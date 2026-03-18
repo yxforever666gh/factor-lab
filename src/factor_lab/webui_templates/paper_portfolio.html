@@ -14,7 +14,7 @@
       <table>
         <thead><tr><th>代码</th><th>信号</th><th>权重</th></tr></thead>
         <tbody>
-          {% for row in (current.positions if current else []) %}
+          {% for row in current_positions %}
           <tr>
             <td class="text-nowrap">{{ row.ticker }}</td>
             <td class="num">{{ row.signal }}</td>
@@ -34,9 +34,11 @@
         <tr><th>标签</th><td>{{ stability.label if stability else '-' }}</td></tr>
         <tr><th>历史样本数</th><td>{{ stability.history_count if stability else '-' }}</td></tr>
         <tr><th>稳定重合率</th><td>{{ stability.stability_ratio if stability else '-' }}</td></tr>
+        <tr><th>上期重合持仓</th><td>{{ retrospective.overlap_with_previous if retrospective else '-' }}</td></tr>
+        <tr><th>新增</th><td>{{ retrospective.added|join('、') if retrospective and retrospective.added else '无' }}</td></tr>
+        <tr><th>移除</th><td>{{ retrospective.removed|join('、') if retrospective and retrospective.removed else '无' }}</td></tr>
       </tbody>
     </table>
-    <pre style="margin-top:12px;">{{ retrospective_text }}</pre>
   </section>
 </div>
 
@@ -46,13 +48,16 @@
     <pre>{{ change_log_text }}</pre>
   </section>
   <section class="card">
-    <h2>稳定性明细</h2>
-    <pre>{{ stability_text }}</pre>
+    <h2>回溯摘要</h2>
+    <pre>{{ retrospective_text }}</pre>
   </section>
 </div>
 
-<section class="card" style="margin-top:18px;">
-  <h2>组合历史</h2>
-  <pre>{{ history_text }}</pre>
-</section>
+<details class="card" style="margin-top:18px;">
+  <summary style="cursor:pointer; font-weight:600;">查看稳定性与历史原始数据</summary>
+  <div class="grid cols-2" style="margin-top:12px;">
+    <pre>{{ stability_text }}</pre>
+    <pre>{{ history_text }}</pre>
+  </div>
+</details>
 {% endblock %}

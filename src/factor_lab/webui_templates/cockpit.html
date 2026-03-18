@@ -31,22 +31,77 @@
 <div class="grid cols-2" style="margin-top:18px;">
   <section class="card">
     <h2>模板权重与疲劳</h2>
-    <pre>{{ recommendation_context_text }}</pre>
+    {% if recommendation_context.priority_summary %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>模板</th><th>建议动作</th><th>效果分</th><th>样本</th><th>疲劳</th><th>冷却</th></tr></thead>
+        <tbody>
+          {% for row in recommendation_context.priority_summary %}
+          <tr>
+            <td>{{ row.template_type }}</td>
+            <td>{{ row.recommended_action }}</td>
+            <td class="num">{{ row.decayed_effect_score }}</td>
+            <td class="num">{{ row.sample_count }}</td>
+            <td>{{ row.fatigue_level }}</td>
+            <td>{{ '是' if row.cooldown_active else '否' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="muted" style="margin-top:10px;">Planner 提示：{{ recommendation_context.planner_hint or '-' }}</div>
+    {% else %}
+    <div class="muted">暂无模板上下文。</div>
+    {% endif %}
   </section>
   <section class="card">
     <h2>计划校验摘要</h2>
-    <pre>{{ plan_validation_text }}</pre>
+    <table>
+      <tbody>
+        <tr><th>是否有效</th><td>{{ '是' if plan_validation.valid else '否' }}</td></tr>
+        <tr><th>模板类型</th><td>{{ plan_validation.normalized_plan.template_type if plan_validation.normalized_plan else '-' }}</td></tr>
+        <tr><th>错误数</th><td>{{ plan_validation.errors|length if plan_validation.errors else 0 }}</td></tr>
+        <tr><th>警告数</th><td>{{ plan_validation.warnings|length if plan_validation.warnings else 0 }}</td></tr>
+        <tr><th>原因</th><td class="text-break">{{ plan_validation.normalized_plan.rationale if plan_validation.normalized_plan else '-' }}</td></tr>
+      </tbody>
+    </table>
   </section>
 </div>
 
 <div class="grid cols-2" style="margin-top:18px;">
   <section class="card">
     <h2>纸面组合摘要</h2>
-    <pre>{{ paper_portfolio_text }}</pre>
+    <table>
+      <tbody>
+        <tr><th>策略</th><td>{{ paper_portfolio.strategy_name if paper_portfolio else '-' }}</td></tr>
+        <tr><th>日期</th><td>{{ paper_portfolio.as_of_date if paper_portfolio else '-' }}</td></tr>
+        <tr><th>持仓数</th><td>{{ paper_portfolio.position_count if paper_portfolio else 0 }}</td></tr>
+      </tbody>
+    </table>
+    {% if paper_portfolio_positions %}
+    <div class="table-wrap" style="margin-top:12px;">
+      <table>
+        <thead><tr><th>代码</th><th>信号</th><th>权重</th></tr></thead>
+        <tbody>
+          {% for row in paper_portfolio_positions %}
+          <tr><td>{{ row.ticker }}</td><td class="num">{{ row.signal }}</td><td class="num">{{ row.weight }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
   </section>
   <section class="card">
     <h2>最近变化</h2>
     <pre>{{ change_report }}</pre>
   </section>
 </div>
+
+<details class="card" style="margin-top:18px;">
+  <summary style="cursor:pointer; font-weight:600;">查看详细 JSON</summary>
+  <div class="grid cols-2" style="margin-top:12px;">
+    <pre>{{ recommendation_context_text }}</pre>
+    <pre>{{ paper_portfolio_text }}</pre>
+  </div>
+</details>
 {% endblock %}

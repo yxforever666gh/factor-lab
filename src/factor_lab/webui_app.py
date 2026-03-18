@@ -13,6 +13,19 @@ from factor_lab.db_views import ensure_views
 from factor_lab.ops import latest_task_states, trigger_script
 
 
+def pretty_json_text(value: Any, empty_text: str = "暂无数据。") -> str:
+    if value in (None, "", [], {}):
+        return empty_text
+    if isinstance(value, str):
+        return value
+    return json.dumps(value, ensure_ascii=False, indent=2)
+
+
+def portfolio_positions(current: dict[str, Any]) -> list[dict[str, Any]]:
+    positions = current.get("positions") or []
+    return sorted(positions, key=lambda row: row.get("weight", 0), reverse=True)
+
+
 BASE_DIR = Path(__file__).resolve().parent
 TEMPLATE_DIR = BASE_DIR / "webui_templates"
 DB_PATH = Path(__file__).resolve().parents[2] / "artifacts" / "factor_lab.db"
@@ -100,6 +113,9 @@ def cockpit_page():
     snapshot = json.loads(snapshot_path.read_text(encoding="utf-8")) if snapshot_path.exists() else {}
     change_report_path = base / "change_report.md"
     paper_current_path = base / "paper_portfolio" / "current_portfolio.json"
+    recommendation_context = snapshot.get("recommendation_context", {}) or {}
+    plan_validation = (llm_status.get("plan_validation", {})) or {}
+    paper_portfolio = json.loads(paper_current_path.read_text(encoding="utf-8")) if paper_current_path.exists() else {}
     return render(
         "cockpit.html",
         title="驾驶舱",
@@ -107,11 +123,15 @@ def cockpit_page():
         stable_candidates=stable_candidates,
         llm_status=llm_status,
         paper_stability=snapshot.get("paper_portfolio_stability", {}),
-        portfolio_policy=(llm_status.get("plan_validation", {}) or {}).get("portfolio_policy", {}),
+        portfolio_policy=plan_validation.get("portfolio_policy", {}),
         conservative_policy=snapshot.get("conservative_policy", {}),
-        recommendation_context_text=json.dumps(snapshot.get("recommendation_context", {}), ensure_ascii=False, indent=2) if snapshot.get("recommendation_context") else "暂无模板上下文。",
-        plan_validation_text=json.dumps((llm_status.get("plan_validation", {})), ensure_ascii=False, indent=2) if llm_status.get("plan_validation") else "暂无计划校验摘要。",
-        paper_portfolio_text=paper_current_path.read_text(encoding="utf-8") if paper_current_path.exists() else "暂无纸面组合。",
+        recommendation_context=recommendation_context,
+        recommendation_context_text=pretty_json_text(recommendation_context, "暂无模板上下文。"),
+        plan_validation=plan_validation,
+        plan_validation_text=pretty_json_text(plan_validation, "暂无计划校验摘要。"),
+        paper_portfolio=paper_portfolio,
+        paper_portfolio_positions=portfolio_positions(paper_portfolio),
+        paper_portfolio_text=pretty_json_text(paper_portfolio, "暂无纸面组合。"),
         change_report=change_report_path.read_text(encoding="utf-8") if change_report_path.exists() else "暂无变化报告。",
     )
 
@@ -223,12 +243,13 @@ def paper_portfolio_page():
         "paper_portfolio.html",
         title="纸面组合",
         current=current,
+        current_positions=portfolio_positions(current),
         retrospective=retrospective,
         stability=stability,
         history_text=history_path.read_text(encoding="utf-8") if history_path.exists() else "暂无组合历史。",
         change_log_text=change_log_path.read_text(encoding="utf-8") if change_log_path.exists() else "暂无组合变更日志。",
-        retrospective_text=retro_path.read_text(encoding="utf-8") if retro_path.exists() else "暂无组合回溯。",
-        stability_text=stability_path.read_text(encoding="utf-8") if stability_path.exists() else "暂无稳定性评分。",
+        retrospective_text=pretty_json_text(retrospective, "暂无组合回溯。"),
+        stability_text=pretty_json_text(stability, "暂无稳定性评分。"),
     )
 
 
@@ -256,6 +277,12 @@ def llm_page():
     retrospective_md_path = DB_PATH.parent / "llm_retrospective.md"
     recommendation_history_path = DB_PATH.parent / "llm_recommendation_history.json"
     recommendation_weights_path = DB_PATH.parent / "llm_recommendation_weights.json"
+    recommendation_context = snapshot.get("recommendation_context", {}) or {}
+    recommendation_history_tail = snapshot.get("recommendation_history_tail", []) or []
+    plan_validation = llm_status.get("plan_validation", {}) or {}
+    generated_batch = json.loads(generated_batch_path.read_text(encoding="utf-8")) if generated_batch_path.exists() else {}
+    generated_workflow = json.loads(generated_batch_workflow_path.read_text(encoding="utf-8")) if generated_batch_workflow_path.exists() else {}
+    recommendation_weights = json.loads(recommendation_weights_path.read_text(encoding="utf-8")) if recommendation_weights_path.exists() else {}
     return render(
         "llm.html",
         title="LLM",
@@ -268,16 +295,21 @@ def llm_page():
         llm_plan=llm_plan,
         snapshot=snapshot,
         agent_request=agent_request,
-        generated_batch_text=generated_batch_path.read_text(encoding="utf-8") if generated_batch_path.exists() else "暂无生成的 batch。",
-        generated_workflow_text=generated_batch_workflow_path.read_text(encoding="utf-8") if generated_batch_workflow_path.exists() else "暂无生成的 workflow。",
+        generated_batch=generated_batch,
+        generated_batch_text=pretty_json_text(generated_batch, "暂无生成的 batch。"),
+        generated_workflow_text=pretty_json_text(generated_workflow, "暂无生成的 workflow。"),
         generated_feedback_text=feedback_path.read_text(encoding="utf-8") if feedback_path.exists() else "暂无 batch 执行反馈。",
         retrospective_text=retrospective_md_path.read_text(encoding="utf-8") if retrospective_md_path.exists() else "暂无建议效果回溯。",
         retrospective_json_text=retrospective_path.read_text(encoding="utf-8") if retrospective_path.exists() else "暂无建议效果回溯 JSON。",
         recommendation_history_text=recommendation_history_path.read_text(encoding="utf-8") if recommendation_history_path.exists() else "暂无建议历史。",
-        recommendation_weights_text=recommendation_weights_path.read_text(encoding="utf-8") if recommendation_weights_path.exists() else "暂无建议权重。",
-        recommendation_history_tail_text=json.dumps(snapshot.get("recommendation_history_tail", []), ensure_ascii=False, indent=2) if snapshot.get("recommendation_history_tail") else "暂无已注入 planner 的历史尾部。",
-        recommendation_context_text=json.dumps(snapshot.get("recommendation_context", {}), ensure_ascii=False, indent=2) if snapshot.get("recommendation_context") else "暂无模板优先级摘要与疲劳度。",
-        plan_validation_text=json.dumps(llm_status.get("plan_validation", {}), ensure_ascii=False, indent=2) if llm_status.get("plan_validation") else "暂无计划校验结果。",
+        recommendation_weights=recommendation_weights,
+        recommendation_weights_text=pretty_json_text(recommendation_weights, "暂无建议权重。"),
+        recommendation_history_tail=recommendation_history_tail,
+        recommendation_history_tail_text=pretty_json_text(recommendation_history_tail, "暂无已注入 planner 的历史尾部。"),
+        recommendation_context=recommendation_context,
+        recommendation_context_text=pretty_json_text(recommendation_context, "暂无模板优先级摘要与疲劳度。"),
+        plan_validation=plan_validation,
+        plan_validation_text=pretty_json_text(plan_validation, "暂无计划校验结果。"),
     )
 
 

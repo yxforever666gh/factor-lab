@@ -82,11 +82,38 @@
 <div class="grid cols-2" style="margin-top:18px;">
   <section class="card">
     <h2>计划校验状态</h2>
-    <pre>{{ plan_validation_text }}</pre>
+    <table>
+      <tbody>
+        <tr><th>有效</th><td>{{ '是' if plan_validation.valid else '否' }}</td></tr>
+        <tr><th>模板</th><td>{{ plan_validation.normalized_plan.template_type if plan_validation.normalized_plan else '-' }}</td></tr>
+        <tr><th>建议动作</th><td>{{ plan_validation.template_policy.recommended_action if plan_validation.template_policy else '-' }}</td></tr>
+        <tr><th>风险模式</th><td>{{ plan_validation.portfolio_policy.risk_mode if plan_validation.portfolio_policy else '-' }}</td></tr>
+        <tr><th>错误</th><td>{{ plan_validation.errors|join('；') if plan_validation.errors else '无' }}</td></tr>
+        <tr><th>警告</th><td>{{ plan_validation.warnings|join('；') if plan_validation.warnings else '无' }}</td></tr>
+      </tbody>
+    </table>
   </section>
   <section class="card">
     <h2>生成的 Batch 摘要</h2>
-    <pre>{{ generated_batch_text }}</pre>
+    {% if generated_batch.jobs %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>任务</th><th>数据源</th><th>时间范围</th><th>因子数</th></tr></thead>
+        <tbody>
+          {% for row in generated_batch.jobs %}
+          <tr>
+            <td>{{ row.job_name or row.name or '-' }}</td>
+            <td>{{ row.data_source or '-' }}</td>
+            <td>{{ row.start_date or '-' }} → {{ row.end_date or '-' }}</td>
+            <td class="num">{{ row.factors|length if row.factors else 0 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="muted">暂无生成的 batch。</div>
+    {% endif %}
   </section>
 </div>
 
@@ -113,49 +140,54 @@
 
 <div class="grid cols-2" style="margin-top:18px;">
   <section class="card">
-    <h2>建议历史</h2>
-    <pre>{{ recommendation_history_text }}</pre>
-  </section>
-  <section class="card">
-    <h2>建议模板权重</h2>
-    <pre>{{ recommendation_weights_text }}</pre>
-  </section>
-</div>
-
-<div class="grid cols-2" style="margin-top:18px;">
-  <section class="card">
     <h2>已注入 Planner 的历史尾部</h2>
-    <pre>{{ recommendation_history_tail_text }}</pre>
+    {% if recommendation_history_tail %}
+      {% for row in recommendation_history_tail %}
+      <div style="padding:12px; border:1px solid var(--border); border-radius:12px; margin-bottom:10px; background: var(--panel-2);">
+        <div><strong>{{ row.template_type }}</strong> · {{ row.recorded_at_utc }}</div>
+        <div class="muted" style="margin-top:6px;">效果：{{ row.effectiveness or '-' }}｜存活候选：{{ row.survived_as_candidates|join('、') if row.survived_as_candidates else '无' }}</div>
+        <div style="margin-top:6px;">{{ row.next_action_hint or row.reason or '-' }}</div>
+      </div>
+      {% endfor %}
+    {% else %}
+    <div class="muted">暂无已注入 planner 的历史尾部。</div>
+    {% endif %}
   </section>
-  <section class="card">
-    <h2>已注入 Planner 的权重</h2>
-    <pre>{{ recommendation_weights_text }}</pre>
-  </section>
-</div>
-
-<div class="grid cols-2" style="margin-top:18px;">
   <section class="card">
     <h2>模板优先级摘要与疲劳度</h2>
-    <pre>{{ recommendation_context_text }}</pre>
-  </section>
-  <section class="card">
-    <h2>Planner 记忆提示</h2>
-    <pre>{{ snapshot.recommendation_context.planner_hint if snapshot.recommendation_context else '暂无 planner hint。' }}</pre>
+    {% if recommendation_context.priority_summary %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>模板</th><th>建议动作</th><th>效果分</th><th>样本</th><th>疲劳</th></tr></thead>
+        <tbody>
+          {% for row in recommendation_context.priority_summary %}
+          <tr>
+            <td>{{ row.template_type }}</td>
+            <td>{{ row.recommended_action }}</td>
+            <td class="num">{{ row.decayed_effect_score }}</td>
+            <td class="num">{{ row.sample_count }}</td>
+            <td>{{ row.fatigue_level }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="muted" style="margin-top:10px;">{{ recommendation_context.planner_hint or '暂无 planner hint。' }}</div>
+    {% else %}
+    <div class="muted">暂无模板优先级摘要与疲劳度。</div>
+    {% endif %}
   </section>
 </div>
 
 <details class="card" style="margin-top:18px;">
-  <summary style="cursor:pointer; font-weight:600;">查看完整 Bridge 请求</summary>
-  <pre style="margin-top:12px;">{{ request_text }}</pre>
-</details>
-
-<details class="card" style="margin-top:18px;">
-  <summary style="cursor:pointer; font-weight:600;">查看完整 LLM 快照</summary>
-  <pre style="margin-top:12px;">{{ snapshot_text }}</pre>
-</details>
-
-<details class="card" style="margin-top:18px;">
-  <summary style="cursor:pointer; font-weight:600;">查看完整 LLM 计划 JSON</summary>
+  <summary style="cursor:pointer; font-weight:600;">查看原始 JSON / 请求详情</summary>
+  <div class="grid cols-2" style="margin-top:12px;">
+    <pre>{{ request_text }}</pre>
+    <pre>{{ snapshot_text }}</pre>
+  </div>
   <pre style="margin-top:12px;">{{ plan_text }}</pre>
+  <pre style="margin-top:12px;">{{ recommendation_weights_text }}</pre>
+  <pre style="margin-top:12px;">{{ recommendation_history_text }}</pre>
+  <pre style="margin-top:12px;">{{ generated_batch_text }}</pre>
 </details>
 {% endblock %}
