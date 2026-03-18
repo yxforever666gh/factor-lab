@@ -1,0 +1,1178 @@
+{
+  "latest_run": {
+    "run_id": "c4cff0db-53f7-4765-a0a0-13d3e2d9dd71",
+    "created_at_utc": "2026-03-18T22:51:23.931076+00:00",
+    "config_path": "artifacts/generated_configs/rolling_120d_back.json",
+    "data_source": "tushare",
+    "start_date": "2025-09-03",
+    "end_date": "2026-03-18",
+    "status": "finished",
+    "dataset_rows": 1092,
+    "factor_count": 6
+  },
+  "latest_runs": [
+    {
+      "run_id": "c4cff0db-53f7-4765-a0a0-13d3e2d9dd71",
+      "created_at_utc": "2026-03-18T22:51:23.931076+00:00",
+      "config_path": "artifacts/generated_configs/rolling_120d_back.json",
+      "data_source": "tushare",
+      "start_date": "2025-09-03",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 1092,
+      "factor_count": 6
+    },
+    {
+      "run_id": "d45c1194-6ef1-4786-84fa-1f2708596f8f",
+      "created_at_utc": "2026-03-18T22:43:52.367910+00:00",
+      "config_path": "artifacts/generated_configs/rolling_recent_90d.json",
+      "data_source": "tushare",
+      "start_date": "2025-12-18",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 352,
+      "factor_count": 6
+    },
+    {
+      "run_id": "1ba53f09-ce41-4735-91ed-4759ef301ddc",
+      "created_at_utc": "2026-03-18T22:42:26.648529+00:00",
+      "config_path": "artifacts/generated_configs/rolling_recent_45d.json",
+      "data_source": "tushare",
+      "start_date": "2026-02-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 22,
+      "factor_count": 6
+    },
+    {
+      "run_id": "4e52d689-f31b-4847-9619-75f3e80a62b7",
+      "created_at_utc": "2026-03-18T22:39:26.654862+00:00",
+      "config_path": "artifacts/generated_configs/rolling_30d_back.json",
+      "data_source": "tushare",
+      "start_date": "2025-12-02",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 484,
+      "factor_count": 6
+    },
+    {
+      "run_id": "44ad0e4d-2f12-4aff-9af0-489c453029c6",
+      "created_at_utc": "2026-03-18T22:02:17.197216+00:00",
+      "config_path": "artifacts/generated_workflow_from_llm.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 242,
+      "factor_count": 4
+    },
+    {
+      "run_id": "7f0eb4be-d9ae-4ed5-ac57-ea56d12e3259",
+      "created_at_utc": "2026-03-18T21:54:46.642703+00:00",
+      "config_path": "configs/tushare_workflow_longer.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 242,
+      "factor_count": 6
+    },
+    {
+      "run_id": "24a0b581-8c3b-4fdf-8d77-880d4905b624",
+      "created_at_utc": "2026-03-18T21:54:43.418791+00:00",
+      "config_path": "configs/tushare_workflow.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 242,
+      "factor_count": 6
+    },
+    {
+      "run_id": "90a04830-fd82-4d65-b31c-080dca74dde1",
+      "created_at_utc": "2026-03-18T21:54:38.163172+00:00",
+      "config_path": "configs/tushare_workflow.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 242,
+      "factor_count": 6
+    },
+    {
+      "run_id": "d4c870ec-8a50-4986-9388-40db4e9f133f",
+      "created_at_utc": "2026-03-18T21:54:33.802098+00:00",
+      "config_path": "artifacts/generated_workflow_from_llm.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 242,
+      "factor_count": 4
+    },
+    {
+      "run_id": "8affe858-e7ec-45df-a0e1-c42eb4a44cbf",
+      "created_at_utc": "2026-03-18T21:54:24.493330+00:00",
+      "config_path": "configs/tushare_workflow_longer.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 242,
+      "factor_count": 6
+    },
+    {
+      "run_id": "f63405e5-3563-4023-9762-2649c8b60f8b",
+      "created_at_utc": "2026-03-18T21:54:21.300427+00:00",
+      "config_path": "configs/tushare_workflow.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 242,
+      "factor_count": 6
+    },
+    {
+      "run_id": "b7113f41-df0f-4960-ac49-b776b11aaa9d",
+      "created_at_utc": "2026-03-18T21:54:16.034311+00:00",
+      "config_path": "configs/tushare_workflow.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 242,
+      "factor_count": 6
+    },
+    {
+      "run_id": "9cbcdf9d-d413-470e-ab2a-e97a6c4f8613",
+      "created_at_utc": "2026-03-18T21:54:11.630882+00:00",
+      "config_path": "artifacts/generated_workflow_from_llm.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 242,
+      "factor_count": 4
+    },
+    {
+      "run_id": "d71c5af0-d5ae-45b0-8d51-1f9c769c19d1",
+      "created_at_utc": "2026-03-18T21:54:01.642850+00:00",
+      "config_path": "configs/tushare_workflow_longer.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 242,
+      "factor_count": 6
+    },
+    {
+      "run_id": "7f1542ac-a996-41d9-a4b5-b8588dc8a640",
+      "created_at_utc": "2026-03-18T21:53:57.647170+00:00",
+      "config_path": "configs/tushare_workflow.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 242,
+      "factor_count": 6
+    },
+    {
+      "run_id": "2489fc29-7c71-4a4f-bedb-e8c030740976",
+      "created_at_utc": "2026-03-18T21:53:51.717701+00:00",
+      "config_path": "configs/tushare_workflow.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 242,
+      "factor_count": 6
+    },
+    {
+      "run_id": "66ab9637-6560-4840-951d-06570858df3b",
+      "created_at_utc": "2026-03-18T21:53:46.767903+00:00",
+      "config_path": "artifacts/generated_workflow_from_llm.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 242,
+      "factor_count": 4
+    },
+    {
+      "run_id": "fc97d443-8f62-4aef-aed4-c0408f0626a3",
+      "created_at_utc": "2026-03-18T21:53:36.756685+00:00",
+      "config_path": "configs/tushare_workflow_longer.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 242,
+      "factor_count": 6
+    },
+    {
+      "run_id": "24be6cf0-4192-4264-a335-2a50506e7328",
+      "created_at_utc": "2026-03-18T21:53:32.899128+00:00",
+      "config_path": "configs/tushare_workflow.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 242,
+      "factor_count": 6
+    },
+    {
+      "run_id": "8f4a2288-ebf3-4507-857b-3d2d9f70b7a7",
+      "created_at_utc": "2026-03-18T21:53:26.932394+00:00",
+      "config_path": "configs/tushare_workflow.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 242,
+      "factor_count": 6
+    }
+  ],
+  "latest_candidates": [],
+  "latest_graveyard": [
+    "liquidity_turnover_shock",
+    "mom_20",
+    "mom_plus_value",
+    "size_small",
+    "value_bp",
+    "value_ep"
+  ],
+  "stable_candidates": [
+    {
+      "factor_name": "mom_20",
+      "candidate_runs": 153
+    },
+    {
+      "factor_name": "mom_plus_value",
+      "candidate_runs": 153
+    },
+    {
+      "factor_name": "value_bp",
+      "candidate_runs": 1
+    },
+    {
+      "factor_name": "value_ep",
+      "candidate_runs": 1
+    }
+  ],
+  "top_scores": [
+    {
+      "factor_name": "mom_20",
+      "avg_score": 1.371247,
+      "runs": 156
+    },
+    {
+      "factor_name": "mom_plus_value",
+      "avg_score": 1.143513,
+      "runs": 156
+    },
+    {
+      "factor_name": "liquidity_turnover_shock",
+      "avg_score": 0.520895,
+      "runs": 156
+    },
+    {
+      "factor_name": "size_small",
+      "avg_score": 0.505706,
+      "runs": 156
+    },
+    {
+      "factor_name": "value_ep",
+      "avg_score": 0.397549,
+      "runs": 121
+    },
+    {
+      "factor_name": "value_bp",
+      "avg_score": -0.214294,
+      "runs": 121
+    }
+  ],
+  "queue_counts": {
+    "pending": 0,
+    "running": 1,
+    "finished": 96,
+    "failed": 3
+  },
+  "queue_budget": {
+    "baseline": 1,
+    "validation": 0,
+    "exploration": 0
+  },
+  "failure_state": {
+    "consecutive_failures": 0,
+    "failed_recently": 3,
+    "last_failure_at": null,
+    "cooldown_active": false
+  },
+  "exploration_state": {
+    "recent_no_gain": 0,
+    "recent_gain": 3,
+    "should_throttle": false
+  },
+  "daemon_status": {
+    "updated_at_utc": "2026-03-18T22:59:38.457619+00:00",
+    "pid": 563791,
+    "state": "idle",
+    "processed_count": 0
+  },
+  "heartbeat_tail": [
+    {
+      "recorded_at_utc": "2026-03-18T22:43:52.366641+00:00",
+      "scope": "research_orchestrator",
+      "status": "started",
+      "summary": "orchestrator awakened (max_tasks=1)"
+    },
+    {
+      "recorded_at_utc": "2026-03-18T22:47:01.630532+00:00",
+      "scope": "research_orchestrator",
+      "status": "finished",
+      "summary": "workflow finished: artifacts/generated_configs/rolling_recent_90d.json",
+      "task_id": "9422c937-b35d-4838-af1b-e4dd8041fe42",
+      "task_type": "workflow"
+    },
+    {
+      "recorded_at_utc": "2026-03-18T22:47:03.659388+00:00",
+      "scope": "research_orchestrator",
+      "status": "started",
+      "summary": "orchestrator awakened (max_tasks=1)"
+    },
+    {
+      "recorded_at_utc": "2026-03-18T22:47:03.659619+00:00",
+      "scope": "research_orchestrator",
+      "status": "idle",
+      "summary": "no pending research tasks"
+    },
+    {
+      "recorded_at_utc": "2026-03-18T22:48:03.730815+00:00",
+      "scope": "research_orchestrator",
+      "status": "started",
+      "summary": "orchestrator awakened (max_tasks=1)"
+    },
+    {
+      "recorded_at_utc": "2026-03-18T22:48:03.731078+00:00",
+      "scope": "research_orchestrator",
+      "status": "idle",
+      "summary": "no pending research tasks"
+    },
+    {
+      "recorded_at_utc": "2026-03-18T22:49:03.804397+00:00",
+      "scope": "research_orchestrator",
+      "status": "started",
+      "summary": "orchestrator awakened (max_tasks=1)"
+    },
+    {
+      "recorded_at_utc": "2026-03-18T22:49:03.804639+00:00",
+      "scope": "research_orchestrator",
+      "status": "idle",
+      "summary": "no pending research tasks"
+    },
+    {
+      "recorded_at_utc": "2026-03-18T22:51:10.175409+00:00",
+      "scope": "research_daemon",
+      "status": "started",
+      "summary": "research daemon started"
+    },
+    {
+      "recorded_at_utc": "2026-03-18T22:51:10.209671+00:00",
+      "scope": "research_orchestrator",
+      "status": "info",
+      "summary": "research space expanded with 2 tasks"
+    },
+    {
+      "recorded_at_utc": "2026-03-18T22:51:10.210774+00:00",
+      "scope": "research_orchestrator",
+      "status": "started",
+      "summary": "orchestrator awakened (max_tasks=1)"
+    },
+    {
+      "recorded_at_utc": "2026-03-18T22:51:23.919648+00:00",
+      "scope": "research_daemon",
+      "status": "started",
+      "summary": "research daemon started"
+    },
+    {
+      "recorded_at_utc": "2026-03-18T22:51:23.922757+00:00",
+      "scope": "research_orchestrator",
+      "status": "started",
+      "summary": "orchestrator awakened (max_tasks=1)"
+    },
+    {
+      "recorded_at_utc": "2026-03-18T22:57:36.341645+00:00",
+      "scope": "research_orchestrator",
+      "status": "finished",
+      "summary": "workflow finished: artifacts/generated_configs/rolling_120d_back.json",
+      "task_id": "60107083-eed0-40bb-afd7-eba4ca880c5f",
+      "task_type": "workflow"
+    },
+    {
+      "recorded_at_utc": "2026-03-18T22:57:38.347127+00:00",
+      "scope": "research_orchestrator",
+      "status": "started",
+      "summary": "orchestrator awakened (max_tasks=1)"
+    },
+    {
+      "recorded_at_utc": "2026-03-18T22:57:38.347362+00:00",
+      "scope": "research_orchestrator",
+      "status": "idle",
+      "summary": "no pending research tasks"
+    },
+    {
+      "recorded_at_utc": "2026-03-18T22:58:38.392301+00:00",
+      "scope": "research_orchestrator",
+      "status": "started",
+      "summary": "orchestrator awakened (max_tasks=1)"
+    },
+    {
+      "recorded_at_utc": "2026-03-18T22:58:38.392566+00:00",
+      "scope": "research_orchestrator",
+      "status": "idle",
+      "summary": "no pending research tasks"
+    },
+    {
+      "recorded_at_utc": "2026-03-18T22:59:38.456297+00:00",
+      "scope": "research_orchestrator",
+      "status": "started",
+      "summary": "orchestrator awakened (max_tasks=1)"
+    },
+    {
+      "recorded_at_utc": "2026-03-18T22:59:38.456649+00:00",
+      "scope": "research_orchestrator",
+      "status": "idle",
+      "summary": "no pending research tasks"
+    }
+  ],
+  "generated_configs": [
+    "expanding_from_2025_10_01.json",
+    "rolling_120d_back.json",
+    "rolling_30d_back.json",
+    "rolling_60d_back.json",
+    "rolling_recent_120d.json",
+    "rolling_recent_45d.json",
+    "rolling_recent_90d.json"
+  ],
+  "recommendation_context": {
+    "priority_summary": [
+      {
+        "template_type": "neutralization_diagnosis",
+        "recommended_action": "soft_upweight",
+        "avg_effect_score": 1.0,
+        "decayed_effect_score": 1.0,
+        "sample_count": 2,
+        "fatigue_level": "medium",
+        "cooldown_active": false
+      }
+    ],
+    "fatigue": {
+      "neutralization_diagnosis": {
+        "recent_count_last_5": 2,
+        "fatigue_level": "medium"
+      }
+    },
+    "cooldown": {
+      "neutralization_diagnosis": {
+        "cooldown_active": false,
+        "reason": "无冷却限制。"
+      }
+    },
+    "planner_hint": "优先尝试 higher priority 且 fatigue_level 低的模板；对 cooldown_active=true 的模板，除非有明确新信息，否则本轮应避免重复。"
+  },
+  "recommendation_weights": {
+    "templates": {
+      "neutralization_diagnosis": {
+        "avg_effect_score": 1.0,
+        "decayed_effect_score": 1.0,
+        "sample_count": 2,
+        "recommended_action": "soft_upweight",
+        "min_samples_for_hard_weight": 3,
+        "half_life_days": 14.0
+      }
+    },
+    "global_hint": "优先考虑历史 decayed_effect_score 更高的建议模板；当 sample_count 不足时，仅做 soft 级别升降权。"
+  },
+  "llm_status": {
+    "mode": "openclaw_agent_bridge",
+    "status": "plan_executed",
+    "updated_at_utc": "2026-03-18T22:02:19.656687+00:00",
+    "generated_batch_path": "artifacts/generated_batch_from_llm.json",
+    "generated_batch_output_dir": "artifacts/llm_generated_batch_run",
+    "feedback_path": "artifacts/llm_plan_feedback.json",
+    "feedback_summary": [
+      {
+        "job_name": "llm_focus_batch",
+        "total_factors": 4,
+        "candidate_count": 2,
+        "graveyard_count": 2
+      }
+    ],
+    "knowledge_gain": [
+      "exploration_candidate_survived",
+      "exploration_graveyard_identified"
+    ]
+  },
+  "knowledge_gain_counter": {
+    "stable_candidate_confirmed": 12,
+    "repeated_graveyard_confirmed": 12,
+    "neutralization_diagnosis_requested": 8,
+    "exploration_candidate_survived": 9,
+    "exploration_graveyard_identified": 9,
+    "no_significant_information_gain": 0
+  },
+  "recent_research_tasks": [
+    {
+      "task_id": "60107083-eed0-40bb-afd7-eba4ca880c5f",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 20,
+      "fingerprint": "workflow::badcb06ce65d4c9460bc793e6fb9636582f9189dd63f337d26e2596390927b2c::artifacts/generated_rolling_120d_back",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T22:51:10.208282+00:00",
+      "started_at_utc": "2026-03-18T22:51:23.923009+00:00",
+      "finished_at_utc": "2026-03-18T22:57:36.340462+00:00",
+      "worker_note": "workflow finished: artifacts/generated_configs/rolling_120d_back.json",
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_120d_back.json",
+        "output_dir": "artifacts/generated_rolling_120d_back"
+      }
+    },
+    {
+      "task_id": "5d0099c1-882e-4658-a4da-cb7d54866b82",
+      "task_type": "workflow",
+      "status": "running",
+      "priority": 19,
+      "fingerprint": "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T22:51:10.188970+00:00",
+      "started_at_utc": "2026-03-18T22:51:10.211055+00:00",
+      "finished_at_utc": null,
+      "worker_note": "baseline｜历史扩窗 60 天",
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_60d_back.json",
+        "output_dir": "artifacts/generated_rolling_60d_back"
+      }
+    },
+    {
+      "task_id": "9422c937-b35d-4838-af1b-e4dd8041fe42",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 24,
+      "fingerprint": "workflow::cca86a85cd075376200d83fe712fa4a384cd1ec40c6347a2a1cfa76ec0f72c4b::artifacts/generated_recent_90d",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T22:43:52.363971+00:00",
+      "started_at_utc": "2026-03-18T22:43:52.366797+00:00",
+      "finished_at_utc": "2026-03-18T22:47:01.629405+00:00",
+      "worker_note": "workflow finished: artifacts/generated_configs/rolling_recent_90d.json",
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_recent_90d.json",
+        "output_dir": "artifacts/generated_recent_90d"
+      }
+    },
+    {
+      "task_id": "0e86827b-e956-4a4e-8047-2523ce259730",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 22,
+      "fingerprint": "workflow::2d0cb3c1564581274c03388ad177e943b554916b9351274c8935f9133b7d9769::artifacts/generated_recent_45d",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T22:39:26.651766+00:00",
+      "started_at_utc": "2026-03-18T22:42:26.646107+00:00",
+      "finished_at_utc": "2026-03-18T22:43:50.353954+00:00",
+      "worker_note": "workflow finished: artifacts/generated_configs/rolling_recent_45d.json",
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_recent_45d.json",
+        "output_dir": "artifacts/generated_recent_45d"
+      }
+    },
+    {
+      "task_id": "fbc52fde-af1c-4a3c-9665-61c5c8ce70c7",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 18,
+      "fingerprint": "workflow::aec26a80ff4107763e4df70188bf97914ae44edf1add208b560b47ca0ca45b56::artifacts/generated_rolling_30d_back",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T22:39:26.649584+00:00",
+      "started_at_utc": "2026-03-18T22:39:26.653764+00:00",
+      "finished_at_utc": "2026-03-18T22:42:24.639313+00:00",
+      "worker_note": "workflow finished: artifacts/generated_configs/rolling_30d_back.json",
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_30d_back.json",
+        "output_dir": "artifacts/generated_rolling_30d_back"
+      }
+    },
+    {
+      "task_id": "d55ba48b-793c-4c1e-9068-50f8f2eead19",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 15,
+      "fingerprint": "retry::d3ce8719-44c5-4be5-a73a-8ec1e692646e::1",
+      "parent_task_id": "d3ce8719-44c5-4be5-a73a-8ec1e692646e",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T21:54:56.630681+00:00",
+      "started_at_utc": "2026-03-18T22:02:15.179079+00:00",
+      "finished_at_utc": "2026-03-18T22:02:15.188523+00:00",
+      "worker_note": "diagnostic finished: batch_consistency_review",
+      "payload": {
+        "diagnostic_type": "batch_consistency_review",
+        "knowledge_gain": [
+          "stable_candidate_confirmed",
+          "repeated_graveyard_confirmed"
+        ],
+        "reasons": [
+          "consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep",
+          "stable_candidates:mom_20, mom_plus_value"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "d3ce8719-44c5-4be5-a73a-8ec1e692646e",
+      "task_type": "diagnostic",
+      "status": "failed",
+      "priority": 15,
+      "fingerprint": "retry::5dc221a5-accc-4dce-8d39-dd89a2e4aa02::1",
+      "parent_task_id": "5dc221a5-accc-4dce-8d39-dd89a2e4aa02",
+      "attempt_count": 1,
+      "last_error": "name 'timedelta' is not defined",
+      "created_at_utc": "2026-03-18T21:54:54.616066+00:00",
+      "started_at_utc": "2026-03-18T21:54:56.622557+00:00",
+      "finished_at_utc": "2026-03-18T21:54:56.631687+00:00",
+      "worker_note": "retry｜自动重试 diagnostic",
+      "payload": {
+        "diagnostic_type": "batch_consistency_review",
+        "knowledge_gain": [
+          "stable_candidate_confirmed",
+          "repeated_graveyard_confirmed"
+        ],
+        "reasons": [
+          "consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep",
+          "stable_candidates:mom_20, mom_plus_value"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "5dc221a5-accc-4dce-8d39-dd89a2e4aa02",
+      "task_type": "diagnostic",
+      "status": "failed",
+      "priority": 15,
+      "fingerprint": "retry::1e10d0b7-e742-4725-86e1-5aa94b65de9a::1",
+      "parent_task_id": "1e10d0b7-e742-4725-86e1-5aa94b65de9a",
+      "attempt_count": 1,
+      "last_error": "name 'timedelta' is not defined",
+      "created_at_utc": "2026-03-18T21:54:52.602741+00:00",
+      "started_at_utc": "2026-03-18T21:54:54.609770+00:00",
+      "finished_at_utc": "2026-03-18T21:54:54.617037+00:00",
+      "worker_note": "retry｜自动重试 diagnostic",
+      "payload": {
+        "diagnostic_type": "batch_consistency_review",
+        "knowledge_gain": [
+          "stable_candidate_confirmed",
+          "repeated_graveyard_confirmed"
+        ],
+        "reasons": [
+          "consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep",
+          "stable_candidates:mom_20, mom_plus_value"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "1e10d0b7-e742-4725-86e1-5aa94b65de9a",
+      "task_type": "diagnostic",
+      "status": "failed",
+      "priority": 35,
+      "fingerprint": "diagnostic::artifacts/tushare_batch::consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep;stable_candidates:mom_20, mom_plus_value",
+      "parent_task_id": "aaf7fa32-a774-4428-8419-4fc8d859b587",
+      "attempt_count": 1,
+      "last_error": "name 'timedelta' is not defined",
+      "created_at_utc": "2026-03-18T21:54:49.863793+00:00",
+      "started_at_utc": "2026-03-18T21:54:52.595878+00:00",
+      "finished_at_utc": "2026-03-18T21:54:52.603698+00:00",
+      "worker_note": "validation｜batch 一致性诊断",
+      "payload": {
+        "diagnostic_type": "batch_consistency_review",
+        "knowledge_gain": [
+          "stable_candidate_confirmed",
+          "repeated_graveyard_confirmed"
+        ],
+        "reasons": [
+          "consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep",
+          "stable_candidates:mom_20, mom_plus_value"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "21c1feba-61f0-466f-adab-c3a89ad6ad0a",
+      "task_type": "generated_batch",
+      "status": "finished",
+      "priority": 60,
+      "fingerprint": "generated_batch::a4cf53c056d30df4446de19c23617566f1f9bfd75d9e6e55e07584c54d5ff466::artifacts/llm_generated_batch_run",
+      "parent_task_id": "6c4537b5-734a-4e8b-abad-07af00c4b38c",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T21:54:41.406795+00:00",
+      "started_at_utc": "2026-03-18T22:02:17.194883+00:00",
+      "finished_at_utc": "2026-03-18T22:02:19.671226+00:00",
+      "worker_note": "generated batch finished: artifacts/generated_batch_from_llm.json | knowledge_gain=exploration_candidate_survived,exploration_graveyard_identified",
+      "payload": {
+        "batch_path": "artifacts/generated_batch_from_llm.json",
+        "output_dir": "artifacts/llm_generated_batch_run"
+      }
+    },
+    {
+      "task_id": "aaf7fa32-a774-4428-8419-4fc8d859b587",
+      "task_type": "batch",
+      "status": "finished",
+      "priority": 30,
+      "fingerprint": "batch::15afad57be9d1e5815d553678240a3e701d656f5a5a7aaf6e564ebefa662ce7f::artifacts/tushare_batch",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T21:54:38.160220+00:00",
+      "started_at_utc": "2026-03-18T21:54:43.416513+00:00",
+      "finished_at_utc": "2026-03-18T21:54:49.864738+00:00",
+      "worker_note": "batch finished: configs/tushare_batch.json | followups=1",
+      "payload": {
+        "config_path": "configs/tushare_batch.json",
+        "output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "6c4537b5-734a-4e8b-abad-07af00c4b38c",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 10,
+      "fingerprint": "workflow::63c043a518d832a1d0cdb3299ff3ecff594a5ebb906d4f4fe4e901b0a66e2dba::artifacts/tushare_workflow",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T21:54:38.157939+00:00",
+      "started_at_utc": "2026-03-18T21:54:38.162073+00:00",
+      "finished_at_utc": "2026-03-18T21:54:41.409264+00:00",
+      "worker_note": "workflow finished: configs/tushare_workflow.json | followups=2",
+      "payload": {
+        "config_path": "configs/tushare_workflow.json",
+        "output_dir": "artifacts/tushare_workflow"
+      }
+    },
+    {
+      "task_id": "b3d9877e-d976-43e7-aaae-8532151c88c9",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 40,
+      "fingerprint": "diagnostic::artifacts/tushare_batch::graveyard_neutralization::liquidity_turnover_shock,size_small,value_bp,value_ep",
+      "parent_task_id": "5618746d-f7b4-4f1e-8efc-afc4040a58f9",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T21:54:29.781448+00:00",
+      "started_at_utc": "2026-03-18T21:54:31.788512+00:00",
+      "finished_at_utc": "2026-03-18T21:54:31.794530+00:00",
+      "worker_note": "diagnostic finished: graveyard_neutralization_review",
+      "payload": {
+        "diagnostic_type": "graveyard_neutralization_review",
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "size_small",
+          "value_bp",
+          "value_ep"
+        ],
+        "knowledge_gain": [
+          "neutralization_diagnosis_requested"
+        ],
+        "reasons": [
+          "repeated_graveyard_after_batch_consistency_review"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "5618746d-f7b4-4f1e-8efc-afc4040a58f9",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 35,
+      "fingerprint": "diagnostic::artifacts/tushare_batch::consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep;stable_candidates:mom_20, mom_plus_value",
+      "parent_task_id": "7ba0b0bf-92c6-41bb-b855-949dd1d0dcf3",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T21:54:27.761129+00:00",
+      "started_at_utc": "2026-03-18T21:54:29.777321+00:00",
+      "finished_at_utc": "2026-03-18T21:54:29.782395+00:00",
+      "worker_note": "diagnostic finished: batch_consistency_review | followups=1",
+      "payload": {
+        "diagnostic_type": "batch_consistency_review",
+        "knowledge_gain": [
+          "stable_candidate_confirmed",
+          "repeated_graveyard_confirmed"
+        ],
+        "reasons": [
+          "consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep",
+          "stable_candidates:mom_20, mom_plus_value"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "9b1382c5-b6d7-4992-9b16-f9efdd76c0d6",
+      "task_type": "generated_batch",
+      "status": "finished",
+      "priority": 60,
+      "fingerprint": "generated_batch::a4cf53c056d30df4446de19c23617566f1f9bfd75d9e6e55e07584c54d5ff466::artifacts/llm_generated_batch_run",
+      "parent_task_id": "95b5b522-423e-43ad-b5a7-cde3967063d9",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T21:54:19.290791+00:00",
+      "started_at_utc": "2026-03-18T21:54:33.799997+00:00",
+      "finished_at_utc": "2026-03-18T21:54:36.149794+00:00",
+      "worker_note": "generated batch finished: artifacts/generated_batch_from_llm.json | knowledge_gain=exploration_candidate_survived,exploration_graveyard_identified",
+      "payload": {
+        "batch_path": "artifacts/generated_batch_from_llm.json",
+        "output_dir": "artifacts/llm_generated_batch_run"
+      }
+    },
+    {
+      "task_id": "7ba0b0bf-92c6-41bb-b855-949dd1d0dcf3",
+      "task_type": "batch",
+      "status": "finished",
+      "priority": 30,
+      "fingerprint": "batch::15afad57be9d1e5815d553678240a3e701d656f5a5a7aaf6e564ebefa662ce7f::artifacts/tushare_batch",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T21:54:16.031782+00:00",
+      "started_at_utc": "2026-03-18T21:54:21.298277+00:00",
+      "finished_at_utc": "2026-03-18T21:54:27.762353+00:00",
+      "worker_note": "batch finished: configs/tushare_batch.json | followups=1",
+      "payload": {
+        "config_path": "configs/tushare_batch.json",
+        "output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "95b5b522-423e-43ad-b5a7-cde3967063d9",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 10,
+      "fingerprint": "workflow::63c043a518d832a1d0cdb3299ff3ecff594a5ebb906d4f4fe4e901b0a66e2dba::artifacts/tushare_workflow",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T21:54:16.029733+00:00",
+      "started_at_utc": "2026-03-18T21:54:16.033296+00:00",
+      "finished_at_utc": "2026-03-18T21:54:19.291789+00:00",
+      "worker_note": "workflow finished: configs/tushare_workflow.json | followups=2",
+      "payload": {
+        "config_path": "configs/tushare_workflow.json",
+        "output_dir": "artifacts/tushare_workflow"
+      }
+    },
+    {
+      "task_id": "5ac1e8f7-8c70-4f7a-9921-c097af13308b",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 40,
+      "fingerprint": "diagnostic::artifacts/tushare_batch::graveyard_neutralization::liquidity_turnover_shock,size_small,value_bp,value_ep",
+      "parent_task_id": "fc1051e8-b393-47ee-8197-56e728778067",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T21:54:07.611906+00:00",
+      "started_at_utc": "2026-03-18T21:54:09.618573+00:00",
+      "finished_at_utc": "2026-03-18T21:54:09.622467+00:00",
+      "worker_note": "diagnostic finished: graveyard_neutralization_review",
+      "payload": {
+        "diagnostic_type": "graveyard_neutralization_review",
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "size_small",
+          "value_bp",
+          "value_ep"
+        ],
+        "knowledge_gain": [
+          "neutralization_diagnosis_requested"
+        ],
+        "reasons": [
+          "repeated_graveyard_after_batch_consistency_review"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "fc1051e8-b393-47ee-8197-56e728778067",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 35,
+      "fingerprint": "diagnostic::artifacts/tushare_batch::consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep;stable_candidates:mom_20, mom_plus_value",
+      "parent_task_id": "cddc03c2-7bcd-4943-8a62-1f3313b64590",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T21:54:05.598862+00:00",
+      "started_at_utc": "2026-03-18T21:54:07.607567+00:00",
+      "finished_at_utc": "2026-03-18T21:54:07.612861+00:00",
+      "worker_note": "diagnostic finished: batch_consistency_review | followups=1",
+      "payload": {
+        "diagnostic_type": "batch_consistency_review",
+        "knowledge_gain": [
+          "stable_candidate_confirmed",
+          "repeated_graveyard_confirmed"
+        ],
+        "reasons": [
+          "consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep",
+          "stable_candidates:mom_20, mom_plus_value"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "4e139824-37dd-42a8-9196-f5a95e534d56",
+      "task_type": "generated_batch",
+      "status": "finished",
+      "priority": 60,
+      "fingerprint": "generated_batch::a4cf53c056d30df4446de19c23617566f1f9bfd75d9e6e55e07584c54d5ff466::artifacts/llm_generated_batch_run",
+      "parent_task_id": "d436e419-15ff-4893-b589-a103e5e09183",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T21:53:55.636876+00:00",
+      "started_at_utc": "2026-03-18T21:54:11.628672+00:00",
+      "finished_at_utc": "2026-03-18T21:54:14.018056+00:00",
+      "worker_note": "generated batch finished: artifacts/generated_batch_from_llm.json | knowledge_gain=exploration_candidate_survived,exploration_graveyard_identified",
+      "payload": {
+        "batch_path": "artifacts/generated_batch_from_llm.json",
+        "output_dir": "artifacts/llm_generated_batch_run"
+      }
+    },
+    {
+      "task_id": "cddc03c2-7bcd-4943-8a62-1f3313b64590",
+      "task_type": "batch",
+      "status": "finished",
+      "priority": 30,
+      "fingerprint": "batch::15afad57be9d1e5815d553678240a3e701d656f5a5a7aaf6e564ebefa662ce7f::artifacts/tushare_batch",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T21:53:51.715219+00:00",
+      "started_at_utc": "2026-03-18T21:53:57.644591+00:00",
+      "finished_at_utc": "2026-03-18T21:54:05.600057+00:00",
+      "worker_note": "batch finished: configs/tushare_batch.json | followups=1",
+      "payload": {
+        "config_path": "configs/tushare_batch.json",
+        "output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "d436e419-15ff-4893-b589-a103e5e09183",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 10,
+      "fingerprint": "workflow::63c043a518d832a1d0cdb3299ff3ecff594a5ebb906d4f4fe4e901b0a66e2dba::artifacts/tushare_workflow",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T21:53:51.712985+00:00",
+      "started_at_utc": "2026-03-18T21:53:51.716731+00:00",
+      "finished_at_utc": "2026-03-18T21:53:55.638078+00:00",
+      "worker_note": "workflow finished: configs/tushare_workflow.json | followups=2",
+      "payload": {
+        "config_path": "configs/tushare_workflow.json",
+        "output_dir": "artifacts/tushare_workflow"
+      }
+    },
+    {
+      "task_id": "9878de8b-10b3-4bdc-9745-02e1d7ef32c1",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 40,
+      "fingerprint": "diagnostic::artifacts/tushare_batch::graveyard_neutralization::liquidity_turnover_shock,size_small,value_bp,value_ep",
+      "parent_task_id": "8a7744bb-2441-41dc-9d0d-7efc31c4b733",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T21:53:42.746295+00:00",
+      "started_at_utc": "2026-03-18T21:53:44.754149+00:00",
+      "finished_at_utc": "2026-03-18T21:53:44.758362+00:00",
+      "worker_note": "diagnostic finished: graveyard_neutralization_review",
+      "payload": {
+        "diagnostic_type": "graveyard_neutralization_review",
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "size_small",
+          "value_bp",
+          "value_ep"
+        ],
+        "knowledge_gain": [
+          "neutralization_diagnosis_requested"
+        ],
+        "reasons": [
+          "repeated_graveyard_after_batch_consistency_review"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "8a7744bb-2441-41dc-9d0d-7efc31c4b733",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 35,
+      "fingerprint": "diagnostic::artifacts/tushare_batch::consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep;stable_candidates:mom_20, mom_plus_value",
+      "parent_task_id": "e6da9f0d-d2fa-4b90-9206-d6878e946c0a",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T21:53:40.733004+00:00",
+      "started_at_utc": "2026-03-18T21:53:42.741966+00:00",
+      "finished_at_utc": "2026-03-18T21:53:42.747254+00:00",
+      "worker_note": "diagnostic finished: batch_consistency_review | followups=1",
+      "payload": {
+        "diagnostic_type": "batch_consistency_review",
+        "knowledge_gain": [
+          "stable_candidate_confirmed",
+          "repeated_graveyard_confirmed"
+        ],
+        "reasons": [
+          "consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep",
+          "stable_candidates:mom_20, mom_plus_value"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "1e8ca40d-7bbe-4915-81bb-af6455f86276",
+      "task_type": "generated_batch",
+      "status": "finished",
+      "priority": 60,
+      "fingerprint": "generated_batch::a4cf53c056d30df4446de19c23617566f1f9bfd75d9e6e55e07584c54d5ff466::artifacts/llm_generated_batch_run",
+      "parent_task_id": "c08e7678-ce73-40a3-9c9b-723179630f2c",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T21:53:30.886981+00:00",
+      "started_at_utc": "2026-03-18T21:53:46.765413+00:00",
+      "finished_at_utc": "2026-03-18T21:53:49.704097+00:00",
+      "worker_note": "generated batch finished: artifacts/generated_batch_from_llm.json | knowledge_gain=exploration_candidate_survived,exploration_graveyard_identified",
+      "payload": {
+        "batch_path": "artifacts/generated_batch_from_llm.json",
+        "output_dir": "artifacts/llm_generated_batch_run"
+      }
+    },
+    {
+      "task_id": "e6da9f0d-d2fa-4b90-9206-d6878e946c0a",
+      "task_type": "batch",
+      "status": "finished",
+      "priority": 30,
+      "fingerprint": "batch::15afad57be9d1e5815d553678240a3e701d656f5a5a7aaf6e564ebefa662ce7f::artifacts/tushare_batch",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T21:53:26.927964+00:00",
+      "started_at_utc": "2026-03-18T21:53:32.896344+00:00",
+      "finished_at_utc": "2026-03-18T21:53:40.734609+00:00",
+      "worker_note": "batch finished: configs/tushare_batch.json | followups=1",
+      "payload": {
+        "config_path": "configs/tushare_batch.json",
+        "output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "c08e7678-ce73-40a3-9c9b-723179630f2c",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 10,
+      "fingerprint": "workflow::63c043a518d832a1d0cdb3299ff3ecff594a5ebb906d4f4fe4e901b0a66e2dba::artifacts/tushare_workflow",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T21:53:26.925884+00:00",
+      "started_at_utc": "2026-03-18T21:53:26.929629+00:00",
+      "finished_at_utc": "2026-03-18T21:53:30.888154+00:00",
+      "worker_note": "workflow finished: configs/tushare_workflow.json | followups=2",
+      "payload": {
+        "config_path": "configs/tushare_workflow.json",
+        "output_dir": "artifacts/tushare_workflow"
+      }
+    },
+    {
+      "task_id": "d4a42ee4-f4d8-463f-afa1-0e9128f38243",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 40,
+      "fingerprint": "diagnostic::artifacts/tushare_batch::graveyard_neutralization::liquidity_turnover_shock,size_small,value_bp,value_ep",
+      "parent_task_id": "8294801a-a488-45fc-8315-bcc09433579e",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T21:53:18.050604+00:00",
+      "started_at_utc": "2026-03-18T21:53:20.060764+00:00",
+      "finished_at_utc": "2026-03-18T21:53:20.066618+00:00",
+      "worker_note": "diagnostic finished: graveyard_neutralization_review",
+      "payload": {
+        "diagnostic_type": "graveyard_neutralization_review",
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "size_small",
+          "value_bp",
+          "value_ep"
+        ],
+        "knowledge_gain": [
+          "neutralization_diagnosis_requested"
+        ],
+        "reasons": [
+          "repeated_graveyard_after_batch_consistency_review"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "8294801a-a488-45fc-8315-bcc09433579e",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 35,
+      "fingerprint": "diagnostic::artifacts/tushare_batch::consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep;stable_candidates:mom_20, mom_plus_value",
+      "parent_task_id": "f669bef7-8f78-4fbc-aa6c-40bc0803b885",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T21:53:16.037904+00:00",
+      "started_at_utc": "2026-03-18T21:53:18.045338+00:00",
+      "finished_at_utc": "2026-03-18T21:53:18.051561+00:00",
+      "worker_note": "diagnostic finished: batch_consistency_review | followups=1",
+      "payload": {
+        "diagnostic_type": "batch_consistency_review",
+        "knowledge_gain": [
+          "stable_candidate_confirmed",
+          "repeated_graveyard_confirmed"
+        ],
+        "reasons": [
+          "consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep",
+          "stable_candidates:mom_20, mom_plus_value"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "27cb31c7-0ad1-4c6c-b7e8-fb3d5f69fb44",
+      "task_type": "generated_batch",
+      "status": "finished",
+      "priority": 60,
+      "fingerprint": "generated_batch::a4cf53c056d30df4446de19c23617566f1f9bfd75d9e6e55e07584c54d5ff466::artifacts/llm_generated_batch_run",
+      "parent_task_id": "426fe754-cce4-494a-a01f-fec012cb27da",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-18T21:53:06.137392+00:00",
+      "started_at_utc": "2026-03-18T21:53:22.080825+00:00",
+      "finished_at_utc": "2026-03-18T21:53:24.917014+00:00",
+      "worker_note": "generated batch finished: artifacts/generated_batch_from_llm.json | knowledge_gain=exploration_candidate_survived,exploration_graveyard_identified",
+      "payload": {
+        "batch_path": "artifacts/generated_batch_from_llm.json",
+        "output_dir": "artifacts/llm_generated_batch_run"
+      }
+    }
+  ]
+}
