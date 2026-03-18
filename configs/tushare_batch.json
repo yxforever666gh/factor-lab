@@ -1,0 +1,12 @@
+{
+  "jobs": [
+    {
+      "name": "recent_window",
+      "config_path": "configs/tushare_workflow.json"
+    },
+    {
+      "name": "longer_window",
+      "config_path": "configs/tushare_workflow_longer.json"
+    }
+  ]
+}

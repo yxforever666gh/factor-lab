@@ -20,6 +20,19 @@ def factor_correlation_matrix(frame: pd.DataFrame, definitions: List[FactorDefin
     return factor_df.corr(method="spearman")
 
 
+def high_correlation_peers(correlation: pd.DataFrame, threshold: float = 0.8) -> Dict[str, List[str]]:
+    peers: Dict[str, List[str]] = {}
+    for col in correlation.columns:
+        matches = []
+        for idx, value in correlation[col].items():
+            if idx == col:
+                continue
+            if pd.notna(value) and abs(float(value)) >= threshold:
+                matches.append(idx)
+        peers[col] = sorted(matches)
+    return peers
+
+
 def evaluate_time_splits(frame: pd.DataFrame, definition: FactorDefinition, thresholds: dict, evaluator) -> List[Dict]:
     dates = sorted(frame["date"].drop_duplicates())
     if len(dates) < 6:

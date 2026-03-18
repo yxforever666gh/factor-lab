@@ -13,6 +13,8 @@ A minimal, reproducible framework for factor research.
 - industry + size neutralized factor check
 - factor correlation matrix for de-duplication clues
 - simple long/short composite portfolio backtest
+- candidate pool / graveyard outputs
+- batch runner for multiple workflow configs
 - experiment artifacts written to `artifacts/`
 
 ## Project layout
@@ -20,8 +22,10 @@ A minimal, reproducible framework for factor research.
 - `src/factor_lab/` — framework code
 - `configs/first_workflow.json` — synthetic first batch
 - `configs/tushare_workflow.json` — real-data workflow config
+- `configs/tushare_batch.json` — batch workflow config
 - `scripts/run_first_workflow.py` — synthetic workflow entrypoint
 - `scripts/run_tushare_workflow.py` — Tushare workflow entrypoint
+- `scripts/run_tushare_batch.py` — batch runner entrypoint
 - `artifacts/` — generated outputs
 
 ## Local secrets
@@ -67,7 +71,10 @@ Outputs:
 - `artifacts/tushare_workflow/factor_correlation.csv`
 - `artifacts/tushare_workflow/neutralized_results.json`
 - `artifacts/tushare_workflow/portfolio_results.json`
+- `artifacts/tushare_workflow/candidate_pool.json`
+- `artifacts/tushare_workflow/factor_graveyard.json`
 - `artifacts/tushare_workflow/summary.md`
+- `artifacts/tushare_batch/batch_summary.json`
 
 ## Current real-data factor set
 
@@ -89,6 +96,8 @@ What it does well now:
 - provide first-pass robustness and de-dup clues
 - compare raw factor efficacy versus industry/size-neutralized efficacy
 - run a simple composite long/short portfolio sanity check
+- classify factors into a candidate pool versus graveyard
+- run multiple workflow configs through one batch entrypoint
 
 What it does not do yet:
 - transaction cost model

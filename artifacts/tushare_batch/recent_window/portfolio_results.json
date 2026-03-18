@@ -1,0 +1,20 @@
+[
+  {
+    "strategy_name": "long_short_top_bottom",
+    "annual_return": 1.670311,
+    "annual_volatility": 0.154128,
+    "sharpe": 10.837132,
+    "max_drawdown": -0.009419,
+    "avg_turnover": 0.15873,
+    "observations": 22
+  },
+  {
+    "strategy_name": "long_short_top_bottom_neutralized",
+    "annual_return": 0.050627,
+    "annual_volatility": 0.123753,
+    "sharpe": 0.4091,
+    "max_drawdown": -0.094694,
+    "avg_turnover": 1.380952,
+    "observations": 22
+  }
+]

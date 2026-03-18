@@ -4,12 +4,13 @@ import json
 from pathlib import Path
 from typing import List
 
-from factor_lab.analytics import evaluate_time_splits, factor_correlation_matrix
+from factor_lab.analytics import evaluate_time_splits, factor_correlation_matrix, high_correlation_peers
 from factor_lab.data import SampleDataGenerator
 from factor_lab.evaluation import evaluate_factor
 from factor_lab.factors import FactorDefinition, apply_factor
 from factor_lab.neutralization import neutralize_by_date
 from factor_lab.portfolio import build_composite_factor, evaluate_long_short_portfolio
+from factor_lab.registry import FactorRegistry
 from factor_lab.tushare_provider import TushareDataProvider, TushareRequest
 
 
@@ -42,6 +43,8 @@ def _write_summary(
     neutralized_results: List[dict],
     split_results: List[dict],
     portfolio_results: List[dict],
+    candidates: List[dict],
+    graveyard: List[dict],
     output_dir: Path,
     source_name: str,
 ) -> None:
@@ -55,6 +58,8 @@ def _write_summary(
         f"- Total factors: {len(results)}",
         f"- Passed: {len(passed)}",
         f"- Failed: {len(failed)}",
+        f"- Candidate pool size: {len(candidates)}",
+        f"- Graveyard size: {len(graveyard)}",
         "",
         "## Main Results",
         "",
@@ -100,6 +105,24 @@ def _write_summary(
                 ]
             )
         lines.append("")
+
+    lines.extend(["## Candidate Pool", ""])
+    if candidates:
+        for row in candidates:
+            lines.append(
+                f"- {row['factor_name']} | rawIC={row['raw_rank_ic_mean']} | neutralIC={row['neutralized_rank_ic_mean']} | peers={', '.join(row['high_corr_peers']) or 'none'}"
+            )
+    else:
+        lines.append("- none")
+    lines.append("")
+
+    lines.extend(["## Graveyard", ""])
+    if graveyard:
+        for row in graveyard:
+            lines.append(f"- {row['factor_name']} | reason={row['graveyard_reason']}")
+    else:
+        lines.append("- none")
+    lines.append("")
 
     if portfolio_results:
         lines.extend(["## Portfolio Results", ""])
@@ -181,6 +204,16 @@ def run_workflow(config_path: str, output_dir: str) -> None:
 
     correlation = factor_correlation_matrix(dataset.frame, definitions)
     correlation.to_csv(output / "factor_correlation.csv")
+    corr_peers = high_correlation_peers(correlation, threshold=config.get("correlation_threshold", 0.8))
+
+    registry = FactorRegistry(output)
+    candidates, graveyard = registry.build_candidate_and_graveyard(
+        raw_results=results,
+        neutralized_results=neutralized_results,
+        split_results=split_results,
+        correlation_lookup=corr_peers,
+    )
+    registry.write_registry(candidates, graveyard)
 
     portfolio_results = []
     composite_raw = build_composite_factor(dataset.frame, definitions, neutralize=False)
@@ -201,6 +234,8 @@ def run_workflow(config_path: str, output_dir: str) -> None:
         neutralized_results=neutralized_results,
         split_results=split_results,
         portfolio_results=portfolio_results,
+        candidates=candidates,
+        graveyard=graveyard,
         output_dir=output,
         source_name=config.get("data_source", "sample"),
     )

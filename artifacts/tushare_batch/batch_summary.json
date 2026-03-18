@@ -1,0 +1,14 @@
+[
+  {
+    "job_name": "recent_window",
+    "total_factors": 6,
+    "candidate_count": 2,
+    "graveyard_count": 4
+  },
+  {
+    "job_name": "longer_window",
+    "total_factors": 6,
+    "candidate_count": 2,
+    "graveyard_count": 4
+  }
+]

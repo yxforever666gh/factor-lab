@@ -38,6 +38,40 @@ class TushareDataProvider:
                 time.sleep(sleep_seconds * attempt)
         raise last_error
 
+    def _date_chunks(self, start_date: str, end_date: str):
+        start = pd.Timestamp(start_date)
+        end = pd.Timestamp(end_date)
+        current = start
+        while current <= end:
+            chunk_end = min(current + pd.offsets.MonthEnd(1), end)
+            yield current.strftime("%Y%m%d"), chunk_end.strftime("%Y%m%d")
+            current = chunk_end + pd.Timedelta(days=1)
+
+    def _fetch_market_data(self, universe_codes: list[str], start_date: str, end_date: str):
+        daily_parts = []
+        daily_basic_parts = []
+        for ts_code in universe_codes:
+            for chunk_start, chunk_end in self._date_chunks(start_date, end_date):
+                daily_parts.append(
+                    self._query_with_retry(
+                        "daily",
+                        ts_code=ts_code,
+                        start_date=chunk_start,
+                        end_date=chunk_end,
+                        fields="ts_code,trade_date,open,high,low,close,vol,amount,pct_chg",
+                    )
+                )
+                daily_basic_parts.append(
+                    self._query_with_retry(
+                        "daily_basic",
+                        ts_code=ts_code,
+                        start_date=chunk_start,
+                        end_date=chunk_end,
+                        fields="ts_code,trade_date,turnover_rate,pe_ttm,pb,total_mv",
+                    )
+                )
+        return pd.concat(daily_parts, ignore_index=True), pd.concat(daily_basic_parts, ignore_index=True)
+
     def load_dataset(self, request: TushareRequest) -> SampleDataset:
         cache_dir = Path(request.cache_dir)
         cache_dir.mkdir(parents=True, exist_ok=True)
@@ -59,32 +93,11 @@ class TushareDataProvider:
         universe_meta = stock_basic.sort_values("list_date_dt").head(request.universe_limit).copy()
         universe_codes = universe_meta["ts_code"].tolist()
 
-        daily_parts = []
-        daily_basic_parts = []
-        start = request.start_date.replace("-", "")
-        end = request.end_date.replace("-", "")
-        for ts_code in universe_codes:
-            daily_parts.append(
-                self._query_with_retry(
-                    "daily",
-                    ts_code=ts_code,
-                    start_date=start,
-                    end_date=end,
-                    fields="ts_code,trade_date,open,high,low,close,vol,amount,pct_chg",
-                )
-            )
-            daily_basic_parts.append(
-                self._query_with_retry(
-                    "daily_basic",
-                    ts_code=ts_code,
-                    start_date=start,
-                    end_date=end,
-                    fields="ts_code,trade_date,turnover_rate,pe_ttm,pb,total_mv",
-                )
-            )
-
-        daily = pd.concat(daily_parts, ignore_index=True)
-        daily_basic = pd.concat(daily_basic_parts, ignore_index=True)
+        daily, daily_basic = self._fetch_market_data(
+            universe_codes=universe_codes,
+            start_date=request.start_date,
+            end_date=request.end_date,
+        )
         frame = daily.merge(daily_basic, on=["ts_code", "trade_date"], how="inner")
         frame = frame.merge(universe_meta[["ts_code", "industry", "list_date"]], on="ts_code", how="left")
         frame["trade_date"] = pd.to_datetime(frame["trade_date"])
