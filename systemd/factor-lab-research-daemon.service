@@ -1,0 +1,16 @@
+[Unit]
+Description=Factor Lab Research Daemon
+After=default.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/admin/.openclaw/workspace
+Environment=PYTHONUNBUFFERED=1
+Environment=RESEARCH_DAEMON_IDLE_SECONDS=60
+Environment=RESEARCH_DAEMON_MAX_TASKS=1
+ExecStart=/usr/bin/python3 /home/admin/.openclaw/workspace/scripts/run_research_daemon.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

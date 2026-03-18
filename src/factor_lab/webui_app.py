@@ -318,6 +318,7 @@ def compute_health_metrics() -> dict[str, Any]:
                 'recent_heartbeat_rows': recent_heartbeat_rows[::-1],
                 'run_success_trend': run_success_trend,
                 'run_success_sparkline': sparkline_svg(run_success_trend, color='#3ddc97'),
+                'daemon_status': daemon_status,
             },
             'research_progress': {
                 'score': research_progress_score,

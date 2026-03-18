@@ -73,6 +73,8 @@
         <tr><th>最近 7d 运行次数</th><td>{{ health.run_health.runs_7d }}</td></tr>
         <tr><th>最近 7d 完成次数</th><td>{{ health.run_health.finished_7d }}</td></tr>
         <tr><th>最近状态</th><td>{{ health.run_health.latest_status or '-' }}</td></tr>
+        <tr><th>Daemon 状态</th><td>{{ health.run_health.daemon_status.state if health.run_health.daemon_status else '-' }}</td></tr>
+        <tr><th>Daemon 更新时间</th><td>{{ health.run_health.daemon_status.updated_at_utc if health.run_health.daemon_status else '-' }}</td></tr>
         <tr><th>最新数据终点</th><td>{{ health.run_health.latest_end_date or '-' }}</td></tr>
         <tr><th>最新样本行数</th><td>{{ health.run_health.latest_dataset_rows or '-' }}</td></tr>
       </tbody>
