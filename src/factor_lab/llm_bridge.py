@@ -25,6 +25,7 @@ def build_agent_request(snapshot: dict[str, Any], output_path: str | Path) -> di
             "plan_required_keys": sorted(REQUIRED_PLAN_KEYS),
             "must_ground_on_snapshot": True,
             "must_not_override_core_metrics": True,
+            "planning_hint": "在生成下一轮建议时，参考 snapshot.recommendation_weights 与 snapshot.recommendation_history_tail；优先考虑历史 avg_effect_score 更高且 recommended_action=upweight 的建议模板，谨慎重复 downweight 模板。",
         },
     }
     Path(output_path).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

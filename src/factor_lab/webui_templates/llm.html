@@ -23,6 +23,7 @@
         <tr><th>时间窗口</th><td>{{ snapshot.latest_run.start_date if snapshot.latest_run else '-' }} → {{ snapshot.latest_run.end_date if snapshot.latest_run else '-' }}</td></tr>
         <tr><th>候选池</th><td>{{ snapshot.latest_candidates|join('、') if snapshot.latest_candidates else '无' }}</td></tr>
         <tr><th>墓地</th><td>{{ snapshot.latest_graveyard|join('、') if snapshot.latest_graveyard else '无' }}</td></tr>
+        <tr><th>规划提示</th><td class="text-break">{{ agent_request.instructions.planning_hint if agent_request.instructions else '-' }}</td></tr>
       </tbody>
     </table>
   </section>
@@ -117,6 +118,17 @@
   </section>
   <section class="card">
     <h2>建议模板权重</h2>
+    <pre>{{ recommendation_weights_text }}</pre>
+  </section>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>已注入 Planner 的历史尾部</h2>
+    <pre>{{ recommendation_history_tail_text }}</pre>
+  </section>
+  <section class="card">
+    <h2>已注入 Planner 的权重</h2>
     <pre>{{ recommendation_weights_text }}</pre>
   </section>
 </div>

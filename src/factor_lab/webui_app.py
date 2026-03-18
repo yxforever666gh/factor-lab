@@ -220,6 +220,7 @@ def llm_page():
         retrospective_json_text=retrospective_path.read_text(encoding="utf-8") if retrospective_path.exists() else "暂无建议效果回溯 JSON。",
         recommendation_history_text=recommendation_history_path.read_text(encoding="utf-8") if recommendation_history_path.exists() else "暂无建议历史。",
         recommendation_weights_text=recommendation_weights_path.read_text(encoding="utf-8") if recommendation_weights_path.exists() else "暂无建议权重。",
+        recommendation_history_tail_text=json.dumps(snapshot.get("recommendation_history_tail", []), ensure_ascii=False, indent=2) if snapshot.get("recommendation_history_tail") else "暂无已注入 planner 的历史尾部。",
         plan_validation_text=json.dumps(llm_status.get("plan_validation", {}), ensure_ascii=False, indent=2) if llm_status.get("plan_validation") else "暂无计划校验结果。",
     )
 

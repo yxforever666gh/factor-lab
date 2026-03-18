@@ -1,35 +1,35 @@
 {
   "latest_run": {
-    "run_id": "88dbd89e-7d71-47de-b3e8-d716f5017486",
-    "created_at_utc": "2026-03-18T17:39:04.657495+00:00",
-    "config_path": "configs/tushare_workflow.json",
+    "run_id": "0e030425-1974-4edc-ba9f-5226c72f25f5",
+    "created_at_utc": "2026-03-18T18:38:02.066476+00:00",
+    "config_path": "artifacts/generated_workflow_from_llm.json",
     "data_source": "tushare",
     "start_date": "2026-01-01",
     "end_date": "2026-03-18",
     "status": "finished",
     "dataset_rows": 242,
-    "factor_count": 6
+    "factor_count": 4
   },
   "top_scores": [
     {
       "factor_name": "mom_20",
       "avg_score": 1.398116,
-      "runs": 10
+      "runs": 11
     },
     {
       "factor_name": "mom_plus_value",
       "avg_score": 1.140355,
-      "runs": 10
+      "runs": 11
     },
     {
       "factor_name": "liquidity_turnover_shock",
       "avg_score": 0.5172,
-      "runs": 10
+      "runs": 11
     },
     {
       "factor_name": "size_small",
       "avg_score": 0.513371,
-      "runs": 10
+      "runs": 11
     },
     {
       "factor_name": "value_ep",
@@ -45,49 +45,49 @@
   "stable_candidates": [
     {
       "factor_name": "mom_20",
-      "candidate_runs": 10
+      "candidate_runs": 11
     },
     {
       "factor_name": "mom_plus_value",
-      "candidate_runs": 10
+      "candidate_runs": 11
     }
   ],
   "portfolio_averages": [
     {
       "strategy_name": "long_short_top_bottom_all_factors",
-      "avg_sharpe": 10.837132,
-      "avg_return": 1.670311,
-      "runs": 10
+      "avg_sharpe": 10.753037,
+      "avg_return": 1.662503,
+      "runs": 11
     },
     {
       "strategy_name": "long_short_top_bottom_cluster_representatives",
-      "avg_sharpe": 10.196009,
-      "avg_return": 1.556436,
-      "runs": 10
+      "avg_sharpe": 10.191826,
+      "avg_return": 1.540512,
+      "runs": 11
     },
     {
       "strategy_name": "long_short_top_bottom_candidates_only",
       "avg_sharpe": 5.441824,
       "avg_return": 1.213329,
-      "runs": 10
+      "runs": 11
     },
     {
       "strategy_name": "long_short_top_bottom_cluster_representatives_neutralized",
-      "avg_sharpe": 1.462645,
-      "avg_return": 0.199767,
-      "runs": 10
+      "avg_sharpe": 1.421922,
+      "avg_return": 0.194537,
+      "runs": 11
     },
     {
       "strategy_name": "long_short_top_bottom_candidates_only_neutralized",
       "avg_sharpe": 0.889911,
       "avg_return": 0.155334,
-      "runs": 10
+      "runs": 11
     },
     {
       "strategy_name": "long_short_top_bottom_neutralized",
-      "avg_sharpe": 0.4091,
-      "avg_return": 0.050627,
-      "runs": 10
+      "avg_sharpe": 0.342901,
+      "avg_return": 0.04057,
+      "runs": 11
     }
   ],
   "latest_candidates": [
@@ -96,17 +96,63 @@
   ],
   "latest_graveyard": [
     "liquidity_turnover_shock",
-    "size_small",
-    "value_bp",
-    "value_ep"
+    "size_small"
   ],
   "latest_top_ranked_factors": [
     "mom_20",
     "mom_plus_value",
     "liquidity_turnover_shock",
-    "size_small",
-    "value_ep"
+    "size_small"
   ],
   "latest_summary": "Latest run: c265d051-fcf3-47ef-9b37-47c2d58c5273 (2026-03-18T17:28:36.852563+00:00) from configs/tushare_workflow_longer.json\nBest average strategy: long_short_top_bottom_all_factors (avg_sharpe=10.837132)\nStable candidates: mom_20, mom_plus_value",
-  "change_report": "# Change Detection\n\nLatest run: c265d051-fcf3-47ef-9b37-47c2d58c5273 | 2026-03-18T17:28:36.852563+00:00 | configs/tushare_workflow_longer.json\nPrevious run: 7a958d8a-29e5-4db4-955c-328491ec0418 | 2026-03-18T17:28:32.751190+00:00 | configs/tushare_workflow.json\n\n## Candidate Pool Changes\n- Entered: none\n- Left: none\n\n## Graveyard Changes\n- Entered: none\n- Left: none"
+  "change_report": "# Change Detection\n\nLatest run: c265d051-fcf3-47ef-9b37-47c2d58c5273 | 2026-03-18T17:28:36.852563+00:00 | configs/tushare_workflow_longer.json\nPrevious run: 7a958d8a-29e5-4db4-955c-328491ec0418 | 2026-03-18T17:28:32.751190+00:00 | configs/tushare_workflow.json\n\n## Candidate Pool Changes\n- Entered: none\n- Left: none\n\n## Graveyard Changes\n- Entered: none\n- Left: none",
+  "recommendation_weights": {
+    "templates": {
+      "neutralization_diagnosis": {
+        "avg_effect_score": 1.0,
+        "sample_count": 1,
+        "recommended_action": "upweight"
+      }
+    },
+    "global_hint": "优先考虑历史上 avg_effect_score 更高的建议模板。"
+  },
+  "recommendation_history_tail": [
+    {
+      "recorded_at_utc": "2026-03-18T18:49:51.143615+00:00",
+      "template_type": "neutralization_diagnosis",
+      "focus_factors": [
+        "mom_20",
+        "mom_plus_value",
+        "liquidity_turnover_shock",
+        "size_small"
+      ],
+      "keep_as_core_candidates": [
+        "mom_20",
+        "mom_plus_value"
+      ],
+      "review_graveyard": [
+        "liquidity_turnover_shock",
+        "size_small",
+        "value_ep",
+        "value_bp"
+      ],
+      "portfolio_checks": [
+        "compare_all_factors_vs_candidates_only",
+        "compare_cluster_representatives_vs_all_factors",
+        "diagnose_neutralized_underperformance"
+      ],
+      "rationale": "基于当前快照，下一轮应继续围绕稳定动量主线，并解释高分非候选因子与中性化策略显著走弱的原因。",
+      "effectiveness": "positive",
+      "reason": "核心候选在执行后的 generated batch 中继续存活。",
+      "survived_as_candidates": [
+        "mom_20",
+        "mom_plus_value"
+      ],
+      "fell_to_graveyard": [
+        "liquidity_turnover_shock",
+        "size_small"
+      ],
+      "next_action_hint": "继续沿当前候选主线做小步扩展。"
+    }
+  ]
 }

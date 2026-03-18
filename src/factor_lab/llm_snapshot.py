@@ -44,8 +44,11 @@ def build_snapshot(db_path: str | Path, output_path: str | Path) -> dict:
             (run_id,),
         ).fetchall()]
 
-    latest_summary_path = Path(db_path).parent / "latest_summary.txt"
-    change_report_path = Path(db_path).parent / "change_report.md"
+    root = Path(db_path).parent
+    latest_summary_path = root / "latest_summary.txt"
+    change_report_path = root / "change_report.md"
+    recommendation_weights_path = root / "llm_recommendation_weights.json"
+    recommendation_history_path = root / "llm_recommendation_history.json"
 
     payload = {
         "latest_run": dict(latest_run) if latest_run else None,
@@ -57,6 +60,8 @@ def build_snapshot(db_path: str | Path, output_path: str | Path) -> dict:
         "latest_top_ranked_factors": latest_representatives,
         "latest_summary": latest_summary_path.read_text(encoding="utf-8") if latest_summary_path.exists() else "",
         "change_report": change_report_path.read_text(encoding="utf-8") if change_report_path.exists() else "",
+        "recommendation_weights": json.loads(recommendation_weights_path.read_text(encoding="utf-8")) if recommendation_weights_path.exists() else {},
+        "recommendation_history_tail": json.loads(recommendation_history_path.read_text(encoding="utf-8"))[-5:] if recommendation_history_path.exists() else [],
     }
     Path(output_path).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return payload
