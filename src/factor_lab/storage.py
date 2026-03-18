@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
+from typing import Any, Iterable
+from uuid import uuid4
 
 
 SCHEMA = """
@@ -57,6 +59,22 @@ CREATE TABLE IF NOT EXISTS run_artifacts (
     artifact_path TEXT NOT NULL,
     PRIMARY KEY (run_id, artifact_name)
 );
+
+CREATE TABLE IF NOT EXISTS research_tasks (
+    task_id TEXT PRIMARY KEY,
+    task_type TEXT NOT NULL,
+    status TEXT NOT NULL,
+    priority INTEGER NOT NULL DEFAULT 100,
+    fingerprint TEXT,
+    payload_json TEXT NOT NULL,
+    parent_task_id TEXT,
+    attempt_count INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
+    created_at_utc TEXT NOT NULL,
+    started_at_utc TEXT,
+    finished_at_utc TEXT,
+    worker_note TEXT
+);
 """
 
 
@@ -76,6 +94,10 @@ class ExperimentStore:
             self.conn.execute("ALTER TABLE workflow_runs ADD COLUMN config_fingerprint TEXT")
         if "rerun_of_run_id" not in cols:
             self.conn.execute("ALTER TABLE workflow_runs ADD COLUMN rerun_of_run_id TEXT")
+
+        task_cols = {row[1] for row in self.conn.execute("PRAGMA table_info(research_tasks)").fetchall()}
+        if task_cols and "worker_note" not in task_cols:
+            self.conn.execute("ALTER TABLE research_tasks ADD COLUMN worker_note TEXT")
 
     def insert_run(self, payload: dict) -> None:
         self.conn.execute(
@@ -175,3 +197,118 @@ class ExperimentStore:
             [(run_id, name, path) for name, path in rows],
         )
         self.conn.commit()
+
+    def enqueue_research_task(
+        self,
+        task_type: str,
+        payload: dict[str, Any],
+        priority: int = 100,
+        fingerprint: str | None = None,
+        parent_task_id: str | None = None,
+        worker_note: str | None = None,
+    ) -> str:
+        if fingerprint:
+            existing = self.conn.execute(
+                """
+                SELECT task_id FROM research_tasks
+                WHERE fingerprint = ? AND status IN ('pending', 'running', 'finished')
+                ORDER BY created_at_utc DESC
+                LIMIT 1
+                """,
+                (fingerprint,),
+            ).fetchone()
+            if existing:
+                return existing[0]
+        task_id = str(uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        self.conn.execute(
+            """
+            INSERT INTO research_tasks (
+                task_id, task_type, status, priority, fingerprint, payload_json,
+                parent_task_id, attempt_count, last_error, created_at_utc,
+                started_at_utc, finished_at_utc, worker_note
+            ) VALUES (?, ?, 'pending', ?, ?, ?, ?, 0, NULL, ?, NULL, NULL, ?)
+            """,
+            (
+                task_id,
+                task_type,
+                priority,
+                fingerprint,
+                json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                parent_task_id,
+                now,
+                worker_note,
+            ),
+        )
+        self.conn.commit()
+        return task_id
+
+    def claim_next_research_task(self) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            """
+            SELECT task_id, task_type, status, priority, fingerprint, payload_json,
+                   parent_task_id, attempt_count, last_error, created_at_utc,
+                   started_at_utc, finished_at_utc, worker_note
+            FROM research_tasks
+            WHERE status = 'pending'
+            ORDER BY priority ASC, created_at_utc ASC
+            LIMIT 1
+            """
+        ).fetchone()
+        if not row:
+            return None
+        now = datetime.now(timezone.utc).isoformat()
+        self.conn.execute(
+            "UPDATE research_tasks SET status='running', started_at_utc=?, attempt_count=attempt_count+1 WHERE task_id=?",
+            (now, row[0]),
+        )
+        self.conn.commit()
+        return self.get_research_task(row[0])
+
+    def get_research_task(self, task_id: str) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            """
+            SELECT task_id, task_type, status, priority, fingerprint, payload_json,
+                   parent_task_id, attempt_count, last_error, created_at_utc,
+                   started_at_utc, finished_at_utc, worker_note
+            FROM research_tasks WHERE task_id = ?
+            """,
+            (task_id,),
+        ).fetchone()
+        if not row:
+            return None
+        payload = dict(zip([c[0] for c in self.conn.execute("SELECT * FROM research_tasks WHERE 0").description], row))
+        payload["payload"] = json.loads(payload.pop("payload_json"))
+        return payload
+
+    def finish_research_task(self, task_id: str, status: str, last_error: str | None = None, worker_note: str | None = None) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        self.conn.execute(
+            "UPDATE research_tasks SET status=?, finished_at_utc=?, last_error=?, worker_note=COALESCE(?, worker_note) WHERE task_id=?",
+            (status, now, last_error, worker_note, task_id),
+        )
+        self.conn.commit()
+
+    def list_research_tasks(self, limit: int = 50) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT task_id, task_type, status, priority, fingerprint, payload_json,
+                   parent_task_id, attempt_count, last_error, created_at_utc,
+                   started_at_utc, finished_at_utc, worker_note
+            FROM research_tasks
+            ORDER BY created_at_utc DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        columns = [
+            'task_id', 'task_type', 'status', 'priority', 'fingerprint', 'payload_json',
+            'parent_task_id', 'attempt_count', 'last_error', 'created_at_utc',
+            'started_at_utc', 'finished_at_utc', 'worker_note'
+        ]
+        result = []
+        for row in rows:
+            item = dict(zip(columns, row))
+            item['payload'] = json.loads(item.pop('payload_json'))
+            result.append(item)
+        return result

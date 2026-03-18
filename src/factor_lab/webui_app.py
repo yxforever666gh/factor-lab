@@ -11,6 +11,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from factor_lab.db_views import ensure_views
 from factor_lab.ops import latest_task_states, trigger_script
+from factor_lab.storage import ExperimentStore
 
 
 def pretty_json_text(value: Any, empty_text: str = "暂无数据。") -> str:
@@ -624,7 +625,8 @@ def llm_page():
 @app.get("/ops", response_class=HTMLResponse)
 def ops_page():
     tasks = latest_task_states(limit=20)
-    return render("ops.html", title="操作", tasks=tasks, result=None)
+    research_tasks = ExperimentStore(DB_PATH).list_research_tasks(limit=20)
+    return render("ops.html", title="操作", tasks=tasks, research_tasks=research_tasks, result=None)
 
 
 @app.get("/ops/run/{target}", response_class=HTMLResponse)
@@ -632,6 +634,8 @@ def ops_run(target: str):
     mapping = {
         "workflow": "scripts/run_tushare_workflow.py",
         "batch": "scripts/run_tushare_batch.py",
+        "orchestrator": "scripts/run_research_orchestrator.py",
+        "queue-seed": "scripts/seed_research_queue.py",
         "cycle": "scripts/run_scheduled_cycle.py",
         "llm": "scripts/run_llm_cycle.py",
         "llm-bridge": "scripts/run_llm_bridge_prepare.py",
@@ -646,4 +650,5 @@ def ops_run(target: str):
         raise HTTPException(status_code=404, detail="未知操作目标")
     result = trigger_script(mapping[target])
     tasks = latest_task_states(limit=20)
-    return render("ops.html", title="操作", tasks=tasks, result=result)
+    research_tasks = ExperimentStore(DB_PATH).list_research_tasks(limit=20)
+    return render("ops.html", title="操作", tasks=tasks, research_tasks=research_tasks, result=result)

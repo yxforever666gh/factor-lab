@@ -4,6 +4,8 @@
   <section class="card">
     <h2>运行操作</h2>
     <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:12px;">
+      <a class="pill" href="/ops/run/queue-seed">初始化研究队列</a>
+      <a class="pill" href="/ops/run/orchestrator">运行研究调度器</a>
       <a class="pill" href="/ops/run/workflow">运行 Workflow</a>
       <a class="pill" href="/ops/run/batch">运行 Batch</a>
       <a class="pill" href="/ops/run/cycle">运行完整周期</a>
@@ -42,6 +44,25 @@
     {% endif %}
   </section>
 </div>
+
+<section class="card" style="margin-top:18px;">
+  <h2>研究队列</h2>
+  <table>
+    <thead><tr><th>任务 ID</th><th>类型</th><th>状态</th><th>优先级</th><th>创建时间</th><th>备注</th></tr></thead>
+    <tbody>
+      {% for row in research_tasks %}
+      <tr>
+        <td>{{ row.task_id[:8] }}</td>
+        <td>{{ row.task_type }}</td>
+        <td><span class="pill {{ 'good' if row.status == 'finished' else 'bad' if row.status == 'failed' else 'warn' }}">{{ row.status }}</span></td>
+        <td>{{ row.priority }}</td>
+        <td>{{ row.created_at_utc }}</td>
+        <td class="text-break">{{ row.worker_note or '-' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
 
 <section class="card" style="margin-top:18px;">
   <h2>最近任务状态</h2>
