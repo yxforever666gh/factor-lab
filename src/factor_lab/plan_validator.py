@@ -18,12 +18,14 @@ ALLOWED_PORTFOLIO_CHECKS = {
 def _apply_template_policy(
     template_type: str,
     recommendation_weights: dict[str, Any] | None,
+    recommendation_context: dict[str, Any] | None,
     max_focus_factors: int,
     max_review_graveyard: int,
 ) -> tuple[int, int, dict[str, Any]]:
     templates = (recommendation_weights or {}).get("templates", {})
     template_info = templates.get(template_type, {})
     action = template_info.get("recommended_action", "keep")
+    cooldown_info = ((recommendation_context or {}).get("cooldown", {}) or {}).get(template_type, {})
 
     adjusted_focus = max_focus_factors
     adjusted_graveyard = max_review_graveyard
@@ -47,10 +49,16 @@ def _apply_template_policy(
         adjusted_focus = max(3, max_focus_factors - 1)
         adjusted_graveyard = max(3, max_review_graveyard - 1)
 
+    if cooldown_info.get("cooldown_active"):
+        adjusted_focus = max(2, min(adjusted_focus, 3))
+        adjusted_graveyard = max(2, min(adjusted_graveyard, 3))
+
     policy["adjusted_max_focus_factors"] = adjusted_focus
     policy["adjusted_max_review_graveyard"] = adjusted_graveyard
     policy["avg_effect_score"] = template_info.get("avg_effect_score")
     policy["sample_count"] = template_info.get("sample_count")
+    policy["cooldown_active"] = cooldown_info.get("cooldown_active", False)
+    policy["cooldown_reason"] = cooldown_info.get("reason")
     return adjusted_focus, adjusted_graveyard, policy
 
 
@@ -60,6 +68,7 @@ def validate_plan(
     max_focus_factors: int = 6,
     max_review_graveyard: int = 6,
     recommendation_weights: dict[str, Any] | None = None,
+    recommendation_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -68,6 +77,7 @@ def validate_plan(
     adjusted_focus_limit, adjusted_graveyard_limit, template_policy = _apply_template_policy(
         template_type,
         recommendation_weights,
+        recommendation_context,
         max_focus_factors,
         max_review_graveyard,
     )
@@ -137,6 +147,12 @@ def validate_plan_file(
     plan_path: str | Path,
     allowed_factor_names: set[str],
     recommendation_weights: dict[str, Any] | None = None,
+    recommendation_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     plan = json.loads(Path(plan_path).read_text(encoding="utf-8"))
-    return validate_plan(plan, allowed_factor_names, recommendation_weights=recommendation_weights)
+    return validate_plan(
+        plan,
+        allowed_factor_names,
+        recommendation_weights=recommendation_weights,
+        recommendation_context=recommendation_context,
+    )

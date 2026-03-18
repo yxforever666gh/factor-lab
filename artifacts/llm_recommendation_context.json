@@ -6,7 +6,8 @@
       "avg_effect_score": 1.0,
       "decayed_effect_score": 1.0,
       "sample_count": 2,
-      "fatigue_level": "medium"
+      "fatigue_level": "medium",
+      "cooldown_active": false
     }
   ],
   "fatigue": {
@@ -15,5 +16,11 @@
       "fatigue_level": "medium"
     }
   },
-  "planner_hint": "优先尝试 higher priority 且 fatigue_level 低的模板；对 fatigue_level 高的模板，除非出现新信息，否则避免连续重复。"
+  "cooldown": {
+    "neutralization_diagnosis": {
+      "cooldown_active": false,
+      "reason": "无冷却限制。"
+    }
+  },
+  "planner_hint": "优先尝试 higher priority 且 fatigue_level 低的模板；对 cooldown_active=true 的模板，除非有明确新信息，否则本轮应避免重复。"
 }
