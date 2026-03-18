@@ -141,7 +141,46 @@ def _enqueue_followups_for_workflow(store: ExperimentStore, task: dict[str, Any]
 
 
 def _enqueue_followups_for_batch(store: ExperimentStore, task: dict[str, Any], payload: dict[str, Any]) -> list[str]:
-    return []
+    followups: list[str] = []
+    budget = queue_budget_snapshot(store)
+    comparison_path = Path(payload["output_dir"]) / "batch_comparison.json"
+    if not comparison_path.exists() or budget["validation"] >= MAX_PENDING_VALIDATION:
+        return followups
+    comparison = json.loads(comparison_path.read_text(encoding="utf-8"))
+    graveyard_presence = comparison.get("graveyard_presence", {}) or {}
+    candidate_presence = comparison.get("candidate_presence", {}) or {}
+
+    diagnostic_reasons = []
+    if graveyard_presence:
+        consistent_graveyard = [name for name, jobs in graveyard_presence.items() if len(jobs) >= 2]
+        if consistent_graveyard:
+            diagnostic_reasons.append(
+                f"consistent_graveyard:{', '.join(sorted(consistent_graveyard[:5]))}"
+            )
+    if candidate_presence:
+        stable_candidates = [name for name, jobs in candidate_presence.items() if len(jobs) >= 2]
+        if stable_candidates:
+            diagnostic_reasons.append(
+                f"stable_candidates:{', '.join(sorted(stable_candidates[:5]))}"
+            )
+
+    if diagnostic_reasons:
+        fingerprint = f"diagnostic::{payload['output_dir']}::{';'.join(diagnostic_reasons)}"
+        followups.append(
+            store.enqueue_research_task(
+                task_type="diagnostic",
+                payload={
+                    "diagnostic_type": "batch_consistency_review",
+                    "source_output_dir": payload["output_dir"],
+                    "reasons": diagnostic_reasons,
+                },
+                priority=VALIDATION_PRIORITY + 5,
+                fingerprint=fingerprint,
+                parent_task_id=task["task_id"],
+                worker_note="validation｜batch 一致性诊断",
+            )
+        )
+    return followups
 
 
 def enqueue_followup_tasks(store: ExperimentStore, task: dict[str, Any]) -> list[str]:
@@ -150,6 +189,10 @@ def enqueue_followup_tasks(store: ExperimentStore, task: dict[str, Any]) -> list
         return _enqueue_followups_for_workflow(store, task, payload)
     if task["task_type"] == "batch":
         return _enqueue_followups_for_batch(store, task, payload)
+    if task["task_type"] == "generated_batch":
+        return []
+    if task["task_type"] == "diagnostic":
+        return []
     return []
 
 
@@ -184,6 +227,33 @@ def execute_task(task: dict[str, Any]) -> str:
         )
         refresh_reports()
         return f"generated batch finished: {batch_path}"
+    if task_type == "diagnostic":
+        output_dir = Path("artifacts") / "diagnostics"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        diagnostic_type = payload.get("diagnostic_type", "generic")
+        source_output_dir = Path(payload.get("source_output_dir", "artifacts"))
+        result = {
+            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "diagnostic_type": diagnostic_type,
+            "source_output_dir": str(source_output_dir),
+            "reasons": payload.get("reasons", []),
+        }
+        if diagnostic_type == "batch_consistency_review":
+            comparison_path = source_output_dir / "batch_comparison.json"
+            comparison = json.loads(comparison_path.read_text(encoding="utf-8")) if comparison_path.exists() else {}
+            result["candidate_presence"] = comparison.get("candidate_presence", {})
+            result["graveyard_presence"] = comparison.get("graveyard_presence", {})
+            result["representative_presence"] = comparison.get("representative_presence", {})
+            stable_candidates = sorted(result["candidate_presence"].keys())
+            repeated_graveyard = sorted(result["graveyard_presence"].keys())
+            result["summary"] = {
+                "stable_candidates": stable_candidates,
+                "repeated_graveyard": repeated_graveyard,
+                "hypothesis": "若某些因子跨窗口稳定落入 graveyard，应优先诊断 neutralization 或 split robustness，而不是继续盲目扩展。",
+            }
+        out_path = output_dir / f"{task['task_id']}.json"
+        out_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
+        return f"diagnostic finished: {diagnostic_type}"
     raise ValueError(f"unsupported task_type: {task_type}")
 
 

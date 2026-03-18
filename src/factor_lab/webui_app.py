@@ -413,6 +413,16 @@ def research_page():
         "exploration": len([t for t in tasks if (t.get("worker_note") or "").startswith("exploration")]),
         "retry": len([t for t in tasks if (t.get("worker_note") or "").startswith("retry")]),
     }
+    for task in tasks:
+        payload = task.get("payload") or {}
+        if task["task_type"] in {"workflow", "batch"}:
+            task["payload_summary"] = payload.get("config_path", "-")
+        elif task["task_type"] == "generated_batch":
+            task["payload_summary"] = payload.get("batch_path", "-")
+        elif task["task_type"] == "diagnostic":
+            task["payload_summary"] = f"{payload.get('diagnostic_type', '-')}: {'; '.join(payload.get('reasons', []))}"
+        else:
+            task["payload_summary"] = pretty_json_text(payload)
     return render("research.html", title="研究队列", tasks=tasks, summary=summary)
 
 
