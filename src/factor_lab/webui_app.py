@@ -415,10 +415,14 @@ def research_page():
     }
     for task in tasks:
         payload = task.get("payload") or {}
+        knowledge_gain = [item for item in (payload.get("knowledge_gain") or []) if item]
+        task["knowledge_gain_text"] = "、".join(knowledge_gain) if knowledge_gain else "-"
         if task["task_type"] in {"workflow", "batch"}:
             task["payload_summary"] = payload.get("config_path", "-")
         elif task["task_type"] == "generated_batch":
             task["payload_summary"] = payload.get("batch_path", "-")
+            if "knowledge_gain=" in (task.get("worker_note") or "") and task["knowledge_gain_text"] == "-":
+                task["knowledge_gain_text"] = (task.get("worker_note") or "").split("knowledge_gain=", 1)[-1]
         elif task["task_type"] == "diagnostic":
             task["payload_summary"] = f"{payload.get('diagnostic_type', '-')}: {'; '.join(payload.get('reasons', []))}"
         else:

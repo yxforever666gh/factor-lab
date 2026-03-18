@@ -26,7 +26,7 @@
   <h2>任务明细</h2>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>任务</th><th>类型</th><th>状态</th><th>优先级</th><th>尝试</th><th>父任务</th><th>创建时间</th><th>原因/备注</th><th>payload 摘要</th><th>错误</th></tr></thead>
+      <thead><tr><th>任务</th><th>类型</th><th>状态</th><th>优先级</th><th>尝试</th><th>父任务</th><th>创建时间</th><th>原因/备注</th><th>payload 摘要</th><th>知识增量</th><th>错误</th></tr></thead>
       <tbody>
         {% for row in tasks %}
         <tr>
@@ -39,6 +39,7 @@
           <td class="text-nowrap">{{ row.created_at_utc }}</td>
           <td class="text-break">{{ row.worker_note or '-' }}</td>
           <td class="text-break">{{ row.payload_summary or '-' }}</td>
+          <td class="text-break">{{ row.knowledge_gain_text or '-' }}</td>
           <td class="text-break">{{ row.last_error or '-' }}</td>
         </tr>
         {% endfor %}
