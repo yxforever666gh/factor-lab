@@ -176,6 +176,21 @@ def portfolios_page():
     return render("portfolios.html", title="组合", strategies=strategies, recent=recent)
 
 
+@app.get("/llm", response_class=HTMLResponse)
+def llm_page():
+    base = DB_PATH.parent
+    review_path = base / "llm_review.md"
+    plan_path = base / "llm_next_batch_proposal.json"
+    snapshot_path = base / "llm_input_snapshot.json"
+    return render(
+        "llm.html",
+        title="LLM",
+        review_text=review_path.read_text(encoding="utf-8") if review_path.exists() else "暂无 LLM 评审。",
+        plan_text=plan_path.read_text(encoding="utf-8") if plan_path.exists() else "暂无 LLM 计划。",
+        snapshot_text=snapshot_path.read_text(encoding="utf-8") if snapshot_path.exists() else "暂无 LLM 输入快照。",
+    )
+
+
 @app.get("/ops", response_class=HTMLResponse)
 def ops_page():
     tasks = latest_task_states(limit=20)
@@ -188,6 +203,7 @@ def ops_run(target: str):
         "workflow": "scripts/run_tushare_workflow.py",
         "batch": "scripts/run_tushare_batch.py",
         "cycle": "scripts/run_scheduled_cycle.py",
+        "llm": "scripts/run_llm_cycle.py",
     }
     if target not in mapping:
         raise HTTPException(status_code=404, detail="未知操作目标")

@@ -1,0 +1,112 @@
+{
+  "latest_run": {
+    "run_id": "88dbd89e-7d71-47de-b3e8-d716f5017486",
+    "created_at_utc": "2026-03-18T17:39:04.657495+00:00",
+    "config_path": "configs/tushare_workflow.json",
+    "data_source": "tushare",
+    "start_date": "2026-01-01",
+    "end_date": "2026-03-18",
+    "status": "finished",
+    "dataset_rows": 242,
+    "factor_count": 6
+  },
+  "top_scores": [
+    {
+      "factor_name": "mom_20",
+      "avg_score": 1.398116,
+      "runs": 10
+    },
+    {
+      "factor_name": "mom_plus_value",
+      "avg_score": 1.140355,
+      "runs": 10
+    },
+    {
+      "factor_name": "liquidity_turnover_shock",
+      "avg_score": 0.5172,
+      "runs": 10
+    },
+    {
+      "factor_name": "size_small",
+      "avg_score": 0.513371,
+      "runs": 10
+    },
+    {
+      "factor_name": "value_ep",
+      "avg_score": 0.391292,
+      "runs": 10
+    },
+    {
+      "factor_name": "value_bp",
+      "avg_score": -0.24034,
+      "runs": 10
+    }
+  ],
+  "stable_candidates": [
+    {
+      "factor_name": "mom_20",
+      "candidate_runs": 10
+    },
+    {
+      "factor_name": "mom_plus_value",
+      "candidate_runs": 10
+    }
+  ],
+  "portfolio_averages": [
+    {
+      "strategy_name": "long_short_top_bottom_all_factors",
+      "avg_sharpe": 10.837132,
+      "avg_return": 1.670311,
+      "runs": 10
+    },
+    {
+      "strategy_name": "long_short_top_bottom_cluster_representatives",
+      "avg_sharpe": 10.196009,
+      "avg_return": 1.556436,
+      "runs": 10
+    },
+    {
+      "strategy_name": "long_short_top_bottom_candidates_only",
+      "avg_sharpe": 5.441824,
+      "avg_return": 1.213329,
+      "runs": 10
+    },
+    {
+      "strategy_name": "long_short_top_bottom_cluster_representatives_neutralized",
+      "avg_sharpe": 1.462645,
+      "avg_return": 0.199767,
+      "runs": 10
+    },
+    {
+      "strategy_name": "long_short_top_bottom_candidates_only_neutralized",
+      "avg_sharpe": 0.889911,
+      "avg_return": 0.155334,
+      "runs": 10
+    },
+    {
+      "strategy_name": "long_short_top_bottom_neutralized",
+      "avg_sharpe": 0.4091,
+      "avg_return": 0.050627,
+      "runs": 10
+    }
+  ],
+  "latest_candidates": [
+    "mom_20",
+    "mom_plus_value"
+  ],
+  "latest_graveyard": [
+    "liquidity_turnover_shock",
+    "size_small",
+    "value_bp",
+    "value_ep"
+  ],
+  "latest_top_ranked_factors": [
+    "mom_20",
+    "mom_plus_value",
+    "liquidity_turnover_shock",
+    "size_small",
+    "value_ep"
+  ],
+  "latest_summary": "Latest run: c265d051-fcf3-47ef-9b37-47c2d58c5273 (2026-03-18T17:28:36.852563+00:00) from configs/tushare_workflow_longer.json\nBest average strategy: long_short_top_bottom_all_factors (avg_sharpe=10.837132)\nStable candidates: mom_20, mom_plus_value",
+  "change_report": "# Change Detection\n\nLatest run: c265d051-fcf3-47ef-9b37-47c2d58c5273 | 2026-03-18T17:28:36.852563+00:00 | configs/tushare_workflow_longer.json\nPrevious run: 7a958d8a-29e5-4db4-955c-328491ec0418 | 2026-03-18T17:28:32.751190+00:00 | configs/tushare_workflow.json\n\n## Candidate Pool Changes\n- Entered: none\n- Left: none\n\n## Graveyard Changes\n- Entered: none\n- Left: none"
+}

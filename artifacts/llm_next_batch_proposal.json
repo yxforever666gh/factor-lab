@@ -1,0 +1,22 @@
+{
+  "provider": "mock",
+  "summary": "优先围绕当前稳定候选池继续做小步扩展，不自动执行。",
+  "recommended_jobs": [
+    {
+      "name": "candidate_focus_followup",
+      "reason": "围绕稳定候选池做进一步验证，避免一次扩太多。",
+      "based_on_candidates": [
+        "mom_20",
+        "mom_plus_value"
+      ],
+      "window": {
+        "start_date": "2026-01-01",
+        "end_date": "2026-03-18"
+      },
+      "notes": [
+        "优先测试候选池相关的轻量组合变化",
+        "继续比较候选组合与中性化候选组合"
+      ]
+    }
+  ]
+}

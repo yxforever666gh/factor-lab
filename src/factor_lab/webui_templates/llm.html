@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-2">
+  <section class="card">
+    <h2>LLM 评审</h2>
+    <pre>{{ review_text }}</pre>
+  </section>
+  <section class="card">
+    <h2>LLM 下一轮计划</h2>
+    <pre>{{ plan_text }}</pre>
+  </section>
+</div>
+
+<section class="card" style="margin-top:18px;">
+  <h2>LLM 输入快照</h2>
+  <pre>{{ snapshot_text }}</pre>
+</section>
+{% endblock %}
