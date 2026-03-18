@@ -1,6 +1,6 @@
 {
   "mode": "openclaw_agent_bridge",
-  "updated_at_utc": "2026-03-18T19:40:59.747377+00:00",
+  "updated_at_utc": "2026-03-18T19:46:59.297783+00:00",
   "plan_validation": {
     "valid": true,
     "errors": [],
@@ -20,7 +20,16 @@
     "portfolio_policy": {
       "stability_score": 0.88,
       "label": "高稳定",
-      "risk_mode": "normal"
+      "risk_mode": "normal",
+      "conservative_policy": {
+        "enabled": false,
+        "mode": "normal",
+        "max_focus_factors": null,
+        "prefer_core_candidates": false,
+        "graveyard_review_limit": null,
+        "new_template_budget": null,
+        "reason": "纸面组合稳定性正常。"
+      }
     },
     "normalized_plan": {
       "focus_factors": [

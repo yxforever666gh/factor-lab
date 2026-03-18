@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from factor_lab.llm_recommendation_memory import infer_template_type
+from factor_lab.conservative_mode import conservative_policy_from_portfolio
 
 
 REQUIRED_KEYS = {"focus_factors", "keep_as_core_candidates", "review_graveyard", "portfolio_checks", "rationale"}
@@ -87,6 +88,8 @@ def validate_plan(
     if missing:
         errors.append(f"缺少字段: {', '.join(sorted(missing))}")
 
+    conservative_policy = conservative_policy_from_portfolio(paper_portfolio_stability)
+
     focus_factors = plan.get("focus_factors", [])
     keep_as_core = plan.get("keep_as_core_candidates", [])
     review_graveyard = plan.get("review_graveyard", [])
@@ -96,15 +99,21 @@ def validate_plan(
 
     if not isinstance(focus_factors, list) or not focus_factors:
         errors.append("focus_factors 必须是非空列表")
-    if isinstance(focus_factors, list) and len(focus_factors) > adjusted_focus_limit:
-        errors.append(f"focus_factors 超出上限 {adjusted_focus_limit}")
+    effective_focus_limit = adjusted_focus_limit
+    if conservative_policy.get("enabled") and conservative_policy.get("max_focus_factors") is not None:
+        effective_focus_limit = min(effective_focus_limit, int(conservative_policy["max_focus_factors"]))
+    if isinstance(focus_factors, list) and len(focus_factors) > effective_focus_limit:
+        errors.append(f"focus_factors 超出上限 {effective_focus_limit}")
 
     if not isinstance(keep_as_core, list):
         errors.append("keep_as_core_candidates 必须是列表")
     if not isinstance(review_graveyard, list):
         errors.append("review_graveyard 必须是列表")
-    if isinstance(review_graveyard, list) and len(review_graveyard) > adjusted_graveyard_limit:
-        warnings.append(f"review_graveyard 超出建议上限 {adjusted_graveyard_limit}，后续会截断")
+    effective_graveyard_limit = adjusted_graveyard_limit
+    if conservative_policy.get("enabled") and conservative_policy.get("graveyard_review_limit") is not None:
+        effective_graveyard_limit = min(effective_graveyard_limit, int(conservative_policy["graveyard_review_limit"]))
+    if isinstance(review_graveyard, list) and len(review_graveyard) > effective_graveyard_limit:
+        warnings.append(f"review_graveyard 超出建议上限 {effective_graveyard_limit}，后续会截断")
 
     if not isinstance(portfolio_checks, list) or not portfolio_checks:
         errors.append("portfolio_checks 必须是非空列表")
@@ -133,18 +142,24 @@ def validate_plan(
         if outside_focus:
             warnings.append(f"keep_as_core_candidates 中部分因子不在 focus_factors 内: {', '.join(outside_focus)}")
 
+    if conservative_policy.get("enabled") and conservative_policy.get("prefer_core_candidates"):
+        non_core = [name for name in focus_factors if name not in keep_as_core]
+        if non_core:
+            warnings.append(f"保守模式下，建议减少非核心候选: {', '.join(non_core)}")
+            if len(non_core) >= len(focus_factors) - len(keep_as_core):
+                pass
+
     portfolio_policy = {
         "stability_score": (paper_portfolio_stability or {}).get("stability_score"),
         "label": (paper_portfolio_stability or {}).get("label"),
+        "risk_mode": conservative_policy.get("mode", "normal"),
+        "conservative_policy": conservative_policy,
     }
     stability_score = (paper_portfolio_stability or {}).get("stability_score")
     if isinstance(stability_score, (int, float)) and stability_score < 0.6:
         warnings.append("纸面组合稳定性偏低，建议减少本轮 focus_factors 数量")
         if isinstance(focus_factors, list) and len(focus_factors) > 3:
             errors.append("纸面组合稳定性偏低时，focus_factors 不应超过 3")
-        portfolio_policy["risk_mode"] = "conservative"
-    else:
-        portfolio_policy["risk_mode"] = "normal"
 
     return {
         "valid": not errors,
@@ -153,9 +168,9 @@ def validate_plan(
         "template_policy": template_policy,
         "portfolio_policy": portfolio_policy,
         "normalized_plan": {
-            "focus_factors": focus_factors[:adjusted_focus_limit] if isinstance(focus_factors, list) else [],
+            "focus_factors": focus_factors[:effective_focus_limit] if isinstance(focus_factors, list) else [],
             "keep_as_core_candidates": keep_as_core if isinstance(keep_as_core, list) else [],
-            "review_graveyard": review_graveyard[:adjusted_graveyard_limit] if isinstance(review_graveyard, list) else [],
+            "review_graveyard": review_graveyard[:effective_graveyard_limit] if isinstance(review_graveyard, list) else [],
             "portfolio_checks": portfolio_checks if isinstance(portfolio_checks, list) else [],
             "rationale": rationale.strip() if isinstance(rationale, str) else "",
             "novelty_reason": novelty_reason.strip() if isinstance(novelty_reason, str) else "",

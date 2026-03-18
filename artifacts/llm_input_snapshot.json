@@ -240,5 +240,14 @@
     "stability_ratio": 1.0,
     "added": [],
     "removed": []
+  },
+  "conservative_policy": {
+    "enabled": false,
+    "mode": "normal",
+    "max_focus_factors": null,
+    "prefer_core_candidates": false,
+    "graveyard_review_limit": null,
+    "new_template_budget": null,
+    "reason": "纸面组合稳定性正常。"
   }
 }

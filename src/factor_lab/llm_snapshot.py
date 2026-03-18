@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 import sqlite3
 
+from factor_lab.conservative_mode import conservative_policy_from_portfolio
+
 
 def build_snapshot(db_path: str | Path, output_path: str | Path) -> dict:
     conn = sqlite3.connect(db_path)
@@ -53,6 +55,8 @@ def build_snapshot(db_path: str | Path, output_path: str | Path) -> dict:
     paper_portfolio_stability_path = root / "paper_portfolio" / "portfolio_stability_score.json"
     paper_portfolio_retro_path = root / "paper_portfolio" / "portfolio_retrospective.json"
 
+    paper_portfolio_stability = json.loads(paper_portfolio_stability_path.read_text(encoding="utf-8")) if paper_portfolio_stability_path.exists() else {}
+
     payload = {
         "latest_run": dict(latest_run) if latest_run else None,
         "top_scores": top_scores,
@@ -66,8 +70,9 @@ def build_snapshot(db_path: str | Path, output_path: str | Path) -> dict:
         "recommendation_weights": json.loads(recommendation_weights_path.read_text(encoding="utf-8")) if recommendation_weights_path.exists() else {},
         "recommendation_history_tail": json.loads(recommendation_history_path.read_text(encoding="utf-8"))[-5:] if recommendation_history_path.exists() else [],
         "recommendation_context": json.loads(recommendation_context_path.read_text(encoding="utf-8")) if recommendation_context_path.exists() else {},
-        "paper_portfolio_stability": json.loads(paper_portfolio_stability_path.read_text(encoding="utf-8")) if paper_portfolio_stability_path.exists() else {},
+        "paper_portfolio_stability": paper_portfolio_stability,
         "paper_portfolio_retrospective": json.loads(paper_portfolio_retro_path.read_text(encoding="utf-8")) if paper_portfolio_retro_path.exists() else {},
+        "conservative_policy": conservative_policy_from_portfolio(paper_portfolio_stability),
     }
     Path(output_path).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return payload

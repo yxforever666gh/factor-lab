@@ -27,7 +27,7 @@ def build_agent_request(snapshot: dict[str, Any], output_path: str | Path) -> di
             "plan_optional_keys": sorted(OPTIONAL_PLAN_KEYS),
             "must_ground_on_snapshot": True,
             "must_not_override_core_metrics": True,
-            "planning_hint": "在生成下一轮建议时，参考 snapshot.recommendation_weights、snapshot.recommendation_history_tail、snapshot.recommendation_context 以及 snapshot.paper_portfolio_stability；优先考虑历史 decayed_effect_score 更高、recommended_action 更积极、且 fatigue_level 更低的建议模板；对 fatigue_level 高或 cooldown_active=true 的模板，除非出现新信息，否则避免连续重复；若仍继续提该模板，必须提供 novelty_reason；如果纸面组合稳定性下降，应优先提出更保守、更少漂移的建议。",
+            "planning_hint": "在生成下一轮建议时，参考 snapshot.recommendation_weights、snapshot.recommendation_history_tail、snapshot.recommendation_context、snapshot.paper_portfolio_stability 与 snapshot.conservative_policy；优先考虑历史 decayed_effect_score 更高、recommended_action 更积极、且 fatigue_level 更低的建议模板；对 fatigue_level 高或 cooldown_active=true 的模板，除非出现新信息，否则避免连续重复；若仍继续提该模板，必须提供 novelty_reason；如果 conservative_policy.enabled=true，应优先选择稳定候选、减少 focus_factors、减少墓地复核，并降低新模板尝试。",
         },
     }
     Path(output_path).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
