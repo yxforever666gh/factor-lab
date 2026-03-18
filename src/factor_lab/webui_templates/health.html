@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-3">
+  <section class="card">
+    <h2>运行健康</h2>
+    <div style="font-size:40px; font-weight:700;">{{ health.run_health.score }}</div>
+    <div class="muted">最近 24h 成功率 {{ (health.run_health.success_rate_24h * 100)|round(1) if health.run_health.success_rate_24h is not none else 0 }}%</div>
+  </section>
+  <section class="card">
+    <h2>研究进步</h2>
+    <div style="font-size:40px; font-weight:700;">{{ health.research_progress.score }}</div>
+    <div class="muted">稳定候选 {{ health.research_progress.stable_candidate_count }} 个</div>
+  </section>
+  <section class="card">
+    <h2>组合进步</h2>
+    <div style="font-size:40px; font-weight:700;">{{ health.portfolio_progress.score }}</div>
+    <div class="muted">纸面组合稳定性 {{ health.portfolio_progress.paper_stability.label if health.portfolio_progress.paper_stability else '-' }}</div>
+  </section>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>它有没有持续在跑？</h2>
+    <table>
+      <tbody>
+        <tr><th>最近 24h 运行次数</th><td>{{ health.run_health.runs_24h }}</td></tr>
+        <tr><th>最近 24h 完成次数</th><td>{{ health.run_health.finished_24h }}</td></tr>
+        <tr><th>最近 7d 运行次数</th><td>{{ health.run_health.runs_7d }}</td></tr>
+        <tr><th>最近 7d 完成次数</th><td>{{ health.run_health.finished_7d }}</td></tr>
+        <tr><th>最近状态</th><td>{{ health.run_health.latest_status or '-' }}</td></tr>
+        <tr><th>最新数据终点</th><td>{{ health.run_health.latest_end_date or '-' }}</td></tr>
+        <tr><th>最新样本行数</th><td>{{ health.run_health.latest_dataset_rows or '-' }}</td></tr>
+      </tbody>
+    </table>
+    <div class="muted" style="margin-top:10px;">看这里主要判断：有没有断档、有没有静默失败、数据是不是在前进。</div>
+  </section>
+
+  <section class="card">
+    <h2>它有没有一步一步变好？</h2>
+    <table>
+      <tbody>
+        <tr><th>稳定候选数量</th><td>{{ health.research_progress.stable_candidate_count }}</td></tr>
+        <tr><th>本轮候选</th><td>{{ health.research_progress.latest_candidates|join('、') if health.research_progress.latest_candidates else '无' }}</td></tr>
+        <tr><th>上轮候选</th><td>{{ health.research_progress.previous_candidates|join('、') if health.research_progress.previous_candidates else '无' }}</td></tr>
+        <tr><th>候选 churn</th><td>{{ health.research_progress.candidate_churn }}</td></tr>
+        <tr><th>LLM 建议命中率</th><td>{{ ((health.research_progress.recommendation_hit_rate or 0) * 100)|round(1) }}%</td></tr>
+        <tr><th>最近建议样本数</th><td>{{ health.research_progress.recommendation_tail_size }}</td></tr>
+      </tbody>
+    </table>
+    <div class="muted" style="margin-top:10px;">看这里主要判断：候选池有没有收敛、建议有没有后验价值，而不是只看某一次最高 Sharpe。</div>
+  </section>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>组合层是否更稳</h2>
+    <table>
+      <tbody>
+        <tr><th>候选组合近 5 次平均 Sharpe</th><td>{{ health.portfolio_progress.candidates_only_recent_sharpe or '-' }}</td></tr>
+        <tr><th>全因子组合近 5 次平均 Sharpe</th><td>{{ health.portfolio_progress.all_factors_recent_sharpe or '-' }}</td></tr>
+        <tr><th>候选组合近 5 次平均收益</th><td>{{ health.portfolio_progress.candidates_only_recent_return or '-' }}</td></tr>
+        <tr><th>全因子组合近 5 次平均收益</th><td>{{ health.portfolio_progress.all_factors_recent_return or '-' }}</td></tr>
+        <tr><th>纸面组合稳定性评分</th><td>{{ health.portfolio_progress.paper_stability.stability_score if health.portfolio_progress.paper_stability else '-' }}</td></tr>
+        <tr><th>纸面组合标签</th><td>{{ health.portfolio_progress.paper_stability.label if health.portfolio_progress.paper_stability else '-' }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>值得盯的高分因子</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>因子</th><th>平均分</th><th>样本次数</th></tr></thead>
+        <tbody>
+          {% for row in health.research_progress.factor_score_trend %}
+          <tr><td>{{ row.factor_name }}</td><td class="num">{{ row.avg_score }}</td><td class="num">{{ row.runs }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<section class="card" style="margin-top:18px;">
+  <h2>最近运行记录</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>时间</th><th>运行</th><th>配置</th><th>状态</th><th>数据区间</th><th>样本</th></tr></thead>
+      <tbody>
+        {% for row in health.recent_runs[:12] %}
+        <tr>
+          <td class="text-nowrap">{{ row.created_at_utc }}</td>
+          <td><a href="/runs/{{ row.run_id }}">{{ row.run_id[:8] }}</a></td>
+          <td class="text-break">{{ row.config_path }}</td>
+          <td>{{ row.status }}</td>
+          <td class="text-nowrap">{{ row.start_date or '-' }} → {{ row.end_date or '-' }}</td>
+          <td class="num">{{ row.dataset_rows or '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

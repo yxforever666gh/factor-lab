@@ -1,5 +1,23 @@
 {% extends 'base.html' %}
 {% block content %}
+<div class="grid cols-3" style="margin-bottom:18px;">
+  <section class="card">
+    <h2>运行健康</h2>
+    <div style="font-size:40px; font-weight:700;">{{ health.run_health.score }}</div>
+    <div class="muted">24h 完成 {{ health.run_health.finished_24h }}/{{ health.run_health.runs_24h }}</div>
+  </section>
+  <section class="card">
+    <h2>研究进步</h2>
+    <div style="font-size:40px; font-weight:700;">{{ health.research_progress.score }}</div>
+    <div class="muted">稳定候选 {{ health.research_progress.stable_candidate_count }} 个</div>
+  </section>
+  <section class="card">
+    <h2>组合进步</h2>
+    <div style="font-size:40px; font-weight:700;">{{ health.portfolio_progress.score }}</div>
+    <div class="muted">纸面组合 {{ health.portfolio_progress.paper_stability.label if health.portfolio_progress.paper_stability else '-' }}</div>
+  </section>
+</div>
+
 <div class="grid cols-2">
   <section class="card">
     <h2>最新摘要</h2>

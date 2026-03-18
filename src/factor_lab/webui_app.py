@@ -26,6 +26,174 @@ def portfolio_positions(current: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(positions, key=lambda row: row.get("weight", 0), reverse=True)
 
 
+def compute_health_metrics() -> dict[str, Any]:
+    conn = get_conn()
+    try:
+        runs = [dict(row) for row in conn.execute(
+            """
+            SELECT run_id, created_at_utc, config_path, start_date, end_date,
+                   status, factor_count, dataset_rows
+            FROM workflow_runs
+            ORDER BY created_at_utc DESC
+            LIMIT 30
+            """
+        ).fetchall()]
+        latest_run = runs[0] if runs else None
+        recent_24h_total = conn.execute(
+            "SELECT COUNT(*) FROM workflow_runs WHERE created_at_utc >= datetime('now', '-1 day')"
+        ).fetchone()[0]
+        recent_24h_finished = conn.execute(
+            "SELECT COUNT(*) FROM workflow_runs WHERE created_at_utc >= datetime('now', '-1 day') AND status = 'finished'"
+        ).fetchone()[0]
+        recent_7d_total = conn.execute(
+            "SELECT COUNT(*) FROM workflow_runs WHERE created_at_utc >= datetime('now', '-7 day')"
+        ).fetchone()[0]
+        recent_7d_finished = conn.execute(
+            "SELECT COUNT(*) FROM workflow_runs WHERE created_at_utc >= datetime('now', '-7 day') AND status = 'finished'"
+        ).fetchone()[0]
+
+        candidate_rows = [dict(row) for row in conn.execute(
+            """
+            SELECT run_id, factor_name
+            FROM factor_results
+            WHERE variant = 'candidate'
+            ORDER BY run_id ASC, factor_name ASC
+            """
+        ).fetchall()]
+        candidate_by_run: dict[str, list[str]] = {}
+        for row in candidate_rows:
+            candidate_by_run.setdefault(row['run_id'], []).append(row['factor_name'])
+
+        candidate_runs = [r for r in runs if r['run_id'] in candidate_by_run]
+        latest_candidates = candidate_by_run.get(latest_run['run_id'], []) if latest_run else []
+        previous_candidates = candidate_by_run.get(runs[1]['run_id'], []) if len(runs) > 1 else []
+        stable_candidate_count = conn.execute(
+            "SELECT COUNT(*) FROM v_stable_candidates WHERE candidate_runs >= 2"
+        ).fetchone()[0]
+
+        recent_candidate_counts = [len(candidate_by_run.get(r['run_id'], [])) for r in runs[:7]]
+        candidate_churn = 0
+        if latest_candidates or previous_candidates:
+            latest_set = set(latest_candidates)
+            previous_set = set(previous_candidates)
+            candidate_churn = len(latest_set.symmetric_difference(previous_set))
+
+        strategy_rows = [dict(row) for row in conn.execute(
+            """
+            SELECT w.created_at_utc, p.run_id, p.strategy_name, p.sharpe, p.annual_return, p.max_drawdown, p.avg_turnover
+            FROM portfolio_results p
+            JOIN workflow_runs w ON w.run_id = p.run_id
+            ORDER BY w.created_at_utc DESC
+            LIMIT 200
+            """
+        ).fetchall()]
+        strategy_map: dict[str, list[dict[str, Any]]] = {}
+        for row in strategy_rows:
+            strategy_map.setdefault(row['strategy_name'], []).append(row)
+
+        def avg_metric(strategy_name: str, field: str, limit: int = 5):
+            rows = strategy_map.get(strategy_name, [])[:limit]
+            values = [row[field] for row in rows if row.get(field) is not None]
+            return round(sum(values) / len(values), 6) if values else None
+
+        candidates_only_recent_sharpe = avg_metric('long_short_top_bottom_candidates_only', 'sharpe')
+        all_factors_recent_sharpe = avg_metric('long_short_top_bottom_all_factors', 'sharpe')
+        candidates_only_recent_return = avg_metric('long_short_top_bottom_candidates_only', 'annual_return')
+        all_factors_recent_return = avg_metric('long_short_top_bottom_all_factors', 'annual_return')
+
+        factor_score_trend = [dict(row) for row in conn.execute(
+            """
+            SELECT factor_name, ROUND(AVG(score), 6) AS avg_score, COUNT(*) AS runs
+            FROM factor_results
+            WHERE variant = 'raw_scored'
+            GROUP BY factor_name
+            HAVING COUNT(*) >= 2
+            ORDER BY avg_score DESC
+            LIMIT 5
+            """
+        ).fetchall()]
+
+        base = DB_PATH.parent
+        llm_status_path = base / 'llm_status.json'
+        snapshot_path = base / 'llm_input_snapshot.json'
+        llm_status = json.loads(llm_status_path.read_text(encoding='utf-8')) if llm_status_path.exists() else {}
+        snapshot = json.loads(snapshot_path.read_text(encoding='utf-8')) if snapshot_path.exists() else {}
+        paper_stability = snapshot.get('paper_portfolio_stability', {}) or {}
+        recommendation_history_tail = snapshot.get('recommendation_history_tail', []) or []
+        positive_count = len([row for row in recommendation_history_tail if row.get('effectiveness') == 'positive'])
+        recommendation_hit_rate = round(positive_count / len(recommendation_history_tail), 4) if recommendation_history_tail else None
+
+        run_health_score = 0
+        if recent_24h_total:
+            run_health_score += 60 * (recent_24h_finished / recent_24h_total)
+        if latest_run and latest_run.get('status') == 'finished':
+            run_health_score += 20
+        if latest_run and latest_run.get('dataset_rows'):
+            run_health_score += 20
+        run_health_score = round(run_health_score, 1)
+
+        research_progress_score = 0
+        if stable_candidate_count:
+            research_progress_score += min(stable_candidate_count * 10, 35)
+        if candidate_churn == 0:
+            research_progress_score += 20
+        elif candidate_churn <= 2:
+            research_progress_score += 10
+        if recommendation_hit_rate is not None:
+            research_progress_score += round(recommendation_hit_rate * 25, 1)
+        if latest_candidates:
+            research_progress_score += 20
+        research_progress_score = round(min(research_progress_score, 100), 1)
+
+        portfolio_progress_score = 0
+        if candidates_only_recent_sharpe is not None:
+            portfolio_progress_score += min(max(candidates_only_recent_sharpe, 0) * 5, 40)
+        if paper_stability.get('stability_score') is not None:
+            portfolio_progress_score += round(float(paper_stability['stability_score']) * 40, 1)
+        if candidates_only_recent_return is not None and all_factors_recent_return is not None and candidates_only_recent_return >= 0.6 * all_factors_recent_return:
+            portfolio_progress_score += 20
+        portfolio_progress_score = round(min(portfolio_progress_score, 100), 1)
+
+        return {
+            'latest_run': latest_run,
+            'recent_runs': runs,
+            'run_health': {
+                'score': run_health_score,
+                'runs_24h': recent_24h_total,
+                'finished_24h': recent_24h_finished,
+                'runs_7d': recent_7d_total,
+                'finished_7d': recent_7d_finished,
+                'success_rate_24h': round(recent_24h_finished / recent_24h_total, 4) if recent_24h_total else None,
+                'success_rate_7d': round(recent_7d_finished / recent_7d_total, 4) if recent_7d_total else None,
+                'latest_status': latest_run.get('status') if latest_run else None,
+                'latest_end_date': latest_run.get('end_date') if latest_run else None,
+                'latest_dataset_rows': latest_run.get('dataset_rows') if latest_run else None,
+            },
+            'research_progress': {
+                'score': research_progress_score,
+                'stable_candidate_count': stable_candidate_count,
+                'latest_candidates': latest_candidates,
+                'previous_candidates': previous_candidates,
+                'candidate_churn': candidate_churn,
+                'recent_candidate_counts': recent_candidate_counts,
+                'factor_score_trend': factor_score_trend,
+                'llm_status': llm_status.get('status'),
+                'recommendation_hit_rate': recommendation_hit_rate,
+                'recommendation_tail_size': len(recommendation_history_tail),
+            },
+            'portfolio_progress': {
+                'score': portfolio_progress_score,
+                'candidates_only_recent_sharpe': candidates_only_recent_sharpe,
+                'all_factors_recent_sharpe': all_factors_recent_sharpe,
+                'candidates_only_recent_return': candidates_only_recent_return,
+                'all_factors_recent_return': all_factors_recent_return,
+                'paper_stability': paper_stability,
+            },
+        }
+    finally:
+        conn.close()
+
+
 BASE_DIR = Path(__file__).resolve().parent
 TEMPLATE_DIR = BASE_DIR / "webui_templates"
 DB_PATH = Path(__file__).resolve().parents[2] / "artifacts" / "factor_lab.db"
@@ -70,6 +238,7 @@ def render(template_name: str, **context) -> HTMLResponse:
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard():
+    health = compute_health_metrics()
     latest_runs = fetch_all(
         "SELECT run_id, created_at_utc, status, config_path FROM workflow_runs ORDER BY created_at_utc DESC LIMIT 8"
     )
@@ -89,6 +258,7 @@ def dashboard():
     return render(
         "dashboard.html",
         title="总览",
+        health=health,
         latest_runs=latest_runs,
         stable_candidates=stable_candidates,
         top_factors=top_factors,
@@ -96,6 +266,12 @@ def dashboard():
         latest_summary=latest_summary,
         change_report=change_report,
     )
+
+
+@app.get("/health", response_class=HTMLResponse)
+def health_page():
+    health = compute_health_metrics()
+    return render("health.html", title="健康度", health=health)
 
 
 @app.get("/cockpit", response_class=HTMLResponse)
