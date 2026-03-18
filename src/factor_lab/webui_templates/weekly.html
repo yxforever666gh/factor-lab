@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-3">
+  <section class="card">
+    <h2>本周运行</h2>
+    <div style="font-size:40px; font-weight:700;">{{ weekly.summary.finished_7d }}/{{ weekly.summary.runs_7d }}</div>
+    <div class="muted">成功率 {{ ((weekly.summary.success_rate_7d or 0) * 100)|round(1) }}%</div>
+  </section>
+  <section class="card">
+    <h2>候选变化</h2>
+    <div style="font-size:40px; font-weight:700;">{{ weekly.summary.stable_candidate_count }}</div>
+    <div class="muted">稳定候选数量</div>
+  </section>
+  <section class="card">
+    <h2>建议命中率</h2>
+    <div style="font-size:40px; font-weight:700;">{{ ((weekly.summary.recommendation_hit_rate or 0) * 100)|round(1) }}%</div>
+    <div class="muted">基于最近已记录建议</div>
+  </section>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>这周有没有变好？</h2>
+    <table>
+      <tbody>
+        <tr><th>新进入候选</th><td>{{ weekly.summary.candidate_entered|join('、') if weekly.summary.candidate_entered else '无' }}</td></tr>
+        <tr><th>退出候选</th><td>{{ weekly.summary.candidate_left|join('、') if weekly.summary.candidate_left else '无' }}</td></tr>
+        <tr><th>纸面组合稳定性</th><td>{{ weekly.summary.paper_stability_label or '-' }}</td></tr>
+        <tr><th>完整周期心跳数</th><td>{{ weekly.summary.cycle_heartbeats_7d }}</td></tr>
+        <tr><th>LLM 周期心跳数</th><td>{{ weekly.summary.llm_heartbeats_7d }}</td></tr>
+      </tbody>
+    </table>
+    <div class="muted" style="margin-top:10px;">看点：候选是在收敛，还是在来回抖动；系统是不是在稳定地产生完整周期。</div>
+  </section>
+  <section class="card">
+    <h2>本周最佳策略</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>策略</th><th>平均 Sharpe</th><th>平均收益</th><th>样本</th></tr></thead>
+        <tbody>
+          {% for row in weekly.weekly_best_strategies %}
+          <tr><td>{{ row.strategy_name }}</td><td class="num">{{ row.avg_sharpe }}</td><td class="num">{{ row.avg_return }}</td><td class="num">{{ row.runs }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>本周运行明细</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>时间</th><th>运行</th><th>配置</th><th>状态</th><th>样本</th></tr></thead>
+        <tbody>
+          {% for row in weekly.week_runs %}
+          <tr>
+            <td class="text-nowrap">{{ row.created_at_utc }}</td>
+            <td><a href="/runs/{{ row.run_id }}">{{ row.run_id[:8] }}</a></td>
+            <td class="text-break">{{ row.config_path }}</td>
+            <td>{{ row.status }}</td>
+            <td class="num">{{ row.dataset_rows or '-' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <section class="card">
+    <h2>最近系统心跳</h2>
+    {% if weekly.heartbeat_rows %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>时间</th><th>范围</th><th>状态</th><th>摘要</th></tr></thead>
+        <tbody>
+          {% for row in weekly.heartbeat_rows %}
+          <tr>
+            <td class="text-nowrap">{{ row.recorded_at_utc or '-' }}</td>
+            <td>{{ row.scope or '-' }}</td>
+            <td>{{ row.status or '-' }}</td>
+            <td class="text-break">{{ row.summary or row.message or '-' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="muted">还没有系统心跳记录。</div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

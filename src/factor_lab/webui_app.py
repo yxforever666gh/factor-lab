@@ -26,6 +26,112 @@ def portfolio_positions(current: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(positions, key=lambda row: row.get("weight", 0), reverse=True)
 
 
+def read_jsonl(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    rows = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            rows.append(json.loads(line))
+        except Exception:
+            continue
+    return rows
+
+
+def sparkline_svg(values: list[float | int], width: int = 240, height: int = 64, color: str = "#84a8ff") -> str:
+    clean = [float(v) for v in values if v is not None]
+    if not clean:
+        return ""
+    if len(clean) == 1:
+        clean = clean * 2
+    min_v = min(clean)
+    max_v = max(clean)
+    span = max(max_v - min_v, 1e-9)
+    points = []
+    for idx, value in enumerate(clean):
+        x = idx * (width - 8) / max(len(clean) - 1, 1) + 4
+        y = height - 4 - ((value - min_v) / span) * (height - 8)
+        points.append(f"{x:.1f},{y:.1f}")
+    polyline = " ".join(points)
+    return (
+        f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">'
+        f'<rect x="0" y="0" width="{width}" height="{height}" rx="10" fill="#1b2444" />'
+        f'<polyline fill="none" stroke="{color}" stroke-width="3" points="{polyline}" />'
+        f'</svg>'
+    )
+
+
+def compute_weekly_report(health: dict[str, Any] | None = None) -> dict[str, Any]:
+    health = health or compute_health_metrics()
+    conn = get_conn()
+    try:
+        week_runs = [dict(row) for row in conn.execute(
+            """
+            SELECT run_id, created_at_utc, config_path, status, start_date, end_date, dataset_rows
+            FROM workflow_runs
+            WHERE created_at_utc >= datetime('now', '-7 day')
+            ORDER BY created_at_utc DESC
+            """
+        ).fetchall()]
+        recent_finished = [row for row in week_runs if row.get('status') == 'finished']
+        latest_run_id = week_runs[0]['run_id'] if week_runs else None
+        prev_run_id = week_runs[1]['run_id'] if len(week_runs) > 1 else None
+
+        def candidate_set(run_id: str | None) -> set[str]:
+            if not run_id:
+                return set()
+            rows = conn.execute(
+                "SELECT factor_name FROM factor_results WHERE run_id = ? AND variant = 'candidate' ORDER BY factor_name ASC",
+                (run_id,),
+            ).fetchall()
+            return {row[0] for row in rows}
+
+        latest_candidates = candidate_set(latest_run_id)
+        prev_candidates = candidate_set(prev_run_id)
+        entered = sorted(latest_candidates - prev_candidates)
+        left = sorted(prev_candidates - latest_candidates)
+
+        weekly_best_strategies = [dict(row) for row in conn.execute(
+            """
+            SELECT strategy_name, ROUND(AVG(sharpe), 6) AS avg_sharpe, ROUND(AVG(annual_return), 6) AS avg_return, COUNT(*) AS runs
+            FROM portfolio_results
+            WHERE run_id IN (
+                SELECT run_id FROM workflow_runs WHERE created_at_utc >= datetime('now', '-7 day')
+            )
+            GROUP BY strategy_name
+            ORDER BY avg_sharpe DESC
+            LIMIT 5
+            """
+        ).fetchall()]
+
+        heartbeat_rows = read_jsonl(DB_PATH.parent / 'system_heartbeat.jsonl')[-20:]
+        cycle_heartbeats = [row for row in heartbeat_rows if row.get('scope') == 'scheduled_cycle']
+        llm_heartbeats = [row for row in heartbeat_rows if row.get('scope') == 'llm_cycle']
+
+        return {
+            'summary': {
+                'runs_7d': len(week_runs),
+                'finished_7d': len(recent_finished),
+                'success_rate_7d': round(len(recent_finished) / len(week_runs), 4) if week_runs else None,
+                'stable_candidate_count': health['research_progress']['stable_candidate_count'],
+                'candidate_entered': entered,
+                'candidate_left': left,
+                'paper_stability_label': (health['portfolio_progress']['paper_stability'] or {}).get('label'),
+                'recommendation_hit_rate': health['research_progress'].get('recommendation_hit_rate'),
+                'cycle_heartbeats_7d': len(cycle_heartbeats),
+                'llm_heartbeats_7d': len(llm_heartbeats),
+            },
+            'weekly_best_strategies': weekly_best_strategies,
+            'week_runs': week_runs[:12],
+            'heartbeat_rows': heartbeat_rows[::-1],
+        }
+    finally:
+        conn.close()
+
+
 def compute_health_metrics() -> dict[str, Any]:
     conn = get_conn()
     try:
@@ -123,6 +229,17 @@ def compute_health_metrics() -> dict[str, Any]:
         positive_count = len([row for row in recommendation_history_tail if row.get('effectiveness') == 'positive'])
         recommendation_hit_rate = round(positive_count / len(recommendation_history_tail), 4) if recommendation_history_tail else None
 
+        run_success_trend = []
+        for row in runs[:12][::-1]:
+            run_success_trend.append(1 if row.get('status') == 'finished' else 0)
+        candidate_count_trend = [len(candidate_by_run.get(r['run_id'], [])) for r in runs[:12][::-1]]
+        strategy_sharpe_trend = [
+            row.get('sharpe') for row in strategy_map.get('long_short_top_bottom_candidates_only', [])[:12][::-1]
+        ]
+
+        heartbeat_rows = read_jsonl(DB_PATH.parent / 'system_heartbeat.jsonl')
+        recent_heartbeat_rows = heartbeat_rows[-12:]
+
         run_health_score = 0
         if recent_24h_total:
             run_health_score += 60 * (recent_24h_finished / recent_24h_total)
@@ -168,6 +285,9 @@ def compute_health_metrics() -> dict[str, Any]:
                 'latest_status': latest_run.get('status') if latest_run else None,
                 'latest_end_date': latest_run.get('end_date') if latest_run else None,
                 'latest_dataset_rows': latest_run.get('dataset_rows') if latest_run else None,
+                'recent_heartbeat_rows': recent_heartbeat_rows[::-1],
+                'run_success_trend': run_success_trend,
+                'run_success_sparkline': sparkline_svg(run_success_trend, color='#3ddc97'),
             },
             'research_progress': {
                 'score': research_progress_score,
@@ -176,6 +296,8 @@ def compute_health_metrics() -> dict[str, Any]:
                 'previous_candidates': previous_candidates,
                 'candidate_churn': candidate_churn,
                 'recent_candidate_counts': recent_candidate_counts,
+                'candidate_count_trend': candidate_count_trend,
+                'candidate_count_sparkline': sparkline_svg(candidate_count_trend, color='#ffd166'),
                 'factor_score_trend': factor_score_trend,
                 'llm_status': llm_status.get('status'),
                 'recommendation_hit_rate': recommendation_hit_rate,
@@ -188,6 +310,8 @@ def compute_health_metrics() -> dict[str, Any]:
                 'candidates_only_recent_return': candidates_only_recent_return,
                 'all_factors_recent_return': all_factors_recent_return,
                 'paper_stability': paper_stability,
+                'strategy_sharpe_trend': strategy_sharpe_trend,
+                'strategy_sharpe_sparkline': sparkline_svg(strategy_sharpe_trend, color='#84a8ff'),
             },
         }
     finally:
@@ -271,7 +395,15 @@ def dashboard():
 @app.get("/health", response_class=HTMLResponse)
 def health_page():
     health = compute_health_metrics()
-    return render("health.html", title="健康度", health=health)
+    weekly = compute_weekly_report(health)
+    return render("health.html", title="健康度", health=health, weekly=weekly)
+
+
+@app.get("/weekly", response_class=HTMLResponse)
+def weekly_page():
+    health = compute_health_metrics()
+    weekly = compute_weekly_report(health)
+    return render("weekly.html", title="周报", health=health, weekly=weekly)
 
 
 @app.get("/cockpit", response_class=HTMLResponse)

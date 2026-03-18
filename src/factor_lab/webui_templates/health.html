@@ -18,6 +18,24 @@
   </section>
 </div>
 
+<div class="grid cols-3" style="margin-top:18px;">
+  <section class="card">
+    <h2>运行趋势</h2>
+    {{ health.run_health.run_success_sparkline | safe }}
+    <div class="muted">最近 12 次运行：完成=1，失败/其他=0</div>
+  </section>
+  <section class="card">
+    <h2>候选数量趋势</h2>
+    {{ health.research_progress.candidate_count_sparkline | safe }}
+    <div class="muted">最近 12 次候选池大小变化</div>
+  </section>
+  <section class="card">
+    <h2>候选组合 Sharpe 趋势</h2>
+    {{ health.portfolio_progress.strategy_sharpe_sparkline | safe }}
+    <div class="muted">最近 12 次 candidates_only Sharpe</div>
+  </section>
+</div>
+
 <div class="grid cols-2" style="margin-top:18px;">
   <section class="card">
     <h2>它有没有持续在跑？</h2>
@@ -81,24 +99,49 @@
   </section>
 </div>
 
-<section class="card" style="margin-top:18px;">
-  <h2>最近运行记录</h2>
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>时间</th><th>运行</th><th>配置</th><th>状态</th><th>数据区间</th><th>样本</th></tr></thead>
-      <tbody>
-        {% for row in health.recent_runs[:12] %}
-        <tr>
-          <td class="text-nowrap">{{ row.created_at_utc }}</td>
-          <td><a href="/runs/{{ row.run_id }}">{{ row.run_id[:8] }}</a></td>
-          <td class="text-break">{{ row.config_path }}</td>
-          <td>{{ row.status }}</td>
-          <td class="text-nowrap">{{ row.start_date or '-' }} → {{ row.end_date or '-' }}</td>
-          <td class="num">{{ row.dataset_rows or '-' }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</section>
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>最近运行记录</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>时间</th><th>运行</th><th>配置</th><th>状态</th><th>数据区间</th><th>样本</th></tr></thead>
+        <tbody>
+          {% for row in health.recent_runs[:12] %}
+          <tr>
+            <td class="text-nowrap">{{ row.created_at_utc }}</td>
+            <td><a href="/runs/{{ row.run_id }}">{{ row.run_id[:8] }}</a></td>
+            <td class="text-break">{{ row.config_path }}</td>
+            <td>{{ row.status }}</td>
+            <td class="text-nowrap">{{ row.start_date or '-' }} → {{ row.end_date or '-' }}</td>
+            <td class="num">{{ row.dataset_rows or '-' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>系统心跳</h2>
+    {% if health.run_health.recent_heartbeat_rows %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>时间</th><th>范围</th><th>状态</th><th>说明</th></tr></thead>
+        <tbody>
+          {% for row in health.run_health.recent_heartbeat_rows %}
+          <tr>
+            <td class="text-nowrap">{{ row.recorded_at_utc or '-' }}</td>
+            <td>{{ row.scope or '-' }}</td>
+            <td>{{ row.status or '-' }}</td>
+            <td class="text-break">{{ row.message or row.summary or '-' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="muted">还没有系统心跳记录。跑完新周期后会开始累计。</div>
+    {% endif %}
+  </section>
+</div>
 {% endblock %}
