@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Factor Lab UI - {{ title }}</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #141b34;
+      --panel-2: #1b2444;
+      --text: #ebf0ff;
+      --muted: #9aa7d1;
+      --good: #3ddc97;
+      --bad: #ff6b6b;
+      --warn: #ffd166;
+      --link: #84a8ff;
+      --border: #2b3765;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Inter, Arial, sans-serif; background: var(--bg); color: var(--text); }
+    a { color: var(--link); text-decoration: none; }
+    .layout { display: grid; grid-template-columns: 250px 1fr; min-height: 100vh; }
+    .sidebar { background: #0f1530; border-right: 1px solid var(--border); padding: 24px 18px; }
+    .sidebar h1 { font-size: 20px; margin: 0 0 20px; }
+    .nav a { display: block; padding: 10px 12px; border-radius: 10px; color: var(--text); margin-bottom: 8px; background: transparent; }
+    .nav a:hover { background: var(--panel); }
+    .content { padding: 28px; }
+    .grid { display: grid; gap: 18px; }
+    .grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 18px; }
+    .card h2, .card h3 { margin-top: 0; }
+    .muted { color: var(--muted); }
+    .good { color: var(--good); }
+    .bad { color: var(--bad); }
+    .warn { color: var(--warn); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 10px 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; }
+    tr:last-child td { border-bottom: none; }
+    pre { white-space: pre-wrap; word-break: break-word; background: var(--panel-2); border-radius: 12px; padding: 12px; border: 1px solid var(--border); }
+    .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; background: var(--panel-2); border: 1px solid var(--border); }
+    .pill.good { color: var(--good); }
+    .pill.bad { color: var(--bad); }
+    .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <h1>Factor Lab UI</h1>
+      <div class="muted" style="margin-bottom:16px;">Local research console</div>
+      <nav class="nav">
+        <a href="/">Dashboard</a>
+        <a href="/runs">Runs</a>
+        <a href="/factors">Factors</a>
+        <a href="/portfolios">Portfolios</a>
+      </nav>
+    </aside>
+    <main class="content">
+      <div class="topbar">
+        <div>
+          <h1 style="margin:0; font-size:28px;">{{ title }}</h1>
+        </div>
+      </div>
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</body>
+</html>

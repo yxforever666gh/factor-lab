@@ -1,0 +1,34 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+  <h2>Workflow Runs</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Run ID</th>
+        <th>Created</th>
+        <th>Config</th>
+        <th>Window</th>
+        <th>Rows</th>
+        <th>Factors</th>
+        <th>Status</th>
+        <th>Rerun Of</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in runs %}
+      <tr>
+        <td><a href="/runs/{{ row.run_id }}">{{ row.run_id }}</a></td>
+        <td>{{ row.created_at_utc }}</td>
+        <td>{{ row.config_path }}</td>
+        <td>{{ row.start_date }} → {{ row.end_date }}</td>
+        <td>{{ row.dataset_rows }}</td>
+        <td>{{ row.factor_count }}</td>
+        <td><span class="pill {{ 'good' if row.status == 'finished' else 'bad' }}">{{ row.status }}</span></td>
+        <td>{{ row.rerun_of_run_id or '-' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

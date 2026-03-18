@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-2">
+  <section class="card">
+    <h2>Run Meta</h2>
+    <table>
+      <tbody>
+        {% for key, value in run.items() %}
+        <tr><th>{{ key }}</th><td>{{ value }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2>Artifacts</h2>
+    <table>
+      <thead><tr><th>Name</th><th>Path</th></tr></thead>
+      <tbody>
+        {% for row in artifacts %}
+        <tr><td>{{ row.artifact_name }}</td><td>{{ row.artifact_path }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<section class="card" style="margin-top:18px;">
+  <h2>Portfolio Results</h2>
+  <table>
+    <thead><tr><th>Strategy</th><th>Annual Return</th><th>Sharpe</th><th>Max Drawdown</th><th>Turnover</th></tr></thead>
+    <tbody>
+      {% for row in portfolios %}
+      <tr>
+        <td>{{ row.strategy_name }}</td>
+        <td>{{ row.annual_return }}</td>
+        <td>{{ row.sharpe }}</td>
+        <td>{{ row.max_drawdown }}</td>
+        <td>{{ row.avg_turnover }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>Factor Rows</h2>
+  <table>
+    <thead><tr><th>Factor</th><th>Variant</th><th>IC</th><th>IR</th><th>Score</th><th>Pass</th><th>Fail Reason</th></tr></thead>
+    <tbody>
+      {% for row in factors %}
+      <tr>
+        <td>{{ row.factor_name }}</td>
+        <td>{{ row.variant }}</td>
+        <td>{{ row.rank_ic_mean }}</td>
+        <td>{{ row.rank_ic_ir }}</td>
+        <td>{{ row.score }}</td>
+        <td>{{ row.pass_gate }}</td>
+        <td>{{ row.fail_reason or '-' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

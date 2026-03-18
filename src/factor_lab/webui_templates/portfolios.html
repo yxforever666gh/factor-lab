@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-2">
+  <section class="card">
+    <h2>Strategy Averages</h2>
+    <table>
+      <thead><tr><th>Strategy</th><th>Avg Sharpe</th><th>Avg Return</th><th>Runs</th></tr></thead>
+      <tbody>
+        {% for row in strategies %}
+        <tr>
+          <td>{{ row.strategy_name }}</td>
+          <td>{{ row.avg_sharpe }}</td>
+          <td>{{ row.avg_return }}</td>
+          <td>{{ row.runs }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2>Recent Portfolio Rows</h2>
+    <table>
+      <thead><tr><th>Run</th><th>Strategy</th><th>Return</th><th>Sharpe</th><th>Drawdown</th><th>Turnover</th></tr></thead>
+      <tbody>
+        {% for row in recent %}
+        <tr>
+          <td><a href="/runs/{{ row.run_id }}">{{ row.run_id[:8] }}</a></td>
+          <td>{{ row.strategy_name }}</td>
+          <td>{{ row.annual_return }}</td>
+          <td>{{ row.sharpe }}</td>
+          <td>{{ row.max_drawdown }}</td>
+          <td>{{ row.avg_turnover }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+{% endblock %}
