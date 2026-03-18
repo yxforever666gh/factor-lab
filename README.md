@@ -73,6 +73,15 @@ Outputs:
 python3 scripts/run_tushare_workflow.py
 ```
 
+### 3) Local web UI
+
+```bash
+python3 scripts/run_web_ui.py
+```
+
+Defaults to `127.0.0.1:8765`.
+Override with `WEB_UI_HOST` and `WEB_UI_PORT` in `.env` or the shell environment.
+
 Outputs:
 
 - `artifacts/tushare_workflow/dataset.csv`
