@@ -91,6 +91,7 @@ def validate_plan(
     review_graveyard = plan.get("review_graveyard", [])
     portfolio_checks = plan.get("portfolio_checks", [])
     rationale = plan.get("rationale", "")
+    novelty_reason = plan.get("novelty_reason", "")
 
     if not isinstance(focus_factors, list) or not focus_factors:
         errors.append("focus_factors 必须是非空列表")
@@ -113,6 +114,10 @@ def validate_plan(
 
     if not isinstance(rationale, str) or not rationale.strip():
         errors.append("rationale 不能为空")
+
+    high_fatigue = template_policy.get("cooldown_active") or ((recommendation_context or {}).get("fatigue", {}) or {}).get(template_type, {}).get("fatigue_level") == "high"
+    if high_fatigue and (not isinstance(novelty_reason, str) or not novelty_reason.strip()):
+        errors.append("高疲劳或冷却模板继续提议时，必须提供 novelty_reason")
 
     referenced = []
     for group in [focus_factors, keep_as_core, review_graveyard]:
@@ -138,6 +143,7 @@ def validate_plan(
             "review_graveyard": review_graveyard[:adjusted_graveyard_limit] if isinstance(review_graveyard, list) else [],
             "portfolio_checks": portfolio_checks if isinstance(portfolio_checks, list) else [],
             "rationale": rationale.strip() if isinstance(rationale, str) else "",
+            "novelty_reason": novelty_reason.strip() if isinstance(novelty_reason, str) else "",
             "template_type": template_type,
         },
     }
