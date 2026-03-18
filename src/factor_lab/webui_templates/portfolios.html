@@ -2,9 +2,9 @@
 {% block content %}
 <div class="grid cols-2">
   <section class="card">
-    <h2>Strategy Averages</h2>
+    <h2>策略平均表现</h2>
     <table>
-      <thead><tr><th>Strategy</th><th>Avg Sharpe</th><th>Avg Return</th><th>Runs</th></tr></thead>
+      <thead><tr><th>策略</th><th>平均夏普</th><th>平均收益</th><th>运行次数</th></tr></thead>
       <tbody>
         {% for row in strategies %}
         <tr>
@@ -18,9 +18,9 @@
     </table>
   </section>
   <section class="card">
-    <h2>Recent Portfolio Rows</h2>
+    <h2>最近组合记录</h2>
     <table>
-      <thead><tr><th>Run</th><th>Strategy</th><th>Return</th><th>Sharpe</th><th>Drawdown</th><th>Turnover</th></tr></thead>
+      <thead><tr><th>运行</th><th>策略</th><th>收益</th><th>夏普</th><th>回撤</th><th>换手</th></tr></thead>
       <tbody>
         {% for row in recent %}
         <tr>

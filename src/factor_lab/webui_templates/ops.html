@@ -2,43 +2,43 @@
 {% block content %}
 <div class="grid cols-2">
   <section class="card">
-    <h2>Run Actions</h2>
+    <h2>运行操作</h2>
     <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:12px;">
-      <a class="pill" href="/ops/run/workflow">Run Workflow</a>
-      <a class="pill" href="/ops/run/batch">Run Batch</a>
-      <a class="pill" href="/ops/run/cycle">Run Full Cycle</a>
+      <a class="pill" href="/ops/run/workflow">运行 Workflow</a>
+      <a class="pill" href="/ops/run/batch">运行 Batch</a>
+      <a class="pill" href="/ops/run/cycle">运行完整周期</a>
     </div>
-    <p class="muted" style="margin-top:14px;">These actions execute the existing local scripts directly on this machine.</p>
+    <p class="muted" style="margin-top:14px;">这些操作会直接在本机执行现有脚本。</p>
   </section>
 
   <section class="card">
-    <h2>Last Trigger Result</h2>
+    <h2>最近一次触发结果</h2>
     {% if result %}
       <table>
         <tbody>
-          <tr><th>Script</th><td>{{ result.script }}</td></tr>
-          <tr><th>Return Code</th><td>{{ result.returncode }}</td></tr>
+          <tr><th>脚本</th><td>{{ result.script }}</td></tr>
+          <tr><th>返回码</th><td>{{ result.returncode }}</td></tr>
         </tbody>
       </table>
-      <h3>stdout</h3>
-      <pre>{{ result.stdout or 'None' }}</pre>
-      <h3>stderr</h3>
-      <pre>{{ result.stderr or 'None' }}</pre>
+      <h3>标准输出</h3>
+      <pre>{{ result.stdout or '无' }}</pre>
+      <h3>错误输出</h3>
+      <pre>{{ result.stderr or '无' }}</pre>
     {% else %}
-      <p class="muted">No action triggered in this page view yet.</p>
+      <p class="muted">当前页面还没有触发过操作。</p>
     {% endif %}
   </section>
 </div>
 
 <section class="card" style="margin-top:18px;">
-  <h2>Recent Task States</h2>
+  <h2>最近任务状态</h2>
   <table>
-    <thead><tr><th>Task ID</th><th>Status</th><th>Started</th><th>Finished</th><th>Config</th><th>Task File</th></tr></thead>
+    <thead><tr><th>任务 ID</th><th>状态</th><th>开始时间</th><th>结束时间</th><th>配置</th><th>任务文件</th></tr></thead>
     <tbody>
       {% for row in tasks %}
       <tr>
         <td>{{ row.task_id }}</td>
-        <td><span class="pill {{ 'good' if row.status == 'finished' else 'bad' if row.status == 'failed' else 'warn' }}">{{ row.status }}</span></td>
+        <td><span class="pill {{ 'good' if row.status == 'finished' else 'bad' if row.status == 'failed' else 'warn' }}">{{ '已完成' if row.status == 'finished' else '失败' if row.status == 'failed' else row.status }}</span></td>
         <td>{{ row.started_at_utc }}</td>
         <td>{{ row.finished_at_utc or '-' }}</td>
         <td>{{ row.config_path }}</td>

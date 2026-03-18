@@ -2,7 +2,7 @@
 {% block content %}
 <div class="grid cols-2">
   <section class="card">
-    <h2>Run Meta</h2>
+    <h2>运行元信息</h2>
     <table>
       <tbody>
         {% for key, value in run.items() %}
@@ -12,9 +12,9 @@
     </table>
   </section>
   <section class="card">
-    <h2>Artifacts</h2>
+    <h2>产物文件</h2>
     <table>
-      <thead><tr><th>Name</th><th>Path</th></tr></thead>
+      <thead><tr><th>名称</th><th>路径</th></tr></thead>
       <tbody>
         {% for row in artifacts %}
         <tr><td>{{ row.artifact_name }}</td><td>{{ row.artifact_path }}</td></tr>
@@ -25,9 +25,9 @@
 </div>
 
 <section class="card" style="margin-top:18px;">
-  <h2>Portfolio Results</h2>
+  <h2>组合结果</h2>
   <table>
-    <thead><tr><th>Strategy</th><th>Annual Return</th><th>Sharpe</th><th>Max Drawdown</th><th>Turnover</th></tr></thead>
+    <thead><tr><th>策略</th><th>年化收益</th><th>夏普</th><th>最大回撤</th><th>换手</th></tr></thead>
     <tbody>
       {% for row in portfolios %}
       <tr>
@@ -43,9 +43,9 @@
 </section>
 
 <section class="card" style="margin-top:18px;">
-  <h2>Factor Rows</h2>
+  <h2>因子明细</h2>
   <table>
-    <thead><tr><th>Factor</th><th>Variant</th><th>IC</th><th>IR</th><th>Score</th><th>Pass</th><th>Fail Reason</th></tr></thead>
+    <thead><tr><th>因子</th><th>变体</th><th>IC</th><th>IR</th><th>评分</th><th>通过</th><th>失败原因</th></tr></thead>
     <tbody>
       {% for row in factors %}
       <tr>

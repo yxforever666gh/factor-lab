@@ -2,25 +2,25 @@
 {% block content %}
 <div class="grid cols-2">
   <section class="card">
-    <h2>Latest Summary</h2>
+    <h2>最新摘要</h2>
     <pre>{{ latest_summary }}</pre>
   </section>
   <section class="card">
-    <h2>Recent Change</h2>
+    <h2>最近变化</h2>
     <pre>{{ change_report }}</pre>
   </section>
 </div>
 
 <div class="grid cols-2" style="margin-top:18px;">
   <section class="card">
-    <h2>Latest Runs</h2>
+    <h2>最近运行</h2>
     <table>
-      <thead><tr><th>Run</th><th>Status</th><th>Config</th></tr></thead>
+      <thead><tr><th>运行</th><th>状态</th><th>配置</th></tr></thead>
       <tbody>
         {% for row in latest_runs %}
         <tr>
           <td><a href="/runs/{{ row.run_id }}">{{ row.run_id[:8] }}</a><br><span class="muted">{{ row.created_at_utc }}</span></td>
-          <td><span class="pill {{ 'good' if row.status == 'finished' else 'bad' }}">{{ row.status }}</span></td>
+          <td><span class="pill {{ 'good' if row.status == 'finished' else 'bad' }}">{{ '已完成' if row.status == 'finished' else row.status }}</span></td>
           <td>{{ row.config_path }}</td>
         </tr>
         {% endfor %}
@@ -29,9 +29,9 @@
   </section>
 
   <section class="card">
-    <h2>Stable Candidates</h2>
+    <h2>稳定候选因子</h2>
     <table>
-      <thead><tr><th>Factor</th><th>Runs</th></tr></thead>
+      <thead><tr><th>因子</th><th>出现次数</th></tr></thead>
       <tbody>
         {% for row in stable_candidates %}
         <tr><td>{{ row.factor_name }}</td><td>{{ row.candidate_runs }}</td></tr>
@@ -43,9 +43,9 @@
 
 <div class="grid cols-2" style="margin-top:18px;">
   <section class="card">
-    <h2>Top Factors</h2>
+    <h2>最高分因子</h2>
     <table>
-      <thead><tr><th>Factor</th><th>Avg Score</th><th>Runs</th></tr></thead>
+      <thead><tr><th>因子</th><th>平均分</th><th>运行次数</th></tr></thead>
       <tbody>
         {% for row in top_factors %}
         <tr><td>{{ row.factor_name }}</td><td>{{ row.avg_score }}</td><td>{{ row.runs }}</td></tr>
@@ -55,9 +55,9 @@
   </section>
 
   <section class="card">
-    <h2>Top Strategies</h2>
+    <h2>最佳策略</h2>
     <table>
-      <thead><tr><th>Strategy</th><th>Avg Sharpe</th><th>Avg Return</th></tr></thead>
+      <thead><tr><th>策略</th><th>平均夏普</th><th>平均收益</th></tr></thead>
       <tbody>
         {% for row in top_strategies %}
         <tr><td>{{ row.strategy_name }}</td><td>{{ row.avg_sharpe }}</td><td>{{ row.avg_return }}</td></tr>

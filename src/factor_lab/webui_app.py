@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from factor_lab.db_views import ensure_views
@@ -46,7 +46,7 @@ env = Environment(
     autoescape=select_autoescape(["html", "xml"]),
 )
 
-app = FastAPI(title="Factor Lab UI")
+app = FastAPI(title="Factor Lab 中文控制台")
 
 
 def render(template_name: str, **context) -> HTMLResponse:
@@ -70,11 +70,11 @@ def dashboard():
     )
     latest_summary_path = DB_PATH.parent / "latest_summary.txt"
     change_report_path = DB_PATH.parent / "change_report.md"
-    latest_summary = latest_summary_path.read_text(encoding="utf-8") if latest_summary_path.exists() else "No summary yet."
-    change_report = change_report_path.read_text(encoding="utf-8") if change_report_path.exists() else "No change report yet."
+    latest_summary = latest_summary_path.read_text(encoding="utf-8") if latest_summary_path.exists() else "暂无摘要。"
+    change_report = change_report_path.read_text(encoding="utf-8") if change_report_path.exists() else "暂无变化报告。"
     return render(
         "dashboard.html",
-        title="Dashboard",
+        title="总览",
         latest_runs=latest_runs,
         stable_candidates=stable_candidates,
         top_factors=top_factors,
@@ -95,7 +95,7 @@ def runs_page():
         LIMIT 100
         """
     )
-    return render("runs.html", title="Runs", runs=runs)
+    return render("runs.html", title="运行记录", runs=runs)
 
 
 @app.get("/runs/{run_id}", response_class=HTMLResponse)
@@ -105,7 +105,7 @@ def run_detail(run_id: str):
         (run_id,),
     )
     if not run:
-        raise HTTPException(status_code=404, detail="Run not found")
+        raise HTTPException(status_code=404, detail="未找到该运行记录")
 
     factors = fetch_all(
         """
@@ -127,7 +127,7 @@ def run_detail(run_id: str):
     )
     return render(
         "run_detail.html",
-        title=f"Run {run_id}",
+        title=f"运行详情 {run_id[:8]}",
         run=run,
         factors=factors,
         portfolios=portfolios,
@@ -156,7 +156,7 @@ def factors_page():
         ORDER BY s.avg_score DESC
         """
     )
-    return render("factors.html", title="Factors", factors=factors)
+    return render("factors.html", title="因子", factors=factors)
 
 
 @app.get("/portfolios", response_class=HTMLResponse)
@@ -173,13 +173,13 @@ def portfolios_page():
         LIMIT 30
         """
     )
-    return render("portfolios.html", title="Portfolios", strategies=strategies, recent=recent)
+    return render("portfolios.html", title="组合", strategies=strategies, recent=recent)
 
 
 @app.get("/ops", response_class=HTMLResponse)
 def ops_page():
     tasks = latest_task_states(limit=20)
-    return render("ops.html", title="Operations", tasks=tasks, result=None)
+    return render("ops.html", title="操作", tasks=tasks, result=None)
 
 
 @app.get("/ops/run/{target}", response_class=HTMLResponse)
@@ -190,7 +190,7 @@ def ops_run(target: str):
         "cycle": "scripts/run_scheduled_cycle.py",
     }
     if target not in mapping:
-        raise HTTPException(status_code=404, detail="Unknown operation target")
+        raise HTTPException(status_code=404, detail="未知操作目标")
     result = trigger_script(mapping[target])
     tasks = latest_task_states(limit=20)
-    return render("ops.html", title="Operations", tasks=tasks, result=result)
+    return render("ops.html", title="操作", tasks=tasks, result=result)

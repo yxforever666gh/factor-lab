@@ -1,9 +1,9 @@
 {% extends 'base.html' %}
 {% block content %}
 <section class="card">
-  <h2>Factor Scoreboard</h2>
+  <h2>因子评分榜</h2>
   <table>
-    <thead><tr><th>Factor</th><th>Avg Score</th><th>Runs</th><th>Candidate Runs</th><th>Graveyard Runs</th></tr></thead>
+    <thead><tr><th>因子</th><th>平均分</th><th>运行次数</th><th>候选次数</th><th>墓地次数</th></tr></thead>
     <tbody>
       {% for row in factors %}
       <tr>

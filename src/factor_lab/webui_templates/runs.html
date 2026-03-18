@@ -1,18 +1,18 @@
 {% extends 'base.html' %}
 {% block content %}
 <section class="card">
-  <h2>Workflow Runs</h2>
+  <h2>工作流运行记录</h2>
   <table>
     <thead>
       <tr>
-        <th>Run ID</th>
-        <th>Created</th>
-        <th>Config</th>
-        <th>Window</th>
-        <th>Rows</th>
-        <th>Factors</th>
-        <th>Status</th>
-        <th>Rerun Of</th>
+        <th>运行 ID</th>
+        <th>创建时间</th>
+        <th>配置</th>
+        <th>时间窗口</th>
+        <th>数据行数</th>
+        <th>因子数</th>
+        <th>状态</th>
+        <th>重跑来源</th>
       </tr>
     </thead>
     <tbody>
@@ -24,7 +24,7 @@
         <td>{{ row.start_date }} → {{ row.end_date }}</td>
         <td>{{ row.dataset_rows }}</td>
         <td>{{ row.factor_count }}</td>
-        <td><span class="pill {{ 'good' if row.status == 'finished' else 'bad' }}">{{ row.status }}</span></td>
+        <td><span class="pill {{ 'good' if row.status == 'finished' else 'bad' }}">{{ '已完成' if row.status == 'finished' else row.status }}</span></td>
         <td>{{ row.rerun_of_run_id or '-' }}</td>
       </tr>
       {% endfor %}
