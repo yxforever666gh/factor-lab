@@ -410,6 +410,7 @@ def research_page():
         "failed": len([t for t in tasks if t["status"] == "failed"]),
         "baseline": len([t for t in tasks if (t.get("worker_note") or "").startswith("baseline")]),
         "validation": len([t for t in tasks if (t.get("worker_note") or "").startswith("validation")]),
+        "exploration": len([t for t in tasks if (t.get("worker_note") or "").startswith("exploration")]),
         "retry": len([t for t in tasks if (t.get("worker_note") or "").startswith("retry")]),
     }
     return render("research.html", title="研究队列", tasks=tasks, summary=summary)

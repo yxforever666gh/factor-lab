@@ -14,15 +14,46 @@ from factor_lab.reporting import write_sqlite_report
 from factor_lab.html_report import build_html_report
 from factor_lab.index_page import build_index_page
 from factor_lab.summary import build_run_summary
+from factor_lab.llm_feedback import summarize_generated_batch_run
+from factor_lab.llm_bridge import write_bridge_status
+from datetime import datetime, timezone
 
 
 BASELINE_PRIORITY = 10
 VALIDATION_PRIORITY = 30
 EXPLORATION_PRIORITY = 60
 RETRY_PRIORITY = 15
+MAX_PENDING_BASELINE = 2
+MAX_PENDING_VALIDATION = 2
+MAX_PENDING_EXPLORATION = 1
 
 
 DB_PATH = Path("artifacts") / "factor_lab.db"
+
+
+def _category_from_note(note: str | None) -> str:
+    note = note or ""
+    if note.startswith("baseline"):
+        return "baseline"
+    if note.startswith("validation"):
+        return "validation"
+    if note.startswith("exploration"):
+        return "exploration"
+    if note.startswith("retry"):
+        return "retry"
+    return "other"
+
+
+def queue_budget_snapshot(store: ExperimentStore) -> dict[str, int]:
+    tasks = store.list_research_tasks(limit=200)
+    counts = {"baseline": 0, "validation": 0, "exploration": 0}
+    for task in tasks:
+        if task["status"] not in {"pending", "running"}:
+            continue
+        category = _category_from_note(task.get("worker_note"))
+        if category in counts:
+            counts[category] += 1
+    return counts
 
 
 def enqueue_baseline_tasks(store: ExperimentStore) -> list[str]:
@@ -42,8 +73,14 @@ def enqueue_baseline_tasks(store: ExperimentStore) -> list[str]:
             "worker_note": "validation｜标准 batch 对比",
         },
     ]
+    budget = queue_budget_snapshot(store)
     task_ids = []
     for seed in seeds:
+        category = _category_from_note(seed["worker_note"])
+        if category == "baseline" and budget["baseline"] >= MAX_PENDING_BASELINE:
+            continue
+        if category == "validation" and budget["validation"] >= MAX_PENDING_VALIDATION:
+            continue
         cfg = json.loads(Path(seed["config_path"]).read_text(encoding="utf-8"))
         fingerprint = f"{seed['task_type']}::{config_fingerprint(cfg)}::{seed['output_dir']}"
         task_id = store.enqueue_research_task(
@@ -54,6 +91,7 @@ def enqueue_baseline_tasks(store: ExperimentStore) -> list[str]:
             worker_note=seed["worker_note"],
         )
         task_ids.append(task_id)
+        budget[category] += 1
     return task_ids
 
 
@@ -68,7 +106,8 @@ def refresh_reports() -> None:
 def _enqueue_followups_for_workflow(store: ExperimentStore, task: dict[str, Any], payload: dict[str, Any]) -> list[str]:
     config_path = payload["config_path"]
     followups: list[str] = []
-    if config_path == "configs/tushare_workflow.json":
+    budget = queue_budget_snapshot(store)
+    if config_path == "configs/tushare_workflow.json" and budget["validation"] < MAX_PENDING_VALIDATION:
         cfg = json.loads(Path("configs/tushare_batch.json").read_text(encoding="utf-8"))
         fingerprint = f"batch::{config_fingerprint(cfg)}::artifacts/tushare_batch"
         followups.append(
@@ -79,6 +118,23 @@ def _enqueue_followups_for_workflow(store: ExperimentStore, task: dict[str, Any]
                 fingerprint=fingerprint,
                 parent_task_id=task["task_id"],
                 worker_note="validation｜由 workflow 完成后自动触发的 batch 对比",
+            )
+        )
+    generated_batch_path = Path("artifacts/generated_batch_from_llm.json")
+    if generated_batch_path.exists() and budget["exploration"] < MAX_PENDING_EXPLORATION:
+        generated_batch = json.loads(generated_batch_path.read_text(encoding="utf-8"))
+        fingerprint = f"generated_batch::{config_fingerprint(generated_batch)}::artifacts/llm_generated_batch_run"
+        followups.append(
+            store.enqueue_research_task(
+                task_type="generated_batch",
+                payload={
+                    "batch_path": str(generated_batch_path),
+                    "output_dir": "artifacts/llm_generated_batch_run",
+                },
+                priority=EXPLORATION_PRIORITY,
+                fingerprint=fingerprint,
+                parent_task_id=task["task_id"],
+                worker_note="exploration｜执行 LLM 生成的 batch",
             )
         )
     return followups
@@ -108,6 +164,26 @@ def execute_task(task: dict[str, Any]) -> str:
         run_batch(config_path=payload["config_path"], output_dir=payload["output_dir"])
         refresh_reports()
         return f"batch finished: {payload['config_path']}"
+    if task_type == "generated_batch":
+        batch_path = Path(payload["batch_path"])
+        if not batch_path.exists():
+            raise FileNotFoundError(f"generated batch not found: {batch_path}")
+        run_batch(str(batch_path), payload["output_dir"])
+        feedback = summarize_generated_batch_run(payload["output_dir"], "artifacts/llm_plan_feedback.json")
+        write_bridge_status(
+            "artifacts/llm_status.json",
+            {
+                "mode": "openclaw_agent_bridge",
+                "status": "plan_executed",
+                "updated_at_utc": datetime.now(timezone.utc).isoformat(),
+                "generated_batch_path": str(batch_path),
+                "generated_batch_output_dir": payload["output_dir"],
+                "feedback_path": "artifacts/llm_plan_feedback.json",
+                "feedback_summary": feedback.get("batch_summary", []),
+            },
+        )
+        refresh_reports()
+        return f"generated batch finished: {batch_path}"
     raise ValueError(f"unsupported task_type: {task_type}")
 
 

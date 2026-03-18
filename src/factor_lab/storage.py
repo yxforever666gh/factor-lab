@@ -211,7 +211,7 @@ class ExperimentStore:
             existing = self.conn.execute(
                 """
                 SELECT task_id FROM research_tasks
-                WHERE fingerprint = ? AND status IN ('pending', 'running', 'finished')
+                WHERE fingerprint = ? AND status IN ('pending', 'running')
                 ORDER BY created_at_utc DESC
                 LIMIT 1
                 """,
