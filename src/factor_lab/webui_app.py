@@ -190,6 +190,12 @@ def llm_page():
     snapshot_text = snapshot_path.read_text(encoding="utf-8") if snapshot_path.exists() else "暂无 LLM 输入快照。"
     status_text = status_path.read_text(encoding="utf-8") if status_path.exists() else "暂无 LLM 状态。"
     request_text = request_path.read_text(encoding="utf-8") if request_path.exists() else "暂无 bridge 请求。"
+    llm_status = json.loads(status_text) if status_path.exists() else {}
+    llm_plan = json.loads(plan_text) if plan_path.exists() else {}
+    snapshot = json.loads(snapshot_text) if snapshot_path.exists() else {}
+    agent_request = json.loads(request_text) if request_path.exists() else {}
+    generated_batch_path = DB_PATH.parent / "generated_batch_from_llm.json"
+    generated_batch_workflow_path = DB_PATH.parent / "generated_workflow_from_llm.json"
     return render(
         "llm.html",
         title="LLM",
@@ -198,10 +204,13 @@ def llm_page():
         snapshot_text=snapshot_text,
         status_text=status_text,
         request_text=request_text,
-        llm_status=json.loads(status_text) if status_path.exists() else {},
-        llm_plan=json.loads(plan_text) if plan_path.exists() else {},
-        snapshot=json.loads(snapshot_text) if snapshot_path.exists() else {},
-        agent_request=json.loads(request_text) if request_path.exists() else {},
+        llm_status=llm_status,
+        llm_plan=llm_plan,
+        snapshot=snapshot,
+        agent_request=agent_request,
+        generated_batch_text=generated_batch_path.read_text(encoding="utf-8") if generated_batch_path.exists() else "暂无生成的 batch。",
+        generated_workflow_text=generated_batch_workflow_path.read_text(encoding="utf-8") if generated_batch_workflow_path.exists() else "暂无生成的 workflow。",
+        plan_validation_text=json.dumps(llm_status.get("plan_validation", {}), ensure_ascii=False, indent=2) if llm_status.get("plan_validation") else "暂无计划校验结果。",
     )
 
 
@@ -221,6 +230,7 @@ def ops_run(target: str):
         "llm-bridge": "scripts/run_llm_bridge_prepare.py",
         "llm-bridge-import": "scripts/import_llm_bridge_response.py",
         "llm-bridge-check": "scripts/check_and_import_llm_bridge.py",
+        "llm-plan-generate": "scripts/generate_batch_from_llm_plan.py",
     }
     if target not in mapping:
         raise HTTPException(status_code=404, detail="未知操作目标")

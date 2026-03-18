@@ -1,8 +1,35 @@
 {
   "mode": "openclaw_agent_bridge",
-  "status": "imported",
-  "response_path": "artifacts/agent_response.json",
-  "imported_at_utc": "2026-03-18T18:26:02.281012+00:00",
-  "agent_name": "openclaw-analyst-agent",
-  "validation": "passed"
+  "updated_at_utc": "2026-03-18T18:32:50.392228+00:00",
+  "plan_validation": {
+    "valid": true,
+    "errors": [],
+    "warnings": [],
+    "normalized_plan": {
+      "focus_factors": [
+        "mom_20",
+        "mom_plus_value",
+        "liquidity_turnover_shock",
+        "size_small"
+      ],
+      "keep_as_core_candidates": [
+        "mom_20",
+        "mom_plus_value"
+      ],
+      "review_graveyard": [
+        "liquidity_turnover_shock",
+        "size_small",
+        "value_ep",
+        "value_bp"
+      ],
+      "portfolio_checks": [
+        "compare_all_factors_vs_candidates_only",
+        "compare_cluster_representatives_vs_all_factors",
+        "diagnose_neutralized_underperformance"
+      ],
+      "rationale": "基于当前快照，下一轮应继续围绕稳定动量主线，并解释高分非候选因子与中性化策略显著走弱的原因。"
+    }
+  },
+  "status": "plan_ready",
+  "generated_batch_path": "artifacts/generated_batch_from_llm.json"
 }

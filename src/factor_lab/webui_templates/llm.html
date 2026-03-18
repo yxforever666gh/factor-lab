@@ -78,6 +78,22 @@
   </section>
 </div>
 
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>计划校验状态</h2>
+    <pre>{{ plan_validation_text }}</pre>
+  </section>
+  <section class="card">
+    <h2>生成的 Batch 摘要</h2>
+    <pre>{{ generated_batch_text }}</pre>
+  </section>
+</div>
+
+<details class="card" style="margin-top:18px;">
+  <summary style="cursor:pointer; font-weight:600;">查看生成的 Workflow 配置</summary>
+  <pre style="margin-top:12px;">{{ generated_workflow_text }}</pre>
+</details>
+
 <details class="card" style="margin-top:18px;">
   <summary style="cursor:pointer; font-weight:600;">查看完整 Bridge 请求</summary>
   <pre style="margin-top:12px;">{{ request_text }}</pre>

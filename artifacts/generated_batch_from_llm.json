@@ -1,0 +1,10 @@
+{
+  "source": "llm_plan",
+  "summary": "基于当前快照，下一轮应继续围绕稳定动量主线，并解释高分非候选因子与中性化策略显著走弱的原因。",
+  "jobs": [
+    {
+      "name": "llm_focus_batch",
+      "config_path": "artifacts/generated_workflow_from_llm.json"
+    }
+  ]
+}
