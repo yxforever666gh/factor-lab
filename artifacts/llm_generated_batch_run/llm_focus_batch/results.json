@@ -1,0 +1,46 @@
+[
+  {
+    "factor_name": "mom_20",
+    "expression": "momentum_20",
+    "observations": 242,
+    "rank_ic_mean": 0.327686,
+    "rank_ic_std": 0.269547,
+    "rank_ic_ir": 1.21569,
+    "top_bottom_spread_mean": 0.032816,
+    "pass_gate": true,
+    "fail_reason": ""
+  },
+  {
+    "factor_name": "mom_plus_value",
+    "expression": "momentum_20 + earnings_yield",
+    "observations": 242,
+    "rank_ic_mean": 0.281405,
+    "rank_ic_std": 0.260461,
+    "rank_ic_ir": 1.080412,
+    "top_bottom_spread_mean": 0.019764,
+    "pass_gate": true,
+    "fail_reason": ""
+  },
+  {
+    "factor_name": "liquidity_turnover_shock",
+    "expression": "turnover_shock_5_20",
+    "observations": 242,
+    "rank_ic_mean": 0.254545,
+    "rank_ic_std": 0.260006,
+    "rank_ic_ir": 0.978997,
+    "top_bottom_spread_mean": 0.02472,
+    "pass_gate": true,
+    "fail_reason": ""
+  },
+  {
+    "factor_name": "size_small",
+    "expression": "size_inv",
+    "observations": 242,
+    "rank_ic_mean": 0.233884,
+    "rank_ic_std": 0.195194,
+    "rank_ic_ir": 1.198217,
+    "top_bottom_spread_mean": 0.020628,
+    "pass_gate": true,
+    "fail_reason": ""
+  }
+]

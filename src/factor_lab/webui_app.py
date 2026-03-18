@@ -196,6 +196,7 @@ def llm_page():
     agent_request = json.loads(request_text) if request_path.exists() else {}
     generated_batch_path = DB_PATH.parent / "generated_batch_from_llm.json"
     generated_batch_workflow_path = DB_PATH.parent / "generated_workflow_from_llm.json"
+    feedback_path = DB_PATH.parent / "llm_plan_feedback.json"
     return render(
         "llm.html",
         title="LLM",
@@ -210,6 +211,7 @@ def llm_page():
         agent_request=agent_request,
         generated_batch_text=generated_batch_path.read_text(encoding="utf-8") if generated_batch_path.exists() else "暂无生成的 batch。",
         generated_workflow_text=generated_batch_workflow_path.read_text(encoding="utf-8") if generated_batch_workflow_path.exists() else "暂无生成的 workflow。",
+        generated_feedback_text=feedback_path.read_text(encoding="utf-8") if feedback_path.exists() else "暂无 batch 执行反馈。",
         plan_validation_text=json.dumps(llm_status.get("plan_validation", {}), ensure_ascii=False, indent=2) if llm_status.get("plan_validation") else "暂无计划校验结果。",
     )
 
@@ -231,6 +233,7 @@ def ops_run(target: str):
         "llm-bridge-import": "scripts/import_llm_bridge_response.py",
         "llm-bridge-check": "scripts/check_and_import_llm_bridge.py",
         "llm-plan-generate": "scripts/generate_batch_from_llm_plan.py",
+        "llm-plan-run": "scripts/run_generated_batch_from_llm.py",
     }
     if target not in mapping:
         raise HTTPException(status_code=404, detail="未知操作目标")
