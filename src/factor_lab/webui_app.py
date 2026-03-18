@@ -5,10 +5,11 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from factor_lab.db_views import ensure_views
+from factor_lab.ops import latest_task_states, trigger_script
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -173,3 +174,23 @@ def portfolios_page():
         """
     )
     return render("portfolios.html", title="Portfolios", strategies=strategies, recent=recent)
+
+
+@app.get("/ops", response_class=HTMLResponse)
+def ops_page():
+    tasks = latest_task_states(limit=20)
+    return render("ops.html", title="Operations", tasks=tasks, result=None)
+
+
+@app.get("/ops/run/{target}", response_class=HTMLResponse)
+def ops_run(target: str):
+    mapping = {
+        "workflow": "scripts/run_tushare_workflow.py",
+        "batch": "scripts/run_tushare_batch.py",
+        "cycle": "scripts/run_scheduled_cycle.py",
+    }
+    if target not in mapping:
+        raise HTTPException(status_code=404, detail="Unknown operation target")
+    result = trigger_script(mapping[target])
+    tasks = latest_task_states(limit=20)
+    return render("ops.html", title="Operations", tasks=tasks, result=result)
