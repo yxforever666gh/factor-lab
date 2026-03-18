@@ -1,9 +1,9 @@
 {
-  "task_id": "0c7e07bb-a725-4c58-873c-1177084e6e0a",
+  "task_id": "c265d051-fcf3-47ef-9b37-47c2d58c5273",
   "config_path": "configs/tushare_workflow_longer.json",
   "output_dir": "artifacts/tushare_batch/longer_window",
   "status": "finished",
-  "started_at_utc": "2026-03-18T17:21:37.456859+00:00",
-  "finished_at_utc": "2026-03-18T17:21:42.114128+00:00",
+  "started_at_utc": "2026-03-18T17:28:36.852563+00:00",
+  "finished_at_utc": "2026-03-18T17:28:40.915724+00:00",
   "error": null
 }

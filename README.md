@@ -1,6 +1,6 @@
-# Factor Research MVP
+# Factor Lab
 
-A minimal, reproducible framework for factor research.
+A reproducible factor research platform, now packaged as v1.0.
 
 ## What this project includes
 
@@ -24,6 +24,7 @@ A minimal, reproducible framework for factor research.
 - batch runner for multiple workflow configs with comparison output
 - scheduled cycle entrypoint for recurring runs
 - index page and latest-summary artifact for quick glance usage
+- change detection between recent finished runs
 - experiment artifacts written to `artifacts/`
 
 ## Project layout
@@ -94,6 +95,7 @@ Outputs:
 - `artifacts/report.html`
 - `artifacts/index.html`
 - `artifacts/latest_summary.txt`
+- `artifacts/change_report.md`
 
 ## Current real-data factor set
 
@@ -106,7 +108,7 @@ Outputs:
 
 ## Notes
 
-This is still an MVP.
+This is the v1.0 baseline release.
 
 What it does well now:
 - prove the research workflow end-to-end

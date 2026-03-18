@@ -1,3 +1,3 @@
-Latest run: 0c7e07bb-a725-4c58-873c-1177084e6e0a (2026-03-18T17:21:37.456859+00:00) from configs/tushare_workflow_longer.json
+Latest run: c265d051-fcf3-47ef-9b37-47c2d58c5273 (2026-03-18T17:28:36.852563+00:00) from configs/tushare_workflow_longer.json
 Best average strategy: long_short_top_bottom_all_factors (avg_sharpe=10.837132)
 Stable candidates: mom_20, mom_plus_value
