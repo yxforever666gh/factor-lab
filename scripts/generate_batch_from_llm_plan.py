@@ -12,7 +12,9 @@ from factor_lab.llm_bridge import write_bridge_status
 
 if __name__ == "__main__":
     allowed = {item["name"] for item in json.loads(Path("configs/tushare_workflow.json").read_text(encoding="utf-8"))["factors"]}
-    result = validate_plan_file("artifacts/llm_next_batch_proposal.json", allowed)
+    weights_path = Path("artifacts/llm_recommendation_weights.json")
+    weights = json.loads(weights_path.read_text(encoding="utf-8")) if weights_path.exists() else {}
+    result = validate_plan_file("artifacts/llm_next_batch_proposal.json", allowed, recommendation_weights=weights)
 
     status_payload = {
         "mode": "openclaw_agent_bridge",

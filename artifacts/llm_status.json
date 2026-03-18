@@ -1,18 +1,46 @@
 {
   "mode": "openclaw_agent_bridge",
-  "status": "recommendation_memory_updated",
-  "updated_at_utc": "2026-03-18T18:49:51.144137+00:00",
-  "history_path": "artifacts/llm_recommendation_history.json",
-  "weights_path": "artifacts/llm_recommendation_weights.json",
-  "history_count": 1,
-  "weights": {
-    "templates": {
-      "neutralization_diagnosis": {
-        "avg_effect_score": 1.0,
-        "sample_count": 1,
-        "recommended_action": "upweight"
-      }
+  "updated_at_utc": "2026-03-18T19:01:27.797231+00:00",
+  "plan_validation": {
+    "valid": true,
+    "errors": [],
+    "warnings": [],
+    "template_policy": {
+      "template_type": "neutralization_diagnosis",
+      "recommended_action": "upweight",
+      "base_max_focus_factors": 6,
+      "base_max_review_graveyard": 6,
+      "adjusted_max_focus_factors": 7,
+      "adjusted_max_review_graveyard": 7,
+      "avg_effect_score": 1.0,
+      "sample_count": 1
     },
-    "global_hint": "优先考虑历史上 avg_effect_score 更高的建议模板。"
-  }
+    "normalized_plan": {
+      "focus_factors": [
+        "mom_20",
+        "mom_plus_value",
+        "liquidity_turnover_shock",
+        "size_small"
+      ],
+      "keep_as_core_candidates": [
+        "mom_20",
+        "mom_plus_value"
+      ],
+      "review_graveyard": [
+        "liquidity_turnover_shock",
+        "size_small",
+        "value_ep",
+        "value_bp"
+      ],
+      "portfolio_checks": [
+        "compare_all_factors_vs_candidates_only",
+        "compare_cluster_representatives_vs_all_factors",
+        "diagnose_neutralized_underperformance"
+      ],
+      "rationale": "基于当前快照，下一轮应继续围绕稳定动量主线，并解释高分非候选因子与中性化策略显著走弱的原因。",
+      "template_type": "neutralization_diagnosis"
+    }
+  },
+  "status": "plan_ready",
+  "generated_batch_path": "artifacts/generated_batch_from_llm.json"
 }

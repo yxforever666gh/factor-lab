@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from factor_lab.llm_recommendation_memory import infer_template_type
+
 
 REQUIRED_KEYS = {"focus_factors", "keep_as_core_candidates", "review_graveyard", "portfolio_checks", "rationale"}
 ALLOWED_PORTFOLIO_CHECKS = {
@@ -13,14 +15,56 @@ ALLOWED_PORTFOLIO_CHECKS = {
 }
 
 
+def _apply_template_policy(
+    template_type: str,
+    recommendation_weights: dict[str, Any] | None,
+    max_focus_factors: int,
+    max_review_graveyard: int,
+) -> tuple[int, int, dict[str, Any]]:
+    templates = (recommendation_weights or {}).get("templates", {})
+    template_info = templates.get(template_type, {})
+    action = template_info.get("recommended_action", "keep")
+
+    adjusted_focus = max_focus_factors
+    adjusted_graveyard = max_review_graveyard
+    policy = {
+        "template_type": template_type,
+        "recommended_action": action,
+        "base_max_focus_factors": max_focus_factors,
+        "base_max_review_graveyard": max_review_graveyard,
+    }
+
+    if action == "upweight":
+        adjusted_focus = max_focus_factors + 1
+        adjusted_graveyard = max_review_graveyard + 1
+    elif action == "downweight":
+        adjusted_focus = max(2, max_focus_factors - 2)
+        adjusted_graveyard = max(2, max_review_graveyard - 2)
+
+    policy["adjusted_max_focus_factors"] = adjusted_focus
+    policy["adjusted_max_review_graveyard"] = adjusted_graveyard
+    policy["avg_effect_score"] = template_info.get("avg_effect_score")
+    policy["sample_count"] = template_info.get("sample_count")
+    return adjusted_focus, adjusted_graveyard, policy
+
+
 def validate_plan(
     plan: dict[str, Any],
     allowed_factor_names: set[str],
     max_focus_factors: int = 6,
     max_review_graveyard: int = 6,
+    recommendation_weights: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
+
+    template_type = infer_template_type(plan)
+    adjusted_focus_limit, adjusted_graveyard_limit, template_policy = _apply_template_policy(
+        template_type,
+        recommendation_weights,
+        max_focus_factors,
+        max_review_graveyard,
+    )
 
     missing = REQUIRED_KEYS - set(plan.keys())
     if missing:
@@ -34,15 +78,15 @@ def validate_plan(
 
     if not isinstance(focus_factors, list) or not focus_factors:
         errors.append("focus_factors 必须是非空列表")
-    if isinstance(focus_factors, list) and len(focus_factors) > max_focus_factors:
-        errors.append(f"focus_factors 超出上限 {max_focus_factors}")
+    if isinstance(focus_factors, list) and len(focus_factors) > adjusted_focus_limit:
+        errors.append(f"focus_factors 超出上限 {adjusted_focus_limit}")
 
     if not isinstance(keep_as_core, list):
         errors.append("keep_as_core_candidates 必须是列表")
     if not isinstance(review_graveyard, list):
         errors.append("review_graveyard 必须是列表")
-    if isinstance(review_graveyard, list) and len(review_graveyard) > max_review_graveyard:
-        warnings.append(f"review_graveyard 超出建议上限 {max_review_graveyard}，后续会截断")
+    if isinstance(review_graveyard, list) and len(review_graveyard) > adjusted_graveyard_limit:
+        warnings.append(f"review_graveyard 超出建议上限 {adjusted_graveyard_limit}，后续会截断")
 
     if not isinstance(portfolio_checks, list) or not portfolio_checks:
         errors.append("portfolio_checks 必须是非空列表")
@@ -71,16 +115,22 @@ def validate_plan(
         "valid": not errors,
         "errors": errors,
         "warnings": warnings,
+        "template_policy": template_policy,
         "normalized_plan": {
-            "focus_factors": focus_factors[:max_focus_factors] if isinstance(focus_factors, list) else [],
+            "focus_factors": focus_factors[:adjusted_focus_limit] if isinstance(focus_factors, list) else [],
             "keep_as_core_candidates": keep_as_core if isinstance(keep_as_core, list) else [],
-            "review_graveyard": review_graveyard[:max_review_graveyard] if isinstance(review_graveyard, list) else [],
+            "review_graveyard": review_graveyard[:adjusted_graveyard_limit] if isinstance(review_graveyard, list) else [],
             "portfolio_checks": portfolio_checks if isinstance(portfolio_checks, list) else [],
             "rationale": rationale.strip() if isinstance(rationale, str) else "",
+            "template_type": template_type,
         },
     }
 
 
-def validate_plan_file(plan_path: str | Path, allowed_factor_names: set[str]) -> dict[str, Any]:
+def validate_plan_file(
+    plan_path: str | Path,
+    allowed_factor_names: set[str],
+    recommendation_weights: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     plan = json.loads(Path(plan_path).read_text(encoding="utf-8"))
-    return validate_plan(plan, allowed_factor_names)
+    return validate_plan(plan, allowed_factor_names, recommendation_weights=recommendation_weights)
