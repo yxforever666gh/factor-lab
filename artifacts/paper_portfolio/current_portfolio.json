@@ -1,0 +1,23 @@
+{
+  "generated_at_utc": "2026-03-18T19:30:06.487202+00:00",
+  "strategy_name": "paper_candidates_only",
+  "as_of_date": "2026-03-11",
+  "position_count": 3,
+  "positions": [
+    {
+      "ticker": "000007.SZ",
+      "signal": 2.235211,
+      "weight": 0.333333
+    },
+    {
+      "ticker": "600603.SH",
+      "signal": 1.339294,
+      "weight": 0.333333
+    },
+    {
+      "ticker": "000001.SZ",
+      "signal": 0.601862,
+      "weight": 0.333333
+    }
+  ]
+}

@@ -177,6 +177,22 @@ def portfolios_page():
     return render("portfolios.html", title="组合", strategies=strategies, recent=recent)
 
 
+@app.get("/paper-portfolio", response_class=HTMLResponse)
+def paper_portfolio_page():
+    base = DB_PATH.parent / "paper_portfolio"
+    current_path = base / "current_portfolio.json"
+    history_path = base / "portfolio_history.json"
+    change_log_path = base / "portfolio_change_log.md"
+    current = json.loads(current_path.read_text(encoding="utf-8")) if current_path.exists() else {}
+    return render(
+        "paper_portfolio.html",
+        title="纸面组合",
+        current=current,
+        history_text=history_path.read_text(encoding="utf-8") if history_path.exists() else "暂无组合历史。",
+        change_log_text=change_log_path.read_text(encoding="utf-8") if change_log_path.exists() else "暂无组合变更日志。",
+    )
+
+
 @app.get("/llm", response_class=HTMLResponse)
 def llm_page():
     base = DB_PATH.parent

@@ -9,6 +9,8 @@ from factor_lab.reporting import write_sqlite_report
 from factor_lab.html_report import build_html_report
 from factor_lab.index_page import build_index_page
 from factor_lab.summary import build_run_summary
+from factor_lab.paper_portfolio import build_paper_portfolio, append_portfolio_history, build_portfolio_change_log
+import json
 
 
 if __name__ == "__main__":
@@ -35,4 +37,21 @@ if __name__ == "__main__":
     build_change_report(
         db_path="artifacts/factor_lab.db",
         output_path="artifacts/change_report.md",
+    )
+
+    candidates = json.loads(Path("artifacts/tushare_workflow/candidate_pool.json").read_text(encoding="utf-8"))
+    build_paper_portfolio(
+        dataset_path="artifacts/tushare_workflow/dataset.csv",
+        factor_definitions=[{"name": row["factor_name"], "expression": row["expression"]} for row in candidates],
+        output_dir="artifacts/paper_portfolio",
+        strategy_name="paper_candidates_only",
+    )
+    append_portfolio_history(
+        current_path="artifacts/paper_portfolio/current_portfolio.json",
+        history_path="artifacts/paper_portfolio/portfolio_history.json",
+    )
+    build_portfolio_change_log(
+        current_path="artifacts/paper_portfolio/current_portfolio.json",
+        history_path="artifacts/paper_portfolio/portfolio_history.json",
+        output_path="artifacts/paper_portfolio/portfolio_change_log.md",
     )
