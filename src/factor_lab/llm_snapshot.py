@@ -50,6 +50,8 @@ def build_snapshot(db_path: str | Path, output_path: str | Path) -> dict:
     recommendation_weights_path = root / "llm_recommendation_weights.json"
     recommendation_history_path = root / "llm_recommendation_history.json"
     recommendation_context_path = root / "llm_recommendation_context.json"
+    paper_portfolio_stability_path = root / "paper_portfolio" / "portfolio_stability_score.json"
+    paper_portfolio_retro_path = root / "paper_portfolio" / "portfolio_retrospective.json"
 
     payload = {
         "latest_run": dict(latest_run) if latest_run else None,
@@ -64,6 +66,8 @@ def build_snapshot(db_path: str | Path, output_path: str | Path) -> dict:
         "recommendation_weights": json.loads(recommendation_weights_path.read_text(encoding="utf-8")) if recommendation_weights_path.exists() else {},
         "recommendation_history_tail": json.loads(recommendation_history_path.read_text(encoding="utf-8"))[-5:] if recommendation_history_path.exists() else [],
         "recommendation_context": json.loads(recommendation_context_path.read_text(encoding="utf-8")) if recommendation_context_path.exists() else {},
+        "paper_portfolio_stability": json.loads(paper_portfolio_stability_path.read_text(encoding="utf-8")) if paper_portfolio_stability_path.exists() else {},
+        "paper_portfolio_retrospective": json.loads(paper_portfolio_retro_path.read_text(encoding="utf-8")) if paper_portfolio_retro_path.exists() else {},
     }
     Path(output_path).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return payload

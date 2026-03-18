@@ -69,6 +69,7 @@ def validate_plan(
     max_review_graveyard: int = 6,
     recommendation_weights: dict[str, Any] | None = None,
     recommendation_context: dict[str, Any] | None = None,
+    paper_portfolio_stability: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -132,11 +133,25 @@ def validate_plan(
         if outside_focus:
             warnings.append(f"keep_as_core_candidates 中部分因子不在 focus_factors 内: {', '.join(outside_focus)}")
 
+    portfolio_policy = {
+        "stability_score": (paper_portfolio_stability or {}).get("stability_score"),
+        "label": (paper_portfolio_stability or {}).get("label"),
+    }
+    stability_score = (paper_portfolio_stability or {}).get("stability_score")
+    if isinstance(stability_score, (int, float)) and stability_score < 0.6:
+        warnings.append("纸面组合稳定性偏低，建议减少本轮 focus_factors 数量")
+        if isinstance(focus_factors, list) and len(focus_factors) > 3:
+            errors.append("纸面组合稳定性偏低时，focus_factors 不应超过 3")
+        portfolio_policy["risk_mode"] = "conservative"
+    else:
+        portfolio_policy["risk_mode"] = "normal"
+
     return {
         "valid": not errors,
         "errors": errors,
         "warnings": warnings,
         "template_policy": template_policy,
+        "portfolio_policy": portfolio_policy,
         "normalized_plan": {
             "focus_factors": focus_factors[:adjusted_focus_limit] if isinstance(focus_factors, list) else [],
             "keep_as_core_candidates": keep_as_core if isinstance(keep_as_core, list) else [],
@@ -154,6 +169,7 @@ def validate_plan_file(
     allowed_factor_names: set[str],
     recommendation_weights: dict[str, Any] | None = None,
     recommendation_context: dict[str, Any] | None = None,
+    paper_portfolio_stability: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     plan = json.loads(Path(plan_path).read_text(encoding="utf-8"))
     return validate_plan(
@@ -161,4 +177,5 @@ def validate_plan_file(
         allowed_factor_names,
         recommendation_weights=recommendation_weights,
         recommendation_context=recommendation_context,
+        paper_portfolio_stability=paper_portfolio_stability,
     )

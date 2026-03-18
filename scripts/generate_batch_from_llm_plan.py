@@ -14,13 +14,16 @@ if __name__ == "__main__":
     allowed = {item["name"] for item in json.loads(Path("configs/tushare_workflow.json").read_text(encoding="utf-8"))["factors"]}
     weights_path = Path("artifacts/llm_recommendation_weights.json")
     context_path = Path("artifacts/llm_recommendation_context.json")
+    stability_path = Path("artifacts/paper_portfolio/portfolio_stability_score.json")
     weights = json.loads(weights_path.read_text(encoding="utf-8")) if weights_path.exists() else {}
     context = json.loads(context_path.read_text(encoding="utf-8")) if context_path.exists() else {}
+    stability = json.loads(stability_path.read_text(encoding="utf-8")) if stability_path.exists() else {}
     result = validate_plan_file(
         "artifacts/llm_next_batch_proposal.json",
         allowed,
         recommendation_weights=weights,
         recommendation_context=context,
+        paper_portfolio_stability=stability,
     )
 
     status_payload = {

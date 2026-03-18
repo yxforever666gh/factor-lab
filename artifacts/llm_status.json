@@ -1,6 +1,6 @@
 {
   "mode": "openclaw_agent_bridge",
-  "updated_at_utc": "2026-03-18T19:11:32.414317+00:00",
+  "updated_at_utc": "2026-03-18T19:40:59.747377+00:00",
   "plan_validation": {
     "valid": true,
     "errors": [],
@@ -16,6 +16,11 @@
       "sample_count": 2,
       "cooldown_active": false,
       "cooldown_reason": "无冷却限制。"
+    },
+    "portfolio_policy": {
+      "stability_score": 0.88,
+      "label": "高稳定",
+      "risk_mode": "normal"
     },
     "normalized_plan": {
       "focus_factors": [
@@ -40,6 +45,7 @@
         "diagnose_neutralized_underperformance"
       ],
       "rationale": "基于当前快照，下一轮应继续围绕稳定动量主线，并解释高分非候选因子与中性化策略显著走弱的原因。",
+      "novelty_reason": "",
       "template_type": "neutralization_diagnosis"
     }
   },
