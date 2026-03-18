@@ -3,8 +3,11 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from factor_lab.db_views import ensure_views
+
 
 def write_sqlite_report(db_path: str | Path, output_path: str | Path) -> None:
+    ensure_views(db_path)
     conn = sqlite3.connect(db_path)
     cur = conn.cursor()
 

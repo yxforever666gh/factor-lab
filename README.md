@@ -17,8 +17,11 @@ A minimal, reproducible framework for factor research.
 - factor scoring and correlation-cluster representatives
 - experiment ledger per workflow run
 - SQLite experiment store for runs, factors, portfolios, and artifacts
+- SQL views for common research queries
 - basic task state tracking per workflow
+- markdown + HTML reporting from the SQLite store
 - batch runner for multiple workflow configs with comparison output
+- scheduled cycle entrypoint for recurring runs
 - experiment artifacts written to `artifacts/`
 
 ## Project layout
@@ -86,6 +89,7 @@ Outputs:
 - `artifacts/tushare_batch/batch_comparison.json`
 - `artifacts/factor_lab.db`
 - `artifacts/sqlite_report.md`
+- `artifacts/report.html`
 
 ## Current real-data factor set
 
