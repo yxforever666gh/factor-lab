@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-3">
+  <section class="card">
+    <h2>待处理</h2>
+    <div style="font-size:40px; font-weight:700;">{{ summary.pending }}</div>
+  </section>
+  <section class="card">
+    <h2>进行中 / 完成</h2>
+    <div style="font-size:40px; font-weight:700;">{{ summary.running }} / {{ summary.finished }}</div>
+  </section>
+  <section class="card">
+    <h2>失败</h2>
+    <div style="font-size:40px; font-weight:700;">{{ summary.failed }}</div>
+  </section>
+</div>
+
+<div class="grid cols-3" style="margin-top:18px;">
+  <section class="card"><h2>baseline</h2><div style="font-size:32px; font-weight:700;">{{ summary.baseline }}</div></section>
+  <section class="card"><h2>validation</h2><div style="font-size:32px; font-weight:700;">{{ summary.validation }}</div></section>
+  <section class="card"><h2>retry</h2><div style="font-size:32px; font-weight:700;">{{ summary.retry }}</div></section>
+</div>
+
+<section class="card" style="margin-top:18px;">
+  <h2>任务明细</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>任务</th><th>类型</th><th>状态</th><th>优先级</th><th>尝试</th><th>创建时间</th><th>备注</th><th>错误</th></tr></thead>
+      <tbody>
+        {% for row in tasks %}
+        <tr>
+          <td class="text-nowrap">{{ row.task_id[:8] }}</td>
+          <td>{{ row.task_type }}</td>
+          <td><span class="pill {{ 'good' if row.status == 'finished' else 'bad' if row.status == 'failed' else 'warn' }}">{{ row.status }}</span></td>
+          <td class="num">{{ row.priority }}</td>
+          <td class="num">{{ row.attempt_count }}</td>
+          <td class="text-nowrap">{{ row.created_at_utc }}</td>
+          <td class="text-break">{{ row.worker_note or '-' }}</td>
+          <td class="text-break">{{ row.last_error or '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

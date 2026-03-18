@@ -400,6 +400,21 @@ def health_page():
     return render("health.html", title="健康度", health=health, weekly=weekly)
 
 
+@app.get("/research", response_class=HTMLResponse)
+def research_page():
+    tasks = ExperimentStore(DB_PATH).list_research_tasks(limit=100)
+    summary = {
+        "pending": len([t for t in tasks if t["status"] == "pending"]),
+        "running": len([t for t in tasks if t["status"] == "running"]),
+        "finished": len([t for t in tasks if t["status"] == "finished"]),
+        "failed": len([t for t in tasks if t["status"] == "failed"]),
+        "baseline": len([t for t in tasks if (t.get("worker_note") or "").startswith("baseline")]),
+        "validation": len([t for t in tasks if (t.get("worker_note") or "").startswith("validation")]),
+        "retry": len([t for t in tasks if (t.get("worker_note") or "").startswith("retry")]),
+    }
+    return render("research.html", title="研究队列", tasks=tasks, summary=summary)
+
+
 @app.get("/weekly", response_class=HTMLResponse)
 def weekly_page():
     health = compute_health_metrics()
