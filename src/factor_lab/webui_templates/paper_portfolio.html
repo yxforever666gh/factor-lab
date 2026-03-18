@@ -27,8 +27,27 @@
   </section>
 
   <section class="card">
+    <h2>组合稳定性评分</h2>
+    <table>
+      <tbody>
+        <tr><th>评分</th><td>{{ stability.stability_score if stability else '-' }}</td></tr>
+        <tr><th>标签</th><td>{{ stability.label if stability else '-' }}</td></tr>
+        <tr><th>历史样本数</th><td>{{ stability.history_count if stability else '-' }}</td></tr>
+        <tr><th>稳定重合率</th><td>{{ stability.stability_ratio if stability else '-' }}</td></tr>
+      </tbody>
+    </table>
+    <pre style="margin-top:12px;">{{ retrospective_text }}</pre>
+  </section>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
     <h2>组合变更日志</h2>
     <pre>{{ change_log_text }}</pre>
+  </section>
+  <section class="card">
+    <h2>稳定性明细</h2>
+    <pre>{{ stability_text }}</pre>
   </section>
 </div>
 

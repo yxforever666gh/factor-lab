@@ -55,3 +55,13 @@ if __name__ == "__main__":
         history_path="artifacts/paper_portfolio/portfolio_history.json",
         output_path="artifacts/paper_portfolio/portfolio_change_log.md",
     )
+
+    from factor_lab.paper_portfolio_retrospective import build_portfolio_retrospective, build_portfolio_stability_score
+    build_portfolio_retrospective(
+        history_path="artifacts/paper_portfolio/portfolio_history.json",
+        output_path="artifacts/paper_portfolio/portfolio_retrospective.json",
+    )
+    build_portfolio_stability_score(
+        retro_path="artifacts/paper_portfolio/portfolio_retrospective.json",
+        output_path="artifacts/paper_portfolio/portfolio_stability_score.json",
+    )

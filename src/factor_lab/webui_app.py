@@ -183,13 +183,21 @@ def paper_portfolio_page():
     current_path = base / "current_portfolio.json"
     history_path = base / "portfolio_history.json"
     change_log_path = base / "portfolio_change_log.md"
+    retro_path = base / "portfolio_retrospective.json"
+    stability_path = base / "portfolio_stability_score.json"
     current = json.loads(current_path.read_text(encoding="utf-8")) if current_path.exists() else {}
+    retrospective = json.loads(retro_path.read_text(encoding="utf-8")) if retro_path.exists() else {}
+    stability = json.loads(stability_path.read_text(encoding="utf-8")) if stability_path.exists() else {}
     return render(
         "paper_portfolio.html",
         title="纸面组合",
         current=current,
+        retrospective=retrospective,
+        stability=stability,
         history_text=history_path.read_text(encoding="utf-8") if history_path.exists() else "暂无组合历史。",
         change_log_text=change_log_path.read_text(encoding="utf-8") if change_log_path.exists() else "暂无组合变更日志。",
+        retrospective_text=retro_path.read_text(encoding="utf-8") if retro_path.exists() else "暂无组合回溯。",
+        stability_text=stability_path.read_text(encoding="utf-8") if stability_path.exists() else "暂无稳定性评分。",
     )
 
 
