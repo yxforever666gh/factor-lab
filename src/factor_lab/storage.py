@@ -18,7 +18,9 @@ CREATE TABLE IF NOT EXISTS workflow_runs (
     universe_limit INTEGER,
     factor_count INTEGER,
     dataset_rows INTEGER,
-    status TEXT NOT NULL
+    status TEXT NOT NULL,
+    config_fingerprint TEXT,
+    rerun_of_run_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS factor_results (
@@ -65,15 +67,24 @@ class ExperimentStore:
         self.conn = sqlite3.connect(self.db_path)
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.executescript(SCHEMA)
+        self._migrate()
         self.conn.commit()
+
+    def _migrate(self) -> None:
+        cols = {row[1] for row in self.conn.execute("PRAGMA table_info(workflow_runs)").fetchall()}
+        if "config_fingerprint" not in cols:
+            self.conn.execute("ALTER TABLE workflow_runs ADD COLUMN config_fingerprint TEXT")
+        if "rerun_of_run_id" not in cols:
+            self.conn.execute("ALTER TABLE workflow_runs ADD COLUMN rerun_of_run_id TEXT")
 
     def insert_run(self, payload: dict) -> None:
         self.conn.execute(
             """
             INSERT OR REPLACE INTO workflow_runs (
                 run_id, created_at_utc, config_path, output_dir, data_source,
-                start_date, end_date, universe_limit, factor_count, dataset_rows, status
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                start_date, end_date, universe_limit, factor_count, dataset_rows, status,
+                config_fingerprint, rerun_of_run_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 payload["run_id"],
@@ -87,9 +98,24 @@ class ExperimentStore:
                 payload.get("factor_count"),
                 payload.get("dataset_rows"),
                 payload["status"],
+                payload.get("config_fingerprint"),
+                payload.get("rerun_of_run_id"),
             ),
         )
         self.conn.commit()
+
+    def find_latest_finished_run(self, config_fingerprint: str) -> tuple[str, str] | None:
+        row = self.conn.execute(
+            """
+            SELECT run_id, created_at_utc
+            FROM workflow_runs
+            WHERE config_fingerprint = ? AND status = 'finished'
+            ORDER BY created_at_utc DESC
+            LIMIT 1
+            """,
+            (config_fingerprint,),
+        ).fetchone()
+        return row if row else None
 
     def insert_factor_rows(self, rows: Iterable[dict]) -> None:
         self.conn.executemany(

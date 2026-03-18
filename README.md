@@ -20,8 +20,10 @@ A minimal, reproducible framework for factor research.
 - SQL views for common research queries
 - basic task state tracking per workflow
 - markdown + HTML reporting from the SQLite store
+- run fingerprinting / rerun linkage in the experiment store
 - batch runner for multiple workflow configs with comparison output
 - scheduled cycle entrypoint for recurring runs
+- index page and latest-summary artifact for quick glance usage
 - experiment artifacts written to `artifacts/`
 
 ## Project layout
@@ -90,6 +92,8 @@ Outputs:
 - `artifacts/factor_lab.db`
 - `artifacts/sqlite_report.md`
 - `artifacts/report.html`
+- `artifacts/index.html`
+- `artifacts/latest_summary.txt`
 
 ## Current real-data factor set
 

@@ -9,6 +9,7 @@ from uuid import uuid4
 from factor_lab.analytics import evaluate_time_splits, factor_correlation_matrix, high_correlation_peers
 from factor_lab.clustering import greedy_correlation_clusters, pick_cluster_representatives
 from factor_lab.data import SampleDataGenerator
+from factor_lab.dedup import config_fingerprint
 from factor_lab.evaluation import evaluate_factor
 from factor_lab.experiments import ExperimentLedger
 from factor_lab.factors import FactorDefinition, apply_factor
@@ -179,8 +180,12 @@ def run_workflow(config_path: str, output_dir: str) -> None:
     task = task_tracker.start(config_path=config_path, output_dir=str(output))
     run_id = task["task_id"]
     created_at = task["started_at_utc"]
+    cfg_fingerprint = config_fingerprint(config)
 
     try:
+        store = ExperimentStore(Path("artifacts") / "factor_lab.db")
+        latest_prior = store.find_latest_finished_run(cfg_fingerprint)
+
         dataset = _load_dataset(config)
         dataset.frame.to_csv(output / "dataset.csv", index=False)
 
@@ -313,7 +318,6 @@ def run_workflow(config_path: str, output_dir: str) -> None:
         }
         ledger.write(ledger_payload)
 
-        store = ExperimentStore(Path("artifacts") / "factor_lab.db")
         store.insert_run(
             {
                 "run_id": run_id,
@@ -327,6 +331,8 @@ def run_workflow(config_path: str, output_dir: str) -> None:
                 "factor_count": len(definitions),
                 "dataset_rows": int(len(dataset.frame)),
                 "status": "finished",
+                "config_fingerprint": cfg_fingerprint,
+                "rerun_of_run_id": latest_prior[0] if latest_prior else None,
             }
         )
 
@@ -448,6 +454,8 @@ def run_workflow(config_path: str, output_dir: str) -> None:
                 "factor_count": len(config.get("factors", [])),
                 "dataset_rows": 0,
                 "status": "failed",
+                "config_fingerprint": cfg_fingerprint,
+                "rerun_of_run_id": None,
             }
         )
         raise
