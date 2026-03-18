@@ -10,7 +10,9 @@ A minimal, reproducible framework for factor research.
 - single-factor evaluation pipeline
 - simple pass/fail gate
 - time-split robustness check
+- industry + size neutralized factor check
 - factor correlation matrix for de-duplication clues
+- simple long/short composite portfolio backtest
 - experiment artifacts written to `artifacts/`
 
 ## Project layout
@@ -63,6 +65,8 @@ Outputs:
 - `artifacts/tushare_workflow/results.json`
 - `artifacts/tushare_workflow/split_results.json`
 - `artifacts/tushare_workflow/factor_correlation.csv`
+- `artifacts/tushare_workflow/neutralized_results.json`
+- `artifacts/tushare_workflow/portfolio_results.json`
 - `artifacts/tushare_workflow/summary.md`
 
 ## Current real-data factor set
@@ -83,10 +87,12 @@ What it does well now:
 - swap between sample and Tushare data
 - generate reproducible experiment artifacts
 - provide first-pass robustness and de-dup clues
+- compare raw factor efficacy versus industry/size-neutralized efficacy
+- run a simple composite long/short portfolio sanity check
 
 What it does not do yet:
-- industry / size neutralization
 - transaction cost model
 - portfolio optimizer
 - production task queue / scheduler
 - factor library / graveyard persistence
+- richer robustness tests beyond simple half-split

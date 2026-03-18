@@ -49,6 +49,15 @@
 - Top-bottom spread mean: 0.007854
 - Fail reason: n/a
 
+## Neutralized Results (industry + size)
+
+- mom_20 [PASS] | RankIC=0.065516 | IR=0.280807 | Spread=0.006955 | Reason=n/a
+- value_bp [FAIL] | RankIC=0.026398 | IR=0.082663 | Spread=-6.6e-05 | Reason=top_bottom_spread<0.0005
+- mom_plus_value [PASS] | RankIC=0.024927 | IR=0.110529 | Spread=0.006892 | Reason=n/a
+- size_small [FAIL] | RankIC=-0.017024 | IR=-0.069919 | Spread=-0.009697 | Reason=rank_ic_mean<0.02; top_bottom_spread<0.0005
+- liquidity_turnover_shock [FAIL] | RankIC=-0.022004 | IR=-0.078614 | Spread=-0.000168 | Reason=rank_ic_mean<0.02; top_bottom_spread<0.0005
+- value_ep [FAIL] | RankIC=-0.022959 | IR=-0.082217 | Spread=-0.002173 | Reason=rank_ic_mean<0.02; top_bottom_spread<0.0005
+
 ## Time Split Robustness
 
 - mom_20 / first_half [PASS] | RankIC=0.315702 | Spread=0.023691 | Reason=n/a
@@ -63,3 +72,21 @@
 - liquidity_turnover_shock / second_half [PASS] | RankIC=0.254545 | Spread=0.013971 | Reason=n/a
 - mom_plus_value / first_half [PASS] | RankIC=0.245455 | Spread=0.013469 | Reason=n/a
 - mom_plus_value / second_half [PASS] | RankIC=0.317355 | Spread=0.026058 | Reason=n/a
+
+## Portfolio Results
+
+### long_short_top_bottom
+- Annual return: 1.670311
+- Annual volatility: 0.154128
+- Sharpe: 10.837132
+- Max drawdown: -0.009419
+- Avg turnover: 0.15873
+- Observations: 22
+
+### long_short_top_bottom_neutralized
+- Annual return: 0.050627
+- Annual volatility: 0.123753
+- Sharpe: 0.4091
+- Max drawdown: -0.094694
+- Avg turnover: 1.380952
+- Observations: 22
