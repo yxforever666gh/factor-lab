@@ -3,11 +3,27 @@
 <div class="grid cols-2">
   <section class="card">
     <h2>LLM 状态</h2>
-    <pre>{{ status_text }}</pre>
+    <table>
+      <tbody>
+        <tr><th>模式</th><td>{{ llm_status.mode or '-' }}</td></tr>
+        <tr><th>状态</th><td>{{ llm_status.status or '-' }}</td></tr>
+        <tr><th>Agent</th><td>{{ llm_status.agent_name or '-' }}</td></tr>
+        <tr><th>校验</th><td>{{ llm_status.validation or '-' }}</td></tr>
+        <tr><th>更新时间</th><td>{{ llm_status.imported_at_utc or llm_status.updated_at_utc or llm_status.validated_at_utc or '-' }}</td></tr>
+      </tbody>
+    </table>
   </section>
   <section class="card">
-    <h2>Bridge 请求</h2>
-    <pre>{{ request_text }}</pre>
+    <h2>本轮关键信息</h2>
+    <table>
+      <tbody>
+        <tr><th>最新运行</th><td>{{ snapshot.latest_run.run_id if snapshot.latest_run else '-' }}</td></tr>
+        <tr><th>配置</th><td class="text-break">{{ snapshot.latest_run.config_path if snapshot.latest_run else '-' }}</td></tr>
+        <tr><th>时间窗口</th><td>{{ snapshot.latest_run.start_date if snapshot.latest_run else '-' }} → {{ snapshot.latest_run.end_date if snapshot.latest_run else '-' }}</td></tr>
+        <tr><th>候选池</th><td>{{ snapshot.latest_candidates|join('、') if snapshot.latest_candidates else '无' }}</td></tr>
+        <tr><th>墓地</th><td>{{ snapshot.latest_graveyard|join('、') if snapshot.latest_graveyard else '无' }}</td></tr>
+      </tbody>
+    </table>
   </section>
 </div>
 
@@ -17,13 +33,62 @@
     <pre>{{ review_text }}</pre>
   </section>
   <section class="card">
-    <h2>LLM 下一轮计划</h2>
-    <pre>{{ plan_text }}</pre>
+    <h2>下一轮计划摘要</h2>
+    <table>
+      <tbody>
+        <tr><th>重点因子</th><td>{{ llm_plan.focus_factors|join('、') if llm_plan.focus_factors else '-' }}</td></tr>
+        <tr><th>保留核心候选</th><td>{{ llm_plan.keep_as_core_candidates|join('、') if llm_plan.keep_as_core_candidates else '-' }}</td></tr>
+        <tr><th>重点复核墓地</th><td>{{ llm_plan.review_graveyard|join('、') if llm_plan.review_graveyard else '-' }}</td></tr>
+        <tr><th>组合检查项</th><td>{{ llm_plan.portfolio_checks|join('、') if llm_plan.portfolio_checks else '-' }}</td></tr>
+        <tr><th>原因</th><td class="text-break">{{ llm_plan.rationale or '-' }}</td></tr>
+      </tbody>
+    </table>
   </section>
 </div>
 
-<section class="card" style="margin-top:18px;">
-  <h2>LLM 输入快照</h2>
-  <pre>{{ snapshot_text }}</pre>
-</section>
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>Bridge 请求摘要</h2>
+    <table>
+      <tbody>
+        <tr><th>Schema</th><td>{{ agent_request.schema_version or '-' }}</td></tr>
+        <tr><th>角色</th><td>{{ agent_request.agent_role or '-' }}</td></tr>
+        <tr><th>任务</th><td>{{ agent_request.tasks|join('、') if agent_request.tasks else '-' }}</td></tr>
+        <tr><th>创建时间</th><td>{{ agent_request.created_at_utc or '-' }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2>快照 Top Scores</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>因子</th><th>平均分</th><th>出现次数</th></tr></thead>
+        <tbody>
+          {% for row in snapshot.top_scores %}
+          <tr>
+            <td>{{ row.factor_name }}</td>
+            <td class="num">{{ row.avg_score }}</td>
+            <td class="num">{{ row.runs }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<details class="card" style="margin-top:18px;">
+  <summary style="cursor:pointer; font-weight:600;">查看完整 Bridge 请求</summary>
+  <pre style="margin-top:12px;">{{ request_text }}</pre>
+</details>
+
+<details class="card" style="margin-top:18px;">
+  <summary style="cursor:pointer; font-weight:600;">查看完整 LLM 快照</summary>
+  <pre style="margin-top:12px;">{{ snapshot_text }}</pre>
+</details>
+
+<details class="card" style="margin-top:18px;">
+  <summary style="cursor:pointer; font-weight:600;">查看完整 LLM 计划 JSON</summary>
+  <pre style="margin-top:12px;">{{ plan_text }}</pre>
+</details>
 {% endblock %}
