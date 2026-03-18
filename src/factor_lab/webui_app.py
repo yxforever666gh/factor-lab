@@ -182,12 +182,16 @@ def llm_page():
     review_path = base / "llm_review.md"
     plan_path = base / "llm_next_batch_proposal.json"
     snapshot_path = base / "llm_input_snapshot.json"
+    status_path = base / "llm_status.json"
+    request_path = base / "agent_request.json"
     return render(
         "llm.html",
         title="LLM",
         review_text=review_path.read_text(encoding="utf-8") if review_path.exists() else "暂无 LLM 评审。",
         plan_text=plan_path.read_text(encoding="utf-8") if plan_path.exists() else "暂无 LLM 计划。",
         snapshot_text=snapshot_path.read_text(encoding="utf-8") if snapshot_path.exists() else "暂无 LLM 输入快照。",
+        status_text=status_path.read_text(encoding="utf-8") if status_path.exists() else "暂无 LLM 状态。",
+        request_text=request_path.read_text(encoding="utf-8") if request_path.exists() else "暂无 bridge 请求。",
     )
 
 
@@ -204,6 +208,7 @@ def ops_run(target: str):
         "batch": "scripts/run_tushare_batch.py",
         "cycle": "scripts/run_scheduled_cycle.py",
         "llm": "scripts/run_llm_cycle.py",
+        "llm-bridge": "scripts/run_llm_bridge_prepare.py",
     }
     if target not in mapping:
         raise HTTPException(status_code=404, detail="未知操作目标")
