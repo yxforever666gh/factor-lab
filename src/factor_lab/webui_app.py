@@ -240,6 +240,35 @@ def compute_health_metrics() -> dict[str, Any]:
 
         heartbeat_rows = read_jsonl(DB_PATH.parent / 'system_heartbeat.jsonl')
         recent_heartbeat_rows = heartbeat_rows[-12:]
+        research_tasks = ExperimentStore(DB_PATH).list_research_tasks(limit=100)
+        recent_finished_tasks = [t for t in research_tasks if t['status'] == 'finished']
+        recent_failed_tasks = [t for t in research_tasks if t['status'] == 'failed']
+        knowledge_gain_counter = {
+            'stable_candidate_confirmed': 0,
+            'repeated_graveyard_confirmed': 0,
+            'neutralization_diagnosis_requested': 0,
+            'exploration_candidate_survived': 0,
+            'exploration_graveyard_identified': 0,
+            'no_significant_information_gain': 0,
+        }
+        for task in research_tasks[:30]:
+            payload = task.get('payload') or {}
+            gains = [g for g in (payload.get('knowledge_gain') or []) if g]
+            note = task.get('worker_note') or ''
+            if 'knowledge_gain=' in note:
+                gains.extend([x.strip() for x in note.split('knowledge_gain=', 1)[-1].split(',') if x.strip()])
+            for gain in gains:
+                if gain in knowledge_gain_counter:
+                    knowledge_gain_counter[gain] += 1
+
+        stall_state = {
+            'queue_pending': len([t for t in research_tasks if t['status'] == 'pending']),
+            'queue_running': len([t for t in research_tasks if t['status'] == 'running']),
+            'recent_finished_tasks': len(recent_finished_tasks[:10]),
+            'recent_failed_tasks': len(recent_failed_tasks[:10]),
+            'stalled': len(recent_finished_tasks[:6]) == 0 and len([t for t in research_tasks if t['status'] == 'pending']) == 0,
+            'warning': len(recent_failed_tasks[:3]) >= 3,
+        }
 
         run_health_score = 0
         if recent_24h_total:
@@ -303,6 +332,8 @@ def compute_health_metrics() -> dict[str, Any]:
                 'llm_status': llm_status.get('status'),
                 'recommendation_hit_rate': recommendation_hit_rate,
                 'recommendation_tail_size': len(recommendation_history_tail),
+                'knowledge_gain_counter': knowledge_gain_counter,
+                'stall_state': stall_state,
             },
             'portfolio_progress': {
                 'score': portfolio_progress_score,

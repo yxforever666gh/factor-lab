@@ -26,6 +26,8 @@ RETRY_PRIORITY = 15
 MAX_PENDING_BASELINE = 2
 MAX_PENDING_VALIDATION = 2
 MAX_PENDING_EXPLORATION = 1
+MAX_CONSECUTIVE_FAILURES = 3
+EXPLORATION_NO_GAIN_THRESHOLD = 3
 
 
 DB_PATH = Path("artifacts") / "factor_lab.db"
@@ -54,6 +56,39 @@ def queue_budget_snapshot(store: ExperimentStore) -> dict[str, int]:
         if category in counts:
             counts[category] += 1
     return counts
+
+
+def recent_failure_stats(store: ExperimentStore, limit: int = 20) -> dict[str, Any]:
+    tasks = store.list_research_tasks(limit=limit)
+    consecutive_failures = 0
+    for task in tasks:
+        if task["status"] == "failed":
+            consecutive_failures += 1
+        elif task["status"] == "finished":
+            break
+    failed_recently = len([t for t in tasks[:10] if t["status"] == "failed"])
+    return {
+        "consecutive_failures": consecutive_failures,
+        "failed_recently": failed_recently,
+    }
+
+
+def exploration_health(store: ExperimentStore, limit: int = 50) -> dict[str, Any]:
+    tasks = store.list_research_tasks(limit=limit)
+    exploration_tasks = [t for t in tasks if t["task_type"] == "generated_batch" and t["status"] == "finished"]
+    recent_no_gain = 0
+    recent_gain = 0
+    for task in exploration_tasks[:EXPLORATION_NO_GAIN_THRESHOLD]:
+        note = task.get("worker_note") or ""
+        if "no_significant_information_gain" in note:
+            recent_no_gain += 1
+        elif "knowledge_gain=" in note:
+            recent_gain += 1
+    return {
+        "recent_no_gain": recent_no_gain,
+        "recent_gain": recent_gain,
+        "should_throttle": recent_no_gain >= EXPLORATION_NO_GAIN_THRESHOLD,
+    }
 
 
 def enqueue_baseline_tasks(store: ExperimentStore) -> list[str]:
@@ -107,6 +142,7 @@ def _enqueue_followups_for_workflow(store: ExperimentStore, task: dict[str, Any]
     config_path = payload["config_path"]
     followups: list[str] = []
     budget = queue_budget_snapshot(store)
+    exploration_state = exploration_health(store)
     if config_path == "configs/tushare_workflow.json" and budget["validation"] < MAX_PENDING_VALIDATION:
         cfg = json.loads(Path("configs/tushare_batch.json").read_text(encoding="utf-8"))
         fingerprint = f"batch::{config_fingerprint(cfg)}::artifacts/tushare_batch"
@@ -121,7 +157,7 @@ def _enqueue_followups_for_workflow(store: ExperimentStore, task: dict[str, Any]
             )
         )
     generated_batch_path = Path("artifacts/generated_batch_from_llm.json")
-    if generated_batch_path.exists() and budget["exploration"] < MAX_PENDING_EXPLORATION:
+    if generated_batch_path.exists() and budget["exploration"] < MAX_PENDING_EXPLORATION and not exploration_state["should_throttle"]:
         generated_batch = json.loads(generated_batch_path.read_text(encoding="utf-8"))
         fingerprint = f"generated_batch::{config_fingerprint(generated_batch)}::artifacts/llm_generated_batch_run"
         followups.append(
@@ -308,8 +344,24 @@ def execute_task(task: dict[str, Any]) -> str:
 
 def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
     store = ExperimentStore(DB_PATH)
-    if not store.list_research_tasks(limit=1):
-        enqueue_baseline_tasks(store)
+    existing_tasks = store.list_research_tasks(limit=20)
+    if not existing_tasks or not any(t["status"] in {"pending", "running"} for t in existing_tasks):
+        seeded = enqueue_baseline_tasks(store)
+        if seeded:
+            append_heartbeat("research_orchestrator", "info", summary=f"queue reseeded with {len(seeded)} baseline tasks")
+
+    failure_state = recent_failure_stats(store)
+    if failure_state["consecutive_failures"] >= MAX_CONSECUTIVE_FAILURES:
+        append_heartbeat(
+            "research_orchestrator",
+            "circuit_open",
+            summary=f"paused due to consecutive failures={failure_state['consecutive_failures']}",
+        )
+        return {
+            "processed": [],
+            "remaining_preview": store.list_research_tasks(limit=10),
+            "guardrail": "circuit_open",
+        }
 
     processed = []
     append_heartbeat("research_orchestrator", "started", summary=f"orchestrator awakened (max_tasks={max_tasks})")

@@ -38,6 +38,33 @@
 
 <div class="grid cols-2" style="margin-top:18px;">
   <section class="card">
+    <h2>守护状态</h2>
+    <table>
+      <tbody>
+        <tr><th>队列待处理</th><td>{{ health.research_progress.stall_state.queue_pending }}</td></tr>
+        <tr><th>队列运行中</th><td>{{ health.research_progress.stall_state.queue_running }}</td></tr>
+        <tr><th>最近完成任务</th><td>{{ health.research_progress.stall_state.recent_finished_tasks }}</td></tr>
+        <tr><th>最近失败任务</th><td>{{ health.research_progress.stall_state.recent_failed_tasks }}</td></tr>
+        <tr><th>停摆红灯</th><td class="{{ 'bad' if health.research_progress.stall_state.stalled else 'good' }}">{{ '是' if health.research_progress.stall_state.stalled else '否' }}</td></tr>
+        <tr><th>失败告警</th><td class="{{ 'bad' if health.research_progress.stall_state.warning else 'good' }}">{{ '是' if health.research_progress.stall_state.warning else '否' }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2>知识增量摘要</h2>
+    <table>
+      <tbody>
+        {% for key, value in health.research_progress.knowledge_gain_counter.items() %}
+        <tr><th>{{ key }}</th><td>{{ value }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="muted" style="margin-top:10px;">如果 no_significant_information_gain 长期偏高，说明探索需要降权。</div>
+  </section>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
     <h2>它有没有持续在跑？</h2>
     <table>
       <tbody>
