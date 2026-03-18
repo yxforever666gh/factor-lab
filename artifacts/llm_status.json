@@ -2,7 +2,7 @@
   "mode": "openclaw_agent_bridge",
   "status": "imported",
   "response_path": "artifacts/agent_response.json",
-  "imported_at_utc": "2026-03-18T18:19:27.352435+00:00",
+  "imported_at_utc": "2026-03-18T18:26:02.281012+00:00",
   "agent_name": "openclaw-analyst-agent",
   "validation": "passed"
 }

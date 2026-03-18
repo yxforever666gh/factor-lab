@@ -10,6 +10,7 @@
         <tr><th>Agent</th><td>{{ llm_status.agent_name or '-' }}</td></tr>
         <tr><th>校验</th><td>{{ llm_status.validation or '-' }}</td></tr>
         <tr><th>更新时间</th><td>{{ llm_status.imported_at_utc or llm_status.updated_at_utc or llm_status.validated_at_utc or '-' }}</td></tr>
+        <tr><th>提示</th><td class="text-break">{{ llm_status.message or '-' }}</td></tr>
       </tbody>
     </table>
   </section>

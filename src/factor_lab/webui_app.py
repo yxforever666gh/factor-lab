@@ -220,6 +220,7 @@ def ops_run(target: str):
         "llm": "scripts/run_llm_cycle.py",
         "llm-bridge": "scripts/run_llm_bridge_prepare.py",
         "llm-bridge-import": "scripts/import_llm_bridge_response.py",
+        "llm-bridge-check": "scripts/check_and_import_llm_bridge.py",
     }
     if target not in mapping:
         raise HTTPException(status_code=404, detail="未知操作目标")

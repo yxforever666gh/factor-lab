@@ -12,9 +12,10 @@
     <h3 style="margin-top:18px;">Agent Bridge</h3>
     <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:12px;">
       <a class="pill" href="/ops/run/llm-bridge">1. 准备 Bridge 请求</a>
-      <a class="pill" href="/ops/run/llm-bridge-import">3. 导入 Bridge 响应</a>
+      <a class="pill" href="/ops/run/llm-bridge-check">2. 检查并尝试导入响应</a>
+      <a class="pill" href="/ops/run/llm-bridge-import">3. 强制导入 Bridge 响应</a>
     </div>
-    <p class="muted" style="margin-top:14px;">Bridge 流程：先准备请求 → 让 OpenClaw 单 agent 处理 → 再导入响应。</p>
+    <p class="muted" style="margin-top:14px;">推荐流程：先准备请求 → 让 OpenClaw 单 agent 处理 → 点击“检查并尝试导入响应”。如果响应已生成，就会自动导入。</p>
   </section>
 
   <section class="card">
