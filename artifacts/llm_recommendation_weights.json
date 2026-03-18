@@ -2,9 +2,12 @@
   "templates": {
     "neutralization_diagnosis": {
       "avg_effect_score": 1.0,
-      "sample_count": 1,
-      "recommended_action": "upweight"
+      "decayed_effect_score": 1.0,
+      "sample_count": 2,
+      "recommended_action": "soft_upweight",
+      "min_samples_for_hard_weight": 3,
+      "half_life_days": 14.0
     }
   },
-  "global_hint": "优先考虑历史上 avg_effect_score 更高的建议模板。"
+  "global_hint": "优先考虑历史 decayed_effect_score 更高的建议模板；当 sample_count 不足时，仅做 soft 级别升降权。"
 }

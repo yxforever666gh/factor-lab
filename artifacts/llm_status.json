@@ -1,19 +1,19 @@
 {
   "mode": "openclaw_agent_bridge",
-  "updated_at_utc": "2026-03-18T19:01:27.797231+00:00",
+  "updated_at_utc": "2026-03-18T19:03:40.527954+00:00",
   "plan_validation": {
     "valid": true,
     "errors": [],
     "warnings": [],
     "template_policy": {
       "template_type": "neutralization_diagnosis",
-      "recommended_action": "upweight",
+      "recommended_action": "soft_upweight",
       "base_max_focus_factors": 6,
       "base_max_review_graveyard": 6,
-      "adjusted_max_focus_factors": 7,
-      "adjusted_max_review_graveyard": 7,
+      "adjusted_max_focus_factors": 6,
+      "adjusted_max_review_graveyard": 6,
       "avg_effect_score": 1.0,
-      "sample_count": 1
+      "sample_count": 2
     },
     "normalized_plan": {
       "focus_factors": [

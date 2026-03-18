@@ -37,9 +37,15 @@ def _apply_template_policy(
     if action == "upweight":
         adjusted_focus = max_focus_factors + 1
         adjusted_graveyard = max_review_graveyard + 1
+    elif action == "soft_upweight":
+        adjusted_focus = max_focus_factors
+        adjusted_graveyard = max_review_graveyard
     elif action == "downweight":
         adjusted_focus = max(2, max_focus_factors - 2)
         adjusted_graveyard = max(2, max_review_graveyard - 2)
+    elif action == "soft_downweight":
+        adjusted_focus = max(3, max_focus_factors - 1)
+        adjusted_graveyard = max(3, max_review_graveyard - 1)
 
     policy["adjusted_max_focus_factors"] = adjusted_focus
     policy["adjusted_max_review_graveyard"] = adjusted_graveyard
