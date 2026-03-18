@@ -16,6 +16,8 @@ A minimal, reproducible framework for factor research.
 - candidate pool / graveyard outputs
 - factor scoring and correlation-cluster representatives
 - experiment ledger per workflow run
+- SQLite experiment store for runs, factors, portfolios, and artifacts
+- basic task state tracking per workflow
 - batch runner for multiple workflow configs with comparison output
 - experiment artifacts written to `artifacts/`
 
@@ -78,9 +80,12 @@ Outputs:
 - `artifacts/tushare_workflow/factor_scores.json`
 - `artifacts/tushare_workflow/cluster_representatives.json`
 - `artifacts/tushare_workflow/experiment_ledger.json`
+- `artifacts/tushare_workflow/task_state.json`
 - `artifacts/tushare_workflow/summary.md`
 - `artifacts/tushare_batch/batch_summary.json`
 - `artifacts/tushare_batch/batch_comparison.json`
+- `artifacts/factor_lab.db`
+- `artifacts/sqlite_report.md`
 
 ## Current real-data factor set
 
