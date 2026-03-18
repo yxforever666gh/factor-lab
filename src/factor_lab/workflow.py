@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
 
@@ -8,6 +9,7 @@ from factor_lab.analytics import evaluate_time_splits, factor_correlation_matrix
 from factor_lab.clustering import greedy_correlation_clusters, pick_cluster_representatives
 from factor_lab.data import SampleDataGenerator
 from factor_lab.evaluation import evaluate_factor
+from factor_lab.experiments import ExperimentLedger
 from factor_lab.factors import FactorDefinition, apply_factor
 from factor_lab.neutralization import neutralize_by_date
 from factor_lab.portfolio import build_composite_factor, evaluate_long_short_portfolio
@@ -259,12 +261,24 @@ def run_workflow(config_path: str, output_dir: str) -> None:
         candidate_payload["strategy_name"] = "long_short_top_bottom_candidates_only"
         portfolio_results.append(candidate_payload)
 
+        if {"industry", "total_mv"}.issubset(dataset.frame.columns):
+            candidate_neutral_signal = build_composite_factor(dataset.frame, candidate_defs, neutralize=True)
+            candidate_neutral_payload = evaluate_long_short_portfolio(dataset.frame, candidate_neutral_signal).to_dict()
+            candidate_neutral_payload["strategy_name"] = "long_short_top_bottom_candidates_only_neutralized"
+            portfolio_results.append(candidate_neutral_payload)
+
     rep_defs = [definition for definition in definitions if any(c["factor_name"] == definition.name for c in cluster_representatives)]
     if rep_defs:
         rep_signal = build_composite_factor(dataset.frame, rep_defs, neutralize=False)
         rep_payload = evaluate_long_short_portfolio(dataset.frame, rep_signal).to_dict()
         rep_payload["strategy_name"] = "long_short_top_bottom_cluster_representatives"
         portfolio_results.append(rep_payload)
+
+        if {"industry", "total_mv"}.issubset(dataset.frame.columns):
+            rep_neutral_signal = build_composite_factor(dataset.frame, rep_defs, neutralize=True)
+            rep_neutral_payload = evaluate_long_short_portfolio(dataset.frame, rep_neutral_signal).to_dict()
+            rep_neutral_payload["strategy_name"] = "long_short_top_bottom_cluster_representatives_neutralized"
+            portfolio_results.append(rep_neutral_payload)
 
     if {"industry", "total_mv"}.issubset(dataset.frame.columns):
         composite_neutral = build_composite_factor(dataset.frame, definitions, neutralize=True)
@@ -274,6 +288,21 @@ def run_workflow(config_path: str, output_dir: str) -> None:
 
     with open(output / "portfolio_results.json", "w", encoding="utf-8") as handle:
         json.dump(portfolio_results, handle, ensure_ascii=False, indent=2)
+
+    ledger = ExperimentLedger(output)
+    ledger.write(
+        {
+            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "config": config,
+            "dataset_rows": int(len(dataset.frame)),
+            "factor_count": len(definitions),
+            "candidate_pool": [row["factor_name"] for row in candidates],
+            "graveyard": [row["factor_name"] for row in graveyard],
+            "cluster_representatives": [row["factor_name"] for row in cluster_representatives],
+            "top_scores": scored_factors[:3],
+            "portfolio_results": portfolio_results,
+        }
+    )
 
     _write_summary(
         results=results,

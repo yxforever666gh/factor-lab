@@ -1,0 +1,66 @@
+{
+  "jobs": [
+    {
+      "job_name": "recent_window",
+      "total_factors": 6,
+      "candidate_count": 2,
+      "graveyard_count": 4
+    },
+    {
+      "job_name": "longer_window",
+      "total_factors": 6,
+      "candidate_count": 2,
+      "graveyard_count": 4
+    }
+  ],
+  "candidate_presence": {
+    "mom_20": [
+      "recent_window",
+      "longer_window"
+    ],
+    "mom_plus_value": [
+      "recent_window",
+      "longer_window"
+    ]
+  },
+  "graveyard_presence": {
+    "value_ep": [
+      "recent_window",
+      "longer_window"
+    ],
+    "value_bp": [
+      "recent_window",
+      "longer_window"
+    ],
+    "size_small": [
+      "recent_window",
+      "longer_window"
+    ],
+    "liquidity_turnover_shock": [
+      "recent_window",
+      "longer_window"
+    ]
+  },
+  "representative_presence": {
+    "liquidity_turnover_shock": [
+      "recent_window",
+      "longer_window"
+    ],
+    "mom_20": [
+      "recent_window",
+      "longer_window"
+    ],
+    "size_small": [
+      "recent_window",
+      "longer_window"
+    ],
+    "value_bp": [
+      "recent_window",
+      "longer_window"
+    ],
+    "value_ep": [
+      "recent_window",
+      "longer_window"
+    ]
+  }
+}

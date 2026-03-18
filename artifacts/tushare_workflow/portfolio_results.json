@@ -18,12 +18,30 @@
     "observations": 22
   },
   {
+    "strategy_name": "long_short_top_bottom_candidates_only_neutralized",
+    "annual_return": 0.155334,
+    "annual_volatility": 0.17455,
+    "sharpe": 0.889911,
+    "max_drawdown": -0.074308,
+    "avg_turnover": 1.460317,
+    "observations": 22
+  },
+  {
     "strategy_name": "long_short_top_bottom_cluster_representatives",
     "annual_return": 1.556436,
     "annual_volatility": 0.152651,
     "sharpe": 10.196009,
     "max_drawdown": -0.009419,
     "avg_turnover": 0.126984,
+    "observations": 22
+  },
+  {
+    "strategy_name": "long_short_top_bottom_cluster_representatives_neutralized",
+    "annual_return": 0.199767,
+    "annual_volatility": 0.136579,
+    "sharpe": 1.462645,
+    "max_drawdown": -0.046688,
+    "avg_turnover": 1.380952,
     "observations": 22
   },
   {

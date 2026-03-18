@@ -15,7 +15,8 @@ A minimal, reproducible framework for factor research.
 - simple long/short composite portfolio backtest
 - candidate pool / graveyard outputs
 - factor scoring and correlation-cluster representatives
-- batch runner for multiple workflow configs
+- experiment ledger per workflow run
+- batch runner for multiple workflow configs with comparison output
 - experiment artifacts written to `artifacts/`
 
 ## Project layout
@@ -76,8 +77,10 @@ Outputs:
 - `artifacts/tushare_workflow/factor_graveyard.json`
 - `artifacts/tushare_workflow/factor_scores.json`
 - `artifacts/tushare_workflow/cluster_representatives.json`
+- `artifacts/tushare_workflow/experiment_ledger.json`
 - `artifacts/tushare_workflow/summary.md`
 - `artifacts/tushare_batch/batch_summary.json`
+- `artifacts/tushare_batch/batch_comparison.json`
 
 ## Current real-data factor set
 

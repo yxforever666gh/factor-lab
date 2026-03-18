@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import List
 
+from factor_lab.batch_report import build_batch_comparison
 from factor_lab.workflow import run_workflow
 
 
@@ -43,3 +44,4 @@ def run_batch(config_path: str, output_dir: str) -> None:
         json.dumps(summary, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    build_batch_comparison(root)

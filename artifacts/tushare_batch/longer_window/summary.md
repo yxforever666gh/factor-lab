@@ -6,6 +6,7 @@
 - Failed: 0
 - Candidate pool size: 2
 - Graveyard size: 4
+- Cluster representative count: 5
 
 ## Main Results
 
@@ -75,10 +76,27 @@
 - mom_plus_value / first_half [PASS] | RankIC=0.245455 | Spread=0.013469 | Reason=n/a
 - mom_plus_value / second_half [PASS] | RankIC=0.317355 | Spread=0.026058 | Reason=n/a
 
+## Factor Scores
+
+- mom_20 | score=1.398116 | rawIC=0.327686 | neutralIC=0.065516 | peers=mom_plus_value
+- mom_plus_value | score=1.140355 | rawIC=0.281405 | neutralIC=0.024927 | peers=mom_20
+- liquidity_turnover_shock | score=0.5172 | rawIC=0.254545 | neutralIC=-0.022004 | peers=none
+- size_small | score=0.513371 | rawIC=0.233884 | neutralIC=-0.017024 | peers=none
+- value_ep | score=0.391292 | rawIC=0.193388 | neutralIC=-0.022959 | peers=none
+- value_bp | score=-0.24034 | rawIC=0.027273 | neutralIC=0.026398 | peers=none
+
 ## Candidate Pool
 
 - mom_20 | rawIC=0.327686 | neutralIC=0.065516 | peers=mom_plus_value
 - mom_plus_value | rawIC=0.281405 | neutralIC=0.024927 | peers=mom_20
+
+## Cluster Representatives
+
+- liquidity_turnover_shock | score=0.5172 | cluster=liquidity_turnover_shock
+- mom_20 | score=1.398116 | cluster=mom_20, mom_plus_value
+- size_small | score=0.513371 | cluster=size_small
+- value_bp | score=-0.24034 | cluster=value_bp
+- value_ep | score=0.391292 | cluster=value_ep
 
 ## Graveyard
 
@@ -89,12 +107,44 @@
 
 ## Portfolio Results
 
-### long_short_top_bottom
+### long_short_top_bottom_all_factors
 - Annual return: 1.670311
 - Annual volatility: 0.154128
 - Sharpe: 10.837132
 - Max drawdown: -0.009419
 - Avg turnover: 0.15873
+- Observations: 22
+
+### long_short_top_bottom_candidates_only
+- Annual return: 1.213329
+- Annual volatility: 0.222964
+- Sharpe: 5.441824
+- Max drawdown: -0.034234
+- Avg turnover: 0.428571
+- Observations: 22
+
+### long_short_top_bottom_candidates_only_neutralized
+- Annual return: 0.155334
+- Annual volatility: 0.17455
+- Sharpe: 0.889911
+- Max drawdown: -0.074308
+- Avg turnover: 1.460317
+- Observations: 22
+
+### long_short_top_bottom_cluster_representatives
+- Annual return: 1.556436
+- Annual volatility: 0.152651
+- Sharpe: 10.196009
+- Max drawdown: -0.009419
+- Avg turnover: 0.126984
+- Observations: 22
+
+### long_short_top_bottom_cluster_representatives_neutralized
+- Annual return: 0.199767
+- Annual volatility: 0.136579
+- Sharpe: 1.462645
+- Max drawdown: -0.046688
+- Avg turnover: 1.380952
 - Observations: 22
 
 ### long_short_top_bottom_neutralized

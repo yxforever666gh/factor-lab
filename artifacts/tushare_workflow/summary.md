@@ -123,12 +123,28 @@
 - Avg turnover: 0.428571
 - Observations: 22
 
+### long_short_top_bottom_candidates_only_neutralized
+- Annual return: 0.155334
+- Annual volatility: 0.17455
+- Sharpe: 0.889911
+- Max drawdown: -0.074308
+- Avg turnover: 1.460317
+- Observations: 22
+
 ### long_short_top_bottom_cluster_representatives
 - Annual return: 1.556436
 - Annual volatility: 0.152651
 - Sharpe: 10.196009
 - Max drawdown: -0.009419
 - Avg turnover: 0.126984
+- Observations: 22
+
+### long_short_top_bottom_cluster_representatives_neutralized
+- Annual return: 0.199767
+- Annual volatility: 0.136579
+- Sharpe: 1.462645
+- Max drawdown: -0.046688
+- Avg turnover: 1.380952
 - Observations: 22
 
 ### long_short_top_bottom_neutralized
