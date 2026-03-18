@@ -199,6 +199,8 @@ def llm_page():
     feedback_path = DB_PATH.parent / "llm_plan_feedback.json"
     retrospective_path = DB_PATH.parent / "llm_retrospective.json"
     retrospective_md_path = DB_PATH.parent / "llm_retrospective.md"
+    recommendation_history_path = DB_PATH.parent / "llm_recommendation_history.json"
+    recommendation_weights_path = DB_PATH.parent / "llm_recommendation_weights.json"
     return render(
         "llm.html",
         title="LLM",
@@ -216,6 +218,8 @@ def llm_page():
         generated_feedback_text=feedback_path.read_text(encoding="utf-8") if feedback_path.exists() else "暂无 batch 执行反馈。",
         retrospective_text=retrospective_md_path.read_text(encoding="utf-8") if retrospective_md_path.exists() else "暂无建议效果回溯。",
         retrospective_json_text=retrospective_path.read_text(encoding="utf-8") if retrospective_path.exists() else "暂无建议效果回溯 JSON。",
+        recommendation_history_text=recommendation_history_path.read_text(encoding="utf-8") if recommendation_history_path.exists() else "暂无建议历史。",
+        recommendation_weights_text=recommendation_weights_path.read_text(encoding="utf-8") if recommendation_weights_path.exists() else "暂无建议权重。",
         plan_validation_text=json.dumps(llm_status.get("plan_validation", {}), ensure_ascii=False, indent=2) if llm_status.get("plan_validation") else "暂无计划校验结果。",
     )
 
@@ -239,6 +243,7 @@ def ops_run(target: str):
         "llm-plan-generate": "scripts/generate_batch_from_llm_plan.py",
         "llm-plan-run": "scripts/run_generated_batch_from_llm.py",
         "llm-retrospective": "scripts/build_llm_retrospective.py",
+        "llm-memory": "scripts/build_recommendation_memory.py",
     }
     if target not in mapping:
         raise HTTPException(status_code=404, detail="未知操作目标")

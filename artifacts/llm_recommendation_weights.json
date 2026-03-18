@@ -1,0 +1,10 @@
+{
+  "templates": {
+    "neutralization_diagnosis": {
+      "avg_effect_score": 1.0,
+      "sample_count": 1,
+      "recommended_action": "upweight"
+    }
+  },
+  "global_hint": "优先考虑历史上 avg_effect_score 更高的建议模板。"
+}

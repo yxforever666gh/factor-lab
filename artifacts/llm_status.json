@@ -1,33 +1,18 @@
 {
   "mode": "openclaw_agent_bridge",
-  "status": "retrospective_ready",
-  "updated_at_utc": "2026-03-18T18:42:40.939773+00:00",
-  "feedback_path": "artifacts/llm_plan_feedback.json",
-  "retrospective_path": "artifacts/llm_retrospective.json",
-  "retrospective": {
-    "generated_at_utc": "2026-03-18T18:42:40.939512+00:00",
-    "effectiveness": "positive",
-    "reason": "核心候选在执行后的 generated batch 中继续存活。",
-    "focus_factors": [
-      "liquidity_turnover_shock",
-      "mom_20",
-      "mom_plus_value",
-      "size_small"
-    ],
-    "survived_as_candidates": [
-      "mom_20",
-      "mom_plus_value"
-    ],
-    "fell_to_graveyard": [
-      "liquidity_turnover_shock",
-      "size_small"
-    ],
-    "unclassified": [],
-    "core_candidates_preserved": [
-      "mom_20",
-      "mom_plus_value"
-    ],
-    "core_candidates_lost": [],
-    "next_action_hint": "继续沿当前候选主线做小步扩展。"
+  "status": "recommendation_memory_updated",
+  "updated_at_utc": "2026-03-18T18:49:51.144137+00:00",
+  "history_path": "artifacts/llm_recommendation_history.json",
+  "weights_path": "artifacts/llm_recommendation_weights.json",
+  "history_count": 1,
+  "weights": {
+    "templates": {
+      "neutralization_diagnosis": {
+        "avg_effect_score": 1.0,
+        "sample_count": 1,
+        "recommended_action": "upweight"
+      }
+    },
+    "global_hint": "优先考虑历史上 avg_effect_score 更高的建议模板。"
   }
 }
