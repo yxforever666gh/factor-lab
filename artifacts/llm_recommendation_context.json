@@ -1,0 +1,19 @@
+{
+  "priority_summary": [
+    {
+      "template_type": "neutralization_diagnosis",
+      "recommended_action": "soft_upweight",
+      "avg_effect_score": 1.0,
+      "decayed_effect_score": 1.0,
+      "sample_count": 2,
+      "fatigue_level": "medium"
+    }
+  ],
+  "fatigue": {
+    "neutralization_diagnosis": {
+      "recent_count_last_5": 2,
+      "fatigue_level": "medium"
+    }
+  },
+  "planner_hint": "优先尝试 higher priority 且 fatigue_level 低的模板；对 fatigue_level 高的模板，除非出现新信息，否则避免连续重复。"
+}

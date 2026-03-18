@@ -110,11 +110,14 @@
     "templates": {
       "neutralization_diagnosis": {
         "avg_effect_score": 1.0,
-        "sample_count": 1,
-        "recommended_action": "upweight"
+        "decayed_effect_score": 1.0,
+        "sample_count": 2,
+        "recommended_action": "soft_upweight",
+        "min_samples_for_hard_weight": 3,
+        "half_life_days": 14.0
       }
     },
-    "global_hint": "优先考虑历史上 avg_effect_score 更高的建议模板。"
+    "global_hint": "优先考虑历史 decayed_effect_score 更高的建议模板；当 sample_count 不足时，仅做 soft 级别升降权。"
   },
   "recommendation_history_tail": [
     {
@@ -153,6 +156,62 @@
         "size_small"
       ],
       "next_action_hint": "继续沿当前候选主线做小步扩展。"
+    },
+    {
+      "recorded_at_utc": "2026-03-18T19:03:40.470194+00:00",
+      "template_type": "neutralization_diagnosis",
+      "focus_factors": [
+        "mom_20",
+        "mom_plus_value",
+        "liquidity_turnover_shock",
+        "size_small"
+      ],
+      "keep_as_core_candidates": [
+        "mom_20",
+        "mom_plus_value"
+      ],
+      "review_graveyard": [
+        "liquidity_turnover_shock",
+        "size_small",
+        "value_ep",
+        "value_bp"
+      ],
+      "portfolio_checks": [
+        "compare_all_factors_vs_candidates_only",
+        "compare_cluster_representatives_vs_all_factors",
+        "diagnose_neutralized_underperformance"
+      ],
+      "rationale": "基于当前快照，下一轮应继续围绕稳定动量主线，并解释高分非候选因子与中性化策略显著走弱的原因。",
+      "effectiveness": "positive",
+      "reason": "核心候选在执行后的 generated batch 中继续存活。",
+      "survived_as_candidates": [
+        "mom_20",
+        "mom_plus_value"
+      ],
+      "fell_to_graveyard": [
+        "liquidity_turnover_shock",
+        "size_small"
+      ],
+      "next_action_hint": "继续沿当前候选主线做小步扩展。"
     }
-  ]
+  ],
+  "recommendation_context": {
+    "priority_summary": [
+      {
+        "template_type": "neutralization_diagnosis",
+        "recommended_action": "soft_upweight",
+        "avg_effect_score": 1.0,
+        "decayed_effect_score": 1.0,
+        "sample_count": 2,
+        "fatigue_level": "medium"
+      }
+    ],
+    "fatigue": {
+      "neutralization_diagnosis": {
+        "recent_count_last_5": 2,
+        "fatigue_level": "medium"
+      }
+    },
+    "planner_hint": "优先尝试 higher priority 且 fatigue_level 低的模板；对 fatigue_level 高的模板，除非出现新信息，否则避免连续重复。"
+  }
 }
