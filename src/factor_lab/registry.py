@@ -62,7 +62,13 @@ class FactorRegistry:
 
         return candidates, graveyard
 
-    def write_registry(self, candidates: List[Dict], graveyard: List[Dict]) -> None:
+    def write_registry(
+        self,
+        candidates: List[Dict],
+        graveyard: List[Dict],
+        scored_factors: List[Dict] | None = None,
+        cluster_representatives: List[Dict] | None = None,
+    ) -> None:
         (self.output_dir / "candidate_pool.json").write_text(
             json.dumps(candidates, ensure_ascii=False, indent=2),
             encoding="utf-8",
@@ -71,3 +77,13 @@ class FactorRegistry:
             json.dumps(graveyard, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
+        if scored_factors is not None:
+            (self.output_dir / "factor_scores.json").write_text(
+                json.dumps(scored_factors, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        if cluster_representatives is not None:
+            (self.output_dir / "cluster_representatives.json").write_text(
+                json.dumps(cluster_representatives, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )

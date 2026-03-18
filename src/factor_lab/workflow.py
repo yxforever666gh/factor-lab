@@ -5,12 +5,14 @@ from pathlib import Path
 from typing import List
 
 from factor_lab.analytics import evaluate_time_splits, factor_correlation_matrix, high_correlation_peers
+from factor_lab.clustering import greedy_correlation_clusters, pick_cluster_representatives
 from factor_lab.data import SampleDataGenerator
 from factor_lab.evaluation import evaluate_factor
 from factor_lab.factors import FactorDefinition, apply_factor
 from factor_lab.neutralization import neutralize_by_date
 from factor_lab.portfolio import build_composite_factor, evaluate_long_short_portfolio
 from factor_lab.registry import FactorRegistry
+from factor_lab.scoring import score_factors
 from factor_lab.tushare_provider import TushareDataProvider, TushareRequest
 
 
@@ -45,6 +47,8 @@ def _write_summary(
     portfolio_results: List[dict],
     candidates: List[dict],
     graveyard: List[dict],
+    scored_factors: List[dict],
+    cluster_representatives: List[dict],
     output_dir: Path,
     source_name: str,
 ) -> None:
@@ -60,6 +64,7 @@ def _write_summary(
         f"- Failed: {len(failed)}",
         f"- Candidate pool size: {len(candidates)}",
         f"- Graveyard size: {len(graveyard)}",
+        f"- Cluster representative count: {len(cluster_representatives)}",
         "",
         "## Main Results",
         "",
@@ -106,11 +111,28 @@ def _write_summary(
             )
         lines.append("")
 
+    lines.extend(["## Factor Scores", ""])
+    for row in scored_factors:
+        lines.append(
+            f"- {row['factor_name']} | score={row['score']} | rawIC={row['raw_rank_ic_mean']} | neutralIC={row['neutralized_rank_ic_mean']} | peers={', '.join(row['high_corr_peers']) or 'none'}"
+        )
+    lines.append("")
+
     lines.extend(["## Candidate Pool", ""])
     if candidates:
         for row in candidates:
             lines.append(
                 f"- {row['factor_name']} | rawIC={row['raw_rank_ic_mean']} | neutralIC={row['neutralized_rank_ic_mean']} | peers={', '.join(row['high_corr_peers']) or 'none'}"
+            )
+    else:
+        lines.append("- none")
+    lines.append("")
+
+    lines.extend(["## Cluster Representatives", ""])
+    if cluster_representatives:
+        for row in cluster_representatives:
+            lines.append(
+                f"- {row['factor_name']} | score={row['score']} | cluster={', '.join(row['cluster_members'])}"
             )
     else:
         lines.append("- none")
@@ -206,6 +228,15 @@ def run_workflow(config_path: str, output_dir: str) -> None:
     correlation.to_csv(output / "factor_correlation.csv")
     corr_peers = high_correlation_peers(correlation, threshold=config.get("correlation_threshold", 0.8))
 
+    scored_factors = score_factors(
+        raw_results=results,
+        neutralized_results=neutralized_results,
+        split_results=split_results,
+        correlation_lookup=corr_peers,
+    )
+    clusters = greedy_correlation_clusters(correlation, threshold=config.get("correlation_threshold", 0.8))
+    cluster_representatives = pick_cluster_representatives(clusters, scored_factors)
+
     registry = FactorRegistry(output)
     candidates, graveyard = registry.build_candidate_and_graveyard(
         raw_results=results,
@@ -213,13 +244,28 @@ def run_workflow(config_path: str, output_dir: str) -> None:
         split_results=split_results,
         correlation_lookup=corr_peers,
     )
-    registry.write_registry(candidates, graveyard)
+    registry.write_registry(candidates, graveyard, scored_factors, cluster_representatives)
 
     portfolio_results = []
     composite_raw = build_composite_factor(dataset.frame, definitions, neutralize=False)
-    portfolio_results.append(
-        evaluate_long_short_portfolio(dataset.frame, composite_raw).to_dict()
-    )
+    raw_payload = evaluate_long_short_portfolio(dataset.frame, composite_raw).to_dict()
+    raw_payload["strategy_name"] = "long_short_top_bottom_all_factors"
+    portfolio_results.append(raw_payload)
+
+    candidate_defs = [definition for definition in definitions if any(c["factor_name"] == definition.name for c in candidates)]
+    if candidate_defs:
+        candidate_signal = build_composite_factor(dataset.frame, candidate_defs, neutralize=False)
+        candidate_payload = evaluate_long_short_portfolio(dataset.frame, candidate_signal).to_dict()
+        candidate_payload["strategy_name"] = "long_short_top_bottom_candidates_only"
+        portfolio_results.append(candidate_payload)
+
+    rep_defs = [definition for definition in definitions if any(c["factor_name"] == definition.name for c in cluster_representatives)]
+    if rep_defs:
+        rep_signal = build_composite_factor(dataset.frame, rep_defs, neutralize=False)
+        rep_payload = evaluate_long_short_portfolio(dataset.frame, rep_signal).to_dict()
+        rep_payload["strategy_name"] = "long_short_top_bottom_cluster_representatives"
+        portfolio_results.append(rep_payload)
+
     if {"industry", "total_mv"}.issubset(dataset.frame.columns):
         composite_neutral = build_composite_factor(dataset.frame, definitions, neutralize=True)
         neutral_payload = evaluate_long_short_portfolio(dataset.frame, composite_neutral).to_dict()
@@ -236,6 +282,8 @@ def run_workflow(config_path: str, output_dir: str) -> None:
         portfolio_results=portfolio_results,
         candidates=candidates,
         graveyard=graveyard,
+        scored_factors=scored_factors,
+        cluster_representatives=cluster_representatives,
         output_dir=output,
         source_name=config.get("data_source", "sample"),
     )

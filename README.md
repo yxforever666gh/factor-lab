@@ -14,6 +14,7 @@ A minimal, reproducible framework for factor research.
 - factor correlation matrix for de-duplication clues
 - simple long/short composite portfolio backtest
 - candidate pool / graveyard outputs
+- factor scoring and correlation-cluster representatives
 - batch runner for multiple workflow configs
 - experiment artifacts written to `artifacts/`
 
@@ -73,6 +74,8 @@ Outputs:
 - `artifacts/tushare_workflow/portfolio_results.json`
 - `artifacts/tushare_workflow/candidate_pool.json`
 - `artifacts/tushare_workflow/factor_graveyard.json`
+- `artifacts/tushare_workflow/factor_scores.json`
+- `artifacts/tushare_workflow/cluster_representatives.json`
 - `artifacts/tushare_workflow/summary.md`
 - `artifacts/tushare_batch/batch_summary.json`
 
