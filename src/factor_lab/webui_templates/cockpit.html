@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-2">
+  <section class="card">
+    <h2>系统总状态</h2>
+    <table>
+      <tbody>
+        <tr><th>最新运行</th><td>{{ latest_run.run_id if latest_run else '-' }}</td></tr>
+        <tr><th>配置</th><td class="text-break">{{ latest_run.config_path if latest_run else '-' }}</td></tr>
+        <tr><th>LLM 状态</th><td>{{ llm_status.status or '-' }}</td></tr>
+        <tr><th>纸面组合稳定性</th><td>{{ paper_stability.label if paper_stability else '-' }} ({{ paper_stability.stability_score if paper_stability else '-' }})</td></tr>
+        <tr><th>组合风险模式</th><td>{{ portfolio_policy.risk_mode if portfolio_policy else '-' }}</td></tr>
+        <tr><th>保守模式</th><td>{{ conservative_policy.mode if conservative_policy else '-' }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>当前候选池</h2>
+    <table>
+      <thead><tr><th>因子</th><th>出现次数</th></tr></thead>
+      <tbody>
+        {% for row in stable_candidates %}
+        <tr><td>{{ row.factor_name }}</td><td>{{ row.candidate_runs }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>模板权重与疲劳</h2>
+    <pre>{{ recommendation_context_text }}</pre>
+  </section>
+  <section class="card">
+    <h2>计划校验摘要</h2>
+    <pre>{{ plan_validation_text }}</pre>
+  </section>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>纸面组合摘要</h2>
+    <pre>{{ paper_portfolio_text }}</pre>
+  </section>
+  <section class="card">
+    <h2>最近变化</h2>
+    <pre>{{ change_report }}</pre>
+  </section>
+</div>
+{% endblock %}

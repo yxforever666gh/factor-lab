@@ -85,6 +85,37 @@ def dashboard():
     )
 
 
+@app.get("/cockpit", response_class=HTMLResponse)
+def cockpit_page():
+    base = DB_PATH.parent
+    latest_run = fetch_one(
+        "SELECT run_id, created_at_utc, config_path, status FROM workflow_runs ORDER BY created_at_utc DESC LIMIT 1"
+    )
+    stable_candidates = fetch_all(
+        "SELECT factor_name, candidate_runs FROM v_stable_candidates ORDER BY candidate_runs DESC, factor_name ASC LIMIT 10"
+    )
+    llm_status_path = base / "llm_status.json"
+    llm_status = json.loads(llm_status_path.read_text(encoding="utf-8")) if llm_status_path.exists() else {}
+    snapshot_path = base / "llm_input_snapshot.json"
+    snapshot = json.loads(snapshot_path.read_text(encoding="utf-8")) if snapshot_path.exists() else {}
+    change_report_path = base / "change_report.md"
+    paper_current_path = base / "paper_portfolio" / "current_portfolio.json"
+    return render(
+        "cockpit.html",
+        title="驾驶舱",
+        latest_run=latest_run,
+        stable_candidates=stable_candidates,
+        llm_status=llm_status,
+        paper_stability=snapshot.get("paper_portfolio_stability", {}),
+        portfolio_policy=(llm_status.get("plan_validation", {}) or {}).get("portfolio_policy", {}),
+        conservative_policy=snapshot.get("conservative_policy", {}),
+        recommendation_context_text=json.dumps(snapshot.get("recommendation_context", {}), ensure_ascii=False, indent=2) if snapshot.get("recommendation_context") else "暂无模板上下文。",
+        plan_validation_text=json.dumps((llm_status.get("plan_validation", {})), ensure_ascii=False, indent=2) if llm_status.get("plan_validation") else "暂无计划校验摘要。",
+        paper_portfolio_text=paper_current_path.read_text(encoding="utf-8") if paper_current_path.exists() else "暂无纸面组合。",
+        change_report=change_report_path.read_text(encoding="utf-8") if change_report_path.exists() else "暂无变化报告。",
+    )
+
+
 @app.get("/runs", response_class=HTMLResponse)
 def runs_page():
     runs = fetch_all(
