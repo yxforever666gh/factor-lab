@@ -82,6 +82,22 @@ python3 scripts/run_web_ui.py
 Defaults to `127.0.0.1:8765`.
 Override with `WEB_UI_HOST` and `WEB_UI_PORT` in `.env` or the shell environment.
 
+### 4) Autonomous research daemon
+
+Main long-running research runtime:
+
+```bash
+python3 scripts/run_research_daemon.py
+```
+
+Install/enable the user service:
+
+```bash
+./scripts/install_research_daemon_service.sh
+```
+
+See `RUNBOOK.md` for the full operating model, health checks, and troubleshooting steps.
+
 Outputs:
 
 - `artifacts/tushare_workflow/dataset.csv`

@@ -67,3 +67,9 @@ Add optional automation layers:
 - notifications
 - LLM review/planning
 - richer dashboards
+
+## Operational note
+
+The current workspace runtime has evolved beyond the original v1.0 baseline.
+Primary operation is now centered on a long-running research daemon supervised by `systemd --user`, with queue-driven orchestration, follow-up task generation, heartbeats, and health/queue dashboards.
+See `RUNBOOK.md` for the current operating model.
