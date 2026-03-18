@@ -34,11 +34,18 @@
     .good { color: var(--good); }
     .bad { color: var(--bad); }
     .warn { color: var(--warn); }
-    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: auto; }
     th, td { padding: 10px 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
-    th { color: var(--muted); font-weight: 600; }
+    th { color: var(--muted); font-weight: 600; white-space: nowrap; }
     tr:last-child td { border-bottom: none; }
     pre { white-space: pre-wrap; word-break: break-word; background: var(--panel-2); border-radius: 12px; padding: 12px; border: 1px solid var(--border); }
+    .table-wrap { width: 100%; overflow-x: auto; overflow-y: hidden; }
+    .table-wrap table { min-width: 100%; }
+    .text-break { word-break: break-word; overflow-wrap: anywhere; }
+    .text-nowrap { white-space: nowrap; }
+    .num { white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .col-strategy { min-width: 320px; }
+    .col-run { min-width: 110px; }
     .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; background: var(--panel-2); border: 1px solid var(--border); }
     .pill.good { color: var(--good); }
     .pill.bad { color: var(--bad); }
