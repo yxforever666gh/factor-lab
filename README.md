@@ -2,30 +2,35 @@
 
 A minimal, reproducible framework for factor research.
 
-## What this project now includes
+## What this project includes
 
 - synthetic sample market/fundamental data generator
-- Tushare-backed A-share data workflow
-- structured factor definitions with safe expression evaluation
+- Tushare-backed real A-share data workflow
+- structured factor definitions
 - single-factor evaluation pipeline
 - simple pass/fail gate
-- v0.2 research add-ons:
-  - time-split robustness check
-  - factor correlation matrix for de-duplication
+- time-split robustness check
+- factor correlation matrix for de-duplication clues
 - experiment artifacts written to `artifacts/`
 
 ## Project layout
 
 - `src/factor_lab/` — framework code
-- `configs/first_workflow.json` — synthetic example workflow
-- `configs/tushare_workflow.json` — first real-data workflow
+- `configs/first_workflow.json` — synthetic first batch
+- `configs/tushare_workflow.json` — real-data workflow config
 - `scripts/run_first_workflow.py` — synthetic workflow entrypoint
 - `scripts/run_tushare_workflow.py` — Tushare workflow entrypoint
 - `artifacts/` — generated outputs
 
 ## Local secrets
 
-Create `.env` with:
+Create a local `.env` file:
+
+```bash
+cp .env.example .env
+```
+
+Then set:
 
 ```bash
 TUSHARE_TOKEN=your_token_here
@@ -35,27 +40,53 @@ TUSHARE_TOKEN=your_token_here
 
 ## Run
 
-### Synthetic workflow
+### 1) Synthetic smoke test
 
 ```bash
 python3 scripts/run_first_workflow.py
 ```
 
-### Tushare workflow
+Outputs:
+
+- `artifacts/first_workflow/results.json`
+- `artifacts/first_workflow/summary.md`
+
+### 2) Real Tushare workflow
 
 ```bash
 python3 scripts/run_tushare_workflow.py
 ```
 
-## Outputs
+Outputs:
 
-Each workflow writes a dataset snapshot and research artifacts such as:
+- `artifacts/tushare_workflow/dataset.csv`
+- `artifacts/tushare_workflow/results.json`
+- `artifacts/tushare_workflow/split_results.json`
+- `artifacts/tushare_workflow/factor_correlation.csv`
+- `artifacts/tushare_workflow/summary.md`
 
-- `results.json`
-- `split_results.json`
-- `summary.md`
-- `factor_correlation.csv`
+## Current real-data factor set
 
-## Current scope
+- `momentum_20`
+- `earnings_yield`
+- `book_yield`
+- `size_inv`
+- `turnover_shock_5_20`
+- `momentum_20 + earnings_yield`
 
-This is still a research MVP, not a production trading engine. The goal is to make the first research loop reproducible and extensible before adding real portfolio construction, scheduling, and large-scale batch search.
+## Notes
+
+This is still an MVP.
+
+What it does well now:
+- prove the research workflow end-to-end
+- swap between sample and Tushare data
+- generate reproducible experiment artifacts
+- provide first-pass robustness and de-dup clues
+
+What it does not do yet:
+- industry / size neutralization
+- transaction cost model
+- portfolio optimizer
+- production task queue / scheduler
+- factor library / graveyard persistence

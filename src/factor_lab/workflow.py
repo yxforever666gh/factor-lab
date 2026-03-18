@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import List
 
-from factor_lab.analytics import factor_correlation_matrix, evaluate_time_splits
+from factor_lab.analytics import evaluate_time_splits, factor_correlation_matrix
 from factor_lab.data import SampleDataGenerator
 from factor_lab.evaluation import evaluate_factor
 from factor_lab.factors import FactorDefinition, apply_factor
@@ -18,35 +18,36 @@ def _load_config(config_path: str) -> dict:
 
 def _load_dataset(config: dict):
     source = config.get("data_source", "sample")
-    if source == "sample":
-        return SampleDataGenerator(seed=config.get("seed", 7)).generate(
-            num_stocks=config.get("num_stocks", 60),
-            num_days=config.get("num_days", 220),
-        )
     if source == "tushare":
         provider = TushareDataProvider()
-        request = TushareRequest(
-            start_date=config["start_date"],
-            end_date=config["end_date"],
-            universe_limit=config.get("universe_limit", 80),
-            cache_dir=config.get("cache_dir", "artifacts/tushare_cache"),
+        return provider.load_dataset(
+            TushareRequest(
+                start_date=config["start_date"],
+                end_date=config["end_date"],
+                universe_limit=config.get("universe_limit", 80),
+                cache_dir=config.get("cache_dir", "artifacts/tushare_cache"),
+            )
         )
-        return provider.load_dataset(request)
-    raise ValueError(f"Unsupported data source: {source}")
+
+    return SampleDataGenerator(seed=config.get("seed", 7)).generate(
+        num_stocks=config.get("num_stocks", 60),
+        num_days=config.get("num_days", 220),
+    )
 
 
-def _write_summary(results: List[dict], split_results: List[dict], output_dir: Path) -> None:
+def _write_summary(results: List[dict], split_results: List[dict], output_dir: Path, source_name: str) -> None:
     passed = [r for r in results if r["pass_gate"]]
     failed = [r for r in results if not r["pass_gate"]]
 
     lines = [
         "# Workflow Summary",
         "",
+        f"- Data source: {source_name}",
         f"- Total factors: {len(results)}",
         f"- Passed: {len(passed)}",
         f"- Failed: {len(failed)}",
         "",
-        "## Results",
+        "## Main Results",
         "",
     ]
 
@@ -70,7 +71,9 @@ def _write_summary(results: List[dict], split_results: List[dict], output_dir: P
             status = "PASS" if row["pass_gate"] else "FAIL"
             lines.extend(
                 [
-                    f"- {row['factor_name']} / {row['split']}: {status}, RankIC={row['rank_ic_mean']}, Spread={row['top_bottom_spread_mean']}",
+                    f"- {row['factor_name']} / {row['split']} [{status}]"
+                    f" | RankIC={row['rank_ic_mean']} | Spread={row['top_bottom_spread_mean']}"
+                    f" | Reason={row['fail_reason'] or 'n/a'}"
                 ]
             )
         lines.append("")
@@ -80,22 +83,19 @@ def _write_summary(results: List[dict], split_results: List[dict], output_dir: P
 
 def run_workflow(config_path: str, output_dir: str) -> None:
     config = _load_config(config_path)
-    output = Path(output_dir)
+    output = Path(output_dir or config.get("output_dir", "artifacts/workflow"))
     output.mkdir(parents=True, exist_ok=True)
 
     dataset = _load_dataset(config)
     dataset.frame.to_csv(output / "dataset.csv", index=False)
 
+    definitions = [FactorDefinition(name=item["name"], expression=item["expression"]) for item in config["factors"]]
+
     results = []
     split_results = []
-    definitions = []
-
-    for item in config["factors"]:
-        definition = FactorDefinition(name=item["name"], expression=item["expression"])
-        definitions.append(definition)
-        factor_values = apply_factor(dataset.frame, definition)
+    for definition in definitions:
         factor_frame = dataset.frame.copy()
-        factor_frame["factor_value"] = factor_values
+        factor_frame["factor_value"] = apply_factor(dataset.frame, definition)
         evaluation = evaluate_factor(
             frame=factor_frame,
             factor_name=definition.name,
@@ -112,13 +112,18 @@ def run_workflow(config_path: str, output_dir: str) -> None:
             )
         )
 
-    corr = factor_correlation_matrix(dataset.frame, definitions)
-    corr.to_csv(output / "factor_correlation.csv")
-
     with open(output / "results.json", "w", encoding="utf-8") as handle:
         json.dump(results, handle, ensure_ascii=False, indent=2)
 
     with open(output / "split_results.json", "w", encoding="utf-8") as handle:
         json.dump(split_results, handle, ensure_ascii=False, indent=2)
 
-    _write_summary(results=results, split_results=split_results, output_dir=output)
+    correlation = factor_correlation_matrix(dataset.frame, definitions)
+    correlation.to_csv(output / "factor_correlation.csv")
+
+    _write_summary(
+        results=results,
+        split_results=split_results,
+        output_dir=output,
+        source_name=config.get("data_source", "sample"),
+    )

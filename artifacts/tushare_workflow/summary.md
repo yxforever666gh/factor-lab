@@ -1,10 +1,11 @@
 # Workflow Summary
 
+- Data source: tushare
 - Total factors: 6
 - Passed: 6
 - Failed: 0
 
-## Results
+## Main Results
 
 ### mom_20 [PASS]
 - Expression: `momentum_20`
@@ -50,15 +51,15 @@
 
 ## Time Split Robustness
 
-- mom_20 / first_half: PASS, RankIC=0.315702, Spread=0.023691
-- mom_20 / second_half: PASS, RankIC=0.339669, Spread=0.041942
-- value_ep / first_half: PASS, RankIC=0.216529, Spread=0.016736
-- value_ep / second_half: PASS, RankIC=0.170248, Spread=0.030334
-- value_bp / first_half: FAIL, RankIC=-0.202479, Spread=-0.010568
-- value_bp / second_half: PASS, RankIC=0.257025, Spread=0.026275
-- size_small / first_half: PASS, RankIC=0.209091, Spread=0.025039
-- size_small / second_half: PASS, RankIC=0.258678, Spread=0.016217
-- liquidity_turnover_shock / first_half: PASS, RankIC=0.254545, Spread=0.035469
-- liquidity_turnover_shock / second_half: PASS, RankIC=0.254545, Spread=0.013971
-- mom_plus_value / first_half: PASS, RankIC=0.245455, Spread=0.013469
-- mom_plus_value / second_half: PASS, RankIC=0.317355, Spread=0.026058
+- mom_20 / first_half [PASS] | RankIC=0.315702 | Spread=0.023691 | Reason=n/a
+- mom_20 / second_half [PASS] | RankIC=0.339669 | Spread=0.041942 | Reason=n/a
+- value_ep / first_half [PASS] | RankIC=0.216529 | Spread=0.016736 | Reason=n/a
+- value_ep / second_half [PASS] | RankIC=0.170248 | Spread=0.030334 | Reason=n/a
+- value_bp / first_half [FAIL] | RankIC=-0.202479 | Spread=-0.010568 | Reason=rank_ic_mean<0.02; top_bottom_spread<0.0005
+- value_bp / second_half [PASS] | RankIC=0.257025 | Spread=0.026275 | Reason=n/a
+- size_small / first_half [PASS] | RankIC=0.209091 | Spread=0.025039 | Reason=n/a
+- size_small / second_half [PASS] | RankIC=0.258678 | Spread=0.016217 | Reason=n/a
+- liquidity_turnover_shock / first_half [PASS] | RankIC=0.254545 | Spread=0.035469 | Reason=n/a
+- liquidity_turnover_shock / second_half [PASS] | RankIC=0.254545 | Spread=0.013971 | Reason=n/a
+- mom_plus_value / first_half [PASS] | RankIC=0.245455 | Spread=0.013469 | Reason=n/a
+- mom_plus_value / second_half [PASS] | RankIC=0.317355 | Spread=0.026058 | Reason=n/a
