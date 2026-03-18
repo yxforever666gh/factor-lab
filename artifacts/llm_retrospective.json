@@ -1,0 +1,26 @@
+{
+  "generated_at_utc": "2026-03-18T18:42:40.939512+00:00",
+  "effectiveness": "positive",
+  "reason": "核心候选在执行后的 generated batch 中继续存活。",
+  "focus_factors": [
+    "liquidity_turnover_shock",
+    "mom_20",
+    "mom_plus_value",
+    "size_small"
+  ],
+  "survived_as_candidates": [
+    "mom_20",
+    "mom_plus_value"
+  ],
+  "fell_to_graveyard": [
+    "liquidity_turnover_shock",
+    "size_small"
+  ],
+  "unclassified": [],
+  "core_candidates_preserved": [
+    "mom_20",
+    "mom_plus_value"
+  ],
+  "core_candidates_lost": [],
+  "next_action_hint": "继续沿当前候选主线做小步扩展。"
+}
