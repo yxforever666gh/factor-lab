@@ -314,30 +314,12 @@
     "should_throttle": false
   },
   "daemon_status": {
-    "updated_at_utc": "2026-03-19T11:29:31.590657+00:00",
+    "updated_at_utc": "2026-03-19T11:30:31.675641+00:00",
     "pid": 788319,
     "state": "idle",
     "processed_count": 0
   },
   "heartbeat_tail": [
-    {
-      "recorded_at_utc": "2026-03-19T11:23:30.395885+00:00",
-      "scope": "research_orchestrator",
-      "status": "started",
-      "summary": "orchestrator awakened (max_tasks=1)"
-    },
-    {
-      "recorded_at_utc": "2026-03-19T11:23:30.396053+00:00",
-      "scope": "research_orchestrator",
-      "status": "idle",
-      "summary": "no pending research tasks"
-    },
-    {
-      "recorded_at_utc": "2026-03-19T11:24:30.484256+00:00",
-      "scope": "research_orchestrator",
-      "status": "info",
-      "summary": "queue empty but reseed cooldown active"
-    },
     {
       "recorded_at_utc": "2026-03-19T11:24:30.484986+00:00",
       "scope": "research_orchestrator",
@@ -436,6 +418,24 @@
     },
     {
       "recorded_at_utc": "2026-03-19T11:29:31.590061+00:00",
+      "scope": "research_orchestrator",
+      "status": "idle",
+      "summary": "no pending research tasks"
+    },
+    {
+      "recorded_at_utc": "2026-03-19T11:30:31.674236+00:00",
+      "scope": "research_orchestrator",
+      "status": "info",
+      "summary": "queue empty but reseed cooldown active"
+    },
+    {
+      "recorded_at_utc": "2026-03-19T11:30:31.674840+00:00",
+      "scope": "research_orchestrator",
+      "status": "started",
+      "summary": "orchestrator awakened (max_tasks=1)"
+    },
+    {
+      "recorded_at_utc": "2026-03-19T11:30:31.675013+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"

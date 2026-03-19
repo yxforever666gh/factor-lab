@@ -48,6 +48,8 @@ def _make_task(task_type: str, category: str, priority_hint: int, reason: str, e
 
 def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | Path) -> dict[str, Any]:
     snapshot = _read_json(snapshot_path)
+    registry_path = ROOT / "artifacts" / "research_space_registry.json"
+    registry = _read_json(registry_path) if registry_path.exists() else {}
     existing_fingerprints = {task.get("fingerprint") for task in snapshot.get("recent_research_tasks", [])}
     latest_run = snapshot.get("latest_run") or {}
     generated_configs = set(snapshot.get("generated_configs", []))
@@ -56,6 +58,9 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
     queue_budget = snapshot.get("queue_budget", {})
     exploration_state = snapshot.get("exploration_state", {})
     failure_state = snapshot.get("failure_state", {})
+    windows_covered = registry.get("windows_covered", {}) or {}
+    validation_depth = registry.get("validation_depth", {}) or {}
+    graveyard_diagnostics = registry.get("graveyard_diagnostics", {}) or {}
 
     base_config = _read_json(ROOT / "configs" / "tushare_workflow.json")
     end_date = latest_run.get("end_date") or base_config["end_date"]
@@ -63,14 +68,14 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
     candidates: list[dict[str, Any]] = []
 
     window_specs = [
-        ("rolling_180d_back", "2025-07-01", "artifacts/generated_rolling_180d_back", 18, "baseline｜历史扩窗 180 天"),
-        ("rolling_240d_back", "2025-05-01", "artifacts/generated_rolling_240d_back", 19, "baseline｜历史扩窗 240 天"),
-        ("rolling_recent_150d", "2025-10-20", "artifacts/generated_recent_150d", 23, "validation｜近期 150 天窗口验证"),
-        ("expanding_from_2025_07_01", "2025-07-01", "artifacts/generated_expanding_2025_07_01", 16, "baseline｜expanding 窗口 2025-07-01 起"),
+        ("rolling_240d_back", "2025-05-01", "artifacts/generated_rolling_240d_back", 18, "baseline｜历史扩窗 240 天", "window_rolling_240d_back"),
+        ("rolling_300d_back", "2025-03-01", "artifacts/generated_rolling_300d_back", 19, "baseline｜历史扩窗 300 天", "window_rolling_300d_back"),
+        ("rolling_recent_180d", "2025-09-20", "artifacts/generated_recent_180d", 24, "validation｜近期 180 天窗口验证", "window_recent_180d"),
+        ("expanding_from_2025_04_01", "2025-04-01", "artifacts/generated_expanding_2025_04_01", 17, "baseline｜expanding 窗口 2025-04-01 起", "window_expanding_2025_04_01"),
     ]
 
-    for name, start_date, output_dir, priority, worker_note in window_specs:
-        if f"{name}.json" in generated_configs:
+    for name, start_date, output_dir, priority, worker_note, window_key in window_specs:
+        if window_key in windows_covered or f"{name}.json" in generated_configs:
             continue
         config = deepcopy(base_config)
         config["start_date"] = start_date
@@ -89,7 +94,7 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
         if task["fingerprint"] not in existing_fingerprints:
             candidates.append(task)
 
-    if stable_candidates:
+    if stable_candidates and not any(level >= 2 for level in validation_depth.values()):
         payload = {
             "diagnostic_type": "stable_candidate_validation_review",
             "focus_factors": stable_candidates,
@@ -146,26 +151,7 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
 
     payload = {
         "generated_from_snapshot": str(Path(snapshot_path)),
-        "summary": {
-            "latest_run_config": latest_run.get("config_path"),
-            "queue_budget": queue_budget,
-            "failure_state": failure_state,
-            "exploration_state": exploration_state,
-            "stable_candidate_count": len(stable_candidates),
-            "graveyard_count": len(latest_graveyard),
-            "candidate_count": len(candidates),
-        },
-        "tasks": sorted(candidates, key=lambda item: (item["priority_hint"], item["category"])),
-    }
-    Path(output_path).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    return payload
-的 batch",
-            )
-            if task["fingerprint"] not in existing_fingerprints:
-                candidates.append(task)
-
-    payload = {
-        "generated_from_snapshot": str(Path(snapshot_path)),
+        "generated_from_registry": str(registry_path),
         "summary": {
             "latest_run_config": latest_run.get("config_path"),
             "queue_budget": queue_budget,
