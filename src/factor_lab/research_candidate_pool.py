@@ -64,14 +64,16 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
 
     base_config = _read_json(ROOT / "configs" / "tushare_workflow.json")
     end_date = latest_run.get("end_date") or base_config["end_date"]
-
     candidates: list[dict[str, Any]] = []
 
     window_specs = [
         ("rolling_240d_back", "2025-05-01", "artifacts/generated_rolling_240d_back", 18, "baseline｜历史扩窗 240 天", "window_rolling_240d_back"),
         ("rolling_300d_back", "2025-03-01", "artifacts/generated_rolling_300d_back", 19, "baseline｜历史扩窗 300 天", "window_rolling_300d_back"),
+        ("rolling_360d_back", "2025-01-01", "artifacts/generated_rolling_360d_back", 20, "baseline｜历史扩窗 360 天", "window_rolling_360d_back"),
         ("rolling_recent_180d", "2025-09-20", "artifacts/generated_recent_180d", 24, "validation｜近期 180 天窗口验证", "window_recent_180d"),
+        ("rolling_recent_210d", "2025-08-20", "artifacts/generated_recent_210d", 25, "validation｜近期 210 天窗口验证", "window_recent_210d"),
         ("expanding_from_2025_04_01", "2025-04-01", "artifacts/generated_expanding_2025_04_01", 17, "baseline｜expanding 窗口 2025-04-01 起", "window_expanding_2025_04_01"),
+        ("expanding_from_2025_01_01", "2025-01-01", "artifacts/generated_expanding_2025_01_01", 18, "baseline｜expanding 窗口 2025-01-01 起", "window_expanding_2025_01_01"),
     ]
 
     for name, start_date, output_dir, priority, worker_note, window_key in window_specs:
@@ -99,21 +101,11 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
     if stable_candidates:
         next_diag = None
         if stable_level < 2:
-            next_diag = (
-                "stable_candidate_validation_review",
-                28,
-                "validation｜稳定候选深化验证",
-                ["stable_candidate_validation_requested"],
-                "稳定候选已形成，下一步应做更严格验证而不是只继续扩时间窗口。",
-            )
+            next_diag = ("stable_candidate_validation_review", 28, "validation｜稳定候选深化验证", ["stable_candidate_validation_requested"], "稳定候选已形成，下一步应做更严格验证而不是只继续扩时间窗口。")
         elif stable_level < 3:
-            next_diag = (
-                "stable_candidate_validation_review_v2",
-                32,
-                "validation｜稳定候选深化验证 v2",
-                ["stable_candidate_validation_v2_requested"],
-                "稳定候选第一层验证已完成，建议进入更严格的第二层稳定性验证。",
-            )
+            next_diag = ("stable_candidate_validation_review_v2", 32, "validation｜稳定候选深化验证 v2", ["stable_candidate_validation_v2_requested"], "稳定候选第一层验证已完成，建议进入更严格的第二层稳定性验证。")
+        elif stable_level < 4:
+            next_diag = ("stable_candidate_validation_review_v3", 36, "validation｜稳定候选深化验证 v3", ["stable_candidate_validation_v3_requested"], "稳定候选第二层验证已完成，建议进入第三层更严格的鲁棒性验证。")
         if next_diag:
             diagnostic_type, priority_hint, worker_note, gain, reason = next_diag
             payload = {
@@ -123,15 +115,7 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
                 "knowledge_gain": gain,
                 "source_output_dir": "artifacts/tushare_batch",
             }
-            task = _make_task(
-                task_type="diagnostic",
-                category="validation",
-                priority_hint=priority_hint,
-                reason=reason,
-                expected_knowledge_gain=gain,
-                payload=payload,
-                worker_note=worker_note,
-            )
+            task = _make_task("diagnostic", "validation", priority_hint, reason, gain, payload, worker_note)
             if task["fingerprint"] not in existing_fingerprints:
                 candidates.append(task)
 
@@ -140,21 +124,11 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
     if latest_graveyard:
         next_diag = None
         if graveyard_level < 2:
-            next_diag = (
-                "graveyard_window_sensitivity_review",
-                30,
-                "validation｜graveyard 窗口敏感性诊断",
-                ["graveyard_window_sensitivity_requested"],
-                "当前 graveyard 因子需要进一步区分是窗口敏感、还是结构性失效。",
-            )
+            next_diag = ("graveyard_window_sensitivity_review", 30, "validation｜graveyard 窗口敏感性诊断", ["graveyard_window_sensitivity_requested"], "当前 graveyard 因子需要进一步区分是窗口敏感、还是结构性失效。")
         elif graveyard_level < 3:
-            next_diag = (
-                "graveyard_raw_vs_neutral_review",
-                34,
-                "validation｜graveyard raw-vs-neutral 诊断",
-                ["graveyard_raw_vs_neutral_requested"],
-                "graveyard 已完成基础诊断，下一步应区分 raw 表现与 neutralized 表现的落差。",
-            )
+            next_diag = ("graveyard_raw_vs_neutral_review", 34, "validation｜graveyard raw-vs-neutral 诊断", ["graveyard_raw_vs_neutral_requested"], "graveyard 已完成基础诊断，下一步应区分 raw 表现与 neutralized 表现的落差。")
+        elif graveyard_level < 4:
+            next_diag = ("graveyard_construction_review", 38, "validation｜graveyard 构造诊断", ["graveyard_construction_requested"], "graveyard 已完成前两层诊断，下一步应检查因子构造本身是否导致失效。")
         if next_diag:
             diagnostic_type, priority_hint, worker_note, gain, reason = next_diag
             payload = {
@@ -164,15 +138,7 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
                 "knowledge_gain": gain,
                 "source_output_dir": "artifacts/tushare_batch",
             }
-            task = _make_task(
-                task_type="diagnostic",
-                category="validation",
-                priority_hint=priority_hint,
-                reason=reason,
-                expected_knowledge_gain=gain,
-                payload=payload,
-                worker_note=worker_note,
-            )
+            task = _make_task("diagnostic", "validation", priority_hint, reason, gain, payload, worker_note)
             if task["fingerprint"] not in existing_fingerprints:
                 candidates.append(task)
 

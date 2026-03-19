@@ -78,6 +78,8 @@
     }
   },
   "knowledge_gain_counter": {
+    "graveyard_raw_vs_neutral_requested": 1,
+    "stable_candidate_validation_v2_requested": 1,
     "graveyard_window_sensitivity_requested": 1,
     "exploration_candidate_survived": 35,
     "exploration_graveyard_identified": 35,

@@ -12,19 +12,29 @@ WINDOW_KEYWORDS = {
     "rolling_120d_back": "window_rolling_120d_back",
     "rolling_180d_back": "window_rolling_180d_back",
     "rolling_240d_back": "window_rolling_240d_back",
+    "rolling_300d_back": "window_rolling_300d_back",
+    "rolling_360d_back": "window_rolling_360d_back",
     "rolling_recent_45d": "window_recent_45d",
     "rolling_recent_90d": "window_recent_90d",
     "rolling_recent_120d": "window_recent_120d",
     "rolling_recent_150d": "window_recent_150d",
-    "expanding_from_2025_07_01": "window_expanding_2025_07_01",
+    "rolling_recent_180d": "window_recent_180d",
+    "rolling_recent_210d": "window_recent_210d",
     "expanding_from_2025_10_01": "window_expanding_2025_10_01",
+    "expanding_from_2025_07_01": "window_expanding_2025_07_01",
+    "expanding_from_2025_04_01": "window_expanding_2025_04_01",
+    "expanding_from_2025_01_01": "window_expanding_2025_01_01",
 }
 
 DIAGNOSTIC_LEVELS = {
     "batch_consistency_review": 1,
     "graveyard_neutralization_review": 2,
     "graveyard_window_sensitivity_review": 2,
+    "graveyard_raw_vs_neutral_review": 3,
+    "graveyard_construction_review": 4,
     "stable_candidate_validation_review": 2,
+    "stable_candidate_validation_review_v2": 3,
+    "stable_candidate_validation_review_v3": 4,
 }
 
 
