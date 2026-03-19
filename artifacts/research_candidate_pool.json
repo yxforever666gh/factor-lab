@@ -1,0 +1,142 @@
+{
+  "generated_from_snapshot": "artifacts/research_planner_snapshot.json",
+  "summary": {
+    "latest_run_config": "artifacts/generated_configs/rolling_120d_back.json",
+    "queue_budget": {
+      "baseline": 1,
+      "validation": 0,
+      "exploration": 0
+    },
+    "failure_state": {
+      "consecutive_failures": 0,
+      "failed_recently": 3,
+      "last_failure_at": null,
+      "cooldown_active": false
+    },
+    "exploration_state": {
+      "recent_no_gain": 0,
+      "recent_gain": 3,
+      "should_throttle": false
+    },
+    "stable_candidate_count": 4,
+    "graveyard_count": 5,
+    "candidate_count": 6
+  },
+  "tasks": [
+    {
+      "task_type": "workflow",
+      "category": "baseline",
+      "priority_hint": 16,
+      "reason": "当前已覆盖到 artifacts/generated_configs/rolling_120d_back.json，建议继续拓宽历史窗口 2025-07-01 → 2026-03-18。",
+      "expected_knowledge_gain": [
+        "window_stability_check"
+      ],
+      "payload": {
+        "config_path": "artifacts/generated_configs/expanding_from_2025_07_01.json",
+        "output_dir": "artifacts/generated_expanding_2025_07_01"
+      },
+      "fingerprint": "workflow::73c37c1ef74b59916e4d130cd1d1319ac924555fff93976a8cc1d9186d4a9654::artifacts/generated_expanding_2025_07_01",
+      "worker_note": "baseline｜expanding 窗口 2025-07-01 起"
+    },
+    {
+      "task_type": "workflow",
+      "category": "baseline",
+      "priority_hint": 18,
+      "reason": "当前已覆盖到 artifacts/generated_configs/rolling_120d_back.json，建议继续拓宽历史窗口 2025-07-01 → 2026-03-18。",
+      "expected_knowledge_gain": [
+        "window_stability_check"
+      ],
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_180d_back.json",
+        "output_dir": "artifacts/generated_rolling_180d_back"
+      },
+      "fingerprint": "workflow::892bdc674f4d9de683da6ff465abce4b870d2dc0ebba35ebd335784d38ed0646::artifacts/generated_rolling_180d_back",
+      "worker_note": "baseline｜历史扩窗 180 天"
+    },
+    {
+      "task_type": "workflow",
+      "category": "baseline",
+      "priority_hint": 19,
+      "reason": "当前已覆盖到 artifacts/generated_configs/rolling_120d_back.json，建议继续拓宽历史窗口 2025-05-01 → 2026-03-18。",
+      "expected_knowledge_gain": [
+        "window_stability_check"
+      ],
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_240d_back.json",
+        "output_dir": "artifacts/generated_rolling_240d_back"
+      },
+      "fingerprint": "workflow::aa9f47ae0e3583b43eec11ed444dc5ae0dd6e669e19e7f6bafb5b2d5dea73773::artifacts/generated_rolling_240d_back",
+      "worker_note": "baseline｜历史扩窗 240 天"
+    },
+    {
+      "task_type": "workflow",
+      "category": "validation",
+      "priority_hint": 23,
+      "reason": "当前已覆盖到 artifacts/generated_configs/rolling_120d_back.json，建议继续拓宽历史窗口 2025-10-20 → 2026-03-18。",
+      "expected_knowledge_gain": [
+        "window_stability_check"
+      ],
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_recent_150d.json",
+        "output_dir": "artifacts/generated_recent_150d"
+      },
+      "fingerprint": "workflow::544b761880bc09e6e5fbb1670fa5be2555443531f8591a1bf5ca79bb23a7e1f2::artifacts/generated_recent_150d",
+      "worker_note": "validation｜近期 150 天窗口验证"
+    },
+    {
+      "task_type": "diagnostic",
+      "category": "validation",
+      "priority_hint": 28,
+      "reason": "稳定候选已形成，下一步应做更严格验证而不是只继续扩时间窗口。",
+      "expected_knowledge_gain": [
+        "stable_candidate_validation_requested"
+      ],
+      "payload": {
+        "diagnostic_type": "stable_candidate_validation_review",
+        "focus_factors": [
+          "mom_20",
+          "mom_plus_value",
+          "value_bp",
+          "value_ep"
+        ],
+        "reasons": [
+          "stable_candidates_need_deeper_validation"
+        ],
+        "knowledge_gain": [
+          "stable_candidate_validation_requested"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      },
+      "fingerprint": "diagnostic::stable_candidate_validation_review::{\"diagnostic_type\": \"stable_candidate_validation_review\", \"focus_factors\": [\"mom_20\", \"mom_plus_value\", \"value_bp\", \"value_ep\"], \"knowledge_gain\": [\"stable_candidate_validation_requested\"], \"reasons\": [\"stable_candidates_need_deeper_validation\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
+      "worker_note": "validation｜稳定候选深化验证"
+    },
+    {
+      "task_type": "diagnostic",
+      "category": "validation",
+      "priority_hint": 30,
+      "reason": "当前 graveyard 因子需要进一步区分是窗口敏感、还是结构性失效。",
+      "expected_knowledge_gain": [
+        "graveyard_window_sensitivity_requested"
+      ],
+      "payload": {
+        "diagnostic_type": "graveyard_window_sensitivity_review",
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small",
+          "value_bp"
+        ],
+        "reasons": [
+          "recent_graveyard_needs_window_sensitivity_review"
+        ],
+        "knowledge_gain": [
+          "graveyard_window_sensitivity_requested"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      },
+      "fingerprint": "diagnostic::graveyard_window_sensitivity_review::{\"diagnostic_type\": \"graveyard_window_sensitivity_review\", \"focus_factors\": [\"liquidity_turnover_shock\", \"mom_20\", \"mom_plus_value\", \"size_small\", \"value_bp\"], \"knowledge_gain\": [\"graveyard_window_sensitivity_requested\"], \"reasons\": [\"recent_graveyard_needs_window_sensitivity_review\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
+      "worker_note": "validation｜graveyard 窗口敏感性诊断"
+    }
+  ]
+}
