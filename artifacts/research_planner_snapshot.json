@@ -1,16 +1,93 @@
 {
   "latest_run": {
-    "run_id": "c4cff0db-53f7-4765-a0a0-13d3e2d9dd71",
-    "created_at_utc": "2026-03-18T22:51:23.931076+00:00",
-    "config_path": "artifacts/generated_configs/rolling_120d_back.json",
+    "run_id": "6f038868-bc7f-41f1-863f-fa424c605759",
+    "created_at_utc": "2026-03-19T08:02:13.103631+00:00",
+    "config_path": "artifacts/generated_configs/expanding_from_2025_10_01.json",
     "data_source": "tushare",
-    "start_date": "2025-09-03",
+    "start_date": "2025-10-01",
     "end_date": "2026-03-18",
     "status": "finished",
-    "dataset_rows": 1092,
+    "dataset_rows": 885,
     "factor_count": 6
   },
   "latest_runs": [
+    {
+      "run_id": "6f038868-bc7f-41f1-863f-fa424c605759",
+      "created_at_utc": "2026-03-19T08:02:13.103631+00:00",
+      "config_path": "artifacts/generated_configs/expanding_from_2025_10_01.json",
+      "data_source": "tushare",
+      "start_date": "2025-10-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 885,
+      "factor_count": 6
+    },
+    {
+      "run_id": "8b136db8-c7a1-4016-aa78-e241f20ba5e3",
+      "created_at_utc": "2026-03-19T07:57:47.399998+00:00",
+      "config_path": "artifacts/generated_configs/rolling_recent_120d.json",
+      "data_source": "tushare",
+      "start_date": "2025-11-18",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 594,
+      "factor_count": 6
+    },
+    {
+      "run_id": "9f673689-c0b9-4515-9fe3-8f39b43210e0",
+      "created_at_utc": "2026-03-19T07:53:03.084314+00:00",
+      "config_path": "artifacts/generated_configs/rolling_60d_back.json",
+      "data_source": "tushare",
+      "start_date": "2025-11-02",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 715,
+      "factor_count": 6
+    },
+    {
+      "run_id": "7de22ca4-b8cf-467c-9817-6248bde5e2b9",
+      "created_at_utc": "2026-03-19T07:52:58.651629+00:00",
+      "config_path": "artifacts/generated_workflow_from_llm.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 242,
+      "factor_count": 4
+    },
+    {
+      "run_id": "6c5171cc-fde9-4705-9db4-eab77160cddf",
+      "created_at_utc": "2026-03-19T07:46:24.812228+00:00",
+      "config_path": "artifacts/generated_configs/rolling_recent_150d.json",
+      "data_source": "tushare",
+      "start_date": "2025-10-20",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 815,
+      "factor_count": 6
+    },
+    {
+      "run_id": "a0f814d8-965d-4ba5-b7f5-bd9117e0cd1a",
+      "created_at_utc": "2026-03-19T07:45:58.813859+00:00",
+      "config_path": "artifacts/generated_configs/rolling_180d_back.json",
+      "data_source": "tushare",
+      "start_date": "2025-07-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 1642,
+      "factor_count": 6
+    },
+    {
+      "run_id": "5e54f39e-66fd-4015-9e83-4e4e1d13c6be",
+      "created_at_utc": "2026-03-19T07:35:09.540873+00:00",
+      "config_path": "artifacts/generated_configs/expanding_from_2025_07_01.json",
+      "data_source": "tushare",
+      "start_date": "2025-07-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 1642,
+      "factor_count": 6
+    },
     {
       "run_id": "c4cff0db-53f7-4765-a0a0-13d3e2d9dd71",
       "created_at_utc": "2026-03-18T22:51:23.931076+00:00",
@@ -153,83 +230,6 @@
       "status": "finished",
       "dataset_rows": 242,
       "factor_count": 4
-    },
-    {
-      "run_id": "d71c5af0-d5ae-45b0-8d51-1f9c769c19d1",
-      "created_at_utc": "2026-03-18T21:54:01.642850+00:00",
-      "config_path": "configs/tushare_workflow_longer.json",
-      "data_source": "tushare",
-      "start_date": "2026-01-01",
-      "end_date": "2026-03-18",
-      "status": "finished",
-      "dataset_rows": 242,
-      "factor_count": 6
-    },
-    {
-      "run_id": "7f1542ac-a996-41d9-a4b5-b8588dc8a640",
-      "created_at_utc": "2026-03-18T21:53:57.647170+00:00",
-      "config_path": "configs/tushare_workflow.json",
-      "data_source": "tushare",
-      "start_date": "2026-01-01",
-      "end_date": "2026-03-18",
-      "status": "finished",
-      "dataset_rows": 242,
-      "factor_count": 6
-    },
-    {
-      "run_id": "2489fc29-7c71-4a4f-bedb-e8c030740976",
-      "created_at_utc": "2026-03-18T21:53:51.717701+00:00",
-      "config_path": "configs/tushare_workflow.json",
-      "data_source": "tushare",
-      "start_date": "2026-01-01",
-      "end_date": "2026-03-18",
-      "status": "finished",
-      "dataset_rows": 242,
-      "factor_count": 6
-    },
-    {
-      "run_id": "66ab9637-6560-4840-951d-06570858df3b",
-      "created_at_utc": "2026-03-18T21:53:46.767903+00:00",
-      "config_path": "artifacts/generated_workflow_from_llm.json",
-      "data_source": "tushare",
-      "start_date": "2026-01-01",
-      "end_date": "2026-03-18",
-      "status": "finished",
-      "dataset_rows": 242,
-      "factor_count": 4
-    },
-    {
-      "run_id": "fc97d443-8f62-4aef-aed4-c0408f0626a3",
-      "created_at_utc": "2026-03-18T21:53:36.756685+00:00",
-      "config_path": "configs/tushare_workflow_longer.json",
-      "data_source": "tushare",
-      "start_date": "2026-01-01",
-      "end_date": "2026-03-18",
-      "status": "finished",
-      "dataset_rows": 242,
-      "factor_count": 6
-    },
-    {
-      "run_id": "24be6cf0-4192-4264-a335-2a50506e7328",
-      "created_at_utc": "2026-03-18T21:53:32.899128+00:00",
-      "config_path": "configs/tushare_workflow.json",
-      "data_source": "tushare",
-      "start_date": "2026-01-01",
-      "end_date": "2026-03-18",
-      "status": "finished",
-      "dataset_rows": 242,
-      "factor_count": 6
-    },
-    {
-      "run_id": "8f4a2288-ebf3-4507-857b-3d2d9f70b7a7",
-      "created_at_utc": "2026-03-18T21:53:26.932394+00:00",
-      "config_path": "configs/tushare_workflow.json",
-      "data_source": "tushare",
-      "start_date": "2026-01-01",
-      "end_date": "2026-03-18",
-      "status": "finished",
-      "dataset_rows": 242,
-      "factor_count": 6
     }
   ],
   "latest_candidates": [],
@@ -244,11 +244,11 @@
   "stable_candidates": [
     {
       "factor_name": "mom_20",
-      "candidate_runs": 153
+      "candidate_runs": 154
     },
     {
       "factor_name": "mom_plus_value",
-      "candidate_runs": 153
+      "candidate_runs": 154
     },
     {
       "factor_name": "value_bp",
@@ -262,49 +262,49 @@
   "top_scores": [
     {
       "factor_name": "mom_20",
-      "avg_score": 1.371247,
-      "runs": 156
+      "avg_score": 1.321602,
+      "runs": 163
     },
     {
       "factor_name": "mom_plus_value",
-      "avg_score": 1.143513,
-      "runs": 156
+      "avg_score": 1.084837,
+      "runs": 163
     },
     {
       "factor_name": "liquidity_turnover_shock",
-      "avg_score": 0.520895,
-      "runs": 156
+      "avg_score": 0.499155,
+      "runs": 163
     },
     {
       "factor_name": "size_small",
-      "avg_score": 0.505706,
-      "runs": 156
+      "avg_score": 0.484626,
+      "runs": 163
     },
     {
       "factor_name": "value_ep",
-      "avg_score": 0.397549,
-      "runs": 121
+      "avg_score": 0.384255,
+      "runs": 127
     },
     {
       "factor_name": "value_bp",
-      "avg_score": -0.214294,
-      "runs": 121
+      "avg_score": -0.213899,
+      "runs": 127
     }
   ],
   "queue_counts": {
     "pending": 0,
-    "running": 1,
+    "running": 0,
     "finished": 96,
-    "failed": 3
+    "failed": 4
   },
   "queue_budget": {
-    "baseline": 1,
+    "baseline": 0,
     "validation": 0,
     "exploration": 0
   },
   "failure_state": {
     "consecutive_failures": 0,
-    "failed_recently": 3,
+    "failed_recently": 0,
     "last_failure_at": null,
     "cooldown_active": false
   },
@@ -314,143 +314,143 @@
     "should_throttle": false
   },
   "daemon_status": {
-    "updated_at_utc": "2026-03-18T22:59:38.457619+00:00",
-    "pid": 563791,
+    "updated_at_utc": "2026-03-19T11:29:31.590657+00:00",
+    "pid": 788319,
     "state": "idle",
     "processed_count": 0
   },
   "heartbeat_tail": [
     {
-      "recorded_at_utc": "2026-03-18T22:43:52.366641+00:00",
+      "recorded_at_utc": "2026-03-19T11:23:30.395885+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-18T22:47:01.630532+00:00",
-      "scope": "research_orchestrator",
-      "status": "finished",
-      "summary": "workflow finished: artifacts/generated_configs/rolling_recent_90d.json",
-      "task_id": "9422c937-b35d-4838-af1b-e4dd8041fe42",
-      "task_type": "workflow"
-    },
-    {
-      "recorded_at_utc": "2026-03-18T22:47:03.659388+00:00",
-      "scope": "research_orchestrator",
-      "status": "started",
-      "summary": "orchestrator awakened (max_tasks=1)"
-    },
-    {
-      "recorded_at_utc": "2026-03-18T22:47:03.659619+00:00",
+      "recorded_at_utc": "2026-03-19T11:23:30.396053+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-18T22:48:03.730815+00:00",
-      "scope": "research_orchestrator",
-      "status": "started",
-      "summary": "orchestrator awakened (max_tasks=1)"
-    },
-    {
-      "recorded_at_utc": "2026-03-18T22:48:03.731078+00:00",
-      "scope": "research_orchestrator",
-      "status": "idle",
-      "summary": "no pending research tasks"
-    },
-    {
-      "recorded_at_utc": "2026-03-18T22:49:03.804397+00:00",
-      "scope": "research_orchestrator",
-      "status": "started",
-      "summary": "orchestrator awakened (max_tasks=1)"
-    },
-    {
-      "recorded_at_utc": "2026-03-18T22:49:03.804639+00:00",
-      "scope": "research_orchestrator",
-      "status": "idle",
-      "summary": "no pending research tasks"
-    },
-    {
-      "recorded_at_utc": "2026-03-18T22:51:10.175409+00:00",
-      "scope": "research_daemon",
-      "status": "started",
-      "summary": "research daemon started"
-    },
-    {
-      "recorded_at_utc": "2026-03-18T22:51:10.209671+00:00",
+      "recorded_at_utc": "2026-03-19T11:24:30.484256+00:00",
       "scope": "research_orchestrator",
       "status": "info",
-      "summary": "research space expanded with 2 tasks"
+      "summary": "queue empty but reseed cooldown active"
     },
     {
-      "recorded_at_utc": "2026-03-18T22:51:10.210774+00:00",
+      "recorded_at_utc": "2026-03-19T11:24:30.484986+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-18T22:51:23.919648+00:00",
-      "scope": "research_daemon",
-      "status": "started",
-      "summary": "research daemon started"
-    },
-    {
-      "recorded_at_utc": "2026-03-18T22:51:23.922757+00:00",
-      "scope": "research_orchestrator",
-      "status": "started",
-      "summary": "orchestrator awakened (max_tasks=1)"
-    },
-    {
-      "recorded_at_utc": "2026-03-18T22:57:36.341645+00:00",
-      "scope": "research_orchestrator",
-      "status": "finished",
-      "summary": "workflow finished: artifacts/generated_configs/rolling_120d_back.json",
-      "task_id": "60107083-eed0-40bb-afd7-eba4ca880c5f",
-      "task_type": "workflow"
-    },
-    {
-      "recorded_at_utc": "2026-03-18T22:57:38.347127+00:00",
-      "scope": "research_orchestrator",
-      "status": "started",
-      "summary": "orchestrator awakened (max_tasks=1)"
-    },
-    {
-      "recorded_at_utc": "2026-03-18T22:57:38.347362+00:00",
+      "recorded_at_utc": "2026-03-19T11:24:30.485183+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-18T22:58:38.392301+00:00",
+      "recorded_at_utc": "2026-03-19T11:25:31.261186+00:00",
+      "scope": "research_orchestrator",
+      "status": "info",
+      "summary": "queue empty but reseed cooldown active"
+    },
+    {
+      "recorded_at_utc": "2026-03-19T11:25:31.261809+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-18T22:58:38.392566+00:00",
+      "recorded_at_utc": "2026-03-19T11:25:31.261990+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-18T22:59:38.456297+00:00",
+      "recorded_at_utc": "2026-03-19T11:26:31.342886+00:00",
+      "scope": "research_orchestrator",
+      "status": "info",
+      "summary": "queue empty but reseed cooldown active"
+    },
+    {
+      "recorded_at_utc": "2026-03-19T11:26:31.343504+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-18T22:59:38.456649+00:00",
+      "recorded_at_utc": "2026-03-19T11:26:31.343675+00:00",
+      "scope": "research_orchestrator",
+      "status": "idle",
+      "summary": "no pending research tasks"
+    },
+    {
+      "recorded_at_utc": "2026-03-19T11:27:31.422225+00:00",
+      "scope": "research_orchestrator",
+      "status": "info",
+      "summary": "queue empty but reseed cooldown active"
+    },
+    {
+      "recorded_at_utc": "2026-03-19T11:27:31.422805+00:00",
+      "scope": "research_orchestrator",
+      "status": "started",
+      "summary": "orchestrator awakened (max_tasks=1)"
+    },
+    {
+      "recorded_at_utc": "2026-03-19T11:27:31.422965+00:00",
+      "scope": "research_orchestrator",
+      "status": "idle",
+      "summary": "no pending research tasks"
+    },
+    {
+      "recorded_at_utc": "2026-03-19T11:28:31.510280+00:00",
+      "scope": "research_orchestrator",
+      "status": "info",
+      "summary": "queue empty but reseed cooldown active"
+    },
+    {
+      "recorded_at_utc": "2026-03-19T11:28:31.510939+00:00",
+      "scope": "research_orchestrator",
+      "status": "started",
+      "summary": "orchestrator awakened (max_tasks=1)"
+    },
+    {
+      "recorded_at_utc": "2026-03-19T11:28:31.511121+00:00",
+      "scope": "research_orchestrator",
+      "status": "idle",
+      "summary": "no pending research tasks"
+    },
+    {
+      "recorded_at_utc": "2026-03-19T11:29:31.589289+00:00",
+      "scope": "research_orchestrator",
+      "status": "info",
+      "summary": "queue empty but reseed cooldown active"
+    },
+    {
+      "recorded_at_utc": "2026-03-19T11:29:31.589893+00:00",
+      "scope": "research_orchestrator",
+      "status": "started",
+      "summary": "orchestrator awakened (max_tasks=1)"
+    },
+    {
+      "recorded_at_utc": "2026-03-19T11:29:31.590061+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     }
   ],
   "generated_configs": [
+    "expanding_from_2025_07_01.json",
     "expanding_from_2025_10_01.json",
     "rolling_120d_back.json",
+    "rolling_180d_back.json",
+    "rolling_240d_back.json",
     "rolling_30d_back.json",
     "rolling_60d_back.json",
     "rolling_recent_120d.json",
+    "rolling_recent_150d.json",
     "rolling_recent_45d.json",
     "rolling_recent_90d.json"
   ],
@@ -496,7 +496,7 @@
   "llm_status": {
     "mode": "openclaw_agent_bridge",
     "status": "plan_executed",
-    "updated_at_utc": "2026-03-18T22:02:19.656687+00:00",
+    "updated_at_utc": "2026-03-19T07:53:01.058843+00:00",
     "generated_batch_path": "artifacts/generated_batch_from_llm.json",
     "generated_batch_output_dir": "artifacts/llm_generated_batch_run",
     "feedback_path": "artifacts/llm_plan_feedback.json",
@@ -514,14 +514,201 @@
     ]
   },
   "knowledge_gain_counter": {
-    "stable_candidate_confirmed": 12,
-    "repeated_graveyard_confirmed": 12,
-    "neutralization_diagnosis_requested": 8,
-    "exploration_candidate_survived": 9,
-    "exploration_graveyard_identified": 9,
+    "stable_candidate_confirmed": 10,
+    "repeated_graveyard_confirmed": 10,
+    "neutralization_diagnosis_requested": 6,
+    "exploration_candidate_survived": 8,
+    "exploration_graveyard_identified": 8,
     "no_significant_information_gain": 0
   },
   "recent_research_tasks": [
+    {
+      "task_id": "8bb0f082-0cd6-4165-9c54-9428b86a4db3",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 30,
+      "fingerprint": "diagnostic::graveyard_window_sensitivity_review::{\"diagnostic_type\": \"graveyard_window_sensitivity_review\", \"focus_factors\": [\"liquidity_turnover_shock\", \"mom_20\", \"mom_plus_value\", \"size_small\", \"value_bp\"], \"knowledge_gain\": [\"graveyard_window_sensitivity_requested\"], \"reasons\": [\"recent_graveyard_needs_window_sensitivity_review\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-19T09:13:28.661950+00:00",
+      "started_at_utc": "2026-03-19T09:13:28.668258+00:00",
+      "finished_at_utc": "2026-03-19T09:13:28.673450+00:00",
+      "worker_note": "diagnostic finished: graveyard_window_sensitivity_review",
+      "payload": {
+        "diagnostic_type": "graveyard_window_sensitivity_review",
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small",
+          "value_bp"
+        ],
+        "knowledge_gain": [
+          "graveyard_window_sensitivity_requested"
+        ],
+        "reasons": [
+          "recent_graveyard_needs_window_sensitivity_review"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "3daab80e-b560-42dd-8043-d7daa59e1c9b",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 16,
+      "fingerprint": "workflow::d5710cb6ee07d73b9440e920aadbf456a8c1245482071688a82fdbb352cacbec::artifacts/generated_expanding_2025_10_01",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-19T08:02:13.099630+00:00",
+      "started_at_utc": "2026-03-19T08:02:13.102444+00:00",
+      "finished_at_utc": "2026-03-19T08:06:28.889991+00:00",
+      "worker_note": "workflow finished: artifacts/generated_configs/expanding_from_2025_10_01.json",
+      "payload": {
+        "config_path": "artifacts/generated_configs/expanding_from_2025_10_01.json",
+        "output_dir": "artifacts/generated_expanding_2025_10_01"
+      }
+    },
+    {
+      "task_id": "290c55d6-9720-4fcd-9515-568cddbfbd6c",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 25,
+      "fingerprint": "workflow::f85a72808e78577e445145bd659b0528bef687849865d7064229e240284c05cd::artifacts/generated_recent_120d",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-19T07:53:03.081642+00:00",
+      "started_at_utc": "2026-03-19T07:57:47.397702+00:00",
+      "finished_at_utc": "2026-03-19T08:02:11.085202+00:00",
+      "worker_note": "workflow finished: artifacts/generated_configs/rolling_recent_120d.json",
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_recent_120d.json",
+        "output_dir": "artifacts/generated_recent_120d"
+      }
+    },
+    {
+      "task_id": "d8d49bbf-de5f-464b-b379-997d598690b7",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 19,
+      "fingerprint": "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-19T07:53:03.079801+00:00",
+      "started_at_utc": "2026-03-19T07:53:03.083235+00:00",
+      "finished_at_utc": "2026-03-19T07:57:45.388459+00:00",
+      "worker_note": "workflow finished: artifacts/generated_configs/rolling_60d_back.json",
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_60d_back.json",
+        "output_dir": "artifacts/generated_rolling_60d_back"
+      }
+    },
+    {
+      "task_id": "23ed7755-1aba-4972-860d-e5a35ad930ec",
+      "task_type": "generated_batch",
+      "status": "finished",
+      "priority": 60,
+      "fingerprint": "generated_batch::a4cf53c056d30df4446de19c23617566f1f9bfd75d9e6e55e07584c54d5ff466::artifacts/llm_generated_batch_run",
+      "parent_task_id": "48e2dc16-2097-4c3e-b37c-cc0eddcd11d5",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-19T07:45:56.802591+00:00",
+      "started_at_utc": "2026-03-19T07:52:58.649374+00:00",
+      "finished_at_utc": "2026-03-19T07:53:01.066685+00:00",
+      "worker_note": "generated batch finished: artifacts/generated_batch_from_llm.json | knowledge_gain=exploration_candidate_survived,exploration_graveyard_identified",
+      "payload": {
+        "batch_path": "artifacts/generated_batch_from_llm.json",
+        "output_dir": "artifacts/llm_generated_batch_run"
+      }
+    },
+    {
+      "task_id": "85645d80-eb9b-40d2-a8a6-6acb3e5729ce",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 18,
+      "fingerprint": "workflow::892bdc674f4d9de683da6ff465abce4b870d2dc0ebba35ebd335784d38ed0646::artifacts/generated_rolling_180d_back",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-19T07:34:32.024116+00:00",
+      "started_at_utc": "2026-03-19T07:45:58.811741+00:00",
+      "finished_at_utc": "2026-03-19T07:46:22.792022+00:00",
+      "worker_note": "workflow finished: artifacts/generated_configs/rolling_180d_back.json",
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_180d_back.json",
+        "output_dir": "artifacts/generated_rolling_180d_back"
+      }
+    },
+    {
+      "task_id": "48e2dc16-2097-4c3e-b37c-cc0eddcd11d5",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 16,
+      "fingerprint": "workflow::73c37c1ef74b59916e4d130cd1d1319ac924555fff93976a8cc1d9186d4a9654::artifacts/generated_expanding_2025_07_01",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-19T07:34:32.019464+00:00",
+      "started_at_utc": "2026-03-19T07:35:09.538719+00:00",
+      "finished_at_utc": "2026-03-19T07:45:56.803709+00:00",
+      "worker_note": "workflow finished: artifacts/generated_configs/expanding_from_2025_07_01.json | followups=1",
+      "payload": {
+        "config_path": "artifacts/generated_configs/expanding_from_2025_07_01.json",
+        "output_dir": "artifacts/generated_expanding_2025_07_01"
+      }
+    },
+    {
+      "task_id": "0f48953f-105e-41b4-9c17-784b983be6d1",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 28,
+      "fingerprint": "diagnostic::stable_candidate_validation_review::{\"diagnostic_type\": \"stable_candidate_validation_review\", \"focus_factors\": [\"mom_20\", \"mom_plus_value\", \"value_bp\", \"value_ep\"], \"knowledge_gain\": [\"stable_candidate_validation_requested\"], \"reasons\": [\"stable_candidates_need_deeper_validation\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-19T07:34:32.003154+00:00",
+      "started_at_utc": "2026-03-19T07:52:56.639484+00:00",
+      "finished_at_utc": "2026-03-19T07:52:56.643595+00:00",
+      "worker_note": "diagnostic finished: stable_candidate_validation_review",
+      "payload": {
+        "diagnostic_type": "stable_candidate_validation_review",
+        "focus_factors": [
+          "mom_20",
+          "mom_plus_value",
+          "value_bp",
+          "value_ep"
+        ],
+        "knowledge_gain": [
+          "stable_candidate_validation_requested"
+        ],
+        "reasons": [
+          "stable_candidates_need_deeper_validation"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "a750d58c-fb5d-4f7a-bd3b-fb97f5a83234",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 23,
+      "fingerprint": "workflow::544b761880bc09e6e5fbb1670fa5be2555443531f8591a1bf5ca79bb23a7e1f2::artifacts/generated_recent_150d",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-19T07:34:31.996116+00:00",
+      "started_at_utc": "2026-03-19T07:46:24.807390+00:00",
+      "finished_at_utc": "2026-03-19T07:52:54.629790+00:00",
+      "worker_note": "workflow finished: artifacts/generated_configs/rolling_recent_150d.json",
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_recent_150d.json",
+        "output_dir": "artifacts/generated_recent_150d"
+      }
+    },
     {
       "task_id": "60107083-eed0-40bb-afd7-eba4ca880c5f",
       "task_type": "workflow",
@@ -543,15 +730,15 @@
     {
       "task_id": "5d0099c1-882e-4658-a4da-cb7d54866b82",
       "task_type": "workflow",
-      "status": "running",
+      "status": "failed",
       "priority": 19,
       "fingerprint": "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back",
       "parent_task_id": null,
       "attempt_count": 1,
-      "last_error": null,
+      "last_error": "marked failed as stale running task after daemon/process interruption; no artifacts produced",
       "created_at_utc": "2026-03-18T22:51:10.188970+00:00",
       "started_at_utc": "2026-03-18T22:51:10.211055+00:00",
-      "finished_at_utc": null,
+      "finished_at_utc": "2026-03-19T07:41:10.916012+00:00",
       "worker_note": "baseline｜历史扩窗 60 天",
       "payload": {
         "config_path": "artifacts/generated_configs/rolling_60d_back.json",
@@ -970,208 +1157,6 @@
       "payload": {
         "config_path": "configs/tushare_batch.json",
         "output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "d436e419-15ff-4893-b589-a103e5e09183",
-      "task_type": "workflow",
-      "status": "finished",
-      "priority": 10,
-      "fingerprint": "workflow::63c043a518d832a1d0cdb3299ff3ecff594a5ebb906d4f4fe4e901b0a66e2dba::artifacts/tushare_workflow",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-18T21:53:51.712985+00:00",
-      "started_at_utc": "2026-03-18T21:53:51.716731+00:00",
-      "finished_at_utc": "2026-03-18T21:53:55.638078+00:00",
-      "worker_note": "workflow finished: configs/tushare_workflow.json | followups=2",
-      "payload": {
-        "config_path": "configs/tushare_workflow.json",
-        "output_dir": "artifacts/tushare_workflow"
-      }
-    },
-    {
-      "task_id": "9878de8b-10b3-4bdc-9745-02e1d7ef32c1",
-      "task_type": "diagnostic",
-      "status": "finished",
-      "priority": 40,
-      "fingerprint": "diagnostic::artifacts/tushare_batch::graveyard_neutralization::liquidity_turnover_shock,size_small,value_bp,value_ep",
-      "parent_task_id": "8a7744bb-2441-41dc-9d0d-7efc31c4b733",
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-18T21:53:42.746295+00:00",
-      "started_at_utc": "2026-03-18T21:53:44.754149+00:00",
-      "finished_at_utc": "2026-03-18T21:53:44.758362+00:00",
-      "worker_note": "diagnostic finished: graveyard_neutralization_review",
-      "payload": {
-        "diagnostic_type": "graveyard_neutralization_review",
-        "focus_factors": [
-          "liquidity_turnover_shock",
-          "size_small",
-          "value_bp",
-          "value_ep"
-        ],
-        "knowledge_gain": [
-          "neutralization_diagnosis_requested"
-        ],
-        "reasons": [
-          "repeated_graveyard_after_batch_consistency_review"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "8a7744bb-2441-41dc-9d0d-7efc31c4b733",
-      "task_type": "diagnostic",
-      "status": "finished",
-      "priority": 35,
-      "fingerprint": "diagnostic::artifacts/tushare_batch::consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep;stable_candidates:mom_20, mom_plus_value",
-      "parent_task_id": "e6da9f0d-d2fa-4b90-9206-d6878e946c0a",
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-18T21:53:40.733004+00:00",
-      "started_at_utc": "2026-03-18T21:53:42.741966+00:00",
-      "finished_at_utc": "2026-03-18T21:53:42.747254+00:00",
-      "worker_note": "diagnostic finished: batch_consistency_review | followups=1",
-      "payload": {
-        "diagnostic_type": "batch_consistency_review",
-        "knowledge_gain": [
-          "stable_candidate_confirmed",
-          "repeated_graveyard_confirmed"
-        ],
-        "reasons": [
-          "consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep",
-          "stable_candidates:mom_20, mom_plus_value"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "1e8ca40d-7bbe-4915-81bb-af6455f86276",
-      "task_type": "generated_batch",
-      "status": "finished",
-      "priority": 60,
-      "fingerprint": "generated_batch::a4cf53c056d30df4446de19c23617566f1f9bfd75d9e6e55e07584c54d5ff466::artifacts/llm_generated_batch_run",
-      "parent_task_id": "c08e7678-ce73-40a3-9c9b-723179630f2c",
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-18T21:53:30.886981+00:00",
-      "started_at_utc": "2026-03-18T21:53:46.765413+00:00",
-      "finished_at_utc": "2026-03-18T21:53:49.704097+00:00",
-      "worker_note": "generated batch finished: artifacts/generated_batch_from_llm.json | knowledge_gain=exploration_candidate_survived,exploration_graveyard_identified",
-      "payload": {
-        "batch_path": "artifacts/generated_batch_from_llm.json",
-        "output_dir": "artifacts/llm_generated_batch_run"
-      }
-    },
-    {
-      "task_id": "e6da9f0d-d2fa-4b90-9206-d6878e946c0a",
-      "task_type": "batch",
-      "status": "finished",
-      "priority": 30,
-      "fingerprint": "batch::15afad57be9d1e5815d553678240a3e701d656f5a5a7aaf6e564ebefa662ce7f::artifacts/tushare_batch",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-18T21:53:26.927964+00:00",
-      "started_at_utc": "2026-03-18T21:53:32.896344+00:00",
-      "finished_at_utc": "2026-03-18T21:53:40.734609+00:00",
-      "worker_note": "batch finished: configs/tushare_batch.json | followups=1",
-      "payload": {
-        "config_path": "configs/tushare_batch.json",
-        "output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "c08e7678-ce73-40a3-9c9b-723179630f2c",
-      "task_type": "workflow",
-      "status": "finished",
-      "priority": 10,
-      "fingerprint": "workflow::63c043a518d832a1d0cdb3299ff3ecff594a5ebb906d4f4fe4e901b0a66e2dba::artifacts/tushare_workflow",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-18T21:53:26.925884+00:00",
-      "started_at_utc": "2026-03-18T21:53:26.929629+00:00",
-      "finished_at_utc": "2026-03-18T21:53:30.888154+00:00",
-      "worker_note": "workflow finished: configs/tushare_workflow.json | followups=2",
-      "payload": {
-        "config_path": "configs/tushare_workflow.json",
-        "output_dir": "artifacts/tushare_workflow"
-      }
-    },
-    {
-      "task_id": "d4a42ee4-f4d8-463f-afa1-0e9128f38243",
-      "task_type": "diagnostic",
-      "status": "finished",
-      "priority": 40,
-      "fingerprint": "diagnostic::artifacts/tushare_batch::graveyard_neutralization::liquidity_turnover_shock,size_small,value_bp,value_ep",
-      "parent_task_id": "8294801a-a488-45fc-8315-bcc09433579e",
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-18T21:53:18.050604+00:00",
-      "started_at_utc": "2026-03-18T21:53:20.060764+00:00",
-      "finished_at_utc": "2026-03-18T21:53:20.066618+00:00",
-      "worker_note": "diagnostic finished: graveyard_neutralization_review",
-      "payload": {
-        "diagnostic_type": "graveyard_neutralization_review",
-        "focus_factors": [
-          "liquidity_turnover_shock",
-          "size_small",
-          "value_bp",
-          "value_ep"
-        ],
-        "knowledge_gain": [
-          "neutralization_diagnosis_requested"
-        ],
-        "reasons": [
-          "repeated_graveyard_after_batch_consistency_review"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "8294801a-a488-45fc-8315-bcc09433579e",
-      "task_type": "diagnostic",
-      "status": "finished",
-      "priority": 35,
-      "fingerprint": "diagnostic::artifacts/tushare_batch::consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep;stable_candidates:mom_20, mom_plus_value",
-      "parent_task_id": "f669bef7-8f78-4fbc-aa6c-40bc0803b885",
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-18T21:53:16.037904+00:00",
-      "started_at_utc": "2026-03-18T21:53:18.045338+00:00",
-      "finished_at_utc": "2026-03-18T21:53:18.051561+00:00",
-      "worker_note": "diagnostic finished: batch_consistency_review | followups=1",
-      "payload": {
-        "diagnostic_type": "batch_consistency_review",
-        "knowledge_gain": [
-          "stable_candidate_confirmed",
-          "repeated_graveyard_confirmed"
-        ],
-        "reasons": [
-          "consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep",
-          "stable_candidates:mom_20, mom_plus_value"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "27cb31c7-0ad1-4c6c-b7e8-fb3d5f69fb44",
-      "task_type": "generated_batch",
-      "status": "finished",
-      "priority": 60,
-      "fingerprint": "generated_batch::a4cf53c056d30df4446de19c23617566f1f9bfd75d9e6e55e07584c54d5ff466::artifacts/llm_generated_batch_run",
-      "parent_task_id": "426fe754-cce4-494a-a01f-fec012cb27da",
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-18T21:53:06.137392+00:00",
-      "started_at_utc": "2026-03-18T21:53:22.080825+00:00",
-      "finished_at_utc": "2026-03-18T21:53:24.917014+00:00",
-      "worker_note": "generated batch finished: artifacts/generated_batch_from_llm.json | knowledge_gain=exploration_candidate_survived,exploration_graveyard_identified",
-      "payload": {
-        "batch_path": "artifacts/generated_batch_from_llm.json",
-        "output_dir": "artifacts/llm_generated_batch_run"
       }
     }
   ]

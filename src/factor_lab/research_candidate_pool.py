@@ -109,7 +109,7 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
         if task["fingerprint"] not in existing_fingerprints:
             candidates.append(task)
 
-    if latest_graveyard:
+    if latest_graveyard and not any(level >= 2 for level in graveyard_diagnostics.values()):
         payload = {
             "diagnostic_type": "graveyard_window_sensitivity_review",
             "focus_factors": latest_graveyard,
@@ -140,6 +140,26 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
                 expected_knowledge_gain=["exploration_candidate_survived", "exploration_graveyard_identified"],
                 payload={"batch_path": str(generated_batch_path.relative_to(ROOT)), "output_dir": "artifacts/llm_generated_batch_run"},
                 worker_note="exploration｜执行 LLM 生成的 batch",
+            )
+            if task["fingerprint"] not in existing_fingerprints:
+                candidates.append(task)
+
+    payload = {
+        "generated_from_snapshot": str(Path(snapshot_path)),
+        "summary": {
+            "latest_run_config": latest_run.get("config_path"),
+            "queue_budget": queue_budget,
+            "failure_state": failure_state,
+            "exploration_state": exploration_state,
+            "stable_candidate_count": len(stable_candidates),
+            "graveyard_count": len(latest_graveyard),
+            "candidate_count": len(candidates),
+        },
+        "tasks": sorted(candidates, key=lambda item: (item["priority_hint"], item["category"])),
+    }
+    Path(output_path).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return payload
+的 batch",
             )
             if task["fingerprint"] not in existing_fingerprints:
                 candidates.append(task)
