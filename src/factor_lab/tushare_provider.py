@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 import time
 
 import numpy as np
@@ -31,12 +32,38 @@ class TushareDataProvider:
         for attempt in range(1, retries + 1):
             try:
                 return getattr(self.pro, api_name)(**kwargs)
-            except Exception as exc:  # network / transient API failures
+            except Exception as exc:
                 last_error = exc
                 if attempt == retries:
                     raise
                 time.sleep(sleep_seconds * attempt)
         raise last_error
+
+    def _cache_candidates(self, cache_dir: Path, universe_limit: int):
+        pattern = re.compile(r"tushare_(\d{4}-\d{2}-\d{2})_(\d{4}-\d{2}-\d{2})_(\d+)\.csv")
+        for path in cache_dir.glob("tushare_*.csv"):
+            m = pattern.fullmatch(path.name)
+            if not m:
+                continue
+            start_date, end_date, limit = m.group(1), m.group(2), int(m.group(3))
+            if limit != universe_limit:
+                continue
+            yield path, start_date, end_date
+
+    def _find_covering_cache(self, cache_dir: Path, request: TushareRequest):
+        matches = []
+        req_start = pd.Timestamp(request.start_date)
+        req_end = pd.Timestamp(request.end_date)
+        for path, start_date, end_date in self._cache_candidates(cache_dir, request.universe_limit):
+            start_ts = pd.Timestamp(start_date)
+            end_ts = pd.Timestamp(end_date)
+            if start_ts <= req_start and end_ts >= req_end:
+                span = (end_ts - start_ts).days
+                matches.append((span, path))
+        if not matches:
+            return None
+        matches.sort(key=lambda item: item[0])
+        return matches[0][1]
 
     def _date_chunks(self, start_date: str, end_date: str):
         start = pd.Timestamp(start_date)
@@ -77,9 +104,20 @@ class TushareDataProvider:
         cache_dir.mkdir(parents=True, exist_ok=True)
         cache_key = f"tushare_{request.start_date}_{request.end_date}_{request.universe_limit}.csv"
         cache_path = cache_dir / cache_key
+
         if cache_path.exists():
             frame = pd.read_csv(cache_path)
             frame["date"] = pd.to_datetime(frame["date"])
+            return SampleDataset(frame=frame)
+
+        covering_cache = self._find_covering_cache(cache_dir, request)
+        if covering_cache is not None:
+            frame = pd.read_csv(covering_cache)
+            frame["date"] = pd.to_datetime(frame["date"])
+            req_start = pd.Timestamp(request.start_date)
+            req_end = pd.Timestamp(request.end_date)
+            frame = frame[(frame["date"] >= req_start) & (frame["date"] <= req_end)].copy().reset_index(drop=True)
+            frame.to_csv(cache_path, index=False)
             return SampleDataset(frame=frame)
 
         stock_basic = self._query_with_retry(
