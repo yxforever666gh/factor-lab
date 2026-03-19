@@ -1,0 +1,89 @@
+{
+  "windows_covered": {
+    "window_expanding_2025_10_01": {
+      "task_id": "3daab80e-b560-42dd-8043-d7daa59e1c9b",
+      "config_path": "artifacts/generated_configs/expanding_from_2025_10_01.json",
+      "status": "finished",
+      "finished_at_utc": "2026-03-19T08:06:28.889991+00:00"
+    },
+    "window_recent_120d": {
+      "task_id": "290c55d6-9720-4fcd-9515-568cddbfbd6c",
+      "config_path": "artifacts/generated_configs/rolling_recent_120d.json",
+      "status": "finished",
+      "finished_at_utc": "2026-03-19T08:02:11.085202+00:00"
+    },
+    "window_rolling_60d_back": {
+      "task_id": "5d0099c1-882e-4658-a4da-cb7d54866b82",
+      "config_path": "artifacts/generated_configs/rolling_60d_back.json",
+      "status": "failed",
+      "finished_at_utc": "2026-03-19T07:41:10.916012+00:00"
+    },
+    "window_rolling_180d_back": {
+      "task_id": "85645d80-eb9b-40d2-a8a6-6acb3e5729ce",
+      "config_path": "artifacts/generated_configs/rolling_180d_back.json",
+      "status": "finished",
+      "finished_at_utc": "2026-03-19T07:46:22.792022+00:00"
+    },
+    "window_expanding_2025_07_01": {
+      "task_id": "48e2dc16-2097-4c3e-b37c-cc0eddcd11d5",
+      "config_path": "artifacts/generated_configs/expanding_from_2025_07_01.json",
+      "status": "finished",
+      "finished_at_utc": "2026-03-19T07:45:56.803709+00:00"
+    },
+    "window_recent_150d": {
+      "task_id": "a750d58c-fb5d-4f7a-bd3b-fb97f5a83234",
+      "config_path": "artifacts/generated_configs/rolling_recent_150d.json",
+      "status": "finished",
+      "finished_at_utc": "2026-03-19T07:52:54.629790+00:00"
+    },
+    "window_rolling_120d_back": {
+      "task_id": "60107083-eed0-40bb-afd7-eba4ca880c5f",
+      "config_path": "artifacts/generated_configs/rolling_120d_back.json",
+      "status": "finished",
+      "finished_at_utc": "2026-03-18T22:57:36.340462+00:00"
+    },
+    "window_recent_90d": {
+      "task_id": "9422c937-b35d-4838-af1b-e4dd8041fe42",
+      "config_path": "artifacts/generated_configs/rolling_recent_90d.json",
+      "status": "finished",
+      "finished_at_utc": "2026-03-18T22:47:01.629405+00:00"
+    },
+    "window_recent_45d": {
+      "task_id": "0e86827b-e956-4a4e-8047-2523ce259730",
+      "config_path": "artifacts/generated_configs/rolling_recent_45d.json",
+      "status": "finished",
+      "finished_at_utc": "2026-03-18T22:43:50.353954+00:00"
+    },
+    "window_rolling_30d_back": {
+      "task_id": "fbc52fde-af1c-4a3c-9665-61c5c8ce70c7",
+      "config_path": "artifacts/generated_configs/rolling_30d_back.json",
+      "status": "finished",
+      "finished_at_utc": "2026-03-18T22:42:24.639313+00:00"
+    }
+  },
+  "validation_depth": {
+    "mom_20,mom_plus_value,value_bp,value_ep": 2
+  },
+  "graveyard_diagnostics": {
+    "liquidity_turnover_shock,mom_20,mom_plus_value,size_small,value_bp": 2,
+    "consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep,stable_candidates:mom_20, mom_plus_value": 1,
+    "liquidity_turnover_shock,size_small,value_bp,value_ep": 2
+  },
+  "exploration_lines": {
+    "artifacts/generated_batch_from_llm.json": {
+      "task_id": "e598609f-1773-47af-8f50-fe2fe9abfba8",
+      "status": "finished",
+      "finished_at_utc": "2026-03-18T21:34:21.439760+00:00",
+      "worker_note": "generated batch finished: artifacts/generated_batch_from_llm.json | knowledge_gain=exploration_candidate_survived,exploration_graveyard_identified"
+    }
+  },
+  "knowledge_gain_counter": {
+    "graveyard_window_sensitivity_requested": 1,
+    "exploration_candidate_survived": 35,
+    "exploration_graveyard_identified": 35,
+    "stable_candidate_validation_requested": 1,
+    "stable_candidate_confirmed": 36,
+    "repeated_graveyard_confirmed": 36,
+    "neutralization_diagnosis_requested": 33
+  }
+}
