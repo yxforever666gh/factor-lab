@@ -17,6 +17,8 @@ from factor_lab.summary import build_run_summary
 from factor_lab.llm_feedback import summarize_generated_batch_run
 from factor_lab.llm_bridge import write_bridge_status
 from factor_lab.research_expansion import maybe_expand_research_space
+from factor_lab.research_planner_pipeline import run_research_planner_pipeline
+from factor_lab.research_runtime_state import queue_budget_snapshot, recent_failure_stats, exploration_health, parse_iso_utc, recently_finished_same_fingerprint
 from datetime import datetime, timezone, timedelta
 
 
@@ -94,20 +96,6 @@ def parse_iso_utc(ts: str | None) -> datetime | None:
         return None
 
 
-def recently_finished_same_fingerprint(store: ExperimentStore, fingerprint: str, cooldown_minutes: int = TASK_REPEAT_COOLDOWN_MINUTES) -> bool:
-    tasks = store.list_research_tasks(limit=300)
-    cutoff = datetime.now(timezone.utc) - timedelta(minutes=cooldown_minutes)
-    for task in tasks:
-        if task.get("fingerprint") != fingerprint:
-            continue
-        if task.get("status") != "finished":
-            continue
-        finished_at = parse_iso_utc(task.get("finished_at_utc"))
-        if finished_at and finished_at >= cutoff:
-            return True
-    return False
-
-
 def can_reseed_baseline(store: ExperimentStore) -> bool:
     tasks = store.list_research_tasks(limit=300)
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=BASELINE_RESEED_COOLDOWN_MINUTES)
@@ -121,24 +109,6 @@ def can_reseed_baseline(store: ExperimentStore) -> bool:
         if latest_at and latest_at >= cutoff:
             return False
     return True
-
-
-def exploration_health(store: ExperimentStore, limit: int = 50) -> dict[str, Any]:
-    tasks = store.list_research_tasks(limit=limit)
-    exploration_tasks = [t for t in tasks if t["task_type"] == "generated_batch" and t["status"] == "finished"]
-    recent_no_gain = 0
-    recent_gain = 0
-    for task in exploration_tasks[:EXPLORATION_NO_GAIN_THRESHOLD]:
-        note = task.get("worker_note") or ""
-        if "no_significant_information_gain" in note:
-            recent_no_gain += 1
-        elif "knowledge_gain=" in note:
-            recent_gain += 1
-    return {
-        "recent_no_gain": recent_no_gain,
-        "recent_gain": recent_gain,
-        "should_throttle": recent_no_gain >= EXPLORATION_NO_GAIN_THRESHOLD,
-    }
 
 
 def enqueue_baseline_tasks(store: ExperimentStore) -> list[str]:
@@ -402,15 +372,23 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
     store = ExperimentStore(DB_PATH)
     existing_tasks = store.list_research_tasks(limit=50)
     if not existing_tasks or not any(t["status"] in {"pending", "running"} for t in existing_tasks):
-        expanded = maybe_expand_research_space(store, max_new_tasks=2)
-        if expanded:
-            append_heartbeat("research_orchestrator", "info", summary=f"research space expanded with {len(expanded)} tasks")
-        elif can_reseed_baseline(store):
-            seeded = enqueue_baseline_tasks(store)
-            if seeded:
-                append_heartbeat("research_orchestrator", "info", summary=f"queue reseeded with {len(seeded)} baseline tasks")
+        planner_result = run_research_planner_pipeline()
+        if planner_result.get("injected_count", 0) > 0:
+            append_heartbeat(
+                "research_orchestrator",
+                "info",
+                summary=f"planner injected {planner_result['injected_count']} tasks",
+            )
         else:
-            append_heartbeat("research_orchestrator", "info", summary="queue empty but reseed cooldown active")
+            expanded = maybe_expand_research_space(store, max_new_tasks=2)
+            if expanded:
+                append_heartbeat("research_orchestrator", "info", summary=f"research space expanded with {len(expanded)} tasks")
+            elif can_reseed_baseline(store):
+                seeded = enqueue_baseline_tasks(store)
+                if seeded:
+                    append_heartbeat("research_orchestrator", "info", summary=f"queue reseeded with {len(seeded)} baseline tasks")
+            else:
+                append_heartbeat("research_orchestrator", "info", summary="queue empty but reseed cooldown active")
 
     failure_state = recent_failure_stats(store)
     if failure_state["consecutive_failures"] >= MAX_CONSECUTIVE_FAILURES and failure_state["cooldown_active"]:

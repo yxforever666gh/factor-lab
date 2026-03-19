@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from factor_lab.research_queue import recently_finished_same_fingerprint
+from factor_lab.research_runtime_state import recently_finished_same_fingerprint
 from factor_lab.storage import ExperimentStore
 
 

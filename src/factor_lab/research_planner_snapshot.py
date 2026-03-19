@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from factor_lab.research_queue import queue_budget_snapshot, recent_failure_stats, exploration_health
+from factor_lab.research_runtime_state import queue_budget_snapshot, recent_failure_stats, exploration_health
 
 
 def _read_json(path: Path, default: Any) -> Any:
