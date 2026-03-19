@@ -1,7 +1,8 @@
 {
-  "generated_from_snapshot": "artifacts/research_planner_snapshot.json",
+  "generated_from_snapshot": "/home/admin/.openclaw/workspace/artifacts/research_planner_snapshot.json",
   "generated_from_registry": "/home/admin/.openclaw/workspace/artifacts/research_space_registry.json",
   "generated_from_space_map": "/home/admin/.openclaw/workspace/artifacts/research_space_map.json",
+  "generated_from_branch_plan": "/home/admin/.openclaw/workspace/artifacts/research_branch_plan.json",
   "summary": {
     "latest_run_config": "artifacts/generated_workflow_from_llm.json",
     "queue_budget": {
@@ -22,75 +23,23 @@
     },
     "stable_candidate_count": 4,
     "graveyard_count": 2,
-    "candidate_count": 3
+    "candidate_count": 1
   },
   "tasks": [
     {
       "task_type": "workflow",
-      "category": "baseline",
+      "category": "validation",
       "priority_hint": 28,
-      "reason": "当前已覆盖到 artifacts/generated_workflow_from_llm.json，建议继续拓宽历史窗口 2024-09-01 → 2026-03-18。",
+      "reason": "当前已覆盖到 artifacts/generated_workflow_from_llm.json，建议继续拓宽近期窗口 2025-09-20 → 2026-03-18。",
       "expected_knowledge_gain": [
         "window_stability_check"
       ],
       "payload": {
-        "config_path": "artifacts/generated_configs/rolling_480d_back.json",
-        "output_dir": "artifacts/generated_rolling_480d_back"
+        "config_path": "artifacts/generated_configs/rolling_recent_180d.json",
+        "output_dir": "artifacts/generated_recent_180d"
       },
-      "fingerprint": "workflow::b4c839b65779d6c67a0f29ee7f6ff2cd28740538dc150ccf0f60087125fd6ebf::artifacts/generated_rolling_480d_back",
-      "worker_note": "baseline｜历史扩窗 480 天"
-    },
-    {
-      "task_type": "diagnostic",
-      "category": "validation",
-      "priority_hint": 34,
-      "reason": "稳定候选当前已完成到第 6 层，建议进入第 7 层验证。",
-      "expected_knowledge_gain": [
-        "stable_candidate_validation_v7_requested"
-      ],
-      "payload": {
-        "diagnostic_type": "stable_candidate_validation_review_v7",
-        "focus_factors": [
-          "mom_20",
-          "mom_plus_value",
-          "value_bp",
-          "value_ep"
-        ],
-        "reasons": [
-          "stable_candidates_need_deeper_validation"
-        ],
-        "knowledge_gain": [
-          "stable_candidate_validation_v7_requested"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      },
-      "fingerprint": "diagnostic::stable_candidate_validation_review_v7::{\"diagnostic_type\": \"stable_candidate_validation_review_v7\", \"focus_factors\": [\"mom_20\", \"mom_plus_value\", \"value_bp\", \"value_ep\"], \"knowledge_gain\": [\"stable_candidate_validation_v7_requested\"], \"reasons\": [\"stable_candidates_need_deeper_validation\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
-      "worker_note": "validation｜稳定候选深化验证 v7"
-    },
-    {
-      "task_type": "diagnostic",
-      "category": "validation",
-      "priority_hint": 36,
-      "reason": "graveyard 诊断当前已完成到第 6 层，建议进入第 7 层。",
-      "expected_knowledge_gain": [
-        "graveyard_diagnosis_level_7_requested"
-      ],
-      "payload": {
-        "diagnostic_type": "graveyard_diagnosis_level_7",
-        "focus_factors": [
-          "liquidity_turnover_shock",
-          "size_small"
-        ],
-        "reasons": [
-          "recent_graveyard_needs_deeper_review"
-        ],
-        "knowledge_gain": [
-          "graveyard_diagnosis_level_7_requested"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      },
-      "fingerprint": "diagnostic::graveyard_diagnosis_level_7::{\"diagnostic_type\": \"graveyard_diagnosis_level_7\", \"focus_factors\": [\"liquidity_turnover_shock\", \"size_small\"], \"knowledge_gain\": [\"graveyard_diagnosis_level_7_requested\"], \"reasons\": [\"recent_graveyard_needs_deeper_review\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
-      "worker_note": "validation｜graveyard level 7 诊断"
+      "fingerprint": "workflow::6e44ee482aa1a176491a1cec79723dfd90e7d9d49d277386dc9934a1b0f3198b::artifacts/generated_recent_180d",
+      "worker_note": "validation｜近期 180 天窗口验证"
     }
   ]
 }

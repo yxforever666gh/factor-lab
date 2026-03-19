@@ -6,20 +6,22 @@ from typing import Any
 
 
 class ResearchBranchPlanner:
-    def plan(self, space_map: dict[str, Any], snapshot: dict[str, Any], candidate_pool: dict[str, Any]) -> dict[str, Any]:
+    def plan(self, space_map: dict[str, Any], snapshot: dict[str, Any], candidate_pool: dict[str, Any] | None = None) -> dict[str, Any]:
         family_progress = space_map.get("family_progress", {}) or {}
         fatigue = space_map.get("family_fatigue", {}) or {}
         saturation = space_map.get("family_saturation", {}) or {}
-        candidate_tasks = candidate_pool.get("tasks", []) or []
+        family_recent_gain = space_map.get("family_recent_gain", {}) or {}
+        candidate_tasks = (candidate_pool or {}).get("tasks", []) or []
 
         branch_decisions = []
-        priority_order = []
+        priority_order: list[str] = []
 
         for family in ["stable_candidate_validation", "graveyard_diagnosis", "recent_window_validation", "window_expansion", "exploration"]:
             progress = family_progress.get(family, {}) or {}
             next_level = progress.get("next_level")
             saturated = (saturation.get(family) or {}).get("saturated", False)
             fatigue_level = (fatigue.get(family) or {}).get("fatigue_level", "low")
+            recent_gain = family_recent_gain.get(family, 0)
 
             if saturated or next_level is None:
                 branch_decisions.append({
@@ -31,21 +33,19 @@ class ResearchBranchPlanner:
 
             if family in {"stable_candidate_validation", "graveyard_diagnosis"}:
                 decision = "advance"
-                reason = f"当前 family 已推进到 level {progress.get('current_level', 0)}，建议继续到 level {next_level}。"
-                priority_order.append(family)
+                reason = f"当前 family 已推进到 level {progress.get('current_level', 0)}，建议继续到 level {next_level}。最近增量 {recent_gain}。"
             elif family == "recent_window_validation":
                 decision = "advance"
-                reason = f"近期窗口验证仍有缺口，可继续补到 level {next_level}。"
-                priority_order.append(family)
+                reason = f"近期窗口验证仍有缺口，可继续补到 level {next_level}。最近增量 {recent_gain}。"
             elif family == "window_expansion":
                 decision = "advance"
-                reason = f"历史窗口仍未覆盖完，可继续补到 level {next_level}。"
-                priority_order.append(family)
+                reason = f"历史窗口仍未覆盖完，可继续补到 level {next_level}。最近增量 {recent_gain}。"
             else:
                 decision = "hold" if fatigue_level != "low" else "advance"
-                reason = "exploration 作为低优先级保留位，默认谨慎推进。"
-                if decision == "advance":
-                    priority_order.append(family)
+                reason = f"exploration 作为低优先级保留位，默认谨慎推进。最近增量 {recent_gain}。"
+
+            if decision == "advance":
+                priority_order.append(family)
 
             branch_decisions.append({
                 "family": family,
@@ -57,29 +57,23 @@ class ResearchBranchPlanner:
             })
 
         selected_tasks = []
-        selected_families = set()
         for family in priority_order:
             for task in candidate_tasks:
                 worker_note = task.get("worker_note", "")
                 if family == "stable_candidate_validation" and "稳定候选" in worker_note:
                     selected_tasks.append(task)
-                    selected_families.add(family)
                     break
                 if family == "graveyard_diagnosis" and "graveyard" in worker_note:
                     selected_tasks.append(task)
-                    selected_families.add(family)
                     break
                 if family == "recent_window_validation" and "近期" in worker_note:
                     selected_tasks.append(task)
-                    selected_families.add(family)
                     break
-                if family == "window_expansion" and "扩窗" in worker_note or "expanding" in worker_note:
+                if family == "window_expansion" and ("扩窗" in worker_note or "expanding" in worker_note):
                     selected_tasks.append(task)
-                    selected_families.add(family)
                     break
                 if family == "exploration" and "exploration" in worker_note:
                     selected_tasks.append(task)
-                    selected_families.add(family)
                     break
             if len(selected_tasks) >= 4:
                 break
@@ -88,7 +82,7 @@ class ResearchBranchPlanner:
             "summary": "优先继续推进 validation 与更宽窗口，exploration 保持保守。",
             "branch_decisions": branch_decisions,
             "selected_tasks": selected_tasks,
-            "selected_families": sorted(selected_families),
+            "selected_families": priority_order,
         }
 
 

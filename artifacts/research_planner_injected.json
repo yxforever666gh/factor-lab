@@ -1,15 +1,10 @@
 {
   "generated_from_validated": "/home/admin/.openclaw/workspace/artifacts/research_planner_validated.json",
-  "injected_count": 2,
+  "injected_count": 1,
   "injected_tasks": [
     {
-      "task_id": "f35d3b1c-c7fe-414e-a345-6ffa3f3e8175",
-      "fingerprint": "diagnostic::stable_candidate_validation_review_v7::{\"diagnostic_type\": \"stable_candidate_validation_review_v7\", \"focus_factors\": [\"mom_20\", \"mom_plus_value\", \"value_bp\", \"value_ep\"], \"knowledge_gain\": [\"stable_candidate_validation_v7_requested\"], \"reasons\": [\"stable_candidates_need_deeper_validation\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
-      "category": "validation"
-    },
-    {
-      "task_id": "7cc9ea6b-7950-4618-895a-5f183940f518",
-      "fingerprint": "diagnostic::graveyard_diagnosis_level_7::{\"diagnostic_type\": \"graveyard_diagnosis_level_7\", \"focus_factors\": [\"liquidity_turnover_shock\", \"size_small\"], \"knowledge_gain\": [\"graveyard_diagnosis_level_7_requested\"], \"reasons\": [\"recent_graveyard_needs_deeper_review\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
+      "task_id": "7acc9178-d768-4a75-940a-58f1be5814d4",
+      "fingerprint": "workflow::6e44ee482aa1a176491a1cec79723dfd90e7d9d49d277386dc9934a1b0f3198b::artifacts/generated_recent_180d",
       "category": "validation"
     }
   ]

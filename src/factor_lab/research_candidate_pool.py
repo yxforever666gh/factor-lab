@@ -16,11 +16,11 @@ from factor_lab.research_family_generators import (
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | Path) -> dict[str, Any]:
+def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | Path, branch_plan_path: str | Path | None = None) -> dict[str, Any]:
     snapshot = read_json(snapshot_path)
     registry_path = ROOT / 'artifacts' / 'research_space_registry.json'
     space_map_path = ROOT / 'artifacts' / 'research_space_map.json'
-    registry = read_json(registry_path) if registry_path.exists() else {}
+    branch_plan = read_json(branch_plan_path) if branch_plan_path and Path(branch_plan_path).exists() else {}
     space_map = read_json(space_map_path) if space_map_path.exists() else {}
 
     existing_fingerprints = {task.get('fingerprint') for task in snapshot.get('recent_research_tasks', [])}
@@ -34,21 +34,23 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
 
     base_config = read_json(ROOT / 'configs' / 'tushare_workflow.json')
     end_date = latest_run.get('end_date') or base_config['end_date']
+    family_progress = space_map.get('family_progress', {})
+    selected_families = set(branch_plan.get('selected_families', []))
+
     candidates: list[dict[str, Any]] = []
 
-    family_progress = space_map.get('family_progress', {})
     window_level = (family_progress.get('window_expansion') or {}).get('next_level')
     recent_level = (family_progress.get('recent_window_validation') or {}).get('next_level')
     stable_level = (family_progress.get('stable_candidate_validation') or {}).get('next_level')
     graveyard_level = (family_progress.get('graveyard_diagnosis') or {}).get('next_level')
 
-    if window_level:
+    if window_level and ('window_expansion' in selected_families or not selected_families):
         candidates.extend(build_window_task(window_level, latest_run, end_date, base_config, existing_fingerprints, generated_configs))
-    if recent_level:
+    if recent_level and ('recent_window_validation' in selected_families or not selected_families):
         candidates.extend(build_recent_validation_task(recent_level, latest_run, end_date, base_config, existing_fingerprints, generated_configs))
-    if stable_level:
+    if stable_level and ('stable_candidate_validation' in selected_families or not selected_families):
         candidates.extend(build_stable_candidate_task(stable_level, stable_candidates, existing_fingerprints))
-    if graveyard_level:
+    if graveyard_level and ('graveyard_diagnosis' in selected_families or not selected_families):
         candidates.extend(build_graveyard_task(graveyard_level, latest_graveyard, existing_fingerprints))
 
     if not exploration_state.get('should_throttle') and queue_budget.get('exploration', 0) < 1:
@@ -70,6 +72,7 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
         'generated_from_snapshot': str(Path(snapshot_path)),
         'generated_from_registry': str(registry_path),
         'generated_from_space_map': str(space_map_path),
+        'generated_from_branch_plan': str(branch_plan_path) if branch_plan_path else None,
         'summary': {
             'latest_run_config': latest_run.get('config_path'),
             'queue_budget': queue_budget,

@@ -32,6 +32,7 @@ def run_research_planner_pipeline() -> dict[str, Any]:
     snapshot = build_research_planner_snapshot(DB_PATH, snapshot_path)
     candidate_pool = build_research_candidate_pool(snapshot_path, candidate_pool_path)
     branch_plan = build_branch_planner_output(space_map_path, snapshot_path, candidate_pool_path, branch_plan_path)
+    candidate_pool = build_research_candidate_pool(snapshot_path, candidate_pool_path, branch_plan_path)
     proposal = build_research_plan(snapshot_path, candidate_pool_path, proposal_path, branch_plan_path)
     validated = validate_research_planner_proposal(proposal_path, validated_path)
     injected = inject_research_planner_tasks(validated_path, injected_path)

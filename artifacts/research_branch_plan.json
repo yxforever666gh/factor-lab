@@ -10,7 +10,7 @@
       "current_level": 6,
       "next_level": 7,
       "fatigue": "medium",
-      "reason": "当前 family 已推进到 level 6，建议继续到 level 7。"
+      "reason": "当前 family 已推进到 level 6，建议继续到 level 7。最近增量 5。"
     },
     {
       "family": "graveyard_diagnosis",
@@ -18,7 +18,7 @@
       "current_level": 6,
       "next_level": 7,
       "fatigue": "medium",
-      "reason": "当前 family 已推进到 level 6，建议继续到 level 7。"
+      "reason": "当前 family 已推进到 level 6，建议继续到 level 7。最近增量 10。"
     },
     {
       "family": "recent_window_validation",
@@ -26,7 +26,7 @@
       "current_level": 4,
       "next_level": 5,
       "fatigue": "low",
-      "reason": "近期窗口验证仍有缺口，可继续补到 level 5。"
+      "reason": "近期窗口验证仍有缺口，可继续补到 level 5。最近增量 0。"
     },
     {
       "family": "window_expansion",
@@ -34,7 +34,7 @@
       "current_level": 10,
       "next_level": 11,
       "fatigue": "medium",
-      "reason": "历史窗口仍未覆盖完，可继续补到 level 11。"
+      "reason": "历史窗口仍未覆盖完，可继续补到 level 11。最近增量 0。"
     },
     {
       "family": "exploration",
@@ -42,65 +42,31 @@
       "current_level": 1,
       "next_level": 2,
       "fatigue": "low",
-      "reason": "exploration 作为低优先级保留位，默认谨慎推进。"
+      "reason": "exploration 作为低优先级保留位，默认谨慎推进。最近增量 74。"
     }
   ],
   "selected_tasks": [
     {
-      "task_type": "diagnostic",
+      "task_type": "workflow",
       "category": "validation",
-      "priority_hint": 34,
-      "reason": "稳定候选当前已完成到第 6 层，建议进入第 7 层验证。",
+      "priority_hint": 28,
+      "reason": "当前已覆盖到 artifacts/generated_workflow_from_llm.json，建议继续拓宽近期窗口 2025-09-20 → 2026-03-18。",
       "expected_knowledge_gain": [
-        "stable_candidate_validation_v7_requested"
+        "window_stability_check"
       ],
       "payload": {
-        "diagnostic_type": "stable_candidate_validation_review_v7",
-        "focus_factors": [
-          "mom_20",
-          "mom_plus_value",
-          "value_bp",
-          "value_ep"
-        ],
-        "reasons": [
-          "stable_candidates_need_deeper_validation"
-        ],
-        "knowledge_gain": [
-          "stable_candidate_validation_v7_requested"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
+        "config_path": "artifacts/generated_configs/rolling_recent_180d.json",
+        "output_dir": "artifacts/generated_recent_180d"
       },
-      "fingerprint": "diagnostic::stable_candidate_validation_review_v7::{\"diagnostic_type\": \"stable_candidate_validation_review_v7\", \"focus_factors\": [\"mom_20\", \"mom_plus_value\", \"value_bp\", \"value_ep\"], \"knowledge_gain\": [\"stable_candidate_validation_v7_requested\"], \"reasons\": [\"stable_candidates_need_deeper_validation\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
-      "worker_note": "validation｜稳定候选深化验证 v7"
-    },
-    {
-      "task_type": "diagnostic",
-      "category": "validation",
-      "priority_hint": 36,
-      "reason": "graveyard 诊断当前已完成到第 6 层，建议进入第 7 层。",
-      "expected_knowledge_gain": [
-        "graveyard_diagnosis_level_7_requested"
-      ],
-      "payload": {
-        "diagnostic_type": "graveyard_diagnosis_level_7",
-        "focus_factors": [
-          "liquidity_turnover_shock",
-          "size_small"
-        ],
-        "reasons": [
-          "recent_graveyard_needs_deeper_review"
-        ],
-        "knowledge_gain": [
-          "graveyard_diagnosis_level_7_requested"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      },
-      "fingerprint": "diagnostic::graveyard_diagnosis_level_7::{\"diagnostic_type\": \"graveyard_diagnosis_level_7\", \"focus_factors\": [\"liquidity_turnover_shock\", \"size_small\"], \"knowledge_gain\": [\"graveyard_diagnosis_level_7_requested\"], \"reasons\": [\"recent_graveyard_needs_deeper_review\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
-      "worker_note": "validation｜graveyard level 7 诊断"
+      "fingerprint": "workflow::6e44ee482aa1a176491a1cec79723dfd90e7d9d49d277386dc9934a1b0f3198b::artifacts/generated_recent_180d",
+      "worker_note": "validation｜近期 180 天窗口验证"
     }
   ],
   "selected_families": [
+    "stable_candidate_validation",
     "graveyard_diagnosis",
-    "stable_candidate_validation"
+    "recent_window_validation",
+    "window_expansion",
+    "exploration"
   ]
 }
