@@ -1,175 +1,85 @@
 from __future__ import annotations
 
 import json
-from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from factor_lab.dedup import config_fingerprint
-
+from factor_lab.research_family_generators import (
+    read_json,
+    make_task,
+    build_window_task,
+    build_recent_validation_task,
+    build_stable_candidate_task,
+    build_graveyard_task,
+)
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def _read_json(path: str | Path) -> dict[str, Any]:
-    return json.loads(Path(path).read_text(encoding="utf-8"))
-
-
-def _write_generated_config(config: dict[str, Any], name: str) -> str:
-    out_dir = ROOT / "artifacts" / "generated_configs"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    path = out_dir / f"{name}.json"
-    path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
-    return str(path.relative_to(ROOT))
-
-
-def _make_task(task_type: str, category: str, priority_hint: int, reason: str, expected_knowledge_gain: list[str], payload: dict[str, Any], worker_note: str) -> dict[str, Any]:
-    if task_type == "workflow":
-        config = _read_json(ROOT / payload["config_path"])
-        fingerprint = f"workflow::{config_fingerprint(config)}::{payload['output_dir']}"
-    elif task_type == "generated_batch":
-        batch = _read_json(ROOT / payload["batch_path"])
-        fingerprint = f"generated_batch::{config_fingerprint(batch)}::{payload['output_dir']}"
-    elif task_type == "diagnostic":
-        fingerprint = f"diagnostic::{payload['diagnostic_type']}::{json.dumps(payload, ensure_ascii=False, sort_keys=True)}"
-    else:
-        fingerprint = f"{task_type}::{json.dumps(payload, ensure_ascii=False, sort_keys=True)}"
-    return {
-        "task_type": task_type,
-        "category": category,
-        "priority_hint": priority_hint,
-        "reason": reason,
-        "expected_knowledge_gain": expected_knowledge_gain,
-        "payload": payload,
-        "fingerprint": fingerprint,
-        "worker_note": worker_note,
-    }
-
-
 def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | Path) -> dict[str, Any]:
-    snapshot = _read_json(snapshot_path)
-    registry_path = ROOT / "artifacts" / "research_space_registry.json"
-    registry = _read_json(registry_path) if registry_path.exists() else {}
-    existing_fingerprints = {task.get("fingerprint") for task in snapshot.get("recent_research_tasks", [])}
-    latest_run = snapshot.get("latest_run") or {}
-    generated_configs = set(snapshot.get("generated_configs", []))
-    stable_candidates = [row["factor_name"] for row in snapshot.get("stable_candidates", [])[:5]]
-    latest_graveyard = snapshot.get("latest_graveyard", [])[:5]
-    queue_budget = snapshot.get("queue_budget", {})
-    exploration_state = snapshot.get("exploration_state", {})
-    failure_state = snapshot.get("failure_state", {})
-    windows_covered = registry.get("windows_covered", {}) or {}
-    validation_depth = registry.get("validation_depth", {}) or {}
-    graveyard_diagnostics = registry.get("graveyard_diagnostics", {}) or {}
+    snapshot = read_json(snapshot_path)
+    registry_path = ROOT / 'artifacts' / 'research_space_registry.json'
+    space_map_path = ROOT / 'artifacts' / 'research_space_map.json'
+    registry = read_json(registry_path) if registry_path.exists() else {}
+    space_map = read_json(space_map_path) if space_map_path.exists() else {}
 
-    base_config = _read_json(ROOT / "configs" / "tushare_workflow.json")
-    end_date = latest_run.get("end_date") or base_config["end_date"]
+    existing_fingerprints = {task.get('fingerprint') for task in snapshot.get('recent_research_tasks', [])}
+    latest_run = snapshot.get('latest_run') or {}
+    generated_configs = set(snapshot.get('generated_configs', []))
+    stable_candidates = [row['factor_name'] for row in snapshot.get('stable_candidates', [])[:5]]
+    latest_graveyard = snapshot.get('latest_graveyard', [])[:5]
+    queue_budget = snapshot.get('queue_budget', {})
+    exploration_state = snapshot.get('exploration_state', {})
+    failure_state = snapshot.get('failure_state', {})
+
+    base_config = read_json(ROOT / 'configs' / 'tushare_workflow.json')
+    end_date = latest_run.get('end_date') or base_config['end_date']
     candidates: list[dict[str, Any]] = []
 
-    window_specs = [
-        ("rolling_240d_back", "2025-05-01", "artifacts/generated_rolling_240d_back", 18, "baseline｜历史扩窗 240 天", "window_rolling_240d_back"),
-        ("rolling_300d_back", "2025-03-01", "artifacts/generated_rolling_300d_back", 19, "baseline｜历史扩窗 300 天", "window_rolling_300d_back"),
-        ("rolling_360d_back", "2025-01-01", "artifacts/generated_rolling_360d_back", 20, "baseline｜历史扩窗 360 天", "window_rolling_360d_back"),
-        ("rolling_recent_180d", "2025-09-20", "artifacts/generated_recent_180d", 24, "validation｜近期 180 天窗口验证", "window_recent_180d"),
-        ("rolling_recent_210d", "2025-08-20", "artifacts/generated_recent_210d", 25, "validation｜近期 210 天窗口验证", "window_recent_210d"),
-        ("expanding_from_2025_04_01", "2025-04-01", "artifacts/generated_expanding_2025_04_01", 17, "baseline｜expanding 窗口 2025-04-01 起", "window_expanding_2025_04_01"),
-        ("expanding_from_2025_01_01", "2025-01-01", "artifacts/generated_expanding_2025_01_01", 18, "baseline｜expanding 窗口 2025-01-01 起", "window_expanding_2025_01_01"),
-    ]
+    family_progress = space_map.get('family_progress', {})
+    window_level = (family_progress.get('window_expansion') or {}).get('next_level')
+    recent_level = (family_progress.get('recent_window_validation') or {}).get('next_level')
+    stable_level = (family_progress.get('stable_candidate_validation') or {}).get('next_level')
+    graveyard_level = (family_progress.get('graveyard_diagnosis') or {}).get('next_level')
 
-    for name, start_date, output_dir, priority, worker_note, window_key in window_specs:
-        if window_key in windows_covered or f"{name}.json" in generated_configs:
-            continue
-        config = deepcopy(base_config)
-        config["start_date"] = start_date
-        config["end_date"] = end_date
-        config["output_dir"] = output_dir
-        config_path = _write_generated_config(config, name)
-        task = _make_task(
-            task_type="workflow",
-            category="baseline" if "baseline" in worker_note else "validation",
-            priority_hint=priority,
-            reason=f"当前已覆盖到 {latest_run.get('config_path', 'base workflow')}，建议继续拓宽历史窗口 {start_date} → {end_date}。",
-            expected_knowledge_gain=["window_stability_check"],
-            payload={"config_path": config_path, "output_dir": output_dir},
-            worker_note=worker_note,
-        )
-        if task["fingerprint"] not in existing_fingerprints:
-            candidates.append(task)
+    if window_level:
+        candidates.extend(build_window_task(window_level, latest_run, end_date, base_config, existing_fingerprints, generated_configs))
+    if recent_level:
+        candidates.extend(build_recent_validation_task(recent_level, latest_run, end_date, base_config, existing_fingerprints, generated_configs))
+    if stable_level:
+        candidates.extend(build_stable_candidate_task(stable_level, stable_candidates, existing_fingerprints))
+    if graveyard_level:
+        candidates.extend(build_graveyard_task(graveyard_level, latest_graveyard, existing_fingerprints))
 
-    stable_key = ",".join(sorted(stable_candidates)) if stable_candidates else ""
-    stable_level = validation_depth.get(stable_key, 0)
-    if stable_candidates:
-        next_diag = None
-        if stable_level < 2:
-            next_diag = ("stable_candidate_validation_review", 28, "validation｜稳定候选深化验证", ["stable_candidate_validation_requested"], "稳定候选已形成，下一步应做更严格验证而不是只继续扩时间窗口。")
-        elif stable_level < 3:
-            next_diag = ("stable_candidate_validation_review_v2", 32, "validation｜稳定候选深化验证 v2", ["stable_candidate_validation_v2_requested"], "稳定候选第一层验证已完成，建议进入更严格的第二层稳定性验证。")
-        elif stable_level < 4:
-            next_diag = ("stable_candidate_validation_review_v3", 36, "validation｜稳定候选深化验证 v3", ["stable_candidate_validation_v3_requested"], "稳定候选第二层验证已完成，建议进入第三层更严格的鲁棒性验证。")
-        if next_diag:
-            diagnostic_type, priority_hint, worker_note, gain, reason = next_diag
-            payload = {
-                "diagnostic_type": diagnostic_type,
-                "focus_factors": stable_candidates,
-                "reasons": ["stable_candidates_need_deeper_validation"],
-                "knowledge_gain": gain,
-                "source_output_dir": "artifacts/tushare_batch",
-            }
-            task = _make_task("diagnostic", "validation", priority_hint, reason, gain, payload, worker_note)
-            if task["fingerprint"] not in existing_fingerprints:
-                candidates.append(task)
-
-    graveyard_key = ",".join(sorted(latest_graveyard)) if latest_graveyard else ""
-    graveyard_level = graveyard_diagnostics.get(graveyard_key, 0)
-    if latest_graveyard:
-        next_diag = None
-        if graveyard_level < 2:
-            next_diag = ("graveyard_window_sensitivity_review", 30, "validation｜graveyard 窗口敏感性诊断", ["graveyard_window_sensitivity_requested"], "当前 graveyard 因子需要进一步区分是窗口敏感、还是结构性失效。")
-        elif graveyard_level < 3:
-            next_diag = ("graveyard_raw_vs_neutral_review", 34, "validation｜graveyard raw-vs-neutral 诊断", ["graveyard_raw_vs_neutral_requested"], "graveyard 已完成基础诊断，下一步应区分 raw 表现与 neutralized 表现的落差。")
-        elif graveyard_level < 4:
-            next_diag = ("graveyard_construction_review", 38, "validation｜graveyard 构造诊断", ["graveyard_construction_requested"], "graveyard 已完成前两层诊断，下一步应检查因子构造本身是否导致失效。")
-        if next_diag:
-            diagnostic_type, priority_hint, worker_note, gain, reason = next_diag
-            payload = {
-                "diagnostic_type": diagnostic_type,
-                "focus_factors": latest_graveyard,
-                "reasons": ["recent_graveyard_needs_deeper_review"],
-                "knowledge_gain": gain,
-                "source_output_dir": "artifacts/tushare_batch",
-            }
-            task = _make_task("diagnostic", "validation", priority_hint, reason, gain, payload, worker_note)
-            if task["fingerprint"] not in existing_fingerprints:
-                candidates.append(task)
-
-    if not exploration_state.get("should_throttle") and queue_budget.get("exploration", 0) < 1:
-        generated_batch_path = ROOT / "artifacts" / "generated_batch_from_llm.json"
+    if not exploration_state.get('should_throttle') and queue_budget.get('exploration', 0) < 1:
+        generated_batch_path = ROOT / 'artifacts' / 'generated_batch_from_llm.json'
         if generated_batch_path.exists():
-            task = _make_task(
-                task_type="generated_batch",
-                category="exploration",
+            task = make_task(
+                task_type='generated_batch',
+                category='exploration',
                 priority_hint=55,
-                reason="当前 exploration 未被 throttle，可允许一个受控生成 batch 进入候选池。",
-                expected_knowledge_gain=["exploration_candidate_survived", "exploration_graveyard_identified"],
-                payload={"batch_path": str(generated_batch_path.relative_to(ROOT)), "output_dir": "artifacts/llm_generated_batch_run"},
-                worker_note="exploration｜执行 LLM 生成的 batch",
+                reason='当前 exploration 未被 throttle，可允许一个受控生成 batch 进入候选池。',
+                expected_knowledge_gain=['exploration_candidate_survived', 'exploration_graveyard_identified'],
+                payload={'batch_path': str(generated_batch_path.relative_to(ROOT)), 'output_dir': 'artifacts/llm_generated_batch_run'},
+                worker_note='exploration｜执行 LLM 生成的 batch',
             )
-            if task["fingerprint"] not in existing_fingerprints:
+            if task['fingerprint'] not in existing_fingerprints:
                 candidates.append(task)
 
     payload = {
-        "generated_from_snapshot": str(Path(snapshot_path)),
-        "generated_from_registry": str(registry_path),
-        "summary": {
-            "latest_run_config": latest_run.get("config_path"),
-            "queue_budget": queue_budget,
-            "failure_state": failure_state,
-            "exploration_state": exploration_state,
-            "stable_candidate_count": len(stable_candidates),
-            "graveyard_count": len(latest_graveyard),
-            "candidate_count": len(candidates),
+        'generated_from_snapshot': str(Path(snapshot_path)),
+        'generated_from_registry': str(registry_path),
+        'generated_from_space_map': str(space_map_path),
+        'summary': {
+            'latest_run_config': latest_run.get('config_path'),
+            'queue_budget': queue_budget,
+            'failure_state': failure_state,
+            'exploration_state': exploration_state,
+            'stable_candidate_count': len(stable_candidates),
+            'graveyard_count': len(latest_graveyard),
+            'candidate_count': len(candidates),
         },
-        "tasks": sorted(candidates, key=lambda item: (item["priority_hint"], item["category"])),
+        'tasks': sorted(candidates, key=lambda item: (item['priority_hint'], item['category'])),
     }
-    Path(output_path).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    Path(output_path).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
     return payload

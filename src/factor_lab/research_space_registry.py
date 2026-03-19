@@ -14,16 +14,21 @@ WINDOW_KEYWORDS = {
     "rolling_240d_back": "window_rolling_240d_back",
     "rolling_300d_back": "window_rolling_300d_back",
     "rolling_360d_back": "window_rolling_360d_back",
+    "rolling_420d_back": "window_rolling_420d_back",
     "rolling_recent_45d": "window_recent_45d",
     "rolling_recent_90d": "window_recent_90d",
     "rolling_recent_120d": "window_recent_120d",
     "rolling_recent_150d": "window_recent_150d",
     "rolling_recent_180d": "window_recent_180d",
     "rolling_recent_210d": "window_recent_210d",
+    "rolling_recent_240d": "window_recent_240d",
+    "rolling_recent_270d": "window_recent_270d",
     "expanding_from_2025_10_01": "window_expanding_2025_10_01",
     "expanding_from_2025_07_01": "window_expanding_2025_07_01",
     "expanding_from_2025_04_01": "window_expanding_2025_04_01",
     "expanding_from_2025_01_01": "window_expanding_2025_01_01",
+    "expanding_from_2024_10_01": "window_expanding_2024_10_01",
+    "expanding_from_2024_07_01": "window_expanding_2024_07_01",
 }
 
 DIAGNOSTIC_LEVELS = {
@@ -32,15 +37,14 @@ DIAGNOSTIC_LEVELS = {
     "graveyard_window_sensitivity_review": 2,
     "graveyard_raw_vs_neutral_review": 3,
     "graveyard_construction_review": 4,
+    "graveyard_cross_window_review": 5,
+    "graveyard_regime_shift_review": 6,
     "stable_candidate_validation_review": 2,
     "stable_candidate_validation_review_v2": 3,
     "stable_candidate_validation_review_v3": 4,
+    "stable_candidate_validation_review_v4": 5,
+    "stable_candidate_validation_review_v5": 6,
 }
-
-
-def _read_task_payload_json(row: tuple) -> dict[str, Any]:
-    payload_json = row[3]
-    return json.loads(payload_json) if payload_json else {}
 
 
 def build_research_space_registry(db_path: str | Path, output_path: str | Path) -> dict[str, Any]:
