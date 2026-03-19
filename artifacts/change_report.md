@@ -1,7 +1,7 @@
 # Change Detection
 
-Latest run: c265d051-fcf3-47ef-9b37-47c2d58c5273 | 2026-03-18T17:28:36.852563+00:00 | configs/tushare_workflow_longer.json
-Previous run: 7a958d8a-29e5-4db4-955c-328491ec0418 | 2026-03-18T17:28:32.751190+00:00 | configs/tushare_workflow.json
+Latest run: 6f038868-bc7f-41f1-863f-fa424c605759 | 2026-03-19T08:02:13.103631+00:00 | artifacts/generated_configs/expanding_from_2025_10_01.json
+Previous run: 8b136db8-c7a1-4016-aa78-e241f20ba5e3 | 2026-03-19T07:57:47.399998+00:00 | artifacts/generated_configs/rolling_recent_120d.json
 
 ## Candidate Pool Changes
 - Entered: none

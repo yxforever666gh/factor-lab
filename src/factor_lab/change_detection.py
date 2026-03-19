@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 import sqlite3
 
@@ -14,7 +13,7 @@ def build_change_report(db_path: str | Path, output_path: str | Path) -> None:
     ).fetchall()
 
     if len(runs) < 2:
-        Path(output_path).write_text("Not enough finished runs for change detection.", encoding="utf-8")
+        Path(output_path).write_text("暂无足够的已完成运行，暂时无法比较变化。", encoding="utf-8")
         return
 
     latest_run_id, latest_at, latest_config = runs[0]
@@ -37,18 +36,30 @@ def build_change_report(db_path: str | Path, output_path: str | Path) -> None:
     entered_graveyard = sorted(latest_graveyard - prev_graveyard)
     left_graveyard = sorted(prev_graveyard - latest_graveyard)
 
+    candidate_summary = []
+    if entered_candidates:
+        candidate_summary.append(f"新进入候选：{'、'.join(entered_candidates)}")
+    if left_candidates:
+        candidate_summary.append(f"退出候选：{'、'.join(left_candidates)}")
+    if not candidate_summary:
+        candidate_summary.append("候选池没有变化。")
+
+    graveyard_summary = []
+    if entered_graveyard:
+        graveyard_summary.append(f"新进入墓地：{'、'.join(entered_graveyard)}")
+    if left_graveyard:
+        graveyard_summary.append(f"离开墓地：{'、'.join(left_graveyard)}")
+    if not graveyard_summary:
+        graveyard_summary.append("墓地没有变化。")
+
     lines = [
-        "# Change Detection",
+        f"最新一次完成运行：{latest_config}（{latest_at}）。",
+        f"上一轮完成运行：{prev_config}（{prev_at}）。",
         "",
-        f"Latest run: {latest_run_id} | {latest_at} | {latest_config}",
-        f"Previous run: {prev_run_id} | {prev_at} | {prev_config}",
+        "候选池变化：",
+        *[f"- {item}" for item in candidate_summary],
         "",
-        "## Candidate Pool Changes",
-        f"- Entered: {', '.join(entered_candidates) if entered_candidates else 'none'}",
-        f"- Left: {', '.join(left_candidates) if left_candidates else 'none'}",
-        "",
-        "## Graveyard Changes",
-        f"- Entered: {', '.join(entered_graveyard) if entered_graveyard else 'none'}",
-        f"- Left: {', '.join(left_graveyard) if left_graveyard else 'none'}",
+        "墓地变化：",
+        *[f"- {item}" for item in graveyard_summary],
     ]
     Path(output_path).write_text("\n".join(lines), encoding="utf-8")
