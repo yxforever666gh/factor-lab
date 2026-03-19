@@ -223,8 +223,10 @@ def compute_health_metrics() -> dict[str, Any]:
         base = DB_PATH.parent
         llm_status_path = base / 'llm_status.json'
         snapshot_path = base / 'llm_input_snapshot.json'
+        daemon_status_path = base / 'research_daemon_status.json'
         llm_status = json.loads(llm_status_path.read_text(encoding='utf-8')) if llm_status_path.exists() else {}
         snapshot = json.loads(snapshot_path.read_text(encoding='utf-8')) if snapshot_path.exists() else {}
+        daemon_status = json.loads(daemon_status_path.read_text(encoding='utf-8')) if daemon_status_path.exists() else {}
         paper_stability = snapshot.get('paper_portfolio_stability', {}) or {}
         recommendation_history_tail = snapshot.get('recommendation_history_tail', []) or []
         positive_count = len([row for row in recommendation_history_tail if row.get('effectiveness') == 'positive'])
