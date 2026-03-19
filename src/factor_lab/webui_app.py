@@ -22,6 +22,33 @@ def pretty_json_text(value: Any, empty_text: str = "暂无数据。") -> str:
     return json.dumps(value, ensure_ascii=False, indent=2)
 
 
+def format_bj_time(value: str | None) -> str:
+    if not value:
+        return "-"
+    try:
+        dt = datetime.fromisoformat(value)
+        if dt.tzinfo is None:
+            return value
+        bj = dt.astimezone(ZoneInfo("Asia/Shanghai"))
+        return bj.strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return value
+
+
+def localize_times(value: Any) -> Any:
+    if isinstance(value, list):
+        return [localize_times(v) for v in value]
+    if isinstance(value, dict):
+        out = {}
+        for k, v in value.items():
+            if isinstance(v, str) and (k.endswith("_utc") or k.endswith("_at_utc") or k in {"created_at_utc", "started_at_utc", "finished_at_utc", "updated_at_utc", "recorded_at_utc"}):
+                out[k] = format_bj_time(v)
+            else:
+                out[k] = localize_times(v)
+        return out
+    return value
+
+
 def portfolio_positions(current: dict[str, Any]) -> list[dict[str, Any]]:
     positions = current.get("positions") or []
     return sorted(positions, key=lambda row: row.get("weight", 0), reverse=True)
@@ -392,7 +419,7 @@ app = FastAPI(title="Factor Lab 中文控制台")
 
 def render(template_name: str, **context) -> HTMLResponse:
     template = env.get_template(template_name)
-    return HTMLResponse(template.render(**context))
+    return HTMLResponse(template.render(**localize_times(context)))
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -424,7 +451,7 @@ def dashboard():
     stable_names = [row['factor_name'] for row in stable_candidates[:4]]
     latest_summary_lines = []
     if latest_run:
-        latest_summary_lines.append(f"最新一次任务：{latest_run['config_path']}（{latest_run['created_at_utc']}）。")
+        latest_summary_lines.append(f"最新一次任务：{latest_run['config_path']}（{format_bj_time(latest_run['created_at_utc'])}）。")
     if top_strategies:
         latest_summary_lines.append(
             f"当前长期平均表现最好的策略是 {top_strategies[0]['strategy_name']}，平均夏普 {top_strategies[0]['avg_sharpe']}。"
@@ -439,8 +466,8 @@ def dashboard():
 
     change_lines = []
     if latest_run and previous_finished:
-        change_lines.append(f"最新完成运行：{latest_run['config_path']}（{latest_run['created_at_utc']}）。")
-        change_lines.append(f"上一轮完成运行：{previous_finished['config_path']}（{previous_finished['created_at_utc']}）。")
+        change_lines.append(f"最新完成运行：{latest_run['config_path']}（{format_bj_time(latest_run['created_at_utc'])}）。")
+        change_lines.append(f"上一轮完成运行：{previous_finished['config_path']}（{format_bj_time(previous_finished['created_at_utc'])}）。")
     if planner_active:
         change_lines.append('当前活跃研究任务：')
         change_lines.extend([f"- {t.get('worker_note') or t['task_type']}" for t in planner_active])
