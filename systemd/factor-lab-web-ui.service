@@ -1,0 +1,15 @@
+[Unit]
+Description=Factor Lab Web UI
+After=default.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/admin/.openclaw/workspace
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/home/admin/.openclaw/workspace/.env
+ExecStart=/usr/bin/python3 /home/admin/.openclaw/workspace/scripts/run_web_ui.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target
