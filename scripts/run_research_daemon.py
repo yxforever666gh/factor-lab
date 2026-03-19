@@ -59,8 +59,16 @@ if __name__ == "__main__":
                 write_status("running", processed_count=len(processed), last_processed=processed[0])
                 time.sleep(2)
             else:
-                write_status("idle", processed_count=0)
-                time.sleep(idle_sleep_seconds)
+                # If the planner just injected tasks, consume them immediately instead of waiting for the next full idle cycle.
+                planner_injected = 0
+                remaining_preview = result.get("remaining_preview") or []
+                pending_after = [row for row in remaining_preview if row.get("status") == "pending"]
+                if pending_after:
+                    write_status("running", processed_count=0, planner_pending=len(pending_after))
+                    time.sleep(2)
+                else:
+                    write_status("idle", processed_count=0)
+                    time.sleep(idle_sleep_seconds)
         except Exception as exc:
             append_heartbeat("research_daemon", "failed", message=str(exc))
             write_status("failed", error=str(exc))
