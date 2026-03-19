@@ -84,8 +84,6 @@ def build_recent_validation_task(level: int, latest_run: dict[str, Any], end_dat
     if not spec:
         return candidates
     name, start_date, output_dir, worker_note = spec
-    if f'{name}.json' in generated_configs:
-        return candidates
     config = deepcopy(base_config)
     config['start_date'] = start_date
     config['end_date'] = end_date
