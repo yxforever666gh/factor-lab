@@ -1,0 +1,26 @@
+{
+  "generated_from_validated": "artifacts/research_planner_validated.json",
+  "injected_count": 4,
+  "injected_tasks": [
+    {
+      "task_id": "a750d58c-fb5d-4f7a-bd3b-fb97f5a83234",
+      "fingerprint": "workflow::544b761880bc09e6e5fbb1670fa5be2555443531f8591a1bf5ca79bb23a7e1f2::artifacts/generated_recent_150d",
+      "category": "validation"
+    },
+    {
+      "task_id": "0f48953f-105e-41b4-9c17-784b983be6d1",
+      "fingerprint": "diagnostic::stable_candidate_validation_review::{\"diagnostic_type\": \"stable_candidate_validation_review\", \"focus_factors\": [\"mom_20\", \"mom_plus_value\", \"value_bp\", \"value_ep\"], \"knowledge_gain\": [\"stable_candidate_validation_requested\"], \"reasons\": [\"stable_candidates_need_deeper_validation\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
+      "category": "validation"
+    },
+    {
+      "task_id": "48e2dc16-2097-4c3e-b37c-cc0eddcd11d5",
+      "fingerprint": "workflow::73c37c1ef74b59916e4d130cd1d1319ac924555fff93976a8cc1d9186d4a9654::artifacts/generated_expanding_2025_07_01",
+      "category": "baseline"
+    },
+    {
+      "task_id": "85645d80-eb9b-40d2-a8a6-6acb3e5729ce",
+      "fingerprint": "workflow::892bdc674f4d9de683da6ff465abce4b870d2dc0ebba35ebd335784d38ed0646::artifacts/generated_rolling_180d_back",
+      "category": "baseline"
+    }
+  ]
+}
