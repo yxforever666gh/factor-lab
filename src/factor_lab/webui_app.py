@@ -410,10 +410,43 @@ def dashboard():
     top_strategies = fetch_all(
         "SELECT strategy_name, ROUND(avg_sharpe, 6) AS avg_sharpe, ROUND(avg_return, 6) AS avg_return, runs FROM v_portfolio_strategy_avg ORDER BY avg_sharpe DESC LIMIT 8"
     )
-    latest_summary_path = DB_PATH.parent / "latest_summary.txt"
-    change_report_path = DB_PATH.parent / "change_report.md"
-    latest_summary = latest_summary_path.read_text(encoding="utf-8") if latest_summary_path.exists() else "暂无摘要。"
-    change_report = change_report_path.read_text(encoding="utf-8") if change_report_path.exists() else "暂无变化报告。"
+    latest_run = fetch_one(
+        "SELECT run_id, created_at_utc, config_path, status FROM workflow_runs ORDER BY created_at_utc DESC LIMIT 1"
+    )
+    previous_finished = fetch_one(
+        "SELECT run_id, created_at_utc, config_path FROM workflow_runs WHERE status='finished' ORDER BY created_at_utc DESC LIMIT 1 OFFSET 1"
+    )
+    planner_tasks = ExperimentStore(DB_PATH).list_research_tasks(limit=20)
+    planner_active = [
+        t for t in planner_tasks
+        if t['status'] in {'pending', 'running'} and 'planner_selected' in (t.get('worker_note') or '')
+    ][:6]
+    stable_names = [row['factor_name'] for row in stable_candidates[:4]]
+    latest_summary_lines = []
+    if latest_run:
+        latest_summary_lines.append(f"最新一次任务：{latest_run['config_path']}（{latest_run['created_at_utc']}）。")
+    if top_strategies:
+        latest_summary_lines.append(
+            f"当前长期平均表现最好的策略是 {top_strategies[0]['strategy_name']}，平均夏普 {top_strategies[0]['avg_sharpe']}。"
+        )
+    if stable_names:
+        latest_summary_lines.append(f"目前最稳定的候选因子：{'、'.join(stable_names)}。")
+    if planner_active:
+        latest_summary_lines.append(
+            f"当前队列里有 {len(planner_active)} 个由 planner 选出的任务正在等待或执行。"
+        )
+    latest_summary = '\n'.join(latest_summary_lines) if latest_summary_lines else '暂无摘要。'
+
+    change_lines = []
+    if latest_run and previous_finished:
+        change_lines.append(f"最新完成运行：{latest_run['config_path']}（{latest_run['created_at_utc']}）。")
+        change_lines.append(f"上一轮完成运行：{previous_finished['config_path']}（{previous_finished['created_at_utc']}）。")
+    if planner_active:
+        change_lines.append('当前活跃研究任务：')
+        change_lines.extend([f"- {t.get('worker_note') or t['task_type']}" for t in planner_active])
+    else:
+        change_lines.append('当前没有活跃的 planner 任务。')
+    change_report = '\n'.join(change_lines)
     return render(
         "dashboard.html",
         title="总览",
@@ -424,6 +457,7 @@ def dashboard():
         top_strategies=top_strategies,
         latest_summary=latest_summary,
         change_report=change_report,
+        planner_active=planner_active,
     )
 
 
