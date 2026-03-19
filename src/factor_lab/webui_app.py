@@ -487,6 +487,8 @@ def dashboard():
         latest_summary=latest_summary,
         change_report=change_report,
         planner_active=planner_active,
+        planner_validated=planner_validated,
+        planner_injected=planner_injected,
     )
 
 
@@ -775,6 +777,11 @@ def ops_run(target: str):
     }
     if target not in mapping:
         raise HTTPException(status_code=404, detail="未知操作目标")
+    result = trigger_script(mapping[target])
+    tasks = latest_task_states(limit=20)
+    research_tasks = ExperimentStore(DB_PATH).list_research_tasks(limit=20)
+    return render("ops.html", title="操作", tasks=tasks, research_tasks=research_tasks, result=result)
+HTTPException(status_code=404, detail="未知操作目标")
     result = trigger_script(mapping[target])
     tasks = latest_task_states(limit=20)
     research_tasks = ExperimentStore(DB_PATH).list_research_tasks(limit=20)
