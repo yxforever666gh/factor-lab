@@ -6,12 +6,13 @@ from typing import Any
 
 
 class ResearchPlannerAgent:
-    def rank_tasks(self, snapshot: dict[str, Any], candidate_pool: dict[str, Any]) -> dict[str, Any]:
+    def rank_tasks(self, snapshot: dict[str, Any], candidate_pool: dict[str, Any], branch_plan: dict[str, Any] | None = None) -> dict[str, Any]:
         tasks = list(candidate_pool.get("tasks", []))
         queue_budget = (snapshot.get("queue_budget") or {})
         exploration_state = (snapshot.get("exploration_state") or {})
         failure_state = (snapshot.get("failure_state") or {})
         knowledge_gain_counter = snapshot.get("knowledge_gain_counter") or {}
+        selected_families = set((branch_plan or {}).get("selected_families", []))
 
         ranked = []
         for task in tasks:
@@ -19,6 +20,7 @@ class ResearchPlannerAgent:
             reason_bits = [task.get("reason", "")]
             category = task.get("category")
             expected = set(task.get("expected_knowledge_gain", []))
+            worker_note = task.get("worker_note", "")
 
             if category == "validation":
                 score += 12
@@ -34,9 +36,20 @@ class ResearchPlannerAgent:
                     score += 4
                     reason_bits.append("exploration 当前未被 throttle。")
 
-            if "stable_candidate_validation_requested" in expected:
+            if "稳定候选" in worker_note and "stable_candidate_validation" in selected_families:
+                score += 20
+                reason_bits.append("branch planner 已明确优先稳定候选验证主线。")
+            if "graveyard" in worker_note and "graveyard_diagnosis" in selected_families:
+                score += 20
+                reason_bits.append("branch planner 已明确优先 graveyard 诊断主线。")
+            if "近期" in worker_note and "recent_window_validation" in selected_families:
                 score += 10
-            if "graveyard_window_sensitivity_requested" in expected:
+            if ("扩窗" in worker_note or "expanding" in worker_note) and "window_expansion" in selected_families:
+                score += 10
+
+            if "stable_candidate_validation_requested" in expected or any(x.startswith("stable_candidate_validation_v") for x in expected):
+                score += 10
+            if any(x.startswith("graveyard_") for x in expected):
                 score += 9
             if "window_stability_check" in expected:
                 score += 6
@@ -87,14 +100,16 @@ class ResearchPlannerAgent:
         }
 
 
-def build_research_plan(snapshot_path: str | Path, candidate_pool_path: str | Path, output_path: str | Path) -> dict[str, Any]:
+def build_research_plan(snapshot_path: str | Path, candidate_pool_path: str | Path, output_path: str | Path, branch_plan_path: str | Path | None = None) -> dict[str, Any]:
     snapshot = json.loads(Path(snapshot_path).read_text(encoding="utf-8"))
     candidate_pool = json.loads(Path(candidate_pool_path).read_text(encoding="utf-8"))
+    branch_plan = json.loads(Path(branch_plan_path).read_text(encoding="utf-8")) if branch_plan_path and Path(branch_plan_path).exists() else None
     planner = ResearchPlannerAgent()
-    result = planner.rank_tasks(snapshot, candidate_pool)
+    result = planner.rank_tasks(snapshot, candidate_pool, branch_plan)
     payload = {
         "generated_from_snapshot": str(snapshot_path),
         "generated_from_candidate_pool": str(candidate_pool_path),
+        "generated_from_branch_plan": str(branch_plan_path) if branch_plan_path else None,
         **result,
     }
     Path(output_path).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

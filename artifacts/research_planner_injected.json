@@ -1,26 +1,16 @@
 {
-  "generated_from_validated": "artifacts/research_planner_validated.json",
-  "injected_count": 4,
+  "generated_from_validated": "/home/admin/.openclaw/workspace/artifacts/research_planner_validated.json",
+  "injected_count": 2,
   "injected_tasks": [
     {
-      "task_id": "a750d58c-fb5d-4f7a-bd3b-fb97f5a83234",
-      "fingerprint": "workflow::544b761880bc09e6e5fbb1670fa5be2555443531f8591a1bf5ca79bb23a7e1f2::artifacts/generated_recent_150d",
+      "task_id": "f35d3b1c-c7fe-414e-a345-6ffa3f3e8175",
+      "fingerprint": "diagnostic::stable_candidate_validation_review_v7::{\"diagnostic_type\": \"stable_candidate_validation_review_v7\", \"focus_factors\": [\"mom_20\", \"mom_plus_value\", \"value_bp\", \"value_ep\"], \"knowledge_gain\": [\"stable_candidate_validation_v7_requested\"], \"reasons\": [\"stable_candidates_need_deeper_validation\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
       "category": "validation"
     },
     {
-      "task_id": "0f48953f-105e-41b4-9c17-784b983be6d1",
-      "fingerprint": "diagnostic::stable_candidate_validation_review::{\"diagnostic_type\": \"stable_candidate_validation_review\", \"focus_factors\": [\"mom_20\", \"mom_plus_value\", \"value_bp\", \"value_ep\"], \"knowledge_gain\": [\"stable_candidate_validation_requested\"], \"reasons\": [\"stable_candidates_need_deeper_validation\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
+      "task_id": "7cc9ea6b-7950-4618-895a-5f183940f518",
+      "fingerprint": "diagnostic::graveyard_diagnosis_level_7::{\"diagnostic_type\": \"graveyard_diagnosis_level_7\", \"focus_factors\": [\"liquidity_turnover_shock\", \"size_small\"], \"knowledge_gain\": [\"graveyard_diagnosis_level_7_requested\"], \"reasons\": [\"recent_graveyard_needs_deeper_review\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
       "category": "validation"
-    },
-    {
-      "task_id": "48e2dc16-2097-4c3e-b37c-cc0eddcd11d5",
-      "fingerprint": "workflow::73c37c1ef74b59916e4d130cd1d1319ac924555fff93976a8cc1d9186d4a9654::artifacts/generated_expanding_2025_07_01",
-      "category": "baseline"
-    },
-    {
-      "task_id": "85645d80-eb9b-40d2-a8a6-6acb3e5729ce",
-      "fingerprint": "workflow::892bdc674f4d9de683da6ff465abce4b870d2dc0ebba35ebd335784d38ed0646::artifacts/generated_rolling_180d_back",
-      "category": "baseline"
     }
   ]
 }

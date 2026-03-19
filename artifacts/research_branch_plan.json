@@ -1,15 +1,51 @@
 {
-  "generated_from_proposal": "/home/admin/.openclaw/workspace/artifacts/research_planner_proposal.json",
-  "summary": {
-    "accepted_count": 2,
-    "rejected_count": 0,
-    "category_counts": {
-      "baseline": 0,
-      "validation": 2,
-      "exploration": 0
+  "generated_from_space_map": "/home/admin/.openclaw/workspace/artifacts/research_space_map.json",
+  "generated_from_snapshot": "/home/admin/.openclaw/workspace/artifacts/research_planner_snapshot.json",
+  "generated_from_candidate_pool": "/home/admin/.openclaw/workspace/artifacts/research_candidate_pool.json",
+  "summary": "优先继续推进 validation 与更宽窗口，exploration 保持保守。",
+  "branch_decisions": [
+    {
+      "family": "stable_candidate_validation",
+      "decision": "advance",
+      "current_level": 6,
+      "next_level": 7,
+      "fatigue": "medium",
+      "reason": "当前 family 已推进到 level 6，建议继续到 level 7。"
+    },
+    {
+      "family": "graveyard_diagnosis",
+      "decision": "advance",
+      "current_level": 6,
+      "next_level": 7,
+      "fatigue": "medium",
+      "reason": "当前 family 已推进到 level 6，建议继续到 level 7。"
+    },
+    {
+      "family": "recent_window_validation",
+      "decision": "advance",
+      "current_level": 4,
+      "next_level": 5,
+      "fatigue": "low",
+      "reason": "近期窗口验证仍有缺口，可继续补到 level 5。"
+    },
+    {
+      "family": "window_expansion",
+      "decision": "advance",
+      "current_level": 10,
+      "next_level": 11,
+      "fatigue": "medium",
+      "reason": "历史窗口仍未覆盖完，可继续补到 level 11。"
+    },
+    {
+      "family": "exploration",
+      "decision": "advance",
+      "current_level": 1,
+      "next_level": 2,
+      "fatigue": "low",
+      "reason": "exploration 作为低优先级保留位，默认谨慎推进。"
     }
-  },
-  "accepted_tasks": [
+  ],
+  "selected_tasks": [
     {
       "task_type": "diagnostic",
       "category": "validation",
@@ -35,9 +71,7 @@
         "source_output_dir": "artifacts/tushare_batch"
       },
       "fingerprint": "diagnostic::stable_candidate_validation_review_v7::{\"diagnostic_type\": \"stable_candidate_validation_review_v7\", \"focus_factors\": [\"mom_20\", \"mom_plus_value\", \"value_bp\", \"value_ep\"], \"knowledge_gain\": [\"stable_candidate_validation_v7_requested\"], \"reasons\": [\"stable_candidates_need_deeper_validation\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
-      "worker_note": "validation｜稳定候选深化验证 v7",
-      "planner_score": 117,
-      "planner_reason": "稳定候选当前已完成到第 6 层，建议进入第 7 层验证。 当前优先补验证深度，避免只拓宽时间窗口。 branch planner 已明确优先稳定候选验证主线。"
+      "worker_note": "validation｜稳定候选深化验证 v7"
     },
     {
       "task_type": "diagnostic",
@@ -62,10 +96,11 @@
         "source_output_dir": "artifacts/tushare_batch"
       },
       "fingerprint": "diagnostic::graveyard_diagnosis_level_7::{\"diagnostic_type\": \"graveyard_diagnosis_level_7\", \"focus_factors\": [\"liquidity_turnover_shock\", \"size_small\"], \"knowledge_gain\": [\"graveyard_diagnosis_level_7_requested\"], \"reasons\": [\"recent_graveyard_needs_deeper_review\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
-      "worker_note": "validation｜graveyard level 7 诊断",
-      "planner_score": 114,
-      "planner_reason": "graveyard 诊断当前已完成到第 6 层，建议进入第 7 层。 当前优先补验证深度，避免只拓宽时间窗口。 branch planner 已明确优先 graveyard 诊断主线。"
+      "worker_note": "validation｜graveyard level 7 诊断"
     }
   ],
-  "rejected_tasks": []
+  "selected_families": [
+    "graveyard_diagnosis",
+    "stable_candidate_validation"
+  ]
 }
