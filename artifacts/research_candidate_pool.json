@@ -1,5 +1,6 @@
 {
-  "generated_from_snapshot": "/home/admin/.openclaw/workspace/artifacts/research_planner_snapshot.json",
+  "generated_from_snapshot": "artifacts/research_planner_snapshot.json",
+  "generated_from_registry": "/home/admin/.openclaw/workspace/artifacts/research_space_registry.json",
   "summary": {
     "latest_run_config": "artifacts/generated_configs/expanding_from_2025_10_01.json",
     "queue_budget": {
@@ -20,7 +21,63 @@
     },
     "stable_candidate_count": 4,
     "graveyard_count": 5,
-    "candidate_count": 0
+    "candidate_count": 2
   },
-  "tasks": []
+  "tasks": [
+    {
+      "task_type": "diagnostic",
+      "category": "validation",
+      "priority_hint": 32,
+      "reason": "稳定候选第一层验证已完成，建议进入更严格的第二层稳定性验证。",
+      "expected_knowledge_gain": [
+        "stable_candidate_validation_v2_requested"
+      ],
+      "payload": {
+        "diagnostic_type": "stable_candidate_validation_review_v2",
+        "focus_factors": [
+          "mom_20",
+          "mom_plus_value",
+          "value_bp",
+          "value_ep"
+        ],
+        "reasons": [
+          "stable_candidates_need_deeper_validation"
+        ],
+        "knowledge_gain": [
+          "stable_candidate_validation_v2_requested"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      },
+      "fingerprint": "diagnostic::stable_candidate_validation_review_v2::{\"diagnostic_type\": \"stable_candidate_validation_review_v2\", \"focus_factors\": [\"mom_20\", \"mom_plus_value\", \"value_bp\", \"value_ep\"], \"knowledge_gain\": [\"stable_candidate_validation_v2_requested\"], \"reasons\": [\"stable_candidates_need_deeper_validation\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
+      "worker_note": "validation｜稳定候选深化验证 v2"
+    },
+    {
+      "task_type": "diagnostic",
+      "category": "validation",
+      "priority_hint": 34,
+      "reason": "graveyard 已完成基础诊断，下一步应区分 raw 表现与 neutralized 表现的落差。",
+      "expected_knowledge_gain": [
+        "graveyard_raw_vs_neutral_requested"
+      ],
+      "payload": {
+        "diagnostic_type": "graveyard_raw_vs_neutral_review",
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small",
+          "value_bp"
+        ],
+        "reasons": [
+          "recent_graveyard_needs_deeper_review"
+        ],
+        "knowledge_gain": [
+          "graveyard_raw_vs_neutral_requested"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      },
+      "fingerprint": "diagnostic::graveyard_raw_vs_neutral_review::{\"diagnostic_type\": \"graveyard_raw_vs_neutral_review\", \"focus_factors\": [\"liquidity_turnover_shock\", \"mom_20\", \"mom_plus_value\", \"size_small\", \"value_bp\"], \"knowledge_gain\": [\"graveyard_raw_vs_neutral_requested\"], \"reasons\": [\"recent_graveyard_needs_deeper_review\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
+      "worker_note": "validation｜graveyard raw-vs-neutral 诊断"
+    }
+  ]
 }

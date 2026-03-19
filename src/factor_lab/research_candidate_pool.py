@@ -94,45 +94,87 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
         if task["fingerprint"] not in existing_fingerprints:
             candidates.append(task)
 
-    if stable_candidates and not any(level >= 2 for level in validation_depth.values()):
-        payload = {
-            "diagnostic_type": "stable_candidate_validation_review",
-            "focus_factors": stable_candidates,
-            "reasons": ["stable_candidates_need_deeper_validation"],
-            "knowledge_gain": ["stable_candidate_validation_requested"],
-            "source_output_dir": "artifacts/tushare_batch",
-        }
-        task = _make_task(
-            task_type="diagnostic",
-            category="validation",
-            priority_hint=28,
-            reason="稳定候选已形成，下一步应做更严格验证而不是只继续扩时间窗口。",
-            expected_knowledge_gain=["stable_candidate_validation_requested"],
-            payload=payload,
-            worker_note="validation｜稳定候选深化验证",
-        )
-        if task["fingerprint"] not in existing_fingerprints:
-            candidates.append(task)
+    stable_key = ",".join(sorted(stable_candidates)) if stable_candidates else ""
+    stable_level = validation_depth.get(stable_key, 0)
+    if stable_candidates:
+        next_diag = None
+        if stable_level < 2:
+            next_diag = (
+                "stable_candidate_validation_review",
+                28,
+                "validation｜稳定候选深化验证",
+                ["stable_candidate_validation_requested"],
+                "稳定候选已形成，下一步应做更严格验证而不是只继续扩时间窗口。",
+            )
+        elif stable_level < 3:
+            next_diag = (
+                "stable_candidate_validation_review_v2",
+                32,
+                "validation｜稳定候选深化验证 v2",
+                ["stable_candidate_validation_v2_requested"],
+                "稳定候选第一层验证已完成，建议进入更严格的第二层稳定性验证。",
+            )
+        if next_diag:
+            diagnostic_type, priority_hint, worker_note, gain, reason = next_diag
+            payload = {
+                "diagnostic_type": diagnostic_type,
+                "focus_factors": stable_candidates,
+                "reasons": ["stable_candidates_need_deeper_validation"],
+                "knowledge_gain": gain,
+                "source_output_dir": "artifacts/tushare_batch",
+            }
+            task = _make_task(
+                task_type="diagnostic",
+                category="validation",
+                priority_hint=priority_hint,
+                reason=reason,
+                expected_knowledge_gain=gain,
+                payload=payload,
+                worker_note=worker_note,
+            )
+            if task["fingerprint"] not in existing_fingerprints:
+                candidates.append(task)
 
-    if latest_graveyard and not any(level >= 2 for level in graveyard_diagnostics.values()):
-        payload = {
-            "diagnostic_type": "graveyard_window_sensitivity_review",
-            "focus_factors": latest_graveyard,
-            "reasons": ["recent_graveyard_needs_window_sensitivity_review"],
-            "knowledge_gain": ["graveyard_window_sensitivity_requested"],
-            "source_output_dir": "artifacts/tushare_batch",
-        }
-        task = _make_task(
-            task_type="diagnostic",
-            category="validation",
-            priority_hint=30,
-            reason="当前 graveyard 因子需要进一步区分是窗口敏感、还是结构性失效。",
-            expected_knowledge_gain=["graveyard_window_sensitivity_requested"],
-            payload=payload,
-            worker_note="validation｜graveyard 窗口敏感性诊断",
-        )
-        if task["fingerprint"] not in existing_fingerprints:
-            candidates.append(task)
+    graveyard_key = ",".join(sorted(latest_graveyard)) if latest_graveyard else ""
+    graveyard_level = graveyard_diagnostics.get(graveyard_key, 0)
+    if latest_graveyard:
+        next_diag = None
+        if graveyard_level < 2:
+            next_diag = (
+                "graveyard_window_sensitivity_review",
+                30,
+                "validation｜graveyard 窗口敏感性诊断",
+                ["graveyard_window_sensitivity_requested"],
+                "当前 graveyard 因子需要进一步区分是窗口敏感、还是结构性失效。",
+            )
+        elif graveyard_level < 3:
+            next_diag = (
+                "graveyard_raw_vs_neutral_review",
+                34,
+                "validation｜graveyard raw-vs-neutral 诊断",
+                ["graveyard_raw_vs_neutral_requested"],
+                "graveyard 已完成基础诊断，下一步应区分 raw 表现与 neutralized 表现的落差。",
+            )
+        if next_diag:
+            diagnostic_type, priority_hint, worker_note, gain, reason = next_diag
+            payload = {
+                "diagnostic_type": diagnostic_type,
+                "focus_factors": latest_graveyard,
+                "reasons": ["recent_graveyard_needs_deeper_review"],
+                "knowledge_gain": gain,
+                "source_output_dir": "artifacts/tushare_batch",
+            }
+            task = _make_task(
+                task_type="diagnostic",
+                category="validation",
+                priority_hint=priority_hint,
+                reason=reason,
+                expected_knowledge_gain=gain,
+                payload=payload,
+                worker_note=worker_note,
+            )
+            if task["fingerprint"] not in existing_fingerprints:
+                candidates.append(task)
 
     if not exploration_state.get("should_throttle") and queue_budget.get("exploration", 0) < 1:
         generated_batch_path = ROOT / "artifacts" / "generated_batch_from_llm.json"
