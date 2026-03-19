@@ -18,23 +18,20 @@
       "current_level": 6,
       "next_level": 7,
       "fatigue": "medium",
-      "reason": "当前 family 已推进到 level 6，建议继续到 level 7。最近增量 10。"
+      "reason": "当前 family 已推进到 level 6，建议继续到 level 7。最近增量 14。"
     },
     {
       "family": "recent_window_validation",
       "decision": "advance",
-      "current_level": 4,
-      "next_level": 5,
-      "fatigue": "low",
-      "reason": "近期窗口验证仍有缺口，可继续补到 level 5。最近增量 0。"
+      "current_level": 8,
+      "next_level": 9,
+      "fatigue": "medium",
+      "reason": "近期窗口验证仍有缺口，可继续补到 level 9。最近增量 0。"
     },
     {
       "family": "window_expansion",
-      "decision": "advance",
-      "current_level": 10,
-      "next_level": 11,
-      "fatigue": "medium",
-      "reason": "历史窗口仍未覆盖完，可继续补到 level 11。最近增量 0。"
+      "decision": "pause",
+      "reason": "当前 family 已无下一层或已饱和。"
     },
     {
       "family": "exploration",
@@ -42,31 +39,14 @@
       "current_level": 1,
       "next_level": 2,
       "fatigue": "low",
-      "reason": "exploration 作为低优先级保留位，默认谨慎推进。最近增量 74。"
+      "reason": "exploration 作为低优先级保留位，默认谨慎推进。最近增量 78。"
     }
   ],
-  "selected_tasks": [
-    {
-      "task_type": "workflow",
-      "category": "validation",
-      "priority_hint": 28,
-      "reason": "当前已覆盖到 artifacts/generated_workflow_from_llm.json，建议继续拓宽近期窗口 2025-09-20 → 2026-03-18。",
-      "expected_knowledge_gain": [
-        "window_stability_check"
-      ],
-      "payload": {
-        "config_path": "artifacts/generated_configs/rolling_recent_180d.json",
-        "output_dir": "artifacts/generated_recent_180d"
-      },
-      "fingerprint": "workflow::6e44ee482aa1a176491a1cec79723dfd90e7d9d49d277386dc9934a1b0f3198b::artifacts/generated_recent_180d",
-      "worker_note": "validation｜近期 180 天窗口验证"
-    }
-  ],
+  "selected_tasks": [],
   "selected_families": [
     "stable_candidate_validation",
     "graveyard_diagnosis",
     "recent_window_validation",
-    "window_expansion",
     "exploration"
   ]
 }

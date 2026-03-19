@@ -1,11 +1,5 @@
 {
   "generated_from_validated": "/home/admin/.openclaw/workspace/artifacts/research_planner_validated.json",
-  "injected_count": 1,
-  "injected_tasks": [
-    {
-      "task_id": "7acc9178-d768-4a75-940a-58f1be5814d4",
-      "fingerprint": "workflow::6e44ee482aa1a176491a1cec79723dfd90e7d9d49d277386dc9934a1b0f3198b::artifacts/generated_recent_180d",
-      "category": "validation"
-    }
-  ]
+  "injected_count": 0,
+  "injected_tasks": []
 }

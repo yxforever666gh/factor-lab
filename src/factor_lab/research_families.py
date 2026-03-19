@@ -75,6 +75,18 @@ def stable_candidate_task_name(level: int) -> str:
     return f"stable_candidate_validation_review_v{level}"
 
 
+def stable_candidate_gain_name(level: int) -> str:
+    if level <= 1:
+        return "stable_candidate_validation_requested"
+    return f"stable_candidate_validation_v{level}_requested"
+
+
+def stable_candidate_worker_note(level: int) -> str:
+    if level <= 1:
+        return "validation｜稳定候选深化验证"
+    return f"validation｜稳定候选深化验证 v{level}"
+
+
 def graveyard_task_name(level: int) -> str:
     mapping = {
         1: "batch_consistency_review",
@@ -85,3 +97,27 @@ def graveyard_task_name(level: int) -> str:
         6: "graveyard_regime_shift_review",
     }
     return mapping.get(level, f"graveyard_diagnosis_level_{level}")
+
+
+def graveyard_gain_name(level: int) -> str:
+    mapping = {
+        1: "graveyard_batch_consistency_requested",
+        2: "graveyard_window_sensitivity_requested",
+        3: "graveyard_raw_vs_neutral_requested",
+        4: "graveyard_construction_requested",
+        5: "graveyard_cross_window_requested",
+        6: "graveyard_regime_shift_requested",
+    }
+    return mapping.get(level, f"graveyard_diagnosis_level_{level}_requested")
+
+
+def graveyard_worker_note(level: int) -> str:
+    mapping = {
+        1: "validation｜graveyard 一致性诊断",
+        2: "validation｜graveyard 窗口敏感性诊断",
+        3: "validation｜graveyard raw-vs-neutral 诊断",
+        4: "validation｜graveyard 构造诊断",
+        5: "validation｜graveyard 跨窗口对照诊断",
+        6: "validation｜graveyard 风格/阶段切换诊断",
+    }
+    return mapping.get(level, f"validation｜graveyard level {level} 诊断")

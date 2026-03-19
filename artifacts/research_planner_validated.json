@@ -1,32 +1,14 @@
 {
   "generated_from_proposal": "/home/admin/.openclaw/workspace/artifacts/research_planner_proposal.json",
   "summary": {
-    "accepted_count": 1,
+    "accepted_count": 0,
     "rejected_count": 0,
     "category_counts": {
       "baseline": 0,
-      "validation": 1,
+      "validation": 0,
       "exploration": 0
     }
   },
-  "accepted_tasks": [
-    {
-      "task_type": "workflow",
-      "category": "validation",
-      "priority_hint": 28,
-      "reason": "当前已覆盖到 artifacts/generated_workflow_from_llm.json，建议继续拓宽近期窗口 2025-09-20 → 2026-03-18。",
-      "expected_knowledge_gain": [
-        "window_stability_check"
-      ],
-      "payload": {
-        "config_path": "artifacts/generated_configs/rolling_recent_180d.json",
-        "output_dir": "artifacts/generated_recent_180d"
-      },
-      "fingerprint": "workflow::6e44ee482aa1a176491a1cec79723dfd90e7d9d49d277386dc9934a1b0f3198b::artifacts/generated_recent_180d",
-      "worker_note": "validation｜近期 180 天窗口验证",
-      "planner_score": 109,
-      "planner_reason": "当前已覆盖到 artifacts/generated_workflow_from_llm.json，建议继续拓宽近期窗口 2025-09-20 → 2026-03-18。 当前优先补验证深度，避免只拓宽时间窗口。"
-    }
-  ],
+  "accepted_tasks": [],
   "rejected_tasks": []
 }

@@ -7,6 +7,10 @@
         "window_expanding_2025_10_01",
         "window_recent_120d",
         "window_recent_150d",
+        "window_recent_180d",
+        "window_recent_210d",
+        "window_recent_240d",
+        "window_recent_270d",
         "window_recent_45d",
         "window_recent_90d",
         "window_rolling_120d_back",
@@ -14,18 +18,22 @@
         "window_rolling_30d_back",
         "window_rolling_60d_back"
       ],
-      "current_level": 10,
-      "next_level": 11
+      "current_level": 14,
+      "next_level": null
     },
     "recent_window_validation": {
       "covered_recent_windows": [
         "window_recent_120d",
         "window_recent_150d",
+        "window_recent_180d",
+        "window_recent_210d",
+        "window_recent_240d",
+        "window_recent_270d",
         "window_recent_45d",
         "window_recent_90d"
       ],
-      "current_level": 4,
-      "next_level": 5
+      "current_level": 8,
+      "next_level": 9
     },
     "stable_candidate_validation": {
       "tracked_keys": {
@@ -36,10 +44,10 @@
     },
     "graveyard_diagnosis": {
       "tracked_keys": {
-        "liquidity_turnover_shock,size_small,value_bp,value_ep": 2,
+        "liquidity_turnover_shock,size_small,value_bp,value_ep": 6,
         "consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep,stable_candidates:mom_20, mom_plus_value": 1,
-        "liquidity_turnover_shock,size_small": 6,
-        "liquidity_turnover_shock,mom_20,mom_plus_value,size_small,value_bp": 6
+        "liquidity_turnover_shock,mom_20,mom_plus_value,size_small,value_bp": 6,
+        "liquidity_turnover_shock,size_small": 6
       },
       "current_level": 6,
       "next_level": 7
@@ -59,15 +67,15 @@
   },
   "family_recent_gain": {
     "stable_candidate_validation": 5,
-    "graveyard_diagnosis": 10,
-    "exploration": 74
+    "graveyard_diagnosis": 14,
+    "exploration": 78
   },
   "family_fatigue": {
     "window_expansion": {
-      "fatigue_level": "medium"
+      "fatigue_level": "high"
     },
     "recent_window_validation": {
-      "fatigue_level": "low"
+      "fatigue_level": "medium"
     },
     "stable_candidate_validation": {
       "fatigue_level": "medium"
@@ -81,12 +89,12 @@
   },
   "family_saturation": {
     "window_expansion": {
-      "saturated": false,
-      "remaining_levels": 2
+      "saturated": true,
+      "remaining_levels": 0
     },
     "recent_window_validation": {
       "saturated": false,
-      "remaining_levels": 8
+      "remaining_levels": 4
     },
     "stable_candidate_validation": {
       "saturated": false,
@@ -103,11 +111,11 @@
   },
   "coverage_gaps": {
     "window_expansion": {
-      "next_level": 11,
-      "needs_expansion": true
+      "next_level": null,
+      "needs_expansion": false
     },
     "recent_window_validation": {
-      "next_level": 5,
+      "next_level": 9,
       "needs_expansion": true
     },
     "stable_candidate_validation": {
@@ -124,15 +132,17 @@
     }
   },
   "knowledge_gain_counter": {
-    "neutralization_diagnosis_requested": 35,
-    "stable_candidate_confirmed": 38,
-    "repeated_graveyard_confirmed": 38,
-    "exploration_candidate_survived": 37,
-    "exploration_graveyard_identified": 37,
-    "graveyard_regime_shift_requested": 2,
-    "graveyard_cross_window_requested": 2,
-    "graveyard_construction_requested": 2,
-    "graveyard_raw_vs_neutral_requested": 2,
+    "neutralization_diagnosis_requested": 37,
+    "stable_candidate_confirmed": 40,
+    "repeated_graveyard_confirmed": 40,
+    "exploration_candidate_survived": 39,
+    "exploration_graveyard_identified": 39,
+    "graveyard_diagnosis_level_7_requested": 3,
+    "graveyard_regime_shift_requested": 3,
+    "graveyard_cross_window_requested": 3,
+    "graveyard_construction_requested": 3,
+    "graveyard_raw_vs_neutral_requested": 3,
+    "stable_candidate_validation_v7_requested": 1,
     "graveyard_window_sensitivity_requested": 2,
     "stable_candidate_validation_v5_requested": 1,
     "stable_candidate_validation_v4_requested": 1,
