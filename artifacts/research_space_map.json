@@ -1,0 +1,143 @@
+{
+  "registry_path": "artifacts/research_space_registry.json",
+  "family_progress": {
+    "window_expansion": {
+      "covered_windows": [
+        "window_expanding_2025_07_01",
+        "window_expanding_2025_10_01",
+        "window_recent_120d",
+        "window_recent_150d",
+        "window_recent_45d",
+        "window_recent_90d",
+        "window_rolling_120d_back",
+        "window_rolling_180d_back",
+        "window_rolling_30d_back",
+        "window_rolling_60d_back"
+      ],
+      "current_level": 10,
+      "next_level": 11
+    },
+    "recent_window_validation": {
+      "covered_recent_windows": [
+        "window_recent_120d",
+        "window_recent_150d",
+        "window_recent_45d",
+        "window_recent_90d"
+      ],
+      "current_level": 4,
+      "next_level": 5
+    },
+    "stable_candidate_validation": {
+      "tracked_keys": {
+        "mom_20,mom_plus_value,value_bp,value_ep": 6
+      },
+      "current_level": 6,
+      "next_level": 7
+    },
+    "graveyard_diagnosis": {
+      "tracked_keys": {
+        "liquidity_turnover_shock,size_small,value_bp,value_ep": 2,
+        "consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep,stable_candidates:mom_20, mom_plus_value": 1,
+        "liquidity_turnover_shock,size_small": 6,
+        "liquidity_turnover_shock,mom_20,mom_plus_value,size_small,value_bp": 6
+      },
+      "current_level": 6,
+      "next_level": 7
+    },
+    "exploration": {
+      "tracked_lines": {
+        "artifacts/generated_batch_from_llm.json": {
+          "task_id": "e598609f-1773-47af-8f50-fe2fe9abfba8",
+          "status": "finished",
+          "finished_at_utc": "2026-03-18T21:34:21.439760+00:00",
+          "worker_note": "generated batch finished: artifacts/generated_batch_from_llm.json | knowledge_gain=exploration_candidate_survived,exploration_graveyard_identified"
+        }
+      },
+      "current_level": 1,
+      "next_level": 2
+    }
+  },
+  "family_recent_gain": {
+    "stable_candidate_validation": 5,
+    "graveyard_diagnosis": 10,
+    "exploration": 74
+  },
+  "family_fatigue": {
+    "window_expansion": {
+      "fatigue_level": "medium"
+    },
+    "recent_window_validation": {
+      "fatigue_level": "low"
+    },
+    "stable_candidate_validation": {
+      "fatigue_level": "medium"
+    },
+    "graveyard_diagnosis": {
+      "fatigue_level": "medium"
+    },
+    "exploration": {
+      "fatigue_level": "low"
+    }
+  },
+  "family_saturation": {
+    "window_expansion": {
+      "saturated": false,
+      "remaining_levels": 2
+    },
+    "recent_window_validation": {
+      "saturated": false,
+      "remaining_levels": 8
+    },
+    "stable_candidate_validation": {
+      "saturated": false,
+      "remaining_levels": 2
+    },
+    "graveyard_diagnosis": {
+      "saturated": false,
+      "remaining_levels": 2
+    },
+    "exploration": {
+      "saturated": false,
+      "remaining_levels": 3
+    }
+  },
+  "coverage_gaps": {
+    "window_expansion": {
+      "next_level": 11,
+      "needs_expansion": true
+    },
+    "recent_window_validation": {
+      "next_level": 5,
+      "needs_expansion": true
+    },
+    "stable_candidate_validation": {
+      "next_level": 7,
+      "needs_expansion": true
+    },
+    "graveyard_diagnosis": {
+      "next_level": 7,
+      "needs_expansion": true
+    },
+    "exploration": {
+      "next_level": 2,
+      "needs_expansion": true
+    }
+  },
+  "knowledge_gain_counter": {
+    "neutralization_diagnosis_requested": 35,
+    "stable_candidate_confirmed": 38,
+    "repeated_graveyard_confirmed": 38,
+    "exploration_candidate_survived": 37,
+    "exploration_graveyard_identified": 37,
+    "graveyard_regime_shift_requested": 2,
+    "graveyard_cross_window_requested": 2,
+    "graveyard_construction_requested": 2,
+    "graveyard_raw_vs_neutral_requested": 2,
+    "graveyard_window_sensitivity_requested": 2,
+    "stable_candidate_validation_v5_requested": 1,
+    "stable_candidate_validation_v4_requested": 1,
+    "stable_candidate_validation_v3_requested": 1,
+    "stable_candidate_validation_v2_requested": 1,
+    "stable_candidate_validation_requested": 1
+  }
+}
