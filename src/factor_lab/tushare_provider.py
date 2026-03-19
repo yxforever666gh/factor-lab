@@ -104,10 +104,22 @@ class TushareDataProvider:
         cache_dir.mkdir(parents=True, exist_ok=True)
         cache_key = f"tushare_{request.start_date}_{request.end_date}_{request.universe_limit}.csv"
         cache_path = cache_dir / cache_key
+        master_path = master_cache_path(MasterCacheSpec(
+            universe_limit=request.universe_limit,
+            start_date=request.start_date,
+            end_date=request.end_date,
+            cache_dir=request.cache_dir,
+        ))
 
         if cache_path.exists():
             frame = pd.read_csv(cache_path)
             frame["date"] = pd.to_datetime(frame["date"])
+            return SampleDataset(frame=frame)
+
+        covering_master = find_covering_master_cache(request.cache_dir, request.universe_limit, request.start_date, request.end_date)
+        if covering_master is not None:
+            frame = slice_master_cache(covering_master, request.start_date, request.end_date)
+            frame.to_csv(cache_path, index=False)
             return SampleDataset(frame=frame)
 
         covering_cache = self._find_covering_cache(cache_dir, request)
