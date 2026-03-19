@@ -450,6 +450,10 @@ def dashboard():
         t for t in planner_tasks
         if t['status'] in {'pending', 'running'} and 'planner_selected' in (t.get('worker_note') or '')
     ][:6]
+    planner_validated_path = DB_PATH.parent / 'research_planner_validated.json'
+    planner_injected_path = DB_PATH.parent / 'research_planner_injected.json'
+    planner_validated = json.loads(planner_validated_path.read_text(encoding='utf-8')) if planner_validated_path.exists() else {}
+    planner_injected = json.loads(planner_injected_path.read_text(encoding='utf-8')) if planner_injected_path.exists() else {}
     stable_names = [row['factor_name'] for row in stable_candidates[:4]]
     latest_summary_lines = []
     if latest_run:
@@ -777,11 +781,6 @@ def ops_run(target: str):
     }
     if target not in mapping:
         raise HTTPException(status_code=404, detail="未知操作目标")
-    result = trigger_script(mapping[target])
-    tasks = latest_task_states(limit=20)
-    research_tasks = ExperimentStore(DB_PATH).list_research_tasks(limit=20)
-    return render("ops.html", title="操作", tasks=tasks, research_tasks=research_tasks, result=result)
-HTTPException(status_code=404, detail="未知操作目标")
     result = trigger_script(mapping[target])
     tasks = latest_task_states(limit=20)
     research_tasks = ExperimentStore(DB_PATH).list_research_tasks(limit=20)
