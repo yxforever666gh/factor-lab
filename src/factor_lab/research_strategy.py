@@ -509,6 +509,103 @@ def build_strategy_plan(
     return payload
 
 
+def update_research_memory_from_task_result(
+    memory_path: str | Path,
+    task: dict[str, Any],
+    *,
+    status: str,
+    summary: str | None = None,
+    error_text: str | None = None,
+) -> dict[str, Any]:
+    memory = load_or_initialize_research_memory(memory_path)
+    memory["updated_at_utc"] = _iso_now()
+    payload = task.get("payload") or {}
+    strategy = payload.get("strategy") or {}
+    branch_id = payload.get("branch_id") or strategy.get("branch_id") or task.get("fingerprint") or task.get("task_id")
+    focus_candidates = payload.get("focus_factors") or strategy.get("focus_candidates") or []
+    if isinstance(focus_candidates, str):
+        focus_candidates = [focus_candidates]
+    knowledge_gain = [g for g in (payload.get("knowledge_gain") or payload.get("expected_information_gain") or []) if g]
+    summary_text = (summary or "") + " " + (error_text or "")
+    has_gain = any(g and g != "no_significant_information_gain" for g in knowledge_gain) or ("knowledge_gain=" in summary_text and "no_significant_information_gain" not in summary_text)
+    branch_lifecycle = dict(memory.get("branch_lifecycle") or {})
+    branch_state = dict(branch_lifecycle.get(branch_id, {}))
+    branch_state.setdefault("history", [])
+    branch_state["updated_at_utc"] = _iso_now()
+    branch_state["last_task_type"] = task.get("task_type")
+    branch_state["last_status"] = status
+    branch_state["goal"] = payload.get("goal") or strategy.get("goal")
+    branch_state["hypothesis"] = payload.get("hypothesis") or strategy.get("hypothesis")
+    branch_state["validation_runs"] = int(branch_state.get("validation_runs") or 0) + (1 if task.get("task_type") == "diagnostic" or (payload.get("goal") or "").startswith("validate") else 0)
+    if status != "finished":
+        branch_state["no_gain_runs"] = int(branch_state.get("no_gain_runs") or 0) + 1
+        branch_state["state"] = branch_state.get("state") or "failed"
+        branch_state["last_action"] = "demote"
+        branch_state["history"].append({"updated_at_utc": _iso_now(), "state": branch_state.get("state"), "last_action": "demote", "reason": "task_failed"})
+    else:
+        if has_gain:
+            branch_state["no_gain_runs"] = 0
+            if payload.get("promote_if"):
+                branch_state["last_action"] = "promote"
+                branch_state["state"] = branch_state.get("state") or "validating"
+            else:
+                branch_state["last_action"] = "hold"
+                branch_state["state"] = branch_state.get("state") or "exploring"
+            branch_state["history"].append({"updated_at_utc": _iso_now(), "state": branch_state.get("state"), "last_action": branch_state.get("last_action"), "reason": "knowledge_gain_detected"})
+        else:
+            branch_state["no_gain_runs"] = int(branch_state.get("no_gain_runs") or 0) + 1
+            branch_state["last_action"] = "hold"
+            branch_state["state"] = branch_state.get("state") or "saturated"
+            branch_state["history"].append({"updated_at_utc": _iso_now(), "state": branch_state.get("state"), "last_action": "hold", "reason": "no_significant_information_gain"})
+    branch_state["history"] = branch_state["history"][-20:]
+    branch_lifecycle[branch_id] = branch_state
+    memory["branch_lifecycle"] = branch_lifecycle
+
+    candidate_lifecycle = dict(memory.get("candidate_lifecycle") or {})
+    stable_candidates = set(memory.get("stable_candidates") or [])
+    for name in focus_candidates:
+        current = dict(candidate_lifecycle.get(name, {}))
+        current.setdefault("history", [])
+        if status != "finished":
+            next_state = "provisional"
+            action = "demote"
+        elif has_gain and name in stable_candidates:
+            next_state = "stable_candidate"
+            action = "promote"
+        elif has_gain:
+            next_state = "validating"
+            action = "hold"
+        else:
+            next_state = "provisional"
+            action = "demote"
+        current.update({
+            "candidate_name": name,
+            "next_state": next_state,
+            "action": action,
+            "source_branch_id": branch_id,
+            "updated_at_utc": _iso_now(),
+        })
+        current["history"].append({"updated_at_utc": _iso_now(), "next_state": next_state, "action": action, "source_branch_id": branch_id})
+        current["history"] = current["history"][-20:]
+        candidate_lifecycle[name] = current
+    memory["candidate_lifecycle"] = candidate_lifecycle
+
+    convergence_policy = memory.get("convergence_policy") or {}
+    archive_after_no_gain = int(convergence_policy.get("archive_after_no_gain_runs") or 2)
+    if int(branch_state.get("no_gain_runs") or 0) >= archive_after_no_gain:
+        branch_state["state"] = "archived"
+        branch_state["last_action"] = "archive"
+        archived = list(memory.get("archived_branches") or [])
+        if branch_id not in archived:
+            archived.append(branch_id)
+        memory["archived_branches"] = archived[-100:]
+        branch_lifecycle[branch_id] = branch_state
+        memory["branch_lifecycle"] = branch_lifecycle
+
+    _write_json(Path(memory_path), memory)
+    return memory
+
+
 def apply_strategy_plan(
     validated_path: str | Path,
     strategy_plan_path: str | Path,

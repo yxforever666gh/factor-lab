@@ -20,6 +20,7 @@ from factor_lab.candidate_graph import build_graph_artifacts
 from factor_lab.research_expansion import maybe_expand_research_space
 from factor_lab.research_planner_pipeline import run_research_planner_pipeline
 from factor_lab.research_runtime_state import queue_budget_snapshot, recent_failure_stats, exploration_health, parse_iso_utc, recently_finished_same_fingerprint
+from factor_lab.research_strategy import update_research_memory_from_task_result
 from datetime import datetime, timezone, timedelta
 
 
@@ -467,6 +468,12 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
             followups = enqueue_followup_tasks(store, task)
             note = summary + (f" | followups={len(followups)}" if followups else "")
             store.finish_research_task(task["task_id"], status="finished", worker_note=note)
+            update_research_memory_from_task_result(
+                "artifacts/research_memory.json",
+                task,
+                status="finished",
+                summary=note,
+            )
             processed.append({"task_id": task["task_id"], "status": "finished", "summary": summary, "followup_task_ids": followups})
             append_heartbeat("research_orchestrator", "finished", summary=note, task_id=task["task_id"], task_type=task["task_type"])
         except Exception as exc:
@@ -483,6 +490,12 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
                     worker_note=f"retry｜自动重试 {task['task_type']}",
                 )
             store.finish_research_task(task["task_id"], status="failed", last_error=error_text)
+            update_research_memory_from_task_result(
+                "artifacts/research_memory.json",
+                task,
+                status="failed",
+                error_text=error_text,
+            )
             processed.append({"task_id": task["task_id"], "status": "failed", "error": error_text, "retry_task_id": retry_task_id})
             append_heartbeat("research_orchestrator", "failed", message=error_text, task_id=task["task_id"], task_type=task["task_type"], retry_task_id=retry_task_id)
 
