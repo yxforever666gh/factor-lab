@@ -137,6 +137,7 @@ def build_research_planner_snapshot(db_path: str | Path, output_path: str | Path
         analyst_signals = load_analyst_signals(root)
         analyst_feedback_context = build_analyst_feedback_context(root)
         main_task_generation = _read_json(root / "main_task_generation_state.json", {})
+        main_task_learning = _read_json(root / "main_task_learning.json", {})
 
         knowledge_gain_counter = {
             "stable_candidate_confirmed": 0,
@@ -185,6 +186,7 @@ def build_research_planner_snapshot(db_path: str | Path, output_path: str | Path
             "analyst_signals": analyst_signals,
             "analyst_feedback_context": analyst_feedback_context,
             "main_task_generation": main_task_generation,
+            "main_task_learning": main_task_learning,
             "recent_research_tasks": [
                 {
                     **{k: v for k, v in task.items() if k != "payload_json"},

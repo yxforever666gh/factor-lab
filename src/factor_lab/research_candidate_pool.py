@@ -12,6 +12,7 @@ from factor_lab.research_family_generators import (
     build_stable_candidate_task,
     build_graveyard_task,
 )
+from factor_lab.main_task_learning import build_main_task_learning
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -174,6 +175,8 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
     family_recommendations = {row.get('family'): row for row in snapshot.get('family_recommendations', []) if row.get('family')}
     trial_summary = snapshot.get('research_trial_summary', {}) or {}
     analyst_signals = snapshot.get('analyst_signals') or {}
+    main_task_learning = build_main_task_learning(strategy_memory_path)
+    learning_families = main_task_learning.get('families') or {}
 
     stable_candidates, representative_notes = _prefer_representatives(raw_stable_candidates, candidate_context_by_name, cluster_rep_map)
     analyst_focus = set(analyst_signals.get('focus_factors') or [])
@@ -193,6 +196,25 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
     def append_task(task: dict[str, Any], suppression_reason: str | None = None) -> None:
         signature = _dedupe_signature(task)
         branch_id = task.get('branch_id') or (task.get('payload') or {}).get('branch_id')
+        family_key = _task_family_key(task)
+        learning = learning_families.get(family_key) or {}
+        if learning.get('cooldown_active'):
+            suppressed_tasks.append({
+                'fingerprint': task.get('fingerprint'),
+                'signature': signature,
+                'worker_note': task.get('worker_note'),
+                'reason': 'family_learning_cooldown',
+                'branch_id': branch_id,
+                'family_key': family_key,
+                'learning': learning,
+            })
+            return
+        if learning.get('recommended_action') == 'upweight':
+            task['priority_hint'] = max(1, int(task.get('priority_hint', 50)) - 4)
+            task['reason'] += f" main-task learning: {family_key} 最近有效，优先级上调。"
+        elif learning.get('recommended_action') == 'downweight':
+            task['priority_hint'] = int(task.get('priority_hint', 50)) + 5
+            task['reason'] += f" main-task learning: {family_key} 最近无增益偏多，优先级下调。"
         if branch_id and branch_id in archived_branches:
             suppressed_tasks.append({
                 'fingerprint': task.get('fingerprint'),
@@ -382,6 +404,7 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
             'candidate_count': len(candidates),
             'suppressed_candidate_count': len(suppressed_tasks),
             'relationship_summary': relationship_summary,
+            'main_task_learning': main_task_learning,
         },
         'representative_selection': representative_notes,
         'suppressed_tasks': suppressed_tasks,
