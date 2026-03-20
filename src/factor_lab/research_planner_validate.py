@@ -22,11 +22,14 @@ def validate_research_planner_proposal(proposal_path: str | Path, output_path: s
     accepted = []
     rejected = []
 
+    required_payload_fields = {"goal", "hypothesis", "expected_information_gain", "branch_id", "stop_if", "promote_if", "disconfirm_if"}
+
     for task in selected_tasks:
         category = task.get("category", "validation")
         fingerprint = task.get("fingerprint")
         reason = []
         ok = True
+        payload = task.get("payload") or {}
 
         if category in counts and counts[category] >= category_limits.get(category, 99):
             ok = False
@@ -39,6 +42,11 @@ def validate_research_planner_proposal(proposal_path: str | Path, output_path: s
         if fingerprint and any(item.get("fingerprint") == fingerprint for item in accepted):
             ok = False
             reason.append("duplicate_within_plan")
+
+        missing_fields = sorted(field for field in required_payload_fields if field not in payload)
+        if missing_fields:
+            ok = False
+            reason.append(f"missing_hypothesis_fields:{','.join(missing_fields)}")
 
         if ok:
             accepted.append(task)

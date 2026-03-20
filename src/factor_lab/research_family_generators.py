@@ -44,25 +44,54 @@ def write_generated_config(config: dict[str, Any], name: str) -> str:
     return str(path.relative_to(ROOT))
 
 
-def make_task(task_type: str, category: str, priority_hint: int, reason: str, expected_knowledge_gain: list[str], payload: dict[str, Any], worker_note: str) -> dict[str, Any]:
+def make_task(
+    task_type: str,
+    category: str,
+    priority_hint: int,
+    reason: str,
+    expected_knowledge_gain: list[str],
+    payload: dict[str, Any],
+    worker_note: str,
+    *,
+    goal: str | None = None,
+    hypothesis: str | None = None,
+    branch_id: str | None = None,
+    stop_if: list[str] | None = None,
+    promote_if: list[str] | None = None,
+    disconfirm_if: list[str] | None = None,
+) -> dict[str, Any]:
     import json
+    enriched_payload = dict(payload)
+    enriched_payload.setdefault('goal', goal or category)
+    enriched_payload.setdefault('hypothesis', hypothesis or reason)
+    enriched_payload.setdefault('expected_information_gain', expected_knowledge_gain)
+    enriched_payload.setdefault('branch_id', branch_id or worker_note)
+    enriched_payload.setdefault('stop_if', stop_if or [])
+    enriched_payload.setdefault('promote_if', promote_if or [])
+    enriched_payload.setdefault('disconfirm_if', disconfirm_if or [])
     if task_type == 'workflow':
-        config = read_json(ROOT / payload['config_path'])
-        fingerprint = f"workflow::{config_fingerprint(config)}::{payload['output_dir']}"
+        config = read_json(ROOT / enriched_payload['config_path'])
+        fingerprint = f"workflow::{config_fingerprint(config)}::{enriched_payload['output_dir']}"
     elif task_type == 'generated_batch':
-        batch = read_json(ROOT / payload['batch_path'])
-        fingerprint = f"generated_batch::{config_fingerprint(batch)}::{payload['output_dir']}"
+        batch = read_json(ROOT / enriched_payload['batch_path'])
+        fingerprint = f"generated_batch::{config_fingerprint(batch)}::{enriched_payload['output_dir']}"
     elif task_type == 'diagnostic':
-        fingerprint = f"diagnostic::{payload['diagnostic_type']}::{json.dumps(payload, ensure_ascii=False, sort_keys=True)}"
+        fingerprint = f"diagnostic::{enriched_payload['diagnostic_type']}::{json.dumps(enriched_payload, ensure_ascii=False, sort_keys=True)}"
     else:
-        fingerprint = f"{task_type}::{json.dumps(payload, ensure_ascii=False, sort_keys=True)}"
+        fingerprint = f"{task_type}::{json.dumps(enriched_payload, ensure_ascii=False, sort_keys=True)}"
     return {
         'task_type': task_type,
         'category': category,
         'priority_hint': priority_hint,
         'reason': reason,
+        'goal': enriched_payload['goal'],
+        'hypothesis': enriched_payload['hypothesis'],
+        'branch_id': enriched_payload['branch_id'],
         'expected_knowledge_gain': expected_knowledge_gain,
-        'payload': payload,
+        'stop_if': enriched_payload['stop_if'],
+        'promote_if': enriched_payload['promote_if'],
+        'disconfirm_if': enriched_payload['disconfirm_if'],
+        'payload': enriched_payload,
         'fingerprint': fingerprint,
         'worker_note': worker_note,
     }
@@ -86,6 +115,12 @@ def build_window_task(level: int, latest_run: dict[str, Any], end_date: str, bas
         ['window_stability_check'],
         {'config_path': config_path, 'output_dir': output_dir},
         worker_note,
+        goal='validate_long_horizon_stability',
+        hypothesis=f'更长历史窗口 {start_date} → {end_date} 下，当前强候选的排序与稳健性不会明显崩塌。',
+        branch_id=f'window_expansion_level_{level}',
+        stop_if=['long_horizon_window_shows_no_incremental_gain_twice'],
+        promote_if=['long_horizon_window_confirms_candidate_ordering'],
+        disconfirm_if=['top_candidates_drop_out_across_long_horizon_window'],
     )
     return [] if task['fingerprint'] in existing_fingerprints else [task]
 
@@ -108,6 +143,12 @@ def build_recent_validation_task(level: int, latest_run: dict[str, Any], end_dat
         ['window_stability_check'],
         {'config_path': config_path, 'output_dir': output_dir},
         worker_note,
+        goal='validate_recent_window_stability',
+        hypothesis=f'近期窗口 {start_date} → {end_date} 仍能支持当前候选，不是只在更短窗口偶然有效。',
+        branch_id=f'recent_window_validation_level_{level}',
+        stop_if=['recent_window_validation_fails_twice'],
+        promote_if=['recent_window_confirms_candidate_survival'],
+        disconfirm_if=['recent_window_eliminates_current_candidates'],
     )
     return [] if task['fingerprint'] in existing_fingerprints else [task]
 
@@ -126,7 +167,21 @@ def build_stable_candidate_task(level: int, stable_candidates: list[str], existi
         'knowledge_gain': gain,
         'source_output_dir': 'artifacts/tushare_batch',
     }
-    task = make_task('diagnostic', 'validation', level_priority('stable_candidate_validation', level), reason, gain, payload, worker_note)
+    task = make_task(
+        'diagnostic',
+        'validation',
+        level_priority('stable_candidate_validation', level),
+        reason,
+        gain,
+        payload,
+        worker_note,
+        goal='validate_stable_candidates',
+        hypothesis='当前稳定候选在更深一层诊断下依然成立，而不是被 cluster/窗口偶然性抬高。',
+        branch_id=f'stable_candidate_validation_level_{level}',
+        stop_if=['stable_candidate_validation_fails_in_two_more_levels'],
+        promote_if=['stable_candidate_validation_confirms_cross_window_robustness'],
+        disconfirm_if=['stable_candidate_validation_reclassifies_candidates_as_fragile'],
+    )
     return [] if task['fingerprint'] in existing_fingerprints else [task]
 
 
@@ -144,5 +199,19 @@ def build_graveyard_task(level: int, latest_graveyard: list[str], existing_finge
         'knowledge_gain': gain,
         'source_output_dir': 'artifacts/tushare_batch',
     }
-    task = make_task('diagnostic', 'validation', level_priority('graveyard_diagnosis', level), reason, gain, payload, worker_note)
+    task = make_task(
+        'diagnostic',
+        'validation',
+        level_priority('graveyard_diagnosis', level),
+        reason,
+        gain,
+        payload,
+        worker_note,
+        goal='diagnose_graveyard_failures',
+        hypothesis='graveyard 中的失败因子包含可解释的结构性失败模式，而不是随机噪声。',
+        branch_id=f'graveyard_diagnosis_level_{level}',
+        stop_if=['graveyard_diagnosis_finds_no_new_failure_pattern_twice'],
+        promote_if=['graveyard_diagnosis_identifies_actionable_failure_pattern'],
+        disconfirm_if=['graveyard_members_behave_inconsistently_without_shared_pattern'],
+    )
     return [] if task['fingerprint'] in existing_fingerprints else [task]

@@ -279,6 +279,12 @@ class StrategyBrain:
                 "reason": " ".join(bit for bit in reason_bits if bit),
                 "selected_families": sorted(selected_families),
                 "focus_candidates": sorted(focus_candidates),
+                "goal": task.get("goal") or (task.get("payload") or {}).get("goal"),
+                "hypothesis": task.get("hypothesis") or (task.get("payload") or {}).get("hypothesis"),
+                "branch_id": task.get("branch_id") or (task.get("payload") or {}).get("branch_id"),
+                "stop_if": task.get("stop_if") or (task.get("payload") or {}).get("stop_if") or [],
+                "promote_if": task.get("promote_if") or (task.get("payload") or {}).get("promote_if") or [],
+                "disconfirm_if": task.get("disconfirm_if") or (task.get("payload") or {}).get("disconfirm_if") or [],
             }
             ranked.append({**task, "strategy_meta": strategy_meta, "strategy_score": round(score, 3), "branch_action": branch_action})
 
@@ -329,7 +335,9 @@ def _derive_open_questions(approved_tasks: list[dict[str, Any]]) -> list[str]:
         category = task.get("category") or "validation"
         focus = task.get("focus_candidates") or []
         focus_names = [row.get("candidate_name") for row in focus if row.get("candidate_name")]
-        if category == "validation" and focus_names:
+        if task.get("hypothesis"):
+            questions.append(str(task.get("hypothesis")))
+        elif category == "validation" and focus_names:
             questions.append(f"验证候选 {', '.join(focus_names[:3])} 的跨窗口稳定性是否继续成立？")
         elif category == "baseline":
             questions.append("更宽历史窗口下，当前强候选是否仍保持一致排序？")

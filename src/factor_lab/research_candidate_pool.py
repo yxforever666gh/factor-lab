@@ -214,6 +214,9 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
                 'validate_risk_family_count': validate_risk_family_count,
             }
             task['reason'] += f" 当前候选图中有 {relationship_summary.get('hybrid_of', 0)} 条 hybrid 关系、{len(snapshot.get('candidate_clusters', []) or [])} 个 cluster；但高风险 family={validate_risk_family_count} 个，因此扩窗优先级被下调，先确认结构是否真的跨阶段成立。"
+            task['hypothesis'] = task['payload'].get('hypothesis')
+            task['goal'] = task['payload'].get('goal')
+            task['branch_id'] = task['payload'].get('branch_id')
             append_task(task, 'window_expansion_already_covered')
     if recent_level and ('recent_window_validation' in selected_families or not selected_families):
         recent_tasks = build_recent_validation_task(recent_level, latest_run, end_date, base_config, existing_fingerprints, generated_configs)
@@ -226,6 +229,9 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
                 'fragile_candidate_count': len(fragile_candidates),
             }
             task['reason'] += f" refinement={relationship_summary.get('refinement_of', 0)}、duplicate={relationship_summary.get('duplicate_of', 0)}；fragile 候选={len(fragile_candidates)}，近期窗口优先确认这些分支是稳健延伸还是短期重复。"
+            task['hypothesis'] = task['payload'].get('hypothesis')
+            task['goal'] = task['payload'].get('goal')
+            task['branch_id'] = task['payload'].get('branch_id')
             append_task(task, 'recent_window_already_covered')
     if stable_level and ('stable_candidate_validation' in selected_families or not selected_families):
         stable_tasks = build_stable_candidate_task(stable_level, stable_candidates, existing_fingerprints)
@@ -278,6 +284,9 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
                 + (f"，fragile_candidates={fragile_count}，family_risk_score={family_risk_score}" if fragile_count or family_risk_score is not None else "")
                 + f"。保留 cluster representatives 后实际验证 {len(stable_candidates)} 个代表候选，压制 {len([r for r in representative_notes if r.get('suppressed_into')])} 个重复/近重复候选。"
             )
+            task['hypothesis'] = task['payload'].get('hypothesis')
+            task['goal'] = task['payload'].get('goal')
+            task['branch_id'] = task['payload'].get('branch_id')
             append_task(task, 'stable_validation_already_covered')
     if graveyard_level and ('graveyard_diagnosis' in selected_families or not selected_families):
         graveyard_tasks = build_graveyard_task(graveyard_level, latest_graveyard, existing_fingerprints)
@@ -287,6 +296,9 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
                 'same_family_count': int(relationship_summary.get('same_family', 0)),
             }
             task['reason'] += f" duplicate={relationship_summary.get('duplicate_of', 0)}、same_family={relationship_summary.get('same_family', 0)}，可检查 graveyard 是否集中出现在同构因子支路。"
+            task['hypothesis'] = task['payload'].get('hypothesis')
+            task['goal'] = task['payload'].get('goal')
+            task['branch_id'] = task['payload'].get('branch_id')
             append_task(task, 'graveyard_diagnosis_already_covered')
 
     if not exploration_state.get('should_throttle') and queue_budget.get('exploration', 0) < 1:
@@ -300,6 +312,12 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
                 expected_knowledge_gain=['exploration_candidate_survived', 'exploration_graveyard_identified'],
                 payload={'batch_path': str(generated_batch_path.relative_to(ROOT)), 'output_dir': 'artifacts/llm_generated_batch_run'},
                 worker_note='exploration｜执行 LLM 生成的 batch',
+                goal='explore_new_candidate_branch',
+                hypothesis='受控 exploration 可能发现能补充现有 family 结构的新候选，而不是重复旧信号。',
+                branch_id='exploration_generated_batch',
+                stop_if=['exploration_produces_no_information_gain_twice'],
+                promote_if=['exploration_surfaces_new_candidate_family'],
+                disconfirm_if=['exploration_only_repeats_existing_graveyard_patterns'],
             )
             task['relationship_signal'] = {
                 'hybrid_count': int(relationship_summary.get('hybrid_of', 0)),
