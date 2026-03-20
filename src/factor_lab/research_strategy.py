@@ -129,6 +129,7 @@ def build_research_state_snapshot(
             }
         )
 
+    knowledge_gain_counter = planner_snapshot.get("knowledge_gain_counter") or {}
     payload = {
         "updated_at_utc": _iso_now(),
         "generated_from_planner_snapshot": str(planner_snapshot_path),
@@ -144,7 +145,7 @@ def build_research_state_snapshot(
         "queue_budget": planner_snapshot.get("queue_budget") or {},
         "failure_state": planner_snapshot.get("failure_state") or {},
         "exploration_state": planner_snapshot.get("exploration_state") or {},
-        "knowledge_gain_counter": planner_snapshot.get("knowledge_gain_counter") or {},
+        "knowledge_gain_counter": knowledge_gain_counter,
         "candidates": {
             "stable": stable_candidates,
             "provisional": [
@@ -186,6 +187,13 @@ def build_research_state_snapshot(
         "repeated_failure_patterns": [
             {"task_type": key, "count": count} for key, count in sorted(repeated_failures.items(), key=lambda item: (-item[1], item[0]))
         ],
+        "convergence_policy": {
+            "archive_after_no_gain_runs": 2,
+            "terminate_after_duplicate_pressure": 4,
+            "promote_after_validation_score": 145,
+            "demote_below_strategy_score": 90,
+            "terminate_after_hold_count": 3,
+        },
     }
     _write_json(Path(output_path), payload)
     return payload
@@ -197,13 +205,21 @@ class StrategyBrain:
     def build_plan(self, state_snapshot: dict[str, Any], proposal: dict[str, Any], branch_plan: dict[str, Any] | None = None) -> dict[str, Any]:
         tasks = list(proposal.get("selected_tasks") or [])
         if not tasks:
+            convergence_policy = state_snapshot.get("convergence_policy") or {
+                "archive_after_no_gain_runs": 2,
+                "terminate_after_duplicate_pressure": 4,
+                "promote_after_validation_score": 145,
+                "demote_below_strategy_score": 90,
+                "terminate_after_hold_count": 3,
+            }
             return {
                 "summary": "proposal 无可执行任务，strategy 仅记录当前状态。",
                 "budget": dict(self.DEFAULT_BUDGETS),
                 "approved_tasks": [],
                 "rejected_tasks": [],
                 "branch_actions": [],
-                "memory_updates": {},
+                "memory_updates": {"convergence_policy": convergence_policy},
+                "convergence_policy": convergence_policy,
             }
 
         memory = state_snapshot.get("memory") or {}
@@ -216,6 +232,7 @@ class StrategyBrain:
         }
         exploration_state = state_snapshot.get("exploration_state") or {}
         knowledge_gain_counter = state_snapshot.get("knowledge_gain_counter") or {}
+        convergence_policy = state_snapshot.get("convergence_policy") or {}
         selected_families = set((branch_plan or {}).get("selected_families") or [])
 
         budgets = dict(self.DEFAULT_BUDGETS)
@@ -269,6 +286,7 @@ class StrategyBrain:
                 score += 2
 
             branch_action = _branch_lifecycle_decision(task, memory, exploration_state)
+            branch_action["policy"] = convergence_policy
             branch_actions.append(branch_action)
             for candidate_name in sorted(focus_candidates):
                 candidate_updates[candidate_name] = {
@@ -343,6 +361,7 @@ class StrategyBrain:
                 for action in approved_branch_actions
                 if action.get("next_state") in {"archived", "terminated", "saturated"}
             ],
+            "convergence_policy": convergence_policy,
         }
         return {
             "summary": "strategy brain 对 proposal 进行了预算约束、显式打分与分支动作标注。",
@@ -352,6 +371,7 @@ class StrategyBrain:
             "rejected_tasks": rejected,
             "branch_actions": approved_branch_actions,
             "memory_updates": memory_updates,
+            "convergence_policy": convergence_policy,
         }
 
 
@@ -365,6 +385,25 @@ def _candidate_lifecycle_state(name: str, stable_candidates: set[str], graveyard
     return "provisional"
 
 
+def _count_recent_branch_actions(memory: dict[str, Any], branch_id: str, action_name: str | None = None) -> int:
+    total = 0
+    for row in reversed(list(memory.get("branch_history") or [])):
+        if row.get("target") != branch_id:
+            continue
+        if action_name and row.get("action") != action_name:
+            continue
+        total += 1
+    return total
+
+
+def _count_recent_candidate_transitions(memory: dict[str, Any], candidate_name: str, state_name: str | None = None) -> int:
+    lifecycle = (memory.get("candidate_lifecycle") or {}).get(candidate_name, {})
+    history = lifecycle.get("history") or []
+    if not state_name:
+        return len(history)
+    return len([row for row in history if row.get("next_state") == state_name])
+
+
 def _branch_lifecycle_decision(task: dict[str, Any], memory: dict[str, Any], exploration_state: dict[str, Any]) -> dict[str, Any]:
     relationship_signal = task.get("relationship_signal") or {}
     branch_id = task.get("branch_id") or task.get("dedupe_signature") or task.get("fingerprint")
@@ -374,15 +413,16 @@ def _branch_lifecycle_decision(task: dict[str, Any], memory: dict[str, Any], exp
     fragile_count = int(relationship_signal.get("fragile_candidate_count") or 0)
     strategy_score = float(task.get("strategy_score") or task.get("planner_score") or 0.0)
     category = task.get("category") or "validation"
+    no_gain_runs = int(branch_memory.get("no_gain_runs") or 0)
+    validation_runs = int(branch_memory.get("validation_runs") or 0)
+    recent_holds = _count_recent_branch_actions(memory, branch_id, "hold")
+    recent_demotes = _count_recent_branch_actions(memory, branch_id, "demote")
 
     action = "hold"
     next_state = previous_state
     reason = "maintain_current_branch_state"
-    if category == "validation" and strategy_score >= 130:
-        action = "promote"
-        next_state = "validating"
-        reason = "high_confidence_validation_branch"
-    elif category == "exploration" and exploration_state.get("should_throttle"):
+
+    if category == "exploration" and exploration_state.get("should_throttle"):
         action = "archive"
         next_state = "archived"
         reason = "exploration_throttled"
@@ -390,14 +430,30 @@ def _branch_lifecycle_decision(task: dict[str, Any], memory: dict[str, Any], exp
         action = "terminate"
         next_state = "terminated"
         reason = "duplicate_pressure_high"
-    elif fragile_count >= 2 and category == "validation":
-        action = "hold"
-        next_state = "validating"
-        reason = "fragile_candidates_need_more_validation"
+    elif no_gain_runs >= 2 or recent_demotes >= 2:
+        action = "archive"
+        next_state = "archived"
+        reason = "repeated_no_gain_or_demote"
     elif strategy_score < 90:
         action = "demote"
         next_state = "saturated"
         reason = "low_strategy_score"
+    elif fragile_count >= 2 and category == "validation":
+        action = "hold"
+        next_state = "validating"
+        reason = "fragile_candidates_need_more_validation"
+    elif category == "validation" and strategy_score >= 145 and validation_runs >= 1:
+        action = "promote"
+        next_state = "stable_candidate"
+        reason = "validated_above_promotion_threshold"
+    elif category == "validation" and strategy_score >= 130:
+        action = "promote"
+        next_state = "validating"
+        reason = "high_confidence_validation_branch"
+    elif recent_holds >= 3:
+        action = "terminate"
+        next_state = "terminated"
+        reason = "too_many_consecutive_holds"
     return {
         "branch_id": branch_id,
         "previous_state": previous_state,
@@ -503,16 +559,44 @@ def apply_strategy_plan(
         memory["stable_candidates"] = updates.get("stable_candidates")
     if updates.get("high_value_open_questions"):
         memory["high_value_open_questions"] = updates.get("high_value_open_questions")
+    convergence_policy = (updates.get("convergence_policy") or strategy_plan.get("convergence_policy") or {
+        "archive_after_no_gain_runs": 2,
+        "terminate_after_duplicate_pressure": 4,
+        "promote_after_validation_score": 145,
+        "demote_below_strategy_score": 90,
+        "terminate_after_hold_count": 3,
+    })
+    memory["convergence_policy"] = convergence_policy
     candidate_lifecycle = dict(memory.get("candidate_lifecycle") or {})
     for name, candidate_update in (updates.get("candidate_lifecycle_updates") or {}).items():
-        candidate_lifecycle[name] = {
-            **candidate_lifecycle.get(name, {}),
-            **candidate_update,
+        current = dict(candidate_lifecycle.get(name, {}))
+        history = list(current.get("history") or [])
+        history.append({
             "updated_at_utc": _iso_now(),
-        }
+            "next_state": candidate_update.get("next_state"),
+            "action": candidate_update.get("action"),
+            "source_branch_id": candidate_update.get("source_branch_id"),
+        })
+        current.update(candidate_update)
+        current["updated_at_utc"] = _iso_now()
+        current["history"] = history[-20:]
+        candidate_lifecycle[name] = current
     memory["candidate_lifecycle"] = candidate_lifecycle
     branch_lifecycle = dict(memory.get("branch_lifecycle") or {})
-    branch_lifecycle.update(updates.get("branch_lifecycle_updates") or {})
+    for branch_id, branch_update in (updates.get("branch_lifecycle_updates") or {}).items():
+        current = dict(branch_lifecycle.get(branch_id, {}))
+        history = list(current.get("history") or [])
+        history.append({
+            "updated_at_utc": _iso_now(),
+            "state": branch_update.get("state"),
+            "last_action": branch_update.get("last_action"),
+            "reason": branch_update.get("reason"),
+        })
+        current.update(branch_update)
+        current["history"] = history[-20:]
+        current["validation_runs"] = int(current.get("validation_runs") or 0) + (1 if branch_update.get("state") in {"validating", "stable_candidate"} else 0)
+        current["no_gain_runs"] = int(current.get("no_gain_runs") or 0) + (1 if branch_update.get("last_action") in {"demote", "hold"} else 0)
+        branch_lifecycle[branch_id] = current
     memory["branch_lifecycle"] = branch_lifecycle
     archived_branches = list(memory.get("archived_branches") or [])
     archived_branches.extend(updates.get("archived_branches") or [])
