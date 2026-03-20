@@ -7,6 +7,7 @@ from typing import Any
 
 from factor_lab.candidate_graph import build_graph_artifacts
 from factor_lab.analyst_signal_bridge import load_analyst_signals
+from factor_lab.analyst_feedback_context import build_analyst_feedback_context
 from factor_lab.research_runtime_state import queue_budget_snapshot, recent_failure_stats, exploration_health
 
 
@@ -89,6 +90,7 @@ def build_research_planner_snapshot(db_path: str | Path, output_path: str | Path
         daemon_status = _read_json(root / "research_daemon_status.json", {})
         recommendation_context = _read_json(root / "llm_recommendation_context.json", {})
         recommendation_weights = _read_json(root / "llm_recommendation_weights.json", {})
+        recommendation_history = _read_json(root / "llm_recommendation_history.json", [])
         llm_status = _read_json(root / "llm_status.json", {})
         candidate_graph_context = _read_json(root / "candidate_graph_context.json", {})
         candidate_risk_profiles = _read_json(root / "candidate_risk_profiles.json", [])
@@ -133,6 +135,7 @@ def build_research_planner_snapshot(db_path: str | Path, output_path: str | Path
         failure_state = recent_failure_stats(store)
         exploration_state = exploration_health(store)
         analyst_signals = load_analyst_signals(root)
+        analyst_feedback_context = build_analyst_feedback_context(root)
 
         knowledge_gain_counter = {
             "stable_candidate_confirmed": 0,
@@ -168,6 +171,7 @@ def build_research_planner_snapshot(db_path: str | Path, output_path: str | Path
             "generated_configs": generated_configs,
             "recommendation_context": recommendation_context,
             "recommendation_weights": recommendation_weights,
+            "recommendation_history_tail": recommendation_history[-10:],
             "llm_status": llm_status,
             "family_summary": family_summary,
             "family_recommendations": family_recommendations,
@@ -178,6 +182,7 @@ def build_research_planner_snapshot(db_path: str | Path, output_path: str | Path
             "knowledge_gain_counter": knowledge_gain_counter,
             "research_trial_summary": research_trial_summary,
             "analyst_signals": analyst_signals,
+            "analyst_feedback_context": analyst_feedback_context,
             "recent_research_tasks": [
                 {
                     **{k: v for k, v in task.items() if k != "payload_json"},

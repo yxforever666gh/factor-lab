@@ -27,7 +27,7 @@ def build_agent_request(snapshot: dict[str, Any], output_path: str | Path) -> di
             "plan_optional_keys": sorted(OPTIONAL_PLAN_KEYS),
             "must_ground_on_snapshot": True,
             "must_not_override_core_metrics": True,
-            "planning_hint": "在生成下一轮建议时，参考 snapshot.recommendation_weights、snapshot.recommendation_history_tail、snapshot.recommendation_context、snapshot.paper_portfolio_stability 与 snapshot.conservative_policy；优先考虑历史 decayed_effect_score 更高、recommended_action 更积极、且 fatigue_level 更低的建议模板；对 fatigue_level 高或 cooldown_active=true 的模板，除非出现新信息，否则避免连续重复；若仍继续提该模板，必须提供 novelty_reason；如果 conservative_policy.enabled=true，应优先选择稳定候选、减少 focus_factors、减少墓地复核，并降低新模板尝试。除基础字段外，尽量输出 risk_flags、suggested_families、confidence_score、must_validate_before_expand，让下游 planner 可直接消费。",
+            "planning_hint": "在生成下一轮建议时，参考 snapshot.recommendation_weights、snapshot.recommendation_history_tail、snapshot.recommendation_context、snapshot.paper_portfolio_stability、snapshot.conservative_policy，以及 snapshot.analyst_feedback_context（其中包含最近注入任务、strategy 运行尾部、fallback 触发次数、执行反馈与 retrospective）。优先考虑历史 decayed_effect_score 更高、recommended_action 更积极、且 fatigue_level 更低的建议模板；对 fatigue_level 高或 cooldown_active=true 的模板，除非出现新信息，否则避免连续重复；若仍继续提该模板，必须提供 novelty_reason；如果 conservative_policy.enabled=true，应优先选择稳定候选、减少 focus_factors、减少墓地复核，并降低新模板尝试。除基础字段外，尽量输出 risk_flags、suggested_families、confidence_score、must_validate_before_expand，让下游 planner 可直接消费。若 recent fallback 连续触发，应解释为什么正常候选池被压空，并给出更保守的验证计划。",
         },
     }
     Path(output_path).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

@@ -57,6 +57,8 @@ def load_or_initialize_research_memory(memory_path: str | Path) -> dict[str, Any
         "candidate_lifecycle": {},
         "branch_lifecycle": {},
         "archived_branches": [],
+        "execution_feedback": [],
+        "fallback_history": [],
     }
     _write_json(path, memory)
     return memory
@@ -554,11 +556,22 @@ def update_research_memory_from_task_result(
     branch_state["goal"] = payload.get("goal") or strategy.get("goal")
     branch_state["hypothesis"] = payload.get("hypothesis") or strategy.get("hypothesis")
     branch_state["validation_runs"] = int(branch_state.get("validation_runs") or 0) + (1 if task.get("task_type") == "diagnostic" or (payload.get("goal") or "").startswith("validate") else 0)
+    execution_feedback = list(memory.get("execution_feedback") or [])
     if status != "finished":
         branch_state["no_gain_runs"] = int(branch_state.get("no_gain_runs") or 0) + 1
         branch_state["state"] = branch_state.get("state") or "failed"
         branch_state["last_action"] = "demote"
         branch_state["history"].append({"updated_at_utc": _iso_now(), "state": branch_state.get("state"), "last_action": "demote", "reason": "task_failed"})
+        execution_feedback.append({
+            "updated_at_utc": _iso_now(),
+            "branch_id": branch_id,
+            "task_type": task.get("task_type"),
+            "status": status,
+            "has_gain": False,
+            "summary": summary,
+            "error_text": error_text,
+            "focus_candidates": focus_candidates,
+        })
     else:
         if has_gain:
             branch_state["no_gain_runs"] = 0
@@ -574,9 +587,35 @@ def update_research_memory_from_task_result(
             branch_state["last_action"] = "hold"
             branch_state["state"] = branch_state.get("state") or "saturated"
             branch_state["history"].append({"updated_at_utc": _iso_now(), "state": branch_state.get("state"), "last_action": "hold", "reason": "no_significant_information_gain"})
+        execution_feedback.append({
+            "updated_at_utc": _iso_now(),
+            "branch_id": branch_id,
+            "task_type": task.get("task_type"),
+            "status": status,
+            "has_gain": has_gain,
+            "summary": summary,
+            "error_text": error_text,
+            "focus_candidates": focus_candidates,
+            "knowledge_gain": knowledge_gain,
+            "goal": payload.get("goal") or strategy.get("goal"),
+            "hypothesis": payload.get("hypothesis") or strategy.get("hypothesis"),
+        })
     branch_state["history"] = branch_state["history"][-20:]
     branch_lifecycle[branch_id] = branch_state
     memory["branch_lifecycle"] = branch_lifecycle
+    memory["execution_feedback"] = execution_feedback[-50:]
+
+    fallback_history = list(memory.get("fallback_history") or [])
+    if str(branch_id).startswith("fallback_"):
+        fallback_history.append({
+            "updated_at_utc": _iso_now(),
+            "branch_id": branch_id,
+            "status": status,
+            "has_gain": has_gain,
+            "summary": summary,
+            "error_text": error_text,
+        })
+    memory["fallback_history"] = fallback_history[-30:]
 
     candidate_lifecycle = dict(memory.get("candidate_lifecycle") or {})
     stable_candidates = set(memory.get("stable_candidates") or [])
