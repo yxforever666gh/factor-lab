@@ -15,6 +15,17 @@ ROOT = Path(__file__).resolve().parents[2]
 DB_PATH = ROOT / "artifacts" / "factor_lab.db"
 
 
+def _opportunity_channel(task: dict[str, Any] | None) -> str | None:
+    if not task:
+        return None
+    task_type = task.get("task_type")
+    if task_type == "diagnostic":
+        return "validation"
+    if task_type == "generated_batch":
+        return "exploration"
+    return None
+
+
 def enqueue_opportunities(opportunities_path: str | Path, output_path: str | Path, db_path: str | Path = DB_PATH, limit: int = 2) -> dict[str, Any]:
     opportunities_doc = json.loads(Path(opportunities_path).read_text(encoding="utf-8")) if Path(opportunities_path).exists() else {}
     opportunities = list(opportunities_doc.get("opportunities") or [])
@@ -24,13 +35,11 @@ def enqueue_opportunities(opportunities_path: str | Path, output_path: str | Pat
     downweights = review.get("downweights") or {}
     store = ExperimentStore(db_path)
 
-    injected = []
+    prepared: list[dict[str, Any]] = []
     skipped = []
     considered = 0
-    for opportunity in opportunities:
-        if considered >= limit:
-            break
 
+    for opportunity in opportunities:
         oid = opportunity.get("opportunity_id")
         if oid in blocks:
             skipped.append({"opportunity_id": oid, "reason": f"blocked:{blocks[oid].get('reason')}"})
@@ -49,9 +58,8 @@ def enqueue_opportunities(opportunities_path: str | Path, output_path: str | Pat
             update_opportunity_state(oid, "rejected", reason="unmappable")
             continue
 
-        considered += 1
-        fingerprint = task.get("fingerprint")
         bypass = should_bypass_recent_fingerprint(opportunity)
+        fingerprint = task.get("fingerprint")
         if fingerprint and recently_finished_same_fingerprint(store, fingerprint) and not bypass.get("allow_bypass"):
             skipped.append({"opportunity_id": oid, "reason": "recently_finished_same_fingerprint"})
             update_opportunity_state(oid, "archived", reason="recently_finished_same_fingerprint")
@@ -61,6 +69,49 @@ def enqueue_opportunities(opportunities_path: str | Path, output_path: str | Pat
             task["payload"]["dedupe_bypass"] = True
             task["payload"]["dedupe_bypass_reason"] = bypass.get("reason")
 
+        prepared.append({
+            "opportunity": opportunity,
+            "task": task,
+            "channel": _opportunity_channel(task) or "other",
+            "bypass": bypass,
+        })
+        considered += 1
+
+    channel_limits = {
+        "validation": min(1, limit),
+        "exploration": min(1, max(0, limit - min(1, limit))),
+    }
+    selected: list[dict[str, Any]] = []
+    selected_ids: set[str] = set()
+
+    for channel in ("validation", "exploration"):
+        quota = channel_limits.get(channel, 0)
+        if quota <= 0:
+            continue
+        channel_rows = [row for row in prepared if row["channel"] == channel]
+        for row in channel_rows[:quota]:
+            selected.append(row)
+            selected_ids.add(row["opportunity"].get("opportunity_id"))
+
+    remaining_slots = max(0, limit - len(selected))
+    if remaining_slots > 0:
+        for row in prepared:
+            oid = row["opportunity"].get("opportunity_id")
+            if oid in selected_ids:
+                continue
+            selected.append(row)
+            selected_ids.add(oid)
+            remaining_slots -= 1
+            if remaining_slots <= 0:
+                break
+
+    injected = []
+    for row in selected:
+        opportunity = row["opportunity"]
+        task = row["task"]
+        bypass = row["bypass"]
+        oid = opportunity.get("opportunity_id")
+        fingerprint = task.get("fingerprint")
         task_id = store.enqueue_research_task(
             task_type=task["task_type"],
             payload=task["payload"],
@@ -73,13 +124,25 @@ def enqueue_opportunities(opportunities_path: str | Path, output_path: str | Pat
             "task_id": task_id,
             "task_type": task.get("task_type"),
             "priority": task.get("priority"),
+            "channel": row["channel"],
             "dedupe_bypass": bool(bypass.get("allow_bypass")),
         })
         update_opportunity_state(oid, "scheduled", reason="task_enqueued", extra={"task_id": task_id, "task_type": task.get("task_type")})
 
+    unscheduled = [
+        {
+            "opportunity_id": row["opportunity"].get("opportunity_id"),
+            "reason": f"channel_deferred:{row['channel']}",
+        }
+        for row in prepared
+        if row["opportunity"].get("opportunity_id") not in selected_ids
+    ]
+    skipped.extend(unscheduled)
+
     payload = {
         "source": str(opportunities_path),
         "considered": considered,
+        "channel_limits": channel_limits,
         "injected_count": len(injected),
         "injected": injected,
         "skipped": skipped,
