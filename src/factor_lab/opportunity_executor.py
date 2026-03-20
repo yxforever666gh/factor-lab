@@ -7,6 +7,7 @@ from typing import Any
 from factor_lab.opportunity_to_tasks import map_opportunity_to_task
 from factor_lab.opportunity_store import sync_opportunities, update_opportunity_state
 from factor_lab.opportunity_dedupe_policy import should_bypass_recent_fingerprint
+from factor_lab.opportunity_review import build_opportunity_review
 from factor_lab.storage import ExperimentStore
 from factor_lab.research_runtime_state import recently_finished_same_fingerprint
 
@@ -18,6 +19,9 @@ def enqueue_opportunities(opportunities_path: str | Path, output_path: str | Pat
     opportunities_doc = json.loads(Path(opportunities_path).read_text(encoding="utf-8")) if Path(opportunities_path).exists() else {}
     opportunities = list(opportunities_doc.get("opportunities") or [])
     sync_opportunities(opportunities)
+    review = build_opportunity_review()
+    blocks = review.get("blocks") or {}
+    downweights = review.get("downweights") or {}
     store = ExperimentStore(db_path)
 
     injected = []
@@ -26,18 +30,31 @@ def enqueue_opportunities(opportunities_path: str | Path, output_path: str | Pat
     for opportunity in opportunities:
         if considered >= limit:
             break
+
+        oid = opportunity.get("opportunity_id")
+        if oid in blocks:
+            skipped.append({"opportunity_id": oid, "reason": f"blocked:{blocks[oid].get('reason')}"})
+            update_opportunity_state(oid, "rejected", reason=f"blocked:{blocks[oid].get('reason')}")
+            continue
+
+        if oid in downweights:
+            opportunity = {
+                **opportunity,
+                "priority": max(0.05, float(opportunity.get("priority") or 0.5) - float(downweights[oid].get("delta") or 0.0)),
+            }
+
         task = map_opportunity_to_task(opportunity)
         if not task:
-            skipped.append({"opportunity_id": opportunity.get("opportunity_id"), "reason": "unmappable"})
-            update_opportunity_state(opportunity.get("opportunity_id"), "rejected", reason="unmappable")
+            skipped.append({"opportunity_id": oid, "reason": "unmappable"})
+            update_opportunity_state(oid, "rejected", reason="unmappable")
             continue
 
         considered += 1
         fingerprint = task.get("fingerprint")
         bypass = should_bypass_recent_fingerprint(opportunity)
         if fingerprint and recently_finished_same_fingerprint(store, fingerprint) and not bypass.get("allow_bypass"):
-            skipped.append({"opportunity_id": opportunity.get("opportunity_id"), "reason": "recently_finished_same_fingerprint"})
-            update_opportunity_state(opportunity.get("opportunity_id"), "archived", reason="recently_finished_same_fingerprint")
+            skipped.append({"opportunity_id": oid, "reason": "recently_finished_same_fingerprint"})
+            update_opportunity_state(oid, "archived", reason="recently_finished_same_fingerprint")
             continue
 
         if bypass.get("allow_bypass"):
@@ -52,18 +69,13 @@ def enqueue_opportunities(opportunities_path: str | Path, output_path: str | Pat
             worker_note=task.get("worker_note"),
         )
         injected.append({
-            "opportunity_id": opportunity.get("opportunity_id"),
+            "opportunity_id": oid,
             "task_id": task_id,
             "task_type": task.get("task_type"),
             "priority": task.get("priority"),
             "dedupe_bypass": bool(bypass.get("allow_bypass")),
         })
-        update_opportunity_state(
-            opportunity.get("opportunity_id"),
-            "scheduled",
-            reason="task_enqueued",
-            extra={"task_id": task_id, "task_type": task.get("task_type")},
-        )
+        update_opportunity_state(oid, "scheduled", reason="task_enqueued", extra={"task_id": task_id, "task_type": task.get("task_type")})
 
     payload = {
         "source": str(opportunities_path),

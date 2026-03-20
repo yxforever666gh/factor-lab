@@ -5,6 +5,7 @@ from typing import Any
 
 def build_recovery_bridge_questions(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
     feedback = snapshot.get("analyst_feedback_context") or {}
+    learning = snapshot.get("research_learning") or {}
     recovery_history = ((feedback.get("research_memory_tail") or {}).get("recovery_history_tail") or [])[-6:]
     flow_state = snapshot.get("research_flow_state") or {}
 
@@ -14,8 +15,10 @@ def build_recovery_bridge_questions(snapshot: dict[str, Any]) -> list[dict[str, 
 
     stable_success = any((row.get("branch_id") == "fallback_stable_candidate_validation" and row.get("has_gain")) for row in recovery_history)
     graveyard_success = any((row.get("branch_id") == "fallback_graveyard_diagnosis" and row.get("has_gain")) for row in recovery_history)
+    stable_normal_ready = ((learning.get("families") or {}).get("stable_candidate_validation") or {}).get("recommended_action") == "upweight"
+    graveyard_normal_ready = ((learning.get("families") or {}).get("graveyard_diagnosis") or {}).get("recommended_action") == "upweight"
 
-    if stable_success:
+    if stable_success and not stable_normal_ready:
         questions.append({
             "question_id": "q-recovery-to-opportunity-stable",
             "question_type": "expand",
@@ -28,7 +31,7 @@ def build_recovery_bridge_questions(snapshot: dict[str, Any]) -> list[dict[str, 
             "origin": "recovery_bridge",
         })
 
-    if graveyard_success:
+    if graveyard_success and not graveyard_normal_ready:
         questions.append({
             "question_id": "q-recovery-to-opportunity-graveyard",
             "question_type": "diagnose",

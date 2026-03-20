@@ -16,16 +16,26 @@ def build_opportunity_review() -> dict[str, Any]:
     review = {
         "challenger": [],
         "auditor": [],
+        "blocks": {},
+        "downweights": {},
     }
-    for row in items[:20]:
+    for row in items[:50]:
         oid = row.get("opportunity_id")
         if not oid:
             continue
-        if (row.get("novelty_score") or 0) < 0.5:
-            review["challenger"].append(f"{oid}: 新颖度偏低，可能仍在重复旧研究问题。")
-        if row.get("state") == "archived":
-            review["auditor"].append(f"{oid}: 已被归档，需检查是否被去重规则过度压制。")
-        if (row.get("confidence") or 0) < 0.6:
-            review["auditor"].append(f"{oid}: 置信度偏低，进入执行前应谨慎。")
+        novelty = float(row.get("novelty_score") or 0.0)
+        confidence = float(row.get("confidence") or 0.0)
+        state = row.get("state")
+        if novelty < 0.5:
+            msg = f"{oid}: 新颖度偏低，可能仍在重复旧研究问题。"
+            review["challenger"].append(msg)
+            review["downweights"][oid] = {"reason": "low_novelty", "delta": 0.08}
+        if state == "archived":
+            msg = f"{oid}: 已被归档，需检查是否被去重规则过度压制。"
+            review["auditor"].append(msg)
+        if confidence < 0.6:
+            msg = f"{oid}: 置信度偏低，进入执行前应谨慎。"
+            review["auditor"].append(msg)
+            review["blocks"][oid] = {"reason": "low_confidence"}
     OUTPUT_PATH.write_text(json.dumps(review, ensure_ascii=False, indent=2), encoding="utf-8")
     return review
