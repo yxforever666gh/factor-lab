@@ -4,11 +4,11 @@ import json
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List
-from uuid import uuid4
 
 from factor_lab.analytics import evaluate_time_splits, factor_correlation_matrix, high_correlation_peers
 from factor_lab.clustering import greedy_correlation_clusters, pick_cluster_representatives
 from factor_lab.data import SampleDataGenerator
+from factor_lab.data_cache import ensure_feature_coverage, slice_feature_store
 from factor_lab.dedup import config_fingerprint
 from factor_lab.evaluation import evaluate_factor
 from factor_lab.experiments import ExperimentLedger
@@ -19,7 +19,9 @@ from factor_lab.registry import FactorRegistry
 from factor_lab.scoring import score_factors
 from factor_lab.storage import ExperimentStore
 from factor_lab.tasks import TaskTracker
-from factor_lab.tushare_provider import TushareDataProvider, TushareRequest
+from factor_lab.timing import WorkflowTiming
+from factor_lab.tushare_provider import TushareDataProvider
+from factor_lab.universe import default_universe_name
 
 
 def _load_config(config_path: str) -> dict:
@@ -27,17 +29,27 @@ def _load_config(config_path: str) -> dict:
         return json.load(handle)
 
 
-def _load_dataset(config: dict):
+def _load_dataset(config: dict, timing: WorkflowTiming | None = None):
     source = config.get("data_source", "sample")
     if source == "tushare":
         provider = TushareDataProvider()
-        return provider.load_dataset(
-            TushareRequest(
-                start_date=config["start_date"],
-                end_date=config["end_date"],
-                universe_limit=config.get("universe_limit", 80),
-                cache_dir=config.get("cache_dir", "artifacts/tushare_cache"),
-            )
+        cache_dir = config.get("cache_dir", "artifacts/tushare_cache")
+        universe_limit = config.get("universe_limit", 80)
+        universe_name = config.get("universe_name") or default_universe_name(universe_limit)
+        ensure_feature_coverage(
+            provider=provider,
+            universe_limit=universe_limit,
+            start_date=config["start_date"],
+            end_date=config["end_date"],
+            cache_dir=cache_dir,
+            universe_name=universe_name,
+            timing=timing,
+        )
+        return slice_feature_store(
+            universe_name=universe_name,
+            start_date=config["start_date"],
+            end_date=config["end_date"],
+            cache_dir=cache_dir,
         )
 
     return SampleDataGenerator(seed=config.get("seed", 7)).generate(
@@ -172,7 +184,9 @@ def _write_summary(
 
 
 def run_workflow(config_path: str, output_dir: str) -> None:
-    config = _load_config(config_path)
+    timing = WorkflowTiming()
+    with timing.stage("load_config"):
+        config = _load_config(config_path)
     output = Path(output_dir or config.get("output_dir", "artifacts/workflow"))
     output.mkdir(parents=True, exist_ok=True)
 
@@ -186,259 +200,265 @@ def run_workflow(config_path: str, output_dir: str) -> None:
         store = ExperimentStore(Path("artifacts") / "factor_lab.db")
         latest_prior = store.find_latest_finished_run(cfg_fingerprint)
 
-        dataset = _load_dataset(config)
+        with timing.stage("load_dataset"):
+            dataset = _load_dataset(config, timing=timing)
         dataset.frame.to_csv(output / "dataset.csv", index=False)
 
         definitions = [FactorDefinition(name=item["name"], expression=item["expression"]) for item in config["factors"]]
+        timing.set_counter("factor_count", len(definitions))
+        timing.set_counter("dataset_rows", int(len(dataset.frame)))
 
         results = []
         neutralized_results = []
         split_results = []
-        for definition in definitions:
-            factor_frame = dataset.frame.copy()
-            raw_factor = apply_factor(dataset.frame, definition)
-            factor_frame["factor_value"] = raw_factor
-            evaluation = evaluate_factor(
-                frame=factor_frame,
-                factor_name=definition.name,
-                expression=definition.expression,
-                thresholds=config.get("thresholds", {}),
-            )
-            results.append(evaluation.to_dict())
-
-            if {"industry", "total_mv"}.issubset(dataset.frame.columns):
-                neutralized_frame = dataset.frame.copy()
-                neutralized_frame["factor_value"] = neutralize_by_date(
-                    factor_frame.assign(raw_factor=raw_factor),
-                    factor_col="raw_factor",
-                )
-                neutralized_eval = evaluate_factor(
-                    frame=neutralized_frame.dropna(subset=["factor_value"]),
+        with timing.stage("factor_eval"):
+            for definition in definitions:
+                factor_frame = dataset.frame.copy()
+                raw_factor = apply_factor(dataset.frame, definition)
+                factor_frame["factor_value"] = raw_factor
+                evaluation = evaluate_factor(
+                    frame=factor_frame,
                     factor_name=definition.name,
                     expression=definition.expression,
                     thresholds=config.get("thresholds", {}),
                 )
-                payload = neutralized_eval.to_dict()
-                payload["variant"] = "neutralized"
-                neutralized_results.append(payload)
+                results.append(evaluation.to_dict())
 
-            split_results.extend(
-                evaluate_time_splits(
-                    frame=dataset.frame,
-                    definition=definition,
-                    thresholds=config.get("thresholds", {}),
-                    evaluator=evaluate_factor,
+                if {"industry", "total_mv"}.issubset(dataset.frame.columns):
+                    neutralized_frame = dataset.frame.copy()
+                    neutralized_frame["factor_value"] = neutralize_by_date(
+                        factor_frame.assign(raw_factor=raw_factor),
+                        factor_col="raw_factor",
+                    )
+                    neutralized_eval = evaluate_factor(
+                        frame=neutralized_frame.dropna(subset=["factor_value"]),
+                        factor_name=definition.name,
+                        expression=definition.expression,
+                        thresholds=config.get("thresholds", {}),
+                    )
+                    payload = neutralized_eval.to_dict()
+                    payload["variant"] = "neutralized"
+                    neutralized_results.append(payload)
+
+                split_results.extend(
+                    evaluate_time_splits(
+                        frame=dataset.frame,
+                        definition=definition,
+                        thresholds=config.get("thresholds", {}),
+                        evaluator=evaluate_factor,
+                    )
                 )
+
+        with timing.stage("persist_intermediate"):
+            with open(output / "results.json", "w", encoding="utf-8") as handle:
+                json.dump(results, handle, ensure_ascii=False, indent=2)
+            with open(output / "split_results.json", "w", encoding="utf-8") as handle:
+                json.dump(split_results, handle, ensure_ascii=False, indent=2)
+            with open(output / "neutralized_results.json", "w", encoding="utf-8") as handle:
+                json.dump(neutralized_results, handle, ensure_ascii=False, indent=2)
+
+        with timing.stage("correlation"):
+            correlation = factor_correlation_matrix(dataset.frame, definitions)
+            correlation.to_csv(output / "factor_correlation.csv")
+            corr_peers = high_correlation_peers(correlation, threshold=config.get("correlation_threshold", 0.8))
+            scored_factors = score_factors(
+                raw_results=results,
+                neutralized_results=neutralized_results,
+                split_results=split_results,
+                correlation_lookup=corr_peers,
             )
+            clusters = greedy_correlation_clusters(correlation, threshold=config.get("correlation_threshold", 0.8))
+            cluster_representatives = pick_cluster_representatives(clusters, scored_factors)
+            registry = FactorRegistry(output)
+            candidates, graveyard = registry.build_candidate_and_graveyard(
+                raw_results=results,
+                neutralized_results=neutralized_results,
+                split_results=split_results,
+                correlation_lookup=corr_peers,
+            )
+            registry.write_registry(candidates, graveyard, scored_factors, cluster_representatives)
 
-        with open(output / "results.json", "w", encoding="utf-8") as handle:
-            json.dump(results, handle, ensure_ascii=False, indent=2)
+        with timing.stage("portfolio"):
+            portfolio_results = []
+            composite_raw = build_composite_factor(dataset.frame, definitions, neutralize=False)
+            raw_payload = evaluate_long_short_portfolio(dataset.frame, composite_raw).to_dict()
+            raw_payload["strategy_name"] = "long_short_top_bottom_all_factors"
+            portfolio_results.append(raw_payload)
 
-        with open(output / "split_results.json", "w", encoding="utf-8") as handle:
-            json.dump(split_results, handle, ensure_ascii=False, indent=2)
+            candidate_defs = [definition for definition in definitions if any(c["factor_name"] == definition.name for c in candidates)]
+            if candidate_defs:
+                candidate_signal = build_composite_factor(dataset.frame, candidate_defs, neutralize=False)
+                candidate_payload = evaluate_long_short_portfolio(dataset.frame, candidate_signal).to_dict()
+                candidate_payload["strategy_name"] = "long_short_top_bottom_candidates_only"
+                portfolio_results.append(candidate_payload)
 
-        with open(output / "neutralized_results.json", "w", encoding="utf-8") as handle:
-            json.dump(neutralized_results, handle, ensure_ascii=False, indent=2)
+                if {"industry", "total_mv"}.issubset(dataset.frame.columns):
+                    candidate_neutral_signal = build_composite_factor(dataset.frame, candidate_defs, neutralize=True)
+                    candidate_neutral_payload = evaluate_long_short_portfolio(dataset.frame, candidate_neutral_signal).to_dict()
+                    candidate_neutral_payload["strategy_name"] = "long_short_top_bottom_candidates_only_neutralized"
+                    portfolio_results.append(candidate_neutral_payload)
 
-        correlation = factor_correlation_matrix(dataset.frame, definitions)
-        correlation.to_csv(output / "factor_correlation.csv")
-        corr_peers = high_correlation_peers(correlation, threshold=config.get("correlation_threshold", 0.8))
+            rep_defs = [definition for definition in definitions if any(c["factor_name"] == definition.name for c in cluster_representatives)]
+            if rep_defs:
+                rep_signal = build_composite_factor(dataset.frame, rep_defs, neutralize=False)
+                rep_payload = evaluate_long_short_portfolio(dataset.frame, rep_signal).to_dict()
+                rep_payload["strategy_name"] = "long_short_top_bottom_cluster_representatives"
+                portfolio_results.append(rep_payload)
 
-        scored_factors = score_factors(
-            raw_results=results,
-            neutralized_results=neutralized_results,
-            split_results=split_results,
-            correlation_lookup=corr_peers,
-        )
-        clusters = greedy_correlation_clusters(correlation, threshold=config.get("correlation_threshold", 0.8))
-        cluster_representatives = pick_cluster_representatives(clusters, scored_factors)
-
-        registry = FactorRegistry(output)
-        candidates, graveyard = registry.build_candidate_and_graveyard(
-            raw_results=results,
-            neutralized_results=neutralized_results,
-            split_results=split_results,
-            correlation_lookup=corr_peers,
-        )
-        registry.write_registry(candidates, graveyard, scored_factors, cluster_representatives)
-
-        portfolio_results = []
-        composite_raw = build_composite_factor(dataset.frame, definitions, neutralize=False)
-        raw_payload = evaluate_long_short_portfolio(dataset.frame, composite_raw).to_dict()
-        raw_payload["strategy_name"] = "long_short_top_bottom_all_factors"
-        portfolio_results.append(raw_payload)
-
-        candidate_defs = [definition for definition in definitions if any(c["factor_name"] == definition.name for c in candidates)]
-        if candidate_defs:
-            candidate_signal = build_composite_factor(dataset.frame, candidate_defs, neutralize=False)
-            candidate_payload = evaluate_long_short_portfolio(dataset.frame, candidate_signal).to_dict()
-            candidate_payload["strategy_name"] = "long_short_top_bottom_candidates_only"
-            portfolio_results.append(candidate_payload)
-
-            if {"industry", "total_mv"}.issubset(dataset.frame.columns):
-                candidate_neutral_signal = build_composite_factor(dataset.frame, candidate_defs, neutralize=True)
-                candidate_neutral_payload = evaluate_long_short_portfolio(dataset.frame, candidate_neutral_signal).to_dict()
-                candidate_neutral_payload["strategy_name"] = "long_short_top_bottom_candidates_only_neutralized"
-                portfolio_results.append(candidate_neutral_payload)
-
-        rep_defs = [definition for definition in definitions if any(c["factor_name"] == definition.name for c in cluster_representatives)]
-        if rep_defs:
-            rep_signal = build_composite_factor(dataset.frame, rep_defs, neutralize=False)
-            rep_payload = evaluate_long_short_portfolio(dataset.frame, rep_signal).to_dict()
-            rep_payload["strategy_name"] = "long_short_top_bottom_cluster_representatives"
-            portfolio_results.append(rep_payload)
+                if {"industry", "total_mv"}.issubset(dataset.frame.columns):
+                    rep_neutral_signal = build_composite_factor(dataset.frame, rep_defs, neutralize=True)
+                    rep_neutral_payload = evaluate_long_short_portfolio(dataset.frame, rep_neutral_signal).to_dict()
+                    rep_neutral_payload["strategy_name"] = "long_short_top_bottom_cluster_representatives_neutralized"
+                    portfolio_results.append(rep_neutral_payload)
 
             if {"industry", "total_mv"}.issubset(dataset.frame.columns):
-                rep_neutral_signal = build_composite_factor(dataset.frame, rep_defs, neutralize=True)
-                rep_neutral_payload = evaluate_long_short_portfolio(dataset.frame, rep_neutral_signal).to_dict()
-                rep_neutral_payload["strategy_name"] = "long_short_top_bottom_cluster_representatives_neutralized"
-                portfolio_results.append(rep_neutral_payload)
+                composite_neutral = build_composite_factor(dataset.frame, definitions, neutralize=True)
+                neutral_payload = evaluate_long_short_portfolio(dataset.frame, composite_neutral).to_dict()
+                neutral_payload["strategy_name"] = "long_short_top_bottom_neutralized"
+                portfolio_results.append(neutral_payload)
 
-        if {"industry", "total_mv"}.issubset(dataset.frame.columns):
-            composite_neutral = build_composite_factor(dataset.frame, definitions, neutralize=True)
-            neutral_payload = evaluate_long_short_portfolio(dataset.frame, composite_neutral).to_dict()
-            neutral_payload["strategy_name"] = "long_short_top_bottom_neutralized"
-            portfolio_results.append(neutral_payload)
+        with timing.stage("persist_final"):
+            with open(output / "portfolio_results.json", "w", encoding="utf-8") as handle:
+                json.dump(portfolio_results, handle, ensure_ascii=False, indent=2)
 
-        with open(output / "portfolio_results.json", "w", encoding="utf-8") as handle:
-            json.dump(portfolio_results, handle, ensure_ascii=False, indent=2)
-
-        ledger = ExperimentLedger(output)
-        ledger_payload = {
-            "run_id": run_id,
-            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-            "config": config,
-            "dataset_rows": int(len(dataset.frame)),
-            "factor_count": len(definitions),
-            "candidate_pool": [row["factor_name"] for row in candidates],
-            "graveyard": [row["factor_name"] for row in graveyard],
-            "cluster_representatives": [row["factor_name"] for row in cluster_representatives],
-            "top_scores": scored_factors[:3],
-            "portfolio_results": portfolio_results,
-        }
-        ledger.write(ledger_payload)
-
-        store.insert_run(
-            {
+            ledger = ExperimentLedger(output)
+            ledger_payload = {
                 "run_id": run_id,
-                "created_at_utc": created_at,
-                "config_path": config_path,
-                "output_dir": str(output),
-                "data_source": config.get("data_source", "sample"),
-                "start_date": config.get("start_date"),
-                "end_date": config.get("end_date"),
-                "universe_limit": config.get("universe_limit"),
-                "factor_count": len(definitions),
+                "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+                "config": config,
                 "dataset_rows": int(len(dataset.frame)),
-                "status": "finished",
-                "config_fingerprint": cfg_fingerprint,
-                "rerun_of_run_id": latest_prior[0] if latest_prior else None,
+                "factor_count": len(definitions),
+                "candidate_pool": [row["factor_name"] for row in candidates],
+                "graveyard": [row["factor_name"] for row in graveyard],
+                "cluster_representatives": [row["factor_name"] for row in cluster_representatives],
+                "top_scores": scored_factors[:3],
+                "portfolio_results": portfolio_results,
             }
-        )
+            ledger.write(ledger_payload)
 
-        neutral_map = {row["factor_name"]: row for row in neutralized_results}
-        split_fails = {}
-        for row in split_results:
-            split_fails.setdefault(row["factor_name"], 0)
-            if not row["pass_gate"]:
-                split_fails[row["factor_name"]] += 1
-        score_map = {row["factor_name"]: row for row in scored_factors}
+            store.insert_run(
+                {
+                    "run_id": run_id,
+                    "created_at_utc": created_at,
+                    "config_path": config_path,
+                    "output_dir": str(output),
+                    "data_source": config.get("data_source", "sample"),
+                    "start_date": config.get("start_date"),
+                    "end_date": config.get("end_date"),
+                    "universe_limit": config.get("universe_limit"),
+                    "factor_count": len(definitions),
+                    "dataset_rows": int(len(dataset.frame)),
+                    "status": "finished",
+                    "config_fingerprint": cfg_fingerprint,
+                    "rerun_of_run_id": latest_prior[0] if latest_prior else None,
+                }
+            )
 
-        factor_rows = []
-        for row in results:
-            factor_rows.append(
-                {
-                    "run_id": run_id,
-                    "factor_name": row["factor_name"],
-                    "variant": "raw_scored",
-                    "expression": row["expression"],
-                    "rank_ic_mean": row["rank_ic_mean"],
-                    "rank_ic_ir": row["rank_ic_ir"],
-                    "top_bottom_spread_mean": row["top_bottom_spread_mean"],
-                    "pass_gate": row["pass_gate"],
-                    "fail_reason": row["fail_reason"],
-                    "score": score_map.get(row["factor_name"], {}).get("score"),
-                    "split_fail_count": split_fails.get(row["factor_name"], 0),
-                    "high_corr_peers": score_map.get(row["factor_name"], {}).get("high_corr_peers", []),
-                }
-            )
-        for row in neutralized_results:
-            factor_rows.append(
-                {
-                    "run_id": run_id,
-                    "factor_name": row["factor_name"],
-                    "variant": "neutralized",
-                    "expression": row["expression"],
-                    "rank_ic_mean": row["rank_ic_mean"],
-                    "rank_ic_ir": row["rank_ic_ir"],
-                    "top_bottom_spread_mean": row["top_bottom_spread_mean"],
-                    "pass_gate": row["pass_gate"],
-                    "fail_reason": row["fail_reason"],
-                    "score": score_map.get(row["factor_name"], {}).get("score"),
-                    "split_fail_count": split_fails.get(row["factor_name"], 0),
-                    "high_corr_peers": score_map.get(row["factor_name"], {}).get("high_corr_peers", []),
-                }
-            )
-        for row in candidates:
-            factor_rows.append(
-                {
-                    "run_id": run_id,
-                    "factor_name": row["factor_name"],
-                    "variant": "candidate",
-                    "expression": row["expression"],
-                    "rank_ic_mean": row["raw_rank_ic_mean"],
-                    "rank_ic_ir": row["raw_rank_ic_ir"],
-                    "top_bottom_spread_mean": None,
-                    "pass_gate": 1,
-                    "fail_reason": None,
-                    "score": score_map.get(row["factor_name"], {}).get("score"),
-                    "split_fail_count": row.get("split_fail_count", 0),
-                    "high_corr_peers": row.get("high_corr_peers", []),
-                }
-            )
-        for row in graveyard:
-            factor_rows.append(
-                {
-                    "run_id": run_id,
-                    "factor_name": row["factor_name"],
-                    "variant": "graveyard",
-                    "expression": row["expression"],
-                    "rank_ic_mean": row["raw_rank_ic_mean"],
-                    "rank_ic_ir": row["raw_rank_ic_ir"],
-                    "top_bottom_spread_mean": None,
-                    "pass_gate": 0,
-                    "fail_reason": row.get("graveyard_reason"),
-                    "score": score_map.get(row["factor_name"], {}).get("score"),
-                    "split_fail_count": row.get("split_fail_count", 0),
-                    "high_corr_peers": row.get("high_corr_peers", []),
-                }
-            )
-        store.insert_factor_rows(factor_rows)
-        store.insert_portfolio_rows(run_id, portfolio_results)
-        store.insert_artifacts(
-            run_id,
-            [
-                ("summary", str(output / "summary.md")),
-                ("ledger", str(output / "experiment_ledger.json")),
-                ("scores", str(output / "factor_scores.json")),
-                ("portfolio", str(output / "portfolio_results.json")),
-            ],
-        )
+            split_fails = {}
+            for row in split_results:
+                split_fails.setdefault(row["factor_name"], 0)
+                if not row["pass_gate"]:
+                    split_fails[row["factor_name"]] += 1
+            score_map = {row["factor_name"]: row for row in scored_factors}
 
-        _write_summary(
-            results=results,
-            neutralized_results=neutralized_results,
-            split_results=split_results,
-            portfolio_results=portfolio_results,
-            candidates=candidates,
-            graveyard=graveyard,
-            scored_factors=scored_factors,
-            cluster_representatives=cluster_representatives,
-            output_dir=output,
-            source_name=config.get("data_source", "sample"),
-        )
+            factor_rows = []
+            for row in results:
+                factor_rows.append(
+                    {
+                        "run_id": run_id,
+                        "factor_name": row["factor_name"],
+                        "variant": "raw_scored",
+                        "expression": row["expression"],
+                        "rank_ic_mean": row["rank_ic_mean"],
+                        "rank_ic_ir": row["rank_ic_ir"],
+                        "top_bottom_spread_mean": row["top_bottom_spread_mean"],
+                        "pass_gate": row["pass_gate"],
+                        "fail_reason": row["fail_reason"],
+                        "score": score_map.get(row["factor_name"], {}).get("score"),
+                        "split_fail_count": split_fails.get(row["factor_name"], 0),
+                        "high_corr_peers": score_map.get(row["factor_name"], {}).get("high_corr_peers", []),
+                    }
+                )
+            for row in neutralized_results:
+                factor_rows.append(
+                    {
+                        "run_id": run_id,
+                        "factor_name": row["factor_name"],
+                        "variant": "neutralized",
+                        "expression": row["expression"],
+                        "rank_ic_mean": row["rank_ic_mean"],
+                        "rank_ic_ir": row["rank_ic_ir"],
+                        "top_bottom_spread_mean": row["top_bottom_spread_mean"],
+                        "pass_gate": row["pass_gate"],
+                        "fail_reason": row["fail_reason"],
+                        "score": score_map.get(row["factor_name"], {}).get("score"),
+                        "split_fail_count": split_fails.get(row["factor_name"], 0),
+                        "high_corr_peers": score_map.get(row["factor_name"], {}).get("high_corr_peers", []),
+                    }
+                )
+            for row in candidates:
+                factor_rows.append(
+                    {
+                        "run_id": run_id,
+                        "factor_name": row["factor_name"],
+                        "variant": "candidate",
+                        "expression": row["expression"],
+                        "rank_ic_mean": row["raw_rank_ic_mean"],
+                        "rank_ic_ir": row["raw_rank_ic_ir"],
+                        "top_bottom_spread_mean": None,
+                        "pass_gate": 1,
+                        "fail_reason": None,
+                        "score": score_map.get(row["factor_name"], {}).get("score"),
+                        "split_fail_count": row.get("split_fail_count", 0),
+                        "high_corr_peers": row.get("high_corr_peers", []),
+                    }
+                )
+            for row in graveyard:
+                factor_rows.append(
+                    {
+                        "run_id": run_id,
+                        "factor_name": row["factor_name"],
+                        "variant": "graveyard",
+                        "expression": row["expression"],
+                        "rank_ic_mean": row["raw_rank_ic_mean"],
+                        "rank_ic_ir": row["raw_rank_ic_ir"],
+                        "top_bottom_spread_mean": None,
+                        "pass_gate": 0,
+                        "fail_reason": row.get("graveyard_reason"),
+                        "score": score_map.get(row["factor_name"], {}).get("score"),
+                        "split_fail_count": row.get("split_fail_count", 0),
+                        "high_corr_peers": row.get("high_corr_peers", []),
+                    }
+                )
+            store.insert_factor_rows(factor_rows)
+            store.insert_portfolio_rows(run_id, portfolio_results)
+
+            _write_summary(
+                results=results,
+                neutralized_results=neutralized_results,
+                split_results=split_results,
+                portfolio_results=portfolio_results,
+                candidates=candidates,
+                graveyard=graveyard,
+                scored_factors=scored_factors,
+                cluster_representatives=cluster_representatives,
+                output_dir=output,
+                source_name=config.get("data_source", "sample"),
+            )
+            timing.write_json(output / "timing.json")
+            store.insert_artifacts(
+                run_id,
+                [
+                    ("summary", str(output / "summary.md")),
+                    ("ledger", str(output / "experiment_ledger.json")),
+                    ("scores", str(output / "factor_scores.json")),
+                    ("portfolio", str(output / "portfolio_results.json")),
+                    ("timing", str(output / "timing.json")),
+                ],
+            )
         task_tracker.finish(task, status="finished")
     except Exception as exc:
+        timing.write_json(output / "timing.json")
         task_tracker.finish(task, status="failed", error=str(exc))
         store = ExperimentStore(Path("artifacts") / "factor_lab.db")
         store.insert_run(
