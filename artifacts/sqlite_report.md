@@ -11,6 +11,17 @@
 - value_bp | family=value | status=promising | evals=145 | windows=8 | avg=5.910476 | best=8.956324 | latest=1.311582 | pass_rate=0.8897 | next=refine
 - mom_plus_value | family=momentum | status=promising | evals=185 | windows=8 | avg=8.11212 | best=9.055424 | latest=1.144852 | pass_rate=0.9135 | next=refine
 
+## Candidate Families
+
+- quality | candidates=1 | promising=0 | testing=1 | rejected=0 | avg_candidate=4.41182 | avg_latest=4.41182 | evals=2 | windows=1
+- value | candidates=3 | promising=1 | testing=2 | rejected=0 | avg_candidate=5.866679 | avg_latest=3.193535 | evals=294 | windows=18
+- other | candidates=1 | promising=0 | testing=1 | rejected=0 | avg_candidate=7.989338 | avg_latest=3.025676 | evals=185 | windows=8
+- momentum | candidates=2 | promising=2 | testing=0 | rejected=0 | avg_candidate=8.318303 | avg_latest=3.005268 | evals=372 | windows=17
+- liquidity | candidates=1 | promising=0 | testing=1 | rejected=0 | avg_candidate=7.969937 | avg_latest=2.364005 | evals=187 | windows=9
+
+## Candidate Relationship Pairs
+
+
 ## Top Factors by Average Score
 
 - quality_roe | avg_score=4.512202 | runs=2

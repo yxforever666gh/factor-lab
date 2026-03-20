@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from factor_lab.candidate_graph import build_graph_artifacts
 from factor_lab.db_views import ensure_views
 
 
@@ -51,6 +52,23 @@ def write_sqlite_report(db_path: str | Path, output_path: str | Path) -> None:
         LIMIT 10
         """
     ).fetchall()
+    family_summary = cur.execute(
+        """
+        SELECT family, candidate_count, promising_count, testing_count, rejected_count,
+               ROUND(avg_candidate_score, 6), ROUND(avg_latest_score, 6), evaluation_count, window_count
+        FROM v_candidate_family_summary
+        ORDER BY COALESCE(avg_latest_score, -999) DESC, candidate_count DESC, family ASC
+        LIMIT 10
+        """
+    ).fetchall()
+    relationship_pairs = cur.execute(
+        """
+        SELECT left_name, right_name, relationship_type, ROUND(strength, 6), run_id
+        FROM v_candidate_relationship_pairs
+        ORDER BY COALESCE(strength, 0) DESC, updated_at_utc DESC
+        LIMIT 12
+        """
+    ).fetchall()
 
     lines = [
         "# SQLite Experiment Report",
@@ -62,6 +80,16 @@ def write_sqlite_report(db_path: str | Path, output_path: str | Path) -> None:
         lines.append(
             f"- {row[0]} | family={row[1]} | status={row[2]} | evals={row[3]} | windows={row[4]} | avg={row[5]} | best={row[6]} | latest={row[7]} | pass_rate={row[8]} | next={row[9]}"
         )
+
+    lines.extend(["", "## Candidate Families", ""])
+    for row in family_summary:
+        lines.append(
+            f"- {row[0]} | candidates={row[1]} | promising={row[2]} | testing={row[3]} | rejected={row[4]} | avg_candidate={row[5]} | avg_latest={row[6]} | evals={row[7]} | windows={row[8]}"
+        )
+
+    lines.extend(["", "## Candidate Relationship Pairs", ""])
+    for left_name, right_name, rel_type, strength, run_id in relationship_pairs:
+        lines.append(f"- {left_name} <-> {right_name} | type={rel_type} | strength={strength} | run_id={run_id}")
 
     lines.extend(["", "## Top Factors by Average Score", ""])
     for name, avg_score, runs in top_factors:
@@ -78,3 +106,4 @@ def write_sqlite_report(db_path: str | Path, output_path: str | Path) -> None:
         )
 
     Path(output_path).write_text("\n".join(lines), encoding="utf-8")
+    build_graph_artifacts(db_path, Path(output_path).parent)

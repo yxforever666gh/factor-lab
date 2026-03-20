@@ -16,6 +16,7 @@ from factor_lab.index_page import build_index_page
 from factor_lab.summary import build_run_summary
 from factor_lab.llm_feedback import summarize_generated_batch_run
 from factor_lab.llm_bridge import write_bridge_status
+from factor_lab.candidate_graph import build_graph_artifacts
 from factor_lab.research_expansion import maybe_expand_research_space
 from factor_lab.research_planner_pipeline import run_research_planner_pipeline
 from factor_lab.research_runtime_state import queue_budget_snapshot, recent_failure_stats, exploration_health, parse_iso_utc, recently_finished_same_fingerprint
@@ -158,6 +159,7 @@ def refresh_reports() -> None:
     build_index_page(db_path=DB_PATH, output_path="artifacts/index.html")
     build_run_summary(db_path=DB_PATH, output_path="artifacts/latest_summary.txt")
     build_change_report(db_path=DB_PATH, output_path="artifacts/change_report.md")
+    build_graph_artifacts(DB_PATH, DB_PATH.parent)
 
 
 def _enqueue_followups_for_workflow(store: ExperimentStore, task: dict[str, Any], payload: dict[str, Any]) -> list[str]:
@@ -372,8 +374,32 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
     store = ExperimentStore(DB_PATH)
     existing_tasks = store.list_research_tasks(limit=50)
     if not existing_tasks or not any(t["status"] in {"pending", "running"} for t in existing_tasks):
-        planner_result = run_research_planner_pipeline()
-        if planner_result.get("injected_count", 0) > 0:
+        planner_result = None
+        planner_error = None
+        try:
+            planner_result = run_research_planner_pipeline()
+            append_heartbeat(
+                "research_orchestrator",
+                "info",
+                summary=(
+                    f"planner pipeline: windows={planner_result.get('registry_windows_count', 0)}, "
+                    f"validation_keys={planner_result.get('registry_validation_depth_count', 0)}, "
+                    f"graveyard_keys={planner_result.get('registry_graveyard_depth_count', 0)}, "
+                    f"candidates={planner_result.get('candidate_count', 0)}, "
+                    f"selected={planner_result.get('proposal_selected_count', 0)}, "
+                    f"accepted={planner_result.get('validated_accepted_count', 0)}, "
+                    f"injected={planner_result.get('injected_count', 0)}"
+                ),
+            )
+        except Exception as exc:
+            planner_error = str(exc)
+            append_heartbeat(
+                "research_orchestrator",
+                "warning",
+                summary=f"planner pipeline failed, fallback to rules: {planner_error}",
+            )
+
+        if planner_result and planner_result.get("injected_count", 0) > 0:
             append_heartbeat(
                 "research_orchestrator",
                 "info",

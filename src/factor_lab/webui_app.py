@@ -11,6 +11,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from factor_lab.candidate_graph import build_graph_artifacts, candidate_clusters, family_rollup
 from factor_lab.db_views import ensure_views
 from factor_lab.ops import latest_task_states, trigger_script
 from factor_lab.storage import ExperimentStore
@@ -657,6 +658,34 @@ def candidate_detail_page(candidate_id: str):
     evaluations = store.list_factor_evaluations(candidate_id=candidate_id, limit=200)
     hypothesis = store.get_hypothesis_for_candidate(candidate_id)
     return render('candidate_detail.html', title=f"候选详情 {candidate['name']}", candidate=candidate, evaluations=evaluations, hypothesis=hypothesis)
+
+
+@app.get("/families", response_class=HTMLResponse)
+def families_page():
+    store = ExperimentStore(DB_PATH)
+    candidates = store.list_factor_candidates(limit=1000)
+    evaluations = store.list_factor_evaluations(limit=5000)
+    families = family_rollup(candidates, evaluations)
+    summary = {
+        'family_count': len(families),
+        'promising_count': sum(int(row['promising_count']) for row in families),
+        'evaluation_count': sum(int(row['evaluation_count']) for row in families),
+    }
+    return render('families.html', title='候选 Family', families=families, summary=summary)
+
+
+@app.get("/candidate-clusters", response_class=HTMLResponse)
+def candidate_clusters_page():
+    store = ExperimentStore(DB_PATH)
+    candidates = store.list_factor_candidates(limit=1000)
+    relationships = store.list_candidate_relationships(limit=5000)
+    clusters = candidate_clusters(candidates, relationships)
+    summary = {
+        'cluster_count': len(clusters),
+        'connected_candidate_count': sum(int(row['cluster_size']) for row in clusters),
+        'relationship_count': len(relationships),
+    }
+    return render('candidate_clusters.html', title='候选簇', clusters=clusters, summary=summary)
 
 
 @app.get("/factors", response_class=HTMLResponse)

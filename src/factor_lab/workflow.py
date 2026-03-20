@@ -19,6 +19,7 @@ from factor_lab.factor_candidates import (
     score_candidate_evaluation,
     summarize_candidate_status,
 )
+from factor_lab.candidate_graph import build_candidate_relationships
 from factor_lab.factors import FactorDefinition, apply_factor
 from factor_lab.neutralization import neutralize_by_date
 from factor_lab.portfolio import build_composite_factor, evaluate_long_short_portfolio
@@ -203,6 +204,7 @@ def _register_candidate_intelligence(
     candidates: list[dict],
     graveyard: list[dict],
     portfolio_results: list[dict],
+    clusters: list[list[str]] | None = None,
 ) -> None:
     raw_map = {row['factor_name']: row for row in results}
     neutral_map = {row['factor_name']: row for row in neutralized_results}
@@ -220,6 +222,8 @@ def _register_candidate_intelligence(
     if results:
         coverage = len(candidates) / max(len(results), 1)
     window_label = derive_window_label(config_path, config.get('start_date'), config.get('end_date'))
+    candidate_id_by_name: dict[str, str] = {}
+    family_by_name: dict[str, str] = {}
 
     for definition in config['factors']:
         name = definition['name']
@@ -230,13 +234,16 @@ def _register_candidate_intelligence(
         robust_pass_count = sum(1 for row in splits if row.get('pass_gate'))
         robust_total_count = len(splits)
         candidate_payload = candidate_map.get(name) or graveyard_map.get(name) or {}
+        inferred_family = infer_factor_family(name, definition.get('expression'))
         candidate_id = store.upsert_factor_candidate(
             name=name,
-            family=infer_factor_family(name, definition.get('expression')),
+            family=inferred_family,
             definition=definition,
             expression=definition.get('expression'),
             origin_run_id=run_id,
         )
+        candidate_id_by_name[name] = candidate_id
+        family_by_name[name] = inferred_family
         run_scope = 'official'
         if config.get('data_source') == 'sample' or 'first_workflow' in config_path:
             run_scope = 'demo'
@@ -286,9 +293,27 @@ def _register_candidate_intelligence(
         evaluations = store.list_factor_evaluations(candidate_id=candidate_id, limit=200)
         summary = summarize_candidate_status(evaluations)
         store.refresh_factor_candidate(candidate_id, summary)
-        candidate_row = store.get_factor_candidate(candidate_id) or {'name': name, 'family': infer_factor_family(name, definition.get('expression')), 'status': summary.get('status')}
+        candidate_row = store.get_factor_candidate(candidate_id) or {'name': name, 'family': inferred_family, 'status': summary.get('status')}
         hypothesis = build_hypothesis_summary(candidate_row, evaluations)
         store.upsert_research_hypothesis(candidate_id, hypothesis)
+
+    relationship_rows = build_candidate_relationships(
+        candidates=candidates,
+        candidate_id_by_name=candidate_id_by_name,
+        family_by_name=family_by_name,
+        correlation_lookup={row['factor_name']: row.get('high_corr_peers') or [] for row in scored_factors},
+        clusters=clusters or [],
+        run_id=run_id,
+    )
+    for row in relationship_rows:
+        store.upsert_candidate_relationship(
+            left_candidate_id=row['left_candidate_id'],
+            right_candidate_id=row['right_candidate_id'],
+            relationship_type=row['relationship_type'],
+            run_id=row.get('run_id'),
+            strength=row.get('strength'),
+            details=row.get('details'),
+        )
 
 
 def run_workflow(config_path: str, output_dir: str) -> None:
@@ -552,6 +577,7 @@ def run_workflow(config_path: str, output_dir: str) -> None:
                 candidates=candidates,
                 graveyard=graveyard,
                 portfolio_results=portfolio_results,
+                clusters=clusters,
             )
 
             _write_summary(

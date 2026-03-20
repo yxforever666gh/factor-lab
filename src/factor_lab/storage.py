@@ -141,6 +141,18 @@ CREATE TABLE IF NOT EXISTS research_hypotheses (
     next_action TEXT,
     last_reviewed_at_utc TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS candidate_relationships (
+    left_candidate_id TEXT NOT NULL,
+    right_candidate_id TEXT NOT NULL,
+    relationship_type TEXT NOT NULL,
+    run_id TEXT,
+    strength REAL,
+    details_json TEXT,
+    created_at_utc TEXT NOT NULL,
+    updated_at_utc TEXT NOT NULL,
+    PRIMARY KEY (left_candidate_id, right_candidate_id, relationship_type)
+);
 """
 
 
@@ -652,6 +664,78 @@ class ExperimentStore:
         item["evidence_for"] = json.loads(item.pop("evidence_for_json") or "[]")
         item["evidence_against"] = json.loads(item.pop("evidence_against_json") or "[]")
         return item
+
+    def upsert_candidate_relationship(
+        self,
+        *,
+        left_candidate_id: str,
+        right_candidate_id: str,
+        relationship_type: str,
+        run_id: str | None = None,
+        strength: float | None = None,
+        details: dict[str, Any] | None = None,
+    ) -> None:
+        if left_candidate_id == right_candidate_id:
+            return
+        if left_candidate_id > right_candidate_id:
+            left_candidate_id, right_candidate_id = right_candidate_id, left_candidate_id
+        now = datetime.now(timezone.utc).isoformat()
+        self.conn.execute(
+            """
+            INSERT INTO candidate_relationships (
+                left_candidate_id, right_candidate_id, relationship_type, run_id, strength,
+                details_json, created_at_utc, updated_at_utc
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(left_candidate_id, right_candidate_id, relationship_type)
+            DO UPDATE SET run_id=excluded.run_id,
+                          strength=excluded.strength,
+                          details_json=excluded.details_json,
+                          updated_at_utc=excluded.updated_at_utc
+            """,
+            (
+                left_candidate_id,
+                right_candidate_id,
+                relationship_type,
+                run_id,
+                strength,
+                json.dumps(details or {}, ensure_ascii=False, sort_keys=True),
+                now,
+                now,
+            ),
+        )
+        self.conn.commit()
+
+    def list_candidate_relationships(self, limit: int = 1000) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT r.left_candidate_id, l.name, r.right_candidate_id, rr.name,
+                   r.relationship_type, r.run_id, r.strength, r.details_json,
+                   r.created_at_utc, r.updated_at_utc
+            FROM candidate_relationships r
+            LEFT JOIN factor_candidates l ON l.id = r.left_candidate_id
+            LEFT JOIN factor_candidates rr ON rr.id = r.right_candidate_id
+            ORDER BY COALESCE(r.strength, 0) DESC, r.updated_at_utc DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        items = []
+        for row in rows:
+            items.append(
+                {
+                    "left_candidate_id": row[0],
+                    "left_name": row[1],
+                    "right_candidate_id": row[2],
+                    "right_name": row[3],
+                    "relationship_type": row[4],
+                    "run_id": row[5],
+                    "strength": row[6],
+                    "details": json.loads(row[7] or "{}"),
+                    "created_at_utc": row[8],
+                    "updated_at_utc": row[9],
+                }
+            )
+        return items
 
     def top_promising_candidates(self, limit: int = 5) -> list[dict[str, Any]]:
         return self.list_factor_candidates(limit=limit, statuses=["promising", "testing"])

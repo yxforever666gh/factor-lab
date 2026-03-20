@@ -4,6 +4,7 @@ import html
 import sqlite3
 from pathlib import Path
 
+from factor_lab.candidate_graph import build_graph_artifacts
 from factor_lab.db_views import ensure_views
 
 
@@ -31,6 +32,12 @@ def build_html_report(db_path: str | Path, output_path: str | Path) -> None:
     ).fetchall()
     latest_runs = cur.execute(
         "SELECT run_id, created_at_utc, data_source, start_date, end_date, status FROM workflow_runs ORDER BY created_at_utc DESC LIMIT 10"
+    ).fetchall()
+    family_summary = cur.execute(
+        "SELECT family, candidate_count, promising_count, testing_count, rejected_count, ROUND(avg_latest_score, 6), evaluation_count, window_count FROM v_candidate_family_summary ORDER BY COALESCE(avg_latest_score, -999) DESC, candidate_count DESC LIMIT 10"
+    ).fetchall()
+    relationship_pairs = cur.execute(
+        "SELECT left_name, right_name, relationship_type, ROUND(strength, 6), run_id FROM v_candidate_relationship_pairs ORDER BY COALESCE(strength, 0) DESC, updated_at_utc DESC LIMIT 12"
     ).fetchall()
 
     html_doc = f"""
@@ -70,6 +77,16 @@ def build_html_report(db_path: str | Path, output_path: str | Path) -> None:
     </section>
 
     <section>
+      <h2>Candidate Families</h2>
+      {_table(['Family', 'Candidates', 'Promising', 'Testing', 'Rejected', 'Avg Latest', 'Evaluations', 'Windows'], family_summary)}
+    </section>
+
+    <section>
+      <h2>Candidate Relationship Pairs</h2>
+      {_table(['Left', 'Right', 'Type', 'Strength', 'Run ID'], relationship_pairs)}
+    </section>
+
+    <section>
       <h2>Latest Workflow Runs</h2>
       {_table(['Run ID', 'Created At UTC', 'Source', 'Start', 'End', 'Status'], latest_runs)}
     </section>
@@ -78,3 +95,4 @@ def build_html_report(db_path: str | Path, output_path: str | Path) -> None:
 </html>
 """
     Path(output_path).write_text(html_doc, encoding="utf-8")
+    build_graph_artifacts(db_path, Path(output_path).parent)

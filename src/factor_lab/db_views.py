@@ -3,6 +3,8 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
+from factor_lab.storage import ExperimentStore
+
 
 VIEWS_SQL = """
 DROP VIEW IF EXISTS v_factor_score_avg;
@@ -51,10 +53,43 @@ SELECT
   rejection_reason,
   updated_at_utc
 FROM factor_candidates;
+
+DROP VIEW IF EXISTS v_candidate_family_summary;
+CREATE VIEW v_candidate_family_summary AS
+SELECT
+  COALESCE(family, 'other') AS family,
+  COUNT(*) AS candidate_count,
+  SUM(CASE WHEN status = 'promising' THEN 1 ELSE 0 END) AS promising_count,
+  SUM(CASE WHEN status = 'testing' THEN 1 ELSE 0 END) AS testing_count,
+  SUM(CASE WHEN status IN ('rejected', 'archived') THEN 1 ELSE 0 END) AS rejected_count,
+  ROUND(AVG(avg_final_score), 6) AS avg_candidate_score,
+  ROUND(AVG(latest_final_score), 6) AS avg_latest_score,
+  ROUND(MAX(best_final_score), 6) AS best_score,
+  SUM(evaluation_count) AS evaluation_count,
+  SUM(window_count) AS window_count
+FROM factor_candidates
+GROUP BY COALESCE(family, 'other');
+
+DROP VIEW IF EXISTS v_candidate_relationship_pairs;
+CREATE VIEW v_candidate_relationship_pairs AS
+SELECT
+  r.left_candidate_id,
+  l.name AS left_name,
+  r.right_candidate_id,
+  rr.name AS right_name,
+  r.relationship_type,
+  ROUND(r.strength, 6) AS strength,
+  r.run_id,
+  r.updated_at_utc
+FROM candidate_relationships r
+LEFT JOIN factor_candidates l ON l.id = r.left_candidate_id
+LEFT JOIN factor_candidates rr ON rr.id = r.right_candidate_id;
 """
 
 
 def ensure_views(db_path: str | Path) -> None:
+    bootstrap = ExperimentStore(db_path)
+    bootstrap.conn.close()
     conn = sqlite3.connect(db_path)
     conn.executescript(VIEWS_SQL)
     conn.commit()

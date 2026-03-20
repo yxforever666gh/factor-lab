@@ -1,0 +1,66 @@
+[
+  {
+    "left_candidate_id": "06229569-0a76-4cce-8fc3-1face8be1d58",
+    "left_name": "value_ep",
+    "right_candidate_id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
+    "right_name": "value_bp",
+    "relationship_type": "same_family",
+    "run_id": null,
+    "strength": 0.5,
+    "details": {
+      "family": "value",
+      "family_size": 3,
+      "source": "backfill"
+    },
+    "created_at_utc": "2026-03-20T00:59:43.776510+00:00",
+    "updated_at_utc": "2026-03-20T00:59:43.776510+00:00"
+  },
+  {
+    "left_candidate_id": "06229569-0a76-4cce-8fc3-1face8be1d58",
+    "left_name": "value_ep",
+    "right_candidate_id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
+    "right_name": "quality_minus_value",
+    "relationship_type": "same_family",
+    "run_id": null,
+    "strength": 0.5,
+    "details": {
+      "family": "value",
+      "family_size": 3,
+      "source": "backfill"
+    },
+    "created_at_utc": "2026-03-20T00:59:43.775733+00:00",
+    "updated_at_utc": "2026-03-20T00:59:43.775733+00:00"
+  },
+  {
+    "left_candidate_id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
+    "left_name": "value_bp",
+    "right_candidate_id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
+    "right_name": "quality_minus_value",
+    "relationship_type": "same_family",
+    "run_id": null,
+    "strength": 0.5,
+    "details": {
+      "family": "value",
+      "family_size": 3,
+      "source": "backfill"
+    },
+    "created_at_utc": "2026-03-20T00:59:43.774899+00:00",
+    "updated_at_utc": "2026-03-20T00:59:43.774899+00:00"
+  },
+  {
+    "left_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
+    "left_name": "mom_20",
+    "right_candidate_id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
+    "right_name": "mom_plus_value",
+    "relationship_type": "same_family",
+    "run_id": null,
+    "strength": 0.4,
+    "details": {
+      "family": "momentum",
+      "family_size": 2,
+      "source": "backfill"
+    },
+    "created_at_utc": "2026-03-20T00:59:43.772749+00:00",
+    "updated_at_utc": "2026-03-20T00:59:43.772749+00:00"
+  }
+]

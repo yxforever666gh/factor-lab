@@ -29,6 +29,12 @@ def build_index_page(db_path: str | Path, output_path: str | Path) -> None:
     failed_runs = cur.execute(
         "SELECT run_id, created_at_utc, config_path FROM workflow_runs WHERE status='failed' ORDER BY created_at_utc DESC LIMIT 10"
     ).fetchall()
+    family_summary = cur.execute(
+        "SELECT family, candidate_count, promising_count, testing_count, rejected_count, ROUND(avg_latest_score, 6) FROM v_candidate_family_summary ORDER BY COALESCE(avg_latest_score, -999) DESC, candidate_count DESC LIMIT 10"
+    ).fetchall()
+    relationship_pairs = cur.execute(
+        "SELECT left_name, right_name, relationship_type, ROUND(strength, 6) FROM v_candidate_relationship_pairs ORDER BY COALESCE(strength, 0) DESC, updated_at_utc DESC LIMIT 10"
+    ).fetchall()
 
     def table(headers, rows):
         return (
@@ -68,6 +74,10 @@ def build_index_page(db_path: str | Path, output_path: str | Path) -> None:
   {table(['Run ID','Created At UTC','Status','Config'], latest_runs)}
   <h2>Stable Candidates</h2>
   {table(['Factor','Candidate Runs'], latest_candidates)}
+  <h2>Candidate Families</h2>
+  {table(['Family','Candidates','Promising','Testing','Rejected','Avg Latest'], family_summary)}
+  <h2>Candidate Relationship Pairs</h2>
+  {table(['Left','Right','Type','Strength'], relationship_pairs)}
   <h2>Failed Runs</h2>
   {table(['Run ID','Created At UTC','Config'], failed_runs) if failed_runs else '<p>None</p>'}
 </body>
