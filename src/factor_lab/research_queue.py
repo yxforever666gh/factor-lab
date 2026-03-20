@@ -417,8 +417,9 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
                     f"strategy_approved={planner_result.get('strategy_approved_count', 0)}, "
                     f"accepted={planner_result.get('validated_accepted_count', 0)}, "
                     f"recovery={planner_result.get('recovery_used', False)}, "
-                    f"main_state={(planner_result.get('main_task_generation') or {}).get('state', 'unknown')}, "
-                    f"injected={planner_result.get('injected_count', 0)}"
+                    f"research_state={(planner_result.get('research_flow_state') or {}).get('state', 'unknown')}, "
+                    f"tasks_injected={planner_result.get('injected_count', 0)}, "
+                    f"opp_injected={((planner_result.get('opportunity_execution') or {}).get('injected_count', 0))}"
                 ),
             )
         except Exception as exc:
