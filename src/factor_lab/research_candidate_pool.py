@@ -30,9 +30,12 @@ def _cluster_rep_map(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
     rows = snapshot.get('cluster_representatives', []) or []
     out: dict[str, dict[str, Any]] = {}
     for row in rows:
-        name = row.get('primary_candidate')
-        if name:
-            out[name] = row
+        rep_name = row.get('representative_candidate')
+        primary_name = row.get('primary_candidate')
+        if rep_name:
+            out[rep_name] = row
+        if primary_name and primary_name not in out:
+            out[primary_name] = row
     return out
 
 
@@ -97,16 +100,22 @@ def _prefer_representatives(stable_candidates: list[str], candidate_context_by_n
     for name in stable_candidates:
         context = candidate_context_by_name.get(name, {})
         cluster = context.get('cluster') or {}
-        primary = cluster.get('primary_candidate') or name
-        if primary not in selected_set:
-            selected.append(primary)
-            selected_set.add(primary)
-        if primary != name:
+        rep_candidates = cluster.get('representative_candidates') or [cluster.get('primary_candidate') or name]
+        rep_candidates = [rep for rep in rep_candidates if rep]
+        if name in rep_candidates:
+            chosen = name
+        else:
+            chosen = rep_candidates[0] if rep_candidates else (cluster.get('primary_candidate') or name)
+        if chosen not in selected_set:
+            selected.append(chosen)
+            selected_set.add(chosen)
+        if chosen != name:
             suppressed.append({
                 'candidate': name,
-                'suppressed_into': primary,
+                'suppressed_into': chosen,
                 'cluster_id': cluster.get('cluster_id'),
-                'reason': 'same_cluster_primary_retained',
+                'available_representatives': rep_candidates,
+                'reason': 'cluster_representative_retained',
             })
     enriched = []
     for name in selected:
@@ -114,6 +123,9 @@ def _prefer_representatives(stable_candidates: list[str], candidate_context_by_n
         enriched.append({
             'candidate': name,
             'cluster_id': row.get('cluster_id'),
+            'representative_rank': row.get('representative_rank'),
+            'representative_count': row.get('representative_count'),
+            'is_primary_representative': row.get('is_primary_representative'),
             'suppressed_candidates': row.get('suppressed_candidates') or [],
         })
     return selected, suppressed + enriched
@@ -222,7 +234,7 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
             task['reason'] += (
                 f" 重点候选累计关系 {relationship_count} 条、lineage {lineage_count} 条"
                 + (f"，最强 family={strongest_family}" if strongest_family else "")
-                + f"。保留 cluster primary 后实际验证 {len(stable_candidates)} 个代表候选，压制 {len([r for r in representative_notes if r.get('suppressed_into')])} 个重复/近重复候选。"
+                + f"。保留 cluster representatives 后实际验证 {len(stable_candidates)} 个代表候选，压制 {len([r for r in representative_notes if r.get('suppressed_into')])} 个重复/近重复候选。"
             )
             append_task(task, 'stable_validation_already_covered')
     if graveyard_level and ('graveyard_diagnosis' in selected_families or not selected_families):

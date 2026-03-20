@@ -1,30 +1,52 @@
 {
   "latest_run": {
-    "run_id": "a237fc4d-fa0c-44ad-a5fb-527a6709d093",
-    "created_at_utc": "2026-03-20T00:06:38.052490+00:00",
-    "config_path": "configs/first_workflow.json",
-    "data_source": "sample",
-    "start_date": null,
-    "end_date": null,
+    "run_id": "356bb2a8-9133-4ef2-bcaf-4d578e2eedde",
+    "created_at_utc": "2026-03-20T13:49:38.663932+00:00",
+    "config_path": "artifacts/generated_configs/rolling_480d_back.json",
+    "data_source": "tushare",
+    "start_date": "2024-09-01",
+    "end_date": "2026-03-18",
     "status": "finished",
-    "dataset_rows": 12900,
-    "factor_count": 5
+    "dataset_rows": 4200,
+    "factor_count": 6
   },
   "latest_runs": [
     {
-      "run_id": "a237fc4d-fa0c-44ad-a5fb-527a6709d093",
-      "created_at_utc": "2026-03-20T00:06:38.052490+00:00",
-      "config_path": "configs/first_workflow.json",
-      "data_source": "sample",
-      "start_date": null,
-      "end_date": null,
+      "run_id": "356bb2a8-9133-4ef2-bcaf-4d578e2eedde",
+      "created_at_utc": "2026-03-20T13:49:38.663932+00:00",
+      "config_path": "artifacts/generated_configs/rolling_480d_back.json",
+      "data_source": "tushare",
+      "start_date": "2024-09-01",
+      "end_date": "2026-03-18",
       "status": "finished",
-      "dataset_rows": 12900,
-      "factor_count": 5
+      "dataset_rows": 4200,
+      "factor_count": 6
     },
     {
-      "run_id": "74ba3c6d-4c0f-4304-8344-2f27b2d6ccd7",
-      "created_at_utc": "2026-03-20T00:00:27.678208+00:00",
+      "run_id": "e1bb5de4-20f4-41cf-ab09-8f70933ed94b",
+      "created_at_utc": "2026-03-20T13:49:32.889827+00:00",
+      "config_path": "artifacts/generated_workflow_from_llm.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 473,
+      "factor_count": 4
+    },
+    {
+      "run_id": "6df37337-fe86-4a2f-b8f6-9e36d113baf7",
+      "created_at_utc": "2026-03-20T13:49:21.489161+00:00",
+      "config_path": "configs/tushare_workflow_longer.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 473,
+      "factor_count": 6
+    },
+    {
+      "run_id": "6e95459c-055e-45bf-bb8f-97422517abea",
+      "created_at_utc": "2026-03-20T13:49:16.169419+00:00",
       "config_path": "configs/tushare_workflow.json",
       "data_source": "tushare",
       "start_date": "2026-01-01",
@@ -34,212 +56,190 @@
       "factor_count": 6
     },
     {
-      "run_id": "bef1bc96-2fcf-4157-8163-bef176c5a67f",
-      "created_at_utc": "2026-03-20T00:00:00.652981+00:00",
-      "config_path": "configs/first_workflow.json",
-      "data_source": "sample",
-      "start_date": null,
-      "end_date": null,
+      "run_id": "1ed24d17-6f39-48d8-aaed-91931cb62e89",
+      "created_at_utc": "2026-03-20T13:49:08.801392+00:00",
+      "config_path": "configs/tushare_workflow.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
       "status": "finished",
-      "dataset_rows": 12900,
-      "factor_count": 5
+      "dataset_rows": 473,
+      "factor_count": 6
     },
     {
-      "run_id": "b1bdf1f7-5a0f-458d-b18a-e0cdca71ad11",
-      "created_at_utc": "2026-03-19T22:45:39.714139+00:00",
+      "run_id": "101899b1-fef7-4648-ab74-89d9bb7a1a0b",
+      "created_at_utc": "2026-03-20T10:48:43.517628+00:00",
       "config_path": "artifacts/generated_workflow_from_llm.json",
       "data_source": "tushare",
       "start_date": "2026-01-01",
       "end_date": "2026-03-18",
       "status": "finished",
-      "dataset_rows": 242,
+      "dataset_rows": 473,
       "factor_count": 4
     },
     {
-      "run_id": "44ec681c-5f07-47e3-b53e-02a7849af4f8",
-      "created_at_utc": "2026-03-19T22:45:30.449186+00:00",
+      "run_id": "41ba5d56-8918-4e0f-a818-54bce05d9ec8",
+      "created_at_utc": "2026-03-20T10:48:32.088110+00:00",
       "config_path": "configs/tushare_workflow_longer.json",
       "data_source": "tushare",
       "start_date": "2026-01-01",
       "end_date": "2026-03-18",
       "status": "finished",
-      "dataset_rows": 242,
+      "dataset_rows": 473,
       "factor_count": 6
     },
     {
-      "run_id": "0a87e259-89fd-413d-8f2e-0418f5559071",
-      "created_at_utc": "2026-03-19T22:45:27.276964+00:00",
+      "run_id": "ff1050da-6e2b-456b-9945-3bce57d752b5",
+      "created_at_utc": "2026-03-20T10:48:26.729261+00:00",
       "config_path": "configs/tushare_workflow.json",
       "data_source": "tushare",
       "start_date": "2026-01-01",
       "end_date": "2026-03-18",
       "status": "finished",
-      "dataset_rows": 242,
+      "dataset_rows": 473,
       "factor_count": 6
     },
     {
-      "run_id": "a8f6232c-3793-4986-800d-c3016368d8ee",
-      "created_at_utc": "2026-03-19T22:45:22.036565+00:00",
+      "run_id": "8181dc8e-1f49-4951-add9-4d18b7be3020",
+      "created_at_utc": "2026-03-20T10:48:19.298015+00:00",
       "config_path": "configs/tushare_workflow.json",
       "data_source": "tushare",
       "start_date": "2026-01-01",
       "end_date": "2026-03-18",
       "status": "finished",
-      "dataset_rows": 242,
+      "dataset_rows": 473,
       "factor_count": 6
     },
     {
-      "run_id": "d4320960-6513-4627-82cf-40faf1212c75",
-      "created_at_utc": "2026-03-19T20:42:09.865682+00:00",
-      "config_path": "artifacts/generated_configs/rolling_480d_back.json",
-      "data_source": "tushare",
-      "start_date": "2024-09-01",
-      "end_date": "2026-03-18",
-      "status": "finished",
-      "dataset_rows": 3965,
-      "factor_count": 6
-    },
-    {
-      "run_id": "1dc541ac-1fa5-4f24-8fb2-93bc539af093",
-      "created_at_utc": "2026-03-19T20:14:04.853215+00:00",
-      "config_path": "artifacts/generated_configs/rolling_recent_270d.json",
-      "data_source": "tushare",
-      "start_date": "2025-06-20",
-      "end_date": "2026-03-18",
-      "status": "finished",
-      "dataset_rows": 1726,
-      "factor_count": 6
-    },
-    {
-      "run_id": "6ec2d1bc-c2d6-4d7d-aee4-858fe90d4cc6",
-      "created_at_utc": "2026-03-19T20:06:00.768329+00:00",
-      "config_path": "artifacts/generated_configs/rolling_recent_240d.json",
-      "data_source": "tushare",
-      "start_date": "2025-07-20",
-      "end_date": "2026-03-18",
-      "status": "finished",
-      "dataset_rows": 1474,
-      "factor_count": 6
-    },
-    {
-      "run_id": "8bba83d4-a4a3-4057-bda2-5a805e0bdf0f",
-      "created_at_utc": "2026-03-19T20:01:04.754879+00:00",
-      "config_path": "artifacts/generated_configs/rolling_recent_210d.json",
-      "data_source": "tushare",
-      "start_date": "2025-08-20",
-      "end_date": "2026-03-18",
-      "status": "finished",
-      "dataset_rows": 1210,
-      "factor_count": 6
-    },
-    {
-      "run_id": "4d2926c3-0928-424f-a1de-85f5a6ffddfc",
-      "created_at_utc": "2026-03-19T19:44:43.118732+00:00",
-      "config_path": "configs/tushare_workflow_longer.json",
-      "data_source": "tushare",
-      "start_date": "2026-01-01",
-      "end_date": "2026-03-18",
-      "status": "finished",
-      "dataset_rows": 242,
-      "factor_count": 6
-    },
-    {
-      "run_id": "24b950df-e093-4b6d-a595-d42ea28ffb7a",
-      "created_at_utc": "2026-03-19T19:44:39.804506+00:00",
-      "config_path": "configs/tushare_workflow.json",
-      "data_source": "tushare",
-      "start_date": "2026-01-01",
-      "end_date": "2026-03-18",
-      "status": "finished",
-      "dataset_rows": 242,
-      "factor_count": 6
-    },
-    {
-      "run_id": "9b51cc47-5a37-470b-b543-af0390b1a2e0",
-      "created_at_utc": "2026-03-19T19:44:34.459078+00:00",
-      "config_path": "configs/tushare_workflow.json",
-      "data_source": "tushare",
-      "start_date": "2026-01-01",
-      "end_date": "2026-03-18",
-      "status": "finished",
-      "dataset_rows": 242,
-      "factor_count": 6
-    },
-    {
-      "run_id": "6928ee2c-6243-4830-8b39-389138bc9aa2",
-      "created_at_utc": "2026-03-19T19:44:30.033854+00:00",
+      "run_id": "1053bbbb-5ff6-497a-8ce8-d0f3e8ef3d09",
+      "created_at_utc": "2026-03-20T07:47:54.985363+00:00",
       "config_path": "artifacts/generated_workflow_from_llm.json",
       "data_source": "tushare",
       "start_date": "2026-01-01",
       "end_date": "2026-03-18",
       "status": "finished",
-      "dataset_rows": 242,
+      "dataset_rows": 473,
       "factor_count": 4
     },
     {
-      "run_id": "8ed57ef9-19a2-4a6b-ac96-d916b36e5423",
-      "created_at_utc": "2026-03-19T19:40:28.872580+00:00",
-      "config_path": "artifacts/generated_configs/rolling_recent_180d.json",
-      "data_source": "tushare",
-      "start_date": "2025-09-20",
-      "end_date": "2026-03-18",
-      "status": "finished",
-      "dataset_rows": 955,
-      "factor_count": 6
-    },
-    {
-      "run_id": "5bd75263-0463-4063-837e-0a1064933529",
-      "created_at_utc": "2026-03-19T16:43:03.903007+00:00",
-      "config_path": "artifacts/generated_workflow_from_llm.json",
-      "data_source": "tushare",
-      "start_date": "2026-01-01",
-      "end_date": "2026-03-18",
-      "status": "finished",
-      "dataset_rows": 242,
-      "factor_count": 4
-    },
-    {
-      "run_id": "99bbe64c-1bb5-4555-b046-f2b202171aee",
-      "created_at_utc": "2026-03-19T16:42:54.675767+00:00",
+      "run_id": "dd9cdabc-102a-46b2-b9d6-17720c424391",
+      "created_at_utc": "2026-03-20T07:47:43.625314+00:00",
       "config_path": "configs/tushare_workflow_longer.json",
       "data_source": "tushare",
       "start_date": "2026-01-01",
       "end_date": "2026-03-18",
       "status": "finished",
-      "dataset_rows": 242,
+      "dataset_rows": 473,
       "factor_count": 6
     },
     {
-      "run_id": "f63dc53f-142d-492d-aaa5-62e1c4e551e8",
-      "created_at_utc": "2026-03-19T16:42:51.519962+00:00",
+      "run_id": "39f56442-0318-470c-a58d-98fad9bf9610",
+      "created_at_utc": "2026-03-20T07:47:38.231384+00:00",
       "config_path": "configs/tushare_workflow.json",
       "data_source": "tushare",
       "start_date": "2026-01-01",
       "end_date": "2026-03-18",
       "status": "finished",
-      "dataset_rows": 242,
+      "dataset_rows": 473,
       "factor_count": 6
     },
     {
-      "run_id": "9d0f0a08-ba7a-49f8-9f95-9e750eb8c380",
-      "created_at_utc": "2026-03-19T16:42:46.308907+00:00",
+      "run_id": "64ab61d4-ece4-4114-84e3-9aad27d2eb2c",
+      "created_at_utc": "2026-03-20T07:47:30.873720+00:00",
       "config_path": "configs/tushare_workflow.json",
       "data_source": "tushare",
       "start_date": "2026-01-01",
       "end_date": "2026-03-18",
       "status": "finished",
-      "dataset_rows": 242,
+      "dataset_rows": 473,
+      "factor_count": 6
+    },
+    {
+      "run_id": "3ba073ae-1eca-4eaf-b7ad-60ca1a572a3e",
+      "created_at_utc": "2026-03-20T04:47:05.756356+00:00",
+      "config_path": "artifacts/generated_workflow_from_llm.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 473,
+      "factor_count": 4
+    },
+    {
+      "run_id": "d7e509a2-008f-41b5-8a40-eb31e42a5f5b",
+      "created_at_utc": "2026-03-20T04:46:54.393545+00:00",
+      "config_path": "configs/tushare_workflow_longer.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 473,
+      "factor_count": 6
+    },
+    {
+      "run_id": "c4a4a12f-b74a-43d6-8634-0b41925732a7",
+      "created_at_utc": "2026-03-20T04:46:49.070511+00:00",
+      "config_path": "configs/tushare_workflow.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 473,
+      "factor_count": 6
+    },
+    {
+      "run_id": "0b82ae1b-db3f-40d8-9d48-42ac3ed46d1e",
+      "created_at_utc": "2026-03-20T04:46:41.694381+00:00",
+      "config_path": "configs/tushare_workflow.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 473,
+      "factor_count": 6
+    },
+    {
+      "run_id": "966f3125-9b9c-4713-b993-95e0ef2e6122",
+      "created_at_utc": "2026-03-20T01:46:15.049872+00:00",
+      "config_path": "artifacts/generated_workflow_from_llm.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 473,
+      "factor_count": 4
+    },
+    {
+      "run_id": "71f687f3-4793-4bce-9427-fdd4edb7f01c",
+      "created_at_utc": "2026-03-20T01:46:03.051664+00:00",
+      "config_path": "configs/tushare_workflow_longer.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 473,
+      "factor_count": 6
+    },
+    {
+      "run_id": "2bcf0700-6e07-4849-ba46-d7ba64e580b5",
+      "created_at_utc": "2026-03-20T01:45:57.033165+00:00",
+      "config_path": "configs/tushare_workflow.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 473,
       "factor_count": 6
     }
   ],
-  "latest_candidates": [
-    "mom_20",
-    "quality_minus_value",
-    "quality_roe",
-    "value_ep"
-  ],
+  "latest_candidates": [],
   "latest_graveyard": [
-    "liquidity_turnover_shock"
+    "liquidity_turnover_shock",
+    "mom_20",
+    "mom_plus_value",
+    "size_small",
+    "value_bp",
+    "value_ep"
   ],
   "stable_candidates": [
     {
@@ -280,33 +280,33 @@
     },
     {
       "factor_name": "mom_20",
-      "avg_score": 1.386701,
-      "runs": 187
+      "avg_score": 1.213236,
+      "runs": 208
     },
     {
       "factor_name": "mom_plus_value",
-      "avg_score": 1.032017,
-      "runs": 185
-    },
-    {
-      "factor_name": "size_small",
-      "avg_score": 0.472745,
-      "runs": 185
+      "avg_score": 0.887084,
+      "runs": 206
     },
     {
       "factor_name": "liquidity_turnover_shock",
-      "avg_score": 0.470518,
-      "runs": 187
+      "avg_score": 0.464833,
+      "runs": 208
+    },
+    {
+      "factor_name": "size_small",
+      "avg_score": 0.458579,
+      "runs": 206
     },
     {
       "factor_name": "value_ep",
-      "avg_score": 0.399132,
-      "runs": 147
+      "avg_score": 0.352758,
+      "runs": 163
     },
     {
       "factor_name": "value_bp",
-      "avg_score": -0.226092,
-      "runs": 145
+      "avg_score": -0.177742,
+      "runs": 161
     }
   ],
   "queue_counts": {
@@ -332,128 +332,128 @@
     "should_throttle": false
   },
   "daemon_status": {
-    "updated_at_utc": "2026-03-20T01:43:48.707862+00:00",
+    "updated_at_utc": "2026-03-20T15:59:46.658910+00:00",
     "pid": 1073652,
     "state": "idle",
     "processed_count": 0
   },
   "heartbeat_tail": [
     {
-      "recorded_at_utc": "2026-03-20T01:37:48.076317+00:00",
+      "recorded_at_utc": "2026-03-20T15:53:45.529895+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:37:48.076519+00:00",
+      "recorded_at_utc": "2026-03-20T15:53:45.530096+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:38:48.162400+00:00",
+      "recorded_at_utc": "2026-03-20T15:54:45.616575+00:00",
       "scope": "research_orchestrator",
       "status": "info",
-      "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=5, candidates=0, selected=0, accepted=0, injected=0"
+      "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=8, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:38:48.175573+00:00",
+      "recorded_at_utc": "2026-03-20T15:54:45.631966+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:38:48.175756+00:00",
+      "recorded_at_utc": "2026-03-20T15:54:45.632167+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:39:48.264820+00:00",
+      "recorded_at_utc": "2026-03-20T15:55:45.722556+00:00",
       "scope": "research_orchestrator",
       "status": "info",
-      "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=5, candidates=0, selected=0, accepted=0, injected=0"
+      "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=8, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:39:48.278103+00:00",
+      "recorded_at_utc": "2026-03-20T15:55:45.737277+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:39:48.278327+00:00",
+      "recorded_at_utc": "2026-03-20T15:55:45.737481+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:40:48.359484+00:00",
+      "recorded_at_utc": "2026-03-20T15:56:45.827998+00:00",
       "scope": "research_orchestrator",
       "status": "info",
-      "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=5, candidates=0, selected=0, accepted=0, injected=0"
+      "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=8, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:40:48.373737+00:00",
+      "recorded_at_utc": "2026-03-20T15:56:45.843049+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:40:48.374059+00:00",
+      "recorded_at_utc": "2026-03-20T15:56:45.843259+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:41:48.469180+00:00",
+      "recorded_at_utc": "2026-03-20T15:57:45.916004+00:00",
       "scope": "research_orchestrator",
       "status": "info",
-      "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=5, candidates=0, selected=0, accepted=0, injected=0"
+      "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=8, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:41:48.485577+00:00",
+      "recorded_at_utc": "2026-03-20T15:57:45.931135+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:41:48.485869+00:00",
+      "recorded_at_utc": "2026-03-20T15:57:45.931344+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:42:48.581919+00:00",
+      "recorded_at_utc": "2026-03-20T15:58:46.018800+00:00",
       "scope": "research_orchestrator",
       "status": "info",
-      "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=5, candidates=0, selected=0, accepted=0, injected=0"
+      "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=8, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:42:48.597499+00:00",
+      "recorded_at_utc": "2026-03-20T15:58:46.033831+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:42:48.597726+00:00",
+      "recorded_at_utc": "2026-03-20T15:58:46.034048+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:43:48.689603+00:00",
+      "recorded_at_utc": "2026-03-20T15:59:46.642663+00:00",
       "scope": "research_orchestrator",
       "status": "info",
-      "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=5, candidates=0, selected=0, accepted=0, injected=0"
+      "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=8, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:43:48.706758+00:00",
+      "recorded_at_utc": "2026-03-20T15:59:46.657633+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:43:48.707036+00:00",
+      "recorded_at_utc": "2026-03-20T15:59:46.657825+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
@@ -526,7 +526,7 @@
   "llm_status": {
     "mode": "openclaw_agent_bridge",
     "status": "plan_executed",
-    "updated_at_utc": "2026-03-19T22:45:42.028788+00:00",
+    "updated_at_utc": "2026-03-20T13:49:36.610013+00:00",
     "generated_batch_path": "artifacts/generated_batch_from_llm.json",
     "generated_batch_output_dir": "artifacts/llm_generated_batch_run",
     "feedback_path": "artifacts/llm_plan_feedback.json",
@@ -534,12 +534,11 @@
       {
         "job_name": "llm_focus_batch",
         "total_factors": 4,
-        "candidate_count": 2,
-        "graveyard_count": 2
+        "candidate_count": 0,
+        "graveyard_count": 4
       }
     ],
     "knowledge_gain": [
-      "exploration_candidate_survived",
       "exploration_graveyard_identified"
     ]
   },
@@ -714,7 +713,12 @@
       "leader": "mom_20",
       "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
       "primary_candidate": "mom_20",
-      "suppressed_member_count": 5,
+      "representative_count": 2,
+      "representative_candidates": [
+        "mom_20",
+        "value_bp"
+      ],
+      "suppressed_member_count": 4,
       "members": [
         {
           "id": "5032916e-07f4-45e2-9618-3cfc8e700940",
@@ -724,7 +728,8 @@
           "latest_final_score": 4.865683,
           "avg_final_score": 8.524486,
           "evaluation_count": 187,
-          "is_primary": true
+          "is_primary": true,
+          "is_representative": true
         },
         {
           "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
@@ -734,7 +739,8 @@
           "latest_final_score": 1.311582,
           "avg_final_score": 5.910476,
           "evaluation_count": 145,
-          "is_primary": false
+          "is_primary": false,
+          "is_representative": true
         },
         {
           "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -744,7 +750,8 @@
           "latest_final_score": 1.144852,
           "avg_final_score": 8.11212,
           "evaluation_count": 185,
-          "is_primary": false
+          "is_primary": false,
+          "is_representative": false
         },
         {
           "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
@@ -754,7 +761,8 @@
           "latest_final_score": 4.41182,
           "avg_final_score": 4.41182,
           "evaluation_count": 2,
-          "is_primary": false
+          "is_primary": false,
+          "is_representative": false
         },
         {
           "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
@@ -764,7 +772,8 @@
           "latest_final_score": 4.197889,
           "avg_final_score": 4.197889,
           "evaluation_count": 2,
-          "is_primary": false
+          "is_primary": false,
+          "is_representative": false
         },
         {
           "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
@@ -774,7 +783,8 @@
           "latest_final_score": 4.071135,
           "avg_final_score": 7.491671,
           "evaluation_count": 147,
-          "is_primary": false
+          "is_primary": false,
+          "is_representative": false
         }
       ]
     },
@@ -792,6 +802,10 @@
       "leader": "liquidity_turnover_shock",
       "primary_candidate_id": "c75fb8df-b227-4cb1-93c8-a6e65ec95dfc",
       "primary_candidate": "liquidity_turnover_shock",
+      "representative_count": 1,
+      "representative_candidates": [
+        "liquidity_turnover_shock"
+      ],
       "suppressed_member_count": 0,
       "members": [
         {
@@ -802,7 +816,8 @@
           "latest_final_score": 2.364005,
           "avg_final_score": 7.969937,
           "evaluation_count": 187,
-          "is_primary": true
+          "is_primary": true,
+          "is_representative": true
         }
       ]
     },
@@ -820,6 +835,10 @@
       "leader": "size_small",
       "primary_candidate_id": "d7e14ed9-6251-425d-a28a-fc75cbf5bbf0",
       "primary_candidate": "size_small",
+      "representative_count": 1,
+      "representative_candidates": [
+        "size_small"
+      ],
       "suppressed_member_count": 0,
       "members": [
         {
@@ -830,7 +849,8 @@
           "latest_final_score": 3.025676,
           "avg_final_score": 7.989338,
           "evaluation_count": 185,
-          "is_primary": true
+          "is_primary": true,
+          "is_representative": true
         }
       ]
     }
@@ -840,10 +860,37 @@
       "cluster_id": 1,
       "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
       "primary_candidate": "mom_20",
+      "representative_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
+      "representative_candidate": "mom_20",
       "family": "momentum",
       "cluster_size": 6,
+      "representative_rank": 1,
+      "representative_count": 2,
+      "is_primary_representative": true,
       "suppressed_candidates": [
-        "value_bp",
+        "mom_plus_value",
+        "quality_roe",
+        "quality_minus_value",
+        "value_ep"
+      ],
+      "relationship_mix": {
+        "same_family": 4,
+        "hybrid_of": 1,
+        "refinement_of": 2
+      }
+    },
+    {
+      "cluster_id": 1,
+      "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
+      "primary_candidate": "mom_20",
+      "representative_candidate_id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
+      "representative_candidate": "value_bp",
+      "family": "value",
+      "cluster_size": 6,
+      "representative_rank": 2,
+      "representative_count": 2,
+      "is_primary_representative": false,
+      "suppressed_candidates": [
         "mom_plus_value",
         "quality_roe",
         "quality_minus_value",
@@ -859,8 +906,13 @@
       "cluster_id": 2,
       "primary_candidate_id": "c75fb8df-b227-4cb1-93c8-a6e65ec95dfc",
       "primary_candidate": "liquidity_turnover_shock",
+      "representative_candidate_id": "c75fb8df-b227-4cb1-93c8-a6e65ec95dfc",
+      "representative_candidate": "liquidity_turnover_shock",
       "family": "liquidity",
       "cluster_size": 1,
+      "representative_rank": 1,
+      "representative_count": 1,
+      "is_primary_representative": true,
       "suppressed_candidates": [],
       "relationship_mix": {}
     },
@@ -868,8 +920,13 @@
       "cluster_id": 3,
       "primary_candidate_id": "d7e14ed9-6251-425d-a28a-fc75cbf5bbf0",
       "primary_candidate": "size_small",
+      "representative_candidate_id": "d7e14ed9-6251-425d-a28a-fc75cbf5bbf0",
+      "representative_candidate": "size_small",
       "family": "other",
       "cluster_size": 1,
+      "representative_rank": 1,
+      "representative_count": 1,
+      "is_primary_representative": true,
       "suppressed_candidates": [],
       "relationship_mix": {}
     }
@@ -903,7 +960,8 @@
             "latest_final_score": 4.865683,
             "avg_final_score": 8.524486,
             "evaluation_count": 187,
-            "is_primary": true
+            "is_primary": true,
+            "is_representative": true
           },
           {
             "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
@@ -913,7 +971,8 @@
             "latest_final_score": 1.311582,
             "avg_final_score": 5.910476,
             "evaluation_count": 145,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": true
           },
           {
             "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -923,7 +982,8 @@
             "latest_final_score": 1.144852,
             "avg_final_score": 8.11212,
             "evaluation_count": 185,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
@@ -933,7 +993,8 @@
             "latest_final_score": 4.41182,
             "avg_final_score": 4.41182,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
@@ -943,7 +1004,8 @@
             "latest_final_score": 4.197889,
             "avg_final_score": 4.197889,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
@@ -953,12 +1015,19 @@
             "latest_final_score": 4.071135,
             "avg_final_score": 7.491671,
             "evaluation_count": 147,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           }
         ],
         "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
         "primary_candidate": "mom_20",
-        "suppressed_member_count": 5
+        "representative_count": 2,
+        "representative_candidates": [
+          "mom_20",
+          "value_bp"
+        ],
+        "is_representative": true,
+        "suppressed_member_count": 4
       },
       "is_primary_candidate": true,
       "related_candidates": [
@@ -1004,7 +1073,8 @@
             "latest_final_score": 4.865683,
             "avg_final_score": 8.524486,
             "evaluation_count": 187,
-            "is_primary": true
+            "is_primary": true,
+            "is_representative": true
           },
           {
             "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
@@ -1014,7 +1084,8 @@
             "latest_final_score": 1.311582,
             "avg_final_score": 5.910476,
             "evaluation_count": 145,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": true
           },
           {
             "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -1024,7 +1095,8 @@
             "latest_final_score": 1.144852,
             "avg_final_score": 8.11212,
             "evaluation_count": 185,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
@@ -1034,7 +1106,8 @@
             "latest_final_score": 4.41182,
             "avg_final_score": 4.41182,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
@@ -1044,7 +1117,8 @@
             "latest_final_score": 4.197889,
             "avg_final_score": 4.197889,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
@@ -1054,12 +1128,19 @@
             "latest_final_score": 4.071135,
             "avg_final_score": 7.491671,
             "evaluation_count": 147,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           }
         ],
         "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
         "primary_candidate": "mom_20",
-        "suppressed_member_count": 5
+        "representative_count": 2,
+        "representative_candidates": [
+          "mom_20",
+          "value_bp"
+        ],
+        "is_representative": false,
+        "suppressed_member_count": 4
       },
       "is_primary_candidate": false,
       "related_candidates": [
@@ -1131,7 +1212,8 @@
             "latest_final_score": 4.865683,
             "avg_final_score": 8.524486,
             "evaluation_count": 187,
-            "is_primary": true
+            "is_primary": true,
+            "is_representative": true
           },
           {
             "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
@@ -1141,7 +1223,8 @@
             "latest_final_score": 1.311582,
             "avg_final_score": 5.910476,
             "evaluation_count": 145,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": true
           },
           {
             "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -1151,7 +1234,8 @@
             "latest_final_score": 1.144852,
             "avg_final_score": 8.11212,
             "evaluation_count": 185,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
@@ -1161,7 +1245,8 @@
             "latest_final_score": 4.41182,
             "avg_final_score": 4.41182,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
@@ -1171,7 +1256,8 @@
             "latest_final_score": 4.197889,
             "avg_final_score": 4.197889,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
@@ -1181,12 +1267,19 @@
             "latest_final_score": 4.071135,
             "avg_final_score": 7.491671,
             "evaluation_count": 147,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           }
         ],
         "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
         "primary_candidate": "mom_20",
-        "suppressed_member_count": 5
+        "representative_count": 2,
+        "representative_candidates": [
+          "mom_20",
+          "value_bp"
+        ],
+        "is_representative": false,
+        "suppressed_member_count": 4
       },
       "is_primary_candidate": false,
       "related_candidates": [
@@ -1316,7 +1409,8 @@
             "latest_final_score": 4.865683,
             "avg_final_score": 8.524486,
             "evaluation_count": 187,
-            "is_primary": true
+            "is_primary": true,
+            "is_representative": true
           },
           {
             "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
@@ -1326,7 +1420,8 @@
             "latest_final_score": 1.311582,
             "avg_final_score": 5.910476,
             "evaluation_count": 145,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": true
           },
           {
             "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -1336,7 +1431,8 @@
             "latest_final_score": 1.144852,
             "avg_final_score": 8.11212,
             "evaluation_count": 185,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
@@ -1346,7 +1442,8 @@
             "latest_final_score": 4.41182,
             "avg_final_score": 4.41182,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
@@ -1356,7 +1453,8 @@
             "latest_final_score": 4.197889,
             "avg_final_score": 4.197889,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
@@ -1366,12 +1464,19 @@
             "latest_final_score": 4.071135,
             "avg_final_score": 7.491671,
             "evaluation_count": 147,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           }
         ],
         "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
         "primary_candidate": "mom_20",
-        "suppressed_member_count": 5
+        "representative_count": 2,
+        "representative_candidates": [
+          "mom_20",
+          "value_bp"
+        ],
+        "is_representative": false,
+        "suppressed_member_count": 4
       },
       "is_primary_candidate": false,
       "related_candidates": [
@@ -1461,11 +1566,17 @@
             "latest_final_score": 3.025676,
             "avg_final_score": 7.989338,
             "evaluation_count": 185,
-            "is_primary": true
+            "is_primary": true,
+            "is_representative": true
           }
         ],
         "primary_candidate_id": "d7e14ed9-6251-425d-a28a-fc75cbf5bbf0",
         "primary_candidate": "size_small",
+        "representative_count": 1,
+        "representative_candidates": [
+          "size_small"
+        ],
+        "is_representative": true,
         "suppressed_member_count": 0
       },
       "is_primary_candidate": true,
@@ -1496,11 +1607,17 @@
             "latest_final_score": 2.364005,
             "avg_final_score": 7.969937,
             "evaluation_count": 187,
-            "is_primary": true
+            "is_primary": true,
+            "is_representative": true
           }
         ],
         "primary_candidate_id": "c75fb8df-b227-4cb1-93c8-a6e65ec95dfc",
         "primary_candidate": "liquidity_turnover_shock",
+        "representative_count": 1,
+        "representative_candidates": [
+          "liquidity_turnover_shock"
+        ],
+        "is_representative": true,
         "suppressed_member_count": 0
       },
       "is_primary_candidate": true,
@@ -1535,7 +1652,8 @@
             "latest_final_score": 4.865683,
             "avg_final_score": 8.524486,
             "evaluation_count": 187,
-            "is_primary": true
+            "is_primary": true,
+            "is_representative": true
           },
           {
             "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
@@ -1545,7 +1663,8 @@
             "latest_final_score": 1.311582,
             "avg_final_score": 5.910476,
             "evaluation_count": 145,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": true
           },
           {
             "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -1555,7 +1674,8 @@
             "latest_final_score": 1.144852,
             "avg_final_score": 8.11212,
             "evaluation_count": 185,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
@@ -1565,7 +1685,8 @@
             "latest_final_score": 4.41182,
             "avg_final_score": 4.41182,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
@@ -1575,7 +1696,8 @@
             "latest_final_score": 4.197889,
             "avg_final_score": 4.197889,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
@@ -1585,12 +1707,19 @@
             "latest_final_score": 4.071135,
             "avg_final_score": 7.491671,
             "evaluation_count": 147,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           }
         ],
         "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
         "primary_candidate": "mom_20",
-        "suppressed_member_count": 5
+        "representative_count": 2,
+        "representative_candidates": [
+          "mom_20",
+          "value_bp"
+        ],
+        "is_representative": true,
+        "suppressed_member_count": 4
       },
       "is_primary_candidate": false,
       "related_candidates": [
@@ -1684,7 +1813,8 @@
             "latest_final_score": 4.865683,
             "avg_final_score": 8.524486,
             "evaluation_count": 187,
-            "is_primary": true
+            "is_primary": true,
+            "is_representative": true
           },
           {
             "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
@@ -1694,7 +1824,8 @@
             "latest_final_score": 1.311582,
             "avg_final_score": 5.910476,
             "evaluation_count": 145,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": true
           },
           {
             "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -1704,7 +1835,8 @@
             "latest_final_score": 1.144852,
             "avg_final_score": 8.11212,
             "evaluation_count": 185,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
@@ -1714,7 +1846,8 @@
             "latest_final_score": 4.41182,
             "avg_final_score": 4.41182,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
@@ -1724,7 +1857,8 @@
             "latest_final_score": 4.197889,
             "avg_final_score": 4.197889,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
@@ -1734,12 +1868,19 @@
             "latest_final_score": 4.071135,
             "avg_final_score": 7.491671,
             "evaluation_count": 147,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           }
         ],
         "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
         "primary_candidate": "mom_20",
-        "suppressed_member_count": 5
+        "representative_count": 2,
+        "representative_candidates": [
+          "mom_20",
+          "value_bp"
+        ],
+        "is_representative": false,
+        "suppressed_member_count": 4
       },
       "is_primary_candidate": false,
       "related_candidates": [
@@ -1801,14 +1942,648 @@
     "same_family": 4
   },
   "knowledge_gain_counter": {
-    "stable_candidate_confirmed": 4,
-    "repeated_graveyard_confirmed": 4,
-    "neutralization_diagnosis_requested": 4,
-    "exploration_candidate_survived": 4,
-    "exploration_graveyard_identified": 4,
+    "stable_candidate_confirmed": 2,
+    "repeated_graveyard_confirmed": 7,
+    "neutralization_diagnosis_requested": 7,
+    "exploration_candidate_survived": 2,
+    "exploration_graveyard_identified": 7,
     "no_significant_information_gain": 0
   },
   "recent_research_tasks": [
+    {
+      "task_id": "15a700bb-ffc9-445e-9597-c1295eb28c7c",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 36,
+      "fingerprint": "diagnostic::graveyard_diagnosis_level_7::{\"diagnostic_type\": \"graveyard_diagnosis_level_7\", \"focus_factors\": [\"liquidity_turnover_shock\", \"mom_20\", \"mom_plus_value\", \"size_small\", \"value_bp\"], \"knowledge_gain\": [\"graveyard_diagnosis_level_7_requested\"], \"reasons\": [\"recent_graveyard_needs_deeper_review\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T13:50:31.317085+00:00",
+      "started_at_utc": "2026-03-20T13:50:31.320475+00:00",
+      "finished_at_utc": "2026-03-20T13:50:31.324044+00:00",
+      "worker_note": "diagnostic finished: graveyard_diagnosis_level_7",
+      "payload": {
+        "diagnostic_type": "graveyard_diagnosis_level_7",
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small",
+          "value_bp"
+        ],
+        "knowledge_gain": [
+          "graveyard_diagnosis_level_7_requested"
+        ],
+        "reasons": [
+          "recent_graveyard_needs_deeper_review"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "38e1ecc4-7623-401a-96df-6a7ec7d85dae",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 28,
+      "fingerprint": "workflow::b4c839b65779d6c67a0f29ee7f6ff2cd28740538dc150ccf0f60087125fd6ebf::artifacts/generated_rolling_480d_back",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T13:49:38.659455+00:00",
+      "started_at_utc": "2026-03-20T13:49:38.662646+00:00",
+      "finished_at_utc": "2026-03-20T13:50:29.276195+00:00",
+      "worker_note": "workflow finished: artifacts/generated_configs/rolling_480d_back.json",
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_480d_back.json",
+        "output_dir": "artifacts/generated_rolling_480d_back"
+      }
+    },
+    {
+      "task_id": "421613ad-6d7b-421b-8ce0-07fc6953a3f9",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 40,
+      "fingerprint": "diagnostic::artifacts/tushare_batch::graveyard_neutralization::liquidity_turnover_shock,mom_20,mom_plus_value,size_small,value_bp,value_ep",
+      "parent_task_id": "83b28aff-3a70-49e9-8947-6b33ca2b1372",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T13:49:28.867392+00:00",
+      "started_at_utc": "2026-03-20T13:49:30.876526+00:00",
+      "finished_at_utc": "2026-03-20T13:49:30.881428+00:00",
+      "worker_note": "diagnostic finished: graveyard_neutralization_review",
+      "payload": {
+        "diagnostic_type": "graveyard_neutralization_review",
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small",
+          "value_bp",
+          "value_ep"
+        ],
+        "knowledge_gain": [
+          "neutralization_diagnosis_requested"
+        ],
+        "reasons": [
+          "repeated_graveyard_after_batch_consistency_review"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "83b28aff-3a70-49e9-8947-6b33ca2b1372",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 35,
+      "fingerprint": "diagnostic::artifacts/tushare_batch::consistent_graveyard:liquidity_turnover_shock, mom_20, size_small, value_bp, value_ep",
+      "parent_task_id": "4add0c6a-b8d0-4f85-94d0-1a3fd7ae8396",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T13:49:26.847789+00:00",
+      "started_at_utc": "2026-03-20T13:49:28.860040+00:00",
+      "finished_at_utc": "2026-03-20T13:49:28.868348+00:00",
+      "worker_note": "diagnostic finished: batch_consistency_review | followups=1",
+      "payload": {
+        "diagnostic_type": "batch_consistency_review",
+        "knowledge_gain": [
+          null,
+          "repeated_graveyard_confirmed"
+        ],
+        "reasons": [
+          "consistent_graveyard:liquidity_turnover_shock, mom_20, size_small, value_bp, value_ep"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "5661eb00-6b4e-42d0-b18a-cb030c0a5420",
+      "task_type": "generated_batch",
+      "status": "finished",
+      "priority": 60,
+      "fingerprint": "generated_batch::a4cf53c056d30df4446de19c23617566f1f9bfd75d9e6e55e07584c54d5ff466::artifacts/llm_generated_batch_run",
+      "parent_task_id": "01ea4972-ef36-4d3e-9108-3e8a1a429eb8",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T13:49:14.156342+00:00",
+      "started_at_utc": "2026-03-20T13:49:32.887741+00:00",
+      "finished_at_utc": "2026-03-20T13:49:36.619911+00:00",
+      "worker_note": "generated batch finished: artifacts/generated_batch_from_llm.json | knowledge_gain=exploration_graveyard_identified",
+      "payload": {
+        "batch_path": "artifacts/generated_batch_from_llm.json",
+        "output_dir": "artifacts/llm_generated_batch_run"
+      }
+    },
+    {
+      "task_id": "4add0c6a-b8d0-4f85-94d0-1a3fd7ae8396",
+      "task_type": "batch",
+      "status": "finished",
+      "priority": 30,
+      "fingerprint": "batch::15afad57be9d1e5815d553678240a3e701d656f5a5a7aaf6e564ebefa662ce7f::artifacts/tushare_batch",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T13:49:08.798437+00:00",
+      "started_at_utc": "2026-03-20T13:49:16.167220+00:00",
+      "finished_at_utc": "2026-03-20T13:49:26.848936+00:00",
+      "worker_note": "batch finished: configs/tushare_batch.json | followups=1",
+      "payload": {
+        "config_path": "configs/tushare_batch.json",
+        "output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "01ea4972-ef36-4d3e-9108-3e8a1a429eb8",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 10,
+      "fingerprint": "workflow::63c043a518d832a1d0cdb3299ff3ecff594a5ebb906d4f4fe4e901b0a66e2dba::artifacts/tushare_workflow",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T13:49:08.794078+00:00",
+      "started_at_utc": "2026-03-20T13:49:08.800296+00:00",
+      "finished_at_utc": "2026-03-20T13:49:14.157788+00:00",
+      "worker_note": "workflow finished: configs/tushare_workflow.json | followups=2",
+      "payload": {
+        "config_path": "configs/tushare_workflow.json",
+        "output_dir": "artifacts/tushare_workflow"
+      }
+    },
+    {
+      "task_id": "4577c645-2054-4f29-9b64-30627670e954",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 40,
+      "fingerprint": "diagnostic::artifacts/tushare_batch::graveyard_neutralization::liquidity_turnover_shock,mom_20,mom_plus_value,size_small,value_bp,value_ep",
+      "parent_task_id": "a885a850-6436-40f1-9438-fd7e658a8603",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T10:48:39.490361+00:00",
+      "started_at_utc": "2026-03-20T10:48:41.501165+00:00",
+      "finished_at_utc": "2026-03-20T10:48:41.506990+00:00",
+      "worker_note": "diagnostic finished: graveyard_neutralization_review",
+      "payload": {
+        "diagnostic_type": "graveyard_neutralization_review",
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small",
+          "value_bp",
+          "value_ep"
+        ],
+        "knowledge_gain": [
+          "neutralization_diagnosis_requested"
+        ],
+        "reasons": [
+          "repeated_graveyard_after_batch_consistency_review"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "a885a850-6436-40f1-9438-fd7e658a8603",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 35,
+      "fingerprint": "diagnostic::artifacts/tushare_batch::consistent_graveyard:liquidity_turnover_shock, mom_20, size_small, value_bp, value_ep",
+      "parent_task_id": "fa68bf09-f937-4660-90be-c7c89d0c204c",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T10:48:37.472288+00:00",
+      "started_at_utc": "2026-03-20T10:48:39.482958+00:00",
+      "finished_at_utc": "2026-03-20T10:48:39.491359+00:00",
+      "worker_note": "diagnostic finished: batch_consistency_review | followups=1",
+      "payload": {
+        "diagnostic_type": "batch_consistency_review",
+        "knowledge_gain": [
+          null,
+          "repeated_graveyard_confirmed"
+        ],
+        "reasons": [
+          "consistent_graveyard:liquidity_turnover_shock, mom_20, size_small, value_bp, value_ep"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "ac6c63f4-0266-4fd5-9579-84c669fec5ab",
+      "task_type": "generated_batch",
+      "status": "finished",
+      "priority": 60,
+      "fingerprint": "generated_batch::a4cf53c056d30df4446de19c23617566f1f9bfd75d9e6e55e07584c54d5ff466::artifacts/llm_generated_batch_run",
+      "parent_task_id": "cba8bd54-f41d-4a5b-9d8a-46bebcf7095f",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T10:48:24.718331+00:00",
+      "started_at_utc": "2026-03-20T10:48:43.515481+00:00",
+      "finished_at_utc": "2026-03-20T10:48:47.260737+00:00",
+      "worker_note": "generated batch finished: artifacts/generated_batch_from_llm.json | knowledge_gain=exploration_graveyard_identified",
+      "payload": {
+        "batch_path": "artifacts/generated_batch_from_llm.json",
+        "output_dir": "artifacts/llm_generated_batch_run"
+      }
+    },
+    {
+      "task_id": "fa68bf09-f937-4660-90be-c7c89d0c204c",
+      "task_type": "batch",
+      "status": "finished",
+      "priority": 30,
+      "fingerprint": "batch::15afad57be9d1e5815d553678240a3e701d656f5a5a7aaf6e564ebefa662ce7f::artifacts/tushare_batch",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T10:48:19.294972+00:00",
+      "started_at_utc": "2026-03-20T10:48:26.727145+00:00",
+      "finished_at_utc": "2026-03-20T10:48:37.474648+00:00",
+      "worker_note": "batch finished: configs/tushare_batch.json | followups=1",
+      "payload": {
+        "config_path": "configs/tushare_batch.json",
+        "output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "cba8bd54-f41d-4a5b-9d8a-46bebcf7095f",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 10,
+      "fingerprint": "workflow::63c043a518d832a1d0cdb3299ff3ecff594a5ebb906d4f4fe4e901b0a66e2dba::artifacts/tushare_workflow",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T10:48:19.290506+00:00",
+      "started_at_utc": "2026-03-20T10:48:19.296966+00:00",
+      "finished_at_utc": "2026-03-20T10:48:24.719417+00:00",
+      "worker_note": "workflow finished: configs/tushare_workflow.json | followups=2",
+      "payload": {
+        "config_path": "configs/tushare_workflow.json",
+        "output_dir": "artifacts/tushare_workflow"
+      }
+    },
+    {
+      "task_id": "c3c0fcec-708a-4126-8313-b901520c9271",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 40,
+      "fingerprint": "diagnostic::artifacts/tushare_batch::graveyard_neutralization::liquidity_turnover_shock,mom_20,mom_plus_value,size_small,value_bp,value_ep",
+      "parent_task_id": "730d5ea4-21ea-426f-b395-3b3f7e72a048",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T07:47:50.961679+00:00",
+      "started_at_utc": "2026-03-20T07:47:52.970635+00:00",
+      "finished_at_utc": "2026-03-20T07:47:52.975228+00:00",
+      "worker_note": "diagnostic finished: graveyard_neutralization_review",
+      "payload": {
+        "diagnostic_type": "graveyard_neutralization_review",
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small",
+          "value_bp",
+          "value_ep"
+        ],
+        "knowledge_gain": [
+          "neutralization_diagnosis_requested"
+        ],
+        "reasons": [
+          "repeated_graveyard_after_batch_consistency_review"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "730d5ea4-21ea-426f-b395-3b3f7e72a048",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 35,
+      "fingerprint": "diagnostic::artifacts/tushare_batch::consistent_graveyard:liquidity_turnover_shock, mom_20, size_small, value_bp, value_ep",
+      "parent_task_id": "a75d007b-00e6-4d79-b101-6bcd504dee8a",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T07:47:48.943796+00:00",
+      "started_at_utc": "2026-03-20T07:47:50.954148+00:00",
+      "finished_at_utc": "2026-03-20T07:47:50.962627+00:00",
+      "worker_note": "diagnostic finished: batch_consistency_review | followups=1",
+      "payload": {
+        "diagnostic_type": "batch_consistency_review",
+        "knowledge_gain": [
+          null,
+          "repeated_graveyard_confirmed"
+        ],
+        "reasons": [
+          "consistent_graveyard:liquidity_turnover_shock, mom_20, size_small, value_bp, value_ep"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "6861c492-21df-41f3-87b8-9503b26eb53c",
+      "task_type": "generated_batch",
+      "status": "finished",
+      "priority": 60,
+      "fingerprint": "generated_batch::a4cf53c056d30df4446de19c23617566f1f9bfd75d9e6e55e07584c54d5ff466::artifacts/llm_generated_batch_run",
+      "parent_task_id": "b4e947f1-cd16-483c-9301-33f43642ead3",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T07:47:36.218565+00:00",
+      "started_at_utc": "2026-03-20T07:47:54.983265+00:00",
+      "finished_at_utc": "2026-03-20T07:47:58.718971+00:00",
+      "worker_note": "generated batch finished: artifacts/generated_batch_from_llm.json | knowledge_gain=exploration_graveyard_identified",
+      "payload": {
+        "batch_path": "artifacts/generated_batch_from_llm.json",
+        "output_dir": "artifacts/llm_generated_batch_run"
+      }
+    },
+    {
+      "task_id": "a75d007b-00e6-4d79-b101-6bcd504dee8a",
+      "task_type": "batch",
+      "status": "finished",
+      "priority": 30,
+      "fingerprint": "batch::15afad57be9d1e5815d553678240a3e701d656f5a5a7aaf6e564ebefa662ce7f::artifacts/tushare_batch",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T07:47:30.870979+00:00",
+      "started_at_utc": "2026-03-20T07:47:38.228922+00:00",
+      "finished_at_utc": "2026-03-20T07:47:48.944983+00:00",
+      "worker_note": "batch finished: configs/tushare_batch.json | followups=1",
+      "payload": {
+        "config_path": "configs/tushare_batch.json",
+        "output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "b4e947f1-cd16-483c-9301-33f43642ead3",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 10,
+      "fingerprint": "workflow::63c043a518d832a1d0cdb3299ff3ecff594a5ebb906d4f4fe4e901b0a66e2dba::artifacts/tushare_workflow",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T07:47:30.866815+00:00",
+      "started_at_utc": "2026-03-20T07:47:30.872725+00:00",
+      "finished_at_utc": "2026-03-20T07:47:36.219548+00:00",
+      "worker_note": "workflow finished: configs/tushare_workflow.json | followups=2",
+      "payload": {
+        "config_path": "configs/tushare_workflow.json",
+        "output_dir": "artifacts/tushare_workflow"
+      }
+    },
+    {
+      "task_id": "b0de20ba-9623-4354-8218-966b358ac8ea",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 40,
+      "fingerprint": "diagnostic::artifacts/tushare_batch::graveyard_neutralization::liquidity_turnover_shock,mom_20,mom_plus_value,size_small,value_bp,value_ep",
+      "parent_task_id": "a1bc697c-2bc7-47e9-ac60-7f0fac018434",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T04:47:01.732300+00:00",
+      "started_at_utc": "2026-03-20T04:47:03.741736+00:00",
+      "finished_at_utc": "2026-03-20T04:47:03.746394+00:00",
+      "worker_note": "diagnostic finished: graveyard_neutralization_review",
+      "payload": {
+        "diagnostic_type": "graveyard_neutralization_review",
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small",
+          "value_bp",
+          "value_ep"
+        ],
+        "knowledge_gain": [
+          "neutralization_diagnosis_requested"
+        ],
+        "reasons": [
+          "repeated_graveyard_after_batch_consistency_review"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "a1bc697c-2bc7-47e9-ac60-7f0fac018434",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 35,
+      "fingerprint": "diagnostic::artifacts/tushare_batch::consistent_graveyard:liquidity_turnover_shock, mom_20, size_small, value_bp, value_ep",
+      "parent_task_id": "552021c3-c0bd-4183-a995-d0de53922e97",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T04:46:59.714330+00:00",
+      "started_at_utc": "2026-03-20T04:47:01.724775+00:00",
+      "finished_at_utc": "2026-03-20T04:47:01.733388+00:00",
+      "worker_note": "diagnostic finished: batch_consistency_review | followups=1",
+      "payload": {
+        "diagnostic_type": "batch_consistency_review",
+        "knowledge_gain": [
+          null,
+          "repeated_graveyard_confirmed"
+        ],
+        "reasons": [
+          "consistent_graveyard:liquidity_turnover_shock, mom_20, size_small, value_bp, value_ep"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "5816319c-a858-4211-a7f8-be0369dc983f",
+      "task_type": "generated_batch",
+      "status": "finished",
+      "priority": 60,
+      "fingerprint": "generated_batch::a4cf53c056d30df4446de19c23617566f1f9bfd75d9e6e55e07584c54d5ff466::artifacts/llm_generated_batch_run",
+      "parent_task_id": "9c9d65c0-d644-403f-a6b2-fbdcfe016493",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T04:46:47.058803+00:00",
+      "started_at_utc": "2026-03-20T04:47:05.754049+00:00",
+      "finished_at_utc": "2026-03-20T04:47:09.489851+00:00",
+      "worker_note": "generated batch finished: artifacts/generated_batch_from_llm.json | knowledge_gain=exploration_graveyard_identified",
+      "payload": {
+        "batch_path": "artifacts/generated_batch_from_llm.json",
+        "output_dir": "artifacts/llm_generated_batch_run"
+      }
+    },
+    {
+      "task_id": "552021c3-c0bd-4183-a995-d0de53922e97",
+      "task_type": "batch",
+      "status": "finished",
+      "priority": 30,
+      "fingerprint": "batch::15afad57be9d1e5815d553678240a3e701d656f5a5a7aaf6e564ebefa662ce7f::artifacts/tushare_batch",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T04:46:41.691413+00:00",
+      "started_at_utc": "2026-03-20T04:46:49.068474+00:00",
+      "finished_at_utc": "2026-03-20T04:46:59.715335+00:00",
+      "worker_note": "batch finished: configs/tushare_batch.json | followups=1",
+      "payload": {
+        "config_path": "configs/tushare_batch.json",
+        "output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "9c9d65c0-d644-403f-a6b2-fbdcfe016493",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 10,
+      "fingerprint": "workflow::63c043a518d832a1d0cdb3299ff3ecff594a5ebb906d4f4fe4e901b0a66e2dba::artifacts/tushare_workflow",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T04:46:41.687048+00:00",
+      "started_at_utc": "2026-03-20T04:46:41.693176+00:00",
+      "finished_at_utc": "2026-03-20T04:46:47.059836+00:00",
+      "worker_note": "workflow finished: configs/tushare_workflow.json | followups=2",
+      "payload": {
+        "config_path": "configs/tushare_workflow.json",
+        "output_dir": "artifacts/tushare_workflow"
+      }
+    },
+    {
+      "task_id": "9d873210-2873-4bf7-9dae-b062ec979e6f",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 36,
+      "fingerprint": "diagnostic::graveyard_diagnosis_level_7::{\"diagnostic_type\": \"graveyard_diagnosis_level_7\", \"focus_factors\": [\"liquidity_turnover_shock\", \"mom_20\", \"mom_plus_value\", \"size_small\"], \"knowledge_gain\": [\"graveyard_diagnosis_level_7_requested\"], \"reasons\": [\"recent_graveyard_needs_deeper_review\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T01:46:21.264210+00:00",
+      "started_at_utc": "2026-03-20T01:46:21.267557+00:00",
+      "finished_at_utc": "2026-03-20T01:46:21.270667+00:00",
+      "worker_note": "diagnostic finished: graveyard_diagnosis_level_7",
+      "payload": {
+        "diagnostic_type": "graveyard_diagnosis_level_7",
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small"
+        ],
+        "knowledge_gain": [
+          "graveyard_diagnosis_level_7_requested"
+        ],
+        "reasons": [
+          "recent_graveyard_needs_deeper_review"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "08f076b5-824c-412a-ac66-7cdd9949cee3",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 40,
+      "fingerprint": "diagnostic::artifacts/tushare_batch::graveyard_neutralization::liquidity_turnover_shock,mom_20,mom_plus_value,size_small,value_bp,value_ep",
+      "parent_task_id": "43c9ab7b-a9b9-4f5a-82d1-572671801e76",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T01:46:11.024956+00:00",
+      "started_at_utc": "2026-03-20T01:46:13.034785+00:00",
+      "finished_at_utc": "2026-03-20T01:46:13.039473+00:00",
+      "worker_note": "diagnostic finished: graveyard_neutralization_review",
+      "payload": {
+        "diagnostic_type": "graveyard_neutralization_review",
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small",
+          "value_bp",
+          "value_ep"
+        ],
+        "knowledge_gain": [
+          "neutralization_diagnosis_requested"
+        ],
+        "reasons": [
+          "repeated_graveyard_after_batch_consistency_review"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "43c9ab7b-a9b9-4f5a-82d1-572671801e76",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 35,
+      "fingerprint": "diagnostic::artifacts/tushare_batch::consistent_graveyard:liquidity_turnover_shock, mom_20, size_small, value_bp, value_ep",
+      "parent_task_id": "83e1c3bd-f1a1-452b-b06b-8e46e19b3af8",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T01:46:09.006375+00:00",
+      "started_at_utc": "2026-03-20T01:46:11.015543+00:00",
+      "finished_at_utc": "2026-03-20T01:46:11.026130+00:00",
+      "worker_note": "diagnostic finished: batch_consistency_review | followups=1",
+      "payload": {
+        "diagnostic_type": "batch_consistency_review",
+        "knowledge_gain": [
+          null,
+          "repeated_graveyard_confirmed"
+        ],
+        "reasons": [
+          "consistent_graveyard:liquidity_turnover_shock, mom_20, size_small, value_bp, value_ep"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "f9b5d12c-0102-414b-b1c8-f3701aad1240",
+      "task_type": "generated_batch",
+      "status": "finished",
+      "priority": 60,
+      "fingerprint": "generated_batch::a4cf53c056d30df4446de19c23617566f1f9bfd75d9e6e55e07584c54d5ff466::artifacts/llm_generated_batch_run",
+      "parent_task_id": "438fe93a-61d7-4922-ae34-a4896437776a",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T01:45:55.018607+00:00",
+      "started_at_utc": "2026-03-20T01:46:15.047680+00:00",
+      "finished_at_utc": "2026-03-20T01:46:19.222376+00:00",
+      "worker_note": "generated batch finished: artifacts/generated_batch_from_llm.json | knowledge_gain=exploration_graveyard_identified",
+      "payload": {
+        "batch_path": "artifacts/generated_batch_from_llm.json",
+        "output_dir": "artifacts/llm_generated_batch_run"
+      }
+    },
+    {
+      "task_id": "83e1c3bd-f1a1-452b-b06b-8e46e19b3af8",
+      "task_type": "batch",
+      "status": "finished",
+      "priority": 30,
+      "fingerprint": "batch::15afad57be9d1e5815d553678240a3e701d656f5a5a7aaf6e564ebefa662ce7f::artifacts/tushare_batch",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T01:45:48.930107+00:00",
+      "started_at_utc": "2026-03-20T01:45:57.031064+00:00",
+      "finished_at_utc": "2026-03-20T01:46:09.007601+00:00",
+      "worker_note": "batch finished: configs/tushare_batch.json | followups=1",
+      "payload": {
+        "config_path": "configs/tushare_batch.json",
+        "output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "438fe93a-61d7-4922-ae34-a4896437776a",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 10,
+      "fingerprint": "workflow::63c043a518d832a1d0cdb3299ff3ecff594a5ebb906d4f4fe4e901b0a66e2dba::artifacts/tushare_workflow",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T01:45:48.925591+00:00",
+      "started_at_utc": "2026-03-20T01:45:48.931920+00:00",
+      "finished_at_utc": "2026-03-20T01:45:55.019801+00:00",
+      "worker_note": "workflow finished: configs/tushare_workflow.json | followups=2",
+      "payload": {
+        "config_path": "configs/tushare_workflow.json",
+        "output_dir": "artifacts/tushare_workflow"
+      }
+    },
     {
       "task_id": "748daea3-63a3-48f4-9d38-c0a580c64568",
       "task_type": "diagnostic",
@@ -1865,665 +2640,6 @@
           "stable_candidates_need_deeper_validation"
         ],
         "source_output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "7a48d614-521f-466a-83fb-0cc6ca927883",
-      "task_type": "diagnostic",
-      "status": "finished",
-      "priority": 40,
-      "fingerprint": "diagnostic::artifacts/tushare_batch::graveyard_neutralization::liquidity_turnover_shock,size_small,value_bp,value_ep",
-      "parent_task_id": "e994b76e-cbb8-4ff7-9a9c-f32b2a9197d5",
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T22:45:35.690120+00:00",
-      "started_at_utc": "2026-03-19T22:45:37.698439+00:00",
-      "finished_at_utc": "2026-03-19T22:45:37.702963+00:00",
-      "worker_note": "diagnostic finished: graveyard_neutralization_review",
-      "payload": {
-        "diagnostic_type": "graveyard_neutralization_review",
-        "focus_factors": [
-          "liquidity_turnover_shock",
-          "size_small",
-          "value_bp",
-          "value_ep"
-        ],
-        "knowledge_gain": [
-          "neutralization_diagnosis_requested"
-        ],
-        "reasons": [
-          "repeated_graveyard_after_batch_consistency_review"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "e994b76e-cbb8-4ff7-9a9c-f32b2a9197d5",
-      "task_type": "diagnostic",
-      "status": "finished",
-      "priority": 35,
-      "fingerprint": "diagnostic::artifacts/tushare_batch::consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep;stable_candidates:mom_20, mom_plus_value",
-      "parent_task_id": "7841a8cd-d22c-4d49-b018-daf91d288d54",
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T22:45:33.672952+00:00",
-      "started_at_utc": "2026-03-19T22:45:35.682905+00:00",
-      "finished_at_utc": "2026-03-19T22:45:35.690987+00:00",
-      "worker_note": "diagnostic finished: batch_consistency_review | followups=1",
-      "payload": {
-        "diagnostic_type": "batch_consistency_review",
-        "knowledge_gain": [
-          "stable_candidate_confirmed",
-          "repeated_graveyard_confirmed"
-        ],
-        "reasons": [
-          "consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep",
-          "stable_candidates:mom_20, mom_plus_value"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "292281e3-de29-4855-92d2-8881e2c66e34",
-      "task_type": "generated_batch",
-      "status": "finished",
-      "priority": 60,
-      "fingerprint": "generated_batch::a4cf53c056d30df4446de19c23617566f1f9bfd75d9e6e55e07584c54d5ff466::artifacts/llm_generated_batch_run",
-      "parent_task_id": "2ac3667f-9d66-46d8-81e1-fdc105800dfe",
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T22:45:25.265524+00:00",
-      "started_at_utc": "2026-03-19T22:45:39.712016+00:00",
-      "finished_at_utc": "2026-03-19T22:45:42.037076+00:00",
-      "worker_note": "generated batch finished: artifacts/generated_batch_from_llm.json | knowledge_gain=exploration_candidate_survived,exploration_graveyard_identified",
-      "payload": {
-        "batch_path": "artifacts/generated_batch_from_llm.json",
-        "output_dir": "artifacts/llm_generated_batch_run"
-      }
-    },
-    {
-      "task_id": "7841a8cd-d22c-4d49-b018-daf91d288d54",
-      "task_type": "batch",
-      "status": "finished",
-      "priority": 30,
-      "fingerprint": "batch::15afad57be9d1e5815d553678240a3e701d656f5a5a7aaf6e564ebefa662ce7f::artifacts/tushare_batch",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T22:45:22.033712+00:00",
-      "started_at_utc": "2026-03-19T22:45:27.274907+00:00",
-      "finished_at_utc": "2026-03-19T22:45:33.674308+00:00",
-      "worker_note": "batch finished: configs/tushare_batch.json | followups=1",
-      "payload": {
-        "config_path": "configs/tushare_batch.json",
-        "output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "2ac3667f-9d66-46d8-81e1-fdc105800dfe",
-      "task_type": "workflow",
-      "status": "finished",
-      "priority": 10,
-      "fingerprint": "workflow::63c043a518d832a1d0cdb3299ff3ecff594a5ebb906d4f4fe4e901b0a66e2dba::artifacts/tushare_workflow",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T22:45:22.029217+00:00",
-      "started_at_utc": "2026-03-19T22:45:22.035557+00:00",
-      "finished_at_utc": "2026-03-19T22:45:25.266556+00:00",
-      "worker_note": "workflow finished: configs/tushare_workflow.json | followups=2",
-      "payload": {
-        "config_path": "configs/tushare_workflow.json",
-        "output_dir": "artifacts/tushare_workflow"
-      }
-    },
-    {
-      "task_id": "d00ae46b-73c3-4469-a80c-0d0060651d6c",
-      "task_type": "workflow",
-      "status": "finished",
-      "priority": 28,
-      "fingerprint": "workflow::b4c839b65779d6c67a0f29ee7f6ff2cd28740538dc150ccf0f60087125fd6ebf::artifacts/generated_rolling_480d_back",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T20:41:17.358981+00:00",
-      "started_at_utc": "2026-03-19T20:42:09.863588+00:00",
-      "finished_at_utc": "2026-03-19T20:57:09.245157+00:00",
-      "worker_note": "workflow finished: artifacts/generated_configs/rolling_480d_back.json",
-      "payload": {
-        "config_path": "artifacts/generated_configs/rolling_480d_back.json",
-        "output_dir": "artifacts/generated_rolling_480d_back"
-      }
-    },
-    {
-      "task_id": "ecbbefa3-ea8f-4316-b6ee-7495d24b462b",
-      "task_type": "workflow",
-      "status": "finished",
-      "priority": 31,
-      "fingerprint": "workflow::b4a9f5df47c18531b05ed0420a05b7e8aea9ca871f65e0b63c17d0b05e0d0550::artifacts/generated_recent_270d",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T20:11:21.961301+00:00",
-      "started_at_utc": "2026-03-19T20:14:04.849361+00:00",
-      "finished_at_utc": "2026-03-19T20:22:03.826228+00:00",
-      "worker_note": "workflow finished: artifacts/generated_configs/rolling_recent_270d.json",
-      "payload": {
-        "config_path": "artifacts/generated_configs/rolling_recent_270d.json",
-        "output_dir": "artifacts/generated_recent_270d"
-      }
-    },
-    {
-      "task_id": "adacd16c-54ea-44ea-9c77-72b58bd5f8bd",
-      "task_type": "workflow",
-      "status": "finished",
-      "priority": 30,
-      "fingerprint": "workflow::331dd4efa2c137ae4f8dbf35779a40edc35a8994d98f0f34a31be65eef7a7c81::artifacts/generated_recent_240d",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T20:06:00.763258+00:00",
-      "started_at_utc": "2026-03-19T20:06:00.766648+00:00",
-      "finished_at_utc": "2026-03-19T20:14:02.839279+00:00",
-      "worker_note": "workflow finished: artifacts/generated_configs/rolling_recent_240d.json",
-      "payload": {
-        "config_path": "artifacts/generated_configs/rolling_recent_240d.json",
-        "output_dir": "artifacts/generated_recent_240d"
-      }
-    },
-    {
-      "task_id": "cbba685c-ecba-4b32-bcfa-8a992e83a122",
-      "task_type": "diagnostic",
-      "status": "finished",
-      "priority": 36,
-      "fingerprint": "diagnostic::graveyard_diagnosis_level_7::{\"diagnostic_type\": \"graveyard_diagnosis_level_7\", \"focus_factors\": [\"liquidity_turnover_shock\", \"mom_20\", \"mom_plus_value\", \"size_small\", \"value_bp\"], \"knowledge_gain\": [\"graveyard_diagnosis_level_7_requested\"], \"reasons\": [\"recent_graveyard_needs_deeper_review\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T20:06:00.761224+00:00",
-      "started_at_utc": "2026-03-19T20:22:05.835386+00:00",
-      "finished_at_utc": "2026-03-19T20:22:05.840315+00:00",
-      "worker_note": "diagnostic finished: graveyard_diagnosis_level_7",
-      "payload": {
-        "diagnostic_type": "graveyard_diagnosis_level_7",
-        "focus_factors": [
-          "liquidity_turnover_shock",
-          "mom_20",
-          "mom_plus_value",
-          "size_small",
-          "value_bp"
-        ],
-        "knowledge_gain": [
-          "graveyard_diagnosis_level_7_requested"
-        ],
-        "reasons": [
-          "recent_graveyard_needs_deeper_review"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "3640b1ea-ae79-49c1-bb18-3dea40639a76",
-      "task_type": "workflow",
-      "status": "finished",
-      "priority": 29,
-      "fingerprint": "workflow::9cb0369e8a623f6d26ed57f971c08eb6a0cd7bc8b65f6cce9d46fa39bb9f40a8::artifacts/generated_recent_210d",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T20:01:04.751287+00:00",
-      "started_at_utc": "2026-03-19T20:01:04.753687+00:00",
-      "finished_at_utc": "2026-03-19T20:05:56.704077+00:00",
-      "worker_note": "workflow finished: artifacts/generated_configs/rolling_recent_210d.json",
-      "payload": {
-        "config_path": "artifacts/generated_configs/rolling_recent_210d.json",
-        "output_dir": "artifacts/generated_recent_210d"
-      }
-    },
-    {
-      "task_id": "ec31fd69-677f-4fa1-aa4b-01078bf9998a",
-      "task_type": "diagnostic",
-      "status": "finished",
-      "priority": 36,
-      "fingerprint": "diagnostic::graveyard_diagnosis_level_7::{\"diagnostic_type\": \"graveyard_diagnosis_level_7\", \"focus_factors\": [\"liquidity_turnover_shock\", \"size_small\", \"value_bp\", \"value_ep\"], \"knowledge_gain\": [\"graveyard_diagnosis_level_7_requested\"], \"reasons\": [\"recent_graveyard_needs_deeper_review\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T20:01:04.748888+00:00",
-      "started_at_utc": "2026-03-19T20:05:58.716102+00:00",
-      "finished_at_utc": "2026-03-19T20:05:58.721494+00:00",
-      "worker_note": "diagnostic finished: graveyard_diagnosis_level_7",
-      "payload": {
-        "diagnostic_type": "graveyard_diagnosis_level_7",
-        "focus_factors": [
-          "liquidity_turnover_shock",
-          "size_small",
-          "value_bp",
-          "value_ep"
-        ],
-        "knowledge_gain": [
-          "graveyard_diagnosis_level_7_requested"
-        ],
-        "reasons": [
-          "recent_graveyard_needs_deeper_review"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "d12858fa-f6e1-40b0-9f88-6fcbf296e770",
-      "task_type": "diagnostic",
-      "status": "finished",
-      "priority": 46,
-      "fingerprint": "diagnostic::graveyard_regime_shift_review::{\"diagnostic_type\": \"graveyard_regime_shift_review\", \"focus_factors\": [\"liquidity_turnover_shock\", \"size_small\", \"value_bp\", \"value_ep\"], \"knowledge_gain\": [\"graveyard_regime_shift_requested\"], \"reasons\": [\"recent_graveyard_needs_deeper_review\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T19:44:59.487284+00:00",
-      "started_at_utc": "2026-03-19T19:44:59.490276+00:00",
-      "finished_at_utc": "2026-03-19T19:44:59.493469+00:00",
-      "worker_note": "diagnostic finished: graveyard_regime_shift_review",
-      "payload": {
-        "diagnostic_type": "graveyard_regime_shift_review",
-        "focus_factors": [
-          "liquidity_turnover_shock",
-          "size_small",
-          "value_bp",
-          "value_ep"
-        ],
-        "knowledge_gain": [
-          "graveyard_regime_shift_requested"
-        ],
-        "reasons": [
-          "recent_graveyard_needs_deeper_review"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "49e29a8c-b693-4cf1-be27-e65632620a62",
-      "task_type": "diagnostic",
-      "status": "finished",
-      "priority": 42,
-      "fingerprint": "diagnostic::graveyard_cross_window_review::{\"diagnostic_type\": \"graveyard_cross_window_review\", \"focus_factors\": [\"liquidity_turnover_shock\", \"size_small\", \"value_bp\", \"value_ep\"], \"knowledge_gain\": [\"graveyard_cross_window_requested\"], \"reasons\": [\"recent_graveyard_needs_deeper_review\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T19:44:57.450483+00:00",
-      "started_at_utc": "2026-03-19T19:44:57.453603+00:00",
-      "finished_at_utc": "2026-03-19T19:44:57.456833+00:00",
-      "worker_note": "diagnostic finished: graveyard_cross_window_review",
-      "payload": {
-        "diagnostic_type": "graveyard_cross_window_review",
-        "focus_factors": [
-          "liquidity_turnover_shock",
-          "size_small",
-          "value_bp",
-          "value_ep"
-        ],
-        "knowledge_gain": [
-          "graveyard_cross_window_requested"
-        ],
-        "reasons": [
-          "recent_graveyard_needs_deeper_review"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "ac9ef55c-e7bf-4423-81ab-c5112dfef2a5",
-      "task_type": "diagnostic",
-      "status": "finished",
-      "priority": 38,
-      "fingerprint": "diagnostic::graveyard_construction_review::{\"diagnostic_type\": \"graveyard_construction_review\", \"focus_factors\": [\"liquidity_turnover_shock\", \"size_small\", \"value_bp\", \"value_ep\"], \"knowledge_gain\": [\"graveyard_construction_requested\"], \"reasons\": [\"recent_graveyard_needs_deeper_review\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T19:44:55.411841+00:00",
-      "started_at_utc": "2026-03-19T19:44:55.415828+00:00",
-      "finished_at_utc": "2026-03-19T19:44:55.419179+00:00",
-      "worker_note": "diagnostic finished: graveyard_construction_review",
-      "payload": {
-        "diagnostic_type": "graveyard_construction_review",
-        "focus_factors": [
-          "liquidity_turnover_shock",
-          "size_small",
-          "value_bp",
-          "value_ep"
-        ],
-        "knowledge_gain": [
-          "graveyard_construction_requested"
-        ],
-        "reasons": [
-          "recent_graveyard_needs_deeper_review"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "0785e476-7354-4b69-b71f-2856d779b88d",
-      "task_type": "diagnostic",
-      "status": "finished",
-      "priority": 34,
-      "fingerprint": "diagnostic::graveyard_raw_vs_neutral_review::{\"diagnostic_type\": \"graveyard_raw_vs_neutral_review\", \"focus_factors\": [\"liquidity_turnover_shock\", \"size_small\", \"value_bp\", \"value_ep\"], \"knowledge_gain\": [\"graveyard_raw_vs_neutral_requested\"], \"reasons\": [\"recent_graveyard_needs_deeper_review\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T19:44:53.376706+00:00",
-      "started_at_utc": "2026-03-19T19:44:53.379846+00:00",
-      "finished_at_utc": "2026-03-19T19:44:53.382951+00:00",
-      "worker_note": "diagnostic finished: graveyard_raw_vs_neutral_review",
-      "payload": {
-        "diagnostic_type": "graveyard_raw_vs_neutral_review",
-        "focus_factors": [
-          "liquidity_turnover_shock",
-          "size_small",
-          "value_bp",
-          "value_ep"
-        ],
-        "knowledge_gain": [
-          "graveyard_raw_vs_neutral_requested"
-        ],
-        "reasons": [
-          "recent_graveyard_needs_deeper_review"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "8d5ea912-257a-47f5-85a3-d4cb2217e012",
-      "task_type": "diagnostic",
-      "status": "finished",
-      "priority": 40,
-      "fingerprint": "diagnostic::artifacts/tushare_batch::graveyard_neutralization::liquidity_turnover_shock,size_small,value_bp,value_ep",
-      "parent_task_id": "fa55604b-ad32-44d1-9729-36ae7a358dc9",
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T19:44:49.332026+00:00",
-      "started_at_utc": "2026-03-19T19:44:51.340237+00:00",
-      "finished_at_utc": "2026-03-19T19:44:51.344794+00:00",
-      "worker_note": "diagnostic finished: graveyard_neutralization_review",
-      "payload": {
-        "diagnostic_type": "graveyard_neutralization_review",
-        "focus_factors": [
-          "liquidity_turnover_shock",
-          "size_small",
-          "value_bp",
-          "value_ep"
-        ],
-        "knowledge_gain": [
-          "neutralization_diagnosis_requested"
-        ],
-        "reasons": [
-          "repeated_graveyard_after_batch_consistency_review"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "fa55604b-ad32-44d1-9729-36ae7a358dc9",
-      "task_type": "diagnostic",
-      "status": "finished",
-      "priority": 35,
-      "fingerprint": "diagnostic::artifacts/tushare_batch::consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep;stable_candidates:mom_20, mom_plus_value",
-      "parent_task_id": "bccce814-914f-43fd-b6b8-c9d08ede912f",
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T19:44:47.311231+00:00",
-      "started_at_utc": "2026-03-19T19:44:49.323118+00:00",
-      "finished_at_utc": "2026-03-19T19:44:49.333332+00:00",
-      "worker_note": "diagnostic finished: batch_consistency_review | followups=1",
-      "payload": {
-        "diagnostic_type": "batch_consistency_review",
-        "knowledge_gain": [
-          "stable_candidate_confirmed",
-          "repeated_graveyard_confirmed"
-        ],
-        "reasons": [
-          "consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep",
-          "stable_candidates:mom_20, mom_plus_value"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "bccce814-914f-43fd-b6b8-c9d08ede912f",
-      "task_type": "batch",
-      "status": "finished",
-      "priority": 30,
-      "fingerprint": "batch::15afad57be9d1e5815d553678240a3e701d656f5a5a7aaf6e564ebefa662ce7f::artifacts/tushare_batch",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T19:44:34.456287+00:00",
-      "started_at_utc": "2026-03-19T19:44:39.802336+00:00",
-      "finished_at_utc": "2026-03-19T19:44:47.312627+00:00",
-      "worker_note": "batch finished: configs/tushare_batch.json | followups=1",
-      "payload": {
-        "config_path": "configs/tushare_batch.json",
-        "output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "83b6a0c8-c960-4af3-b4d2-62d35d430537",
-      "task_type": "workflow",
-      "status": "finished",
-      "priority": 10,
-      "fingerprint": "workflow::63c043a518d832a1d0cdb3299ff3ecff594a5ebb906d4f4fe4e901b0a66e2dba::artifacts/tushare_workflow",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T19:44:34.452367+00:00",
-      "started_at_utc": "2026-03-19T19:44:34.457997+00:00",
-      "finished_at_utc": "2026-03-19T19:44:37.795818+00:00",
-      "worker_note": "workflow finished: configs/tushare_workflow.json | followups=1",
-      "payload": {
-        "config_path": "configs/tushare_workflow.json",
-        "output_dir": "artifacts/tushare_workflow"
-      }
-    },
-    {
-      "task_id": "b3d39fbc-d411-410a-aefb-767b1122fe70",
-      "task_type": "generated_batch",
-      "status": "finished",
-      "priority": 60,
-      "fingerprint": "generated_batch::a4cf53c056d30df4446de19c23617566f1f9bfd75d9e6e55e07584c54d5ff466::artifacts/llm_generated_batch_run",
-      "parent_task_id": "7acc9178-d768-4a75-940a-58f1be5814d4",
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T19:44:28.020947+00:00",
-      "started_at_utc": "2026-03-19T19:44:30.031543+00:00",
-      "finished_at_utc": "2026-03-19T19:44:32.415408+00:00",
-      "worker_note": "generated batch finished: artifacts/generated_batch_from_llm.json | knowledge_gain=exploration_candidate_survived,exploration_graveyard_identified",
-      "payload": {
-        "batch_path": "artifacts/generated_batch_from_llm.json",
-        "output_dir": "artifacts/llm_generated_batch_run"
-      }
-    },
-    {
-      "task_id": "7acc9178-d768-4a75-940a-58f1be5814d4",
-      "task_type": "workflow",
-      "status": "finished",
-      "priority": 28,
-      "fingerprint": "workflow::6e44ee482aa1a176491a1cec79723dfd90e7d9d49d277386dc9934a1b0f3198b::artifacts/generated_recent_180d",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T19:40:28.769808+00:00",
-      "started_at_utc": "2026-03-19T19:40:28.869832+00:00",
-      "finished_at_utc": "2026-03-19T19:44:28.022048+00:00",
-      "worker_note": "workflow finished: artifacts/generated_configs/rolling_recent_180d.json | followups=1",
-      "payload": {
-        "config_path": "artifacts/generated_configs/rolling_recent_180d.json",
-        "output_dir": "artifacts/generated_recent_180d"
-      }
-    },
-    {
-      "task_id": "7cc9ea6b-7950-4618-895a-5f183940f518",
-      "task_type": "diagnostic",
-      "status": "finished",
-      "priority": 36,
-      "fingerprint": "diagnostic::graveyard_diagnosis_level_7::{\"diagnostic_type\": \"graveyard_diagnosis_level_7\", \"focus_factors\": [\"liquidity_turnover_shock\", \"size_small\"], \"knowledge_gain\": [\"graveyard_diagnosis_level_7_requested\"], \"reasons\": [\"recent_graveyard_needs_deeper_review\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T19:14:36.911409+00:00",
-      "started_at_utc": "2026-03-19T19:15:24.396376+00:00",
-      "finished_at_utc": "2026-03-19T19:15:24.401535+00:00",
-      "worker_note": "diagnostic finished: graveyard_diagnosis_level_7",
-      "payload": {
-        "diagnostic_type": "graveyard_diagnosis_level_7",
-        "focus_factors": [
-          "liquidity_turnover_shock",
-          "size_small"
-        ],
-        "knowledge_gain": [
-          "graveyard_diagnosis_level_7_requested"
-        ],
-        "reasons": [
-          "recent_graveyard_needs_deeper_review"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "f35d3b1c-c7fe-414e-a345-6ffa3f3e8175",
-      "task_type": "diagnostic",
-      "status": "finished",
-      "priority": 34,
-      "fingerprint": "diagnostic::stable_candidate_validation_review_v7::{\"diagnostic_type\": \"stable_candidate_validation_review_v7\", \"focus_factors\": [\"mom_20\", \"mom_plus_value\", \"value_bp\", \"value_ep\"], \"knowledge_gain\": [\"stable_candidate_validation_v7_requested\"], \"reasons\": [\"stable_candidates_need_deeper_validation\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T19:14:36.908978+00:00",
-      "started_at_utc": "2026-03-19T19:15:22.384571+00:00",
-      "finished_at_utc": "2026-03-19T19:15:22.389432+00:00",
-      "worker_note": "diagnostic finished: stable_candidate_validation_review_v7",
-      "payload": {
-        "diagnostic_type": "stable_candidate_validation_review_v7",
-        "focus_factors": [
-          "mom_20",
-          "mom_plus_value",
-          "value_bp",
-          "value_ep"
-        ],
-        "knowledge_gain": [
-          "stable_candidate_validation_v7_requested"
-        ],
-        "reasons": [
-          "stable_candidates_need_deeper_validation"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "94ece2dc-be39-44e6-b30e-ad7e5470b7b6",
-      "task_type": "diagnostic",
-      "status": "finished",
-      "priority": 40,
-      "fingerprint": "diagnostic::artifacts/tushare_batch::graveyard_neutralization::liquidity_turnover_shock,size_small,value_bp,value_ep",
-      "parent_task_id": "3ec1e789-e24a-4a05-a930-a721599a2cdd",
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T16:42:59.882549+00:00",
-      "started_at_utc": "2026-03-19T16:43:01.889451+00:00",
-      "finished_at_utc": "2026-03-19T16:43:01.893815+00:00",
-      "worker_note": "diagnostic finished: graveyard_neutralization_review",
-      "payload": {
-        "diagnostic_type": "graveyard_neutralization_review",
-        "focus_factors": [
-          "liquidity_turnover_shock",
-          "size_small",
-          "value_bp",
-          "value_ep"
-        ],
-        "knowledge_gain": [
-          "neutralization_diagnosis_requested"
-        ],
-        "reasons": [
-          "repeated_graveyard_after_batch_consistency_review"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "3ec1e789-e24a-4a05-a930-a721599a2cdd",
-      "task_type": "diagnostic",
-      "status": "finished",
-      "priority": 35,
-      "fingerprint": "diagnostic::artifacts/tushare_batch::consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep;stable_candidates:mom_20, mom_plus_value",
-      "parent_task_id": "d7d0a621-d4b6-4968-a597-50d61517ba8f",
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T16:42:57.867445+00:00",
-      "started_at_utc": "2026-03-19T16:42:59.875809+00:00",
-      "finished_at_utc": "2026-03-19T16:42:59.883497+00:00",
-      "worker_note": "diagnostic finished: batch_consistency_review | followups=1",
-      "payload": {
-        "diagnostic_type": "batch_consistency_review",
-        "knowledge_gain": [
-          "stable_candidate_confirmed",
-          "repeated_graveyard_confirmed"
-        ],
-        "reasons": [
-          "consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep",
-          "stable_candidates:mom_20, mom_plus_value"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "94f90837-2c55-4872-bd5f-d95c5d6ec4d2",
-      "task_type": "generated_batch",
-      "status": "finished",
-      "priority": 60,
-      "fingerprint": "generated_batch::a4cf53c056d30df4446de19c23617566f1f9bfd75d9e6e55e07584c54d5ff466::artifacts/llm_generated_batch_run",
-      "parent_task_id": "9f443934-5db2-4f44-89f7-9c0a6c028c5d",
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T16:42:49.506554+00:00",
-      "started_at_utc": "2026-03-19T16:43:03.900796+00:00",
-      "finished_at_utc": "2026-03-19T16:43:06.222648+00:00",
-      "worker_note": "generated batch finished: artifacts/generated_batch_from_llm.json | knowledge_gain=exploration_candidate_survived,exploration_graveyard_identified",
-      "payload": {
-        "batch_path": "artifacts/generated_batch_from_llm.json",
-        "output_dir": "artifacts/llm_generated_batch_run"
-      }
-    },
-    {
-      "task_id": "d7d0a621-d4b6-4968-a597-50d61517ba8f",
-      "task_type": "batch",
-      "status": "finished",
-      "priority": 30,
-      "fingerprint": "batch::15afad57be9d1e5815d553678240a3e701d656f5a5a7aaf6e564ebefa662ce7f::artifacts/tushare_batch",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T16:42:46.305960+00:00",
-      "started_at_utc": "2026-03-19T16:42:51.515902+00:00",
-      "finished_at_utc": "2026-03-19T16:42:57.868447+00:00",
-      "worker_note": "batch finished: configs/tushare_batch.json | followups=1",
-      "payload": {
-        "config_path": "configs/tushare_batch.json",
-        "output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "9f443934-5db2-4f44-89f7-9c0a6c028c5d",
-      "task_type": "workflow",
-      "status": "finished",
-      "priority": 10,
-      "fingerprint": "workflow::63c043a518d832a1d0cdb3299ff3ecff594a5ebb906d4f4fe4e901b0a66e2dba::artifacts/tushare_workflow",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-19T16:42:46.301756+00:00",
-      "started_at_utc": "2026-03-19T16:42:46.307778+00:00",
-      "finished_at_utc": "2026-03-19T16:42:49.507571+00:00",
-      "worker_note": "workflow finished: configs/tushare_workflow.json | followups=2",
-      "payload": {
-        "config_path": "configs/tushare_workflow.json",
-        "output_dir": "artifacts/tushare_workflow"
       }
     }
   ]

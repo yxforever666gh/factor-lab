@@ -5,6 +5,16 @@ from pathlib import Path
 from typing import Any
 
 
+def _normalize_decision(action_hint: str | None, default: str = "hold") -> str:
+    mapping = {
+        "continue": "advance",
+        "refine": "refine",
+        "pause": "pause",
+        "explore_new_branch": "advance",
+    }
+    return mapping.get(action_hint or "", default)
+
+
 class ResearchBranchPlanner:
     def plan(self, space_map: dict[str, Any], snapshot: dict[str, Any], candidate_pool: dict[str, Any] | None = None) -> dict[str, Any]:
         family_progress = space_map.get("family_progress", {}) or {}
@@ -54,41 +64,37 @@ class ResearchBranchPlanner:
                 branch_decisions.append({
                     "family": family,
                     "decision": "pause",
-                    "recommended_action": action_hint or "pause",
+                    "recommended_action": "pause",
                     "reason": "当前 family 已无下一层或已饱和。",
                 })
                 continue
 
             if family == "stable_candidate_validation":
                 score += 70 + min(top_family_score / 4, 30) + min(refinement_count * 4, 12)
-                decision = "advance"
+                decision = _normalize_decision(action_hint, "advance")
                 if action_hint == "refine":
-                    decision = "refine"
                     score += 6
                 elif action_hint == "pause":
-                    decision = "hold"
                     score -= 10
                 reason = f"高分 family={top_family_score:.2f}，refinement={refinement_count}，优先把强主线做深。最近增量 {recent_gain}。"
             elif family == "graveyard_diagnosis":
                 score += 52 + min(duplicate_count * 5, 20)
-                decision = "refine" if duplicate_count >= 2 else "advance"
+                decision = _normalize_decision(action_hint, "advance")
                 reason = f"duplicate={duplicate_count}，需要确认失败因子是否只是同构重复。最近增量 {recent_gain}。"
             elif family == "recent_window_validation":
                 score += 60 + min(refinement_count * 3, 12)
-                decision = "refine" if (action_hint == "refine" or duplicate_count >= 2) else "advance"
+                decision = _normalize_decision(action_hint, "advance")
                 reason = f"近期窗口验证仍有缺口，且 refinement={refinement_count}，适合先确认分支稳定性。最近增量 {recent_gain}。"
             elif family == "window_expansion":
                 score += 48 + min(hybrid_count * 4, 16) + min(top_family_score / 8, 10)
-                decision = "advance" if action_hint == "continue" else "hold"
+                decision = _normalize_decision(action_hint, "pause")
                 reason = f"hybrid={hybrid_count}，需要跨更长区间确认组合关系是否持久。最近增量 {recent_gain}。"
             else:
                 score += 35 + min(hybrid_count * 3, 12)
+                decision = _normalize_decision(action_hint, "pause")
                 if fatigue_level != "low" or top_family_score < 70:
-                    decision = "hold"
-                else:
-                    decision = "advance"
+                    decision = "pause" if action_hint != "explore_new_branch" else "advance"
                 if action_hint == "explore_new_branch":
-                    decision = "advance"
                     score += 8
                 reason = f"exploration 仅在已有 family 分数较强且混合支路出现时推进。最近增量 {recent_gain}。"
 
@@ -137,7 +143,7 @@ class ResearchBranchPlanner:
                 break
 
         return {
-            "summary": "优先推进高分 family 的验证与带 lineage 的分支；duplicate 压力高的主线转向 refine，弱 family 倾向 explore_new_branch。",
+            "summary": "decision 现在直接从 recommended_action 语义映射：continue→advance、refine→refine、pause→pause、explore_new_branch→advance；仅在疲劳/饱和约束下收紧。",
             "branch_decisions": branch_decisions,
             "selected_tasks": selected_tasks,
             "selected_families": selected_families,

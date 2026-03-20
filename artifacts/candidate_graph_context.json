@@ -128,7 +128,12 @@
       "leader": "mom_20",
       "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
       "primary_candidate": "mom_20",
-      "suppressed_member_count": 5,
+      "representative_count": 2,
+      "representative_candidates": [
+        "mom_20",
+        "value_bp"
+      ],
+      "suppressed_member_count": 4,
       "members": [
         {
           "id": "5032916e-07f4-45e2-9618-3cfc8e700940",
@@ -138,7 +143,8 @@
           "latest_final_score": 4.865683,
           "avg_final_score": 8.524486,
           "evaluation_count": 187,
-          "is_primary": true
+          "is_primary": true,
+          "is_representative": true
         },
         {
           "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
@@ -148,7 +154,8 @@
           "latest_final_score": 1.311582,
           "avg_final_score": 5.910476,
           "evaluation_count": 145,
-          "is_primary": false
+          "is_primary": false,
+          "is_representative": true
         },
         {
           "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -158,7 +165,8 @@
           "latest_final_score": 1.144852,
           "avg_final_score": 8.11212,
           "evaluation_count": 185,
-          "is_primary": false
+          "is_primary": false,
+          "is_representative": false
         },
         {
           "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
@@ -168,7 +176,8 @@
           "latest_final_score": 4.41182,
           "avg_final_score": 4.41182,
           "evaluation_count": 2,
-          "is_primary": false
+          "is_primary": false,
+          "is_representative": false
         },
         {
           "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
@@ -178,7 +187,8 @@
           "latest_final_score": 4.197889,
           "avg_final_score": 4.197889,
           "evaluation_count": 2,
-          "is_primary": false
+          "is_primary": false,
+          "is_representative": false
         },
         {
           "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
@@ -188,7 +198,8 @@
           "latest_final_score": 4.071135,
           "avg_final_score": 7.491671,
           "evaluation_count": 147,
-          "is_primary": false
+          "is_primary": false,
+          "is_representative": false
         }
       ]
     },
@@ -206,6 +217,10 @@
       "leader": "liquidity_turnover_shock",
       "primary_candidate_id": "c75fb8df-b227-4cb1-93c8-a6e65ec95dfc",
       "primary_candidate": "liquidity_turnover_shock",
+      "representative_count": 1,
+      "representative_candidates": [
+        "liquidity_turnover_shock"
+      ],
       "suppressed_member_count": 0,
       "members": [
         {
@@ -216,7 +231,8 @@
           "latest_final_score": 2.364005,
           "avg_final_score": 7.969937,
           "evaluation_count": 187,
-          "is_primary": true
+          "is_primary": true,
+          "is_representative": true
         }
       ]
     },
@@ -234,6 +250,10 @@
       "leader": "size_small",
       "primary_candidate_id": "d7e14ed9-6251-425d-a28a-fc75cbf5bbf0",
       "primary_candidate": "size_small",
+      "representative_count": 1,
+      "representative_candidates": [
+        "size_small"
+      ],
       "suppressed_member_count": 0,
       "members": [
         {
@@ -244,7 +264,8 @@
           "latest_final_score": 3.025676,
           "avg_final_score": 7.989338,
           "evaluation_count": 185,
-          "is_primary": true
+          "is_primary": true,
+          "is_representative": true
         }
       ]
     }
@@ -254,10 +275,37 @@
       "cluster_id": 1,
       "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
       "primary_candidate": "mom_20",
+      "representative_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
+      "representative_candidate": "mom_20",
       "family": "momentum",
       "cluster_size": 6,
+      "representative_rank": 1,
+      "representative_count": 2,
+      "is_primary_representative": true,
       "suppressed_candidates": [
-        "value_bp",
+        "mom_plus_value",
+        "quality_roe",
+        "quality_minus_value",
+        "value_ep"
+      ],
+      "relationship_mix": {
+        "same_family": 4,
+        "hybrid_of": 1,
+        "refinement_of": 2
+      }
+    },
+    {
+      "cluster_id": 1,
+      "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
+      "primary_candidate": "mom_20",
+      "representative_candidate_id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
+      "representative_candidate": "value_bp",
+      "family": "value",
+      "cluster_size": 6,
+      "representative_rank": 2,
+      "representative_count": 2,
+      "is_primary_representative": false,
+      "suppressed_candidates": [
         "mom_plus_value",
         "quality_roe",
         "quality_minus_value",
@@ -273,8 +321,13 @@
       "cluster_id": 2,
       "primary_candidate_id": "c75fb8df-b227-4cb1-93c8-a6e65ec95dfc",
       "primary_candidate": "liquidity_turnover_shock",
+      "representative_candidate_id": "c75fb8df-b227-4cb1-93c8-a6e65ec95dfc",
+      "representative_candidate": "liquidity_turnover_shock",
       "family": "liquidity",
       "cluster_size": 1,
+      "representative_rank": 1,
+      "representative_count": 1,
+      "is_primary_representative": true,
       "suppressed_candidates": [],
       "relationship_mix": {}
     },
@@ -282,8 +335,13 @@
       "cluster_id": 3,
       "primary_candidate_id": "d7e14ed9-6251-425d-a28a-fc75cbf5bbf0",
       "primary_candidate": "size_small",
+      "representative_candidate_id": "d7e14ed9-6251-425d-a28a-fc75cbf5bbf0",
+      "representative_candidate": "size_small",
       "family": "other",
       "cluster_size": 1,
+      "representative_rank": 1,
+      "representative_count": 1,
+      "is_primary_representative": true,
       "suppressed_candidates": [],
       "relationship_mix": {}
     }
@@ -322,7 +380,8 @@
             "latest_final_score": 4.865683,
             "avg_final_score": 8.524486,
             "evaluation_count": 187,
-            "is_primary": true
+            "is_primary": true,
+            "is_representative": true
           },
           {
             "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
@@ -332,7 +391,8 @@
             "latest_final_score": 1.311582,
             "avg_final_score": 5.910476,
             "evaluation_count": 145,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": true
           },
           {
             "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -342,7 +402,8 @@
             "latest_final_score": 1.144852,
             "avg_final_score": 8.11212,
             "evaluation_count": 185,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
@@ -352,7 +413,8 @@
             "latest_final_score": 4.41182,
             "avg_final_score": 4.41182,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
@@ -362,7 +424,8 @@
             "latest_final_score": 4.197889,
             "avg_final_score": 4.197889,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
@@ -372,12 +435,19 @@
             "latest_final_score": 4.071135,
             "avg_final_score": 7.491671,
             "evaluation_count": 147,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           }
         ],
         "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
         "primary_candidate": "mom_20",
-        "suppressed_member_count": 5
+        "representative_count": 2,
+        "representative_candidates": [
+          "mom_20",
+          "value_bp"
+        ],
+        "is_representative": true,
+        "suppressed_member_count": 4
       },
       "is_primary_candidate": true,
       "related_candidates": [
@@ -423,7 +493,8 @@
             "latest_final_score": 4.865683,
             "avg_final_score": 8.524486,
             "evaluation_count": 187,
-            "is_primary": true
+            "is_primary": true,
+            "is_representative": true
           },
           {
             "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
@@ -433,7 +504,8 @@
             "latest_final_score": 1.311582,
             "avg_final_score": 5.910476,
             "evaluation_count": 145,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": true
           },
           {
             "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -443,7 +515,8 @@
             "latest_final_score": 1.144852,
             "avg_final_score": 8.11212,
             "evaluation_count": 185,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
@@ -453,7 +526,8 @@
             "latest_final_score": 4.41182,
             "avg_final_score": 4.41182,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
@@ -463,7 +537,8 @@
             "latest_final_score": 4.197889,
             "avg_final_score": 4.197889,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
@@ -473,12 +548,19 @@
             "latest_final_score": 4.071135,
             "avg_final_score": 7.491671,
             "evaluation_count": 147,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           }
         ],
         "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
         "primary_candidate": "mom_20",
-        "suppressed_member_count": 5
+        "representative_count": 2,
+        "representative_candidates": [
+          "mom_20",
+          "value_bp"
+        ],
+        "is_representative": false,
+        "suppressed_member_count": 4
       },
       "is_primary_candidate": false,
       "related_candidates": [
@@ -550,7 +632,8 @@
             "latest_final_score": 4.865683,
             "avg_final_score": 8.524486,
             "evaluation_count": 187,
-            "is_primary": true
+            "is_primary": true,
+            "is_representative": true
           },
           {
             "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
@@ -560,7 +643,8 @@
             "latest_final_score": 1.311582,
             "avg_final_score": 5.910476,
             "evaluation_count": 145,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": true
           },
           {
             "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -570,7 +654,8 @@
             "latest_final_score": 1.144852,
             "avg_final_score": 8.11212,
             "evaluation_count": 185,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
@@ -580,7 +665,8 @@
             "latest_final_score": 4.41182,
             "avg_final_score": 4.41182,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
@@ -590,7 +676,8 @@
             "latest_final_score": 4.197889,
             "avg_final_score": 4.197889,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
@@ -600,12 +687,19 @@
             "latest_final_score": 4.071135,
             "avg_final_score": 7.491671,
             "evaluation_count": 147,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           }
         ],
         "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
         "primary_candidate": "mom_20",
-        "suppressed_member_count": 5
+        "representative_count": 2,
+        "representative_candidates": [
+          "mom_20",
+          "value_bp"
+        ],
+        "is_representative": false,
+        "suppressed_member_count": 4
       },
       "is_primary_candidate": false,
       "related_candidates": [
@@ -735,7 +829,8 @@
             "latest_final_score": 4.865683,
             "avg_final_score": 8.524486,
             "evaluation_count": 187,
-            "is_primary": true
+            "is_primary": true,
+            "is_representative": true
           },
           {
             "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
@@ -745,7 +840,8 @@
             "latest_final_score": 1.311582,
             "avg_final_score": 5.910476,
             "evaluation_count": 145,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": true
           },
           {
             "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -755,7 +851,8 @@
             "latest_final_score": 1.144852,
             "avg_final_score": 8.11212,
             "evaluation_count": 185,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
@@ -765,7 +862,8 @@
             "latest_final_score": 4.41182,
             "avg_final_score": 4.41182,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
@@ -775,7 +873,8 @@
             "latest_final_score": 4.197889,
             "avg_final_score": 4.197889,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
@@ -785,12 +884,19 @@
             "latest_final_score": 4.071135,
             "avg_final_score": 7.491671,
             "evaluation_count": 147,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           }
         ],
         "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
         "primary_candidate": "mom_20",
-        "suppressed_member_count": 5
+        "representative_count": 2,
+        "representative_candidates": [
+          "mom_20",
+          "value_bp"
+        ],
+        "is_representative": false,
+        "suppressed_member_count": 4
       },
       "is_primary_candidate": false,
       "related_candidates": [
@@ -880,11 +986,17 @@
             "latest_final_score": 3.025676,
             "avg_final_score": 7.989338,
             "evaluation_count": 185,
-            "is_primary": true
+            "is_primary": true,
+            "is_representative": true
           }
         ],
         "primary_candidate_id": "d7e14ed9-6251-425d-a28a-fc75cbf5bbf0",
         "primary_candidate": "size_small",
+        "representative_count": 1,
+        "representative_candidates": [
+          "size_small"
+        ],
+        "is_representative": true,
         "suppressed_member_count": 0
       },
       "is_primary_candidate": true,
@@ -915,11 +1027,17 @@
             "latest_final_score": 2.364005,
             "avg_final_score": 7.969937,
             "evaluation_count": 187,
-            "is_primary": true
+            "is_primary": true,
+            "is_representative": true
           }
         ],
         "primary_candidate_id": "c75fb8df-b227-4cb1-93c8-a6e65ec95dfc",
         "primary_candidate": "liquidity_turnover_shock",
+        "representative_count": 1,
+        "representative_candidates": [
+          "liquidity_turnover_shock"
+        ],
+        "is_representative": true,
         "suppressed_member_count": 0
       },
       "is_primary_candidate": true,
@@ -954,7 +1072,8 @@
             "latest_final_score": 4.865683,
             "avg_final_score": 8.524486,
             "evaluation_count": 187,
-            "is_primary": true
+            "is_primary": true,
+            "is_representative": true
           },
           {
             "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
@@ -964,7 +1083,8 @@
             "latest_final_score": 1.311582,
             "avg_final_score": 5.910476,
             "evaluation_count": 145,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": true
           },
           {
             "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -974,7 +1094,8 @@
             "latest_final_score": 1.144852,
             "avg_final_score": 8.11212,
             "evaluation_count": 185,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
@@ -984,7 +1105,8 @@
             "latest_final_score": 4.41182,
             "avg_final_score": 4.41182,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
@@ -994,7 +1116,8 @@
             "latest_final_score": 4.197889,
             "avg_final_score": 4.197889,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
@@ -1004,12 +1127,19 @@
             "latest_final_score": 4.071135,
             "avg_final_score": 7.491671,
             "evaluation_count": 147,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           }
         ],
         "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
         "primary_candidate": "mom_20",
-        "suppressed_member_count": 5
+        "representative_count": 2,
+        "representative_candidates": [
+          "mom_20",
+          "value_bp"
+        ],
+        "is_representative": true,
+        "suppressed_member_count": 4
       },
       "is_primary_candidate": false,
       "related_candidates": [
@@ -1103,7 +1233,8 @@
             "latest_final_score": 4.865683,
             "avg_final_score": 8.524486,
             "evaluation_count": 187,
-            "is_primary": true
+            "is_primary": true,
+            "is_representative": true
           },
           {
             "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
@@ -1113,7 +1244,8 @@
             "latest_final_score": 1.311582,
             "avg_final_score": 5.910476,
             "evaluation_count": 145,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": true
           },
           {
             "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -1123,7 +1255,8 @@
             "latest_final_score": 1.144852,
             "avg_final_score": 8.11212,
             "evaluation_count": 185,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
@@ -1133,7 +1266,8 @@
             "latest_final_score": 4.41182,
             "avg_final_score": 4.41182,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
@@ -1143,7 +1277,8 @@
             "latest_final_score": 4.197889,
             "avg_final_score": 4.197889,
             "evaluation_count": 2,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           },
           {
             "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
@@ -1153,12 +1288,19 @@
             "latest_final_score": 4.071135,
             "avg_final_score": 7.491671,
             "evaluation_count": 147,
-            "is_primary": false
+            "is_primary": false,
+            "is_representative": false
           }
         ],
         "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
         "primary_candidate": "mom_20",
-        "suppressed_member_count": 5
+        "representative_count": 2,
+        "representative_candidates": [
+          "mom_20",
+          "value_bp"
+        ],
+        "is_representative": false,
+        "suppressed_member_count": 4
       },
       "is_primary_candidate": false,
       "related_candidates": [

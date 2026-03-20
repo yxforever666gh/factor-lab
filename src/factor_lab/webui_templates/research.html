@@ -26,12 +26,12 @@
   <section class="card">
     <h2>Planner 候选池</h2>
     <div style="font-size:34px; font-weight:700;">{{ summary.planner_candidates }}</div>
-    <div class="muted">suppressed={{ summary.planner_suppressed }}</div>
+    <div class="muted">suppressed={{ summary.planner_suppressed }} · multi-rep aware</div>
     {% if candidate_pool.representative_selection %}
     <div style="margin-top:10px;">
       {% for row in candidate_pool.representative_selection[:6] %}
         {% if row.suppressed_into %}
-        <div class="muted">{{ row.candidate }} → {{ row.suppressed_into }}</div>
+        <div class="muted">{{ row.candidate }} → {{ row.suppressed_into }}{% if row.available_representatives %} (reps={{ row.available_representatives|join(', ') }}){% endif %}</div>
         {% endif %}
       {% endfor %}
     </div>

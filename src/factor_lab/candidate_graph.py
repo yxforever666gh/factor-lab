@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
@@ -98,6 +99,48 @@ def _candidate_rank_key(candidate: dict[str, Any]) -> tuple[float, float, float,
     avg_score = float(candidate.get("avg_final_score") or -999.0)
     evals = float(candidate.get("evaluation_count") or 0)
     return (status_rank, latest, avg_score + evals / 1000.0, candidate.get("name") or "")
+
+
+def _cluster_rep_limit(cluster_size: int) -> int:
+    if cluster_size <= 2:
+        return 1
+    return min(4, max(1, math.ceil(cluster_size / 3)))
+
+
+def _select_cluster_representatives(members_sorted: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    if not members_sorted:
+        return []
+    rep_limit = _cluster_rep_limit(len(members_sorted))
+    families_seen: set[str] = set()
+    kept: list[dict[str, Any]] = []
+    primary_key = _candidate_rank_key(members_sorted[0])
+    primary_latest = float(members_sorted[0].get("latest_final_score") or -999.0)
+    margin = 0.18
+
+    for row in members_sorted:
+        if len(kept) >= rep_limit:
+            break
+        family = row.get("family") or "other"
+        latest = float(row.get("latest_final_score") or -999.0)
+        near_frontier = latest >= primary_latest - margin
+        introduces_family = family not in families_seen
+        if not kept or near_frontier or introduces_family:
+            kept.append(row)
+            families_seen.add(family)
+
+    if not kept:
+        kept = [members_sorted[0]]
+
+    fallback_idx = 0
+    while len(kept) < rep_limit and fallback_idx < len(members_sorted):
+        row = members_sorted[fallback_idx]
+        fallback_idx += 1
+        if row in kept:
+            continue
+        if _candidate_rank_key(row) >= (primary_key[0] - 1.0, primary_key[1] - 0.3, -9999.0, ""):
+            kept.append(row)
+
+    return kept[:rep_limit]
 
 
 def _recommend_family_action(row: dict[str, Any]) -> str:
@@ -444,7 +487,9 @@ def candidate_clusters(candidates: list[dict[str, Any]], relationships: list[dic
                     edge_types[rel["relationship_type"]] += 1
                     strengths.append(float(rel.get("strength") or 0.0))
         members_sorted = sorted(members, key=_candidate_rank_key, reverse=True)
-        primary = members_sorted[0] if members_sorted else None
+        representatives = _select_cluster_representatives(members_sorted)
+        representative_ids = {row.get("id") for row in representatives}
+        primary = representatives[0] if representatives else (members_sorted[0] if members_sorted else None)
         cluster_id = len(clusters) + 1
         for member_id in component:
             cluster_index_by_candidate[member_id] = cluster_id
@@ -461,7 +506,9 @@ def candidate_clusters(candidates: list[dict[str, Any]], relationships: list[dic
                 "leader": primary.get("name") if primary else None,
                 "primary_candidate_id": primary.get("id") if primary else None,
                 "primary_candidate": primary.get("name") if primary else None,
-                "suppressed_member_count": max(len(members_sorted) - 1, 0),
+                "representative_count": len(representatives),
+                "representative_candidates": [row.get("name") for row in representatives],
+                "suppressed_member_count": max(len(members_sorted) - len(representatives), 0),
                 "members": [
                     {
                         "id": row["id"],
@@ -472,6 +519,7 @@ def candidate_clusters(candidates: list[dict[str, Any]], relationships: list[dic
                         "avg_final_score": row.get("avg_final_score"),
                         "evaluation_count": row.get("evaluation_count"),
                         "is_primary": bool(primary and row["id"] == primary.get("id")),
+                        "is_representative": row.get("id") in representative_ids,
                     }
                     for row in members_sorted
                 ],
@@ -491,15 +539,21 @@ def build_candidate_graph_context(candidates: list[dict[str, Any]], evaluations:
     representative_rows: list[dict[str, Any]] = []
     for cluster in clusters:
         primary_member = next((member for member in cluster["members"] if member.get("is_primary")), cluster["members"][0] if cluster["members"] else None)
-        if primary_member:
+        representative_members = [member for member in cluster["members"] if member.get("is_representative")]
+        for rep_rank, representative in enumerate(representative_members, start=1):
             representative_rows.append(
                 {
                     "cluster_id": cluster["cluster_id"],
-                    "primary_candidate_id": primary_member.get("id"),
-                    "primary_candidate": primary_member.get("name"),
-                    "family": primary_member.get("family"),
+                    "primary_candidate_id": primary_member.get("id") if primary_member else representative.get("id"),
+                    "primary_candidate": primary_member.get("name") if primary_member else representative.get("name"),
+                    "representative_candidate_id": representative.get("id"),
+                    "representative_candidate": representative.get("name"),
+                    "family": representative.get("family"),
                     "cluster_size": cluster.get("cluster_size"),
-                    "suppressed_candidates": [member.get("name") for member in cluster["members"] if member.get("id") != primary_member.get("id")],
+                    "representative_rank": rep_rank,
+                    "representative_count": len(representative_members),
+                    "is_primary_representative": bool(primary_member and representative.get("id") == primary_member.get("id")),
+                    "suppressed_candidates": [member.get("name") for member in cluster["members"] if not member.get("is_representative")],
                     "relationship_mix": cluster.get("relationship_mix") or {},
                 }
             )
@@ -513,6 +567,9 @@ def build_candidate_graph_context(candidates: list[dict[str, Any]], evaluations:
                 "members": cluster["members"],
                 "primary_candidate_id": cluster.get("primary_candidate_id"),
                 "primary_candidate": cluster.get("primary_candidate"),
+                "representative_count": cluster.get("representative_count", 1),
+                "representative_candidates": cluster.get("representative_candidates") or [],
+                "is_representative": bool(member.get("is_representative")),
                 "suppressed_member_count": cluster.get("suppressed_member_count", 0),
             }
 

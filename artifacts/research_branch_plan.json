@@ -2,7 +2,7 @@
   "generated_from_space_map": "artifacts/research_space_map.json",
   "generated_from_snapshot": "artifacts/research_planner_snapshot.json",
   "generated_from_candidate_pool": "artifacts/research_candidate_pool.json",
-  "summary": "优先推进高分 family 的验证与带 lineage 的分支；duplicate 压力高的主线转向 refine，弱 family 倾向 explore_new_branch。",
+  "summary": "decision 现在直接从 recommended_action 语义映射：continue→advance、refine→refine、pause→pause、explore_new_branch→advance；仅在疲劳/饱和约束下收紧。",
   "branch_decisions": [
     {
       "family": "stable_candidate_validation",
@@ -22,7 +22,7 @@
       "next_level": 7,
       "fatigue": "medium",
       "priority_score": 54.0,
-      "reason": "duplicate=0，需要确认失败因子是否只是同构重复。最近增量 18。"
+      "reason": "duplicate=0，需要确认失败因子是否只是同构重复。最近增量 20。"
     },
     {
       "family": "recent_window_validation",
@@ -46,13 +46,13 @@
     },
     {
       "family": "exploration",
-      "decision": "advance",
+      "decision": "pause",
       "recommended_action": "pause",
       "current_level": 1,
       "next_level": 2,
       "fatigue": "low",
       "priority_score": 46.0,
-      "reason": "exploration 仅在已有 family 分数较强且混合支路出现时推进。最近增量 78。"
+      "reason": "exploration 仅在已有 family 分数较强且混合支路出现时推进。最近增量 83。"
     }
   ],
   "selected_tasks": [
@@ -60,7 +60,7 @@
       "task_type": "diagnostic",
       "category": "validation",
       "priority_hint": 29,
-      "reason": "稳定候选当前已完成到第 6 层，建议进入第 7 层验证。 重点候选累计关系 1 条、lineage 0 条，最强 family=momentum。保留 cluster primary 后实际验证 1 个代表候选，压制 4 个重复/近重复候选。",
+      "reason": "稳定候选当前已完成到第 6 层，建议进入第 7 层验证。 重点候选累计关系 1 条、lineage 0 条，最强 family=momentum。保留 cluster representatives 后实际验证 1 个代表候选，压制 4 个重复/近重复候选。",
       "expected_knowledge_gain": [
         "stable_candidate_validation_v7_requested"
       ],
@@ -108,7 +108,8 @@
                 "latest_final_score": 4.865683,
                 "avg_final_score": 8.524486,
                 "evaluation_count": 187,
-                "is_primary": true
+                "is_primary": true,
+                "is_representative": true
               },
               {
                 "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
@@ -118,7 +119,8 @@
                 "latest_final_score": 1.311582,
                 "avg_final_score": 5.910476,
                 "evaluation_count": 145,
-                "is_primary": false
+                "is_primary": false,
+                "is_representative": true
               },
               {
                 "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -128,7 +130,8 @@
                 "latest_final_score": 1.144852,
                 "avg_final_score": 8.11212,
                 "evaluation_count": 185,
-                "is_primary": false
+                "is_primary": false,
+                "is_representative": false
               },
               {
                 "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
@@ -138,7 +141,8 @@
                 "latest_final_score": 4.41182,
                 "avg_final_score": 4.41182,
                 "evaluation_count": 2,
-                "is_primary": false
+                "is_primary": false,
+                "is_representative": false
               },
               {
                 "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
@@ -148,7 +152,8 @@
                 "latest_final_score": 4.197889,
                 "avg_final_score": 4.197889,
                 "evaluation_count": 2,
-                "is_primary": false
+                "is_primary": false,
+                "is_representative": false
               },
               {
                 "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
@@ -158,12 +163,19 @@
                 "latest_final_score": 4.071135,
                 "avg_final_score": 7.491671,
                 "evaluation_count": 147,
-                "is_primary": false
+                "is_primary": false,
+                "is_representative": false
               }
             ],
             "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
             "primary_candidate": "mom_20",
-            "suppressed_member_count": 5
+            "representative_count": 2,
+            "representative_candidates": [
+              "mom_20",
+              "value_bp"
+            ],
+            "is_representative": true,
+            "suppressed_member_count": 4
           },
           "is_primary_candidate": true,
           "related_candidates": [
@@ -188,31 +200,49 @@
           "candidate": "mom_plus_value",
           "suppressed_into": "mom_20",
           "cluster_id": 1,
-          "reason": "same_cluster_primary_retained"
+          "available_representatives": [
+            "mom_20",
+            "value_bp"
+          ],
+          "reason": "cluster_representative_retained"
         },
         {
           "candidate": "value_ep",
           "suppressed_into": "mom_20",
           "cluster_id": 1,
-          "reason": "same_cluster_primary_retained"
+          "available_representatives": [
+            "mom_20",
+            "value_bp"
+          ],
+          "reason": "cluster_representative_retained"
         },
         {
           "candidate": "quality_minus_value",
           "suppressed_into": "mom_20",
           "cluster_id": 1,
-          "reason": "same_cluster_primary_retained"
+          "available_representatives": [
+            "mom_20",
+            "value_bp"
+          ],
+          "reason": "cluster_representative_retained"
         },
         {
           "candidate": "quality_roe",
           "suppressed_into": "mom_20",
           "cluster_id": 1,
-          "reason": "same_cluster_primary_retained"
+          "available_representatives": [
+            "mom_20",
+            "value_bp"
+          ],
+          "reason": "cluster_representative_retained"
         },
         {
           "candidate": "mom_20",
           "cluster_id": 1,
+          "representative_rank": 1,
+          "representative_count": 2,
+          "is_primary_representative": true,
           "suppressed_candidates": [
-            "value_bp",
             "mom_plus_value",
             "quality_roe",
             "quality_minus_value",
@@ -241,7 +271,6 @@
     "stable_candidate_validation",
     "recent_window_validation",
     "window_expansion",
-    "graveyard_diagnosis",
-    "exploration"
+    "graveyard_diagnosis"
   ]
 }

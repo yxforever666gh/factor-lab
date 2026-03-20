@@ -23,7 +23,7 @@
         {% for row in cluster.members %}
         <tr>
           <td><a href="/candidates/{{ row.id }}">{{ row.name }}</a></td>
-          <td>{% if row.is_primary %}<span class="pill good">primary</span>{% else %}<span class="pill warn">suppressed similar</span>{% endif %}</td>
+          <td>{% if row.is_primary %}<span class="pill good">primary</span>{% elif row.is_representative %}<span class="pill good">representative</span>{% else %}<span class="pill warn">suppressed similar</span>{% endif %}</td>
           <td>{{ row.family }}</td>
           <td>{{ row.status }}</td>
           <td class="num">{{ row.latest_final_score if row.latest_final_score is not none else '-' }}</td>
