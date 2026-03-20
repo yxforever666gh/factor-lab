@@ -2,4 +2,4 @@
 运行时间：2026-03-20T00:06:38.052490+00:00。
 当前长期平均表现最好的策略是 long_short_top_bottom_all_factors，平均夏普 10.08。
 目前最稳定的候选因子：mom_20、mom_plus_value、value_ep、quality_minus_value、quality_roe。
-当前候选榜单前列：mom_20(promising, 74.55231)；quality_roe(promising, 73.57363)；quality_minus_value(promising, 73.12289)；value_ep(testing, 72.849566)；liquidity_turnover_shock(testing, 68.96729)。
+当前候选榜单前列：mom_20(promising, 4.865683)；quality_roe(testing, 4.41182)；quality_minus_value(testing, 4.197889)；value_ep(testing, 4.071135)；size_small(testing, 3.025676)。

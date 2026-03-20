@@ -237,6 +237,14 @@ def _register_candidate_intelligence(
             expression=definition.get('expression'),
             origin_run_id=run_id,
         )
+        run_scope = 'official'
+        if config.get('data_source') == 'sample' or 'first_workflow' in config_path:
+            run_scope = 'demo'
+        elif 'generated_' in config_path:
+            run_scope = 'generated'
+        elif 'tushare_batch' in config_path or 'batch' in config_path:
+            run_scope = 'batch_official'
+
         metric_payload = {
             'sample_size': raw.get('observations') or 0,
             'observations': raw.get('observations') or 0,
@@ -251,6 +259,7 @@ def _register_candidate_intelligence(
             'high_corr_peer_count': len(score_row.get('high_corr_peers') or []),
             'robust_pass_count': robust_pass_count,
             'robust_total_count': robust_total_count,
+            'run_scope': run_scope,
         }
         scored = score_candidate_evaluation(metric_payload)
         notes = {
@@ -259,6 +268,8 @@ def _register_candidate_intelligence(
             'neutralized_pass': neutral.get('pass_gate'),
             'high_corr_peers': score_row.get('high_corr_peers') or [],
             'source_run': run_id,
+            'run_scope': run_scope,
+            'config_path': config_path,
         }
         store.insert_factor_evaluation(
             {

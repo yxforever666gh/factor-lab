@@ -7,6 +7,7 @@ from typing import Any
 
 GOOD_STATUSES = {"promising", "testing"}
 BAD_STATUSES = {"rejected", "archived"}
+OFFICIAL_RUN_SCOPES = {"official", "generated", "batch_official"}
 
 
 def infer_factor_family(name: str, expression: str | None = None) -> str:
@@ -54,27 +55,33 @@ def score_candidate_evaluation(metrics: dict[str, Any]) -> dict[str, Any]:
     observations = int(metrics.get("observations") or 0)
     robust_pass_count = int(metrics.get("robust_pass_count") or 0)
     robust_total_count = int(metrics.get("robust_total_count") or 0)
+    run_scope = metrics.get("run_scope") or "official"
+
+    clipped_return = max(min(return_metric, 1.5), -1.5)
+    clipped_sharpe = max(min(sharpe_like, 4.0), -2.0)
+    drawdown_penalty = abs(min(max_drawdown, 0.0))
+    scope_multiplier = 0.35 if run_scope == "demo" else 1.0
 
     stability_score = (
-        raw_ic * 2.2
-        + max(neutral_ic, 0.0) * 2.4
-        + min(sharpe_like, 8.0) * 0.25
-        + min(coverage, 1.0) * 0.8
-        + min(sample_size / 240.0, 1.5) * 0.55
-        + min(observations / 240.0, 1.2) * 0.35
-        + (robust_pass_count / max(robust_total_count, 1)) * 0.8
-        - split_fail_count * 0.45
-        - high_corr_peer_count * 0.08
-    )
+        raw_ic * 3.2
+        + max(neutral_ic, -0.1) * 2.4
+        + clipped_sharpe * 0.35
+        + min(coverage, 1.0) * 0.9
+        + min(sample_size / 240.0, 1.2) * 0.7
+        + min(observations / 240.0, 1.2) * 0.55
+        + (robust_pass_count / max(robust_total_count, 1)) * 0.9
+        - split_fail_count * 0.55
+        - high_corr_peer_count * 0.12
+    ) * scope_multiplier
 
     quality_score = (
-        return_metric * 1.6
-        + max(sharpe_like, -4.0) * 0.35
-        + max(raw_ic, 0.0) * 1.8
-        + max(neutral_ic, 0.0) * 1.6
-        - abs(min(max_drawdown, 0.0)) * 3.2
-        - turnover * 0.35
-    )
+        clipped_return * 1.4
+        + clipped_sharpe * 0.55
+        + max(raw_ic, -0.1) * 2.1
+        + max(neutral_ic, -0.1) * 1.8
+        - drawdown_penalty * 4.0
+        - turnover * 0.45
+    ) * scope_multiplier
 
     final_score = stability_score + quality_score
     rejection_reasons: list[str] = []
@@ -95,12 +102,12 @@ def score_candidate_evaluation(metrics: dict[str, Any]) -> dict[str, Any]:
     if return_metric < 0:
         rejection_reasons.append("negative_return")
 
-    pass_flag = not rejection_reasons and final_score >= 0.55
-    if pass_flag and final_score >= 2.2:
+    pass_flag = not rejection_reasons and final_score >= 1.0
+    if pass_flag and final_score >= 2.4:
         status = "promising"
     elif pass_flag:
         status = "testing"
-    elif final_score <= -0.5 or len(rejection_reasons) >= 2:
+    elif final_score <= -0.75 or len(rejection_reasons) >= 2:
         status = "rejected"
     else:
         status = "archived"
@@ -132,21 +139,32 @@ def summarize_candidate_status(evaluations: list[dict[str, Any]]) -> dict[str, A
 
     evaluations = sorted(evaluations, key=lambda row: row.get("created_at_utc") or "")
     scores = [float(row.get("final_score") or 0.0) for row in evaluations]
-    pass_flags = [int(row.get("pass_flag") or 0) for row in evaluations]
-    statuses = [row.get("status") or "testing" for row in evaluations]
     windows = {row.get("window_label") or "unknown" for row in evaluations}
-    recent_statuses = statuses[-3:]
-    status_counter = Counter(statuses)
-
-    avg_score = round(sum(scores) / len(scores), 6)
-    pass_rate = round(sum(pass_flags) / len(pass_flags), 4)
     latest_score = round(scores[-1], 6)
     best_score = round(max(scores), 6)
 
-    if (status_counter.get("promising", 0) >= 2 or best_score >= 2.2) and pass_rate >= 0.45:
+    official_evaluations = [
+        row for row in evaluations
+        if (row.get("notes") or {}).get("run_scope") in OFFICIAL_RUN_SCOPES
+    ]
+    status_pool = official_evaluations or evaluations
+    pass_flags = [int(row.get("pass_flag") or 0) for row in status_pool]
+    statuses = [row.get("status") or "testing" for row in status_pool]
+    official_scores = [float(row.get("final_score") or 0.0) for row in status_pool]
+    official_windows = {row.get("window_label") or "unknown" for row in status_pool}
+    status_counter = Counter(statuses)
+    avg_score = round(sum(official_scores) / len(status_pool), 6)
+    pass_rate = round(sum(pass_flags) / len(status_pool), 4)
+    official_eval_count = len(status_pool)
+    official_window_count = len(official_windows)
+
+    if official_eval_count >= 5 and official_window_count >= 3 and pass_rate >= 0.6 and avg_score >= 1.0:
         status = "promising"
         next_action = "refine"
-    elif pass_rate >= 0.25 or avg_score >= 1.2:
+    elif official_eval_count >= 2 and official_window_count >= 1 and (pass_rate >= 0.2 or avg_score >= 0.5 or best_score >= 1.5):
+        status = "testing"
+        next_action = "validate_more_windows"
+    elif official_eval_count <= 1 and len(evaluations) >= 1:
         status = "testing"
         next_action = "validate_more_windows"
     elif status_counter.get("archived", 0) >= 2 and status_counter.get("promising", 0) == 0:
@@ -156,11 +174,11 @@ def summarize_candidate_status(evaluations: list[dict[str, Any]]) -> dict[str, A
         status = "rejected"
         next_action = "stop"
 
-    rejection_reasons = [row.get("rejection_reason") for row in evaluations if row.get("rejection_reason")]
+    rejection_reasons = [row.get("rejection_reason") for row in status_pool if row.get("rejection_reason")]
     rejection_reason = rejection_reasons[-1] if rejection_reasons else None
     summary = (
-        f"{len(evaluations)} evals across {len(windows)} windows; "
-        f"avg_score={avg_score}, latest={scores[-1]:.3f}, pass_rate={pass_rate:.2f}."
+        f"{len(evaluations)} evals ({official_eval_count} official) across {len(windows)} windows "
+        f"({official_window_count} official); avg_score={avg_score}, latest={scores[-1]:.3f}, pass_rate={pass_rate:.2f}."
     )
     return {
         "status": status,

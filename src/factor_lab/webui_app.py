@@ -437,7 +437,7 @@ def dashboard():
         "SELECT factor_name, ROUND(avg_score, 6) AS avg_score, runs FROM v_factor_score_avg ORDER BY avg_score DESC LIMIT 8"
     )
     candidate_leaderboard = fetch_all(
-        "SELECT id, name, family, status, ROUND(latest_final_score, 6) AS latest_final_score, evaluation_count, window_count FROM v_factor_candidate_leaderboard ORDER BY COALESCE(latest_final_score, -999) DESC, evaluation_count DESC LIMIT 8"
+        "SELECT id, name, family, status, ROUND(latest_final_score, 6) AS latest_final_score, ROUND(avg_final_score, 6) AS avg_final_score, evaluation_count, window_count FROM v_factor_candidate_leaderboard ORDER BY COALESCE(avg_final_score, -999) DESC, evaluation_count DESC LIMIT 8"
     )
     top_strategies = fetch_all(
         "SELECT strategy_name, ROUND(avg_sharpe, 6) AS avg_sharpe, ROUND(avg_return, 6) AS avg_return, runs FROM v_portfolio_strategy_avg ORDER BY avg_sharpe DESC LIMIT 8"

@@ -90,10 +90,10 @@
   <section class="card">
     <h2>候选榜单</h2>
     <table>
-      <thead><tr><th>候选</th><th>状态</th><th>最新分</th><th>评估数</th></tr></thead>
+      <thead><tr><th>候选</th><th>状态</th><th>平均分</th><th>最新分</th><th>评估数</th></tr></thead>
       <tbody>
         {% for row in candidate_leaderboard %}
-        <tr><td><a href="/candidates/{{ row.id }}">{{ row.name }}</a></td><td>{{ row.status }}</td><td>{{ row.latest_final_score }}</td><td>{{ row.evaluation_count }}</td></tr>
+        <tr><td><a href="/candidates/{{ row.id }}">{{ row.name }}</a></td><td>{{ row.status }}</td><td>{{ row.avg_final_score }}</td><td>{{ row.latest_final_score }}</td><td>{{ row.evaluation_count }}</td></tr>
         {% endfor %}
       </tbody>
     </table>
