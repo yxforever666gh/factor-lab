@@ -28,7 +28,7 @@ def load_analyst_signals(base_dir: str | Path | None = None) -> dict[str, Any]:
     portfolio_checks = [x for x in (plan.get("portfolio_checks") or []) if x]
     rationale = plan.get("rationale") or ""
 
-    suggested_families: list[str] = []
+    suggested_families = [x for x in (plan.get("suggested_families") or []) if x]
     if core_candidates:
         suggested_families.append("stable_candidate_validation")
     if review_graveyard:
@@ -40,7 +40,7 @@ def load_analyst_signals(base_dir: str | Path | None = None) -> dict[str, Any]:
     if "compare_all_factors_vs_candidates_only" in portfolio_checks or "compare_cluster_representatives_vs_all_factors" in portfolio_checks:
         suggested_families.append("stable_candidate_validation")
 
-    risk_flags: list[str] = []
+    risk_flags = [x for x in (plan.get("risk_flags") or []) if x]
     if "diagnose_neutralized_underperformance" in portfolio_checks:
         risk_flags.append("must_validate_neutralization")
     if review_graveyard:
@@ -57,7 +57,7 @@ def load_analyst_signals(base_dir: str | Path | None = None) -> dict[str, Any]:
         if (template_hint.get("recommended_action") or "").endswith("downweight"):
             risk_flags.append("template_downweighted")
 
-    must_validate_before_expand = any(
+    must_validate_before_expand = bool(plan.get("must_validate_before_expand")) or any(
         flag in risk_flags
         for flag in ["must_validate_neutralization", "graveyard_review_required", "template_cooldown_active"]
     )
@@ -75,5 +75,6 @@ def load_analyst_signals(base_dir: str | Path | None = None) -> dict[str, Any]:
         "must_validate_before_expand": must_validate_before_expand,
         "priority_summary": priority_summary,
         "template_hint": template_hint,
+        "confidence_score": plan.get("confidence_score"),
         "global_hint": weights.get("global_hint") or context.get("planner_hint"),
     }

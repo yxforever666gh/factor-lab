@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import Any
 
 
-REQUEST_SCHEMA_VERSION = "factor_lab.llm_bridge.v1"
+REQUEST_SCHEMA_VERSION = "factor_lab.llm_bridge.v2"
 REQUIRED_RESPONSE_KEYS = {"agent_name", "generated_at_utc", "review_markdown", "next_batch_proposal"}
 REQUIRED_PLAN_KEYS = {"focus_factors", "keep_as_core_candidates", "review_graveyard", "portfolio_checks", "rationale"}
-OPTIONAL_PLAN_KEYS = {"novelty_reason"}
+OPTIONAL_PLAN_KEYS = {"novelty_reason", "risk_flags", "suggested_families", "confidence_score", "must_validate_before_expand"}
 
 
 def build_agent_request(snapshot: dict[str, Any], output_path: str | Path) -> dict[str, Any]:
@@ -27,7 +27,7 @@ def build_agent_request(snapshot: dict[str, Any], output_path: str | Path) -> di
             "plan_optional_keys": sorted(OPTIONAL_PLAN_KEYS),
             "must_ground_on_snapshot": True,
             "must_not_override_core_metrics": True,
-            "planning_hint": "在生成下一轮建议时，参考 snapshot.recommendation_weights、snapshot.recommendation_history_tail、snapshot.recommendation_context、snapshot.paper_portfolio_stability 与 snapshot.conservative_policy；优先考虑历史 decayed_effect_score 更高、recommended_action 更积极、且 fatigue_level 更低的建议模板；对 fatigue_level 高或 cooldown_active=true 的模板，除非出现新信息，否则避免连续重复；若仍继续提该模板，必须提供 novelty_reason；如果 conservative_policy.enabled=true，应优先选择稳定候选、减少 focus_factors、减少墓地复核，并降低新模板尝试。",
+            "planning_hint": "在生成下一轮建议时，参考 snapshot.recommendation_weights、snapshot.recommendation_history_tail、snapshot.recommendation_context、snapshot.paper_portfolio_stability 与 snapshot.conservative_policy；优先考虑历史 decayed_effect_score 更高、recommended_action 更积极、且 fatigue_level 更低的建议模板；对 fatigue_level 高或 cooldown_active=true 的模板，除非出现新信息，否则避免连续重复；若仍继续提该模板，必须提供 novelty_reason；如果 conservative_policy.enabled=true，应优先选择稳定候选、减少 focus_factors、减少墓地复核，并降低新模板尝试。除基础字段外，尽量输出 risk_flags、suggested_families、confidence_score、must_validate_before_expand，让下游 planner 可直接消费。",
         },
     }
     Path(output_path).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -55,6 +55,19 @@ def validate_agent_response(response: dict[str, Any]) -> list[str]:
         missing_plan = REQUIRED_PLAN_KEYS - set(plan.keys())
         if missing_plan:
             errors.append(f"next_batch_proposal 缺少字段: {', '.join(sorted(missing_plan))}")
+        if "risk_flags" in plan and not isinstance(plan.get("risk_flags"), list):
+            errors.append("next_batch_proposal.risk_flags 必须是列表")
+        if "suggested_families" in plan and not isinstance(plan.get("suggested_families"), list):
+            errors.append("next_batch_proposal.suggested_families 必须是列表")
+        if "must_validate_before_expand" in plan and not isinstance(plan.get("must_validate_before_expand"), bool):
+            errors.append("next_batch_proposal.must_validate_before_expand 必须是布尔值")
+        if "confidence_score" in plan:
+            try:
+                score = float(plan.get("confidence_score"))
+                if score < 0 or score > 1:
+                    errors.append("next_batch_proposal.confidence_score 必须在 0 到 1 之间")
+            except Exception:
+                errors.append("next_batch_proposal.confidence_score 必须是数值")
 
     return errors
 
