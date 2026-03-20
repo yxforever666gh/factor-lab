@@ -44,6 +44,32 @@
 </section>
 
 <section class="card" style="margin-top:18px;">
+  <h2>主任务学习</h2>
+  {% if main_task_learning.families %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Family</th><th>最近运行</th><th>最近增益</th><th>最近无增益</th><th>连续无增益</th><th>建议动作</th><th>冷却</th></tr></thead>
+      <tbody>
+        {% for key, row in main_task_learning.families.items() %}
+        <tr>
+          <td>{{ key }}</td>
+          <td>{{ row.recent_runs }}</td>
+          <td>{{ row.recent_gain }}</td>
+          <td>{{ row.recent_no_gain }}</td>
+          <td>{{ row.consecutive_no_gain }}</td>
+          <td>{{ row.recommended_action }}</td>
+          <td>{{ '是' if row.cooldown_active else '否' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="muted">主任务学习样本还在积累中，当前暂无可用 family 学习记录。</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:18px;">
   <h2>当前活跃的 Planner 任务</h2>
   {% if planner_active %}
   <div class="table-wrap">

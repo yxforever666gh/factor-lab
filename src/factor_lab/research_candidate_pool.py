@@ -13,6 +13,7 @@ from factor_lab.research_family_generators import (
     build_graveyard_task,
 )
 from factor_lab.main_task_learning import build_main_task_learning
+from factor_lab.main_task_promoter import should_promote_main_tasks
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -177,6 +178,8 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
     analyst_signals = snapshot.get('analyst_signals') or {}
     main_task_learning = build_main_task_learning(strategy_memory_path)
     learning_families = main_task_learning.get('families') or {}
+    promotion = should_promote_main_tasks()
+    promotable_families = set(promotion.get('promotable_families') or [])
 
     stable_candidates, representative_notes = _prefer_representatives(raw_stable_candidates, candidate_context_by_name, cluster_rep_map)
     analyst_focus = set(analyst_signals.get('focus_factors') or [])
@@ -212,6 +215,9 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
         if learning.get('recommended_action') == 'upweight':
             task['priority_hint'] = max(1, int(task.get('priority_hint', 50)) - 4)
             task['reason'] += f" main-task learning: {family_key} 最近有效，优先级上调。"
+        if family_key in promotable_families:
+            task['priority_hint'] = max(1, int(task.get('priority_hint', 50)) - 3)
+            task['reason'] += f" main-task promoter: recovery 后优先恢复 {family_key} 主线。"
         elif learning.get('recommended_action') == 'downweight':
             task['priority_hint'] = int(task.get('priority_hint', 50)) + 5
             task['reason'] += f" main-task learning: {family_key} 最近无增益偏多，优先级下调。"
@@ -405,6 +411,7 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
             'suppressed_candidate_count': len(suppressed_tasks),
             'relationship_summary': relationship_summary,
             'main_task_learning': main_task_learning,
+            'main_task_promoter': promotion,
         },
         'representative_selection': representative_notes,
         'suppressed_tasks': suppressed_tasks,
