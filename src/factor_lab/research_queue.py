@@ -21,6 +21,8 @@ from factor_lab.research_expansion import maybe_expand_research_space
 from factor_lab.research_planner_pipeline import run_research_planner_pipeline
 from factor_lab.research_runtime_state import queue_budget_snapshot, recent_failure_stats, exploration_health, parse_iso_utc, recently_finished_same_fingerprint
 from factor_lab.research_strategy import update_research_memory_from_task_result
+from factor_lab.opportunity_store import update_opportunity_state
+from factor_lab.opportunity_evaluator import evaluate_opportunity_from_task
 from datetime import datetime, timezone, timedelta
 
 
@@ -477,7 +479,10 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
                 status="finished",
                 summary=note,
             )
-            processed.append({"task_id": task["task_id"], "status": "finished", "summary": summary, "followup_task_ids": followups})
+            evaluation = evaluate_opportunity_from_task(task, status="finished", summary=note)
+            if evaluation:
+                update_opportunity_state(evaluation["opportunity_id"], evaluation["next_state"], reason=evaluation["evaluation_label"], extra={"evaluation": evaluation})
+            processed.append({"task_id": task["task_id"], "status": "finished", "summary": summary, "followup_task_ids": followups, "opportunity_evaluation": evaluation})
             append_heartbeat("research_orchestrator", "finished", summary=note, task_id=task["task_id"], task_type=task["task_type"])
         except Exception as exc:
             error_text = str(exc)

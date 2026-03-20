@@ -26,7 +26,11 @@ def build_child_opportunities(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
         otype = row.get("opportunity_type")
         target_family = row.get("target_family")
         target_candidates = list(row.get("target_candidates") or [])
-        if not oid or state not in {"promoted", "evaluated"}:
+        if not oid:
+            continue
+        evaluation = row.get("evaluation") or {}
+        branchworthy = state in {"promoted", "evaluated"} or (evaluation.get("evaluation_label") in {"high_gain", "moderate_gain"})
+        if not branchworthy:
             continue
 
         if otype == "confirm":

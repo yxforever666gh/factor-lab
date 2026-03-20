@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 MIN_EXPLORATION_FLOOR = {"recombine": 1, "probe": 1}
+CHILD_BUDGET = {"expand": 1, "recombine": 1, "probe": 1}
 
 
 def allocate_opportunity_budget(snapshot: dict[str, Any], opportunity_learning: dict[str, Any]) -> dict[str, Any]:
@@ -53,4 +54,7 @@ def allocate_opportunity_budget(snapshot: dict[str, Any], opportunity_learning: 
             budget[key] = floor
             reasons.append(f"exploration_floor:{key}")
 
-    return {"budget": budget, "reasons": reasons}
+    child_budget = dict(CHILD_BUDGET)
+    reasons.append("child_budget_reserved")
+
+    return {"budget": budget, "child_budget": child_budget, "reasons": reasons}

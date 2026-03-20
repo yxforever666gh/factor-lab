@@ -74,6 +74,7 @@ def build_research_opportunities(snapshot_path: str | Path, output_path: str | P
     opportunity_learning = build_opportunity_learning()
     opportunity_budget = allocate_opportunity_budget(snapshot, opportunity_learning)
     type_budget = dict(opportunity_budget.get("budget") or {})
+    child_budget = dict(opportunity_budget.get("child_budget") or {})
 
     opportunities: list[dict[str, Any]] = []
     for question in questions:
@@ -123,6 +124,7 @@ def build_research_opportunities(snapshot_path: str | Path, output_path: str | P
             "opportunity_budget": opportunity_budget,
             "opportunity_learning": opportunity_learning,
             "recovery_state": recovery_state,
+            "child_budget_remaining": child_budget,
         },
         "opportunities": opportunities[:12],
     }
