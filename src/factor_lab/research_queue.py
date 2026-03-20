@@ -387,6 +387,7 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
                     f"graveyard_keys={planner_result.get('registry_graveyard_depth_count', 0)}, "
                     f"candidates={planner_result.get('candidate_count', 0)}, "
                     f"selected={planner_result.get('proposal_selected_count', 0)}, "
+                    f"strategy_approved={planner_result.get('strategy_approved_count', 0)}, "
                     f"accepted={planner_result.get('validated_accepted_count', 0)}, "
                     f"injected={planner_result.get('injected_count', 0)}"
                 ),
