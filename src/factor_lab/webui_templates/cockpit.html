@@ -30,6 +30,19 @@
 
 <div class="grid cols-2" style="margin-top:18px;">
   <section class="card">
+    <h2>Recovery / 回主线状态</h2>
+    <table>
+      <tbody>
+        <tr><th>本轮是否 recovery</th><td>{{ '是' if main_task_state.recovery_used else '否' }}</td></tr>
+        <tr><th>主任务候选数</th><td>{{ main_task_state.main_task_candidate_count if main_task_state else 0 }}</td></tr>
+        <tr><th>活跃 recovery 分支</th><td>{{ main_task_state.recovery_active_branch_count if main_task_state else 0 }}</td></tr>
+        <tr><th>最近 recovery 触发</th><td>{{ analyst_feedback_context.analyst_learning_loop.recovery_trigger_count_last_5 if analyst_feedback_context.analyst_learning_loop else 0 }}</td></tr>
+        <tr><th>最近 recovery 无增益</th><td>{{ analyst_feedback_context.analyst_learning_loop.recovery_no_gain_count_last_10 if analyst_feedback_context.analyst_learning_loop else 0 }}</td></tr>
+        <tr><th>最近注入数</th><td>{{ analyst_feedback_context.analyst_learning_loop.last_injected_count if analyst_feedback_context.analyst_learning_loop else 0 }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section class="card">
     <h2>模板权重与疲劳</h2>
     {% if recommendation_context.priority_summary %}
     <div class="table-wrap">

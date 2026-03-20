@@ -24,10 +24,24 @@
     <pre>{{ latest_summary }}</pre>
   </section>
   <section class="card">
-    <h2>最近变化</h2>
-    <pre>{{ change_report }}</pre>
+    <h2>主任务状态机</h2>
+    <table>
+      <tbody>
+        <tr><th>当前状态</th><td><span class="pill {{ 'good' if main_task_state.state in ['ready','recovered'] else 'bad' if main_task_state.state == 'exhausted' else '' }}">{{ main_task_state.state or '-' }}</span></td></tr>
+        <tr><th>主任务候选数</th><td>{{ main_task_state.main_task_candidate_count if main_task_state else 0 }}</td></tr>
+        <tr><th>本轮是否 recovery</th><td>{{ '是' if main_task_state.recovery_used else '否' }}</td></tr>
+        <tr><th>活跃 recovery 分支</th><td>{{ main_task_state.recovery_active_branch_count if main_task_state else 0 }}</td></tr>
+        <tr><th>本轮注入数</th><td>{{ main_task_state.injected_count if main_task_state else 0 }}</td></tr>
+        <tr><th>原因</th><td class="text-break">{{ main_task_state.reasons|join('、') if main_task_state.reasons else '-' }}</td></tr>
+      </tbody>
+    </table>
   </section>
 </div>
+
+<section class="card" style="margin-top:18px;">
+  <h2>最近变化</h2>
+  <pre>{{ change_report }}</pre>
+</section>
 
 <section class="card" style="margin-top:18px;">
   <h2>当前活跃的 Planner 任务</h2>

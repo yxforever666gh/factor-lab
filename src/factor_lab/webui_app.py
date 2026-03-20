@@ -478,8 +478,10 @@ def dashboard():
     ][:6]
     planner_validated_path = DB_PATH.parent / 'research_planner_validated.json'
     planner_injected_path = DB_PATH.parent / 'research_planner_injected.json'
+    main_task_state_path = DB_PATH.parent / 'main_task_generation_state.json'
     planner_validated = json.loads(planner_validated_path.read_text(encoding='utf-8')) if planner_validated_path.exists() else {}
     planner_injected = json.loads(planner_injected_path.read_text(encoding='utf-8')) if planner_injected_path.exists() else {}
+    main_task_state = json.loads(main_task_state_path.read_text(encoding='utf-8')) if main_task_state_path.exists() else {}
     stable_names = [row['factor_name'] for row in stable_candidates[:4]]
     latest_summary_lines = []
     if latest_run:
@@ -524,6 +526,7 @@ def dashboard():
         planner_active=planner_active,
         planner_validated=planner_validated,
         planner_injected=planner_injected,
+        main_task_state=main_task_state,
     )
 
 
@@ -604,6 +607,9 @@ def cockpit_page():
     paper_current_path = base / "paper_portfolio" / "current_portfolio.json"
     recommendation_context = snapshot.get("recommendation_context", {}) or {}
     plan_validation = (llm_status.get("plan_validation", {})) or {}
+    main_task_state_path = base / "main_task_generation_state.json"
+    main_task_state = json.loads(main_task_state_path.read_text(encoding="utf-8")) if main_task_state_path.exists() else {}
+    analyst_feedback_context = snapshot.get("analyst_feedback_context", {}) or {}
     paper_portfolio = json.loads(paper_current_path.read_text(encoding="utf-8")) if paper_current_path.exists() else {}
     return render(
         "cockpit.html",
@@ -617,6 +623,8 @@ def cockpit_page():
         recommendation_context=recommendation_context,
         recommendation_context_text=pretty_json_text(recommendation_context, "暂无模板上下文。"),
         plan_validation=plan_validation,
+        main_task_state=main_task_state,
+        analyst_feedback_context=analyst_feedback_context,
         plan_validation_text=pretty_json_text(plan_validation, "暂无计划校验摘要。"),
         paper_portfolio=paper_portfolio,
         paper_portfolio_positions=portfolio_positions(paper_portfolio),
