@@ -547,10 +547,14 @@ def research_page():
     branch_plan_path = DB_PATH.parent / 'research_branch_plan.json'
     family_summary_path = DB_PATH.parent / 'family_summary.json'
     opportunities_path = DB_PATH.parent / 'research_opportunities.json'
+    opportunity_store_path = DB_PATH.parent / 'research_opportunity_store.json'
+    opportunity_review_path = DB_PATH.parent / 'opportunity_review.json'
     candidate_pool = json.loads(candidate_pool_path.read_text(encoding='utf-8')) if candidate_pool_path.exists() else {}
     branch_plan = json.loads(branch_plan_path.read_text(encoding='utf-8')) if branch_plan_path.exists() else {}
     family_summary = json.loads(family_summary_path.read_text(encoding='utf-8')) if family_summary_path.exists() else []
     opportunities = json.loads(opportunities_path.read_text(encoding='utf-8')) if opportunities_path.exists() else {}
+    opportunity_store = json.loads(opportunity_store_path.read_text(encoding='utf-8')) if opportunity_store_path.exists() else {}
+    opportunity_review = json.loads(opportunity_review_path.read_text(encoding='utf-8')) if opportunity_review_path.exists() else {}
     summary = {
         "pending": len([t for t in tasks if t["status"] == "pending"]),
         "running": len([t for t in tasks if t["status"] == "running"]),
@@ -586,6 +590,8 @@ def research_page():
         branch_plan=branch_plan,
         family_summary=family_summary,
         opportunities=opportunities,
+        opportunity_store=opportunity_store,
+        opportunity_review=opportunity_review,
     )
 
 

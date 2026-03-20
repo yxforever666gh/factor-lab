@@ -74,6 +74,26 @@
 </section>
 {% endif %}
 
+{% if opportunity_review.challenger or opportunity_review.auditor %}
+<section class="card" style="margin-top:18px;">
+  <h2>Opportunity Review</h2>
+  <div class="grid cols-2">
+    <div>
+      <h3>Challenger</h3>
+      {% if opportunity_review.challenger %}
+        {% for row in opportunity_review.challenger %}<div style="margin-bottom:8px;">- {{ row }}</div>{% endfor %}
+      {% else %}<div class="muted">暂无 challenger 评论。</div>{% endif %}
+    </div>
+    <div>
+      <h3>Auditor</h3>
+      {% if opportunity_review.auditor %}
+        {% for row in opportunity_review.auditor %}<div style="margin-bottom:8px;">- {{ row }}</div>{% endfor %}
+      {% else %}<div class="muted">暂无 auditor 评论。</div>{% endif %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
 {% if branch_plan.branch_decisions %}
 <section class="card" style="margin-top:18px;">
   <h2>Branch Planner 决策</h2>
