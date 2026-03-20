@@ -1,18 +1,17 @@
 {
-  "generated_at_utc": "2026-03-20T23:52:55.243588+00:00",
+  "generated_at_utc": "2026-03-20T23:58:41.083041+00:00",
   "schema_version": "factor_lab.research_opportunity.v1",
   "flow_state": {
-    "state": "recovered",
+    "state": "recovering",
     "reasons": [
-      "recovery_injected_new_tasks",
-      "research_candidates_available"
+      "recovery_step_triggered"
     ],
     "candidate_count": 2,
     "recovery_used": true,
     "recovery_active_branch_count": 2,
     "recent_recovery_event_count": 1,
     "recent_recovery_success": true,
-    "injected_count": 1,
+    "injected_count": 0,
     "queue_counts": {
       "pending": 0,
       "running": 0,
@@ -21,22 +20,21 @@
     }
   },
   "summary": {
-    "count": 7,
-    "question_count": 8,
+    "count": 5,
+    "question_count": 5,
     "child_question_count": 2,
     "top_types": [
       "confirm",
       "diagnose",
       "expand",
-      "probe",
       "recombine"
     ],
     "opportunity_budget": {
       "budget": {
-        "confirm": 2,
-        "diagnose": 2,
-        "expand": 2,
-        "recombine": 2,
+        "confirm": 3,
+        "diagnose": 3,
+        "expand": 1,
+        "recombine": 1,
         "probe": 1
       },
       "child_budget": {
@@ -45,7 +43,7 @@
         "probe": 1
       },
       "reasons": [
-        "recovered_bias_to_expand_recombine",
+        "recovering_bias",
         "child_budget_reserved"
       ]
     },
@@ -73,7 +71,7 @@
         },
         "recombine": {
           "opportunity_type": "recombine",
-          "count": 1,
+          "count": 3,
           "promoted": 0,
           "evaluated": 0,
           "rejected": 0,
@@ -90,10 +88,20 @@
           "archived": 0,
           "success_rate": null,
           "recommended_action": "keep"
+        },
+        "probe": {
+          "opportunity_type": "probe",
+          "count": 1,
+          "promoted": 0,
+          "evaluated": 0,
+          "rejected": 0,
+          "archived": 0,
+          "success_rate": null,
+          "recommended_action": "keep"
         }
       }
     },
-    "recovery_state": "recovered",
+    "recovery_state": "recovering",
     "child_budget_remaining": {
       "expand": 1,
       "recombine": 1,
@@ -120,10 +128,10 @@
         "repeated_graveyard_confirmed"
       ],
       "evidence_gap": "墓地诊断频繁出现，但失败解释尚未系统转化成新研究机会。",
-      "priority": 0.88,
+      "priority": 0.94,
       "novelty_score": 0.51,
       "confidence": 0.63,
-      "rationale": "base_type=diagnose; analyst_focus_overlap; analyst_graveyard_overlap",
+      "rationale": "base_type=diagnose; recovering_prefers_confirm_diagnose; analyst_focus_overlap; analyst_graveyard_overlap",
       "sources": [
         "latest_graveyard",
         "analyst_signals",
@@ -148,15 +156,61 @@
         "stable_candidate_confirmed"
       ],
       "evidence_gap": "稳定候选已多次被恢复动作确认，但缺少更主动的边界验证。",
-      "priority": 0.86,
+      "priority": 0.92,
       "novelty_score": 0.45,
       "confidence": 0.63,
-      "rationale": "base_type=confirm; analyst_focus_overlap; analyst_graveyard_overlap",
+      "rationale": "base_type=confirm; recovering_prefers_confirm_diagnose; analyst_focus_overlap; analyst_graveyard_overlap",
       "sources": [
         "stable_candidates",
         "analyst_feedback_context",
         "exploration_budget"
       ]
+    },
+    {
+      "opportunity_id": "opp-q-recovery-to-opportunity-graveyard",
+      "schema_version": "factor_lab.research_opportunity.v1",
+      "opportunity_type": "diagnose",
+      "title": "recovery 已多次触发墓地诊断，下一步应把哪类失败解释升级为新研究机会？",
+      "question": "recovery 已多次触发墓地诊断，下一步应把哪类失败解释升级为新研究机会？",
+      "hypothesis": "墓地 recovery 的有效结果应该转成更高层的失败模式研究机会。",
+      "target_family": "graveyard_diagnosis",
+      "target_candidates": [],
+      "expected_knowledge_gain": [],
+      "evidence_gap": "recovery 对墓地的解释动作存在，但还没有系统化地转成新的研究机会。",
+      "priority": 0.84,
+      "novelty_score": 0.51,
+      "confidence": 0.6,
+      "rationale": "base_type=diagnose; recovering_prefers_confirm_diagnose",
+      "sources": [
+        "recovery_history",
+        "research_flow_state"
+      ]
+    },
+    {
+      "opportunity_id": "opp-child-recombine-from-opp-q-graveyard-cause",
+      "schema_version": "factor_lab.research_opportunity.v1",
+      "opportunity_type": "recombine",
+      "title": "opp-q-graveyard-cause 已提供失败解释，是否可据此构造新的重组型机会？",
+      "question": "opp-q-graveyard-cause 已提供失败解释，是否可据此构造新的重组型机会？",
+      "hypothesis": "diagnose 类型机会在给出失败解释后，应该派生出更高层的重组或替代方向。",
+      "target_family": "graveyard_diagnosis",
+      "target_candidates": [
+        "liquidity_turnover_shock",
+        "mom_20"
+      ],
+      "expected_knowledge_gain": [
+        "exploration_candidate_survived"
+      ],
+      "evidence_gap": "已有失败解释，但尚未把它转成新方向。",
+      "priority": 0.74,
+      "novelty_score": 0.63,
+      "confidence": 0.63,
+      "rationale": "base_type=recombine; analyst_focus_overlap; analyst_graveyard_overlap",
+      "sources": [
+        "opportunity_brancher",
+        "opp-q-graveyard-cause"
+      ],
+      "parent_opportunity_id": "opp-q-graveyard-cause"
     },
     {
       "opportunity_id": "opp-child-expand-from-opp-q-stable-boundary",
@@ -174,108 +228,15 @@
         "window_stability_check"
       ],
       "evidence_gap": "已确认信号存在，但缺少顺势扩展动作。",
-      "priority": 0.8,
-      "novelty_score": 0.63,
+      "priority": 0.73,
+      "novelty_score": 0.55,
       "confidence": 0.63,
-      "rationale": "base_type=expand; recovered_prefers_expand_recombine; analyst_focus_overlap",
+      "rationale": "base_type=expand; analyst_focus_overlap",
       "sources": [
         "opportunity_brancher",
         "opp-q-stable-boundary"
       ],
       "parent_opportunity_id": "opp-q-stable-boundary"
-    },
-    {
-      "opportunity_id": "opp-q-recovery-to-opportunity-graveyard",
-      "schema_version": "factor_lab.research_opportunity.v1",
-      "opportunity_type": "diagnose",
-      "title": "recovery 已多次触发墓地诊断，下一步应把哪类失败解释升级为新研究机会？",
-      "question": "recovery 已多次触发墓地诊断，下一步应把哪类失败解释升级为新研究机会？",
-      "hypothesis": "墓地 recovery 的有效结果应该转成更高层的失败模式研究机会。",
-      "target_family": "graveyard_diagnosis",
-      "target_candidates": [],
-      "expected_knowledge_gain": [],
-      "evidence_gap": "recovery 对墓地的解释动作存在，但还没有系统化地转成新的研究机会。",
-      "priority": 0.78,
-      "novelty_score": 0.51,
-      "confidence": 0.6,
-      "rationale": "base_type=diagnose",
-      "sources": [
-        "recovery_history",
-        "research_flow_state"
-      ]
-    },
-    {
-      "opportunity_id": "opp-q-new-branch-hybrid-expansion",
-      "schema_version": "factor_lab.research_opportunity.v1",
-      "opportunity_type": "recombine",
-      "title": "现有 hybrid 关系是否值得长出新的跨 family 分支？",
-      "question": "现有 hybrid 关系是否值得长出新的跨 family 分支？",
-      "hypothesis": "hybrid 关系不是偶然拼接，而是可延展的研究新分支。",
-      "target_family": "exploration",
-      "target_candidates": [
-        "mom_20",
-        "mom_plus_value"
-      ],
-      "expected_knowledge_gain": [],
-      "evidence_gap": "候选图已有 hybrid 线索，但系统尚未把它系统化为新分支。",
-      "priority": 0.76,
-      "novelty_score": 0.71,
-      "confidence": 0.63,
-      "rationale": "base_type=recombine; recovered_prefers_expand_recombine; analyst_focus_overlap",
-      "sources": [
-        "relationship_summary",
-        "candidate_graph"
-      ]
-    },
-    {
-      "opportunity_id": "opp-q-recombine-space",
-      "schema_version": "factor_lab.research_opportunity.v1",
-      "opportunity_type": "recombine",
-      "title": "现有候选图里的 hybrid / refinement 关系能否扩展出新的研究方向？",
-      "question": "现有候选图里的 hybrid / refinement 关系能否扩展出新的研究方向？",
-      "hypothesis": "当前候选关系图并未被充分利用，仍能长出新的高信息增益方向。",
-      "target_family": "exploration",
-      "target_candidates": [
-        "mom_20",
-        "mom_plus_value"
-      ],
-      "expected_knowledge_gain": [
-        "exploration_candidate_survived"
-      ],
-      "evidence_gap": "关系图已出现结构性信号，但 exploration 仍偏弱。",
-      "priority": 0.76,
-      "novelty_score": 0.71,
-      "confidence": 0.63,
-      "rationale": "base_type=recombine; recovered_prefers_expand_recombine; analyst_focus_overlap",
-      "sources": [
-        "relationship_summary",
-        "candidate_graph",
-        "exploration_budget"
-      ]
-    },
-    {
-      "opportunity_id": "opp-q-new-branch-topscore-probe",
-      "schema_version": "factor_lab.research_opportunity.v1",
-      "opportunity_type": "probe",
-      "title": "评分靠前但未被充分验证的因子组合里，是否藏着新方向？",
-      "question": "评分靠前但未被充分验证的因子组合里，是否藏着新方向？",
-      "hypothesis": "top score 尾部候选中仍有未展开的研究方向。",
-      "target_family": null,
-      "target_candidates": [
-        "mom_20",
-        "mom_plus_value",
-        "liquidity_turnover_shock",
-        "size_small"
-      ],
-      "expected_knowledge_gain": [],
-      "evidence_gap": "高分因子被排名看见了，但还没被组织成明确的新分支机会。",
-      "priority": 0.68,
-      "novelty_score": 0.63,
-      "confidence": 0.63,
-      "rationale": "base_type=probe; analyst_focus_overlap; analyst_graveyard_overlap",
-      "sources": [
-        "top_scores"
-      ]
     }
   ]
 }

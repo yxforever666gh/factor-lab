@@ -1,63 +1,19 @@
 {
   "mode": "openclaw_agent_bridge",
-  "updated_at_utc": "2026-03-18T19:46:59.297783+00:00",
-  "plan_validation": {
-    "valid": true,
-    "errors": [],
-    "warnings": [],
-    "template_policy": {
-      "template_type": "neutralization_diagnosis",
-      "recommended_action": "soft_upweight",
-      "base_max_focus_factors": 6,
-      "base_max_review_graveyard": 6,
-      "adjusted_max_focus_factors": 6,
-      "adjusted_max_review_graveyard": 6,
-      "avg_effect_score": 1.0,
-      "sample_count": 2,
-      "cooldown_active": false,
-      "cooldown_reason": "无冷却限制。"
-    },
-    "portfolio_policy": {
-      "stability_score": 0.88,
-      "label": "高稳定",
-      "risk_mode": "normal",
-      "conservative_policy": {
-        "enabled": false,
-        "mode": "normal",
-        "max_focus_factors": null,
-        "prefer_core_candidates": false,
-        "graveyard_review_limit": null,
-        "new_template_budget": null,
-        "reason": "纸面组合稳定性正常。"
-      }
-    },
-    "normalized_plan": {
-      "focus_factors": [
-        "mom_20",
-        "mom_plus_value",
-        "liquidity_turnover_shock",
-        "size_small"
-      ],
-      "keep_as_core_candidates": [
-        "mom_20",
-        "mom_plus_value"
-      ],
-      "review_graveyard": [
-        "liquidity_turnover_shock",
-        "size_small",
-        "value_ep",
-        "value_bp"
-      ],
-      "portfolio_checks": [
-        "compare_all_factors_vs_candidates_only",
-        "compare_cluster_representatives_vs_all_factors",
-        "diagnose_neutralized_underperformance"
-      ],
-      "rationale": "基于当前快照，下一轮应继续围绕稳定动量主线，并解释高分非候选因子与中性化策略显著走弱的原因。",
-      "novelty_reason": "",
-      "template_type": "neutralization_diagnosis"
+  "status": "plan_executed",
+  "updated_at_utc": "2026-03-20T23:53:16.027514+00:00",
+  "generated_batch_path": "/home/admin/.openclaw/workspace/artifacts/generated_batch_from_llm.json",
+  "generated_batch_output_dir": "artifacts/opportunity_generated_batch_run",
+  "feedback_path": "artifacts/llm_plan_feedback.json",
+  "feedback_summary": [
+    {
+      "job_name": "llm_focus_batch",
+      "total_factors": 4,
+      "candidate_count": 0,
+      "graveyard_count": 4
     }
-  },
-  "status": "plan_ready",
-  "generated_batch_path": "artifacts/generated_batch_from_llm.json"
+  ],
+  "knowledge_gain": [
+    "exploration_graveyard_identified"
+  ]
 }

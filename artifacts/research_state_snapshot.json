@@ -1,0 +1,4650 @@
+{
+  "updated_at_utc": "2026-03-20T23:58:41.032041+00:00",
+  "generated_from_planner_snapshot": "/home/admin/.openclaw/workspace/artifacts/research_planner_snapshot.json",
+  "generated_from_candidate_pool": "/home/admin/.openclaw/workspace/artifacts/research_candidate_pool.json",
+  "generated_from_proposal": "/home/admin/.openclaw/workspace/artifacts/research_planner_proposal.json",
+  "generated_from_memory": "/home/admin/.openclaw/workspace/artifacts/research_memory.json",
+  "queue": {
+    "pending": 0,
+    "running": 0,
+    "finished": 119,
+    "failed": 1
+  },
+  "queue_budget": {
+    "baseline": 0,
+    "validation": 0,
+    "exploration": 0
+  },
+  "failure_state": {
+    "consecutive_failures": 0,
+    "failed_recently": 0,
+    "last_failure_at": null,
+    "cooldown_active": false
+  },
+  "exploration_state": {
+    "recent_no_gain": 0,
+    "recent_gain": 3,
+    "should_throttle": false
+  },
+  "knowledge_gain_counter": {
+    "stable_candidate_confirmed": 3,
+    "repeated_graveyard_confirmed": 3,
+    "neutralization_diagnosis_requested": 7,
+    "exploration_candidate_survived": 0,
+    "exploration_graveyard_identified": 4,
+    "no_significant_information_gain": 0
+  },
+  "candidates": {
+    "stable": [
+      "mom_20",
+      "mom_plus_value",
+      "value_ep",
+      "quality_minus_value",
+      "quality_roe",
+      "value_bp"
+    ],
+    "provisional": [
+      "quality_roe",
+      "quality_minus_value",
+      "mom_20",
+      "mom_plus_value",
+      "liquidity_turnover_shock",
+      "size_small",
+      "value_ep",
+      "value_bp"
+    ],
+    "graveyard": [
+      "liquidity_turnover_shock",
+      "mom_20",
+      "mom_plus_value",
+      "size_small"
+    ]
+  },
+  "planner": {
+    "candidate_task_count": 2,
+    "proposal_selected_count": 2,
+    "branch_selected_families": [
+      {
+        "family": "quality",
+        "recommended_action": "validate_risk",
+        "family_score": 45.29456,
+        "primary_candidate": null,
+        "duplicate_pressure": 0,
+        "representative_count": 0,
+        "trial_pressure": 0.0,
+        "false_positive_pressure": 0.0,
+        "trial_count": 0,
+        "family_risk_score": 72.617448,
+        "family_risk_profile": {
+          "trial_count": 0,
+          "informative_trial_count": 0,
+          "no_gain_trial_count": 0,
+          "failed_trial_count": 0,
+          "knowledge_gain_per_trial": null,
+          "trial_pressure": 0.0,
+          "false_positive_pressure": 0.0,
+          "risk_score": 72.617448,
+          "recommended_action": "validate_risk"
+        }
+      },
+      {
+        "family": "other",
+        "recommended_action": "validate_risk",
+        "family_score": 85.914704,
+        "primary_candidate": "size_small",
+        "duplicate_pressure": 0,
+        "representative_count": 1,
+        "trial_pressure": 100.0,
+        "false_positive_pressure": 100.0,
+        "trial_count": 191,
+        "family_risk_score": 61.338383,
+        "family_risk_profile": {
+          "trial_count": 191,
+          "informative_trial_count": 60,
+          "no_gain_trial_count": 127,
+          "failed_trial_count": 4,
+          "knowledge_gain_per_trial": 0.539267,
+          "trial_pressure": 100.0,
+          "false_positive_pressure": 100.0,
+          "risk_score": 61.338383,
+          "recommended_action": "validate_risk"
+        }
+      },
+      {
+        "family": "value",
+        "recommended_action": "refine",
+        "family_score": 93.933432,
+        "primary_candidate": "value_bp",
+        "duplicate_pressure": 0,
+        "representative_count": 1,
+        "trial_pressure": 0.0,
+        "false_positive_pressure": 0.0,
+        "trial_count": 0,
+        "family_risk_score": 50.729956,
+        "family_risk_profile": {
+          "trial_count": 0,
+          "informative_trial_count": 0,
+          "no_gain_trial_count": 0,
+          "failed_trial_count": 0,
+          "knowledge_gain_per_trial": null,
+          "trial_pressure": 0.0,
+          "false_positive_pressure": 0.0,
+          "risk_score": 50.729956,
+          "recommended_action": "refine"
+        }
+      },
+      {
+        "family": "momentum",
+        "recommended_action": "refine",
+        "family_score": 106.366112,
+        "primary_candidate": null,
+        "duplicate_pressure": 0,
+        "representative_count": 0,
+        "trial_pressure": 0.0,
+        "false_positive_pressure": 0.0,
+        "trial_count": 0,
+        "family_risk_score": 48.0,
+        "family_risk_profile": {
+          "trial_count": 0,
+          "informative_trial_count": 0,
+          "no_gain_trial_count": 0,
+          "failed_trial_count": 0,
+          "knowledge_gain_per_trial": null,
+          "trial_pressure": 0.0,
+          "false_positive_pressure": 0.0,
+          "risk_score": 48.0,
+          "recommended_action": "refine"
+        }
+      },
+      {
+        "family": "liquidity",
+        "recommended_action": "continue",
+        "family_score": 85.759496,
+        "primary_candidate": "liquidity_turnover_shock",
+        "duplicate_pressure": 0,
+        "representative_count": 1,
+        "trial_pressure": 0.0,
+        "false_positive_pressure": 0.0,
+        "trial_count": 0,
+        "family_risk_score": 14.408227,
+        "family_risk_profile": {
+          "trial_count": 0,
+          "informative_trial_count": 0,
+          "no_gain_trial_count": 0,
+          "failed_trial_count": 0,
+          "knowledge_gain_per_trial": null,
+          "trial_pressure": 0.0,
+          "false_positive_pressure": 0.0,
+          "risk_score": 14.408227,
+          "recommended_action": "continue"
+        }
+      }
+    ],
+    "analyst_signals": {
+      "available": true,
+      "agent_name": null,
+      "focus_factors": [
+        "mom_20",
+        "mom_plus_value",
+        "liquidity_turnover_shock",
+        "size_small"
+      ],
+      "keep_as_core_candidates": [
+        "mom_20",
+        "mom_plus_value"
+      ],
+      "review_graveyard": [
+        "liquidity_turnover_shock",
+        "size_small",
+        "value_ep",
+        "value_bp"
+      ],
+      "portfolio_checks": [
+        "compare_all_factors_vs_candidates_only",
+        "compare_cluster_representatives_vs_all_factors",
+        "diagnose_neutralized_underperformance"
+      ],
+      "rationale": "基于当前快照，下一轮应继续围绕稳定动量主线，并解释高分非候选因子与中性化策略显著走弱的原因。",
+      "suggested_families": [
+        "graveyard_diagnosis",
+        "recent_window_validation",
+        "stable_candidate_validation"
+      ],
+      "risk_flags": [
+        "graveyard_review_required",
+        "must_validate_neutralization"
+      ],
+      "must_validate_before_expand": true,
+      "priority_summary": [
+        {
+          "template_type": "neutralization_diagnosis",
+          "recommended_action": "soft_upweight",
+          "avg_effect_score": 1.0,
+          "decayed_effect_score": 1.0,
+          "sample_count": 2,
+          "fatigue_level": "medium",
+          "cooldown_active": false
+        }
+      ],
+      "template_hint": {
+        "template_type": "neutralization_diagnosis",
+        "recommended_action": "soft_upweight",
+        "avg_effect_score": 1.0,
+        "decayed_effect_score": 1.0,
+        "sample_count": 2,
+        "fatigue_level": "medium",
+        "cooldown_active": false
+      },
+      "confidence_score": null,
+      "global_hint": "优先考虑历史 decayed_effect_score 更高的建议模板；当 sample_count 不足时，仅做 soft 级别升降权。"
+    }
+  },
+  "recent_finished_tasks": [
+    {
+      "task_id": "003452cd-c4a3-4ee2-8f39-bfd5cab69504",
+      "task_type": "generated_batch",
+      "status": "finished",
+      "priority": 40,
+      "fingerprint": "opportunity::opp-child-expand-from-opp-q-stable-boundary::expand::[\"mom_20\", \"mom_plus_value\"]",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T23:52:55.278691+00:00",
+      "started_at_utc": "2026-03-20T23:53:08.886294+00:00",
+      "finished_at_utc": "2026-03-20T23:53:16.043992+00:00",
+      "worker_note": "generated batch finished: /home/admin/.openclaw/workspace/artifacts/generated_batch_from_llm.json | knowledge_gain=exploration_graveyard_identified",
+      "payload": {
+        "batch_path": "/home/admin/.openclaw/workspace/artifacts/generated_batch_from_llm.json",
+        "branch_id": "opp-child-expand-from-opp-q-stable-boundary",
+        "disconfirm_if": [],
+        "expected_information_gain": [
+          "window_stability_check"
+        ],
+        "goal": "opp-q-stable-boundary 已确认，下一步应扩展哪种验证维度？",
+        "hypothesis": "confirm 类型机会被验证后，应自然分裂出 expand 类型子机会。",
+        "opportunity_id": "opp-child-expand-from-opp-q-stable-boundary",
+        "opportunity_type": "expand",
+        "output_dir": "artifacts/opportunity_generated_batch_run",
+        "promote_if": [],
+        "question": "opp-q-stable-boundary 已确认，下一步应扩展哪种验证维度？",
+        "source": "research_opportunity",
+        "stop_if": [],
+        "target_candidates": [
+          "mom_20",
+          "mom_plus_value"
+        ],
+        "target_family": "stable_candidate_validation"
+      }
+    },
+    {
+      "task_id": "3c5ac3d4-2d3b-41e4-bc51-ccfaa678111e",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 12,
+      "fingerprint": "opportunity::opp-q-graveyard-cause::diagnose::[\"liquidity_turnover_shock\", \"mom_20\", \"mom_plus_value\", \"size_small\"]",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T23:52:55.275324+00:00",
+      "started_at_utc": "2026-03-20T23:53:06.862939+00:00",
+      "finished_at_utc": "2026-03-20T23:53:06.872373+00:00",
+      "worker_note": "diagnostic finished: opportunity_diagnose",
+      "payload": {
+        "branch_id": "opp-q-graveyard-cause",
+        "dedupe_bypass": true,
+        "dedupe_bypass_reason": "high_priority_validation_override",
+        "diagnostic_type": "opportunity_diagnose",
+        "disconfirm_if": [],
+        "expected_information_gain": [
+          "neutralization_diagnosis_requested",
+          "repeated_graveyard_confirmed"
+        ],
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small"
+        ],
+        "goal": "当前 graveyard 因子的失败是否共享共同原因？",
+        "hypothesis": "至少部分 graveyard 因子并非随机失败，而是共享可解释的结构性原因。",
+        "opportunity_id": "opp-q-graveyard-cause",
+        "opportunity_type": "diagnose",
+        "promote_if": [],
+        "question": "当前 graveyard 因子的失败是否共享共同原因？",
+        "reasons": [
+          "opportunity_selected",
+          "mapped_from:diagnose"
+        ],
+        "source": "research_opportunity",
+        "stop_if": [],
+        "target_candidates": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small"
+        ],
+        "target_family": "graveyard_diagnosis"
+      }
+    },
+    {
+      "task_id": "7168be7f-7d90-4041-8d7b-8960d1888181",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 6,
+      "fingerprint": "opportunity::opp-q-graveyard-cause::diagnose::[\"liquidity_turnover_shock\", \"mom_20\", \"mom_plus_value\", \"size_small\"]",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T23:50:39.228537+00:00",
+      "started_at_utc": "2026-03-20T23:51:02.551469+00:00",
+      "finished_at_utc": "2026-03-20T23:51:02.558256+00:00",
+      "worker_note": "diagnostic finished: opportunity_diagnose",
+      "payload": {
+        "branch_id": "opp-q-graveyard-cause",
+        "dedupe_bypass": true,
+        "dedupe_bypass_reason": "high_priority_validation_override",
+        "diagnostic_type": "opportunity_diagnose",
+        "disconfirm_if": [],
+        "expected_information_gain": [
+          "neutralization_diagnosis_requested",
+          "repeated_graveyard_confirmed"
+        ],
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small"
+        ],
+        "goal": "当前 graveyard 因子的失败是否共享共同原因？",
+        "hypothesis": "至少部分 graveyard 因子并非随机失败，而是共享可解释的结构性原因。",
+        "opportunity_id": "opp-q-graveyard-cause",
+        "opportunity_type": "diagnose",
+        "promote_if": [],
+        "question": "当前 graveyard 因子的失败是否共享共同原因？",
+        "reasons": [
+          "opportunity_selected",
+          "mapped_from:diagnose"
+        ],
+        "source": "research_opportunity",
+        "stop_if": [],
+        "target_candidates": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small"
+        ],
+        "target_family": "graveyard_diagnosis"
+      }
+    },
+    {
+      "task_id": "20fa83d6-6158-449e-b39a-9e582eef598b",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 18,
+      "fingerprint": "diagnostic::fallback_stable_candidate_validation::{\"branch_id\": \"fallback_stable_candidate_validation\", \"diagnostic_type\": \"fallback_stable_candidate_validation\", \"disconfirm_if\": [\"recovery_validation_rejects_current_core_candidates\"], \"expected_information_gain\": [\"stable_candidate_confirmed\"], \"focus_factors\": [\"mom_20\", \"mom_plus_value\"], \"goal\": \"recovery_validate_stable_candidates\", \"hypothesis\": \"当主任务暂时产不出来时，最小恢复动作应优先重新确认当前核心稳定候选。\", \"knowledge_gain\": [\"stable_candidate_confirmed\"], \"promote_if\": [\"recovery_validation_confirms_core_candidates\"], \"reasons\": [\"main_task_generation_exhausted\", \"recovery_step\"], \"source_output_dir\": \"artifacts/tushare_batch\", \"stop_if\": [\"recovery_validation_no_incremental_signal_twice\"]}",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T23:50:39.203785+00:00",
+      "started_at_utc": "2026-03-20T23:51:04.570050+00:00",
+      "finished_at_utc": "2026-03-20T23:51:04.579488+00:00",
+      "worker_note": "diagnostic finished: fallback_stable_candidate_validation",
+      "payload": {
+        "branch_id": "fallback_stable_candidate_validation",
+        "diagnostic_type": "fallback_stable_candidate_validation",
+        "disconfirm_if": [
+          "recovery_validation_rejects_current_core_candidates"
+        ],
+        "expected_information_gain": [
+          "stable_candidate_confirmed"
+        ],
+        "focus_factors": [
+          "mom_20",
+          "mom_plus_value"
+        ],
+        "goal": "recovery_validate_stable_candidates",
+        "hypothesis": "当主任务暂时产不出来时，最小恢复动作应优先重新确认当前核心稳定候选。",
+        "knowledge_gain": [
+          "stable_candidate_confirmed"
+        ],
+        "promote_if": [
+          "recovery_validation_confirms_core_candidates"
+        ],
+        "reasons": [
+          "main_task_generation_exhausted",
+          "recovery_step"
+        ],
+        "source_output_dir": "artifacts/tushare_batch",
+        "stop_if": [
+          "recovery_validation_no_incremental_signal_twice"
+        ],
+        "strategy": {
+          "branch_id": "fallback_stable_candidate_validation",
+          "category": "validation",
+          "disconfirm_if": [
+            "recovery_validation_rejects_current_core_candidates"
+          ],
+          "focus_candidates": [
+            "mom_20",
+            "mom_plus_value"
+          ],
+          "goal": "recovery_validate_stable_candidates",
+          "hypothesis": "当主任务暂时产不出来时，最小恢复动作应优先重新确认当前核心稳定候选。",
+          "promote_if": [
+            "recovery_validation_confirms_core_candidates"
+          ],
+          "reason": "主任务暂时枯竭，启动恢复动作：对核心稳定候选做一次轻量验证，帮助系统重新回到主任务流。 recovery_history=0，recent_success=0，recent_no_gain=0，consecutive_no_gain=0。 当前优先补验证深度，避免只拓宽时间窗口。 branch planner 已明确优先稳定候选验证主线。 命中 analyst focus=mom_20,mom_plus_value。 命中 analyst core=mom_20,mom_plus_value。 lineage_count=1，适合沿候选谱系继续推进。 family_score=106.366112。 focus_family=momentum。 验证型任务优先，防止系统只扩不收敛。 命中稳定候选主线。 命中 analyst focus。 命中 analyst core。",
+          "score": 218.137,
+          "selected_families": [
+            "graveyard_diagnosis",
+            "recent_window_validation",
+            "stable_candidate_validation"
+          ],
+          "stop_if": [
+            "recovery_validation_no_incremental_signal_twice"
+          ]
+        }
+      }
+    },
+    {
+      "task_id": "e1333b67-7d62-48d2-bfbf-c6877d58c0da",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 6,
+      "fingerprint": "opportunity::opp-q-graveyard-cause::diagnose::[\"liquidity_turnover_shock\", \"mom_20\", \"mom_plus_value\", \"size_small\"]",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T23:30:11.047471+00:00",
+      "started_at_utc": "2026-03-20T23:30:57.817118+00:00",
+      "finished_at_utc": "2026-03-20T23:30:57.822309+00:00",
+      "worker_note": "diagnostic finished: opportunity_diagnose",
+      "payload": {
+        "branch_id": "opp-q-graveyard-cause",
+        "dedupe_bypass": true,
+        "dedupe_bypass_reason": "high_priority_validation_override",
+        "diagnostic_type": "opportunity_diagnose",
+        "disconfirm_if": [],
+        "expected_information_gain": [
+          "neutralization_diagnosis_requested",
+          "repeated_graveyard_confirmed"
+        ],
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small"
+        ],
+        "goal": "当前 graveyard 因子的失败是否共享共同原因？",
+        "hypothesis": "至少部分 graveyard 因子并非随机失败，而是共享可解释的结构性原因。",
+        "opportunity_id": "opp-q-graveyard-cause",
+        "opportunity_type": "diagnose",
+        "promote_if": [],
+        "question": "当前 graveyard 因子的失败是否共享共同原因？",
+        "reasons": [
+          "opportunity_selected",
+          "mapped_from:diagnose"
+        ],
+        "source": "research_opportunity",
+        "stop_if": [],
+        "target_candidates": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small"
+        ],
+        "target_family": "graveyard_diagnosis"
+      }
+    },
+    {
+      "task_id": "a5dedc7e-5b41-4aa9-ab73-45dfddb0a48e",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 8,
+      "fingerprint": "opportunity::opp-q-stable-boundary::confirm::[\"mom_20\", \"mom_plus_value\", \"value_ep\"]",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T23:24:03.474421+00:00",
+      "started_at_utc": "2026-03-20T23:24:55.024491+00:00",
+      "finished_at_utc": "2026-03-20T23:24:55.029814+00:00",
+      "worker_note": "diagnostic finished: opportunity_confirm",
+      "payload": {
+        "branch_id": "opp-q-stable-boundary",
+        "dedupe_bypass": true,
+        "dedupe_bypass_reason": "high_priority_validation_override",
+        "diagnostic_type": "opportunity_confirm",
+        "disconfirm_if": [],
+        "expected_information_gain": [
+          "stable_candidate_confirmed"
+        ],
+        "focus_factors": [
+          "mom_20",
+          "mom_plus_value",
+          "value_ep"
+        ],
+        "goal": "当前稳定候选的有效性边界在哪里？",
+        "hypothesis": "稳定候选并非只在局部窗口有效，而是存在可继续扩展验证的稳健边界。",
+        "opportunity_id": "opp-q-stable-boundary",
+        "opportunity_type": "confirm",
+        "promote_if": [],
+        "question": "当前稳定候选的有效性边界在哪里？",
+        "reasons": [
+          "opportunity_selected",
+          "mapped_from:confirm"
+        ],
+        "source": "research_opportunity",
+        "stop_if": [],
+        "target_candidates": [
+          "mom_20",
+          "mom_plus_value",
+          "value_ep"
+        ],
+        "target_family": "stable_candidate_validation"
+      }
+    },
+    {
+      "task_id": "7030365a-c744-4892-b881-97cde2a78018",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 6,
+      "fingerprint": "opportunity::opp-q-graveyard-cause::diagnose::[\"liquidity_turnover_shock\", \"mom_20\", \"mom_plus_value\", \"size_small\"]",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T23:24:03.466118+00:00",
+      "started_at_utc": "2026-03-20T23:24:53.010067+00:00",
+      "finished_at_utc": "2026-03-20T23:24:53.015048+00:00",
+      "worker_note": "diagnostic finished: opportunity_diagnose",
+      "payload": {
+        "branch_id": "opp-q-graveyard-cause",
+        "dedupe_bypass": true,
+        "dedupe_bypass_reason": "high_priority_validation_override",
+        "diagnostic_type": "opportunity_diagnose",
+        "disconfirm_if": [],
+        "expected_information_gain": [
+          "neutralization_diagnosis_requested",
+          "repeated_graveyard_confirmed"
+        ],
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small"
+        ],
+        "goal": "当前 graveyard 因子的失败是否共享共同原因？",
+        "hypothesis": "至少部分 graveyard 因子并非随机失败，而是共享可解释的结构性原因。",
+        "opportunity_id": "opp-q-graveyard-cause",
+        "opportunity_type": "diagnose",
+        "promote_if": [],
+        "question": "当前 graveyard 因子的失败是否共享共同原因？",
+        "reasons": [
+          "opportunity_selected",
+          "mapped_from:diagnose"
+        ],
+        "source": "research_opportunity",
+        "stop_if": [],
+        "target_candidates": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small"
+        ],
+        "target_family": "graveyard_diagnosis"
+      }
+    },
+    {
+      "task_id": "c64ec2c5-0fb9-4ea8-84c6-f9179b12cd6c",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 6,
+      "fingerprint": "opportunity::opp-q-graveyard-cause::diagnose::[\"liquidity_turnover_shock\", \"mom_20\", \"mom_plus_value\", \"size_small\"]",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T23:23:49.772854+00:00",
+      "started_at_utc": "2026-03-20T23:23:49.787416+00:00",
+      "finished_at_utc": "2026-03-20T23:23:49.791875+00:00",
+      "worker_note": "diagnostic finished: opportunity_diagnose",
+      "payload": {
+        "branch_id": "opp-q-graveyard-cause",
+        "dedupe_bypass": true,
+        "dedupe_bypass_reason": "high_priority_validation_override",
+        "diagnostic_type": "opportunity_diagnose",
+        "disconfirm_if": [],
+        "expected_information_gain": [
+          "neutralization_diagnosis_requested",
+          "repeated_graveyard_confirmed"
+        ],
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small"
+        ],
+        "goal": "当前 graveyard 因子的失败是否共享共同原因？",
+        "hypothesis": "至少部分 graveyard 因子并非随机失败，而是共享可解释的结构性原因。",
+        "opportunity_id": "opp-q-graveyard-cause",
+        "opportunity_type": "diagnose",
+        "promote_if": [],
+        "question": "当前 graveyard 因子的失败是否共享共同原因？",
+        "reasons": [
+          "opportunity_selected",
+          "mapped_from:diagnose"
+        ],
+        "source": "research_opportunity",
+        "stop_if": [],
+        "target_candidates": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small"
+        ],
+        "target_family": "graveyard_diagnosis"
+      }
+    },
+    {
+      "task_id": "fec83663-19d3-4dbf-8e82-f0ac61680a93",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 15,
+      "fingerprint": "retry::e95b9bff-7c26-48a6-aad9-e8d3dcce69e4::1",
+      "parent_task_id": "e95b9bff-7c26-48a6-aad9-e8d3dcce69e4",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T23:23:13.617286+00:00",
+      "started_at_utc": "2026-03-20T23:23:49.808029+00:00",
+      "finished_at_utc": "2026-03-20T23:23:49.811600+00:00",
+      "worker_note": "diagnostic finished: opportunity_diagnose",
+      "payload": {
+        "branch_id": "opp-q-graveyard-cause",
+        "dedupe_bypass": true,
+        "dedupe_bypass_reason": "high_priority_validation_override",
+        "diagnostic_type": "opportunity_diagnose",
+        "disconfirm_if": [],
+        "expected_information_gain": [
+          "neutralization_diagnosis_requested",
+          "repeated_graveyard_confirmed"
+        ],
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small"
+        ],
+        "goal": "当前 graveyard 因子的失败是否共享共同原因？",
+        "hypothesis": "至少部分 graveyard 因子并非随机失败，而是共享可解释的结构性原因。",
+        "opportunity_id": "opp-q-graveyard-cause",
+        "opportunity_type": "diagnose",
+        "promote_if": [],
+        "question": "当前 graveyard 因子的失败是否共享共同原因？",
+        "reasons": [
+          "opportunity_selected",
+          "mapped_from:diagnose"
+        ],
+        "source": "research_opportunity",
+        "stop_if": [],
+        "target_candidates": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small"
+        ],
+        "target_family": "graveyard_diagnosis"
+      }
+    },
+    {
+      "task_id": "70a5fe43-764f-45cf-b8c7-c5d5c55effab",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 8,
+      "fingerprint": "opportunity::opp-q-stable-boundary::confirm::[\"mom_20\", \"mom_plus_value\", \"value_ep\"]",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T23:23:13.598807+00:00",
+      "started_at_utc": "2026-03-20T23:23:49.798173+00:00",
+      "finished_at_utc": "2026-03-20T23:23:49.801801+00:00",
+      "worker_note": "diagnostic finished: opportunity_confirm",
+      "payload": {
+        "branch_id": "opp-q-stable-boundary",
+        "dedupe_bypass": true,
+        "dedupe_bypass_reason": "high_priority_validation_override",
+        "diagnostic_type": "opportunity_confirm",
+        "disconfirm_if": [],
+        "expected_information_gain": [
+          "stable_candidate_confirmed"
+        ],
+        "focus_factors": [
+          "mom_20",
+          "mom_plus_value",
+          "value_ep"
+        ],
+        "goal": "当前稳定候选的有效性边界在哪里？",
+        "hypothesis": "稳定候选并非只在局部窗口有效，而是存在可继续扩展验证的稳健边界。",
+        "opportunity_id": "opp-q-stable-boundary",
+        "opportunity_type": "confirm",
+        "promote_if": [],
+        "question": "当前稳定候选的有效性边界在哪里？",
+        "reasons": [
+          "opportunity_selected",
+          "mapped_from:confirm"
+        ],
+        "source": "research_opportunity",
+        "stop_if": [],
+        "target_candidates": [
+          "mom_20",
+          "mom_plus_value",
+          "value_ep"
+        ],
+        "target_family": "stable_candidate_validation"
+      }
+    },
+    {
+      "task_id": "f3eb1a0e-f372-4786-91eb-68cf161cfc01",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 36,
+      "fingerprint": "diagnostic::graveyard_diagnosis_level_7::{\"diagnostic_type\": \"graveyard_diagnosis_level_7\", \"focus_factors\": [\"liquidity_turnover_shock\", \"mom_20\", \"mom_plus_value\", \"size_small\"], \"knowledge_gain\": [\"graveyard_diagnosis_level_7_requested\"], \"reasons\": [\"recent_graveyard_needs_deeper_review\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T23:17:50.080535+00:00",
+      "started_at_utc": "2026-03-20T23:17:50.085871+00:00",
+      "finished_at_utc": "2026-03-20T23:17:50.098502+00:00",
+      "worker_note": "diagnostic finished: graveyard_diagnosis_level_7",
+      "payload": {
+        "diagnostic_type": "graveyard_diagnosis_level_7",
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small"
+        ],
+        "knowledge_gain": [
+          "graveyard_diagnosis_level_7_requested"
+        ],
+        "reasons": [
+          "recent_graveyard_needs_deeper_review"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "7b54b526-8ef3-46c0-863d-c82487fa61a0",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 8,
+      "fingerprint": "opportunity::opp-q-stable-boundary::confirm::[\"mom_20\", \"mom_plus_value\", \"value_ep\"]",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T23:17:30.655680+00:00",
+      "started_at_utc": "2026-03-20T23:17:47.976238+00:00",
+      "finished_at_utc": "2026-03-20T23:17:47.986693+00:00",
+      "worker_note": "diagnostic finished: opportunity_confirm",
+      "payload": {
+        "branch_id": "opp-q-stable-boundary",
+        "dedupe_bypass": true,
+        "dedupe_bypass_reason": "high_priority_validation_override",
+        "diagnostic_type": "opportunity_confirm",
+        "disconfirm_if": [],
+        "expected_information_gain": [
+          "stable_candidate_confirmed"
+        ],
+        "focus_factors": [
+          "mom_20",
+          "mom_plus_value",
+          "value_ep"
+        ],
+        "goal": "当前稳定候选的有效性边界在哪里？",
+        "hypothesis": "稳定候选并非只在局部窗口有效，而是存在可继续扩展验证的稳健边界。",
+        "opportunity_id": "opp-q-stable-boundary",
+        "opportunity_type": "confirm",
+        "promote_if": [],
+        "question": "当前稳定候选的有效性边界在哪里？",
+        "reasons": [
+          "opportunity_selected",
+          "mapped_from:confirm"
+        ],
+        "source": "research_opportunity",
+        "stop_if": [],
+        "target_candidates": [
+          "mom_20",
+          "mom_plus_value",
+          "value_ep"
+        ],
+        "target_family": "stable_candidate_validation"
+      }
+    },
+    {
+      "task_id": "7389edbf-012e-4aa5-bf1a-420bfa5b8b66",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 6,
+      "fingerprint": "opportunity::opp-q-graveyard-cause::diagnose::[\"liquidity_turnover_shock\", \"mom_20\", \"mom_plus_value\", \"size_small\"]",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T23:17:30.649850+00:00",
+      "started_at_utc": "2026-03-20T23:17:45.960221+00:00",
+      "finished_at_utc": "2026-03-20T23:17:45.965935+00:00",
+      "worker_note": "diagnostic finished: opportunity_diagnose",
+      "payload": {
+        "branch_id": "opp-q-graveyard-cause",
+        "dedupe_bypass": true,
+        "dedupe_bypass_reason": "high_priority_validation_override",
+        "diagnostic_type": "opportunity_diagnose",
+        "disconfirm_if": [],
+        "expected_information_gain": [
+          "neutralization_diagnosis_requested",
+          "repeated_graveyard_confirmed"
+        ],
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small"
+        ],
+        "goal": "当前 graveyard 因子的失败是否共享共同原因？",
+        "hypothesis": "至少部分 graveyard 因子并非随机失败，而是共享可解释的结构性原因。",
+        "opportunity_id": "opp-q-graveyard-cause",
+        "opportunity_type": "diagnose",
+        "promote_if": [],
+        "question": "当前 graveyard 因子的失败是否共享共同原因？",
+        "reasons": [
+          "opportunity_selected",
+          "mapped_from:diagnose"
+        ],
+        "source": "research_opportunity",
+        "stop_if": [],
+        "target_candidates": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small"
+        ],
+        "target_family": "graveyard_diagnosis"
+      }
+    },
+    {
+      "task_id": "07570ec9-92b5-490c-b2f8-b5c4351f0b54",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 34,
+      "fingerprint": "diagnostic::stable_candidate_validation_review_v7::{\"diagnostic_type\": \"stable_candidate_validation_review_v7\", \"focus_factors\": [\"mom_20\", \"mom_plus_value\", \"value_ep\", \"quality_minus_value\", \"quality_roe\"], \"knowledge_gain\": [\"stable_candidate_validation_v7_requested\"], \"reasons\": [\"stable_candidates_need_deeper_validation\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T23:15:43.459242+00:00",
+      "started_at_utc": "2026-03-20T23:15:43.466703+00:00",
+      "finished_at_utc": "2026-03-20T23:15:43.472902+00:00",
+      "worker_note": "diagnostic finished: stable_candidate_validation_review_v7",
+      "payload": {
+        "diagnostic_type": "stable_candidate_validation_review_v7",
+        "focus_factors": [
+          "mom_20",
+          "mom_plus_value",
+          "value_ep",
+          "quality_minus_value",
+          "quality_roe"
+        ],
+        "knowledge_gain": [
+          "stable_candidate_validation_v7_requested"
+        ],
+        "reasons": [
+          "stable_candidates_need_deeper_validation"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "8a34faa3-c8fd-43eb-8ea6-82eb45a0ea18",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 8,
+      "fingerprint": "opportunity::opp-q-stable-boundary::confirm::[\"mom_20\", \"mom_plus_value\", \"value_ep\"]",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T23:15:12.806301+00:00",
+      "started_at_utc": "2026-03-20T23:15:41.349402+00:00",
+      "finished_at_utc": "2026-03-20T23:15:41.356423+00:00",
+      "worker_note": "diagnostic finished: opportunity_confirm",
+      "payload": {
+        "branch_id": "opp-q-stable-boundary",
+        "dedupe_bypass": true,
+        "dedupe_bypass_reason": "high_priority_validation_override",
+        "diagnostic_type": "opportunity_confirm",
+        "disconfirm_if": [],
+        "expected_information_gain": [
+          "stable_candidate_confirmed"
+        ],
+        "focus_factors": [
+          "mom_20",
+          "mom_plus_value",
+          "value_ep"
+        ],
+        "goal": "当前稳定候选的有效性边界在哪里？",
+        "hypothesis": "稳定候选并非只在局部窗口有效，而是存在可继续扩展验证的稳健边界。",
+        "opportunity_id": "opp-q-stable-boundary",
+        "opportunity_type": "confirm",
+        "promote_if": [],
+        "question": "当前稳定候选的有效性边界在哪里？",
+        "reasons": [
+          "opportunity_selected",
+          "mapped_from:confirm"
+        ],
+        "source": "research_opportunity",
+        "stop_if": [],
+        "target_candidates": [
+          "mom_20",
+          "mom_plus_value",
+          "value_ep"
+        ],
+        "target_family": "stable_candidate_validation"
+      }
+    }
+  ],
+  "recent_failed_tasks": [
+    {
+      "task_id": "e95b9bff-7c26-48a6-aad9-e8d3dcce69e4",
+      "task_type": "diagnostic",
+      "status": "failed",
+      "priority": 6,
+      "fingerprint": "opportunity::opp-q-graveyard-cause::diagnose::[\"liquidity_turnover_shock\", \"mom_20\", \"mom_plus_value\", \"size_small\"]",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": "name 'evaluate_opportunity_from_task' is not defined",
+      "created_at_utc": "2026-03-20T23:23:13.593169+00:00",
+      "started_at_utc": "2026-03-20T23:23:13.607299+00:00",
+      "finished_at_utc": "2026-03-20T23:23:13.618109+00:00",
+      "worker_note": "diagnostic finished: opportunity_diagnose",
+      "payload": {
+        "branch_id": "opp-q-graveyard-cause",
+        "dedupe_bypass": true,
+        "dedupe_bypass_reason": "high_priority_validation_override",
+        "diagnostic_type": "opportunity_diagnose",
+        "disconfirm_if": [],
+        "expected_information_gain": [
+          "neutralization_diagnosis_requested",
+          "repeated_graveyard_confirmed"
+        ],
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small"
+        ],
+        "goal": "当前 graveyard 因子的失败是否共享共同原因？",
+        "hypothesis": "至少部分 graveyard 因子并非随机失败，而是共享可解释的结构性原因。",
+        "opportunity_id": "opp-q-graveyard-cause",
+        "opportunity_type": "diagnose",
+        "promote_if": [],
+        "question": "当前 graveyard 因子的失败是否共享共同原因？",
+        "reasons": [
+          "opportunity_selected",
+          "mapped_from:diagnose"
+        ],
+        "source": "research_opportunity",
+        "stop_if": [],
+        "target_candidates": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small"
+        ],
+        "target_family": "graveyard_diagnosis"
+      }
+    }
+  ],
+  "pending_task_preview": [],
+  "branch_signals": [
+    {
+      "branch_id": "fallback_graveyard_diagnosis",
+      "category": "validation",
+      "task_type": "diagnostic",
+      "priority_hint": 18,
+      "goal": "recovery_diagnose_graveyard_failures",
+      "hypothesis": "当主任务暂时产不出来时，应先解释当前 graveyard 与 neutralization 风险，再回到主任务推进。",
+      "expected_knowledge_gain": [
+        "neutralization_diagnosis_requested"
+      ],
+      "duplicate_risk": 4,
+      "fragile_candidate_count": 0,
+      "family_focus": "graveyard_diagnosis",
+      "lifecycle_state": "stable_candidate"
+    },
+    {
+      "branch_id": "fallback_stable_candidate_validation",
+      "category": "validation",
+      "task_type": "diagnostic",
+      "priority_hint": 18,
+      "goal": "recovery_validate_stable_candidates",
+      "hypothesis": "当主任务暂时产不出来时，最小恢复动作应优先重新确认当前核心稳定候选。",
+      "expected_knowledge_gain": [
+        "stable_candidate_confirmed"
+      ],
+      "duplicate_risk": 0,
+      "fragile_candidate_count": 0,
+      "family_focus": "momentum",
+      "lifecycle_state": "stable_candidate"
+    }
+  ],
+  "memory": {
+    "updated_at_utc": "2026-03-20T23:52:55.232766+00:00",
+    "stable_candidates": [
+      "mom_20",
+      "mom_plus_value",
+      "quality_minus_value",
+      "quality_roe",
+      "value_bp",
+      "value_ep"
+    ],
+    "repeated_failure_patterns": [
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "validating",
+        "next_state": "validating",
+        "action": "promote",
+        "reason": "high_confidence_validation_branch",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "validating",
+        "next_state": "validating",
+        "action": "promote",
+        "reason": "high_confidence_validation_branch",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "validating",
+        "next_state": "validating",
+        "action": "promote",
+        "reason": "high_confidence_validation_branch",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "validating",
+        "next_state": "validating",
+        "action": "promote",
+        "reason": "high_confidence_validation_branch",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "validating",
+        "next_state": "validating",
+        "action": "promote",
+        "reason": "high_confidence_validation_branch",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "validating",
+        "next_state": "validating",
+        "action": "promote",
+        "reason": "high_confidence_validation_branch",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "validating",
+        "next_state": "validating",
+        "action": "promote",
+        "reason": "high_confidence_validation_branch",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "stable_candidate_validation_level_7",
+        "previous_state": "exploring",
+        "next_state": "validating",
+        "action": "promote",
+        "reason": "high_confidence_validation_branch",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "graveyard_diagnosis_level_7",
+        "previous_state": "exploring",
+        "next_state": "exploring",
+        "action": "hold",
+        "reason": "maintain_current_branch_state",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "validating",
+        "next_state": "validating",
+        "action": "promote",
+        "reason": "high_confidence_validation_branch",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "validating",
+        "next_state": "validating",
+        "action": "promote",
+        "reason": "high_confidence_validation_branch",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "validating",
+        "next_state": "validating",
+        "action": "promote",
+        "reason": "high_confidence_validation_branch",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "validating",
+        "next_state": "validating",
+        "action": "promote",
+        "reason": "high_confidence_validation_branch",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "validating",
+        "next_state": "validating",
+        "action": "promote",
+        "reason": "high_confidence_validation_branch",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "validating",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_stable_candidate_validation",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "fallback_graveyard_diagnosis",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      }
+    ],
+    "high_value_open_questions": [
+      "当主任务暂时产不出来时，最小恢复动作应优先重新确认当前核心稳定候选。",
+      "当主任务暂时产不出来时，应先解释当前 graveyard 与 neutralization 风险，再回到主任务推进。"
+    ],
+    "branch_history": [
+      {
+        "updated_at_utc": "2026-03-20T19:20:15.399800+00:00",
+        "target": "stable_candidate_validation::diagnostic::mom_20",
+        "category": "validation",
+        "strategy_score": 152.255,
+        "action": "approved"
+      },
+      {
+        "updated_at_utc": "2026-03-20T19:40:06.075586+00:00",
+        "target": "stable_candidate_validation::diagnostic::mom_20",
+        "category": "validation",
+        "strategy_score": 155.255,
+        "action": "approved"
+      },
+      {
+        "updated_at_utc": "2026-03-20T20:17:55.935751+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 213.255,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T20:17:55.935763+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 160.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T20:35:16.835282+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 213.255,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T20:35:16.835297+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 160.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T20:45:59.526572+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 213.255,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T20:45:59.526592+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 160.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T20:48:24.524257+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 213.255,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T20:48:24.524270+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 160.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:11:27.974565+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 213.255,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:11:27.974578+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 160.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:11:55.141659+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 213.255,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:11:55.141674+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 160.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:12:21.185928+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 213.255,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:12:21.185941+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 160.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:12:51.025695+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 213.255,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:12:51.025708+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 160.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:18:28.697580+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 213.255,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:18:28.697603+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 160.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:21:55.495662+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 213.255,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:21:55.495683+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 160.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:22:49.217836+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 213.255,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:22:49.217857+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 160.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:26:11.881717+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 213.255,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:26:11.881735+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 160.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:26:37.070223+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 213.255,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:26:37.070236+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 160.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:27:09.967243+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 213.255,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:27:09.967255+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 160.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:33:52.118943+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 213.255,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:33:52.118973+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 160.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:34:31.431406+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 213.255,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:34:31.431421+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 160.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:35:05.637657+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 213.255,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:35:05.637672+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 160.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:37:35.391166+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 213.255,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:37:35.391185+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 160.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:37:35.712491+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 213.255,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:37:35.712517+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 160.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:37:58.609091+00:00",
+        "target": "stable_candidate_validation_level_7",
+        "category": "validation",
+        "strategy_score": 247.137,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:37:58.609157+00:00",
+        "target": "graveyard_diagnosis_level_7",
+        "category": "validation",
+        "strategy_score": 125.0,
+        "action": "hold",
+        "next_state": "exploring"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:38:46.436819+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 212.137,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:38:46.436840+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 140.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:42:56.253000+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 218.137,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:42:56.253021+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 148.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:43:47.176917+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 218.137,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:43:47.176931+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 148.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:46:19.760114+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 218.137,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:46:19.760135+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 148.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:47:17.482330+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 218.137,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:47:17.482351+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 148.0,
+        "action": "promote",
+        "next_state": "validating"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:15:12.765060+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 218.137,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:15:12.765081+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 168.0,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:17:00.050712+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 218.137,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:17:00.050727+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 168.0,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:17:30.611644+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 218.137,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:17:30.611659+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 168.0,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:22:00.658756+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 218.137,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:22:00.658771+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 168.0,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:22:41.264479+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 218.137,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:22:41.264495+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 168.0,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:23:13.539258+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 218.137,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:23:13.539273+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 168.0,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:23:49.703164+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 218.137,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:23:49.703186+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 168.0,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:24:03.416692+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 218.137,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:24:03.416723+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 168.0,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:29:19.960966+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 218.137,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:29:19.960982+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 168.0,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:30:11.009405+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 218.137,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:30:11.009426+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 168.0,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:50:39.187054+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 218.137,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:50:39.187070+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 168.0,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:52:55.210795+00:00",
+        "target": "fallback_stable_candidate_validation",
+        "category": "validation",
+        "strategy_score": 218.137,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:52:55.210810+00:00",
+        "target": "fallback_graveyard_diagnosis",
+        "category": "validation",
+        "strategy_score": 168.0,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      }
+    ],
+    "strategy_runs": [
+      {
+        "updated_at_utc": "2026-03-20T19:20:15.412858+00:00",
+        "approved_count": 1,
+        "injected_count": 1,
+        "branch_actions": []
+      },
+      {
+        "updated_at_utc": "2026-03-20T19:40:06.086695+00:00",
+        "approved_count": 1,
+        "injected_count": 1,
+        "branch_actions": []
+      },
+      {
+        "updated_at_utc": "2026-03-20T19:46:16.058631+00:00",
+        "approved_count": 0,
+        "injected_count": 0,
+        "branch_actions": []
+      },
+      {
+        "updated_at_utc": "2026-03-20T19:50:31.195888+00:00",
+        "approved_count": 0,
+        "injected_count": 0,
+        "branch_actions": []
+      },
+      {
+        "updated_at_utc": "2026-03-20T19:51:21.103355+00:00",
+        "approved_count": 0,
+        "injected_count": 0,
+        "branch_actions": []
+      },
+      {
+        "updated_at_utc": "2026-03-20T20:14:09.396157+00:00",
+        "approved_count": 0,
+        "injected_count": 0,
+        "branch_actions": []
+      },
+      {
+        "updated_at_utc": "2026-03-20T20:17:55.962396+00:00",
+        "approved_count": 2,
+        "injected_count": 2,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "exploring",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "exploring",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T20:35:16.857225+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "validating",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T20:45:59.548746+00:00",
+        "approved_count": 2,
+        "injected_count": 2,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T20:48:24.539975+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:11:27.992496+00:00",
+        "approved_count": 2,
+        "injected_count": 1,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:11:55.165271+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:12:21.201393+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:12:51.040956+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:18:28.725451+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:21:55.520736+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:22:49.239814+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:26:11.905085+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:26:37.085868+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:27:09.982677+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:33:52.142444+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:34:31.448553+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:35:05.655937+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:37:35.415342+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:37:35.742732+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:37:58.652284+00:00",
+        "approved_count": 2,
+        "injected_count": 2,
+        "branch_actions": [
+          {
+            "branch_id": "stable_candidate_validation_level_7",
+            "previous_state": "exploring",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "graveyard_diagnosis_level_7",
+            "previous_state": "exploring",
+            "next_state": "exploring",
+            "action": "hold",
+            "reason": "maintain_current_branch_state",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:38:46.456414+00:00",
+        "approved_count": 2,
+        "injected_count": 1,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:42:56.272167+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:43:47.193289+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:46:19.783768+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:47:17.502645+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "validating",
+            "action": "promote",
+            "reason": "high_confidence_validation_branch",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:15:12.785546+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "validating",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:17:00.077945+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:17:30.635209+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:22:00.697181+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:22:41.306264+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:23:13.580528+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:23:49.758029+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:24:03.443846+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:29:19.980339+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:30:11.032158+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:50:39.212061+00:00",
+        "approved_count": 2,
+        "injected_count": 1,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:52:55.232818+00:00",
+        "approved_count": 2,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "fallback_stable_candidate_validation",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          },
+          {
+            "branch_id": "fallback_graveyard_diagnosis",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      }
+    ],
+    "candidate_lifecycle": {
+      "mom_20": {
+        "history": [
+          {
+            "updated_at_utc": "2026-03-20T22:43:47.193259+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T22:46:19.783734+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T22:47:17.502612+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:15:12.785514+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:17:00.077896+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:17:30.635160+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:22:00.697146+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:22:41.306227+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:13.580494+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:13.613484+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "opp-q-graveyard-cause"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:13.619648+00:00",
+            "next_state": "provisional",
+            "action": "demote",
+            "source_branch_id": "opp-q-graveyard-cause"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:49.757994+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:49.793693+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "opp-q-graveyard-cause"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:49.803539+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "opp-q-stable-boundary"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:49.813621+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "opp-q-graveyard-cause"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:24:03.443813+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:29:19.980305+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:30:11.032115+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:50:39.212008+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:52:55.232786+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          }
+        ],
+        "candidate_name": "mom_20",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "source_branch_id": "fallback_stable_candidate_validation",
+        "updated_at_utc": "2026-03-20T23:52:55.232791+00:00"
+      },
+      "mom_plus_value": {
+        "candidate_name": "mom_plus_value",
+        "next_state": "stable_candidate",
+        "source_branch_id": "fallback_stable_candidate_validation",
+        "action": "promote",
+        "updated_at_utc": "2026-03-20T23:52:55.232798+00:00",
+        "history": [
+          {
+            "updated_at_utc": "2026-03-20T22:43:47.193268+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T22:46:19.783744+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T22:47:17.502622+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:15:12.785524+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:17:00.077910+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:17:30.635175+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:22:00.697156+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:22:41.306238+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:13.580504+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:13.613491+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "opp-q-graveyard-cause"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:13.619655+00:00",
+            "next_state": "provisional",
+            "action": "demote",
+            "source_branch_id": "opp-q-graveyard-cause"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:49.758005+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:49.793699+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "opp-q-graveyard-cause"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:49.803546+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "opp-q-stable-boundary"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:49.813627+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "opp-q-graveyard-cause"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:24:03.443823+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:29:19.980315+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:30:11.032128+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:50:39.212023+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:52:55.232795+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "fallback_stable_candidate_validation"
+          }
+        ]
+      },
+      "value_bp": {
+        "candidate_name": "value_bp",
+        "next_state": "stable_candidate",
+        "source_branch_id": "stable_candidate_validation_level_7",
+        "action": "promote",
+        "updated_at_utc": "2026-03-20T22:37:58.652251+00:00",
+        "history": [
+          {
+            "updated_at_utc": "2026-03-20T22:37:58.652246+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "stable_candidate_validation_level_7"
+          }
+        ]
+      },
+      "liquidity_turnover_shock": {
+        "history": [
+          {
+            "updated_at_utc": "2026-03-20T23:23:13.613477+00:00",
+            "next_state": "validating",
+            "action": "hold",
+            "source_branch_id": "opp-q-graveyard-cause"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:13.619642+00:00",
+            "next_state": "provisional",
+            "action": "demote",
+            "source_branch_id": "opp-q-graveyard-cause"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:49.793686+00:00",
+            "next_state": "validating",
+            "action": "hold",
+            "source_branch_id": "opp-q-graveyard-cause"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:49.813614+00:00",
+            "next_state": "validating",
+            "action": "hold",
+            "source_branch_id": "opp-q-graveyard-cause"
+          }
+        ],
+        "candidate_name": "liquidity_turnover_shock",
+        "next_state": "validating",
+        "action": "hold",
+        "source_branch_id": "opp-q-graveyard-cause",
+        "updated_at_utc": "2026-03-20T23:23:49.813610+00:00"
+      },
+      "size_small": {
+        "history": [
+          {
+            "updated_at_utc": "2026-03-20T23:23:13.613498+00:00",
+            "next_state": "validating",
+            "action": "hold",
+            "source_branch_id": "opp-q-graveyard-cause"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:13.619661+00:00",
+            "next_state": "provisional",
+            "action": "demote",
+            "source_branch_id": "opp-q-graveyard-cause"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:49.793706+00:00",
+            "next_state": "validating",
+            "action": "hold",
+            "source_branch_id": "opp-q-graveyard-cause"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:49.813633+00:00",
+            "next_state": "validating",
+            "action": "hold",
+            "source_branch_id": "opp-q-graveyard-cause"
+          }
+        ],
+        "candidate_name": "size_small",
+        "next_state": "validating",
+        "action": "hold",
+        "source_branch_id": "opp-q-graveyard-cause",
+        "updated_at_utc": "2026-03-20T23:23:49.813630+00:00"
+      },
+      "value_ep": {
+        "history": [
+          {
+            "updated_at_utc": "2026-03-20T23:23:49.803552+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "opp-q-stable-boundary"
+          }
+        ],
+        "candidate_name": "value_ep",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "source_branch_id": "opp-q-stable-boundary",
+        "updated_at_utc": "2026-03-20T23:23:49.803549+00:00"
+      }
+    },
+    "branch_lifecycle": {
+      "demo_branch": {
+        "history": [
+          {
+            "updated_at_utc": "2026-03-20T19:53:54.449986+00:00",
+            "state": "validating",
+            "last_action": "promote",
+            "reason": "knowledge_gain_detected"
+          }
+        ],
+        "updated_at_utc": "2026-03-20T19:53:54.449980+00:00",
+        "last_task_type": "diagnostic",
+        "last_status": "finished",
+        "goal": "validate_demo",
+        "hypothesis": "demo hypothesis",
+        "validation_runs": 1,
+        "no_gain_runs": 0,
+        "last_action": "promote",
+        "state": "validating"
+      },
+      "fallback_stable_candidate_validation": {
+        "state": "stable_candidate",
+        "last_action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "updated_at_utc": "2026-03-20T23:52:55.210806+00:00",
+        "goal": "recovery_validate_stable_candidates",
+        "hypothesis": "当主任务暂时产不出来时，最小恢复动作应优先重新确认当前核心稳定候选。",
+        "history": [
+          {
+            "updated_at_utc": "2026-03-20T22:35:05.655924+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T22:37:35.415325+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T22:37:35.742707+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T22:38:46.456399+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T22:42:56.272147+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T22:43:47.193275+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T22:46:19.783752+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T22:47:17.502629+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:15:12.785531+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:17:00.077923+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:17:30.635187+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:22:00.697165+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:22:41.306247+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:13.580513+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:49.758013+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:24:03.443830+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:29:19.980322+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:30:11.032140+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:50:39.212035+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:52:55.232803+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          }
+        ],
+        "validation_runs": 36,
+        "no_gain_runs": 0
+      },
+      "fallback_graveyard_diagnosis": {
+        "state": "stable_candidate",
+        "last_action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "updated_at_utc": "2026-03-20T23:52:55.210812+00:00",
+        "goal": "recovery_diagnose_graveyard_failures",
+        "hypothesis": "当主任务暂时产不出来时，应先解释当前 graveyard 与 neutralization 风险，再回到主任务推进。",
+        "history": [
+          {
+            "updated_at_utc": "2026-03-20T22:37:35.415334+00:00",
+            "state": "validating",
+            "last_action": "promote",
+            "reason": "high_confidence_validation_branch"
+          },
+          {
+            "updated_at_utc": "2026-03-20T22:37:35.742719+00:00",
+            "state": "validating",
+            "last_action": "promote",
+            "reason": "high_confidence_validation_branch"
+          },
+          {
+            "updated_at_utc": "2026-03-20T22:38:46.456406+00:00",
+            "state": "validating",
+            "last_action": "promote",
+            "reason": "high_confidence_validation_branch"
+          },
+          {
+            "updated_at_utc": "2026-03-20T22:38:46.506161+00:00",
+            "state": "validating",
+            "last_action": "promote",
+            "reason": "knowledge_gain_detected"
+          },
+          {
+            "updated_at_utc": "2026-03-20T22:42:56.272156+00:00",
+            "state": "validating",
+            "last_action": "promote",
+            "reason": "high_confidence_validation_branch"
+          },
+          {
+            "updated_at_utc": "2026-03-20T22:43:47.193282+00:00",
+            "state": "validating",
+            "last_action": "promote",
+            "reason": "high_confidence_validation_branch"
+          },
+          {
+            "updated_at_utc": "2026-03-20T22:46:19.783759+00:00",
+            "state": "validating",
+            "last_action": "promote",
+            "reason": "high_confidence_validation_branch"
+          },
+          {
+            "updated_at_utc": "2026-03-20T22:47:17.502637+00:00",
+            "state": "validating",
+            "last_action": "promote",
+            "reason": "high_confidence_validation_branch"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:15:12.785539+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:17:00.077933+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:17:30.635197+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:22:00.697172+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:22:41.306254+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:13.580520+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:49.758020+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:24:03.443839+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:29:19.980331+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:30:11.032149+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:50:39.212047+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:52:55.232810+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          }
+        ],
+        "validation_runs": 37,
+        "no_gain_runs": 0,
+        "last_task_type": "diagnostic",
+        "last_status": "finished"
+      },
+      "workflow::b6991f4cf70905f50b75b9d3ded9cdb7db21e20932d6496e2a803807978d443f::artifacts/generated_candidate_mom_20_recent_45d": {
+        "history": [
+          {
+            "updated_at_utc": "2026-03-20T22:37:38.043402+00:00",
+            "state": "saturated",
+            "last_action": "hold",
+            "reason": "no_significant_information_gain"
+          }
+        ],
+        "updated_at_utc": "2026-03-20T22:37:38.043393+00:00",
+        "last_task_type": "workflow",
+        "last_status": "finished",
+        "goal": null,
+        "hypothesis": null,
+        "validation_runs": 0,
+        "no_gain_runs": 1,
+        "last_action": "hold",
+        "state": "saturated"
+      },
+      "workflow::be09dcf3c4d547982a36c9725b08388bc1ee6355e9128a08664cc2d055d8ea46::artifacts/generated_candidate_mom_20_recent_90d": {
+        "history": [
+          {
+            "updated_at_utc": "2026-03-20T22:37:41.489296+00:00",
+            "state": "saturated",
+            "last_action": "hold",
+            "reason": "no_significant_information_gain"
+          }
+        ],
+        "updated_at_utc": "2026-03-20T22:37:41.489280+00:00",
+        "last_task_type": "workflow",
+        "last_status": "finished",
+        "goal": null,
+        "hypothesis": null,
+        "validation_runs": 0,
+        "no_gain_runs": 1,
+        "last_action": "hold",
+        "state": "saturated"
+      },
+      "stable_candidate_validation_level_7": {
+        "state": "validating",
+        "last_action": "promote",
+        "reason": "high_confidence_validation_branch",
+        "updated_at_utc": "2026-03-20T22:37:58.609148+00:00",
+        "goal": "validate_stable_candidates",
+        "hypothesis": "当前稳定候选在更深一层诊断下依然成立，而不是被 cluster/窗口偶然性抬高。",
+        "history": [
+          {
+            "updated_at_utc": "2026-03-20T22:37:58.652259+00:00",
+            "state": "validating",
+            "last_action": "promote",
+            "reason": "high_confidence_validation_branch"
+          }
+        ],
+        "validation_runs": 1,
+        "no_gain_runs": 0
+      },
+      "graveyard_diagnosis_level_7": {
+        "state": "exploring",
+        "last_action": "hold",
+        "reason": "maintain_current_branch_state",
+        "updated_at_utc": "2026-03-20T22:37:58.609162+00:00",
+        "goal": "diagnose_graveyard_failures",
+        "hypothesis": "graveyard 中的失败因子包含可解释的结构性失败模式，而不是随机噪声。",
+        "history": [
+          {
+            "updated_at_utc": "2026-03-20T22:37:58.652271+00:00",
+            "state": "exploring",
+            "last_action": "hold",
+            "reason": "maintain_current_branch_state"
+          }
+        ],
+        "validation_runs": 0,
+        "no_gain_runs": 1
+      },
+      "opp-q-graveyard-cause": {
+        "history": [
+          {
+            "updated_at_utc": "2026-03-20T23:23:13.613459+00:00",
+            "state": "exploring",
+            "last_action": "hold",
+            "reason": "knowledge_gain_detected"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:13.619624+00:00",
+            "state": "exploring",
+            "last_action": "demote",
+            "reason": "task_failed"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:49.793668+00:00",
+            "state": "exploring",
+            "last_action": "hold",
+            "reason": "knowledge_gain_detected"
+          },
+          {
+            "updated_at_utc": "2026-03-20T23:23:49.813597+00:00",
+            "state": "exploring",
+            "last_action": "hold",
+            "reason": "knowledge_gain_detected"
+          }
+        ],
+        "updated_at_utc": "2026-03-20T23:23:49.813589+00:00",
+        "last_task_type": "diagnostic",
+        "last_status": "finished",
+        "goal": "当前 graveyard 因子的失败是否共享共同原因？",
+        "hypothesis": "至少部分 graveyard 因子并非随机失败，而是共享可解释的结构性原因。",
+        "validation_runs": 4,
+        "no_gain_runs": 0,
+        "last_action": "hold",
+        "state": "exploring"
+      },
+      "opp-q-stable-boundary": {
+        "history": [
+          {
+            "updated_at_utc": "2026-03-20T23:23:49.803522+00:00",
+            "state": "exploring",
+            "last_action": "hold",
+            "reason": "knowledge_gain_detected"
+          }
+        ],
+        "updated_at_utc": "2026-03-20T23:23:49.803514+00:00",
+        "last_task_type": "diagnostic",
+        "last_status": "finished",
+        "goal": "当前稳定候选的有效性边界在哪里？",
+        "hypothesis": "稳定候选并非只在局部窗口有效，而是存在可继续扩展验证的稳健边界。",
+        "validation_runs": 1,
+        "no_gain_runs": 0,
+        "last_action": "hold",
+        "state": "exploring"
+      }
+    },
+    "archived_branches": [],
+    "convergence_policy": {
+      "archive_after_no_gain_runs": 2,
+      "terminate_after_duplicate_pressure": 4,
+      "promote_after_validation_score": 145,
+      "demote_below_strategy_score": 90,
+      "terminate_after_hold_count": 3
+    },
+    "execution_feedback": [
+      {
+        "updated_at_utc": "2026-03-20T22:37:38.043406+00:00",
+        "branch_id": "workflow::b6991f4cf70905f50b75b9d3ded9cdb7db21e20932d6496e2a803807978d443f::artifacts/generated_candidate_mom_20_recent_45d",
+        "task_type": "workflow",
+        "status": "finished",
+        "has_gain": false,
+        "summary": "workflow finished: artifacts/generated_configs/candidate_mom_20_recent_45d.json",
+        "error_text": null,
+        "focus_candidates": [],
+        "knowledge_gain": [],
+        "goal": null,
+        "hypothesis": null
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:37:41.489302+00:00",
+        "branch_id": "workflow::be09dcf3c4d547982a36c9725b08388bc1ee6355e9128a08664cc2d055d8ea46::artifacts/generated_candidate_mom_20_recent_90d",
+        "task_type": "workflow",
+        "status": "finished",
+        "has_gain": false,
+        "summary": "workflow finished: artifacts/generated_configs/candidate_mom_20_recent_90d.json",
+        "error_text": null,
+        "focus_candidates": [],
+        "knowledge_gain": [],
+        "goal": null,
+        "hypothesis": null
+      },
+      {
+        "updated_at_utc": "2026-03-20T22:38:46.506164+00:00",
+        "branch_id": "fallback_graveyard_diagnosis",
+        "task_type": "diagnostic",
+        "status": "finished",
+        "has_gain": true,
+        "summary": "diagnostic finished: fallback_graveyard_review",
+        "error_text": null,
+        "focus_candidates": [
+          "mom_20"
+        ],
+        "knowledge_gain": [
+          "neutralization_diagnosis_requested"
+        ],
+        "goal": "recovery_diagnose_graveyard_failures",
+        "hypothesis": "当主任务暂时产不出来时，应先解释当前 graveyard 与 neutralization 风险，再回到主任务推进。"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:23:13.613463+00:00",
+        "branch_id": "opp-q-graveyard-cause",
+        "task_type": "diagnostic",
+        "status": "finished",
+        "has_gain": true,
+        "summary": "diagnostic finished: opportunity_diagnose",
+        "error_text": null,
+        "focus_candidates": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small"
+        ],
+        "knowledge_gain": [
+          "neutralization_diagnosis_requested",
+          "repeated_graveyard_confirmed"
+        ],
+        "goal": "当前 graveyard 因子的失败是否共享共同原因？",
+        "hypothesis": "至少部分 graveyard 因子并非随机失败，而是共享可解释的结构性原因。"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:23:13.619628+00:00",
+        "branch_id": "opp-q-graveyard-cause",
+        "task_type": "diagnostic",
+        "status": "failed",
+        "has_gain": false,
+        "summary": null,
+        "error_text": "name 'evaluate_opportunity_from_task' is not defined",
+        "focus_candidates": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small"
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:23:49.793672+00:00",
+        "branch_id": "opp-q-graveyard-cause",
+        "task_type": "diagnostic",
+        "status": "finished",
+        "has_gain": true,
+        "summary": "diagnostic finished: opportunity_diagnose",
+        "error_text": null,
+        "focus_candidates": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small"
+        ],
+        "knowledge_gain": [
+          "neutralization_diagnosis_requested",
+          "repeated_graveyard_confirmed"
+        ],
+        "goal": "当前 graveyard 因子的失败是否共享共同原因？",
+        "hypothesis": "至少部分 graveyard 因子并非随机失败，而是共享可解释的结构性原因。"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:23:49.803525+00:00",
+        "branch_id": "opp-q-stable-boundary",
+        "task_type": "diagnostic",
+        "status": "finished",
+        "has_gain": true,
+        "summary": "diagnostic finished: opportunity_confirm",
+        "error_text": null,
+        "focus_candidates": [
+          "mom_20",
+          "mom_plus_value",
+          "value_ep"
+        ],
+        "knowledge_gain": [
+          "stable_candidate_confirmed"
+        ],
+        "goal": "当前稳定候选的有效性边界在哪里？",
+        "hypothesis": "稳定候选并非只在局部窗口有效，而是存在可继续扩展验证的稳健边界。"
+      },
+      {
+        "updated_at_utc": "2026-03-20T23:23:49.813600+00:00",
+        "branch_id": "opp-q-graveyard-cause",
+        "task_type": "diagnostic",
+        "status": "finished",
+        "has_gain": true,
+        "summary": "diagnostic finished: opportunity_diagnose",
+        "error_text": null,
+        "focus_candidates": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small"
+        ],
+        "knowledge_gain": [
+          "neutralization_diagnosis_requested",
+          "repeated_graveyard_confirmed"
+        ],
+        "goal": "当前 graveyard 因子的失败是否共享共同原因？",
+        "hypothesis": "至少部分 graveyard 因子并非随机失败，而是共享可解释的结构性原因。"
+      }
+    ],
+    "fallback_history": [
+      {
+        "updated_at_utc": "2026-03-20T22:38:46.506171+00:00",
+        "branch_id": "fallback_graveyard_diagnosis",
+        "status": "finished",
+        "has_gain": true,
+        "summary": "diagnostic finished: fallback_graveyard_review",
+        "error_text": null,
+        "task_type": "diagnostic",
+        "focus_candidates": [
+          "mom_20"
+        ],
+        "knowledge_gain": [
+          "neutralization_diagnosis_requested"
+        ],
+        "goal": "recovery_diagnose_graveyard_failures"
+      }
+    ]
+  },
+  "open_questions": [
+    "当主任务暂时产不出来时，最小恢复动作应优先重新确认当前核心稳定候选。",
+    "当主任务暂时产不出来时，应先解释当前 graveyard 与 neutralization 风险，再回到主任务推进。"
+  ],
+  "repeated_failure_patterns": [
+    {
+      "task_type": "diagnostic",
+      "count": 1
+    }
+  ],
+  "convergence_policy": {
+    "archive_after_no_gain_runs": 2,
+    "terminate_after_duplicate_pressure": 4,
+    "promote_after_validation_score": 145,
+    "demote_below_strategy_score": 90,
+    "terminate_after_hold_count": 3
+  }
+}

@@ -1,12 +1,12 @@
 {
-  "generated_at_utc": "2026-03-18T18:38:05.158871+00:00",
-  "batch_output_dir": "artifacts/llm_generated_batch_run",
+  "generated_at_utc": "2026-03-20T23:53:16.027351+00:00",
+  "batch_output_dir": "artifacts/opportunity_generated_batch_run",
   "batch_summary": [
     {
       "job_name": "llm_focus_batch",
       "total_factors": 4,
-      "candidate_count": 2,
-      "graveyard_count": 2
+      "candidate_count": 0,
+      "graveyard_count": 4
     }
   ],
   "batch_comparison": {
@@ -14,19 +14,18 @@
       {
         "job_name": "llm_focus_batch",
         "total_factors": 4,
-        "candidate_count": 2,
-        "graveyard_count": 2
+        "candidate_count": 0,
+        "graveyard_count": 4
       }
     ],
-    "candidate_presence": {
+    "candidate_presence": {},
+    "graveyard_presence": {
       "mom_20": [
         "llm_focus_batch"
       ],
       "mom_plus_value": [
         "llm_focus_batch"
-      ]
-    },
-    "graveyard_presence": {
+      ],
       "liquidity_turnover_shock": [
         "llm_focus_batch"
       ],
