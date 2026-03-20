@@ -11,7 +11,6 @@ from factor_lab.storage import ExperimentStore
 
 
 ROOT = Path(__file__).resolve().parents[2]
-DB_PATH = ROOT / "artifacts" / "factor_lab.db"
 
 
 def _parse_date(text: str) -> datetime:
@@ -38,9 +37,41 @@ def _write_generated_config(config: dict[str, Any], name: str) -> str:
     return str(path.relative_to(ROOT))
 
 
+def _candidate_validation_specs(store: ExperimentStore, base_recent: dict[str, Any], end_date: str) -> list[dict[str, Any]]:
+    specs: list[dict[str, Any]] = []
+    end_dt = _parse_date(end_date)
+    promising = store.top_promising_candidates(limit=4)
+    for idx, candidate in enumerate(promising):
+        definition = candidate.get("definition") or {}
+        if not definition.get("name"):
+            continue
+        for days, priority in [(45, 12), (90, 14)]:
+            name = f"candidate_{definition['name']}_recent_{days}d"
+            output_dir = f"artifacts/generated_candidate_{definition['name']}_recent_{days}d"
+            cfg = deepcopy(base_recent)
+            cfg["factors"] = [definition]
+            cfg["start_date"] = _fmt_date(end_dt - timedelta(days=days))
+            cfg["end_date"] = end_date
+            cfg["output_dir"] = output_dir
+            config_path = _write_generated_config(cfg, name)
+            fingerprint = f"workflow::{config_fingerprint(cfg)}::{output_dir}"
+            specs.append(
+                {
+                    "task_type": "workflow",
+                    "priority": priority + idx,
+                    "payload": {"config_path": config_path, "output_dir": output_dir},
+                    "fingerprint": fingerprint,
+                    "worker_note": f"validation｜candidate_validation {definition['name']} recent_{days}d",
+                }
+            )
+    return specs
+
+
 def expansion_candidates(store: ExperimentStore) -> list[dict[str, Any]]:
-    recent_tasks = store.list_research_tasks(limit=100)
-    existing_fingerprints = {t.get("fingerprint") for t in recent_tasks if t.get("status") in {"pending", "running", "finished"}}
+    recent_tasks = store.list_research_tasks(limit=300)
+    existing_fingerprints = {
+        t.get("fingerprint") for t in recent_tasks if t.get("status") in {"pending", "running", "finished"}
+    }
     candidates: list[dict[str, Any]] = []
 
     base_recent = json.loads((ROOT / "configs" / "tushare_workflow.json").read_text(encoding="utf-8"))
@@ -58,6 +89,22 @@ def expansion_candidates(store: ExperimentStore) -> list[dict[str, Any]]:
             "worker_note": "baseline｜历史扩窗 30 天",
         },
         {
+            "name": "rolling_60d_back",
+            "start_date": _fmt_date(recent_start - timedelta(days=60)),
+            "end_date": end_date,
+            "output_dir": "artifacts/generated_rolling_60d_back",
+            "priority": 19,
+            "worker_note": "baseline｜历史扩窗 60 天",
+        },
+        {
+            "name": "rolling_120d_back",
+            "start_date": _fmt_date(recent_start - timedelta(days=120)),
+            "end_date": end_date,
+            "output_dir": "artifacts/generated_rolling_120d_back",
+            "priority": 20,
+            "worker_note": "baseline｜历史扩窗 120 天",
+        },
+        {
             "name": "rolling_recent_45d",
             "start_date": _fmt_date(end_dt - timedelta(days=45)),
             "end_date": end_date,
@@ -73,63 +120,49 @@ def expansion_candidates(store: ExperimentStore) -> list[dict[str, Any]]:
             "priority": 24,
             "worker_note": "validation｜近期 90 天窗口验证",
         },
+        {
+            "name": "rolling_recent_120d",
+            "start_date": _fmt_date(end_dt - timedelta(days=120)),
+            "end_date": end_date,
+            "output_dir": "artifacts/generated_recent_120d",
+            "priority": 25,
+            "worker_note": "validation｜近期 120 天窗口验证",
+        },
+        {
+            "name": "expanding_from_2025_10_01",
+            "start_date": "2025-10-01",
+            "end_date": end_date,
+            "output_dir": "artifacts/generated_expanding_2025_10_01",
+            "priority": 16,
+            "worker_note": "baseline｜expanding 窗口 2025-10-01 起",
+        },
     ]
 
-    for window in windows:
-        config = _make_window_config(base_recent, window["start_date"], window["end_date"], window["output_dir"])
-        fingerprint = f"workflow::{config_fingerprint(config)}::{window['output_dir']}"
-        if fingerprint in existing_fingerprints:
+    for spec in _candidate_validation_specs(store, base_recent, end_date) + windows:
+        if "start_date" in spec:
+            config = _make_window_config(base_recent, spec["start_date"], spec["end_date"], spec["output_dir"])
+            fingerprint = f"workflow::{config_fingerprint(config)}::{spec['output_dir']}"
+            if fingerprint in existing_fingerprints:
+                continue
+            config_path = _write_generated_config(config, spec["name"])
+            candidates.append(
+                {
+                    "task_type": "workflow",
+                    "priority": spec["priority"],
+                    "payload": {"config_path": config_path, "output_dir": spec["output_dir"]},
+                    "fingerprint": fingerprint,
+                    "worker_note": spec["worker_note"],
+                }
+            )
             continue
-        config_path = _write_generated_config(config, window["name"])
-        candidates.append(
-            {
-                "task_type": "workflow",
-                "priority": window["priority"],
-                "payload": {"config_path": config_path, "output_dir": window["output_dir"]},
-                "fingerprint": fingerprint,
-                "worker_note": window["worker_note"],
-            }
-        )
+        if spec["fingerprint"] in existing_fingerprints:
+            continue
+        candidates.append(spec)
 
     return candidates
 
 
 def maybe_expand_research_space(store: ExperimentStore, max_new_tasks: int = 3) -> list[str]:
-    recent_tasks = store.list_research_tasks(limit=50)
-    pending_or_running = [t for t in recent_tasks if t["status"] in {"pending", "running"}]
-    if pending_or_running:
-        return []
-
-    task_specs = expansion_candidates(store)[:max_new_tasks]
-    new_task_ids = []
-    for spec in task_specs:
-        task_id = store.enqueue_research_task(
-            task_type=spec["task_type"],
-            payload=spec["payload"],
-            priority=spec["priority"],
-            fingerprint=spec["fingerprint"],
-            worker_note=spec["worker_note"],
-        )
-        new_task_ids.append(task_id)
-    return new_task_ids
-{config_fingerprint(config)}::{window['output_dir']}"
-        if fingerprint in existing_fingerprints:
-            continue
-        config_path = _write_generated_config(config, window["name"])
-        candidates.append(
-            {
-                "task_type": "workflow",
-                "priority": window["priority"],
-                "payload": {"config_path": config_path, "output_dir": window["output_dir"]},
-                "fingerprint": fingerprint,
-                "worker_note": window["worker_note"],
-            }
-        )
-
-    return candidates
-
-
-def maybe_expand_research_space(store: ExperimentStore, max_new_tasks: int = 2) -> list[str]:
     recent_tasks = store.list_research_tasks(limit=50)
     pending_or_running = [t for t in recent_tasks if t["status"] in {"pending", "running"}]
     if pending_or_running:

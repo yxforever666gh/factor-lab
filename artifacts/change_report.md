@@ -1,12 +1,8 @@
-# Change Detection
+最新一次完成运行：configs/first_workflow.json（2026-03-20T00:06:38.052490+00:00）。
+上一轮完成运行：configs/tushare_workflow.json（2026-03-20T00:00:27.678208+00:00）。
 
-Latest run: 6f038868-bc7f-41f1-863f-fa424c605759 | 2026-03-19T08:02:13.103631+00:00 | artifacts/generated_configs/expanding_from_2025_10_01.json
-Previous run: 8b136db8-c7a1-4016-aa78-e241f20ba5e3 | 2026-03-19T07:57:47.399998+00:00 | artifacts/generated_configs/rolling_recent_120d.json
+候选池变化：
+- 新进入候选：mom_20、quality_minus_value、quality_roe、value_ep
 
-## Candidate Pool Changes
-- Entered: none
-- Left: none
-
-## Graveyard Changes
-- Entered: none
-- Left: none
+墓地变化：
+- 离开墓地：mom_20、mom_plus_value、size_small、value_bp、value_ep

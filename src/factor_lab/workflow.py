@@ -12,6 +12,13 @@ from factor_lab.data_cache import ensure_feature_coverage, slice_feature_store
 from factor_lab.dedup import config_fingerprint
 from factor_lab.evaluation import evaluate_factor
 from factor_lab.experiments import ExperimentLedger
+from factor_lab.factor_candidates import (
+    build_hypothesis_summary,
+    derive_window_label,
+    infer_factor_family,
+    score_candidate_evaluation,
+    summarize_candidate_status,
+)
 from factor_lab.factors import FactorDefinition, apply_factor
 from factor_lab.neutralization import neutralize_by_date
 from factor_lab.portfolio import build_composite_factor, evaluate_long_short_portfolio
@@ -181,6 +188,96 @@ def _write_summary(
             )
 
     (output_dir / "summary.md").write_text("\n".join(lines), encoding="utf-8")
+
+
+def _register_candidate_intelligence(
+    *,
+    store: ExperimentStore,
+    run_id: str,
+    config_path: str,
+    config: dict,
+    results: list[dict],
+    neutralized_results: list[dict],
+    split_results: list[dict],
+    scored_factors: list[dict],
+    candidates: list[dict],
+    graveyard: list[dict],
+    portfolio_results: list[dict],
+) -> None:
+    raw_map = {row['factor_name']: row for row in results}
+    neutral_map = {row['factor_name']: row for row in neutralized_results}
+    score_map = {row['factor_name']: row for row in scored_factors}
+    split_map: dict[str, list[dict]] = {}
+    for row in split_results:
+        split_map.setdefault(row['factor_name'], []).append(row)
+    candidate_map = {row['factor_name']: row for row in candidates}
+    graveyard_map = {row['factor_name']: row for row in graveyard}
+
+    portfolio_by_name = {row['strategy_name']: row for row in portfolio_results}
+    candidate_portfolio = portfolio_by_name.get('long_short_top_bottom_candidates_only') or {}
+    all_portfolio = portfolio_by_name.get('long_short_top_bottom_all_factors') or {}
+    coverage = 0.0
+    if results:
+        coverage = len(candidates) / max(len(results), 1)
+    window_label = derive_window_label(config_path, config.get('start_date'), config.get('end_date'))
+
+    for definition in config['factors']:
+        name = definition['name']
+        raw = raw_map.get(name, {})
+        neutral = neutral_map.get(name, {})
+        splits = split_map.get(name, [])
+        score_row = score_map.get(name, {})
+        robust_pass_count = sum(1 for row in splits if row.get('pass_gate'))
+        robust_total_count = len(splits)
+        candidate_payload = candidate_map.get(name) or graveyard_map.get(name) or {}
+        candidate_id = store.upsert_factor_candidate(
+            name=name,
+            family=infer_factor_family(name, definition.get('expression')),
+            definition=definition,
+            expression=definition.get('expression'),
+            origin_run_id=run_id,
+        )
+        metric_payload = {
+            'sample_size': raw.get('observations') or 0,
+            'observations': raw.get('observations') or 0,
+            'return_metric': candidate_portfolio.get('annual_return') or all_portfolio.get('annual_return') or 0.0,
+            'sharpe_like': candidate_portfolio.get('sharpe') or all_portfolio.get('sharpe') or 0.0,
+            'max_drawdown': candidate_portfolio.get('max_drawdown') or all_portfolio.get('max_drawdown') or 0.0,
+            'turnover': candidate_portfolio.get('avg_turnover') or all_portfolio.get('avg_turnover') or 0.0,
+            'coverage': coverage,
+            'raw_rank_ic_mean': raw.get('rank_ic_mean') or 0.0,
+            'neutralized_rank_ic_mean': neutral.get('rank_ic_mean') or 0.0,
+            'split_fail_count': candidate_payload.get('split_fail_count') or sum(1 for row in splits if not row.get('pass_gate')),
+            'high_corr_peer_count': len(score_row.get('high_corr_peers') or []),
+            'robust_pass_count': robust_pass_count,
+            'robust_total_count': robust_total_count,
+        }
+        scored = score_candidate_evaluation(metric_payload)
+        notes = {
+            'expression': definition.get('expression'),
+            'raw_pass': raw.get('pass_gate'),
+            'neutralized_pass': neutral.get('pass_gate'),
+            'high_corr_peers': score_row.get('high_corr_peers') or [],
+            'source_run': run_id,
+        }
+        store.insert_factor_evaluation(
+            {
+                'candidate_id': candidate_id,
+                'run_id': run_id,
+                'window_label': window_label,
+                'market_scope': config.get('universe_name') or f"top_{config.get('universe_limit') or 'all'}",
+                **metric_payload,
+                **scored,
+                'notes': notes,
+                'created_at_utc': datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        evaluations = store.list_factor_evaluations(candidate_id=candidate_id, limit=200)
+        summary = summarize_candidate_status(evaluations)
+        store.refresh_factor_candidate(candidate_id, summary)
+        candidate_row = store.get_factor_candidate(candidate_id) or {'name': name, 'family': infer_factor_family(name, definition.get('expression')), 'status': summary.get('status')}
+        hypothesis = build_hypothesis_summary(candidate_row, evaluations)
+        store.upsert_research_hypothesis(candidate_id, hypothesis)
 
 
 def run_workflow(config_path: str, output_dir: str) -> None:
@@ -432,6 +529,19 @@ def run_workflow(config_path: str, output_dir: str) -> None:
                 )
             store.insert_factor_rows(factor_rows)
             store.insert_portfolio_rows(run_id, portfolio_results)
+            _register_candidate_intelligence(
+                store=store,
+                run_id=run_id,
+                config_path=config_path,
+                config=config,
+                results=results,
+                neutralized_results=neutralized_results,
+                split_results=split_results,
+                scored_factors=scored_factors,
+                candidates=candidates,
+                graveyard=graveyard,
+                portfolio_results=portfolio_results,
+            )
 
             _write_summary(
                 results=results,

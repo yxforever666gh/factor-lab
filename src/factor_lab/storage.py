@@ -75,6 +75,72 @@ CREATE TABLE IF NOT EXISTS research_tasks (
     finished_at_utc TEXT,
     worker_note TEXT
 );
+
+CREATE TABLE IF NOT EXISTS factor_candidates (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE,
+    family TEXT,
+    definition_json TEXT NOT NULL,
+    expression TEXT,
+    origin_task_id TEXT,
+    origin_run_id TEXT,
+    status TEXT NOT NULL DEFAULT 'new',
+    evaluation_count INTEGER NOT NULL DEFAULT 0,
+    window_count INTEGER NOT NULL DEFAULT 0,
+    avg_final_score REAL,
+    best_final_score REAL,
+    latest_final_score REAL,
+    pass_rate REAL,
+    summary TEXT,
+    next_action TEXT,
+    rejection_reason TEXT,
+    duplicate_of TEXT,
+    created_at_utc TEXT NOT NULL,
+    updated_at_utc TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS factor_evaluations (
+    id TEXT PRIMARY KEY,
+    candidate_id TEXT NOT NULL,
+    run_id TEXT,
+    task_id TEXT,
+    window_label TEXT,
+    market_scope TEXT,
+    sample_size INTEGER,
+    observations INTEGER,
+    return_metric REAL,
+    sharpe_like REAL,
+    max_drawdown REAL,
+    turnover REAL,
+    coverage REAL,
+    raw_rank_ic_mean REAL,
+    neutralized_rank_ic_mean REAL,
+    split_fail_count INTEGER,
+    high_corr_peer_count INTEGER,
+    robust_pass_count INTEGER,
+    robust_total_count INTEGER,
+    stability_score REAL,
+    quality_score REAL,
+    final_score REAL,
+    pass_flag INTEGER,
+    status TEXT,
+    rejection_reason TEXT,
+    notes_json TEXT,
+    created_at_utc TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS research_hypotheses (
+    id TEXT PRIMARY KEY,
+    candidate_id TEXT UNIQUE,
+    title TEXT NOT NULL,
+    family TEXT,
+    hypothesis_text TEXT,
+    status TEXT,
+    evidence_for_json TEXT,
+    evidence_against_json TEXT,
+    next_action TEXT,
+    last_reviewed_at_utc TEXT NOT NULL
+);
 """
 
 
@@ -312,3 +378,280 @@ class ExperimentStore:
             item['payload'] = json.loads(item.pop('payload_json'))
             result.append(item)
         return result
+
+    def upsert_factor_candidate(
+        self,
+        *,
+        name: str,
+        family: str | None,
+        definition: dict[str, Any],
+        expression: str | None = None,
+        origin_task_id: str | None = None,
+        origin_run_id: str | None = None,
+    ) -> str:
+        now = datetime.now(timezone.utc).isoformat()
+        row = self.conn.execute("SELECT id FROM factor_candidates WHERE name = ?", (name,)).fetchone()
+        if row:
+            candidate_id = row[0]
+            self.conn.execute(
+                """
+                UPDATE factor_candidates
+                SET family = COALESCE(?, family),
+                    definition_json = ?,
+                    expression = COALESCE(?, expression),
+                    origin_task_id = COALESCE(?, origin_task_id),
+                    origin_run_id = COALESCE(?, origin_run_id),
+                    updated_at_utc = ?
+                WHERE id = ?
+                """,
+                (
+                    family,
+                    json.dumps(definition, ensure_ascii=False, sort_keys=True),
+                    expression,
+                    origin_task_id,
+                    origin_run_id,
+                    now,
+                    candidate_id,
+                ),
+            )
+        else:
+            candidate_id = str(uuid4())
+            self.conn.execute(
+                """
+                INSERT INTO factor_candidates (
+                    id, name, family, definition_json, expression, origin_task_id, origin_run_id,
+                    status, created_at_utc, updated_at_utc
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'new', ?, ?)
+                """,
+                (
+                    candidate_id,
+                    name,
+                    family,
+                    json.dumps(definition, ensure_ascii=False, sort_keys=True),
+                    expression,
+                    origin_task_id,
+                    origin_run_id,
+                    now,
+                    now,
+                ),
+            )
+        self.conn.commit()
+        return candidate_id
+
+    def insert_factor_evaluation(self, payload: dict[str, Any]) -> str:
+        evaluation_id = payload.get("id") or str(uuid4())
+        self.conn.execute(
+            """
+            INSERT INTO factor_evaluations (
+                id, candidate_id, run_id, task_id, window_label, market_scope, sample_size, observations,
+                return_metric, sharpe_like, max_drawdown, turnover, coverage,
+                raw_rank_ic_mean, neutralized_rank_ic_mean, split_fail_count, high_corr_peer_count,
+                robust_pass_count, robust_total_count, stability_score, quality_score, final_score,
+                pass_flag, status, rejection_reason, notes_json, created_at_utc
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                evaluation_id,
+                payload["candidate_id"],
+                payload.get("run_id"),
+                payload.get("task_id"),
+                payload.get("window_label"),
+                payload.get("market_scope"),
+                payload.get("sample_size"),
+                payload.get("observations"),
+                payload.get("return_metric"),
+                payload.get("sharpe_like"),
+                payload.get("max_drawdown"),
+                payload.get("turnover"),
+                payload.get("coverage"),
+                payload.get("raw_rank_ic_mean"),
+                payload.get("neutralized_rank_ic_mean"),
+                payload.get("split_fail_count"),
+                payload.get("high_corr_peer_count"),
+                payload.get("robust_pass_count"),
+                payload.get("robust_total_count"),
+                payload.get("stability_score"),
+                payload.get("quality_score"),
+                payload.get("final_score"),
+                int(bool(payload.get("pass_flag"))),
+                payload.get("status"),
+                payload.get("rejection_reason"),
+                json.dumps(payload.get("notes") or {}, ensure_ascii=False, sort_keys=True),
+                payload.get("created_at_utc") or datetime.now(timezone.utc).isoformat(),
+            ),
+        )
+        self.conn.commit()
+        return evaluation_id
+
+    def list_factor_evaluations(self, candidate_id: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+        params: list[Any] = []
+        where = ""
+        if candidate_id:
+            where = "WHERE candidate_id = ?"
+            params.append(candidate_id)
+        params.append(limit)
+        rows = self.conn.execute(
+            f"""
+            SELECT id, candidate_id, run_id, task_id, window_label, market_scope, sample_size, observations,
+                   return_metric, sharpe_like, max_drawdown, turnover, coverage,
+                   raw_rank_ic_mean, neutralized_rank_ic_mean, split_fail_count, high_corr_peer_count,
+                   robust_pass_count, robust_total_count, stability_score, quality_score, final_score,
+                   pass_flag, status, rejection_reason, notes_json, created_at_utc
+            FROM factor_evaluations
+            {where}
+            ORDER BY created_at_utc DESC
+            LIMIT ?
+            """,
+            tuple(params),
+        ).fetchall()
+        columns = [
+            "id", "candidate_id", "run_id", "task_id", "window_label", "market_scope", "sample_size", "observations",
+            "return_metric", "sharpe_like", "max_drawdown", "turnover", "coverage",
+            "raw_rank_ic_mean", "neutralized_rank_ic_mean", "split_fail_count", "high_corr_peer_count",
+            "robust_pass_count", "robust_total_count", "stability_score", "quality_score", "final_score",
+            "pass_flag", "status", "rejection_reason", "notes_json", "created_at_utc",
+        ]
+        items = []
+        for row in rows:
+            item = dict(zip(columns, row))
+            item["notes"] = json.loads(item.pop("notes_json") or "{}")
+            items.append(item)
+        return items
+
+    def list_factor_candidates(self, limit: int = 100, statuses: list[str] | None = None) -> list[dict[str, Any]]:
+        params: list[Any] = []
+        where = ""
+        if statuses:
+            placeholders = ", ".join("?" for _ in statuses)
+            where = f"WHERE status IN ({placeholders})"
+            params.extend(statuses)
+        params.append(limit)
+        rows = self.conn.execute(
+            f"""
+            SELECT id, name, family, definition_json, expression, origin_task_id, origin_run_id, status,
+                   evaluation_count, window_count, avg_final_score, best_final_score, latest_final_score,
+                   pass_rate, summary, next_action, rejection_reason, duplicate_of, created_at_utc, updated_at_utc
+            FROM factor_candidates
+            {where}
+            ORDER BY COALESCE(latest_final_score, -999) DESC, updated_at_utc DESC
+            LIMIT ?
+            """,
+            tuple(params),
+        ).fetchall()
+        columns = [
+            "id", "name", "family", "definition_json", "expression", "origin_task_id", "origin_run_id", "status",
+            "evaluation_count", "window_count", "avg_final_score", "best_final_score", "latest_final_score",
+            "pass_rate", "summary", "next_action", "rejection_reason", "duplicate_of", "created_at_utc", "updated_at_utc",
+        ]
+        items = []
+        for row in rows:
+            item = dict(zip(columns, row))
+            item["definition"] = json.loads(item.pop("definition_json") or "{}")
+            items.append(item)
+        return items
+
+    def get_factor_candidate(self, candidate_id: str) -> dict[str, Any] | None:
+        rows = self.list_factor_candidates(limit=1000)
+        for row in rows:
+            if row["id"] == candidate_id:
+                return row
+        return None
+
+    def refresh_factor_candidate(self, candidate_id: str, summary: dict[str, Any]) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        self.conn.execute(
+            """
+            UPDATE factor_candidates
+            SET status = ?, evaluation_count = ?, window_count = ?, avg_final_score = ?, best_final_score = ?,
+                latest_final_score = ?, pass_rate = ?, summary = ?, next_action = ?, rejection_reason = ?, updated_at_utc = ?
+            WHERE id = ?
+            """,
+            (
+                summary.get("status") or "new",
+                summary.get("evaluation_count") or 0,
+                summary.get("window_count") or 0,
+                summary.get("avg_final_score"),
+                summary.get("best_final_score"),
+                summary.get("latest_final_score"),
+                summary.get("pass_rate"),
+                summary.get("summary"),
+                summary.get("next_action"),
+                summary.get("rejection_reason"),
+                now,
+                candidate_id,
+            ),
+        )
+        self.conn.commit()
+
+    def upsert_research_hypothesis(self, candidate_id: str, payload: dict[str, Any]) -> str:
+        now = datetime.now(timezone.utc).isoformat()
+        row = self.conn.execute("SELECT id FROM research_hypotheses WHERE candidate_id = ?", (candidate_id,)).fetchone()
+        if row:
+            hypothesis_id = row[0]
+            self.conn.execute(
+                """
+                UPDATE research_hypotheses
+                SET title = ?, family = ?, hypothesis_text = ?, status = ?, evidence_for_json = ?,
+                    evidence_against_json = ?, next_action = ?, last_reviewed_at_utc = ?
+                WHERE id = ?
+                """,
+                (
+                    payload["title"],
+                    payload.get("family"),
+                    payload.get("hypothesis_text"),
+                    payload.get("status"),
+                    payload.get("evidence_for_json"),
+                    payload.get("evidence_against_json"),
+                    payload.get("next_action"),
+                    now,
+                    hypothesis_id,
+                ),
+            )
+        else:
+            hypothesis_id = str(uuid4())
+            self.conn.execute(
+                """
+                INSERT INTO research_hypotheses (
+                    id, candidate_id, title, family, hypothesis_text, status,
+                    evidence_for_json, evidence_against_json, next_action, last_reviewed_at_utc
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    hypothesis_id,
+                    candidate_id,
+                    payload["title"],
+                    payload.get("family"),
+                    payload.get("hypothesis_text"),
+                    payload.get("status"),
+                    payload.get("evidence_for_json"),
+                    payload.get("evidence_against_json"),
+                    payload.get("next_action"),
+                    now,
+                ),
+            )
+        self.conn.commit()
+        return hypothesis_id
+
+    def get_hypothesis_for_candidate(self, candidate_id: str) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            """
+            SELECT id, candidate_id, title, family, hypothesis_text, status,
+                   evidence_for_json, evidence_against_json, next_action, last_reviewed_at_utc
+            FROM research_hypotheses
+            WHERE candidate_id = ?
+            """,
+            (candidate_id,),
+        ).fetchone()
+        if not row:
+            return None
+        columns = [
+            "id", "candidate_id", "title", "family", "hypothesis_text", "status",
+            "evidence_for_json", "evidence_against_json", "next_action", "last_reviewed_at_utc",
+        ]
+        item = dict(zip(columns, row))
+        item["evidence_for"] = json.loads(item.pop("evidence_for_json") or "[]")
+        item["evidence_against"] = json.loads(item.pop("evidence_against_json") or "[]")
+        return item
+
+    def top_promising_candidates(self, limit: int = 5) -> list[dict[str, Any]]:
+        return self.list_factor_candidates(limit=limit, statuses=["promising", "testing"])

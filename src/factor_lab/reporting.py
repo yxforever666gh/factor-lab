@@ -41,12 +41,29 @@ def write_sqlite_report(db_path: str | Path, output_path: str | Path) -> None:
         """
     ).fetchall()
 
+    candidate_leaderboard = cur.execute(
+        """
+        SELECT name, family, status, evaluation_count, window_count,
+               ROUND(avg_final_score, 6), ROUND(best_final_score, 6), ROUND(latest_final_score, 6),
+               ROUND(pass_rate, 4), COALESCE(next_action, '-')
+        FROM v_factor_candidate_leaderboard
+        ORDER BY COALESCE(latest_final_score, -999) DESC, evaluation_count DESC
+        LIMIT 10
+        """
+    ).fetchall()
+
     lines = [
         "# SQLite Experiment Report",
         "",
-        "## Top Factors by Average Score",
+        "## Candidate Leaderboard",
         "",
     ]
+    for row in candidate_leaderboard:
+        lines.append(
+            f"- {row[0]} | family={row[1]} | status={row[2]} | evals={row[3]} | windows={row[4]} | avg={row[5]} | best={row[6]} | latest={row[7]} | pass_rate={row[8]} | next={row[9]}"
+        )
+
+    lines.extend(["", "## Top Factors by Average Score", ""])
     for name, avg_score, runs in top_factors:
         lines.append(f"- {name} | avg_score={avg_score:.6f} | runs={runs}")
 

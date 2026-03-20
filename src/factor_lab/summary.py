@@ -17,13 +17,22 @@ def build_run_summary(db_path: str | Path, output_path: str | Path) -> None:
     best_portfolio = cur.execute(
         "SELECT strategy_name, AVG(sharpe) AS avg_sharpe FROM portfolio_results GROUP BY strategy_name ORDER BY avg_sharpe DESC LIMIT 1"
     ).fetchone()
+    candidate_leaderboard = cur.execute(
+        """
+        SELECT name, status, ROUND(latest_final_score, 6), evaluation_count
+        FROM v_factor_candidate_leaderboard
+        ORDER BY COALESCE(latest_final_score, -999) DESC, evaluation_count DESC
+        LIMIT 5
+        """
+    ).fetchall()
 
     if not latest_run:
         Path(output_path).write_text("暂无运行记录。", encoding="utf-8")
         return
 
-    run_id, created_at_utc, config_path = latest_run
+    _, created_at_utc, config_path = latest_run
     candidates_text = "、".join(name for name, _ in stable_candidates) if stable_candidates else "暂无"
+    leaderboard_text = "；".join(f"{name}({status}, {score})" for name, status, score, _ in candidate_leaderboard) if candidate_leaderboard else "暂无"
     strategy_text = (
         f"当前长期平均表现最好的策略是 {best_portfolio[0]}，平均夏普 {best_portfolio[1]:.2f}。"
         if best_portfolio else
@@ -35,5 +44,6 @@ def build_run_summary(db_path: str | Path, output_path: str | Path) -> None:
         f"运行时间：{created_at_utc}。",
         strategy_text,
         f"目前最稳定的候选因子：{candidates_text}。",
+        f"当前候选榜单前列：{leaderboard_text}。",
     ]
     Path(output_path).write_text("\n".join(lines), encoding="utf-8")

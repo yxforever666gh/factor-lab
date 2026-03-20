@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-2">
+  <section class="card">
+    <h2>{{ candidate.name }}</h2>
+    <div class="muted">{{ candidate.expression or '-' }}</div>
+    <div style="margin-top:12px;">
+      <span class="pill {{ 'good' if candidate.status == 'promising' else 'bad' if candidate.status in ['rejected','archived'] else 'warn' }}">{{ candidate.status }}</span>
+      <span class="pill">{{ candidate.family or '-' }}</span>
+    </div>
+    <table style="margin-top:12px;">
+      <tbody>
+        <tr><th>最新分</th><td>{{ candidate.latest_final_score if candidate.latest_final_score is not none else '-' }}</td></tr>
+        <tr><th>平均分</th><td>{{ candidate.avg_final_score if candidate.avg_final_score is not none else '-' }}</td></tr>
+        <tr><th>最佳分</th><td>{{ candidate.best_final_score if candidate.best_final_score is not none else '-' }}</td></tr>
+        <tr><th>通过率</th><td>{{ candidate.pass_rate if candidate.pass_rate is not none else '-' }}</td></tr>
+        <tr><th>评估数</th><td>{{ candidate.evaluation_count }}</td></tr>
+        <tr><th>窗口数</th><td>{{ candidate.window_count }}</td></tr>
+        <tr><th>下一步</th><td>{{ candidate.next_action or '-' }}</td></tr>
+        <tr><th>拒绝原因</th><td>{{ candidate.rejection_reason or '-' }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2>研究假设</h2>
+    {% if hypothesis %}
+    <p>{{ hypothesis.hypothesis_text }}</p>
+    <h3>支持证据</h3>
+    <ul>{% for row in hypothesis.evidence_for %}<li>{{ row }}</li>{% endfor %}</ul>
+    <h3>反对证据</h3>
+    <ul>{% for row in hypothesis.evidence_against %}<li>{{ row }}</li>{% endfor %}</ul>
+    <div class="muted">下一步：{{ hypothesis.next_action or '-' }}</div>
+    {% else %}
+    <div class="muted">暂无假设摘要。</div>
+    {% endif %}
+  </section>
+</div>
+<section class="card" style="margin-top:18px;">
+  <h2>评估历史</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>时间</th><th>窗口</th><th>状态</th><th>最终分</th><th>稳定分</th><th>质量分</th><th>收益</th><th>Sharpe</th><th>回撤</th><th>Split Fail</th><th>原因</th></tr></thead>
+      <tbody>
+        {% for row in evaluations %}
+        <tr>
+          <td class="text-nowrap">{{ row.created_at_utc }}</td>
+          <td>{{ row.window_label or '-' }}</td>
+          <td><span class="pill {{ 'good' if row.status == 'promising' else 'bad' if row.status in ['rejected','archived'] else 'warn' }}">{{ row.status }}</span></td>
+          <td class="num">{{ row.final_score }}</td>
+          <td class="num">{{ row.stability_score }}</td>
+          <td class="num">{{ row.quality_score }}</td>
+          <td class="num">{{ row.return_metric }}</td>
+          <td class="num">{{ row.sharpe_like }}</td>
+          <td class="num">{{ row.max_drawdown }}</td>
+          <td class="num">{{ row.split_fail_count }}</td>
+          <td class="text-break">{{ row.rejection_reason or '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

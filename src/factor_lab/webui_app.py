@@ -436,6 +436,9 @@ def dashboard():
     top_factors = fetch_all(
         "SELECT factor_name, ROUND(avg_score, 6) AS avg_score, runs FROM v_factor_score_avg ORDER BY avg_score DESC LIMIT 8"
     )
+    candidate_leaderboard = fetch_all(
+        "SELECT id, name, family, status, ROUND(latest_final_score, 6) AS latest_final_score, evaluation_count, window_count FROM v_factor_candidate_leaderboard ORDER BY COALESCE(latest_final_score, -999) DESC, evaluation_count DESC LIMIT 8"
+    )
     top_strategies = fetch_all(
         "SELECT strategy_name, ROUND(avg_sharpe, 6) AS avg_sharpe, ROUND(avg_return, 6) AS avg_return, runs FROM v_portfolio_strategy_avg ORDER BY avg_sharpe DESC LIMIT 8"
     )
@@ -468,6 +471,10 @@ def dashboard():
         latest_summary_lines.append(
             f"当前队列里有 {len(planner_active)} 个由 planner 选出的任务正在等待或执行。"
         )
+    if candidate_leaderboard:
+        latest_summary_lines.append(
+            f"当前候选榜单第一名是 {candidate_leaderboard[0]['name']}，状态 {candidate_leaderboard[0]['status']}，最新分 {candidate_leaderboard[0]['latest_final_score']}。"
+        )
     latest_summary = '\n'.join(latest_summary_lines) if latest_summary_lines else '暂无摘要。'
 
     change_lines = []
@@ -487,6 +494,7 @@ def dashboard():
         latest_runs=latest_runs,
         stable_candidates=stable_candidates,
         top_factors=top_factors,
+        candidate_leaderboard=candidate_leaderboard,
         top_strategies=top_strategies,
         latest_summary=latest_summary,
         change_report=change_report,
@@ -627,6 +635,28 @@ def run_detail(run_id: str):
         portfolios=portfolios,
         artifacts=artifacts,
     )
+
+
+@app.get("/candidates", response_class=HTMLResponse)
+def candidates_page():
+    candidates = ExperimentStore(DB_PATH).list_factor_candidates(limit=200)
+    summary = {
+        'promising': len([row for row in candidates if row['status'] == 'promising']),
+        'testing': len([row for row in candidates if row['status'] == 'testing']),
+        'rejected_archived': len([row for row in candidates if row['status'] in {'rejected', 'archived'}]),
+    }
+    return render('candidates.html', title='候选榜单', candidates=candidates, summary=summary)
+
+
+@app.get("/candidates/{candidate_id}", response_class=HTMLResponse)
+def candidate_detail_page(candidate_id: str):
+    store = ExperimentStore(DB_PATH)
+    candidate = store.get_factor_candidate(candidate_id)
+    if not candidate:
+        raise HTTPException(status_code=404, detail='未找到该候选因子')
+    evaluations = store.list_factor_evaluations(candidate_id=candidate_id, limit=200)
+    hypothesis = store.get_hypothesis_for_candidate(candidate_id)
+    return render('candidate_detail.html', title=f"候选详情 {candidate['name']}", candidate=candidate, evaluations=evaluations, hypothesis=hypothesis)
 
 
 @app.get("/factors", response_class=HTMLResponse)

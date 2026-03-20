@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import html
-import json
 from pathlib import Path
 import sqlite3
 
@@ -18,6 +17,14 @@ def build_index_page(db_path: str | Path, output_path: str | Path) -> None:
     ).fetchall()
     latest_candidates = cur.execute(
         "SELECT factor_name, COUNT(*) FROM factor_results WHERE variant='candidate' GROUP BY factor_name ORDER BY COUNT(*) DESC, factor_name ASC"
+    ).fetchall()
+    candidate_leaderboard = cur.execute(
+        """
+        SELECT name, family, status, COALESCE(latest_final_score, 0), evaluation_count, window_count
+        FROM v_factor_candidate_leaderboard
+        ORDER BY COALESCE(latest_final_score, -999) DESC, evaluation_count DESC
+        LIMIT 10
+        """
     ).fetchall()
     failed_runs = cur.execute(
         "SELECT run_id, created_at_utc, config_path FROM workflow_runs WHERE status='failed' ORDER BY created_at_utc DESC LIMIT 10"
@@ -55,6 +62,8 @@ def build_index_page(db_path: str | Path, output_path: str | Path) -> None:
     <a href=\"report.html\">HTML report</a>
     <a href=\"sqlite_report.md\">SQLite markdown report</a>
   </div>
+  <h2>Candidate Leaderboard</h2>
+  {table(['Name','Family','Status','Latest Score','Evaluations','Windows'], candidate_leaderboard)}
   <h2>Latest Runs</h2>
   {table(['Run ID','Created At UTC','Status','Config'], latest_runs)}
   <h2>Stable Candidates</h2>
