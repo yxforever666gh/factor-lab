@@ -8,6 +8,9 @@ WorkingDirectory=/home/admin/.openclaw/workspace
 Environment=PYTHONUNBUFFERED=1
 Environment=RESEARCH_DAEMON_IDLE_SECONDS=60
 Environment=RESEARCH_DAEMON_MAX_TASKS=1
+Environment=RESEARCH_DAEMON_PREWARM_WINDOWS=45,90,120,180,240,480
+Environment=RESEARCH_DAEMON_PREWARM_INTERVAL_SECONDS=21600
+Environment=RESEARCH_DAEMON_PREWARM_UNIVERSE_LIMIT=20
 ExecStart=/usr/bin/python3 /home/admin/.openclaw/workspace/scripts/run_research_daemon.py
 Restart=always
 RestartSec=10
