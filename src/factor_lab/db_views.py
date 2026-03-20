@@ -84,6 +84,41 @@ SELECT
 FROM candidate_relationships r
 LEFT JOIN factor_candidates l ON l.id = r.left_candidate_id
 LEFT JOIN factor_candidates rr ON rr.id = r.right_candidate_id;
+
+DROP VIEW IF EXISTS v_candidate_risk_summary;
+CREATE VIEW v_candidate_risk_summary AS
+SELECT
+  rp.candidate_id,
+  fc.name AS candidate_name,
+  fc.family,
+  fc.status AS candidate_status,
+  rp.risk_level,
+  ROUND(rp.risk_score, 6) AS risk_score,
+  ROUND(rp.robustness_score, 6) AS robustness_score,
+  ROUND(rp.family_context_score, 6) AS family_context_score,
+  ROUND(rp.graph_context_score, 6) AS graph_context_score,
+  rp.evaluation_count,
+  rp.passing_check_count,
+  rp.failing_check_count,
+  rp.summary,
+  rp.updated_at_utc
+FROM candidate_risk_profile rp
+LEFT JOIN factor_candidates fc ON fc.id = rp.candidate_id;
+
+DROP VIEW IF EXISTS v_candidate_family_risk_summary;
+CREATE VIEW v_candidate_family_risk_summary AS
+SELECT
+  COALESCE(fc.family, 'other') AS family,
+  COUNT(*) AS candidate_count,
+  ROUND(AVG(rp.risk_score), 6) AS avg_risk_score,
+  SUM(CASE WHEN rp.risk_level = 'high' THEN 1 ELSE 0 END) AS high_risk_count,
+  SUM(CASE WHEN rp.risk_level = 'medium' THEN 1 ELSE 0 END) AS medium_risk_count,
+  SUM(CASE WHEN rp.risk_level = 'low' THEN 1 ELSE 0 END) AS low_risk_count,
+  ROUND(AVG(rp.robustness_score), 6) AS avg_robustness_score,
+  ROUND(MAX(rp.risk_score), 6) AS max_risk_score
+FROM candidate_risk_profile rp
+LEFT JOIN factor_candidates fc ON fc.id = rp.candidate_id
+GROUP BY COALESCE(fc.family, 'other');
 """
 
 

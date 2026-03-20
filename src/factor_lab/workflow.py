@@ -26,6 +26,7 @@ from factor_lab.portfolio import build_composite_factor, evaluate_long_short_por
 from factor_lab.registry import FactorRegistry
 from factor_lab.scoring import score_factors
 from factor_lab.storage import ExperimentStore
+from factor_lab.robustness import refresh_candidate_risk_profiles
 from factor_lab.tasks import TaskTracker
 from factor_lab.timing import WorkflowTiming
 from factor_lab.tushare_provider import TushareDataProvider
@@ -579,6 +580,7 @@ def run_workflow(config_path: str, output_dir: str) -> None:
                 portfolio_results=portfolio_results,
                 clusters=clusters,
             )
+            refresh_candidate_risk_profiles(store, run_id=run_id, output_dir=Path("artifacts"))
 
             _write_summary(
                 results=results,

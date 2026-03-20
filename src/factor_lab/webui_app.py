@@ -738,6 +738,24 @@ def candidate_clusters_page():
     return render('candidate_clusters.html', title='候选簇', clusters=clusters, summary=summary)
 
 
+@app.get("/robustness", response_class=HTMLResponse)
+def robustness_page():
+    store = ExperimentStore(DB_PATH)
+    profiles = store.list_candidate_risk_profiles(limit=500)
+    checks = store.list_candidate_robustness_checks(limit=200)
+    family_risks = fetch_all(
+        "SELECT family, candidate_count, avg_risk_score, high_risk_count, medium_risk_count, low_risk_count, avg_robustness_score FROM v_candidate_family_risk_summary ORDER BY COALESCE(avg_risk_score, -999) DESC, family ASC"
+    )
+    candidate_name_by_id = {row['id']: row['name'] for row in store.list_factor_candidates(limit=1000)}
+    avg_risk_score = round(sum(float(row.get('risk_score') or 0.0) for row in profiles) / max(len(profiles), 1), 6) if profiles else None
+    summary = {
+        'profile_count': len(profiles),
+        'high_risk_count': len([row for row in profiles if row.get('risk_level') == 'high']),
+        'avg_risk_score': avg_risk_score,
+    }
+    return render('robustness.html', title='稳健性', profiles=profiles, family_risks=family_risks, checks=checks, candidate_name_by_id=candidate_name_by_id, summary=summary)
+
+
 @app.get("/factors", response_class=HTMLResponse)
 def factors_page():
     factors = fetch_all(

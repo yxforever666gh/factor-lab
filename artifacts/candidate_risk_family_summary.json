@@ -1,0 +1,92 @@
+[
+  {
+    "family": "quality",
+    "candidate_count": 1,
+    "high_risk_count": 0,
+    "medium_risk_count": 1,
+    "low_risk_count": 0,
+    "top_risk_candidates": [
+      {
+        "candidate_name": "quality_roe",
+        "risk_level": "medium",
+        "risk_score": 45.3438
+      }
+    ],
+    "avg_risk_score": 45.3438
+  },
+  {
+    "family": "value",
+    "candidate_count": 3,
+    "high_risk_count": 0,
+    "medium_risk_count": 2,
+    "low_risk_count": 1,
+    "top_risk_candidates": [
+      {
+        "candidate_name": "value_bp",
+        "risk_level": "medium",
+        "risk_score": 48.281
+      },
+      {
+        "candidate_name": "quality_minus_value",
+        "risk_level": "medium",
+        "risk_score": 43.7695
+      },
+      {
+        "candidate_name": "value_ep",
+        "risk_level": "low",
+        "risk_score": 37.4669
+      }
+    ],
+    "avg_risk_score": 43.172467
+  },
+  {
+    "family": "momentum",
+    "candidate_count": 2,
+    "high_risk_count": 0,
+    "medium_risk_count": 0,
+    "low_risk_count": 2,
+    "top_risk_candidates": [
+      {
+        "candidate_name": "mom_20",
+        "risk_level": "low",
+        "risk_score": 30.6269
+      },
+      {
+        "candidate_name": "mom_plus_value",
+        "risk_level": "low",
+        "risk_score": 30.6269
+      }
+    ],
+    "avg_risk_score": 30.6269
+  },
+  {
+    "family": "liquidity",
+    "candidate_count": 1,
+    "high_risk_count": 0,
+    "medium_risk_count": 0,
+    "low_risk_count": 1,
+    "top_risk_candidates": [
+      {
+        "candidate_name": "liquidity_turnover_shock",
+        "risk_level": "low",
+        "risk_score": 17.3871
+      }
+    ],
+    "avg_risk_score": 17.3871
+  },
+  {
+    "family": "other",
+    "candidate_count": 1,
+    "high_risk_count": 0,
+    "medium_risk_count": 0,
+    "low_risk_count": 1,
+    "top_risk_candidates": [
+      {
+        "candidate_name": "size_small",
+        "risk_level": "low",
+        "risk_score": 12.658
+      }
+    ],
+    "avg_risk_score": 12.658
+  }
+]

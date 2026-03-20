@@ -153,6 +153,38 @@ CREATE TABLE IF NOT EXISTS candidate_relationships (
     updated_at_utc TEXT NOT NULL,
     PRIMARY KEY (left_candidate_id, right_candidate_id, relationship_type)
 );
+
+CREATE TABLE IF NOT EXISTS candidate_robustness_checks (
+    id TEXT PRIMARY KEY,
+    candidate_id TEXT NOT NULL,
+    run_id TEXT,
+    check_name TEXT NOT NULL,
+    status TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    score REAL,
+    weight REAL,
+    evidence_json TEXT,
+    rationale TEXT,
+    created_at_utc TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS candidate_risk_profile (
+    candidate_id TEXT PRIMARY KEY,
+    run_id TEXT,
+    risk_level TEXT NOT NULL,
+    risk_score REAL NOT NULL,
+    robustness_score REAL,
+    family_context_score REAL,
+    graph_context_score REAL,
+    evaluation_count INTEGER NOT NULL DEFAULT 0,
+    passing_check_count INTEGER NOT NULL DEFAULT 0,
+    failing_check_count INTEGER NOT NULL DEFAULT 0,
+    summary TEXT,
+    key_risks_json TEXT,
+    mitigations_json TEXT,
+    profile_json TEXT,
+    updated_at_utc TEXT NOT NULL
+);
 """
 
 
@@ -176,6 +208,10 @@ class ExperimentStore:
         task_cols = {row[1] for row in self.conn.execute("PRAGMA table_info(research_tasks)").fetchall()}
         if task_cols and "worker_note" not in task_cols:
             self.conn.execute("ALTER TABLE research_tasks ADD COLUMN worker_note TEXT")
+
+        risk_cols = {row[1] for row in self.conn.execute("PRAGMA table_info(candidate_risk_profile)").fetchall()}
+        if risk_cols and "profile_json" not in risk_cols:
+            self.conn.execute("ALTER TABLE candidate_risk_profile ADD COLUMN profile_json TEXT")
 
     def insert_run(self, payload: dict) -> None:
         self.conn.execute(
@@ -735,6 +771,137 @@ class ExperimentStore:
                     "updated_at_utc": row[9],
                 }
             )
+        return items
+
+    def insert_candidate_robustness_checks(self, rows: Iterable[dict[str, Any]]) -> None:
+        payload = []
+        for row in rows:
+            payload.append((
+                row.get("id") or str(uuid4()),
+                row["candidate_id"],
+                row.get("run_id"),
+                row["check_name"],
+                row.get("status") or "unknown",
+                row.get("severity") or "medium",
+                row.get("score"),
+                row.get("weight"),
+                json.dumps(row.get("evidence") or {}, ensure_ascii=False, sort_keys=True),
+                row.get("rationale"),
+                row.get("created_at_utc") or datetime.now(timezone.utc).isoformat(),
+            ))
+        self.conn.executemany(
+            """
+            INSERT INTO candidate_robustness_checks (
+                id, candidate_id, run_id, check_name, status, severity, score, weight,
+                evidence_json, rationale, created_at_utc
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            payload,
+        )
+        self.conn.commit()
+
+    def replace_candidate_risk_profile(self, candidate_id: str, payload: dict[str, Any]) -> None:
+        now = payload.get("updated_at_utc") or datetime.now(timezone.utc).isoformat()
+        self.conn.execute("DELETE FROM candidate_robustness_checks WHERE candidate_id = ?", (candidate_id,))
+        checks = list(payload.get("checks") or [])
+        if checks:
+            self.insert_candidate_robustness_checks([
+                {**row, "candidate_id": candidate_id, "run_id": payload.get("run_id"), "created_at_utc": now}
+                for row in checks
+            ])
+        self.conn.execute(
+            """
+            INSERT INTO candidate_risk_profile (
+                candidate_id, run_id, risk_level, risk_score, robustness_score, family_context_score, graph_context_score,
+                evaluation_count, passing_check_count, failing_check_count, summary, key_risks_json, mitigations_json,
+                profile_json, updated_at_utc
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(candidate_id) DO UPDATE SET
+                run_id=excluded.run_id,
+                risk_level=excluded.risk_level,
+                risk_score=excluded.risk_score,
+                robustness_score=excluded.robustness_score,
+                family_context_score=excluded.family_context_score,
+                graph_context_score=excluded.graph_context_score,
+                evaluation_count=excluded.evaluation_count,
+                passing_check_count=excluded.passing_check_count,
+                failing_check_count=excluded.failing_check_count,
+                summary=excluded.summary,
+                key_risks_json=excluded.key_risks_json,
+                mitigations_json=excluded.mitigations_json,
+                profile_json=excluded.profile_json,
+                updated_at_utc=excluded.updated_at_utc
+            """,
+            (
+                candidate_id,
+                payload.get("run_id"),
+                payload.get("risk_level") or "unknown",
+                payload.get("risk_score") or 0.0,
+                payload.get("robustness_score"),
+                payload.get("family_context_score"),
+                payload.get("graph_context_score"),
+                int(payload.get("evaluation_count") or 0),
+                int(payload.get("passing_check_count") or 0),
+                int(payload.get("failing_check_count") or 0),
+                payload.get("summary"),
+                json.dumps(payload.get("key_risks") or [], ensure_ascii=False),
+                json.dumps(payload.get("mitigations") or [], ensure_ascii=False),
+                json.dumps(payload, ensure_ascii=False, sort_keys=True),
+                now,
+            ),
+        )
+        self.conn.commit()
+
+    def list_candidate_risk_profiles(self, limit: int = 1000) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT rp.candidate_id, fc.name, fc.family, fc.status, rp.run_id, rp.risk_level, rp.risk_score,
+                   rp.robustness_score, rp.family_context_score, rp.graph_context_score, rp.evaluation_count,
+                   rp.passing_check_count, rp.failing_check_count, rp.summary, rp.key_risks_json,
+                   rp.mitigations_json, rp.profile_json, rp.updated_at_utc
+            FROM candidate_risk_profile rp
+            LEFT JOIN factor_candidates fc ON fc.id = rp.candidate_id
+            ORDER BY rp.risk_score DESC, rp.updated_at_utc DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        items = []
+        for row in rows:
+            items.append({
+                "candidate_id": row[0], "candidate_name": row[1], "family": row[2], "candidate_status": row[3],
+                "run_id": row[4], "risk_level": row[5], "risk_score": row[6], "robustness_score": row[7],
+                "family_context_score": row[8], "graph_context_score": row[9], "evaluation_count": row[10],
+                "passing_check_count": row[11], "failing_check_count": row[12], "summary": row[13],
+                "key_risks": json.loads(row[14] or '[]'), "mitigations": json.loads(row[15] or '[]'),
+                "profile": json.loads(row[16] or '{}'), "updated_at_utc": row[17],
+            })
+        return items
+
+    def list_candidate_robustness_checks(self, candidate_id: str | None = None, limit: int = 5000) -> list[dict[str, Any]]:
+        where = ''
+        params: list[Any] = []
+        if candidate_id:
+            where = 'WHERE candidate_id = ?'
+            params.append(candidate_id)
+        params.append(limit)
+        rows = self.conn.execute(
+            f"""
+            SELECT id, candidate_id, run_id, check_name, status, severity, score, weight, evidence_json, rationale, created_at_utc
+            FROM candidate_robustness_checks
+            {where}
+            ORDER BY created_at_utc DESC, check_name ASC
+            LIMIT ?
+            """,
+            tuple(params),
+        ).fetchall()
+        items = []
+        for row in rows:
+            items.append({
+                "id": row[0], "candidate_id": row[1], "run_id": row[2], "check_name": row[3], "status": row[4],
+                "severity": row[5], "score": row[6], "weight": row[7], "evidence": json.loads(row[8] or '{}'),
+                "rationale": row[9], "created_at_utc": row[10],
+            })
         return items
 
     def top_promising_candidates(self, limit: int = 5) -> list[dict[str, Any]]:
