@@ -614,6 +614,10 @@ def update_research_memory_from_task_result(
             "has_gain": has_gain,
             "summary": summary,
             "error_text": error_text,
+            "task_type": task.get("task_type"),
+            "focus_candidates": focus_candidates,
+            "knowledge_gain": knowledge_gain,
+            "goal": payload.get("goal") or strategy.get("goal"),
         })
     memory["fallback_history"] = fallback_history[-30:]
 

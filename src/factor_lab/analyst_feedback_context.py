@@ -45,12 +45,15 @@ def build_analyst_feedback_context(base_dir: str | Path | None = None) -> dict[s
             (action.get("branch_id") or "").startswith("fallback_") for action in (row.get("branch_actions") or [])
         )
     ]
+    fallback_history = list(research_memory.get("fallback_history") or [])
 
+    fallback_no_gain_tail = [row for row in fallback_history[-10:] if not row.get("has_gain")]
     analyst_learning_loop = {
         "recent_strategy_runs": recent_strategy_runs,
         "recent_branch_actions": recent_branch_actions,
         "active_branch_count": len(active_branches),
         "fallback_trigger_count_last_5": len(fallback_events),
+        "fallback_no_gain_count_last_10": len(fallback_no_gain_tail),
         "last_injected_count": int(injected.get("injected_count") or 0),
         "last_llm_status": llm_status.get("status"),
     }
@@ -77,6 +80,7 @@ def build_analyst_feedback_context(base_dir: str | Path | None = None) -> dict[s
             "branch_history_tail": recent_branch_actions,
             "active_branches": active_branches[:10],
             "candidate_lifecycle_sample": list(candidate_lifecycle.values())[:10],
+            "fallback_history_tail": fallback_history[-10:],
         },
         "llm_execution_feedback": {
             "status": llm_status.get("status"),
