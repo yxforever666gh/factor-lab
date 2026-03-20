@@ -1,5 +1,80 @@
 [
   {
+    "family": "value",
+    "candidate_count": 3,
+    "high_risk_count": 1,
+    "medium_risk_count": 2,
+    "low_risk_count": 0,
+    "top_risk_candidates": [
+      {
+        "candidate_name": "value_ep",
+        "risk_level": "high",
+        "risk_score": 70.6625
+      },
+      {
+        "candidate_name": "value_bp",
+        "risk_level": "medium",
+        "risk_score": 61.8022
+      },
+      {
+        "candidate_name": "quality_minus_value",
+        "risk_level": "medium",
+        "risk_score": 43.0686
+      }
+    ],
+    "avg_risk_score": 58.5111
+  },
+  {
+    "family": "momentum",
+    "candidate_count": 2,
+    "high_risk_count": 0,
+    "medium_risk_count": 2,
+    "low_risk_count": 0,
+    "top_risk_candidates": [
+      {
+        "candidate_name": "mom_plus_value",
+        "risk_level": "medium",
+        "risk_score": 56.5941
+      },
+      {
+        "candidate_name": "mom_20",
+        "risk_level": "medium",
+        "risk_score": 46.7941
+      }
+    ],
+    "avg_risk_score": 51.6941
+  },
+  {
+    "family": "liquidity",
+    "candidate_count": 1,
+    "high_risk_count": 0,
+    "medium_risk_count": 1,
+    "low_risk_count": 0,
+    "top_risk_candidates": [
+      {
+        "candidate_name": "liquidity_turnover_shock",
+        "risk_level": "medium",
+        "risk_score": 50.739
+      }
+    ],
+    "avg_risk_score": 50.739
+  },
+  {
+    "family": "other",
+    "candidate_count": 1,
+    "high_risk_count": 0,
+    "medium_risk_count": 1,
+    "low_risk_count": 0,
+    "top_risk_candidates": [
+      {
+        "candidate_name": "size_small",
+        "risk_level": "medium",
+        "risk_score": 46.6943
+      }
+    ],
+    "avg_risk_score": 46.6943
+  },
+  {
     "family": "quality",
     "candidate_count": 1,
     "high_risk_count": 0,
@@ -13,80 +88,5 @@
       }
     ],
     "avg_risk_score": 41.9651
-  },
-  {
-    "family": "value",
-    "candidate_count": 3,
-    "high_risk_count": 0,
-    "medium_risk_count": 2,
-    "low_risk_count": 1,
-    "top_risk_candidates": [
-      {
-        "candidate_name": "value_bp",
-        "risk_level": "medium",
-        "risk_score": 44.4772
-      },
-      {
-        "candidate_name": "quality_minus_value",
-        "risk_level": "medium",
-        "risk_score": 40.6186
-      },
-      {
-        "candidate_name": "value_ep",
-        "risk_level": "low",
-        "risk_score": 35.6625
-      }
-    ],
-    "avg_risk_score": 40.252767
-  },
-  {
-    "family": "momentum",
-    "candidate_count": 2,
-    "high_risk_count": 0,
-    "medium_risk_count": 0,
-    "low_risk_count": 2,
-    "top_risk_candidates": [
-      {
-        "candidate_name": "mom_20",
-        "risk_level": "low",
-        "risk_score": 28.9441
-      },
-      {
-        "candidate_name": "mom_plus_value",
-        "risk_level": "low",
-        "risk_score": 28.9441
-      }
-    ],
-    "avg_risk_score": 28.9441
-  },
-  {
-    "family": "liquidity",
-    "candidate_count": 1,
-    "high_risk_count": 0,
-    "medium_risk_count": 0,
-    "low_risk_count": 1,
-    "top_risk_candidates": [
-      {
-        "candidate_name": "liquidity_turnover_shock",
-        "risk_level": "low",
-        "risk_score": 15.739
-      }
-    ],
-    "avg_risk_score": 15.739
-  },
-  {
-    "family": "other",
-    "candidate_count": 1,
-    "high_risk_count": 0,
-    "medium_risk_count": 0,
-    "low_risk_count": 1,
-    "top_risk_candidates": [
-      {
-        "candidate_name": "size_small",
-        "risk_level": "low",
-        "risk_score": 11.6943
-      }
-    ],
-    "avg_risk_score": 11.6943
   }
 ]

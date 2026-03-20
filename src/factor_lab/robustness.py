@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from factor_lab.factor_candidates import summarize_candidate_status
 from factor_lab.storage import ExperimentStore
 
 
@@ -127,7 +128,10 @@ def build_candidate_risk_profile(
     graph_context_score = round(_clip(robustness_score - graph_penalty, 0.0, 1.0), 6)
     fail_count = len([row for row in checks if row.get("status") == "fail"])
     warn_count = len([row for row in checks if row.get("status") == "warn"])
-    risk_score = round(_clip((1.0 - robustness_score) * 100 + fail_count * 9 + warn_count * 3 + graph_penalty * 20, 0.0, 100.0), 6)
+    status_summary = summarize_candidate_status(evaluations)
+    fragility = status_summary.get("fragility") or {}
+    fragility_penalty = float(fragility.get("risk_score") or 0.0) * 0.35
+    risk_score = round(_clip((1.0 - robustness_score) * 100 + fail_count * 9 + warn_count * 3 + graph_penalty * 20 + fragility_penalty, 0.0, 100.0), 6)
     if risk_score >= 70:
         risk_level = "high"
     elif risk_score >= 40:
@@ -164,6 +168,11 @@ def build_candidate_risk_profile(
         "key_risks": key_risks,
         "mitigations": mitigations,
         "checks": checks,
+        "fragile": bool(fragility.get("is_fragile")),
+        "fragility": fragility,
+        "acceptance_gate": status_summary.get("acceptance_gate") or {},
+        "acceptance_gate_explanation": status_summary.get("acceptance_gate_explanation"),
+        "candidate_status": status_summary.get("status") or candidate.get("status"),
     }
 
 

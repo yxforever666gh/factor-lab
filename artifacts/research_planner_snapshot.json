@@ -1,16 +1,60 @@
 {
   "latest_run": {
-    "run_id": "356bb2a8-9133-4ef2-bcaf-4d578e2eedde",
-    "created_at_utc": "2026-03-20T13:49:38.663932+00:00",
-    "config_path": "artifacts/generated_configs/rolling_480d_back.json",
+    "run_id": "f2126239-cd48-481c-88d6-1b4d8d187cc0",
+    "created_at_utc": "2026-03-20T16:50:16.242574+00:00",
+    "config_path": "artifacts/generated_workflow_from_llm.json",
     "data_source": "tushare",
-    "start_date": "2024-09-01",
+    "start_date": "2026-01-01",
     "end_date": "2026-03-18",
     "status": "finished",
-    "dataset_rows": 4200,
-    "factor_count": 6
+    "dataset_rows": 473,
+    "factor_count": 4
   },
   "latest_runs": [
+    {
+      "run_id": "f2126239-cd48-481c-88d6-1b4d8d187cc0",
+      "created_at_utc": "2026-03-20T16:50:16.242574+00:00",
+      "config_path": "artifacts/generated_workflow_from_llm.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 473,
+      "factor_count": 4
+    },
+    {
+      "run_id": "bc240eb1-2a52-46b2-a886-c8436c1b73e8",
+      "created_at_utc": "2026-03-20T16:50:04.755630+00:00",
+      "config_path": "configs/tushare_workflow_longer.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 473,
+      "factor_count": 6
+    },
+    {
+      "run_id": "d573ebcb-8496-484c-93ca-ae268bb2be3f",
+      "created_at_utc": "2026-03-20T16:49:59.338283+00:00",
+      "config_path": "configs/tushare_workflow.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 473,
+      "factor_count": 6
+    },
+    {
+      "run_id": "d5cd10dd-8416-4d6c-bcd2-e22c94de47d9",
+      "created_at_utc": "2026-03-20T16:49:51.874838+00:00",
+      "config_path": "configs/tushare_workflow.json",
+      "data_source": "tushare",
+      "start_date": "2026-01-01",
+      "end_date": "2026-03-18",
+      "status": "finished",
+      "dataset_rows": 473,
+      "factor_count": 6
+    },
     {
       "run_id": "356bb2a8-9133-4ef2-bcaf-4d578e2eedde",
       "created_at_utc": "2026-03-20T13:49:38.663932+00:00",
@@ -186,50 +230,6 @@
       "status": "finished",
       "dataset_rows": 473,
       "factor_count": 6
-    },
-    {
-      "run_id": "0b82ae1b-db3f-40d8-9d48-42ac3ed46d1e",
-      "created_at_utc": "2026-03-20T04:46:41.694381+00:00",
-      "config_path": "configs/tushare_workflow.json",
-      "data_source": "tushare",
-      "start_date": "2026-01-01",
-      "end_date": "2026-03-18",
-      "status": "finished",
-      "dataset_rows": 473,
-      "factor_count": 6
-    },
-    {
-      "run_id": "966f3125-9b9c-4713-b993-95e0ef2e6122",
-      "created_at_utc": "2026-03-20T01:46:15.049872+00:00",
-      "config_path": "artifacts/generated_workflow_from_llm.json",
-      "data_source": "tushare",
-      "start_date": "2026-01-01",
-      "end_date": "2026-03-18",
-      "status": "finished",
-      "dataset_rows": 473,
-      "factor_count": 4
-    },
-    {
-      "run_id": "71f687f3-4793-4bce-9427-fdd4edb7f01c",
-      "created_at_utc": "2026-03-20T01:46:03.051664+00:00",
-      "config_path": "configs/tushare_workflow_longer.json",
-      "data_source": "tushare",
-      "start_date": "2026-01-01",
-      "end_date": "2026-03-18",
-      "status": "finished",
-      "dataset_rows": 473,
-      "factor_count": 6
-    },
-    {
-      "run_id": "2bcf0700-6e07-4849-ba46-d7ba64e580b5",
-      "created_at_utc": "2026-03-20T01:45:57.033165+00:00",
-      "config_path": "configs/tushare_workflow.json",
-      "data_source": "tushare",
-      "start_date": "2026-01-01",
-      "end_date": "2026-03-18",
-      "status": "finished",
-      "dataset_rows": 473,
-      "factor_count": 6
     }
   ],
   "latest_candidates": [],
@@ -237,9 +237,7 @@
     "liquidity_turnover_shock",
     "mom_20",
     "mom_plus_value",
-    "size_small",
-    "value_bp",
-    "value_ep"
+    "size_small"
   ],
   "stable_candidates": [
     {
@@ -280,33 +278,33 @@
     },
     {
       "factor_name": "mom_20",
-      "avg_score": 1.213236,
-      "runs": 208
+      "avg_score": 1.18455,
+      "runs": 212
     },
     {
       "factor_name": "mom_plus_value",
-      "avg_score": 0.887084,
-      "runs": 206
+      "avg_score": 0.863182,
+      "runs": 210
     },
     {
       "factor_name": "liquidity_turnover_shock",
-      "avg_score": 0.464833,
-      "runs": 208
+      "avg_score": 0.464903,
+      "runs": 212
     },
     {
       "factor_name": "size_small",
-      "avg_score": 0.458579,
-      "runs": 206
+      "avg_score": 0.456652,
+      "runs": 210
     },
     {
       "factor_name": "value_ep",
-      "avg_score": 0.352758,
-      "runs": 163
+      "avg_score": 0.345545,
+      "runs": 166
     },
     {
       "factor_name": "value_bp",
-      "avg_score": -0.177742,
-      "runs": 161
+      "avg_score": -0.169392,
+      "runs": 164
     }
   ],
   "queue_counts": {
@@ -332,128 +330,128 @@
     "should_throttle": false
   },
   "daemon_status": {
-    "updated_at_utc": "2026-03-20T16:40:50.910124+00:00",
+    "updated_at_utc": "2026-03-20T18:33:38.679558+00:00",
     "pid": 1073652,
     "state": "idle",
     "processed_count": 0
   },
   "heartbeat_tail": [
     {
-      "recorded_at_utc": "2026-03-20T16:34:50.273398+00:00",
+      "recorded_at_utc": "2026-03-20T18:27:38.037868+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T16:34:50.273639+00:00",
+      "recorded_at_utc": "2026-03-20T18:27:38.038094+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T16:35:50.360871+00:00",
+      "recorded_at_utc": "2026-03-20T18:28:38.129960+00:00",
       "scope": "research_orchestrator",
       "status": "info",
       "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=8, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T16:35:50.375647+00:00",
+      "recorded_at_utc": "2026-03-20T18:28:38.145233+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T16:35:50.375837+00:00",
+      "recorded_at_utc": "2026-03-20T18:28:38.145481+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T16:36:50.463897+00:00",
+      "recorded_at_utc": "2026-03-20T18:29:38.234586+00:00",
       "scope": "research_orchestrator",
       "status": "info",
       "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=8, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T16:36:50.480576+00:00",
+      "recorded_at_utc": "2026-03-20T18:29:38.249817+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T16:36:50.480815+00:00",
+      "recorded_at_utc": "2026-03-20T18:29:38.250035+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T16:37:50.571467+00:00",
+      "recorded_at_utc": "2026-03-20T18:30:38.340537+00:00",
       "scope": "research_orchestrator",
       "status": "info",
       "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=8, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T16:37:50.586662+00:00",
+      "recorded_at_utc": "2026-03-20T18:30:38.356043+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T16:37:50.586870+00:00",
+      "recorded_at_utc": "2026-03-20T18:30:38.356260+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T16:38:50.681514+00:00",
+      "recorded_at_utc": "2026-03-20T18:31:38.445200+00:00",
       "scope": "research_orchestrator",
       "status": "info",
       "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=8, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T16:38:50.696565+00:00",
+      "recorded_at_utc": "2026-03-20T18:31:38.460275+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T16:38:50.696765+00:00",
+      "recorded_at_utc": "2026-03-20T18:31:38.460471+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T16:39:50.788789+00:00",
+      "recorded_at_utc": "2026-03-20T18:32:38.551960+00:00",
       "scope": "research_orchestrator",
       "status": "info",
       "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=8, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T16:39:50.803731+00:00",
+      "recorded_at_utc": "2026-03-20T18:32:38.567150+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T16:39:50.803941+00:00",
+      "recorded_at_utc": "2026-03-20T18:32:38.567353+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T16:40:50.893930+00:00",
+      "recorded_at_utc": "2026-03-20T18:33:38.660272+00:00",
       "scope": "research_orchestrator",
       "status": "info",
       "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=8, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T16:40:50.909072+00:00",
+      "recorded_at_utc": "2026-03-20T18:33:38.678401+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T16:40:50.909272+00:00",
+      "recorded_at_utc": "2026-03-20T18:33:38.678655+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
@@ -526,7 +524,7 @@
   "llm_status": {
     "mode": "openclaw_agent_bridge",
     "status": "plan_executed",
-    "updated_at_utc": "2026-03-20T13:49:36.610013+00:00",
+    "updated_at_utc": "2026-03-20T16:50:19.995036+00:00",
     "generated_batch_path": "artifacts/generated_batch_from_llm.json",
     "generated_batch_output_dir": "artifacts/llm_generated_batch_run",
     "feedback_path": "artifacts/llm_plan_feedback.json",
@@ -542,1631 +540,157 @@
       "exploration_graveyard_identified"
     ]
   },
-  "family_summary": [
-    {
-      "family": "quality",
-      "candidate_count": 1,
-      "evaluation_count": 2,
-      "window_count": 1,
-      "promising_count": 0,
-      "testing_count": 1,
-      "rejected_count": 0,
-      "top_status": "testing",
-      "avg_candidate_score": 4.41182,
-      "avg_latest_score": 4.41182,
-      "avg_best_score": 4.41182,
-      "family_score": 45.29456,
-      "duplicate_pressure": 0,
-      "cluster_pressure": 6.0,
-      "representative_count": 0,
-      "primary_candidate": null,
-      "representative_candidates": [],
-      "recommended_action": "explore_new_branch",
-      "family_risk_profile": {
-        "trial_count": 0,
-        "informative_trial_count": 0,
-        "no_gain_trial_count": 0,
-        "failed_trial_count": 0,
-        "knowledge_gain_per_trial": null,
-        "trial_pressure": 0.0,
-        "false_positive_pressure": 0.0,
-        "risk_score": 72.617448,
-        "recommended_action": "explore_new_branch"
-      },
-      "trial_count": 0,
-      "informative_trial_count": 0,
-      "no_gain_trial_count": 0,
-      "failed_trial_count": 0,
-      "knowledge_gain_per_trial": null,
-      "trial_pressure": 0.0,
-      "false_positive_pressure": 0.0,
-      "family_risk_score": 72.617448
-    },
-    {
-      "family": "other",
-      "candidate_count": 1,
-      "evaluation_count": 185,
-      "window_count": 8,
-      "promising_count": 0,
-      "testing_count": 1,
-      "rejected_count": 0,
-      "top_status": "testing",
-      "avg_candidate_score": 7.989338,
-      "avg_latest_score": 3.025676,
-      "avg_best_score": 8.747369,
-      "family_score": 85.914704,
-      "duplicate_pressure": 0,
-      "cluster_pressure": 1.0,
-      "representative_count": 1,
-      "primary_candidate": "size_small",
-      "representative_candidates": [
-        "size_small"
-      ],
-      "recommended_action": "pause",
-      "family_risk_profile": {
-        "trial_count": 155,
-        "informative_trial_count": 49,
-        "no_gain_trial_count": 103,
-        "failed_trial_count": 3,
-        "knowledge_gain_per_trial": 0.593548,
-        "trial_pressure": 100.0,
-        "false_positive_pressure": 100.0,
-        "risk_score": 61.338383,
-        "recommended_action": "pause"
-      },
-      "trial_count": 155,
-      "informative_trial_count": 49,
-      "no_gain_trial_count": 103,
-      "failed_trial_count": 3,
-      "knowledge_gain_per_trial": 0.593548,
-      "trial_pressure": 100.0,
-      "false_positive_pressure": 100.0,
-      "family_risk_score": 61.338383
-    },
-    {
-      "family": "value",
-      "candidate_count": 3,
-      "evaluation_count": 294,
-      "window_count": 9,
-      "promising_count": 1,
-      "testing_count": 2,
-      "rejected_count": 0,
-      "top_status": "testing",
-      "avg_candidate_score": 5.866679,
-      "avg_latest_score": 3.193535,
-      "avg_best_score": 7.249232,
-      "family_score": 93.933432,
-      "duplicate_pressure": 0,
-      "cluster_pressure": 6.0,
-      "representative_count": 0,
-      "primary_candidate": null,
-      "representative_candidates": [],
-      "recommended_action": "refine",
-      "family_risk_profile": {
-        "trial_count": 0,
-        "informative_trial_count": 0,
-        "no_gain_trial_count": 0,
-        "failed_trial_count": 0,
-        "knowledge_gain_per_trial": null,
-        "trial_pressure": 0.0,
-        "false_positive_pressure": 0.0,
-        "risk_score": 50.729956,
-        "recommended_action": "refine"
-      },
-      "trial_count": 0,
-      "informative_trial_count": 0,
-      "no_gain_trial_count": 0,
-      "failed_trial_count": 0,
-      "knowledge_gain_per_trial": null,
-      "trial_pressure": 0.0,
-      "false_positive_pressure": 0.0,
-      "family_risk_score": 50.729956
-    },
-    {
-      "family": "momentum",
-      "candidate_count": 2,
-      "evaluation_count": 372,
-      "window_count": 9,
-      "promising_count": 2,
-      "testing_count": 0,
-      "rejected_count": 0,
-      "top_status": "promising",
-      "avg_candidate_score": 8.318303,
-      "avg_latest_score": 3.005267,
-      "avg_best_score": 9.263306,
-      "family_score": 117.546424,
-      "duplicate_pressure": 0,
-      "cluster_pressure": 6.0,
-      "representative_count": 1,
-      "primary_candidate": "mom_20",
-      "representative_candidates": [
-        "mom_20"
-      ],
-      "recommended_action": "continue",
-      "family_risk_profile": {
-        "trial_count": 0,
-        "informative_trial_count": 0,
-        "no_gain_trial_count": 0,
-        "failed_trial_count": 0,
-        "knowledge_gain_per_trial": null,
-        "trial_pressure": 0.0,
-        "false_positive_pressure": 0.0,
-        "risk_score": 48.0,
-        "recommended_action": "continue"
-      },
-      "trial_count": 0,
-      "informative_trial_count": 0,
-      "no_gain_trial_count": 0,
-      "failed_trial_count": 0,
-      "knowledge_gain_per_trial": null,
-      "trial_pressure": 0.0,
-      "false_positive_pressure": 0.0,
-      "family_risk_score": 48.0
-    },
-    {
-      "family": "liquidity",
-      "candidate_count": 1,
-      "evaluation_count": 187,
-      "window_count": 9,
-      "promising_count": 0,
-      "testing_count": 1,
-      "rejected_count": 0,
-      "top_status": "testing",
-      "avg_candidate_score": 7.969937,
-      "avg_latest_score": 2.364005,
-      "avg_best_score": 8.835956,
-      "family_score": 85.759496,
-      "duplicate_pressure": 0,
-      "cluster_pressure": 1.0,
-      "representative_count": 1,
-      "primary_candidate": "liquidity_turnover_shock",
-      "representative_candidates": [
-        "liquidity_turnover_shock"
-      ],
-      "recommended_action": "continue",
-      "family_risk_profile": {
-        "trial_count": 0,
-        "informative_trial_count": 0,
-        "no_gain_trial_count": 0,
-        "failed_trial_count": 0,
-        "knowledge_gain_per_trial": null,
-        "trial_pressure": 0.0,
-        "false_positive_pressure": 0.0,
-        "risk_score": 14.408227,
-        "recommended_action": "continue"
-      },
-      "trial_count": 0,
-      "informative_trial_count": 0,
-      "no_gain_trial_count": 0,
-      "failed_trial_count": 0,
-      "knowledge_gain_per_trial": null,
-      "trial_pressure": 0.0,
-      "false_positive_pressure": 0.0,
-      "family_risk_score": 14.408227
-    }
-  ],
-  "family_recommendations": [
-    {
-      "family": "quality",
-      "recommended_action": "explore_new_branch",
-      "family_score": 45.29456,
-      "primary_candidate": null,
-      "duplicate_pressure": 0,
-      "representative_count": 0,
-      "trial_pressure": 0.0,
-      "false_positive_pressure": 0.0,
-      "trial_count": 0,
-      "family_risk_score": 72.617448,
-      "family_risk_profile": {
-        "trial_count": 0,
-        "informative_trial_count": 0,
-        "no_gain_trial_count": 0,
-        "failed_trial_count": 0,
-        "knowledge_gain_per_trial": null,
-        "trial_pressure": 0.0,
-        "false_positive_pressure": 0.0,
-        "risk_score": 72.617448,
-        "recommended_action": "explore_new_branch"
-      }
-    },
-    {
-      "family": "other",
-      "recommended_action": "pause",
-      "family_score": 85.914704,
-      "primary_candidate": "size_small",
-      "duplicate_pressure": 0,
-      "representative_count": 1,
-      "trial_pressure": 100.0,
-      "false_positive_pressure": 100.0,
-      "trial_count": 155,
-      "family_risk_score": 61.338383,
-      "family_risk_profile": {
-        "trial_count": 155,
-        "informative_trial_count": 49,
-        "no_gain_trial_count": 103,
-        "failed_trial_count": 3,
-        "knowledge_gain_per_trial": 0.593548,
-        "trial_pressure": 100.0,
-        "false_positive_pressure": 100.0,
-        "risk_score": 61.338383,
-        "recommended_action": "pause"
-      }
-    },
-    {
-      "family": "value",
-      "recommended_action": "refine",
-      "family_score": 93.933432,
-      "primary_candidate": null,
-      "duplicate_pressure": 0,
-      "representative_count": 0,
-      "trial_pressure": 0.0,
-      "false_positive_pressure": 0.0,
-      "trial_count": 0,
-      "family_risk_score": 50.729956,
-      "family_risk_profile": {
-        "trial_count": 0,
-        "informative_trial_count": 0,
-        "no_gain_trial_count": 0,
-        "failed_trial_count": 0,
-        "knowledge_gain_per_trial": null,
-        "trial_pressure": 0.0,
-        "false_positive_pressure": 0.0,
-        "risk_score": 50.729956,
-        "recommended_action": "refine"
-      }
-    },
-    {
-      "family": "momentum",
-      "recommended_action": "continue",
-      "family_score": 117.546424,
-      "primary_candidate": "mom_20",
-      "duplicate_pressure": 0,
-      "representative_count": 1,
-      "trial_pressure": 0.0,
-      "false_positive_pressure": 0.0,
-      "trial_count": 0,
-      "family_risk_score": 48.0,
-      "family_risk_profile": {
-        "trial_count": 0,
-        "informative_trial_count": 0,
-        "no_gain_trial_count": 0,
-        "failed_trial_count": 0,
-        "knowledge_gain_per_trial": null,
-        "trial_pressure": 0.0,
-        "false_positive_pressure": 0.0,
-        "risk_score": 48.0,
-        "recommended_action": "continue"
-      }
-    },
-    {
-      "family": "liquidity",
-      "recommended_action": "continue",
-      "family_score": 85.759496,
-      "primary_candidate": "liquidity_turnover_shock",
-      "duplicate_pressure": 0,
-      "representative_count": 1,
-      "trial_pressure": 0.0,
-      "false_positive_pressure": 0.0,
-      "trial_count": 0,
-      "family_risk_score": 14.408227,
-      "family_risk_profile": {
-        "trial_count": 0,
-        "informative_trial_count": 0,
-        "no_gain_trial_count": 0,
-        "failed_trial_count": 0,
-        "knowledge_gain_per_trial": null,
-        "trial_pressure": 0.0,
-        "false_positive_pressure": 0.0,
-        "risk_score": 14.408227,
-        "recommended_action": "continue"
-      }
-    }
-  ],
-  "candidate_clusters": [
-    {
-      "cluster_id": 1,
-      "cluster_key": "06229569-0a76-4cce-8fc3-1face8be1d58::35ea6eda-67c4-403d-8e74-acf91eb2b9a7::4cadc3c9-a2f7-47f1-a130-b53479e5ba8e::5032916e-07f4-45e2-9618-3cfc8e700940::7adf7ff3-658f-40c5-b228-9e06aa2426f3::821208b3-6f47-41ed-9a77-e63f2ab52638",
-      "cluster_size": 6,
-      "edge_count": 7,
-      "avg_strength": 0.567143,
-      "dominant_family": "value",
-      "family_mix": {
-        "momentum": 2,
-        "value": 3,
-        "quality": 1
-      },
-      "relationship_mix": {
-        "same_family": 4,
-        "hybrid_of": 1,
-        "refinement_of": 2
-      },
-      "leader": "mom_20",
-      "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
-      "primary_candidate": "mom_20",
-      "representative_count": 2,
-      "representative_candidates": [
-        "mom_20",
-        "value_bp"
-      ],
-      "suppressed_member_count": 4,
-      "members": [
-        {
-          "id": "5032916e-07f4-45e2-9618-3cfc8e700940",
-          "name": "mom_20",
-          "family": "momentum",
-          "status": "promising",
-          "latest_final_score": 4.865683,
-          "avg_final_score": 8.524486,
-          "evaluation_count": 187,
-          "is_primary": true,
-          "is_representative": true
-        },
-        {
-          "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
-          "name": "value_bp",
-          "family": "value",
-          "status": "promising",
-          "latest_final_score": 1.311582,
-          "avg_final_score": 5.910476,
-          "evaluation_count": 145,
-          "is_primary": false,
-          "is_representative": true
-        },
-        {
-          "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
-          "name": "mom_plus_value",
-          "family": "momentum",
-          "status": "promising",
-          "latest_final_score": 1.144852,
-          "avg_final_score": 8.11212,
-          "evaluation_count": 185,
-          "is_primary": false,
-          "is_representative": false
-        },
-        {
-          "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
-          "name": "quality_roe",
-          "family": "quality",
-          "status": "testing",
-          "latest_final_score": 4.41182,
-          "avg_final_score": 4.41182,
-          "evaluation_count": 2,
-          "is_primary": false,
-          "is_representative": false
-        },
-        {
-          "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
-          "name": "quality_minus_value",
-          "family": "value",
-          "status": "testing",
-          "latest_final_score": 4.197889,
-          "avg_final_score": 4.197889,
-          "evaluation_count": 2,
-          "is_primary": false,
-          "is_representative": false
-        },
-        {
-          "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
-          "name": "value_ep",
-          "family": "value",
-          "status": "testing",
-          "latest_final_score": 4.071135,
-          "avg_final_score": 7.491671,
-          "evaluation_count": 147,
-          "is_primary": false,
-          "is_representative": false
-        }
-      ]
-    },
-    {
-      "cluster_id": 2,
-      "cluster_key": "c75fb8df-b227-4cb1-93c8-a6e65ec95dfc",
-      "cluster_size": 1,
-      "edge_count": 0,
-      "avg_strength": null,
-      "dominant_family": "liquidity",
-      "family_mix": {
-        "liquidity": 1
-      },
-      "relationship_mix": {},
-      "leader": "liquidity_turnover_shock",
-      "primary_candidate_id": "c75fb8df-b227-4cb1-93c8-a6e65ec95dfc",
-      "primary_candidate": "liquidity_turnover_shock",
-      "representative_count": 1,
-      "representative_candidates": [
-        "liquidity_turnover_shock"
-      ],
-      "suppressed_member_count": 0,
-      "members": [
-        {
-          "id": "c75fb8df-b227-4cb1-93c8-a6e65ec95dfc",
-          "name": "liquidity_turnover_shock",
-          "family": "liquidity",
-          "status": "testing",
-          "latest_final_score": 2.364005,
-          "avg_final_score": 7.969937,
-          "evaluation_count": 187,
-          "is_primary": true,
-          "is_representative": true
-        }
-      ]
-    },
-    {
-      "cluster_id": 3,
-      "cluster_key": "d7e14ed9-6251-425d-a28a-fc75cbf5bbf0",
-      "cluster_size": 1,
-      "edge_count": 0,
-      "avg_strength": null,
-      "dominant_family": "other",
-      "family_mix": {
-        "other": 1
-      },
-      "relationship_mix": {},
-      "leader": "size_small",
-      "primary_candidate_id": "d7e14ed9-6251-425d-a28a-fc75cbf5bbf0",
-      "primary_candidate": "size_small",
-      "representative_count": 1,
-      "representative_candidates": [
-        "size_small"
-      ],
-      "suppressed_member_count": 0,
-      "members": [
-        {
-          "id": "d7e14ed9-6251-425d-a28a-fc75cbf5bbf0",
-          "name": "size_small",
-          "family": "other",
-          "status": "testing",
-          "latest_final_score": 3.025676,
-          "avg_final_score": 7.989338,
-          "evaluation_count": 185,
-          "is_primary": true,
-          "is_representative": true
-        }
-      ]
-    }
-  ],
-  "cluster_representatives": [
-    {
-      "cluster_id": 1,
-      "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
-      "primary_candidate": "mom_20",
-      "representative_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
-      "representative_candidate": "mom_20",
-      "family": "momentum",
-      "cluster_size": 6,
-      "representative_rank": 1,
-      "representative_count": 2,
-      "is_primary_representative": true,
-      "suppressed_candidates": [
-        "mom_plus_value",
-        "quality_roe",
-        "quality_minus_value",
-        "value_ep"
-      ],
-      "relationship_mix": {
-        "same_family": 4,
-        "hybrid_of": 1,
-        "refinement_of": 2
-      }
-    },
-    {
-      "cluster_id": 1,
-      "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
-      "primary_candidate": "mom_20",
-      "representative_candidate_id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
-      "representative_candidate": "value_bp",
-      "family": "value",
-      "cluster_size": 6,
-      "representative_rank": 2,
-      "representative_count": 2,
-      "is_primary_representative": false,
-      "suppressed_candidates": [
-        "mom_plus_value",
-        "quality_roe",
-        "quality_minus_value",
-        "value_ep"
-      ],
-      "relationship_mix": {
-        "same_family": 4,
-        "hybrid_of": 1,
-        "refinement_of": 2
-      }
-    },
-    {
-      "cluster_id": 2,
-      "primary_candidate_id": "c75fb8df-b227-4cb1-93c8-a6e65ec95dfc",
-      "primary_candidate": "liquidity_turnover_shock",
-      "representative_candidate_id": "c75fb8df-b227-4cb1-93c8-a6e65ec95dfc",
-      "representative_candidate": "liquidity_turnover_shock",
-      "family": "liquidity",
-      "cluster_size": 1,
-      "representative_rank": 1,
-      "representative_count": 1,
-      "is_primary_representative": true,
-      "suppressed_candidates": [],
-      "relationship_mix": {}
-    },
-    {
-      "cluster_id": 3,
-      "primary_candidate_id": "d7e14ed9-6251-425d-a28a-fc75cbf5bbf0",
-      "primary_candidate": "size_small",
-      "representative_candidate_id": "d7e14ed9-6251-425d-a28a-fc75cbf5bbf0",
-      "representative_candidate": "size_small",
-      "family": "other",
-      "cluster_size": 1,
-      "representative_rank": 1,
-      "representative_count": 1,
-      "is_primary_representative": true,
-      "suppressed_candidates": [],
-      "relationship_mix": {}
-    }
-  ],
-  "candidate_context": [
-    {
-      "candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
-      "candidate_name": "mom_20",
-      "family": "momentum",
-      "status": "promising",
-      "family_score": 117.546424,
-      "family_recommended_action": "continue",
-      "relationship_count": 1,
-      "lineage_count": 0,
-      "cluster": {
-        "cluster_id": 1,
-        "cluster_size": 6,
-        "leader": "mom_20",
-        "dominant_family": "value",
-        "relationship_mix": {
-          "same_family": 4,
-          "hybrid_of": 1,
-          "refinement_of": 2
-        },
-        "members": [
-          {
-            "id": "5032916e-07f4-45e2-9618-3cfc8e700940",
-            "name": "mom_20",
-            "family": "momentum",
-            "status": "promising",
-            "latest_final_score": 4.865683,
-            "avg_final_score": 8.524486,
-            "evaluation_count": 187,
-            "is_primary": true,
-            "is_representative": true
-          },
-          {
-            "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
-            "name": "value_bp",
-            "family": "value",
-            "status": "promising",
-            "latest_final_score": 1.311582,
-            "avg_final_score": 5.910476,
-            "evaluation_count": 145,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
-            "name": "mom_plus_value",
-            "family": "momentum",
-            "status": "promising",
-            "latest_final_score": 1.144852,
-            "avg_final_score": 8.11212,
-            "evaluation_count": 185,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
-            "name": "quality_roe",
-            "family": "quality",
-            "status": "testing",
-            "latest_final_score": 4.41182,
-            "avg_final_score": 4.41182,
-            "evaluation_count": 2,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
-            "name": "quality_minus_value",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.197889,
-            "avg_final_score": 4.197889,
-            "evaluation_count": 2,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
-            "name": "value_ep",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.071135,
-            "avg_final_score": 7.491671,
-            "evaluation_count": 147,
-            "is_primary": false,
-            "is_representative": false
-          }
-        ],
-        "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
-        "primary_candidate": "mom_20",
-        "representative_count": 2,
-        "representative_candidates": [
-          "mom_20",
-          "value_bp"
-        ],
-        "is_representative": true,
-        "suppressed_member_count": 4
-      },
-      "is_primary_candidate": true,
-      "related_candidates": [
-        {
-          "candidate_id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
-          "candidate_name": "mom_plus_value",
-          "relationship_type": "same_family",
-          "strength": 0.4,
-          "details": {
-            "family": "momentum",
-            "family_size": 2,
-            "source": "backfill"
-          }
-        }
-      ],
-      "lineage": []
-    },
-    {
-      "candidate_id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
-      "candidate_name": "quality_roe",
-      "family": "quality",
-      "status": "testing",
-      "family_score": 45.29456,
-      "family_recommended_action": "explore_new_branch",
-      "relationship_count": 1,
-      "lineage_count": 1,
-      "cluster": {
-        "cluster_id": 1,
-        "cluster_size": 6,
-        "leader": "mom_20",
-        "dominant_family": "value",
-        "relationship_mix": {
-          "same_family": 4,
-          "hybrid_of": 1,
-          "refinement_of": 2
-        },
-        "members": [
-          {
-            "id": "5032916e-07f4-45e2-9618-3cfc8e700940",
-            "name": "mom_20",
-            "family": "momentum",
-            "status": "promising",
-            "latest_final_score": 4.865683,
-            "avg_final_score": 8.524486,
-            "evaluation_count": 187,
-            "is_primary": true,
-            "is_representative": true
-          },
-          {
-            "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
-            "name": "value_bp",
-            "family": "value",
-            "status": "promising",
-            "latest_final_score": 1.311582,
-            "avg_final_score": 5.910476,
-            "evaluation_count": 145,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
-            "name": "mom_plus_value",
-            "family": "momentum",
-            "status": "promising",
-            "latest_final_score": 1.144852,
-            "avg_final_score": 8.11212,
-            "evaluation_count": 185,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
-            "name": "quality_roe",
-            "family": "quality",
-            "status": "testing",
-            "latest_final_score": 4.41182,
-            "avg_final_score": 4.41182,
-            "evaluation_count": 2,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
-            "name": "quality_minus_value",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.197889,
-            "avg_final_score": 4.197889,
-            "evaluation_count": 2,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
-            "name": "value_ep",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.071135,
-            "avg_final_score": 7.491671,
-            "evaluation_count": 147,
-            "is_primary": false,
-            "is_representative": false
-          }
-        ],
-        "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
-        "primary_candidate": "mom_20",
-        "representative_count": 2,
-        "representative_candidates": [
-          "mom_20",
-          "value_bp"
-        ],
-        "is_representative": false,
-        "suppressed_member_count": 4
-      },
-      "is_primary_candidate": false,
-      "related_candidates": [
-        {
-          "candidate_id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
-          "candidate_name": "quality_minus_value",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "quality_minus_value",
-            "extra_atoms": [
-              "book_yield"
-            ],
-            "parent_candidate": "quality_roe",
-            "shared_atoms": [
-              "roe"
-            ],
-            "source": "backfill"
-          }
-        }
-      ],
-      "lineage": [
-        {
-          "candidate_id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
-          "candidate_name": "quality_minus_value",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "quality_minus_value",
-            "extra_atoms": [
-              "book_yield"
-            ],
-            "parent_candidate": "quality_roe",
-            "shared_atoms": [
-              "roe"
-            ],
-            "source": "backfill"
-          }
-        }
-      ]
-    },
-    {
-      "candidate_id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
-      "candidate_name": "quality_minus_value",
-      "family": "value",
-      "status": "testing",
-      "family_score": 93.933432,
-      "family_recommended_action": "refine",
-      "relationship_count": 4,
-      "lineage_count": 2,
-      "cluster": {
-        "cluster_id": 1,
-        "cluster_size": 6,
-        "leader": "mom_20",
-        "dominant_family": "value",
-        "relationship_mix": {
-          "same_family": 4,
-          "hybrid_of": 1,
-          "refinement_of": 2
-        },
-        "members": [
-          {
-            "id": "5032916e-07f4-45e2-9618-3cfc8e700940",
-            "name": "mom_20",
-            "family": "momentum",
-            "status": "promising",
-            "latest_final_score": 4.865683,
-            "avg_final_score": 8.524486,
-            "evaluation_count": 187,
-            "is_primary": true,
-            "is_representative": true
-          },
-          {
-            "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
-            "name": "value_bp",
-            "family": "value",
-            "status": "promising",
-            "latest_final_score": 1.311582,
-            "avg_final_score": 5.910476,
-            "evaluation_count": 145,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
-            "name": "mom_plus_value",
-            "family": "momentum",
-            "status": "promising",
-            "latest_final_score": 1.144852,
-            "avg_final_score": 8.11212,
-            "evaluation_count": 185,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
-            "name": "quality_roe",
-            "family": "quality",
-            "status": "testing",
-            "latest_final_score": 4.41182,
-            "avg_final_score": 4.41182,
-            "evaluation_count": 2,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
-            "name": "quality_minus_value",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.197889,
-            "avg_final_score": 4.197889,
-            "evaluation_count": 2,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
-            "name": "value_ep",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.071135,
-            "avg_final_score": 7.491671,
-            "evaluation_count": 147,
-            "is_primary": false,
-            "is_representative": false
-          }
-        ],
-        "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
-        "primary_candidate": "mom_20",
-        "representative_count": 2,
-        "representative_candidates": [
-          "mom_20",
-          "value_bp"
-        ],
-        "is_representative": false,
-        "suppressed_member_count": 4
-      },
-      "is_primary_candidate": false,
-      "related_candidates": [
-        {
-          "candidate_id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
-          "candidate_name": "value_bp",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "quality_minus_value",
-            "extra_atoms": [
-              "roe"
-            ],
-            "parent_candidate": "value_bp",
-            "shared_atoms": [
-              "book_yield"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
-          "candidate_name": "quality_roe",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "quality_minus_value",
-            "extra_atoms": [
-              "book_yield"
-            ],
-            "parent_candidate": "quality_roe",
-            "shared_atoms": [
-              "roe"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "06229569-0a76-4cce-8fc3-1face8be1d58",
-          "candidate_name": "value_ep",
-          "relationship_type": "same_family",
-          "strength": 0.5,
-          "details": {
-            "family": "value",
-            "family_size": 3,
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
-          "candidate_name": "value_bp",
-          "relationship_type": "same_family",
-          "strength": 0.5,
-          "details": {
-            "family": "value",
-            "family_size": 3,
-            "source": "backfill"
-          }
-        }
-      ],
-      "lineage": [
-        {
-          "candidate_id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
-          "candidate_name": "value_bp",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "quality_minus_value",
-            "extra_atoms": [
-              "roe"
-            ],
-            "parent_candidate": "value_bp",
-            "shared_atoms": [
-              "book_yield"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
-          "candidate_name": "quality_roe",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "quality_minus_value",
-            "extra_atoms": [
-              "book_yield"
-            ],
-            "parent_candidate": "quality_roe",
-            "shared_atoms": [
-              "roe"
-            ],
-            "source": "backfill"
-          }
-        }
-      ]
-    },
-    {
-      "candidate_id": "06229569-0a76-4cce-8fc3-1face8be1d58",
-      "candidate_name": "value_ep",
-      "family": "value",
-      "status": "testing",
-      "family_score": 93.933432,
-      "family_recommended_action": "refine",
-      "relationship_count": 3,
-      "lineage_count": 1,
-      "cluster": {
-        "cluster_id": 1,
-        "cluster_size": 6,
-        "leader": "mom_20",
-        "dominant_family": "value",
-        "relationship_mix": {
-          "same_family": 4,
-          "hybrid_of": 1,
-          "refinement_of": 2
-        },
-        "members": [
-          {
-            "id": "5032916e-07f4-45e2-9618-3cfc8e700940",
-            "name": "mom_20",
-            "family": "momentum",
-            "status": "promising",
-            "latest_final_score": 4.865683,
-            "avg_final_score": 8.524486,
-            "evaluation_count": 187,
-            "is_primary": true,
-            "is_representative": true
-          },
-          {
-            "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
-            "name": "value_bp",
-            "family": "value",
-            "status": "promising",
-            "latest_final_score": 1.311582,
-            "avg_final_score": 5.910476,
-            "evaluation_count": 145,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
-            "name": "mom_plus_value",
-            "family": "momentum",
-            "status": "promising",
-            "latest_final_score": 1.144852,
-            "avg_final_score": 8.11212,
-            "evaluation_count": 185,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
-            "name": "quality_roe",
-            "family": "quality",
-            "status": "testing",
-            "latest_final_score": 4.41182,
-            "avg_final_score": 4.41182,
-            "evaluation_count": 2,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
-            "name": "quality_minus_value",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.197889,
-            "avg_final_score": 4.197889,
-            "evaluation_count": 2,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
-            "name": "value_ep",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.071135,
-            "avg_final_score": 7.491671,
-            "evaluation_count": 147,
-            "is_primary": false,
-            "is_representative": false
-          }
-        ],
-        "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
-        "primary_candidate": "mom_20",
-        "representative_count": 2,
-        "representative_candidates": [
-          "mom_20",
-          "value_bp"
-        ],
-        "is_representative": false,
-        "suppressed_member_count": 4
-      },
-      "is_primary_candidate": false,
-      "related_candidates": [
-        {
-          "candidate_id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
-          "candidate_name": "mom_plus_value",
-          "relationship_type": "hybrid_of",
-          "strength": 0.63,
-          "details": {
-            "basis": "hybrid_component_overlap",
-            "component_candidate": "value_ep",
-            "hybrid_atoms": [
-              "earnings_yield"
-            ],
-            "hybrid_candidate": "mom_plus_value",
-            "shared_atoms": [
-              "earnings_yield"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
-          "candidate_name": "value_bp",
-          "relationship_type": "same_family",
-          "strength": 0.5,
-          "details": {
-            "family": "value",
-            "family_size": 3,
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
-          "candidate_name": "quality_minus_value",
-          "relationship_type": "same_family",
-          "strength": 0.5,
-          "details": {
-            "family": "value",
-            "family_size": 3,
-            "source": "backfill"
-          }
-        }
-      ],
-      "lineage": [
-        {
-          "candidate_id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
-          "candidate_name": "mom_plus_value",
-          "relationship_type": "hybrid_of",
-          "strength": 0.63,
-          "details": {
-            "basis": "hybrid_component_overlap",
-            "component_candidate": "value_ep",
-            "hybrid_atoms": [
-              "earnings_yield"
-            ],
-            "hybrid_candidate": "mom_plus_value",
-            "shared_atoms": [
-              "earnings_yield"
-            ],
-            "source": "backfill"
-          }
-        }
-      ]
-    },
-    {
-      "candidate_id": "d7e14ed9-6251-425d-a28a-fc75cbf5bbf0",
-      "candidate_name": "size_small",
-      "family": "other",
-      "status": "testing",
-      "family_score": 85.914704,
-      "family_recommended_action": "continue",
-      "relationship_count": 0,
-      "lineage_count": 0,
-      "cluster": {
-        "cluster_id": 3,
-        "cluster_size": 1,
-        "leader": "size_small",
-        "dominant_family": "other",
-        "relationship_mix": {},
-        "members": [
-          {
-            "id": "d7e14ed9-6251-425d-a28a-fc75cbf5bbf0",
-            "name": "size_small",
-            "family": "other",
-            "status": "testing",
-            "latest_final_score": 3.025676,
-            "avg_final_score": 7.989338,
-            "evaluation_count": 185,
-            "is_primary": true,
-            "is_representative": true
-          }
-        ],
-        "primary_candidate_id": "d7e14ed9-6251-425d-a28a-fc75cbf5bbf0",
-        "primary_candidate": "size_small",
-        "representative_count": 1,
-        "representative_candidates": [
-          "size_small"
-        ],
-        "is_representative": true,
-        "suppressed_member_count": 0
-      },
-      "is_primary_candidate": true,
-      "related_candidates": [],
-      "lineage": []
-    },
-    {
-      "candidate_id": "c75fb8df-b227-4cb1-93c8-a6e65ec95dfc",
-      "candidate_name": "liquidity_turnover_shock",
-      "family": "liquidity",
-      "status": "testing",
-      "family_score": 85.759496,
-      "family_recommended_action": "continue",
-      "relationship_count": 0,
-      "lineage_count": 0,
-      "cluster": {
-        "cluster_id": 2,
-        "cluster_size": 1,
-        "leader": "liquidity_turnover_shock",
-        "dominant_family": "liquidity",
-        "relationship_mix": {},
-        "members": [
-          {
-            "id": "c75fb8df-b227-4cb1-93c8-a6e65ec95dfc",
-            "name": "liquidity_turnover_shock",
-            "family": "liquidity",
-            "status": "testing",
-            "latest_final_score": 2.364005,
-            "avg_final_score": 7.969937,
-            "evaluation_count": 187,
-            "is_primary": true,
-            "is_representative": true
-          }
-        ],
-        "primary_candidate_id": "c75fb8df-b227-4cb1-93c8-a6e65ec95dfc",
-        "primary_candidate": "liquidity_turnover_shock",
-        "representative_count": 1,
-        "representative_candidates": [
-          "liquidity_turnover_shock"
-        ],
-        "is_representative": true,
-        "suppressed_member_count": 0
-      },
-      "is_primary_candidate": true,
-      "related_candidates": [],
-      "lineage": []
-    },
-    {
-      "candidate_id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
-      "candidate_name": "value_bp",
-      "family": "value",
-      "status": "promising",
-      "family_score": 93.933432,
-      "family_recommended_action": "refine",
-      "relationship_count": 3,
-      "lineage_count": 1,
-      "cluster": {
-        "cluster_id": 1,
-        "cluster_size": 6,
-        "leader": "mom_20",
-        "dominant_family": "value",
-        "relationship_mix": {
-          "same_family": 4,
-          "hybrid_of": 1,
-          "refinement_of": 2
-        },
-        "members": [
-          {
-            "id": "5032916e-07f4-45e2-9618-3cfc8e700940",
-            "name": "mom_20",
-            "family": "momentum",
-            "status": "promising",
-            "latest_final_score": 4.865683,
-            "avg_final_score": 8.524486,
-            "evaluation_count": 187,
-            "is_primary": true,
-            "is_representative": true
-          },
-          {
-            "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
-            "name": "value_bp",
-            "family": "value",
-            "status": "promising",
-            "latest_final_score": 1.311582,
-            "avg_final_score": 5.910476,
-            "evaluation_count": 145,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
-            "name": "mom_plus_value",
-            "family": "momentum",
-            "status": "promising",
-            "latest_final_score": 1.144852,
-            "avg_final_score": 8.11212,
-            "evaluation_count": 185,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
-            "name": "quality_roe",
-            "family": "quality",
-            "status": "testing",
-            "latest_final_score": 4.41182,
-            "avg_final_score": 4.41182,
-            "evaluation_count": 2,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
-            "name": "quality_minus_value",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.197889,
-            "avg_final_score": 4.197889,
-            "evaluation_count": 2,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
-            "name": "value_ep",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.071135,
-            "avg_final_score": 7.491671,
-            "evaluation_count": 147,
-            "is_primary": false,
-            "is_representative": false
-          }
-        ],
-        "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
-        "primary_candidate": "mom_20",
-        "representative_count": 2,
-        "representative_candidates": [
-          "mom_20",
-          "value_bp"
-        ],
-        "is_representative": true,
-        "suppressed_member_count": 4
-      },
-      "is_primary_candidate": false,
-      "related_candidates": [
-        {
-          "candidate_id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
-          "candidate_name": "quality_minus_value",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "quality_minus_value",
-            "extra_atoms": [
-              "roe"
-            ],
-            "parent_candidate": "value_bp",
-            "shared_atoms": [
-              "book_yield"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "06229569-0a76-4cce-8fc3-1face8be1d58",
-          "candidate_name": "value_ep",
-          "relationship_type": "same_family",
-          "strength": 0.5,
-          "details": {
-            "family": "value",
-            "family_size": 3,
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
-          "candidate_name": "quality_minus_value",
-          "relationship_type": "same_family",
-          "strength": 0.5,
-          "details": {
-            "family": "value",
-            "family_size": 3,
-            "source": "backfill"
-          }
-        }
-      ],
-      "lineage": [
-        {
-          "candidate_id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
-          "candidate_name": "quality_minus_value",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "quality_minus_value",
-            "extra_atoms": [
-              "roe"
-            ],
-            "parent_candidate": "value_bp",
-            "shared_atoms": [
-              "book_yield"
-            ],
-            "source": "backfill"
-          }
-        }
-      ]
-    },
-    {
-      "candidate_id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
-      "candidate_name": "mom_plus_value",
-      "family": "momentum",
-      "status": "promising",
-      "family_score": 117.546424,
-      "family_recommended_action": "continue",
-      "relationship_count": 2,
-      "lineage_count": 1,
-      "cluster": {
-        "cluster_id": 1,
-        "cluster_size": 6,
-        "leader": "mom_20",
-        "dominant_family": "value",
-        "relationship_mix": {
-          "same_family": 4,
-          "hybrid_of": 1,
-          "refinement_of": 2
-        },
-        "members": [
-          {
-            "id": "5032916e-07f4-45e2-9618-3cfc8e700940",
-            "name": "mom_20",
-            "family": "momentum",
-            "status": "promising",
-            "latest_final_score": 4.865683,
-            "avg_final_score": 8.524486,
-            "evaluation_count": 187,
-            "is_primary": true,
-            "is_representative": true
-          },
-          {
-            "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
-            "name": "value_bp",
-            "family": "value",
-            "status": "promising",
-            "latest_final_score": 1.311582,
-            "avg_final_score": 5.910476,
-            "evaluation_count": 145,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
-            "name": "mom_plus_value",
-            "family": "momentum",
-            "status": "promising",
-            "latest_final_score": 1.144852,
-            "avg_final_score": 8.11212,
-            "evaluation_count": 185,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
-            "name": "quality_roe",
-            "family": "quality",
-            "status": "testing",
-            "latest_final_score": 4.41182,
-            "avg_final_score": 4.41182,
-            "evaluation_count": 2,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
-            "name": "quality_minus_value",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.197889,
-            "avg_final_score": 4.197889,
-            "evaluation_count": 2,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
-            "name": "value_ep",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.071135,
-            "avg_final_score": 7.491671,
-            "evaluation_count": 147,
-            "is_primary": false,
-            "is_representative": false
-          }
-        ],
-        "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
-        "primary_candidate": "mom_20",
-        "representative_count": 2,
-        "representative_candidates": [
-          "mom_20",
-          "value_bp"
-        ],
-        "is_representative": false,
-        "suppressed_member_count": 4
-      },
-      "is_primary_candidate": false,
-      "related_candidates": [
-        {
-          "candidate_id": "06229569-0a76-4cce-8fc3-1face8be1d58",
-          "candidate_name": "value_ep",
-          "relationship_type": "hybrid_of",
-          "strength": 0.63,
-          "details": {
-            "basis": "hybrid_component_overlap",
-            "component_candidate": "value_ep",
-            "hybrid_atoms": [
-              "earnings_yield"
-            ],
-            "hybrid_candidate": "mom_plus_value",
-            "shared_atoms": [
-              "earnings_yield"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
-          "candidate_name": "mom_20",
-          "relationship_type": "same_family",
-          "strength": 0.4,
-          "details": {
-            "family": "momentum",
-            "family_size": 2,
-            "source": "backfill"
-          }
-        }
-      ],
-      "lineage": [
-        {
-          "candidate_id": "06229569-0a76-4cce-8fc3-1face8be1d58",
-          "candidate_name": "value_ep",
-          "relationship_type": "hybrid_of",
-          "strength": 0.63,
-          "details": {
-            "basis": "hybrid_component_overlap",
-            "component_candidate": "value_ep",
-            "hybrid_atoms": [
-              "earnings_yield"
-            ],
-            "hybrid_candidate": "mom_plus_value",
-            "shared_atoms": [
-              "earnings_yield"
-            ],
-            "source": "backfill"
-          }
-        }
-      ]
-    }
-  ],
-  "relationship_summary": {
-    "refinement_of": 2,
-    "hybrid_of": 1,
-    "same_family": 4
-  },
   "knowledge_gain_counter": {
-    "stable_candidate_confirmed": 2,
+    "stable_candidate_confirmed": 1,
     "repeated_graveyard_confirmed": 7,
     "neutralization_diagnosis_requested": 7,
-    "exploration_candidate_survived": 2,
+    "exploration_candidate_survived": 1,
     "exploration_graveyard_identified": 7,
     "no_significant_information_gain": 0
   },
-  "research_trial_summary": {
-    "graveyard_diagnosis": {
-      "family": "graveyard_diagnosis",
-      "trial_count": 106,
-      "informative_trial_count": 106,
-      "no_gain_trial_count": 0,
-      "failed_trial_count": 0,
-      "running_trial_count": 0,
-      "pending_trial_count": 0,
-      "knowledge_gain_total": 145,
-      "pressure_weight_total": 79.5,
-      "latest_trial_at": "2026-03-20T13:50:31.324044+00:00",
-      "knowledge_gain_per_trial": 1.367925,
-      "trial_pressure": 26.25,
-      "false_positive_pressure": 0.0
-    },
-    "other": {
-      "family": "other",
-      "trial_count": 155,
-      "informative_trial_count": 49,
-      "no_gain_trial_count": 103,
-      "failed_trial_count": 3,
-      "running_trial_count": 0,
-      "pending_trial_count": 0,
-      "knowledge_gain_total": 92,
-      "pressure_weight_total": 180.59999999999965,
-      "latest_trial_at": "2026-03-20T13:50:29.276195+00:00",
-      "knowledge_gain_per_trial": 0.593548,
-      "trial_pressure": 100.0,
-      "false_positive_pressure": 100.0
-    },
-    "window_expansion": {
-      "family": "window_expansion",
-      "trial_count": 3,
-      "informative_trial_count": 0,
-      "no_gain_trial_count": 2,
-      "failed_trial_count": 1,
-      "running_trial_count": 0,
-      "pending_trial_count": 0,
-      "knowledge_gain_total": 0,
-      "pressure_weight_total": 4.300000000000001,
-      "latest_trial_at": "2026-03-19T08:06:28.889991+00:00",
-      "knowledge_gain_per_trial": 0.0,
-      "trial_pressure": 74.166667,
-      "false_positive_pressure": 77.5
-    }
-  },
   "recent_research_tasks": [
+    {
+      "task_id": "12f01672-86d6-418d-ad37-c5903aa43a50",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 34,
+      "fingerprint": "diagnostic::stable_candidate_validation_review_v7::{\"diagnostic_type\": \"stable_candidate_validation_review_v7\", \"focus_factors\": [\"mom_20\", \"mom_plus_value\", \"value_ep\", \"quality_minus_value\", \"quality_roe\"], \"knowledge_gain\": [\"stable_candidate_validation_v7_requested\"], \"reasons\": [\"stable_candidates_need_deeper_validation\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T16:50:22.048713+00:00",
+      "started_at_utc": "2026-03-20T16:50:22.052042+00:00",
+      "finished_at_utc": "2026-03-20T16:50:22.055265+00:00",
+      "worker_note": "diagnostic finished: stable_candidate_validation_review_v7",
+      "payload": {
+        "diagnostic_type": "stable_candidate_validation_review_v7",
+        "focus_factors": [
+          "mom_20",
+          "mom_plus_value",
+          "value_ep",
+          "quality_minus_value",
+          "quality_roe"
+        ],
+        "knowledge_gain": [
+          "stable_candidate_validation_v7_requested"
+        ],
+        "reasons": [
+          "stable_candidates_need_deeper_validation"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "d6314e45-fe64-41a4-8c7c-fda1fd79b064",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 40,
+      "fingerprint": "diagnostic::artifacts/tushare_batch::graveyard_neutralization::liquidity_turnover_shock,mom_20,mom_plus_value,size_small,value_bp,value_ep",
+      "parent_task_id": "a82bc067-dc3d-4808-ac60-2e906179cb6e",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T16:50:12.219038+00:00",
+      "started_at_utc": "2026-03-20T16:50:14.227687+00:00",
+      "finished_at_utc": "2026-03-20T16:50:14.232274+00:00",
+      "worker_note": "diagnostic finished: graveyard_neutralization_review",
+      "payload": {
+        "diagnostic_type": "graveyard_neutralization_review",
+        "focus_factors": [
+          "liquidity_turnover_shock",
+          "mom_20",
+          "mom_plus_value",
+          "size_small",
+          "value_bp",
+          "value_ep"
+        ],
+        "knowledge_gain": [
+          "neutralization_diagnosis_requested"
+        ],
+        "reasons": [
+          "repeated_graveyard_after_batch_consistency_review"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "a82bc067-dc3d-4808-ac60-2e906179cb6e",
+      "task_type": "diagnostic",
+      "status": "finished",
+      "priority": 35,
+      "fingerprint": "diagnostic::artifacts/tushare_batch::consistent_graveyard:liquidity_turnover_shock, mom_20, size_small, value_bp, value_ep",
+      "parent_task_id": "a4d72ab1-fbd5-4b45-adb7-f4a9b981bb33",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T16:50:10.200106+00:00",
+      "started_at_utc": "2026-03-20T16:50:12.211218+00:00",
+      "finished_at_utc": "2026-03-20T16:50:12.220046+00:00",
+      "worker_note": "diagnostic finished: batch_consistency_review | followups=1",
+      "payload": {
+        "diagnostic_type": "batch_consistency_review",
+        "knowledge_gain": [
+          null,
+          "repeated_graveyard_confirmed"
+        ],
+        "reasons": [
+          "consistent_graveyard:liquidity_turnover_shock, mom_20, size_small, value_bp, value_ep"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "7e41c550-f516-4841-9874-9dbb6cb3b80d",
+      "task_type": "generated_batch",
+      "status": "finished",
+      "priority": 60,
+      "fingerprint": "generated_batch::a4cf53c056d30df4446de19c23617566f1f9bfd75d9e6e55e07584c54d5ff466::artifacts/llm_generated_batch_run",
+      "parent_task_id": "6dc48e5a-4e60-4feb-babd-473d52b501c2",
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T16:49:57.325901+00:00",
+      "started_at_utc": "2026-03-20T16:50:16.240438+00:00",
+      "finished_at_utc": "2026-03-20T16:50:20.006729+00:00",
+      "worker_note": "generated batch finished: artifacts/generated_batch_from_llm.json | knowledge_gain=exploration_graveyard_identified",
+      "payload": {
+        "batch_path": "artifacts/generated_batch_from_llm.json",
+        "output_dir": "artifacts/llm_generated_batch_run"
+      }
+    },
+    {
+      "task_id": "a4d72ab1-fbd5-4b45-adb7-f4a9b981bb33",
+      "task_type": "batch",
+      "status": "finished",
+      "priority": 30,
+      "fingerprint": "batch::15afad57be9d1e5815d553678240a3e701d656f5a5a7aaf6e564ebefa662ce7f::artifacts/tushare_batch",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T16:49:51.871461+00:00",
+      "started_at_utc": "2026-03-20T16:49:59.336242+00:00",
+      "finished_at_utc": "2026-03-20T16:50:10.201445+00:00",
+      "worker_note": "batch finished: configs/tushare_batch.json | followups=1",
+      "payload": {
+        "config_path": "configs/tushare_batch.json",
+        "output_dir": "artifacts/tushare_batch"
+      }
+    },
+    {
+      "task_id": "6dc48e5a-4e60-4feb-babd-473d52b501c2",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 10,
+      "fingerprint": "workflow::63c043a518d832a1d0cdb3299ff3ecff594a5ebb906d4f4fe4e901b0a66e2dba::artifacts/tushare_workflow",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-20T16:49:51.866848+00:00",
+      "started_at_utc": "2026-03-20T16:49:51.873642+00:00",
+      "finished_at_utc": "2026-03-20T16:49:57.326860+00:00",
+      "worker_note": "workflow finished: configs/tushare_workflow.json | followups=2",
+      "payload": {
+        "config_path": "configs/tushare_workflow.json",
+        "output_dir": "artifacts/tushare_workflow"
+      }
+    },
     {
       "task_id": "15a700bb-ffc9-445e-9597-c1295eb28c7c",
       "task_type": "diagnostic",
@@ -2718,143 +1242,6 @@
         ],
         "reasons": [
           "repeated_graveyard_after_batch_consistency_review"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "43c9ab7b-a9b9-4f5a-82d1-572671801e76",
-      "task_type": "diagnostic",
-      "status": "finished",
-      "priority": 35,
-      "fingerprint": "diagnostic::artifacts/tushare_batch::consistent_graveyard:liquidity_turnover_shock, mom_20, size_small, value_bp, value_ep",
-      "parent_task_id": "83e1c3bd-f1a1-452b-b06b-8e46e19b3af8",
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-20T01:46:09.006375+00:00",
-      "started_at_utc": "2026-03-20T01:46:11.015543+00:00",
-      "finished_at_utc": "2026-03-20T01:46:11.026130+00:00",
-      "worker_note": "diagnostic finished: batch_consistency_review | followups=1",
-      "payload": {
-        "diagnostic_type": "batch_consistency_review",
-        "knowledge_gain": [
-          null,
-          "repeated_graveyard_confirmed"
-        ],
-        "reasons": [
-          "consistent_graveyard:liquidity_turnover_shock, mom_20, size_small, value_bp, value_ep"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "f9b5d12c-0102-414b-b1c8-f3701aad1240",
-      "task_type": "generated_batch",
-      "status": "finished",
-      "priority": 60,
-      "fingerprint": "generated_batch::a4cf53c056d30df4446de19c23617566f1f9bfd75d9e6e55e07584c54d5ff466::artifacts/llm_generated_batch_run",
-      "parent_task_id": "438fe93a-61d7-4922-ae34-a4896437776a",
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-20T01:45:55.018607+00:00",
-      "started_at_utc": "2026-03-20T01:46:15.047680+00:00",
-      "finished_at_utc": "2026-03-20T01:46:19.222376+00:00",
-      "worker_note": "generated batch finished: artifacts/generated_batch_from_llm.json | knowledge_gain=exploration_graveyard_identified",
-      "payload": {
-        "batch_path": "artifacts/generated_batch_from_llm.json",
-        "output_dir": "artifacts/llm_generated_batch_run"
-      }
-    },
-    {
-      "task_id": "83e1c3bd-f1a1-452b-b06b-8e46e19b3af8",
-      "task_type": "batch",
-      "status": "finished",
-      "priority": 30,
-      "fingerprint": "batch::15afad57be9d1e5815d553678240a3e701d656f5a5a7aaf6e564ebefa662ce7f::artifacts/tushare_batch",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-20T01:45:48.930107+00:00",
-      "started_at_utc": "2026-03-20T01:45:57.031064+00:00",
-      "finished_at_utc": "2026-03-20T01:46:09.007601+00:00",
-      "worker_note": "batch finished: configs/tushare_batch.json | followups=1",
-      "payload": {
-        "config_path": "configs/tushare_batch.json",
-        "output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "438fe93a-61d7-4922-ae34-a4896437776a",
-      "task_type": "workflow",
-      "status": "finished",
-      "priority": 10,
-      "fingerprint": "workflow::63c043a518d832a1d0cdb3299ff3ecff594a5ebb906d4f4fe4e901b0a66e2dba::artifacts/tushare_workflow",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-20T01:45:48.925591+00:00",
-      "started_at_utc": "2026-03-20T01:45:48.931920+00:00",
-      "finished_at_utc": "2026-03-20T01:45:55.019801+00:00",
-      "worker_note": "workflow finished: configs/tushare_workflow.json | followups=2",
-      "payload": {
-        "config_path": "configs/tushare_workflow.json",
-        "output_dir": "artifacts/tushare_workflow"
-      }
-    },
-    {
-      "task_id": "748daea3-63a3-48f4-9d38-c0a580c64568",
-      "task_type": "diagnostic",
-      "status": "finished",
-      "priority": 36,
-      "fingerprint": "diagnostic::graveyard_diagnosis_level_7::{\"diagnostic_type\": \"graveyard_diagnosis_level_7\", \"focus_factors\": [\"liquidity_turnover_shock\"], \"knowledge_gain\": [\"graveyard_diagnosis_level_7_requested\"], \"reasons\": [\"recent_graveyard_needs_deeper_review\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-20T00:00:51.829580+00:00",
-      "started_at_utc": "2026-03-20T00:00:53.842886+00:00",
-      "finished_at_utc": "2026-03-20T00:00:53.846752+00:00",
-      "worker_note": "diagnostic finished: graveyard_diagnosis_level_7",
-      "payload": {
-        "diagnostic_type": "graveyard_diagnosis_level_7",
-        "focus_factors": [
-          "liquidity_turnover_shock"
-        ],
-        "knowledge_gain": [
-          "graveyard_diagnosis_level_7_requested"
-        ],
-        "reasons": [
-          "recent_graveyard_needs_deeper_review"
-        ],
-        "source_output_dir": "artifacts/tushare_batch"
-      }
-    },
-    {
-      "task_id": "602a1f4d-04b1-425b-92f8-4961dd53908e",
-      "task_type": "diagnostic",
-      "status": "finished",
-      "priority": 34,
-      "fingerprint": "diagnostic::stable_candidate_validation_review_v7::{\"diagnostic_type\": \"stable_candidate_validation_review_v7\", \"focus_factors\": [\"mom_20\", \"mom_plus_value\", \"value_ep\", \"quality_minus_value\", \"quality_roe\"], \"knowledge_gain\": [\"stable_candidate_validation_v7_requested\"], \"reasons\": [\"stable_candidates_need_deeper_validation\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-20T00:00:51.827741+00:00",
-      "started_at_utc": "2026-03-20T00:00:51.832154+00:00",
-      "finished_at_utc": "2026-03-20T00:00:51.836283+00:00",
-      "worker_note": "diagnostic finished: stable_candidate_validation_review_v7",
-      "payload": {
-        "diagnostic_type": "stable_candidate_validation_review_v7",
-        "focus_factors": [
-          "mom_20",
-          "mom_plus_value",
-          "value_ep",
-          "quality_minus_value",
-          "quality_roe"
-        ],
-        "knowledge_gain": [
-          "stable_candidate_validation_v7_requested"
-        ],
-        "reasons": [
-          "stable_candidates_need_deeper_validation"
         ],
         "source_output_dir": "artifacts/tushare_batch"
       }

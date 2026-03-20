@@ -7,6 +7,7 @@
     <div style="margin-top:12px;">
       <span class="pill {{ 'good' if candidate.status == 'promising' else 'bad' if candidate.status in ['rejected','archived'] else 'warn' }}">{{ candidate.status }}</span>
       <span class="pill">{{ candidate.family or '-' }}</span>
+      {% if acceptance_snapshot.fragility and acceptance_snapshot.fragility.is_fragile %}<span class="pill warn">fragile</span>{% endif %}
       {% if family_rollup.family_score is not none %}<span class="pill">family_score={{ family_rollup.family_score }}</span>{% endif %}
       {% if cluster_membership.cluster_id %}<span class="pill">cluster #{{ cluster_membership.cluster_id }}</span>{% endif %}
     </div>
@@ -24,6 +25,75 @@
         <tr><th>拒绝原因</th><td>{{ candidate.rejection_reason or '-' }}</td></tr>
       </tbody>
     </table>
+  </section>
+  <section class="card">
+    <h2>Acceptance Gate 2.0</h2>
+    {% set gate = acceptance_snapshot.acceptance_gate or {} %}
+    <div style="margin-bottom:10px;">
+      <span class="pill {{ 'good' if gate.status == 'pass' else 'bad' if gate.status in ['fail','blocked'] else 'warn' }}">{{ gate.status or '-' }}</span>
+      <span class="pill">{{ gate.promotion or '-' }}</span>
+    </div>
+    <p>{{ acceptance_snapshot.acceptance_gate_explanation or '暂无 gate 解释。' }}</p>
+    <table>
+      <tbody>
+        <tr><th>官方评估数</th><td>{{ gate.metrics.official_eval_count if gate.metrics else '-' }}</td></tr>
+        <tr><th>官方窗口数</th><td>{{ gate.metrics.official_window_count if gate.metrics else '-' }}</td></tr>
+        <tr><th>平均分</th><td>{{ gate.metrics.avg_score if gate.metrics else '-' }}</td></tr>
+        <tr><th>通过率</th><td>{{ gate.metrics.pass_rate if gate.metrics else '-' }}</td></tr>
+        <tr><th>Fragility 风险分</th><td>{{ gate.metrics.fragility_risk_score if gate.metrics else '-' }}</td></tr>
+      </tbody>
+    </table>
+    {% if gate.fragility_gate and gate.fragility_gate.triggers %}
+    <h3>Fragility 触发器</h3>
+    <ul>{% for row in gate.fragility_gate.triggers %}<li>{{ row }}</li>{% endfor %}</ul>
+    {% endif %}
+  </section>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>风险画像 / Robustness</h2>
+    {% if candidate_risk_profile %}
+    <div style="margin-bottom:10px;">
+      <span class="pill {{ 'bad' if candidate_risk_profile.risk_level == 'high' else 'warn' if candidate_risk_profile.risk_level == 'medium' else 'good' }}">risk={{ candidate_risk_profile.risk_level }}</span>
+      <span class="pill">risk_score={{ candidate_risk_profile.risk_score }}</span>
+      <span class="pill">robustness={{ candidate_risk_profile.robustness_score }}</span>
+      {% if candidate_risk_profile.profile and candidate_risk_profile.profile.fragile %}<span class="pill warn">fragile</span>{% endif %}
+    </div>
+    <table>
+      <tbody>
+        <tr><th>Family context</th><td>{{ candidate_risk_profile.family_context_score if candidate_risk_profile.family_context_score is not none else '-' }}</td></tr>
+        <tr><th>Graph context</th><td>{{ candidate_risk_profile.graph_context_score if candidate_risk_profile.graph_context_score is not none else '-' }}</td></tr>
+        <tr><th>通过检查数</th><td>{{ candidate_risk_profile.passing_check_count }}</td></tr>
+        <tr><th>失败检查数</th><td>{{ candidate_risk_profile.failing_check_count }}</td></tr>
+        <tr><th>摘要</th><td>{{ candidate_risk_profile.summary or '-' }}</td></tr>
+      </tbody>
+    </table>
+    <h3>关键风险</h3>
+    <ul>{% for row in candidate_risk_profile.key_risks %}<li>{{ row }}</li>{% endfor %}</ul>
+    <h3>缓解动作</h3>
+    <ul>{% for row in candidate_risk_profile.mitigations %}<li>{{ row }}</li>{% endfor %}</ul>
+    <h3>检查明细</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Check</th><th>Status</th><th>Severity</th><th>Score</th><th>Evidence</th><th>Rationale</th></tr></thead>
+        <tbody>
+          {% for row in candidate_risk_profile.profile.checks or [] %}
+          <tr>
+            <td>{{ row.check_name }}</td>
+            <td><span class="pill {{ 'good' if row.status == 'pass' else 'bad' if row.status == 'fail' else 'warn' }}">{{ row.status }}</span></td>
+            <td>{{ row.severity }}</td>
+            <td class="num">{{ row.score }}</td>
+            <td class="text-break">{{ row.evidence }}</td>
+            <td class="text-break">{{ row.rationale }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="muted">暂无风险画像。</div>
+    {% endif %}
   </section>
   <section class="card">
     <h2>研究假设</h2>

@@ -11,6 +11,7 @@ def _normalize_decision(action_hint: str | None, default: str = "hold") -> str:
         "refine": "refine",
         "pause": "pause",
         "explore_new_branch": "advance",
+        "validate_risk": "advance",
     }
     return mapping.get(action_hint or "", default)
 
@@ -44,6 +45,9 @@ class ResearchBranchPlanner:
             family_trial = trial_summary.get(family, {})
             trial_pressure = float(family_trial.get("trial_pressure") or 0.0)
             false_positive_pressure = float(family_trial.get("false_positive_pressure") or 0.0)
+            family_rec = family_recommendations.get(family) or {}
+            family_risk_score = float(family_rec.get("family_risk_score") or 0.0)
+            recommended_action = family_rec.get("recommended_action")
             score = 0.0
             action_hint = None
 
@@ -54,15 +58,18 @@ class ResearchBranchPlanner:
                     family_action_counts[action] = family_action_counts.get(action, 0) + 1
                 if family_action_counts:
                     action_hint = max(family_action_counts.items(), key=lambda item: item[1])[0]
+                if any((row.get("recommended_action") == "validate_risk") for row in snapshot.get("family_recommendations", []) or []):
+                    action_hint = "validate_risk"
             elif family == "graveyard_diagnosis":
                 action_hint = "refine" if duplicate_count else "continue"
             elif family == "recent_window_validation":
-                action_hint = "refine" if refinement_count or duplicate_count else "continue"
+                action_hint = "validate_risk" if recommended_action == "validate_risk" or family_risk_score >= 60 else ("refine" if refinement_count or duplicate_count else "continue")
             elif family == "window_expansion":
-                action_hint = "continue" if top_family_score >= 70 else "pause"
+                action_hint = "pause" if recommended_action == "validate_risk" or family_risk_score >= 60 else ("continue" if top_family_score >= 70 else "pause")
             elif family == "exploration":
                 explore_branch_count = len([row for row in family_recommendations.values() if row.get("recommended_action") == "explore_new_branch"])
-                action_hint = "explore_new_branch" if explore_branch_count >= 2 else "pause"
+                validate_risk_count = len([row for row in family_recommendations.values() if row.get("recommended_action") == "validate_risk"])
+                action_hint = "pause" if validate_risk_count else ("explore_new_branch" if explore_branch_count >= 2 else "pause")
 
             if saturated or next_level is None:
                 branch_decisions.append({
@@ -122,6 +129,15 @@ class ResearchBranchPlanner:
                 if decision == "advance":
                     decision = "refine"
 
+            if family_risk_score >= 60:
+                if family in {"stable_candidate_validation", "recent_window_validation", "graveyard_diagnosis"}:
+                    score += 10
+                    decision = "advance"
+                else:
+                    score -= 12
+                    decision = "pause"
+                reason += f" family_risk_score={family_risk_score:.1f}，优先走 robustness/validation 而不是 refinement。"
+
             if recent_gain:
                 score += min(recent_gain * 2, 8)
 
@@ -164,7 +180,7 @@ class ResearchBranchPlanner:
                 break
 
         return {
-            "summary": "decision 现在直接从 recommended_action 语义映射：continue→advance、refine→refine、pause→pause、explore_new_branch→advance；仅在疲劳/饱和约束下收紧。",
+            "summary": "decision 现在直接从 recommended_action 语义映射：continue→advance、refine→refine、pause→pause、explore_new_branch→advance、validate_risk→advance；当 family / candidate 风险偏高时，优先把任务导向 robustness / validation，而不是 refinement。",
             "branch_decisions": branch_decisions,
             "selected_tasks": selected_tasks,
             "selected_families": selected_families,

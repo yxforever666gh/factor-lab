@@ -63,6 +63,34 @@ class ResearchPlannerAgent:
             if relationship_signal.get("lineage_count"):
                 score += min(int(relationship_signal["lineage_count"]) * 3, 12)
                 reason_bits.append(f"lineage_count={relationship_signal['lineage_count']}，适合沿候选谱系继续推进。")
+            fragile_candidate_count = int(relationship_signal.get("fragile_candidate_count") or 0)
+            family_risk_score = relationship_signal.get("family_risk_score")
+            family_recommended_action = relationship_signal.get("family_recommended_action")
+            if fragile_candidate_count:
+                if category == "validation":
+                    score += min(fragile_candidate_count * 5, 15)
+                    reason_bits.append(f"fragile_candidate_count={fragile_candidate_count}，先做 robustness/validation，避免过早 refinement。")
+                else:
+                    score -= min(fragile_candidate_count * 4, 12)
+                    reason_bits.append(f"fragile_candidate_count={fragile_candidate_count}，非验证任务降权。")
+            if family_risk_score is not None:
+                frs = float(family_risk_score or 0.0)
+                if frs >= 60:
+                    if category == "validation":
+                        score += 12
+                        reason_bits.append(f"family_risk_score={frs:.1f}，应转向 robustness/validation。")
+                    else:
+                        score -= 14
+                        reason_bits.append(f"family_risk_score={frs:.1f}，暂不优先 refinement / expansion。")
+                elif frs >= 45 and category == "validation":
+                    score += 5
+                    reason_bits.append(f"family_risk_score={frs:.1f}，验证优先级上调。")
+            if family_recommended_action == "validate_risk":
+                if category == "validation":
+                    score += 10
+                else:
+                    score -= 10
+                reason_bits.append("family_recommended_action=validate_risk。")
             if relationship_signal.get("relationship_count"):
                 score += min(int(relationship_signal["relationship_count"]) * 1.5, 8)
             if relationship_signal.get("hybrid_count") and category in {"baseline", "exploration"}:
@@ -124,7 +152,7 @@ class ResearchPlannerAgent:
                 break
 
         return {
-            "summary": "优先选择带 family 分数与关系信号支撑的 validation / baseline 任务，exploration 保守进入。",
+            "summary": "优先选择带 family 分数、fragility、风险信号支撑的 validation / baseline 任务；当候选或 family 触发风险阈值时，先走 robustness/validation，再考虑 refinement。",
             "selection_policy": {
                 "max_total": 4,
                 "category_limits": limits,

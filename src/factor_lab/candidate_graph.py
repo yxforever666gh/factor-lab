@@ -97,7 +97,7 @@ def _candidate_profile(candidate: dict[str, Any]) -> dict[str, Any]:
 
 def _candidate_rank_key(candidate: dict[str, Any]) -> tuple[float, float, float, str]:
     status = candidate.get("status") or "new"
-    status_rank = {"promising": 3.0, "testing": 2.0, "new": 1.0, "rejected": 0.0, "archived": -1.0}.get(status, 0.0)
+    status_rank = {"promising": 3.0, "testing": 2.0, "fragile": 1.5, "new": 1.0, "rejected": 0.0, "archived": -1.0}.get(status, 0.0)
     latest = float(candidate.get("latest_final_score") or -999.0)
     avg_score = float(candidate.get("avg_final_score") or -999.0)
     evals = float(candidate.get("evaluation_count") or 0)
@@ -378,7 +378,7 @@ def family_rollup(candidates: list[dict[str, Any]], evaluations: list[dict[str, 
         bucket["status_counter"][status] += 1
         if status == "promising":
             bucket["promising_count"] += 1
-        elif status == "testing":
+        elif status in {"testing", "fragile"}:
             bucket["testing_count"] += 1
         elif status in {"rejected", "archived"}:
             bucket["rejected_count"] += 1

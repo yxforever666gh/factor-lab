@@ -22,7 +22,9 @@ def build_family_risk_profile(family_row: dict[str, Any], trial_summary: dict[st
         recommended_action = family_trial_recommended_action(trial_summary)
     if risk_score < 35 and family_score >= 70 and recommended_action != 'pause':
         recommended_action = 'continue'
-    elif risk_score >= 60 and recommended_action == 'continue':
+    elif risk_score >= 60:
+        recommended_action = 'validate_risk'
+    elif risk_score >= 45 and recommended_action == 'continue':
         recommended_action = 'refine'
     return {
         **family_row,

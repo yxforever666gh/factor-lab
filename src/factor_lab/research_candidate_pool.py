@@ -39,7 +39,7 @@ def _cluster_rep_map(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return out
 
 
-def _priority_adjustment(family_score: float | None, relationship_count: int, lineage_count: int, trial_pressure: float | None = None, false_positive_pressure: float | None = None) -> int:
+def _priority_adjustment(family_score: float | None, relationship_count: int, lineage_count: int, trial_pressure: float | None = None, false_positive_pressure: float | None = None, fragile_count: int = 0, family_risk_score: float | None = None) -> int:
     adj = 0
     if family_score is not None:
         if family_score >= 100:
@@ -62,6 +62,13 @@ def _priority_adjustment(family_score: float | None, relationship_count: int, li
             adj += 5
         elif false_positive_pressure >= 45:
             adj += 2
+    if fragile_count:
+        adj -= min(fragile_count * 2, 6)
+    if family_risk_score is not None:
+        if family_risk_score >= 70:
+            adj -= 5
+        elif family_risk_score >= 55:
+            adj -= 2
     return adj
 
 
@@ -197,20 +204,28 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
     if window_level and ('window_expansion' in selected_families or not selected_families):
         window_tasks = build_window_task(window_level, latest_run, end_date, base_config, existing_fingerprints, generated_configs)
         for task in window_tasks:
+            max_family_risk = max([float((row.get('family_risk_score') or 0.0)) for row in family_recommendations.values()] or [0.0])
+            validate_risk_family_count = len([row for row in family_recommendations.values() if row.get('recommended_action') == 'validate_risk'])
+            task['priority_hint'] += 8 if validate_risk_family_count else 0
             task['relationship_signal'] = {
                 'hybrid_count': int(relationship_summary.get('hybrid_of', 0)),
                 'cluster_count': len(snapshot.get('candidate_clusters', []) or []),
+                'family_risk_score': max_family_risk,
+                'validate_risk_family_count': validate_risk_family_count,
             }
-            task['reason'] += f" 当前候选图中有 {relationship_summary.get('hybrid_of', 0)} 条 hybrid 关系、{len(snapshot.get('candidate_clusters', []) or [])} 个 cluster，适合扩窗检验结构是否跨阶段成立。"
+            task['reason'] += f" 当前候选图中有 {relationship_summary.get('hybrid_of', 0)} 条 hybrid 关系、{len(snapshot.get('candidate_clusters', []) or [])} 个 cluster；但高风险 family={validate_risk_family_count} 个，因此扩窗优先级被下调，先确认结构是否真的跨阶段成立。"
             append_task(task, 'window_expansion_already_covered')
     if recent_level and ('recent_window_validation' in selected_families or not selected_families):
         recent_tasks = build_recent_validation_task(recent_level, latest_run, end_date, base_config, existing_fingerprints, generated_configs)
         for task in recent_tasks:
+            fragile_candidates = [row for row in candidate_context_by_name.values() if row.get('fragile')]
+            task['priority_hint'] -= 4 if fragile_candidates else 0
             task['relationship_signal'] = {
                 'refinement_count': int(relationship_summary.get('refinement_of', 0)),
                 'duplicate_count': int(relationship_summary.get('duplicate_of', 0)),
+                'fragile_candidate_count': len(fragile_candidates),
             }
-            task['reason'] += f" refinement={relationship_summary.get('refinement_of', 0)}、duplicate={relationship_summary.get('duplicate_of', 0)}，近期窗口可验证这些分支是稳健延伸还是短期重复。"
+            task['reason'] += f" refinement={relationship_summary.get('refinement_of', 0)}、duplicate={relationship_summary.get('duplicate_of', 0)}；fragile 候选={len(fragile_candidates)}，近期窗口优先确认这些分支是稳健延伸还是短期重复。"
             append_task(task, 'recent_window_already_covered')
     if stable_level and ('stable_candidate_validation' in selected_families or not selected_families):
         stable_tasks = build_stable_candidate_task(stable_level, stable_candidates, existing_fingerprints)
@@ -227,12 +242,16 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
                     default=None,
                 )
             strongest_trial = trial_summary.get(strongest_family or '', {}) if strongest_family else {}
+            fragile_count = len([row for row in focus_context if row.get('fragile')])
+            family_risk_score = (family_recommendations.get(strongest_family or '') or {}).get('family_risk_score') if strongest_family else None
             task['priority_hint'] += _priority_adjustment(
                 max(family_scores) if family_scores else None,
                 relationship_count,
                 lineage_count,
                 strongest_trial.get('trial_pressure'),
                 strongest_trial.get('false_positive_pressure'),
+                fragile_count,
+                family_risk_score,
             )
             task['focus_candidates'] = focus_context
             task['family_focus'] = strongest_family
@@ -245,6 +264,9 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
                 'trial_pressure': strongest_trial.get('trial_pressure'),
                 'false_positive_pressure': strongest_trial.get('false_positive_pressure'),
                 'trial_count': strongest_trial.get('trial_count'),
+                'fragile_candidate_count': fragile_count,
+                'family_risk_score': family_risk_score,
+                'family_recommended_action': (family_recommendations.get(strongest_family or '') or {}).get('recommended_action') if strongest_family else None,
             }
             if strongest_family and strongest_family in family_recommendations:
                 task['family_recommendation'] = family_recommendations[strongest_family]
@@ -253,6 +275,7 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
                 f" 重点候选累计关系 {relationship_count} 条、lineage {lineage_count} 条"
                 + (f"，最强 family={strongest_family}" if strongest_family else "")
                 + (f"，trial_pressure={strongest_trial.get('trial_pressure')}，false_positive_pressure={strongest_trial.get('false_positive_pressure')}" if strongest_trial else "")
+                + (f"，fragile_candidates={fragile_count}，family_risk_score={family_risk_score}" if fragile_count or family_risk_score is not None else "")
                 + f"。保留 cluster representatives 后实际验证 {len(stable_candidates)} 个代表候选，压制 {len([r for r in representative_notes if r.get('suppressed_into')])} 个重复/近重复候选。"
             )
             append_task(task, 'stable_validation_already_covered')

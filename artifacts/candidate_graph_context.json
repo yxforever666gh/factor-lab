@@ -18,7 +18,7 @@
       "representative_count": 0,
       "primary_candidate": null,
       "representative_candidates": [],
-      "recommended_action": "explore_new_branch",
+      "recommended_action": "validate_risk",
       "family_risk_profile": {
         "trial_count": 0,
         "informative_trial_count": 0,
@@ -28,7 +28,7 @@
         "trial_pressure": 0.0,
         "false_positive_pressure": 0.0,
         "risk_score": 72.617448,
-        "recommended_action": "explore_new_branch"
+        "recommended_action": "validate_risk"
       },
       "trial_count": 0,
       "informative_trial_count": 0,
@@ -59,23 +59,23 @@
       "representative_candidates": [
         "size_small"
       ],
-      "recommended_action": "pause",
+      "recommended_action": "validate_risk",
       "family_risk_profile": {
-        "trial_count": 155,
-        "informative_trial_count": 49,
-        "no_gain_trial_count": 103,
+        "trial_count": 159,
+        "informative_trial_count": 51,
+        "no_gain_trial_count": 105,
         "failed_trial_count": 3,
-        "knowledge_gain_per_trial": 0.593548,
+        "knowledge_gain_per_trial": 0.591195,
         "trial_pressure": 100.0,
         "false_positive_pressure": 100.0,
         "risk_score": 61.338383,
-        "recommended_action": "pause"
+        "recommended_action": "validate_risk"
       },
-      "trial_count": 155,
-      "informative_trial_count": 49,
-      "no_gain_trial_count": 103,
+      "trial_count": 159,
+      "informative_trial_count": 51,
+      "no_gain_trial_count": 105,
       "failed_trial_count": 3,
-      "knowledge_gain_per_trial": 0.593548,
+      "knowledge_gain_per_trial": 0.591195,
       "trial_pressure": 100.0,
       "false_positive_pressure": 100.0,
       "family_risk_score": 61.338383
@@ -139,7 +139,7 @@
       "representative_candidates": [
         "mom_20"
       ],
-      "recommended_action": "continue",
+      "recommended_action": "refine",
       "family_risk_profile": {
         "trial_count": 0,
         "informative_trial_count": 0,
@@ -149,7 +149,7 @@
         "trial_pressure": 0.0,
         "false_positive_pressure": 0.0,
         "risk_score": 48.0,
-        "recommended_action": "continue"
+        "recommended_action": "refine"
       },
       "trial_count": 0,
       "informative_trial_count": 0,

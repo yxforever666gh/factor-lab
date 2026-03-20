@@ -90,10 +90,22 @@ def build_research_planner_snapshot(db_path: str | Path, output_path: str | Path
         recommendation_weights = _read_json(root / "llm_recommendation_weights.json", {})
         llm_status = _read_json(root / "llm_status.json", {})
         candidate_graph_context = _read_json(root / "candidate_graph_context.json", {})
+        candidate_risk_profiles = _read_json(root / "candidate_risk_profiles.json", [])
+        risk_by_name = {row.get("candidate_name"): row for row in candidate_risk_profiles if row.get("candidate_name")}
         family_summary = candidate_graph_context.get("families") or _read_json(root / "family_summary.json", [])
         candidate_clusters = candidate_graph_context.get("clusters") or _read_json(root / "candidate_clusters.json", [])
         cluster_representatives = candidate_graph_context.get("cluster_representatives") or _read_json(root / "cluster_representatives.json", [])
-        candidate_context = candidate_graph_context.get("candidate_context") or []
+        candidate_context = []
+        for row in (candidate_graph_context.get("candidate_context") or []):
+            risk = risk_by_name.get(row.get("candidate_name")) or {}
+            candidate_context.append({
+                **row,
+                "risk_level": risk.get("risk_level"),
+                "risk_score": risk.get("risk_score"),
+                "robustness_score": risk.get("robustness_score"),
+                "fragile": bool((risk.get("profile") or {}).get("fragile")),
+                "acceptance_gate": (risk.get("profile") or {}).get("acceptance_gate") or {},
+            })
         relationship_summary = candidate_graph_context.get("relationship_summary") or {}
         family_recommendations = [
             {

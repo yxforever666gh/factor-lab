@@ -5,9 +5,30 @@ from collections import Counter, defaultdict
 from typing import Any
 
 
-GOOD_STATUSES = {"promising", "testing"}
+GOOD_STATUSES = {"promising", "testing", "fragile"}
 BAD_STATUSES = {"rejected", "archived"}
 OFFICIAL_RUN_SCOPES = {"official", "generated", "batch_official"}
+
+
+ACCEPTANCE_GATE_20_THRESHOLDS = {
+    "promising": {
+        "min_official_eval_count": 5,
+        "min_official_window_count": 3,
+        "min_pass_rate": 0.6,
+        "min_avg_score": 1.0,
+        "max_risk_score": 44.0,
+    },
+    "testing": {
+        "min_official_eval_count": 2,
+        "min_official_window_count": 1,
+        "min_pass_rate": 0.2,
+        "min_avg_score": 0.5,
+        "max_risk_score": 64.0,
+    },
+    "fragile": {
+        "max_risk_score": 84.0,
+    },
+}
 
 
 def infer_factor_family(name: str, expression: str | None = None) -> str:
@@ -39,6 +60,109 @@ def derive_window_label(config_path: str | None, start_date: str | None, end_dat
     if start_date and end_date:
         return f"{start_date}->{end_date}"
     return config_path or "unknown"
+
+
+def _evaluate_fragility(status_pool: list[dict[str, Any]], avg_score: float, best_score: float, pass_rate: float) -> dict[str, Any]:
+    split_fail_max = max(int(row.get("split_fail_count") or 0) for row in status_pool) if status_pool else 0
+    high_corr_max = max(int(row.get("high_corr_peer_count") or 0) for row in status_pool) if status_pool else 0
+    robust_total = max(int(row.get("robust_total_count") or 0) for row in status_pool) if status_pool else 0
+    robust_pass = max(int(row.get("robust_pass_count") or 0) for row in status_pool) if status_pool else 0
+    neutral_breaks = len([
+        row for row in status_pool
+        if float(row.get("neutralized_rank_ic_mean") or 0.0) < 0 and float(row.get("raw_rank_ic_mean") or 0.0) > 0
+    ])
+    latest_status = (status_pool[-1].get("status") if status_pool else None) or "testing"
+    robustness_ratio = robust_pass / max(robust_total, 1)
+
+    trigger_bits: list[str] = []
+    if split_fail_max >= 1:
+        trigger_bits.append(f"split_fail_max={split_fail_max}")
+    if robust_total and robustness_ratio < 0.6:
+        trigger_bits.append(f"robustness_ratio={robustness_ratio:.2f}")
+    if neutral_breaks:
+        trigger_bits.append(f"neutralization_breaks={neutral_breaks}")
+    if high_corr_max >= 2:
+        trigger_bits.append(f"high_corr_peer_max={high_corr_max}")
+    if pass_rate < 0.6 and avg_score < 1.0 and best_score >= 1.5:
+        trigger_bits.append("peak_without_repeatability")
+    if latest_status in {"archived"} and best_score >= 1.2:
+        trigger_bits.append("latest_window_regression")
+
+    risk_score = min(
+        100.0,
+        split_fail_max * 22.0
+        + max(0.0, (0.6 - robustness_ratio)) * 55.0
+        + neutral_breaks * 14.0
+        + high_corr_max * 7.0
+        + (18.0 if pass_rate < 0.35 and best_score >= 1.5 else 0.0)
+        + (10.0 if avg_score < 0.5 < best_score else 0.0),
+    )
+    is_fragile = bool(trigger_bits) and risk_score >= 25.0
+    return {
+        "is_fragile": is_fragile,
+        "risk_score": round(risk_score, 6),
+        "trigger_bits": trigger_bits,
+        "robustness_ratio": round(robustness_ratio, 6) if robust_total else None,
+        "split_fail_max": split_fail_max,
+        "high_corr_peer_max": high_corr_max,
+        "neutralization_break_count": neutral_breaks,
+    }
+
+
+def _build_acceptance_gate_20(status: str, *, official_eval_count: int, official_window_count: int, avg_score: float, pass_rate: float, fragility: dict[str, Any]) -> dict[str, Any]:
+    thresholds = ACCEPTANCE_GATE_20_THRESHOLDS
+    promising_ok = (
+        official_eval_count >= thresholds["promising"]["min_official_eval_count"]
+        and official_window_count >= thresholds["promising"]["min_official_window_count"]
+        and pass_rate >= thresholds["promising"]["min_pass_rate"]
+        and avg_score >= thresholds["promising"]["min_avg_score"]
+        and float(fragility.get("risk_score") or 0.0) <= thresholds["promising"]["max_risk_score"]
+        and not fragility.get("is_fragile")
+    )
+    testing_ok = (
+        official_eval_count >= thresholds["testing"]["min_official_eval_count"]
+        and official_window_count >= thresholds["testing"]["min_official_window_count"]
+        and (pass_rate >= thresholds["testing"]["min_pass_rate"] or avg_score >= thresholds["testing"]["min_avg_score"])
+        and float(fragility.get("risk_score") or 0.0) <= thresholds["testing"]["max_risk_score"]
+    )
+    fragile_gate = {
+        "allowed_but_blocked_from_refinement": status == "fragile",
+        "risk_score": fragility.get("risk_score"),
+        "triggers": fragility.get("trigger_bits") or [],
+    }
+
+    if promising_ok:
+        outcome = "pass"
+        promotion = "eligible_for_refinement"
+        explanation = "Acceptance Gate 2.0 passed: repeatability is strong and fragility checks are clean."
+    elif testing_ok and status == "testing":
+        outcome = "monitor"
+        promotion = "needs_more_validation"
+        explanation = "Acceptance Gate 2.0 monitor: candidate is usable for validation, but evidence is not deep enough for refinement."
+    elif status == "fragile":
+        outcome = "blocked"
+        promotion = "route_to_robustness_validation"
+        explanation = "Acceptance Gate 2.0 blocked refinement: the candidate shows some alpha, but fragility/risk checks failed and robustness validation must come first."
+    else:
+        outcome = "fail"
+        promotion = "do_not_refine"
+        explanation = "Acceptance Gate 2.0 failed: evidence quality or repeatability is insufficient."
+
+    return {
+        "version": "2.0",
+        "status": outcome,
+        "promotion": promotion,
+        "explanation": explanation,
+        "thresholds": thresholds,
+        "metrics": {
+            "official_eval_count": official_eval_count,
+            "official_window_count": official_window_count,
+            "avg_score": round(avg_score, 6),
+            "pass_rate": round(pass_rate, 6),
+            "fragility_risk_score": fragility.get("risk_score"),
+        },
+        "fragility_gate": fragile_gate,
+    }
 
 
 def score_candidate_evaluation(metrics: dict[str, Any]) -> dict[str, Any]:
@@ -102,13 +226,23 @@ def score_candidate_evaluation(metrics: dict[str, Any]) -> dict[str, Any]:
     if return_metric < 0:
         rejection_reasons.append("negative_return")
 
+    fragility_signals = [
+        split_fail_count >= 1,
+        robust_total_count > 0 and (robust_pass_count / max(robust_total_count, 1)) < 0.6,
+        neutral_ic < 0 < raw_ic,
+        high_corr_peer_count >= 2,
+    ]
     pass_flag = not rejection_reasons and final_score >= 1.0
-    if pass_flag and final_score >= 2.4:
+    if pass_flag and final_score >= 2.4 and not any(fragility_signals):
         status = "promising"
+    elif pass_flag and any(fragility_signals):
+        status = "fragile"
     elif pass_flag:
         status = "testing"
     elif final_score <= -0.75 or len(rejection_reasons) >= 2:
         status = "rejected"
+    elif any(fragility_signals) and final_score >= 0:
+        status = "fragile"
     else:
         status = "archived"
 
@@ -124,6 +258,14 @@ def score_candidate_evaluation(metrics: dict[str, Any]) -> dict[str, Any]:
 
 def summarize_candidate_status(evaluations: list[dict[str, Any]]) -> dict[str, Any]:
     if not evaluations:
+        gate = _build_acceptance_gate_20(
+            "new",
+            official_eval_count=0,
+            official_window_count=0,
+            avg_score=0.0,
+            pass_rate=0.0,
+            fragility={"risk_score": 0.0, "trigger_bits": [], "is_fragile": False},
+        )
         return {
             "status": "new",
             "evaluation_count": 0,
@@ -135,6 +277,9 @@ def summarize_candidate_status(evaluations: list[dict[str, Any]]) -> dict[str, A
             "summary": "No evaluations yet.",
             "next_action": "seed_validation",
             "rejection_reason": None,
+            "fragility": {"is_fragile": False, "risk_score": 0.0, "trigger_bits": []},
+            "acceptance_gate": gate,
+            "acceptance_gate_explanation": gate["explanation"],
         }
 
     evaluations = sorted(evaluations, key=lambda row: row.get("created_at_utc") or "")
@@ -157,10 +302,14 @@ def summarize_candidate_status(evaluations: list[dict[str, Any]]) -> dict[str, A
     pass_rate = round(sum(pass_flags) / len(status_pool), 4)
     official_eval_count = len(status_pool)
     official_window_count = len(official_windows)
+    fragility = _evaluate_fragility(status_pool, avg_score, best_score, pass_rate)
 
-    if official_eval_count >= 5 and official_window_count >= 3 and pass_rate >= 0.6 and avg_score >= 1.0:
+    if official_eval_count >= 5 and official_window_count >= 3 and pass_rate >= 0.6 and avg_score >= 1.0 and not fragility["is_fragile"]:
         status = "promising"
         next_action = "refine"
+    elif fragility["is_fragile"] and best_score >= 1.0:
+        status = "fragile"
+        next_action = "run_robustness_validation"
     elif official_eval_count >= 2 and official_window_count >= 1 and (pass_rate >= 0.2 or avg_score >= 0.5 or best_score >= 1.5):
         status = "testing"
         next_action = "validate_more_windows"
@@ -176,10 +325,20 @@ def summarize_candidate_status(evaluations: list[dict[str, Any]]) -> dict[str, A
 
     rejection_reasons = [row.get("rejection_reason") for row in status_pool if row.get("rejection_reason")]
     rejection_reason = rejection_reasons[-1] if rejection_reasons else None
+    gate = _build_acceptance_gate_20(
+        status,
+        official_eval_count=official_eval_count,
+        official_window_count=official_window_count,
+        avg_score=avg_score,
+        pass_rate=pass_rate,
+        fragility=fragility,
+    )
     summary = (
         f"{len(evaluations)} evals ({official_eval_count} official) across {len(windows)} windows "
         f"({official_window_count} official); avg_score={avg_score}, latest={scores[-1]:.3f}, pass_rate={pass_rate:.2f}."
     )
+    if fragility["is_fragile"]:
+        summary += f" Fragile triggers: {', '.join(fragility['trigger_bits'])}."
     return {
         "status": status,
         "evaluation_count": len(evaluations),
@@ -191,6 +350,9 @@ def summarize_candidate_status(evaluations: list[dict[str, Any]]) -> dict[str, A
         "summary": summary,
         "next_action": next_action,
         "rejection_reason": rejection_reason,
+        "fragility": fragility,
+        "acceptance_gate": gate,
+        "acceptance_gate_explanation": gate["explanation"],
     }
 
 
@@ -198,6 +360,7 @@ def build_hypothesis_summary(candidate: dict[str, Any], evaluations: list[dict[s
     family = candidate.get("family") or infer_factor_family(candidate.get("name", ""), None)
     promising_windows = [row.get("window_label") for row in evaluations if row.get("status") == "promising"]
     rejected_windows = [row.get("window_label") for row in evaluations if row.get("status") in BAD_STATUSES]
+    fragile_windows = [row.get("window_label") for row in evaluations if row.get("status") == "fragile"]
     evidence_for = []
     evidence_against = []
     if promising_windows:
@@ -205,6 +368,8 @@ def build_hypothesis_summary(candidate: dict[str, Any], evaluations: list[dict[s
     high_scores = [row for row in evaluations if float(row.get("final_score") or 0.0) >= 2.0]
     if high_scores:
         evidence_for.append(f"high score count: {len(high_scores)}")
+    if fragile_windows:
+        evidence_against.append(f"fragile windows: {', '.join(fragile_windows[:4])}")
     if rejected_windows:
         evidence_against.append(f"weak windows: {', '.join(rejected_windows[:4])}")
     recent_reason = next((row.get("rejection_reason") for row in reversed(evaluations) if row.get("rejection_reason")), None)
@@ -214,6 +379,8 @@ def build_hypothesis_summary(candidate: dict[str, Any], evaluations: list[dict[s
     candidate_status = candidate.get("status") or "testing"
     if candidate_status == "promising":
         next_action = "expand same family with nearby variants"
+    elif candidate_status == "fragile":
+        next_action = "run robustness and validation before any refinement"
     elif candidate_status == "rejected":
         next_action = "stop expanding this branch"
     elif candidate_status == "archived":

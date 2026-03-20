@@ -1,8 +1,9 @@
 {% extends 'base.html' %}
 {% block content %}
-<div class="grid cols-3" style="margin-bottom:18px;">
+<div class="grid cols-4" style="margin-bottom:18px;">
   <section class="card"><h2>Promising</h2><div style="font-size:36px; font-weight:700;">{{ summary.promising }}</div></section>
   <section class="card"><h2>Testing</h2><div style="font-size:36px; font-weight:700;">{{ summary.testing }}</div></section>
+  <section class="card"><h2>Fragile</h2><div style="font-size:36px; font-weight:700;">{{ summary.fragile }}</div></section>
   <section class="card"><h2>Rejected / Archived</h2><div style="font-size:36px; font-weight:700;">{{ summary.rejected_archived }}</div></section>
 </div>
 <section class="card">

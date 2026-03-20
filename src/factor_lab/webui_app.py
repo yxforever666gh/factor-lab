@@ -12,6 +12,7 @@ from fastapi.responses import HTMLResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from factor_lab.candidate_graph import build_graph_artifacts, build_candidate_graph_context, candidate_clusters, family_rollup
+from factor_lab.factor_candidates import summarize_candidate_status
 from factor_lab.db_views import ensure_views
 from factor_lab.ops import latest_task_states, trigger_script
 from factor_lab.storage import ExperimentStore
@@ -681,6 +682,7 @@ def candidates_page():
     summary = {
         'promising': len([row for row in candidates if row['status'] == 'promising']),
         'testing': len([row for row in candidates if row['status'] == 'testing']),
+        'fragile': len([row for row in candidates if row['status'] == 'fragile']),
         'rejected_archived': len([row for row in candidates if row['status'] in {'rejected', 'archived'}]),
     }
     return render('candidates.html', title='候选榜单', candidates=candidates, summary=summary)
@@ -695,12 +697,16 @@ def candidate_detail_page(candidate_id: str):
     evaluations = store.list_factor_evaluations(candidate_id=candidate_id, limit=200)
     hypothesis = store.get_hypothesis_for_candidate(candidate_id)
     detail_context = build_candidate_detail_context(store, candidate_id)
+    candidate_risk_profile = next((row for row in store.list_candidate_risk_profiles(limit=5000) if row.get('candidate_id') == candidate_id), None)
+    acceptance_snapshot = summarize_candidate_status(evaluations)
     return render(
         'candidate_detail.html',
         title=f"候选详情 {candidate['name']}",
         candidate=candidate,
         evaluations=evaluations,
         hypothesis=hypothesis,
+        candidate_risk_profile=candidate_risk_profile,
+        acceptance_snapshot=acceptance_snapshot,
         **detail_context,
     )
 

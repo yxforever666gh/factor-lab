@@ -60,7 +60,7 @@ SELECT
   COALESCE(family, 'other') AS family,
   COUNT(*) AS candidate_count,
   SUM(CASE WHEN status = 'promising' THEN 1 ELSE 0 END) AS promising_count,
-  SUM(CASE WHEN status = 'testing' THEN 1 ELSE 0 END) AS testing_count,
+  SUM(CASE WHEN status IN ('testing', 'fragile') THEN 1 ELSE 0 END) AS testing_count,
   SUM(CASE WHEN status IN ('rejected', 'archived') THEN 1 ELSE 0 END) AS rejected_count,
   ROUND(AVG(avg_final_score), 6) AS avg_candidate_score,
   ROUND(AVG(latest_final_score), 6) AS avg_latest_score,
