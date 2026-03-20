@@ -6,8 +6,8 @@ from typing import Any
 
 from factor_lab.opportunity_to_tasks import map_opportunity_to_task
 from factor_lab.opportunity_store import sync_opportunities, update_opportunity_state
-from factor_lab.opportunity_dedupe_policy import should_bypass_recent_fingerprint
-from factor_lab.opportunity_review import build_opportunity_review
+from factor_lab.opportunity_policy import should_bypass_recent_fingerprint
+from factor_lab.opportunity_diagnostics import build_opportunity_review
 from factor_lab.storage import ExperimentStore
 from factor_lab.research_runtime_state import recently_finished_same_fingerprint
 

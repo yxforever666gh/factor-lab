@@ -7,9 +7,7 @@ from typing import Any
 
 from factor_lab.question_generator import build_research_questions
 from factor_lab.opportunity_scorer import score_opportunity
-from factor_lab.opportunity_learning import build_opportunity_learning
-from factor_lab.opportunity_budget_allocator import allocate_opportunity_budget
-from factor_lab.opportunity_brancher import build_child_opportunities
+from factor_lab.opportunity_policy import build_opportunity_learning, allocate_opportunity_budget, build_child_opportunities
 
 ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS = ROOT / "artifacts"

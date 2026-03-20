@@ -16,9 +16,7 @@ from factor_lab.factor_candidates import summarize_candidate_status
 from factor_lab.db_views import ensure_views
 from factor_lab.ops import latest_task_states, trigger_script
 from factor_lab.storage import ExperimentStore
-from factor_lab.opportunity_metrics import build_opportunity_metrics
-from factor_lab.opportunity_review import build_opportunity_review
-from factor_lab.opportunity_archive_diagnostics import build_opportunity_archive_diagnostics
+from factor_lab.opportunity_diagnostics import build_opportunity_metrics, build_opportunity_review, build_opportunity_archive_diagnostics
 
 
 def pretty_json_text(value: Any, empty_text: str = "暂无数据。") -> str:
