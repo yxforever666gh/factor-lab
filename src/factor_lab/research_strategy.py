@@ -54,6 +54,9 @@ def load_or_initialize_research_memory(memory_path: str | Path) -> dict[str, Any
         "high_value_open_questions": [],
         "branch_history": [],
         "strategy_runs": [],
+        "candidate_lifecycle": {},
+        "branch_lifecycle": {},
+        "archived_branches": [],
     }
     _write_json(path, memory)
     return memory
@@ -112,14 +115,17 @@ def build_research_state_snapshot(
         relationship_signal = task.get("relationship_signal") or {}
         branch_signals.append(
             {
-                "branch_id": task.get("dedupe_signature") or task.get("fingerprint") or task.get("worker_note"),
+                "branch_id": task.get("branch_id") or task.get("dedupe_signature") or task.get("fingerprint") or task.get("worker_note"),
                 "category": task.get("category"),
                 "task_type": task.get("task_type"),
                 "priority_hint": task.get("priority_hint"),
+                "goal": task.get("goal") or (task.get("payload") or {}).get("goal"),
+                "hypothesis": task.get("hypothesis") or (task.get("payload") or {}).get("hypothesis"),
                 "expected_knowledge_gain": task.get("expected_knowledge_gain") or [],
                 "duplicate_risk": int(relationship_signal.get("duplicate_count") or 0),
                 "fragile_candidate_count": int(relationship_signal.get("fragile_candidate_count") or 0),
                 "family_focus": task.get("family_focus"),
+                "lifecycle_state": ((memory.get("branch_lifecycle") or {}).get(task.get("branch_id") or "") or {}).get("state", "exploring"),
             }
         )
 
@@ -202,6 +208,7 @@ class StrategyBrain:
 
         memory = state_snapshot.get("memory") or {}
         stable_candidates = set((state_snapshot.get("candidates") or {}).get("stable") or [])
+        graveyard_candidates = set((state_snapshot.get("candidates") or {}).get("graveyard") or [])
         repeated_failures = {
             row.get("task_type"): int(row.get("count") or 0)
             for row in (state_snapshot.get("repeated_failure_patterns") or [])
@@ -221,6 +228,8 @@ class StrategyBrain:
             budgets["validation"] += 1
 
         ranked: list[dict[str, Any]] = []
+        branch_actions: list[dict[str, Any]] = []
+        candidate_updates: dict[str, dict[str, Any]] = {}
         for task in tasks:
             category = task.get("category") or "validation"
             relationship_signal = task.get("relationship_signal") or {}
@@ -259,18 +268,14 @@ class StrategyBrain:
             if task.get("worker_note", "").find("graveyard") >= 0 and category == "validation":
                 score += 2
 
-            branch_action = None
-            if category == "exploration" and exploration_state.get("should_throttle"):
-                branch_action = {
-                    "action": "hold",
-                    "target": task.get("dedupe_signature") or task.get("fingerprint"),
-                    "reason": "exploration_throttled",
-                }
-            elif relationship_signal.get("duplicate_count") and int(relationship_signal.get("duplicate_count") or 0) >= 4 and category != "validation":
-                branch_action = {
-                    "action": "deprioritize",
-                    "target": task.get("dedupe_signature") or task.get("fingerprint"),
-                    "reason": "duplicate_pressure_high",
+            branch_action = _branch_lifecycle_decision(task, memory, exploration_state)
+            branch_actions.append(branch_action)
+            for candidate_name in sorted(focus_candidates):
+                candidate_updates[candidate_name] = {
+                    "candidate_name": candidate_name,
+                    "next_state": _candidate_lifecycle_state(candidate_name, stable_candidates, graveyard_candidates, task),
+                    "source_branch_id": task.get("branch_id") or task.get("dedupe_signature") or task.get("fingerprint"),
+                    "action": branch_action.get("action"),
                 }
 
             strategy_meta = {
@@ -292,7 +297,7 @@ class StrategyBrain:
         counts = {key: 0 for key in budgets}
         approved: list[dict[str, Any]] = []
         rejected: list[dict[str, Any]] = []
-        branch_actions: list[dict[str, Any]] = []
+        approved_branch_actions: list[dict[str, Any]] = []
         for task in ranked:
             category = task.get("category") or "validation"
             limit = budgets.get(category, 1)
@@ -302,20 +307,41 @@ class StrategyBrain:
             approved.append(task)
             counts[category] = counts.get(category, 0) + 1
             if task.get("branch_action"):
-                branch_actions.append(task["branch_action"])
+                approved_branch_actions.append(task["branch_action"])
+
+        branch_history_append = []
+        branch_lifecycle_updates = {}
+        for task in approved[:10]:
+            action = task.get("branch_action") or _branch_lifecycle_decision(task, memory, exploration_state)
+            branch_history_append.append(
+                {
+                    "updated_at_utc": _iso_now(),
+                    "target": task.get("branch_id") or task.get("dedupe_signature") or task.get("fingerprint"),
+                    "category": task.get("category"),
+                    "strategy_score": task.get("strategy_score"),
+                    "action": action.get("action") or "approved",
+                    "next_state": action.get("next_state"),
+                }
+            )
+            branch_lifecycle_updates[action["branch_id"]] = {
+                "state": action.get("next_state"),
+                "last_action": action.get("action"),
+                "reason": action.get("reason"),
+                "updated_at_utc": _iso_now(),
+                "goal": task.get("goal") or (task.get("payload") or {}).get("goal"),
+                "hypothesis": task.get("hypothesis") or (task.get("payload") or {}).get("hypothesis"),
+            }
 
         memory_updates = {
             "stable_candidates": sorted(stable_candidates),
             "high_value_open_questions": _derive_open_questions(approved),
-            "branch_history_append": [
-                {
-                    "updated_at_utc": _iso_now(),
-                    "target": task.get("dedupe_signature") or task.get("fingerprint"),
-                    "category": task.get("category"),
-                    "strategy_score": task.get("strategy_score"),
-                    "action": "approved",
-                }
-                for task in approved[:10]
+            "branch_history_append": branch_history_append,
+            "branch_lifecycle_updates": branch_lifecycle_updates,
+            "candidate_lifecycle_updates": candidate_updates,
+            "archived_branches": [
+                action["branch_id"]
+                for action in approved_branch_actions
+                if action.get("next_state") in {"archived", "terminated", "saturated"}
             ],
         }
         return {
@@ -324,9 +350,61 @@ class StrategyBrain:
             "budget_usage": counts,
             "approved_tasks": approved,
             "rejected_tasks": rejected,
-            "branch_actions": branch_actions,
+            "branch_actions": approved_branch_actions,
             "memory_updates": memory_updates,
         }
+
+
+def _candidate_lifecycle_state(name: str, stable_candidates: set[str], graveyard_candidates: set[str], task: dict[str, Any] | None = None) -> str:
+    if name in stable_candidates:
+        return "stable_candidate"
+    if name in graveyard_candidates:
+        return "graveyard"
+    if task and task.get("category") == "validation":
+        return "validating"
+    return "provisional"
+
+
+def _branch_lifecycle_decision(task: dict[str, Any], memory: dict[str, Any], exploration_state: dict[str, Any]) -> dict[str, Any]:
+    relationship_signal = task.get("relationship_signal") or {}
+    branch_id = task.get("branch_id") or task.get("dedupe_signature") or task.get("fingerprint")
+    branch_memory = (memory.get("branch_lifecycle") or {}).get(branch_id, {})
+    previous_state = branch_memory.get("state", "exploring")
+    duplicate_count = int(relationship_signal.get("duplicate_count") or 0)
+    fragile_count = int(relationship_signal.get("fragile_candidate_count") or 0)
+    strategy_score = float(task.get("strategy_score") or task.get("planner_score") or 0.0)
+    category = task.get("category") or "validation"
+
+    action = "hold"
+    next_state = previous_state
+    reason = "maintain_current_branch_state"
+    if category == "validation" and strategy_score >= 130:
+        action = "promote"
+        next_state = "validating"
+        reason = "high_confidence_validation_branch"
+    elif category == "exploration" and exploration_state.get("should_throttle"):
+        action = "archive"
+        next_state = "archived"
+        reason = "exploration_throttled"
+    elif duplicate_count >= 4 and category != "validation":
+        action = "terminate"
+        next_state = "terminated"
+        reason = "duplicate_pressure_high"
+    elif fragile_count >= 2 and category == "validation":
+        action = "hold"
+        next_state = "validating"
+        reason = "fragile_candidates_need_more_validation"
+    elif strategy_score < 90:
+        action = "demote"
+        next_state = "saturated"
+        reason = "low_strategy_score"
+    return {
+        "branch_id": branch_id,
+        "previous_state": previous_state,
+        "next_state": next_state,
+        "action": action,
+        "reason": reason,
+    }
 
 
 def _derive_open_questions(approved_tasks: list[dict[str, Any]]) -> list[str]:
@@ -425,6 +503,20 @@ def apply_strategy_plan(
         memory["stable_candidates"] = updates.get("stable_candidates")
     if updates.get("high_value_open_questions"):
         memory["high_value_open_questions"] = updates.get("high_value_open_questions")
+    candidate_lifecycle = dict(memory.get("candidate_lifecycle") or {})
+    for name, candidate_update in (updates.get("candidate_lifecycle_updates") or {}).items():
+        candidate_lifecycle[name] = {
+            **candidate_lifecycle.get(name, {}),
+            **candidate_update,
+            "updated_at_utc": _iso_now(),
+        }
+    memory["candidate_lifecycle"] = candidate_lifecycle
+    branch_lifecycle = dict(memory.get("branch_lifecycle") or {})
+    branch_lifecycle.update(updates.get("branch_lifecycle_updates") or {})
+    memory["branch_lifecycle"] = branch_lifecycle
+    archived_branches = list(memory.get("archived_branches") or [])
+    archived_branches.extend(updates.get("archived_branches") or [])
+    memory["archived_branches"] = archived_branches[-100:]
     branch_history = list(memory.get("branch_history") or [])
     branch_history.extend(updates.get("branch_history_append") or [])
     memory["branch_history"] = branch_history[-100:]
@@ -451,6 +543,9 @@ def apply_strategy_plan(
         "injected_tasks": injected,
         "skipped_tasks": skipped,
         "memory_updated": True,
+        "branch_lifecycle_updates": updates.get("branch_lifecycle_updates") or {},
+        "candidate_lifecycle_updates": updates.get("candidate_lifecycle_updates") or {},
+        "archived_branches": updates.get("archived_branches") or [],
     }
     _write_json(Path(output_path), payload)
     return payload

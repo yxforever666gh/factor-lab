@@ -154,6 +154,9 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
     space_map_path = ROOT / 'artifacts' / 'research_space_map.json'
     branch_plan = read_json(branch_plan_path) if branch_plan_path and Path(branch_plan_path).exists() else {}
     space_map = read_json(space_map_path) if space_map_path.exists() else {}
+    strategy_memory_path = ROOT / 'artifacts' / 'research_memory.json'
+    strategy_memory = read_json(strategy_memory_path) if strategy_memory_path.exists() else {}
+    archived_branches = set(strategy_memory.get('archived_branches', []) or [])
 
     existing_fingerprints = {task.get('fingerprint') for task in snapshot.get('recent_research_tasks', [])}
     existing_signatures = _existing_signatures(snapshot)
@@ -184,12 +187,23 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
 
     def append_task(task: dict[str, Any], suppression_reason: str | None = None) -> None:
         signature = _dedupe_signature(task)
+        branch_id = task.get('branch_id') or (task.get('payload') or {}).get('branch_id')
+        if branch_id and branch_id in archived_branches:
+            suppressed_tasks.append({
+                'fingerprint': task.get('fingerprint'),
+                'signature': signature,
+                'worker_note': task.get('worker_note'),
+                'reason': 'archived_branch_suppressed',
+                'branch_id': branch_id,
+            })
+            return
         if task.get('fingerprint') in existing_fingerprints or signature in existing_signatures or signature in seen_signatures:
             suppressed_tasks.append({
                 'fingerprint': task.get('fingerprint'),
                 'signature': signature,
                 'worker_note': task.get('worker_note'),
                 'reason': suppression_reason or 'duplicate_candidate_suppressed',
+                'branch_id': branch_id,
             })
             return
         seen_signatures.add(signature)
