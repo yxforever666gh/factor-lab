@@ -9,10 +9,10 @@
       {
         "candidate_name": "quality_roe",
         "risk_level": "medium",
-        "risk_score": 45.3438
+        "risk_score": 41.9651
       }
     ],
-    "avg_risk_score": 45.3438
+    "avg_risk_score": 41.9651
   },
   {
     "family": "value",
@@ -24,20 +24,20 @@
       {
         "candidate_name": "value_bp",
         "risk_level": "medium",
-        "risk_score": 48.281
+        "risk_score": 44.4772
       },
       {
         "candidate_name": "quality_minus_value",
         "risk_level": "medium",
-        "risk_score": 43.7695
+        "risk_score": 40.6186
       },
       {
         "candidate_name": "value_ep",
         "risk_level": "low",
-        "risk_score": 37.4669
+        "risk_score": 35.6625
       }
     ],
-    "avg_risk_score": 43.172467
+    "avg_risk_score": 40.252767
   },
   {
     "family": "momentum",
@@ -49,15 +49,15 @@
       {
         "candidate_name": "mom_20",
         "risk_level": "low",
-        "risk_score": 30.6269
+        "risk_score": 28.9441
       },
       {
         "candidate_name": "mom_plus_value",
         "risk_level": "low",
-        "risk_score": 30.6269
+        "risk_score": 28.9441
       }
     ],
-    "avg_risk_score": 30.6269
+    "avg_risk_score": 28.9441
   },
   {
     "family": "liquidity",
@@ -69,10 +69,10 @@
       {
         "candidate_name": "liquidity_turnover_shock",
         "risk_level": "low",
-        "risk_score": 17.3871
+        "risk_score": 15.739
       }
     ],
-    "avg_risk_score": 17.3871
+    "avg_risk_score": 15.739
   },
   {
     "family": "other",
@@ -84,9 +84,9 @@
       {
         "candidate_name": "size_small",
         "risk_level": "low",
-        "risk_score": 12.658
+        "risk_score": 11.6943
       }
     ],
-    "avg_risk_score": 12.658
+    "avg_risk_score": 11.6943
   }
 ]

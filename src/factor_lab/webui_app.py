@@ -710,7 +710,7 @@ def families_page():
     store = ExperimentStore(DB_PATH)
     candidates = store.list_factor_candidates(limit=1000)
     evaluations = store.list_factor_evaluations(limit=5000)
-    families = family_rollup(candidates, evaluations)
+    families = json.loads((DB_PATH.parent / 'family_risk_profiles.json').read_text(encoding='utf-8')) if (DB_PATH.parent / 'family_risk_profiles.json').exists() else family_rollup(candidates, evaluations)
     summary = {
         'family_count': len(families),
         'promising_count': sum(int(row['promising_count']) for row in families),
@@ -746,6 +746,16 @@ def robustness_page():
     family_risks = fetch_all(
         "SELECT family, candidate_count, avg_risk_score, high_risk_count, medium_risk_count, low_risk_count, avg_robustness_score FROM v_candidate_family_risk_summary ORDER BY COALESCE(avg_risk_score, -999) DESC, family ASC"
     )
+    family_risk_map = {}
+    family_risk_profiles_path = DB_PATH.parent / 'family_risk_profiles.json'
+    if family_risk_profiles_path.exists():
+        for row in json.loads(family_risk_profiles_path.read_text(encoding='utf-8')):
+            family_risk_map[row.get('family')] = row
+    for row in family_risks:
+        extra = family_risk_map.get(row.get('family')) or {}
+        row['trial_pressure'] = extra.get('trial_pressure')
+        row['false_positive_pressure'] = extra.get('false_positive_pressure')
+        row['recommended_action'] = extra.get('recommended_action')
     candidate_name_by_id = {row['id']: row['name'] for row in store.list_factor_candidates(limit=1000)}
     avg_risk_score = round(sum(float(row.get('risk_score') or 0.0) for row in profiles) / max(len(profiles), 1), 6) if profiles else None
     summary = {

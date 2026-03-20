@@ -11,8 +11,10 @@
       "current_level": 6,
       "next_level": 7,
       "fatigue": "medium",
+      "trial_pressure": 0.0,
+      "false_positive_pressure": 0.0,
       "priority_score": 109.387,
-      "reason": "高分 family=117.55，refinement=2，优先把强主线做深。最近增量 7。"
+      "reason": "高分 family=117.55，refinement=2，优先把强主线做深。最近增量 7。 trial_pressure=0.0，false_positive_pressure=0.0。"
     },
     {
       "family": "graveyard_diagnosis",
@@ -21,8 +23,10 @@
       "current_level": 6,
       "next_level": 7,
       "fatigue": "medium",
+      "trial_pressure": 26.25,
+      "false_positive_pressure": 0.0,
       "priority_score": 54.0,
-      "reason": "duplicate=0，需要确认失败因子是否只是同构重复。最近增量 20。"
+      "reason": "duplicate=0，需要确认失败因子是否只是同构重复。最近增量 20。 trial_pressure=26.2，false_positive_pressure=0.0。"
     },
     {
       "family": "recent_window_validation",
@@ -31,18 +35,22 @@
       "current_level": 8,
       "next_level": 9,
       "fatigue": "medium",
+      "trial_pressure": 0.0,
+      "false_positive_pressure": 0.0,
       "priority_score": 60.0,
-      "reason": "近期窗口验证仍有缺口，且 refinement=2，适合先确认分支稳定性。最近增量 0。"
+      "reason": "近期窗口验证仍有缺口，且 refinement=2，适合先确认分支稳定性。最近增量 0。 trial_pressure=0.0，false_positive_pressure=0.0。"
     },
     {
       "family": "window_expansion",
-      "decision": "advance",
+      "decision": "pause",
       "recommended_action": "continue",
       "current_level": 10,
       "next_level": 11,
       "fatigue": "medium",
-      "priority_score": 56.0,
-      "reason": "hybrid=1，需要跨更长区间确认组合关系是否持久。最近增量 0。"
+      "trial_pressure": 74.166667,
+      "false_positive_pressure": 77.5,
+      "priority_score": 30.0,
+      "reason": "hybrid=1，需要跨更长区间确认组合关系是否持久。最近增量 0。 trial_pressure=74.2，false_positive_pressure=77.5。"
     },
     {
       "family": "exploration",
@@ -51,8 +59,10 @@
       "current_level": 1,
       "next_level": 2,
       "fatigue": "low",
+      "trial_pressure": 0.0,
+      "false_positive_pressure": 0.0,
       "priority_score": 46.0,
-      "reason": "exploration 仅在已有 family 分数较强且混合支路出现时推进。最近增量 83。"
+      "reason": "exploration 仅在已有 family 分数较强且混合支路出现时推进。最近增量 83。 trial_pressure=0.0，false_positive_pressure=0.0。"
     }
   ],
   "selected_tasks": [
@@ -254,7 +264,10 @@
         "relationship_count": 1,
         "lineage_count": 0,
         "family_score": 117.546424,
-        "duplicate_count": 0
+        "duplicate_count": 0,
+        "trial_pressure": null,
+        "false_positive_pressure": null,
+        "trial_count": null
       },
       "family_recommendation": {
         "family": "momentum",
@@ -262,15 +275,30 @@
         "family_score": 117.546424,
         "primary_candidate": "mom_20",
         "duplicate_pressure": 0,
-        "representative_count": 1
+        "representative_count": 1,
+        "trial_pressure": 0.0,
+        "false_positive_pressure": 0.0,
+        "trial_count": 0,
+        "family_risk_score": 48.0,
+        "family_risk_profile": {
+          "trial_count": 0,
+          "informative_trial_count": 0,
+          "no_gain_trial_count": 0,
+          "failed_trial_count": 0,
+          "knowledge_gain_per_trial": null,
+          "trial_pressure": 0.0,
+          "false_positive_pressure": 0.0,
+          "risk_score": 48.0,
+          "recommended_action": "continue"
+        }
       },
+      "trial_accounting": {},
       "dedupe_signature": "stable_candidate_validation::diagnostic::mom_20"
     }
   ],
   "selected_families": [
     "stable_candidate_validation",
     "recent_window_validation",
-    "window_expansion",
     "graveyard_diagnosis"
   ]
 }

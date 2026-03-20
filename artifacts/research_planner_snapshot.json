@@ -332,128 +332,128 @@
     "should_throttle": false
   },
   "daemon_status": {
-    "updated_at_utc": "2026-03-20T15:59:46.658910+00:00",
+    "updated_at_utc": "2026-03-20T16:40:50.910124+00:00",
     "pid": 1073652,
     "state": "idle",
     "processed_count": 0
   },
   "heartbeat_tail": [
     {
-      "recorded_at_utc": "2026-03-20T15:53:45.529895+00:00",
+      "recorded_at_utc": "2026-03-20T16:34:50.273398+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T15:53:45.530096+00:00",
+      "recorded_at_utc": "2026-03-20T16:34:50.273639+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T15:54:45.616575+00:00",
+      "recorded_at_utc": "2026-03-20T16:35:50.360871+00:00",
       "scope": "research_orchestrator",
       "status": "info",
       "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=8, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T15:54:45.631966+00:00",
+      "recorded_at_utc": "2026-03-20T16:35:50.375647+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T15:54:45.632167+00:00",
+      "recorded_at_utc": "2026-03-20T16:35:50.375837+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T15:55:45.722556+00:00",
+      "recorded_at_utc": "2026-03-20T16:36:50.463897+00:00",
       "scope": "research_orchestrator",
       "status": "info",
       "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=8, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T15:55:45.737277+00:00",
+      "recorded_at_utc": "2026-03-20T16:36:50.480576+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T15:55:45.737481+00:00",
+      "recorded_at_utc": "2026-03-20T16:36:50.480815+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T15:56:45.827998+00:00",
+      "recorded_at_utc": "2026-03-20T16:37:50.571467+00:00",
       "scope": "research_orchestrator",
       "status": "info",
       "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=8, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T15:56:45.843049+00:00",
+      "recorded_at_utc": "2026-03-20T16:37:50.586662+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T15:56:45.843259+00:00",
+      "recorded_at_utc": "2026-03-20T16:37:50.586870+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T15:57:45.916004+00:00",
+      "recorded_at_utc": "2026-03-20T16:38:50.681514+00:00",
       "scope": "research_orchestrator",
       "status": "info",
       "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=8, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T15:57:45.931135+00:00",
+      "recorded_at_utc": "2026-03-20T16:38:50.696565+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T15:57:45.931344+00:00",
+      "recorded_at_utc": "2026-03-20T16:38:50.696765+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T15:58:46.018800+00:00",
+      "recorded_at_utc": "2026-03-20T16:39:50.788789+00:00",
       "scope": "research_orchestrator",
       "status": "info",
       "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=8, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T15:58:46.033831+00:00",
+      "recorded_at_utc": "2026-03-20T16:39:50.803731+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T15:58:46.034048+00:00",
+      "recorded_at_utc": "2026-03-20T16:39:50.803941+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T15:59:46.642663+00:00",
+      "recorded_at_utc": "2026-03-20T16:40:50.893930+00:00",
       "scope": "research_orchestrator",
       "status": "info",
       "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=8, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T15:59:46.657633+00:00",
+      "recorded_at_utc": "2026-03-20T16:40:50.909072+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T15:59:46.657825+00:00",
+      "recorded_at_utc": "2026-03-20T16:40:50.909272+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
@@ -544,46 +544,43 @@
   },
   "family_summary": [
     {
-      "family": "momentum",
-      "candidate_count": 2,
-      "evaluation_count": 372,
-      "window_count": 9,
-      "promising_count": 2,
-      "testing_count": 0,
-      "rejected_count": 0,
-      "top_status": "promising",
-      "avg_candidate_score": 8.318303,
-      "avg_latest_score": 3.005267,
-      "avg_best_score": 9.263306,
-      "family_score": 117.546424,
-      "duplicate_pressure": 0,
-      "cluster_pressure": 6.0,
-      "representative_count": 1,
-      "primary_candidate": "mom_20",
-      "representative_candidates": [
-        "mom_20"
-      ],
-      "recommended_action": "continue"
-    },
-    {
-      "family": "value",
-      "candidate_count": 3,
-      "evaluation_count": 294,
-      "window_count": 9,
-      "promising_count": 1,
-      "testing_count": 2,
+      "family": "quality",
+      "candidate_count": 1,
+      "evaluation_count": 2,
+      "window_count": 1,
+      "promising_count": 0,
+      "testing_count": 1,
       "rejected_count": 0,
       "top_status": "testing",
-      "avg_candidate_score": 5.866679,
-      "avg_latest_score": 3.193535,
-      "avg_best_score": 7.249232,
-      "family_score": 93.933432,
+      "avg_candidate_score": 4.41182,
+      "avg_latest_score": 4.41182,
+      "avg_best_score": 4.41182,
+      "family_score": 45.29456,
       "duplicate_pressure": 0,
       "cluster_pressure": 6.0,
       "representative_count": 0,
       "primary_candidate": null,
       "representative_candidates": [],
-      "recommended_action": "refine"
+      "recommended_action": "explore_new_branch",
+      "family_risk_profile": {
+        "trial_count": 0,
+        "informative_trial_count": 0,
+        "no_gain_trial_count": 0,
+        "failed_trial_count": 0,
+        "knowledge_gain_per_trial": null,
+        "trial_pressure": 0.0,
+        "false_positive_pressure": 0.0,
+        "risk_score": 72.617448,
+        "recommended_action": "explore_new_branch"
+      },
+      "trial_count": 0,
+      "informative_trial_count": 0,
+      "no_gain_trial_count": 0,
+      "failed_trial_count": 0,
+      "knowledge_gain_per_trial": null,
+      "trial_pressure": 0.0,
+      "false_positive_pressure": 0.0,
+      "family_risk_score": 72.617448
     },
     {
       "family": "other",
@@ -605,7 +602,106 @@
       "representative_candidates": [
         "size_small"
       ],
-      "recommended_action": "continue"
+      "recommended_action": "pause",
+      "family_risk_profile": {
+        "trial_count": 155,
+        "informative_trial_count": 49,
+        "no_gain_trial_count": 103,
+        "failed_trial_count": 3,
+        "knowledge_gain_per_trial": 0.593548,
+        "trial_pressure": 100.0,
+        "false_positive_pressure": 100.0,
+        "risk_score": 61.338383,
+        "recommended_action": "pause"
+      },
+      "trial_count": 155,
+      "informative_trial_count": 49,
+      "no_gain_trial_count": 103,
+      "failed_trial_count": 3,
+      "knowledge_gain_per_trial": 0.593548,
+      "trial_pressure": 100.0,
+      "false_positive_pressure": 100.0,
+      "family_risk_score": 61.338383
+    },
+    {
+      "family": "value",
+      "candidate_count": 3,
+      "evaluation_count": 294,
+      "window_count": 9,
+      "promising_count": 1,
+      "testing_count": 2,
+      "rejected_count": 0,
+      "top_status": "testing",
+      "avg_candidate_score": 5.866679,
+      "avg_latest_score": 3.193535,
+      "avg_best_score": 7.249232,
+      "family_score": 93.933432,
+      "duplicate_pressure": 0,
+      "cluster_pressure": 6.0,
+      "representative_count": 0,
+      "primary_candidate": null,
+      "representative_candidates": [],
+      "recommended_action": "refine",
+      "family_risk_profile": {
+        "trial_count": 0,
+        "informative_trial_count": 0,
+        "no_gain_trial_count": 0,
+        "failed_trial_count": 0,
+        "knowledge_gain_per_trial": null,
+        "trial_pressure": 0.0,
+        "false_positive_pressure": 0.0,
+        "risk_score": 50.729956,
+        "recommended_action": "refine"
+      },
+      "trial_count": 0,
+      "informative_trial_count": 0,
+      "no_gain_trial_count": 0,
+      "failed_trial_count": 0,
+      "knowledge_gain_per_trial": null,
+      "trial_pressure": 0.0,
+      "false_positive_pressure": 0.0,
+      "family_risk_score": 50.729956
+    },
+    {
+      "family": "momentum",
+      "candidate_count": 2,
+      "evaluation_count": 372,
+      "window_count": 9,
+      "promising_count": 2,
+      "testing_count": 0,
+      "rejected_count": 0,
+      "top_status": "promising",
+      "avg_candidate_score": 8.318303,
+      "avg_latest_score": 3.005267,
+      "avg_best_score": 9.263306,
+      "family_score": 117.546424,
+      "duplicate_pressure": 0,
+      "cluster_pressure": 6.0,
+      "representative_count": 1,
+      "primary_candidate": "mom_20",
+      "representative_candidates": [
+        "mom_20"
+      ],
+      "recommended_action": "continue",
+      "family_risk_profile": {
+        "trial_count": 0,
+        "informative_trial_count": 0,
+        "no_gain_trial_count": 0,
+        "failed_trial_count": 0,
+        "knowledge_gain_per_trial": null,
+        "trial_pressure": 0.0,
+        "false_positive_pressure": 0.0,
+        "risk_score": 48.0,
+        "recommended_action": "continue"
+      },
+      "trial_count": 0,
+      "informative_trial_count": 0,
+      "no_gain_trial_count": 0,
+      "failed_trial_count": 0,
+      "knowledge_gain_per_trial": null,
+      "trial_pressure": 0.0,
+      "false_positive_pressure": 0.0,
+      "family_risk_score": 48.0
     },
     {
       "family": "liquidity",
@@ -627,37 +723,74 @@
       "representative_candidates": [
         "liquidity_turnover_shock"
       ],
-      "recommended_action": "continue"
-    },
-    {
-      "family": "quality",
-      "candidate_count": 1,
-      "evaluation_count": 2,
-      "window_count": 1,
-      "promising_count": 0,
-      "testing_count": 1,
-      "rejected_count": 0,
-      "top_status": "testing",
-      "avg_candidate_score": 4.41182,
-      "avg_latest_score": 4.41182,
-      "avg_best_score": 4.41182,
-      "family_score": 45.29456,
-      "duplicate_pressure": 0,
-      "cluster_pressure": 6.0,
-      "representative_count": 0,
-      "primary_candidate": null,
-      "representative_candidates": [],
-      "recommended_action": "explore_new_branch"
+      "recommended_action": "continue",
+      "family_risk_profile": {
+        "trial_count": 0,
+        "informative_trial_count": 0,
+        "no_gain_trial_count": 0,
+        "failed_trial_count": 0,
+        "knowledge_gain_per_trial": null,
+        "trial_pressure": 0.0,
+        "false_positive_pressure": 0.0,
+        "risk_score": 14.408227,
+        "recommended_action": "continue"
+      },
+      "trial_count": 0,
+      "informative_trial_count": 0,
+      "no_gain_trial_count": 0,
+      "failed_trial_count": 0,
+      "knowledge_gain_per_trial": null,
+      "trial_pressure": 0.0,
+      "false_positive_pressure": 0.0,
+      "family_risk_score": 14.408227
     }
   ],
   "family_recommendations": [
     {
-      "family": "momentum",
-      "recommended_action": "continue",
-      "family_score": 117.546424,
-      "primary_candidate": "mom_20",
+      "family": "quality",
+      "recommended_action": "explore_new_branch",
+      "family_score": 45.29456,
+      "primary_candidate": null,
       "duplicate_pressure": 0,
-      "representative_count": 1
+      "representative_count": 0,
+      "trial_pressure": 0.0,
+      "false_positive_pressure": 0.0,
+      "trial_count": 0,
+      "family_risk_score": 72.617448,
+      "family_risk_profile": {
+        "trial_count": 0,
+        "informative_trial_count": 0,
+        "no_gain_trial_count": 0,
+        "failed_trial_count": 0,
+        "knowledge_gain_per_trial": null,
+        "trial_pressure": 0.0,
+        "false_positive_pressure": 0.0,
+        "risk_score": 72.617448,
+        "recommended_action": "explore_new_branch"
+      }
+    },
+    {
+      "family": "other",
+      "recommended_action": "pause",
+      "family_score": 85.914704,
+      "primary_candidate": "size_small",
+      "duplicate_pressure": 0,
+      "representative_count": 1,
+      "trial_pressure": 100.0,
+      "false_positive_pressure": 100.0,
+      "trial_count": 155,
+      "family_risk_score": 61.338383,
+      "family_risk_profile": {
+        "trial_count": 155,
+        "informative_trial_count": 49,
+        "no_gain_trial_count": 103,
+        "failed_trial_count": 3,
+        "knowledge_gain_per_trial": 0.593548,
+        "trial_pressure": 100.0,
+        "false_positive_pressure": 100.0,
+        "risk_score": 61.338383,
+        "recommended_action": "pause"
+      }
     },
     {
       "family": "value",
@@ -665,15 +798,45 @@
       "family_score": 93.933432,
       "primary_candidate": null,
       "duplicate_pressure": 0,
-      "representative_count": 0
+      "representative_count": 0,
+      "trial_pressure": 0.0,
+      "false_positive_pressure": 0.0,
+      "trial_count": 0,
+      "family_risk_score": 50.729956,
+      "family_risk_profile": {
+        "trial_count": 0,
+        "informative_trial_count": 0,
+        "no_gain_trial_count": 0,
+        "failed_trial_count": 0,
+        "knowledge_gain_per_trial": null,
+        "trial_pressure": 0.0,
+        "false_positive_pressure": 0.0,
+        "risk_score": 50.729956,
+        "recommended_action": "refine"
+      }
     },
     {
-      "family": "other",
+      "family": "momentum",
       "recommended_action": "continue",
-      "family_score": 85.914704,
-      "primary_candidate": "size_small",
+      "family_score": 117.546424,
+      "primary_candidate": "mom_20",
       "duplicate_pressure": 0,
-      "representative_count": 1
+      "representative_count": 1,
+      "trial_pressure": 0.0,
+      "false_positive_pressure": 0.0,
+      "trial_count": 0,
+      "family_risk_score": 48.0,
+      "family_risk_profile": {
+        "trial_count": 0,
+        "informative_trial_count": 0,
+        "no_gain_trial_count": 0,
+        "failed_trial_count": 0,
+        "knowledge_gain_per_trial": null,
+        "trial_pressure": 0.0,
+        "false_positive_pressure": 0.0,
+        "risk_score": 48.0,
+        "recommended_action": "continue"
+      }
     },
     {
       "family": "liquidity",
@@ -681,15 +844,22 @@
       "family_score": 85.759496,
       "primary_candidate": "liquidity_turnover_shock",
       "duplicate_pressure": 0,
-      "representative_count": 1
-    },
-    {
-      "family": "quality",
-      "recommended_action": "explore_new_branch",
-      "family_score": 45.29456,
-      "primary_candidate": null,
-      "duplicate_pressure": 0,
-      "representative_count": 0
+      "representative_count": 1,
+      "trial_pressure": 0.0,
+      "false_positive_pressure": 0.0,
+      "trial_count": 0,
+      "family_risk_score": 14.408227,
+      "family_risk_profile": {
+        "trial_count": 0,
+        "informative_trial_count": 0,
+        "no_gain_trial_count": 0,
+        "failed_trial_count": 0,
+        "knowledge_gain_per_trial": null,
+        "trial_pressure": 0.0,
+        "false_positive_pressure": 0.0,
+        "risk_score": 14.408227,
+        "recommended_action": "continue"
+      }
     }
   ],
   "candidate_clusters": [
@@ -1948,6 +2118,53 @@
     "exploration_candidate_survived": 2,
     "exploration_graveyard_identified": 7,
     "no_significant_information_gain": 0
+  },
+  "research_trial_summary": {
+    "graveyard_diagnosis": {
+      "family": "graveyard_diagnosis",
+      "trial_count": 106,
+      "informative_trial_count": 106,
+      "no_gain_trial_count": 0,
+      "failed_trial_count": 0,
+      "running_trial_count": 0,
+      "pending_trial_count": 0,
+      "knowledge_gain_total": 145,
+      "pressure_weight_total": 79.5,
+      "latest_trial_at": "2026-03-20T13:50:31.324044+00:00",
+      "knowledge_gain_per_trial": 1.367925,
+      "trial_pressure": 26.25,
+      "false_positive_pressure": 0.0
+    },
+    "other": {
+      "family": "other",
+      "trial_count": 155,
+      "informative_trial_count": 49,
+      "no_gain_trial_count": 103,
+      "failed_trial_count": 3,
+      "running_trial_count": 0,
+      "pending_trial_count": 0,
+      "knowledge_gain_total": 92,
+      "pressure_weight_total": 180.59999999999965,
+      "latest_trial_at": "2026-03-20T13:50:29.276195+00:00",
+      "knowledge_gain_per_trial": 0.593548,
+      "trial_pressure": 100.0,
+      "false_positive_pressure": 100.0
+    },
+    "window_expansion": {
+      "family": "window_expansion",
+      "trial_count": 3,
+      "informative_trial_count": 0,
+      "no_gain_trial_count": 2,
+      "failed_trial_count": 1,
+      "running_trial_count": 0,
+      "pending_trial_count": 0,
+      "knowledge_gain_total": 0,
+      "pressure_weight_total": 4.300000000000001,
+      "latest_trial_at": "2026-03-19T08:06:28.889991+00:00",
+      "knowledge_gain_per_trial": 0.0,
+      "trial_pressure": 74.166667,
+      "false_positive_pressure": 77.5
+    }
   },
   "recent_research_tasks": [
     {

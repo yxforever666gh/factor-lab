@@ -34,6 +34,9 @@ def aggregate_candidate_checks(
     lineage = candidate_context.get("lineage") or []
     family_score = float(family_context.get("family_score") or 0.0)
     family_action = family_context.get("recommended_action") or "explore_new_branch"
+    family_risk_profile = family_context.get("family_risk_profile") or {}
+    trial_pressure = float(family_risk_profile.get("trial_pressure") or family_context.get("trial_pressure") or 0.0)
+    false_positive_pressure = float(family_risk_profile.get("false_positive_pressure") or family_context.get("false_positive_pressure") or 0.0)
 
     checks = []
 
@@ -91,6 +94,17 @@ def aggregate_candidate_checks(
         "weight": 0.9,
         "evidence": {"family_score": family_score, "recommended_action": family_action, "family": candidate.get("family")},
         "rationale": "Healthy families with viable representatives make a candidate easier to trust and extend.",
+    })
+
+    trial_score = _clip(1.0 - (trial_pressure / 100.0) * 0.7 - (false_positive_pressure / 100.0) * 0.3, 0.0, 1.0)
+    checks.append({
+        "check_name": "trial_accounting",
+        "status": "pass" if trial_pressure < 35 and false_positive_pressure < 30 else "warn" if trial_pressure < 65 and false_positive_pressure < 60 else "fail",
+        "severity": "medium" if trial_pressure < 65 else "high",
+        "score": round(trial_score, 6),
+        "weight": 1.1,
+        "evidence": {"trial_pressure": trial_pressure, "false_positive_pressure": false_positive_pressure, "family": candidate.get("family")},
+        "rationale": "Families with many low-information retries should be treated as higher false-positive risk.",
     })
 
     return checks

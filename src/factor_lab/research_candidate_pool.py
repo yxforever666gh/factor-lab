@@ -39,7 +39,7 @@ def _cluster_rep_map(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return out
 
 
-def _priority_adjustment(family_score: float | None, relationship_count: int, lineage_count: int) -> int:
+def _priority_adjustment(family_score: float | None, relationship_count: int, lineage_count: int, trial_pressure: float | None = None, false_positive_pressure: float | None = None) -> int:
     adj = 0
     if family_score is not None:
         if family_score >= 100:
@@ -52,6 +52,16 @@ def _priority_adjustment(family_score: float | None, relationship_count: int, li
         adj -= 2
     if lineage_count >= 2:
         adj -= 2
+    if trial_pressure is not None:
+        if trial_pressure >= 75:
+            adj += 6
+        elif trial_pressure >= 50:
+            adj += 3
+    if false_positive_pressure is not None:
+        if false_positive_pressure >= 70:
+            adj += 5
+        elif false_positive_pressure >= 45:
+            adj += 2
     return adj
 
 
@@ -152,6 +162,7 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
     cluster_rep_map = _cluster_rep_map(snapshot)
     relationship_summary = snapshot.get('relationship_summary', {}) or {}
     family_recommendations = {row.get('family'): row for row in snapshot.get('family_recommendations', []) if row.get('family')}
+    trial_summary = snapshot.get('research_trial_summary', {}) or {}
 
     stable_candidates, representative_notes = _prefer_representatives(raw_stable_candidates, candidate_context_by_name, cluster_rep_map)
 
@@ -215,10 +226,13 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
                     key=lambda name: (family_score_map.get(name) or {}).get('family_score', -999),
                     default=None,
                 )
+            strongest_trial = trial_summary.get(strongest_family or '', {}) if strongest_family else {}
             task['priority_hint'] += _priority_adjustment(
                 max(family_scores) if family_scores else None,
                 relationship_count,
                 lineage_count,
+                strongest_trial.get('trial_pressure'),
+                strongest_trial.get('false_positive_pressure'),
             )
             task['focus_candidates'] = focus_context
             task['family_focus'] = strongest_family
@@ -228,12 +242,17 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
                 'lineage_count': lineage_count,
                 'family_score': max(family_scores) if family_scores else None,
                 'duplicate_count': int(relationship_summary.get('duplicate_of', 0)),
+                'trial_pressure': strongest_trial.get('trial_pressure'),
+                'false_positive_pressure': strongest_trial.get('false_positive_pressure'),
+                'trial_count': strongest_trial.get('trial_count'),
             }
             if strongest_family and strongest_family in family_recommendations:
                 task['family_recommendation'] = family_recommendations[strongest_family]
+            task['trial_accounting'] = strongest_trial
             task['reason'] += (
                 f" 重点候选累计关系 {relationship_count} 条、lineage {lineage_count} 条"
                 + (f"，最强 family={strongest_family}" if strongest_family else "")
+                + (f"，trial_pressure={strongest_trial.get('trial_pressure')}，false_positive_pressure={strongest_trial.get('false_positive_pressure')}" if strongest_trial else "")
                 + f"。保留 cluster representatives 后实际验证 {len(stable_candidates)} 个代表候选，压制 {len([r for r in representative_notes if r.get('suppressed_into')])} 个重复/近重复候选。"
             )
             append_task(task, 'stable_validation_already_covered')

@@ -185,6 +185,20 @@ CREATE TABLE IF NOT EXISTS candidate_risk_profile (
     profile_json TEXT,
     updated_at_utc TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS research_trial_log (
+    source_task_id TEXT PRIMARY KEY,
+    fingerprint TEXT,
+    family TEXT NOT NULL,
+    category TEXT,
+    candidate_name TEXT,
+    status TEXT NOT NULL,
+    outcome_label TEXT NOT NULL,
+    knowledge_gain_count INTEGER NOT NULL DEFAULT 0,
+    pressure_weight REAL NOT NULL DEFAULT 1.0,
+    created_at_utc TEXT NOT NULL,
+    details_json TEXT
+);
 """
 
 
@@ -212,6 +226,10 @@ class ExperimentStore:
         risk_cols = {row[1] for row in self.conn.execute("PRAGMA table_info(candidate_risk_profile)").fetchall()}
         if risk_cols and "profile_json" not in risk_cols:
             self.conn.execute("ALTER TABLE candidate_risk_profile ADD COLUMN profile_json TEXT")
+
+        trial_cols = {row[1] for row in self.conn.execute("PRAGMA table_info(research_trial_log)").fetchall()}
+        if trial_cols and "details_json" not in trial_cols:
+            self.conn.execute("ALTER TABLE research_trial_log ADD COLUMN details_json TEXT")
 
     def insert_run(self, payload: dict) -> None:
         self.conn.execute(
@@ -903,6 +921,88 @@ class ExperimentStore:
                 "rationale": row[9], "created_at_utc": row[10],
             })
         return items
+
+    def upsert_research_trial_log(self, payload: dict[str, Any]) -> None:
+        self.conn.execute(
+            """
+            INSERT INTO research_trial_log (
+                source_task_id, fingerprint, family, category, candidate_name, status, outcome_label,
+                knowledge_gain_count, pressure_weight, created_at_utc, details_json
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(source_task_id) DO UPDATE SET
+                fingerprint=excluded.fingerprint,
+                family=excluded.family,
+                category=excluded.category,
+                candidate_name=excluded.candidate_name,
+                status=excluded.status,
+                outcome_label=excluded.outcome_label,
+                knowledge_gain_count=excluded.knowledge_gain_count,
+                pressure_weight=excluded.pressure_weight,
+                created_at_utc=excluded.created_at_utc,
+                details_json=excluded.details_json
+            """,
+            (
+                payload["source_task_id"],
+                payload.get("fingerprint"),
+                payload.get("family") or "other",
+                payload.get("category"),
+                payload.get("candidate_name"),
+                payload.get("status") or "pending",
+                payload.get("outcome_label") or "pending",
+                int(payload.get("knowledge_gain_count") or 0),
+                float(payload.get("pressure_weight") or 1.0),
+                payload.get("created_at_utc") or datetime.now(timezone.utc).isoformat(),
+                json.dumps(payload.get("details") or {}, ensure_ascii=False, sort_keys=True),
+            ),
+        )
+        self.conn.commit()
+
+    def sync_research_trial_logs_from_tasks(self, limit: int = 500) -> list[dict[str, Any]]:
+        from factor_lab.research_trials import build_trial_log_entry
+        rows = self.conn.execute(
+            """
+            SELECT task_id, task_type, status, priority, fingerprint, payload_json, parent_task_id,
+                   attempt_count, last_error, created_at_utc, started_at_utc, finished_at_utc, worker_note
+            FROM research_tasks
+            ORDER BY created_at_utc DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        synced = []
+        for row in rows:
+            task = {
+                "task_id": row[0], "task_type": row[1], "status": row[2], "priority": row[3],
+                "fingerprint": row[4], "payload": json.loads(row[5] or '{}'), "parent_task_id": row[6],
+                "attempt_count": row[7], "last_error": row[8], "created_at_utc": row[9],
+                "started_at_utc": row[10], "finished_at_utc": row[11], "worker_note": row[12],
+            }
+            payload = build_trial_log_entry(task)
+            self.upsert_research_trial_log(payload)
+            synced.append(payload)
+        return synced
+
+    def list_research_trial_logs(self, limit: int = 1000) -> list[dict[str, Any]]:
+        rows = self.conn.execute(
+            """
+            SELECT source_task_id, fingerprint, family, category, candidate_name, status, outcome_label,
+                   knowledge_gain_count, pressure_weight, created_at_utc, details_json
+            FROM research_trial_log
+            ORDER BY created_at_utc DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [{
+            "source_task_id": row[0], "fingerprint": row[1], "family": row[2], "category": row[3],
+            "candidate_name": row[4], "status": row[5], "outcome_label": row[6],
+            "knowledge_gain_count": row[7], "pressure_weight": row[8], "created_at_utc": row[9],
+            "details": json.loads(row[10] or '{}'),
+        } for row in rows]
+
+    def summarize_research_trials(self, limit: int = 1000) -> dict[str, dict[str, Any]]:
+        from factor_lab.research_trials import build_family_trial_summary
+        return build_family_trial_summary(self.list_research_trial_logs(limit=limit))
 
     def top_promising_candidates(self, limit: int = 5) -> list[dict[str, Any]]:
         return self.list_factor_candidates(limit=limit, statuses=["promising", "testing"])

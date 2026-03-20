@@ -103,12 +103,19 @@ def build_research_planner_snapshot(db_path: str | Path, output_path: str | Path
                 "primary_candidate": row.get("primary_candidate"),
                 "duplicate_pressure": row.get("duplicate_pressure"),
                 "representative_count": row.get("representative_count"),
+                "trial_pressure": row.get("trial_pressure"),
+                "false_positive_pressure": row.get("false_positive_pressure"),
+                "trial_count": row.get("trial_count"),
+                "family_risk_score": row.get("family_risk_score"),
+                "family_risk_profile": row.get("family_risk_profile") or {},
             }
             for row in family_summary
         ]
 
         from factor_lab.storage import ExperimentStore
         store = ExperimentStore(db_path)
+        store.sync_research_trial_logs_from_tasks(limit=500)
+        research_trial_summary = store.summarize_research_trials(limit=1000)
         queue_budget = queue_budget_snapshot(store)
         failure_state = recent_failure_stats(store)
         exploration_state = exploration_health(store)
@@ -155,6 +162,7 @@ def build_research_planner_snapshot(db_path: str | Path, output_path: str | Path
             "candidate_context": candidate_context,
             "relationship_summary": relationship_summary,
             "knowledge_gain_counter": knowledge_gain_counter,
+            "research_trial_summary": research_trial_summary,
             "recent_research_tasks": [
                 {
                     **{k: v for k, v in task.items() if k != "payload_json"},

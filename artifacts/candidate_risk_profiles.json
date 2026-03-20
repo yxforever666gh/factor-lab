@@ -5,14 +5,14 @@
     "family": "value",
     "run_id": null,
     "risk_level": "medium",
-    "risk_score": 48.281,
-    "robustness_score": 0.73719,
+    "risk_score": 44.4772,
+    "robustness_score": 0.775228,
     "family_context_score": 0.939334,
-    "graph_context_score": 0.38719,
+    "graph_context_score": 0.425228,
     "evaluation_count": 145,
-    "passing_check_count": 2,
+    "passing_check_count": 3,
     "failing_check_count": 1,
-    "summary": "value_bp risk=medium (48.3) with robustness=0.74 across 5 checks.",
+    "summary": "value_bp risk=medium (44.5) with robustness=0.78 across 6 checks.",
     "key_risks": [
       "window_robustness: Repeated split failures are an early sign of unstable alpha.",
       "graph_crowding: Crowded graph neighborhoods increase redundancy and false confidence risk.",
@@ -87,6 +87,19 @@
           "family": "value"
         },
         "rationale": "Healthy families with viable representatives make a candidate easier to trust and extend."
+      },
+      {
+        "check_name": "trial_accounting",
+        "status": "pass",
+        "severity": "medium",
+        "score": 1.0,
+        "weight": 1.1,
+        "evidence": {
+          "trial_pressure": 0.0,
+          "false_positive_pressure": 0.0,
+          "family": "value"
+        },
+        "rationale": "Families with many low-information retries should be treated as higher false-positive risk."
       }
     ]
   },
@@ -96,14 +109,14 @@
     "family": "quality",
     "run_id": null,
     "risk_level": "medium",
-    "risk_score": 45.3438,
-    "robustness_score": 0.766562,
+    "risk_score": 41.9651,
+    "robustness_score": 0.800349,
     "family_context_score": 0.452946,
-    "graph_context_score": 0.416562,
+    "graph_context_score": 0.450349,
     "evaluation_count": 2,
-    "passing_check_count": 2,
+    "passing_check_count": 3,
     "failing_check_count": 1,
-    "summary": "quality_roe risk=medium (45.3) with robustness=0.77 across 5 checks.",
+    "summary": "quality_roe risk=medium (42.0) with robustness=0.80 across 6 checks.",
     "key_risks": [
       "evaluation_depth: More windows and reruns reduce single-run illusion risk.",
       "graph_crowding: Crowded graph neighborhoods increase redundancy and false confidence risk.",
@@ -177,6 +190,19 @@
           "family": "quality"
         },
         "rationale": "Healthy families with viable representatives make a candidate easier to trust and extend."
+      },
+      {
+        "check_name": "trial_accounting",
+        "status": "pass",
+        "severity": "medium",
+        "score": 1.0,
+        "weight": 1.1,
+        "evidence": {
+          "trial_pressure": 0.0,
+          "false_positive_pressure": 0.0,
+          "family": "quality"
+        },
+        "rationale": "Families with many low-information retries should be treated as higher false-positive risk."
       }
     ]
   },
@@ -186,14 +212,14 @@
     "family": "value",
     "run_id": null,
     "risk_level": "medium",
-    "risk_score": 43.7695,
-    "robustness_score": 0.782305,
+    "risk_score": 40.6186,
+    "robustness_score": 0.813814,
     "family_context_score": 0.939334,
-    "graph_context_score": 0.432305,
+    "graph_context_score": 0.463814,
     "evaluation_count": 2,
-    "passing_check_count": 2,
+    "passing_check_count": 3,
     "failing_check_count": 1,
-    "summary": "quality_minus_value risk=medium (43.8) with robustness=0.78 across 5 checks.",
+    "summary": "quality_minus_value risk=medium (40.6) with robustness=0.81 across 6 checks.",
     "key_risks": [
       "evaluation_depth: More windows and reruns reduce single-run illusion risk.",
       "graph_crowding: Crowded graph neighborhoods increase redundancy and false confidence risk.",
@@ -267,6 +293,19 @@
           "family": "value"
         },
         "rationale": "Healthy families with viable representatives make a candidate easier to trust and extend."
+      },
+      {
+        "check_name": "trial_accounting",
+        "status": "pass",
+        "severity": "medium",
+        "score": 1.0,
+        "weight": 1.1,
+        "evidence": {
+          "trial_pressure": 0.0,
+          "false_positive_pressure": 0.0,
+          "family": "value"
+        },
+        "rationale": "Families with many low-information retries should be treated as higher false-positive risk."
       }
     ]
   },
@@ -276,14 +315,14 @@
     "family": "value",
     "run_id": null,
     "risk_level": "low",
-    "risk_score": 37.4669,
-    "robustness_score": 0.875331,
+    "risk_score": 35.6625,
+    "robustness_score": 0.893375,
     "family_context_score": 0.939334,
-    "graph_context_score": 0.525331,
+    "graph_context_score": 0.543375,
     "evaluation_count": 147,
-    "passing_check_count": 1,
+    "passing_check_count": 2,
     "failing_check_count": 1,
-    "summary": "value_ep risk=low (37.5) with robustness=0.88 across 5 checks.",
+    "summary": "value_ep risk=low (35.7) with robustness=0.89 across 6 checks.",
     "key_risks": [
       "score_consistency: Candidates that repeatedly pass with decent scores are less brittle.",
       "window_robustness: Repeated split failures are an early sign of unstable alpha.",
@@ -359,6 +398,19 @@
           "family": "value"
         },
         "rationale": "Healthy families with viable representatives make a candidate easier to trust and extend."
+      },
+      {
+        "check_name": "trial_accounting",
+        "status": "pass",
+        "severity": "medium",
+        "score": 1.0,
+        "weight": 1.1,
+        "evidence": {
+          "trial_pressure": 0.0,
+          "false_positive_pressure": 0.0,
+          "family": "value"
+        },
+        "rationale": "Families with many low-information retries should be treated as higher false-positive risk."
       }
     ]
   },
@@ -368,14 +420,14 @@
     "family": "momentum",
     "run_id": null,
     "risk_level": "low",
-    "risk_score": 30.6269,
-    "robustness_score": 0.883731,
+    "risk_score": 28.9441,
+    "robustness_score": 0.900559,
     "family_context_score": 1.175464,
-    "graph_context_score": 0.533731,
+    "graph_context_score": 0.550559,
     "evaluation_count": 187,
-    "passing_check_count": 3,
+    "passing_check_count": 4,
     "failing_check_count": 1,
-    "summary": "mom_20 risk=low (30.6) with robustness=0.88 across 5 checks.",
+    "summary": "mom_20 risk=low (28.9) with robustness=0.90 across 6 checks.",
     "key_risks": [
       "window_robustness: Repeated split failures are an early sign of unstable alpha.",
       "graph_crowding: Crowded graph neighborhoods increase redundancy and false confidence risk."
@@ -449,6 +501,19 @@
           "family": "momentum"
         },
         "rationale": "Healthy families with viable representatives make a candidate easier to trust and extend."
+      },
+      {
+        "check_name": "trial_accounting",
+        "status": "pass",
+        "severity": "medium",
+        "score": 1.0,
+        "weight": 1.1,
+        "evidence": {
+          "trial_pressure": 0.0,
+          "false_positive_pressure": 0.0,
+          "family": "momentum"
+        },
+        "rationale": "Families with many low-information retries should be treated as higher false-positive risk."
       }
     ]
   },
@@ -458,14 +523,14 @@
     "family": "momentum",
     "run_id": null,
     "risk_level": "low",
-    "risk_score": 30.6269,
-    "robustness_score": 0.883731,
+    "risk_score": 28.9441,
+    "robustness_score": 0.900559,
     "family_context_score": 1.175464,
-    "graph_context_score": 0.533731,
+    "graph_context_score": 0.550559,
     "evaluation_count": 185,
-    "passing_check_count": 3,
+    "passing_check_count": 4,
     "failing_check_count": 1,
-    "summary": "mom_plus_value risk=low (30.6) with robustness=0.88 across 5 checks.",
+    "summary": "mom_plus_value risk=low (28.9) with robustness=0.90 across 6 checks.",
     "key_risks": [
       "window_robustness: Repeated split failures are an early sign of unstable alpha.",
       "graph_crowding: Crowded graph neighborhoods increase redundancy and false confidence risk."
@@ -539,6 +604,19 @@
           "family": "momentum"
         },
         "rationale": "Healthy families with viable representatives make a candidate easier to trust and extend."
+      },
+      {
+        "check_name": "trial_accounting",
+        "status": "pass",
+        "severity": "medium",
+        "score": 1.0,
+        "weight": 1.1,
+        "evidence": {
+          "trial_pressure": 0.0,
+          "false_positive_pressure": 0.0,
+          "family": "momentum"
+        },
+        "rationale": "Families with many low-information retries should be treated as higher false-positive risk."
       }
     ]
   },
@@ -548,14 +626,14 @@
     "family": "liquidity",
     "run_id": null,
     "risk_level": "low",
-    "risk_score": 17.3871,
-    "robustness_score": 0.886129,
+    "risk_score": 15.739,
+    "robustness_score": 0.90261,
     "family_context_score": 0.857595,
-    "graph_context_score": 0.886129,
+    "graph_context_score": 0.90261,
     "evaluation_count": 187,
-    "passing_check_count": 3,
+    "passing_check_count": 4,
     "failing_check_count": 0,
-    "summary": "liquidity_turnover_shock risk=low (17.4) with robustness=0.89 across 5 checks.",
+    "summary": "liquidity_turnover_shock risk=low (15.7) with robustness=0.90 across 6 checks.",
     "key_risks": [
       "score_consistency: Candidates that repeatedly pass with decent scores are less brittle.",
       "window_robustness: Repeated split failures are an early sign of unstable alpha."
@@ -628,6 +706,19 @@
           "family": "liquidity"
         },
         "rationale": "Healthy families with viable representatives make a candidate easier to trust and extend."
+      },
+      {
+        "check_name": "trial_accounting",
+        "status": "pass",
+        "severity": "medium",
+        "score": 1.0,
+        "weight": 1.1,
+        "evidence": {
+          "trial_pressure": 0.0,
+          "false_positive_pressure": 0.0,
+          "family": "liquidity"
+        },
+        "rationale": "Families with many low-information retries should be treated as higher false-positive risk."
       }
     ]
   },
@@ -637,14 +728,14 @@
     "family": "other",
     "run_id": null,
     "risk_level": "low",
-    "risk_score": 12.658,
-    "robustness_score": 0.93342,
+    "risk_score": 11.6943,
+    "robustness_score": 0.943057,
     "family_context_score": 0.859147,
-    "graph_context_score": 0.93342,
+    "graph_context_score": 0.943057,
     "evaluation_count": 185,
-    "passing_check_count": 3,
+    "passing_check_count": 4,
     "failing_check_count": 0,
-    "summary": "size_small risk=low (12.7) with robustness=0.93 across 5 checks.",
+    "summary": "size_small risk=low (11.7) with robustness=0.94 across 6 checks.",
     "key_risks": [
       "score_consistency: Candidates that repeatedly pass with decent scores are less brittle.",
       "window_robustness: Repeated split failures are an early sign of unstable alpha."
@@ -717,6 +808,19 @@
           "family": "other"
         },
         "rationale": "Healthy families with viable representatives make a candidate easier to trust and extend."
+      },
+      {
+        "check_name": "trial_accounting",
+        "status": "pass",
+        "severity": "medium",
+        "score": 1.0,
+        "weight": 1.1,
+        "evidence": {
+          "trial_pressure": 0.0,
+          "false_positive_pressure": 0.0,
+          "family": "other"
+        },
+        "rationale": "Families with many low-information retries should be treated as higher false-positive risk."
       }
     ]
   }

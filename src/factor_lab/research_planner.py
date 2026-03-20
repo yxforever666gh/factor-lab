@@ -74,6 +74,22 @@ class ResearchPlannerAgent:
             if relationship_signal.get("family_score") is not None:
                 score += min(float(relationship_signal["family_score"]) / 10, 12)
                 reason_bits.append(f"family_score={relationship_signal['family_score']}。")
+            if relationship_signal.get("trial_pressure") is not None:
+                tp = float(relationship_signal.get("trial_pressure") or 0.0)
+                if tp >= 75:
+                    score -= 16
+                elif tp >= 50:
+                    score -= 8
+                elif tp <= 20:
+                    score += 4
+                reason_bits.append(f"trial_pressure={tp:.1f}。")
+            if relationship_signal.get("false_positive_pressure") is not None:
+                fp = float(relationship_signal.get("false_positive_pressure") or 0.0)
+                if fp >= 75:
+                    score -= 18
+                elif fp >= 45:
+                    score -= 9
+                reason_bits.append(f"false_positive_pressure={fp:.1f}。")
             if family_focus:
                 reason_bits.append(f"focus_family={family_focus}。")
 

@@ -41,7 +41,7 @@
     <h2>Family 建议动作</h2>
     {% if family_summary %}
       {% for row in family_summary[:6] %}
-      <div style="margin-bottom:8px;"><strong>{{ row.family }}</strong> · <span class="pill {{ 'good' if row.recommended_action == 'continue' else 'warn' if row.recommended_action in ['refine','explore_new_branch'] else 'bad' }}">{{ row.recommended_action }}</span> · primary={{ row.primary_candidate or '-' }}</div>
+      <div style="margin-bottom:8px;"><strong>{{ row.family }}</strong> · <span class="pill {{ 'good' if row.recommended_action == 'continue' else 'warn' if row.recommended_action in ['refine','explore_new_branch'] else 'bad' }}">{{ row.recommended_action }}</span> · primary={{ row.primary_candidate or '-' }} · trial={{ row.trial_pressure if row.trial_pressure is not none else '-' }} · false+={{ row.false_positive_pressure if row.false_positive_pressure is not none else '-' }}</div>
       {% endfor %}
     {% else %}
       <div class="muted">暂无 family 建议。</div>
@@ -54,13 +54,15 @@
   <h2>Branch Planner 决策</h2>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Family</th><th>Decision</th><th>Recommended Action</th><th>Score</th><th>Reason</th></tr></thead>
+      <thead><tr><th>Family</th><th>Decision</th><th>Recommended Action</th><th>Trial Pressure</th><th>False+ Pressure</th><th>Score</th><th>Reason</th></tr></thead>
       <tbody>
         {% for row in branch_plan.branch_decisions %}
         <tr>
           <td>{{ row.family }}</td>
           <td>{{ row.decision }}</td>
           <td>{{ row.recommended_action or '-' }}</td>
+          <td class="num">{{ row.trial_pressure if row.trial_pressure is not none else '-' }}</td>
+          <td class="num">{{ row.false_positive_pressure if row.false_positive_pressure is not none else '-' }}</td>
           <td class="num">{{ row.priority_score if row.priority_score is not none else '-' }}</td>
           <td class="text-break">{{ row.reason }}</td>
         </tr>

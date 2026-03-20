@@ -7,6 +7,7 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
+from factor_lab.family_risk import build_family_risk_profiles
 from factor_lab.robustness import refresh_candidate_risk_profiles
 
 
@@ -731,8 +732,12 @@ def build_graph_artifacts(db_path: str | Path, output_dir: str | Path) -> dict[s
             existing_keys.add(key)
         relationships = store.list_candidate_relationships(limit=5000)
     graph_context = build_candidate_graph_context(candidates, evaluations, relationships)
+    store.sync_research_trial_logs_from_tasks(limit=500)
+    trial_summary = store.summarize_research_trials(limit=1000)
+    enriched_families = build_family_risk_profiles(graph_context["families"], trial_summary)
+    graph_context["families"] = enriched_families
     risk_payload = refresh_candidate_risk_profiles(store, output_dir=output_dir)
-    families = graph_context["families"]
+    families = enriched_families
     clusters = graph_context["clusters"]
     representatives = graph_context["cluster_representatives"]
 
@@ -742,12 +747,14 @@ def build_graph_artifacts(db_path: str | Path, output_dir: str | Path) -> dict[s
     context_path = output_dir / "candidate_graph_context.json"
     representative_path = output_dir / "cluster_representatives.json"
     risk_snapshot_path = output_dir / "candidate_risk_snapshot.json"
+    family_risk_path = output_dir / "family_risk_profiles.json"
     family_path.write_text(json.dumps(families, ensure_ascii=False, indent=2), encoding="utf-8")
     cluster_path.write_text(json.dumps(clusters, ensure_ascii=False, indent=2), encoding="utf-8")
     relationship_path.write_text(json.dumps(relationships, ensure_ascii=False, indent=2), encoding="utf-8")
     context_path.write_text(json.dumps(graph_context, ensure_ascii=False, indent=2), encoding="utf-8")
     representative_path.write_text(json.dumps(representatives, ensure_ascii=False, indent=2), encoding="utf-8")
     risk_snapshot_path.write_text(json.dumps(risk_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    family_risk_path.write_text(json.dumps(families, ensure_ascii=False, indent=2), encoding="utf-8")
     return {
         "family_summary_path": str(family_path),
         "candidate_clusters_path": str(cluster_path),
@@ -755,6 +762,7 @@ def build_graph_artifacts(db_path: str | Path, output_dir: str | Path) -> dict[s
         "candidate_graph_context_path": str(context_path),
         "cluster_representatives_path": str(representative_path),
         "candidate_risk_snapshot_path": str(risk_snapshot_path),
+        "family_risk_profiles_path": str(family_risk_path),
         "family_count": len(families),
         "risk_profile_count": len(risk_payload.get("profiles", [])),
         "cluster_count": len(clusters),

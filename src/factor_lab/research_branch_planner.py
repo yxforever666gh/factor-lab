@@ -25,6 +25,7 @@ class ResearchBranchPlanner:
         family_summary = snapshot.get("family_summary", []) or []
         relationship_summary = snapshot.get("relationship_summary", {}) or {}
         family_recommendations = {row.get("family"): row for row in snapshot.get("family_recommendations", []) if row.get("family")}
+        trial_summary = snapshot.get("research_trial_summary", {}) or {}
 
         top_family_score = max([row.get("family_score") or 0 for row in family_summary] or [0])
         hybrid_count = int(relationship_summary.get("hybrid_of", 0) or 0)
@@ -40,6 +41,9 @@ class ResearchBranchPlanner:
             saturated = (saturation.get(family) or {}).get("saturated", False)
             fatigue_level = (fatigue.get(family) or {}).get("fatigue_level", "low")
             recent_gain = family_recent_gain.get(family, 0)
+            family_trial = trial_summary.get(family, {})
+            trial_pressure = float(family_trial.get("trial_pressure") or 0.0)
+            false_positive_pressure = float(family_trial.get("false_positive_pressure") or 0.0)
             score = 0.0
             action_hint = None
 
@@ -103,6 +107,21 @@ class ResearchBranchPlanner:
             elif fatigue_level == "high":
                 score -= 14
 
+            if trial_pressure >= 75:
+                score -= 16
+                if decision == "advance":
+                    decision = "refine"
+            elif trial_pressure >= 50:
+                score -= 8
+
+            if false_positive_pressure >= 75:
+                score -= 18
+                decision = "pause" if family != "stable_candidate_validation" else "refine"
+            elif false_positive_pressure >= 45:
+                score -= 8
+                if decision == "advance":
+                    decision = "refine"
+
             if recent_gain:
                 score += min(recent_gain * 2, 8)
 
@@ -116,8 +135,10 @@ class ResearchBranchPlanner:
                 "current_level": progress.get("current_level"),
                 "next_level": next_level,
                 "fatigue": fatigue_level,
+                "trial_pressure": round(trial_pressure, 6),
+                "false_positive_pressure": round(false_positive_pressure, 6),
                 "priority_score": round(score, 3),
-                "reason": reason,
+                "reason": reason + f" trial_pressure={trial_pressure:.1f}，false_positive_pressure={false_positive_pressure:.1f}。",
             })
 
         selected_tasks = []

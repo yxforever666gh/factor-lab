@@ -37,7 +37,7 @@
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>Family</th><th>候选数</th><th>平均风险分</th><th>高</th><th>中</th><th>低</th><th>平均稳健分</th></tr>
+          <tr><th>Family</th><th>候选数</th><th>平均风险分</th><th>高</th><th>中</th><th>低</th><th>平均稳健分</th><th>Trial Pressure</th><th>False+ Pressure</th><th>建议动作</th></tr>
         </thead>
         <tbody>
           {% for row in family_risks %}
@@ -49,6 +49,9 @@
             <td class="num warn">{{ row.medium_risk_count }}</td>
             <td class="num good">{{ row.low_risk_count }}</td>
             <td class="num">{{ row.avg_robustness_score }}</td>
+            <td class="num">{{ row.trial_pressure if row.trial_pressure is not none else '-' }}</td>
+            <td class="num">{{ row.false_positive_pressure if row.false_positive_pressure is not none else '-' }}</td>
+            <td>{{ row.recommended_action or '-' }}</td>
           </tr>
           {% endfor %}
         </tbody>
