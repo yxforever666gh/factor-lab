@@ -15,10 +15,10 @@ def _read_json(path: Path, default: Any) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def should_promote_main_tasks() -> dict[str, Any]:
-    main_task_state = _read_json(ARTIFACTS / "main_task_generation_state.json", {})
-    learning = _read_json(ARTIFACTS / "main_task_learning.json", {})
-    recovery_state = main_task_state.get("state")
+def should_promote_research_paths() -> dict[str, Any]:
+    research_flow_state = _read_json(ARTIFACTS / "research_flow_state.json", {})
+    learning = _read_json(ARTIFACTS / "research_learning.json", {})
+    recovery_state = research_flow_state.get("state")
     families = learning.get("families") or {}
 
     promotable = [

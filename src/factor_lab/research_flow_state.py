@@ -15,7 +15,7 @@ def _read_json(path: Path, default: Any) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def derive_main_task_generation_state(
+def derive_research_flow_state(
     *,
     snapshot: dict[str, Any],
     candidate_pool: dict[str, Any],
@@ -38,7 +38,7 @@ def derive_main_task_generation_state(
     reasons: list[str] = []
     if main_candidates <= 0 and not recovery_used:
         state = "exhausted"
-        reasons.append("main_task_candidates_empty")
+        reasons.append("research_candidates_empty")
     elif recovery_used and injected_count and injected_count > 0:
         state = "recovered"
         reasons.append("recovery_injected_new_tasks")
@@ -53,12 +53,12 @@ def derive_main_task_generation_state(
         reasons.append("recent_recovery_produced_gain")
 
     if main_candidates > 0 and state in {"ready", "recovered"}:
-        reasons.append("main_task_candidates_available")
+        reasons.append("research_candidates_available")
 
     payload = {
         "state": state,
         "reasons": reasons,
-        "main_task_candidate_count": main_candidates,
+        "candidate_count": main_candidates,
         "recovery_used": recovery_used,
         "recovery_active_branch_count": len(recovery_active),
         "recent_recovery_event_count": len(recent_recovery_events),

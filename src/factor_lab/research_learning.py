@@ -33,7 +33,7 @@ def _family_key_from_branch_id(branch_id: str | None) -> str | None:
     return None
 
 
-def build_main_task_learning(memory_path: str | Path | None = None) -> dict[str, Any]:
+def build_research_learning(memory_path: str | Path | None = None) -> dict[str, Any]:
     path = Path(memory_path) if memory_path else (ARTIFACTS / "research_memory.json")
     memory = _read_json(path, {})
     execution_feedback = list(memory.get("execution_feedback") or [])[-WINDOW:]
@@ -82,5 +82,5 @@ def build_main_task_learning(memory_path: str | Path | None = None) -> dict[str,
         "updated_at_utc": memory.get("updated_at_utc"),
         "families": families,
     }
-    (ARTIFACTS / "main_task_learning.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    (ARTIFACTS / "research_learning.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return payload

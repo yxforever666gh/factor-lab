@@ -12,7 +12,7 @@ from factor_lab.research_planner_validate import validate_research_planner_propo
 from factor_lab.planner_recovery import build_recovery_tasks
 from factor_lab.research_space_registry import build_research_space_registry
 from factor_lab.research_space_map import build_research_space_map
-from factor_lab.main_task_state import derive_main_task_generation_state
+from factor_lab.research_flow_state import derive_research_flow_state
 from factor_lab.research_strategy import (
     build_research_state_snapshot,
     build_strategy_plan,
@@ -59,14 +59,14 @@ def run_research_planner_pipeline() -> dict[str, Any]:
     strategy_plan = build_strategy_plan(state_snapshot_path, proposal_path, strategy_plan_path, branch_plan_path)
     validated = validate_research_planner_proposal(proposal_path, validated_path)
     injected = apply_strategy_plan(validated_path, strategy_plan_path, injected_path, memory_path, DB_PATH)
-    main_task_generation = derive_main_task_generation_state(
+    research_flow_state = derive_research_flow_state(
         snapshot=snapshot,
         candidate_pool=candidate_pool,
         recovery_used=recovery_used,
         injected_count=injected.get("injected_count", 0),
     )
-    (ROOT / "artifacts" / "main_task_generation_state.json").write_text(
-        json.dumps(main_task_generation, ensure_ascii=False, indent=2),
+    (ROOT / "artifacts" / "research_flow_state.json").write_text(
+        json.dumps(research_flow_state, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
@@ -84,6 +84,6 @@ def run_research_planner_pipeline() -> dict[str, Any]:
         "validated_accepted_count": len(validated.get("accepted_tasks", [])),
         "injected_count": injected.get("injected_count", 0),
         "injected_tasks": injected.get("injected_tasks", []),
-        "main_task_generation": main_task_generation,
+        "research_flow_state": research_flow_state,
         "state_snapshot_open_questions": len(state_snapshot.get("open_questions", [])),
     }

@@ -12,8 +12,8 @@ from factor_lab.research_family_generators import (
     build_stable_candidate_task,
     build_graveyard_task,
 )
-from factor_lab.main_task_learning import build_main_task_learning
-from factor_lab.main_task_promoter import should_promote_main_tasks
+from factor_lab.research_learning import build_research_learning
+from factor_lab.research_promoter import should_promote_research_paths
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -176,9 +176,9 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
     family_recommendations = {row.get('family'): row for row in snapshot.get('family_recommendations', []) if row.get('family')}
     trial_summary = snapshot.get('research_trial_summary', {}) or {}
     analyst_signals = snapshot.get('analyst_signals') or {}
-    main_task_learning = build_main_task_learning(strategy_memory_path)
-    learning_families = main_task_learning.get('families') or {}
-    promotion = should_promote_main_tasks()
+    research_learning = build_research_learning(strategy_memory_path)
+    learning_families = research_learning.get('families') or {}
+    promotion = should_promote_research_paths()
     promotable_families = set(promotion.get('promotable_families') or [])
 
     stable_candidates, representative_notes = _prefer_representatives(raw_stable_candidates, candidate_context_by_name, cluster_rep_map)
@@ -410,8 +410,8 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
             'candidate_count': len(candidates),
             'suppressed_candidate_count': len(suppressed_tasks),
             'relationship_summary': relationship_summary,
-            'main_task_learning': main_task_learning,
-            'main_task_promoter': promotion,
+            'research_learning': research_learning,
+            'research_promoter': promotion,
         },
         'representative_selection': representative_notes,
         'suppressed_tasks': suppressed_tasks,
@@ -419,3 +419,4 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
     }
     Path(output_path).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
     return payload
+oad
