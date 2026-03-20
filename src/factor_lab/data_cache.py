@@ -62,6 +62,28 @@ def _read_feature_store(universe_name: str, cache_dir: str | Path = "artifacts/t
     return frame
 
 
+def _coverage_segments(req_start: pd.Timestamp, req_end: pd.Timestamp, current_min: pd.Timestamp | None, current_max: pd.Timestamp | None) -> list[tuple[pd.Timestamp, pd.Timestamp]]:
+    if current_min is None or current_max is None:
+        return [(req_start - timedelta(days=WARMUP_DAYS), req_end + timedelta(days=FORWARD_LABEL_DAYS))]
+
+    segments: list[tuple[pd.Timestamp, pd.Timestamp]] = []
+    if req_start < current_min:
+        segments.append((req_start - timedelta(days=WARMUP_DAYS), min(req_end, current_min) + timedelta(days=FORWARD_LABEL_DAYS)))
+    if req_end > current_max:
+        segments.append((max(req_start, current_max) - timedelta(days=WARMUP_DAYS), req_end + timedelta(days=FORWARD_LABEL_DAYS)))
+    return segments
+
+
+def _merge_feature_frames(existing: pd.DataFrame, incoming_frames: list[pd.DataFrame]) -> pd.DataFrame:
+    frames = [frame for frame in [existing, *incoming_frames] if not frame.empty]
+    if not frames:
+        return pd.DataFrame()
+    merged = pd.concat(frames, ignore_index=True)
+    merged["date"] = pd.to_datetime(merged["date"])
+    merged = merged.drop_duplicates(subset=["date", "ticker"], keep="last")
+    return merged.sort_values(["date", "ticker"]).reset_index(drop=True)
+
+
 def ensure_feature_coverage(
     *,
     provider: TushareDataProvider,
@@ -81,38 +103,35 @@ def ensure_feature_coverage(
     req_start = pd.Timestamp(start_date)
     req_end = pd.Timestamp(end_date)
 
-    if meta and meta.get("min_date") and meta.get("max_date"):
-        covered = pd.Timestamp(meta["min_date"]) <= req_start and pd.Timestamp(meta["max_date"]) >= req_end
-        if covered:
-            if timing:
-                timing.set_counter("cache_hit_type", "feature_master_exact")
-            return resolved_universe_name
-
-    fetch_start = req_start - timedelta(days=WARMUP_DAYS)
-    fetch_end = req_end + timedelta(days=FORWARD_LABEL_DAYS)
-    if meta and meta.get("min_date") and meta.get("max_date"):
-        current_min = pd.Timestamp(meta["min_date"])
-        current_max = pd.Timestamp(meta["max_date"])
-        fetch_start = min(fetch_start, current_min - timedelta(days=WARMUP_DAYS)) if req_start < current_min else current_min
-        fetch_end = max(fetch_end, current_max + timedelta(days=FORWARD_LABEL_DAYS)) if req_end > current_max else current_max
+    current_min = pd.Timestamp(meta["min_date"]) if meta and meta.get("min_date") else None
+    current_max = pd.Timestamp(meta["max_date"]) if meta and meta.get("max_date") else None
+    if current_min is not None and current_max is not None and current_min <= req_start and current_max >= req_end:
         if timing:
-            timing.set_counter("cache_hit_type", "feature_master_extend")
-    elif timing:
-        timing.set_counter("cache_hit_type", "none")
+            timing.set_counter("cache_hit_type", "feature_master_exact")
+            timing.set_counter("coverage_fetch_segments", 0)
+        return resolved_universe_name
 
-    request = TushareRequest(
-        start_date=fetch_start.strftime("%Y-%m-%d"),
-        end_date=fetch_end.strftime("%Y-%m-%d"),
-        universe_limit=universe_limit,
-        cache_dir=cache_dir,
-        universe_codes=tickers,
-        use_request_cache=True,
-    )
-    frame = provider.load_dataset(request, timing=timing).frame
+    segments = _coverage_segments(req_start, req_end, current_min, current_max)
+    if timing:
+        timing.set_counter("cache_hit_type", "none" if current_min is None else "feature_master_incremental")
+        timing.set_counter("coverage_fetch_segments", len(segments))
 
-    merged = frame if existing.empty else pd.concat([existing, frame], ignore_index=True)
-    merged["date"] = pd.to_datetime(merged["date"])
-    merged = merged.drop_duplicates(subset=["date", "ticker"], keep="last")
+    incoming_frames: list[pd.DataFrame] = []
+    for idx, (fetch_start, fetch_end) in enumerate(segments, start=1):
+        request = TushareRequest(
+            start_date=fetch_start.strftime("%Y-%m-%d"),
+            end_date=fetch_end.strftime("%Y-%m-%d"),
+            universe_limit=universe_limit,
+            cache_dir=cache_dir,
+            universe_codes=tickers,
+            use_request_cache=True,
+        )
+        frame = provider.load_dataset(request, timing=timing).frame
+        incoming_frames.append(frame)
+        if timing:
+            timing.set_counter(f"coverage_segment_{idx}", f"{request.start_date}:{request.end_date}")
+
+    merged = _merge_feature_frames(existing, incoming_frames)
     _write_feature_store(merged, resolved_universe_name, cache_dir)
     return resolved_universe_name
 

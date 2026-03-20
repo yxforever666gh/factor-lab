@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import signal
+import subprocess
 import sys
 import time
 from datetime import datetime, timezone
@@ -16,6 +17,7 @@ from factor_lab.research_queue import run_orchestrator
 ROOT = Path(__file__).resolve().parents[1]
 STATUS_PATH = ROOT / "artifacts" / "research_daemon_status.json"
 RUNNING = True
+LAST_PREWARM_AT = 0.0
 
 
 def handle_stop(signum, frame):
@@ -36,6 +38,46 @@ def write_status(state: str, **extra):
 
 def emit_wake_event(text: str) -> None:
     os.system(f'openclaw system event --mode now --text {json.dumps(text, ensure_ascii=False)} >/dev/null 2>&1')
+
+
+def maybe_run_prewarm() -> dict | None:
+    global LAST_PREWARM_AT
+    windows_env = os.getenv("RESEARCH_DAEMON_PREWARM_WINDOWS", "").strip()
+    if not windows_env:
+        return None
+    interval_seconds = int(os.getenv("RESEARCH_DAEMON_PREWARM_INTERVAL_SECONDS", "21600"))
+    now = time.time()
+    if LAST_PREWARM_AT and now - LAST_PREWARM_AT < interval_seconds:
+        return None
+
+    windows = [item.strip() for item in windows_env.split(",") if item.strip()]
+    if not windows:
+        return None
+
+    universe_limit = os.getenv("RESEARCH_DAEMON_PREWARM_UNIVERSE_LIMIT", "20")
+    output = ROOT / "artifacts" / "data_prepare_status.json"
+    command = [
+        sys.executable,
+        str(ROOT / "scripts" / "prepare_tushare_data.py"),
+        "--end-date",
+        datetime.now().strftime("%Y-%m-%d"),
+        "--universe-limit",
+        str(universe_limit),
+        "--output",
+        str(output),
+    ]
+    for window in windows:
+        command.extend(["--window-days", window])
+
+    result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
+    LAST_PREWARM_AT = now
+    return {
+        "ok": result.returncode == 0,
+        "returncode": result.returncode,
+        "stdout": result.stdout[-1000:],
+        "stderr": result.stderr[-1000:],
+        "windows": windows,
+    }
 
 
 if __name__ == "__main__":
@@ -74,7 +116,13 @@ if __name__ == "__main__":
                     write_status("running", processed_count=0, planner_pending=len(pending_after))
                     time.sleep(2)
                 else:
-                    write_status("idle", processed_count=0)
+                    prewarm = maybe_run_prewarm()
+                    if prewarm:
+                        write_status("idle", processed_count=0, prewarm=prewarm)
+                        if not prewarm.get("ok"):
+                            emit_wake_event(f"Factor Lab prewarm failed: {prewarm.get('stderr') or prewarm.get('stdout') or 'unknown error'}")
+                    else:
+                        write_status("idle", processed_count=0)
                     time.sleep(idle_sleep_seconds)
         except Exception as exc:
             append_heartbeat("research_daemon", "failed", message=str(exc))
