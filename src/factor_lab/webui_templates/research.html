@@ -49,6 +49,30 @@
   </section>
 </div>
 
+{% if opportunities.opportunities %}
+<section class="card" style="margin-top:18px;">
+  <h2>Research Opportunities</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Type</th><th>Title</th><th>Priority</th><th>Novelty</th><th>Confidence</th><th>Target Family</th><th>Question</th></tr></thead>
+      <tbody>
+        {% for row in opportunities.opportunities %}
+        <tr>
+          <td>{{ row.opportunity_type }}</td>
+          <td>{{ row.title }}</td>
+          <td class="num">{{ row.priority }}</td>
+          <td class="num">{{ row.novelty_score }}</td>
+          <td class="num">{{ row.confidence }}</td>
+          <td>{{ row.target_family or '-' }}</td>
+          <td class="text-break">{{ row.question }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
 {% if branch_plan.branch_decisions %}
 <section class="card" style="margin-top:18px;">
   <h2>Branch Planner 决策</h2>

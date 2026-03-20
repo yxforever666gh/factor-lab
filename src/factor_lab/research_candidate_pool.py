@@ -214,13 +214,13 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
             return
         if learning.get('recommended_action') == 'upweight':
             task['priority_hint'] = max(1, int(task.get('priority_hint', 50)) - 4)
-            task['reason'] += f" main-task learning: {family_key} 最近有效，优先级上调。"
+            task['reason'] += f" research learning: {family_key} 最近有效，优先级上调。"
         if family_key in promotable_families:
             task['priority_hint'] = max(1, int(task.get('priority_hint', 50)) - 3)
-            task['reason'] += f" main-task promoter: recovery 后优先恢复 {family_key} 主线。"
+            task['reason'] += f" research promoter: recovery 后优先扩展 {family_key} 方向。"
         elif learning.get('recommended_action') == 'downweight':
             task['priority_hint'] = int(task.get('priority_hint', 50)) + 5
-            task['reason'] += f" main-task learning: {family_key} 最近无增益偏多，优先级下调。"
+            task['reason'] += f" research learning: {family_key} 最近无增益偏多，优先级下调。"
         if branch_id and branch_id in archived_branches:
             suppressed_tasks.append({
                 'fingerprint': task.get('fingerprint'),
@@ -419,4 +419,3 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
     }
     Path(output_path).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
     return payload
-oad

@@ -24,7 +24,7 @@
     <pre>{{ latest_summary }}</pre>
   </section>
   <section class="card">
-    <h2>主任务状态机</h2>
+    <h2>研究流状态机</h2>
     <table>
       <tbody>
         <tr><th>当前状态</th><td><span class="pill {{ 'good' if research_flow_state.state in ['ready','recovered'] else 'bad' if research_flow_state.state == 'exhausted' else '' }}">{{ research_flow_state.state or '-' }}</span></td></tr>

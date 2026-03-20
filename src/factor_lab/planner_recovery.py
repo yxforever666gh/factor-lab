@@ -146,7 +146,7 @@ def build_recovery_tasks(snapshot_path: str | Path, output_path: str | Path, bra
                 {
                     "diagnostic_type": "fallback_graveyard_review",
                     "focus_factors": focus,
-                    "reasons": ["main_task_generation_exhausted", "graveyard_review_required", "recovery_step"],
+                    "reasons": ["research_generation_exhausted", "graveyard_review_required", "recovery_step"],
                     "knowledge_gain": ["neutralization_diagnosis_requested"],
                     "source_output_dir": "artifacts/tushare_batch",
                 },
