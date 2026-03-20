@@ -39,7 +39,7 @@ def map_opportunity_to_task(opportunity: dict[str, Any]) -> dict[str, Any] | Non
                 **payload_base,
                 "diagnostic_type": diagnostic_type,
                 "focus_factors": target_candidates,
-                "reasons": ["opportunity_selected"],
+                "reasons": ["opportunity_selected", f"mapped_from:{otype}"],
                 "goal": opportunity.get("question") or diagnostic_type,
                 "branch_id": opportunity.get("opportunity_id"),
                 "stop_if": [],

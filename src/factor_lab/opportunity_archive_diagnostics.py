@@ -58,6 +58,7 @@ def build_opportunity_archive_diagnostics(
             "priority": row.get("priority"),
             "novelty": row.get("novelty_score"),
             "confidence": row.get("confidence"),
+            "target_family": row.get("target_family"),
         })
 
     payload = {
