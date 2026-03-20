@@ -26,6 +26,16 @@ def _family_score_map(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {row.get('family'): row for row in rows if row.get('family')}
 
 
+def _cluster_rep_map(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    rows = snapshot.get('cluster_representatives', []) or []
+    out: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        name = row.get('primary_candidate')
+        if name:
+            out[name] = row
+    return out
+
+
 def _priority_adjustment(family_score: float | None, relationship_count: int, lineage_count: int) -> int:
     adj = 0
     if family_score is not None:
@@ -42,6 +52,73 @@ def _priority_adjustment(family_score: float | None, relationship_count: int, li
     return adj
 
 
+def _task_family_key(task: dict[str, Any]) -> str:
+    worker_note = task.get('worker_note', '') or ''
+    if '稳定候选' in worker_note:
+        return 'stable_candidate_validation'
+    if 'graveyard' in worker_note:
+        return 'graveyard_diagnosis'
+    if '近期' in worker_note:
+        return 'recent_window_validation'
+    if '扩窗' in worker_note or 'expanding' in worker_note:
+        return 'window_expansion'
+    if 'exploration' in worker_note:
+        return 'exploration'
+    return task.get('category') or 'other'
+
+
+def _dedupe_signature(task: dict[str, Any]) -> str:
+    payload = task.get('payload') or {}
+    family_key = _task_family_key(task)
+    if task.get('task_type') == 'diagnostic':
+        focus = sorted(payload.get('focus_factors') or [])
+        return f"{family_key}::diagnostic::{'|'.join(focus)}"
+    if task.get('task_type') == 'workflow':
+        config_path = payload.get('config_path', '')
+        return f'{family_key}::workflow::{Path(config_path).name}'
+    if task.get('task_type') == 'generated_batch':
+        return f"{family_key}::generated_batch::{payload.get('batch_path', '')}"
+    return f"{family_key}::{task.get('fingerprint')}"
+
+
+def _existing_signatures(snapshot: dict[str, Any]) -> set[str]:
+    signatures = set()
+    for task in snapshot.get('recent_research_tasks', []) or []:
+        if task.get('status') not in {'pending', 'running', 'finished'}:
+            continue
+        signatures.add(_dedupe_signature(task))
+    return signatures
+
+
+def _prefer_representatives(stable_candidates: list[str], candidate_context_by_name: dict[str, dict[str, Any]], cluster_rep_map: dict[str, dict[str, Any]]) -> tuple[list[str], list[dict[str, Any]]]:
+    selected: list[str] = []
+    selected_set: set[str] = set()
+    suppressed: list[dict[str, Any]] = []
+    for name in stable_candidates:
+        context = candidate_context_by_name.get(name, {})
+        cluster = context.get('cluster') or {}
+        primary = cluster.get('primary_candidate') or name
+        if primary not in selected_set:
+            selected.append(primary)
+            selected_set.add(primary)
+        if primary != name:
+            suppressed.append({
+                'candidate': name,
+                'suppressed_into': primary,
+                'cluster_id': cluster.get('cluster_id'),
+                'reason': 'same_cluster_primary_retained',
+            })
+    enriched = []
+    for name in selected:
+        row = cluster_rep_map.get(name) or {}
+        enriched.append({
+            'candidate': name,
+            'cluster_id': row.get('cluster_id'),
+            'suppressed_candidates': row.get('suppressed_candidates') or [],
+        })
+    return selected, suppressed + enriched
+
+
 def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | Path, branch_plan_path: str | Path | None = None) -> dict[str, Any]:
     snapshot = read_json(snapshot_path)
     registry_path = ROOT / 'artifacts' / 'research_space_registry.json'
@@ -50,16 +127,21 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
     space_map = read_json(space_map_path) if space_map_path.exists() else {}
 
     existing_fingerprints = {task.get('fingerprint') for task in snapshot.get('recent_research_tasks', [])}
+    existing_signatures = _existing_signatures(snapshot)
     latest_run = snapshot.get('latest_run') or {}
     generated_configs = set(snapshot.get('generated_configs', []))
-    stable_candidates = [row['factor_name'] for row in snapshot.get('stable_candidates', [])[:5]]
+    raw_stable_candidates = [row['factor_name'] for row in snapshot.get('stable_candidates', [])[:5]]
     latest_graveyard = snapshot.get('latest_graveyard', [])[:5]
     queue_budget = snapshot.get('queue_budget', {})
     exploration_state = snapshot.get('exploration_state', {})
     failure_state = snapshot.get('failure_state', {})
     candidate_context_by_name = _candidate_context_by_name(snapshot)
     family_score_map = _family_score_map(snapshot)
+    cluster_rep_map = _cluster_rep_map(snapshot)
     relationship_summary = snapshot.get('relationship_summary', {}) or {}
+    family_recommendations = {row.get('family'): row for row in snapshot.get('family_recommendations', []) if row.get('family')}
+
+    stable_candidates, representative_notes = _prefer_representatives(raw_stable_candidates, candidate_context_by_name, cluster_rep_map)
 
     base_config = read_json(ROOT / 'configs' / 'tushare_workflow.json')
     end_date = latest_run.get('end_date') or base_config['end_date']
@@ -67,6 +149,22 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
     selected_families = set(branch_plan.get('selected_families', []))
 
     candidates: list[dict[str, Any]] = []
+    suppressed_tasks: list[dict[str, Any]] = []
+    seen_signatures: set[str] = set()
+
+    def append_task(task: dict[str, Any], suppression_reason: str | None = None) -> None:
+        signature = _dedupe_signature(task)
+        if task.get('fingerprint') in existing_fingerprints or signature in existing_signatures or signature in seen_signatures:
+            suppressed_tasks.append({
+                'fingerprint': task.get('fingerprint'),
+                'signature': signature,
+                'worker_note': task.get('worker_note'),
+                'reason': suppression_reason or 'duplicate_candidate_suppressed',
+            })
+            return
+        seen_signatures.add(signature)
+        task['dedupe_signature'] = signature
+        candidates.append(task)
 
     window_level = (family_progress.get('window_expansion') or {}).get('next_level')
     recent_level = (family_progress.get('recent_window_validation') or {}).get('next_level')
@@ -81,7 +179,7 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
                 'cluster_count': len(snapshot.get('candidate_clusters', []) or []),
             }
             task['reason'] += f" 当前候选图中有 {relationship_summary.get('hybrid_of', 0)} 条 hybrid 关系、{len(snapshot.get('candidate_clusters', []) or [])} 个 cluster，适合扩窗检验结构是否跨阶段成立。"
-        candidates.extend(window_tasks)
+            append_task(task, 'window_expansion_already_covered')
     if recent_level and ('recent_window_validation' in selected_families or not selected_families):
         recent_tasks = build_recent_validation_task(recent_level, latest_run, end_date, base_config, existing_fingerprints, generated_configs)
         for task in recent_tasks:
@@ -90,7 +188,7 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
                 'duplicate_count': int(relationship_summary.get('duplicate_of', 0)),
             }
             task['reason'] += f" refinement={relationship_summary.get('refinement_of', 0)}、duplicate={relationship_summary.get('duplicate_of', 0)}，近期窗口可验证这些分支是稳健延伸还是短期重复。"
-        candidates.extend(recent_tasks)
+            append_task(task, 'recent_window_already_covered')
     if stable_level and ('stable_candidate_validation' in selected_families or not selected_families):
         stable_tasks = build_stable_candidate_task(stable_level, stable_candidates, existing_fingerprints)
         for task in stable_tasks:
@@ -112,17 +210,21 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
             )
             task['focus_candidates'] = focus_context
             task['family_focus'] = strongest_family
+            task['representative_selection'] = representative_notes
             task['relationship_signal'] = {
                 'relationship_count': relationship_count,
                 'lineage_count': lineage_count,
                 'family_score': max(family_scores) if family_scores else None,
+                'duplicate_count': int(relationship_summary.get('duplicate_of', 0)),
             }
+            if strongest_family and strongest_family in family_recommendations:
+                task['family_recommendation'] = family_recommendations[strongest_family]
             task['reason'] += (
                 f" 重点候选累计关系 {relationship_count} 条、lineage {lineage_count} 条"
                 + (f"，最强 family={strongest_family}" if strongest_family else "")
-                + "，优先确认这是可复制主线而非偶然候选。"
+                + f"。保留 cluster primary 后实际验证 {len(stable_candidates)} 个代表候选，压制 {len([r for r in representative_notes if r.get('suppressed_into')])} 个重复/近重复候选。"
             )
-        candidates.extend(stable_tasks)
+            append_task(task, 'stable_validation_already_covered')
     if graveyard_level and ('graveyard_diagnosis' in selected_families or not selected_families):
         graveyard_tasks = build_graveyard_task(graveyard_level, latest_graveyard, existing_fingerprints)
         for task in graveyard_tasks:
@@ -131,7 +233,7 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
                 'same_family_count': int(relationship_summary.get('same_family', 0)),
             }
             task['reason'] += f" duplicate={relationship_summary.get('duplicate_of', 0)}、same_family={relationship_summary.get('same_family', 0)}，可检查 graveyard 是否集中出现在同构因子支路。"
-        candidates.extend(graveyard_tasks)
+            append_task(task, 'graveyard_diagnosis_already_covered')
 
     if not exploration_state.get('should_throttle') and queue_budget.get('exploration', 0) < 1:
         generated_batch_path = ROOT / 'artifacts' / 'generated_batch_from_llm.json'
@@ -150,8 +252,7 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
                 'top_family_score': max([row.get('family_score') or 0 for row in family_score_map.values()] or [0]),
             }
             task['reason'] += ' 当前关系图已出现 hybrid 支路，可让 exploration 有针对性地尝试跨 family 组合。'
-            if task['fingerprint'] not in existing_fingerprints:
-                candidates.append(task)
+            append_task(task, 'exploration_batch_already_seen')
 
     payload = {
         'generated_from_snapshot': str(Path(snapshot_path)),
@@ -164,10 +265,14 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
             'failure_state': failure_state,
             'exploration_state': exploration_state,
             'stable_candidate_count': len(stable_candidates),
+            'raw_stable_candidate_count': len(raw_stable_candidates),
             'graveyard_count': len(latest_graveyard),
             'candidate_count': len(candidates),
+            'suppressed_candidate_count': len(suppressed_tasks),
             'relationship_summary': relationship_summary,
         },
+        'representative_selection': representative_notes,
+        'suppressed_tasks': suppressed_tasks,
         'tasks': sorted(candidates, key=lambda item: (item['priority_hint'], item['category'])),
     }
     Path(output_path).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')

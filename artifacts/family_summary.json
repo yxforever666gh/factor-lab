@@ -11,7 +11,15 @@
     "avg_candidate_score": 8.318303,
     "avg_latest_score": 3.005267,
     "avg_best_score": 9.263306,
-    "family_score": 117.546424
+    "family_score": 117.546424,
+    "duplicate_pressure": 0,
+    "cluster_pressure": 6.0,
+    "representative_count": 1,
+    "primary_candidate": "mom_20",
+    "representative_candidates": [
+      "mom_20"
+    ],
+    "recommended_action": "continue"
   },
   {
     "family": "value",
@@ -25,7 +33,13 @@
     "avg_candidate_score": 5.866679,
     "avg_latest_score": 3.193535,
     "avg_best_score": 7.249232,
-    "family_score": 93.933432
+    "family_score": 93.933432,
+    "duplicate_pressure": 0,
+    "cluster_pressure": 6.0,
+    "representative_count": 0,
+    "primary_candidate": null,
+    "representative_candidates": [],
+    "recommended_action": "refine"
   },
   {
     "family": "other",
@@ -39,7 +53,15 @@
     "avg_candidate_score": 7.989338,
     "avg_latest_score": 3.025676,
     "avg_best_score": 8.747369,
-    "family_score": 85.914704
+    "family_score": 85.914704,
+    "duplicate_pressure": 0,
+    "cluster_pressure": 1.0,
+    "representative_count": 1,
+    "primary_candidate": "size_small",
+    "representative_candidates": [
+      "size_small"
+    ],
+    "recommended_action": "continue"
   },
   {
     "family": "liquidity",
@@ -53,7 +75,15 @@
     "avg_candidate_score": 7.969937,
     "avg_latest_score": 2.364005,
     "avg_best_score": 8.835956,
-    "family_score": 85.759496
+    "family_score": 85.759496,
+    "duplicate_pressure": 0,
+    "cluster_pressure": 1.0,
+    "representative_count": 1,
+    "primary_candidate": "liquidity_turnover_shock",
+    "representative_candidates": [
+      "liquidity_turnover_shock"
+    ],
+    "recommended_action": "continue"
   },
   {
     "family": "quality",
@@ -67,6 +97,12 @@
     "avg_candidate_score": 4.41182,
     "avg_latest_score": 4.41182,
     "avg_best_score": 4.41182,
-    "family_score": 45.29456
+    "family_score": 45.29456,
+    "duplicate_pressure": 0,
+    "cluster_pressure": 6.0,
+    "representative_count": 0,
+    "primary_candidate": null,
+    "representative_candidates": [],
+    "recommended_action": "explore_new_branch"
   }
 ]

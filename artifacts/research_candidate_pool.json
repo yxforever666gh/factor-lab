@@ -1,8 +1,8 @@
 {
-  "generated_from_snapshot": "/home/admin/.openclaw/workspace/artifacts/research_planner_snapshot.json",
+  "generated_from_snapshot": "artifacts/research_planner_snapshot.json",
   "generated_from_registry": "/home/admin/.openclaw/workspace/artifacts/research_space_registry.json",
   "generated_from_space_map": "/home/admin/.openclaw/workspace/artifacts/research_space_map.json",
-  "generated_from_branch_plan": "/home/admin/.openclaw/workspace/artifacts/research_branch_plan.json",
+  "generated_from_branch_plan": null,
   "summary": {
     "latest_run_config": "configs/first_workflow.json",
     "queue_budget": {
@@ -21,14 +21,242 @@
       "recent_gain": 3,
       "should_throttle": false
     },
-    "stable_candidate_count": 5,
+    "stable_candidate_count": 1,
+    "raw_stable_candidate_count": 5,
     "graveyard_count": 1,
-    "candidate_count": 0,
+    "candidate_count": 1,
+    "suppressed_candidate_count": 1,
     "relationship_summary": {
       "refinement_of": 2,
       "hybrid_of": 1,
       "same_family": 4
     }
   },
-  "tasks": []
+  "representative_selection": [
+    {
+      "candidate": "mom_plus_value",
+      "suppressed_into": "mom_20",
+      "cluster_id": 1,
+      "reason": "same_cluster_primary_retained"
+    },
+    {
+      "candidate": "value_ep",
+      "suppressed_into": "mom_20",
+      "cluster_id": 1,
+      "reason": "same_cluster_primary_retained"
+    },
+    {
+      "candidate": "quality_minus_value",
+      "suppressed_into": "mom_20",
+      "cluster_id": 1,
+      "reason": "same_cluster_primary_retained"
+    },
+    {
+      "candidate": "quality_roe",
+      "suppressed_into": "mom_20",
+      "cluster_id": 1,
+      "reason": "same_cluster_primary_retained"
+    },
+    {
+      "candidate": "mom_20",
+      "cluster_id": 1,
+      "suppressed_candidates": [
+        "value_bp",
+        "mom_plus_value",
+        "quality_roe",
+        "quality_minus_value",
+        "value_ep"
+      ]
+    }
+  ],
+  "suppressed_tasks": [
+    {
+      "fingerprint": "generated_batch::a4cf53c056d30df4446de19c23617566f1f9bfd75d9e6e55e07584c54d5ff466::artifacts/llm_generated_batch_run",
+      "signature": "exploration::generated_batch::artifacts/generated_batch_from_llm.json",
+      "worker_note": "exploration｜执行 LLM 生成的 batch",
+      "reason": "exploration_batch_already_seen"
+    }
+  ],
+  "tasks": [
+    {
+      "task_type": "diagnostic",
+      "category": "validation",
+      "priority_hint": 29,
+      "reason": "稳定候选当前已完成到第 6 层，建议进入第 7 层验证。 重点候选累计关系 1 条、lineage 0 条，最强 family=momentum。保留 cluster primary 后实际验证 1 个代表候选，压制 4 个重复/近重复候选。",
+      "expected_knowledge_gain": [
+        "stable_candidate_validation_v7_requested"
+      ],
+      "payload": {
+        "diagnostic_type": "stable_candidate_validation_review_v7",
+        "focus_factors": [
+          "mom_20"
+        ],
+        "reasons": [
+          "stable_candidates_need_deeper_validation"
+        ],
+        "knowledge_gain": [
+          "stable_candidate_validation_v7_requested"
+        ],
+        "source_output_dir": "artifacts/tushare_batch"
+      },
+      "fingerprint": "diagnostic::stable_candidate_validation_review_v7::{\"diagnostic_type\": \"stable_candidate_validation_review_v7\", \"focus_factors\": [\"mom_20\"], \"knowledge_gain\": [\"stable_candidate_validation_v7_requested\"], \"reasons\": [\"stable_candidates_need_deeper_validation\"], \"source_output_dir\": \"artifacts/tushare_batch\"}",
+      "worker_note": "validation｜稳定候选深化验证 v7",
+      "focus_candidates": [
+        {
+          "candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
+          "candidate_name": "mom_20",
+          "family": "momentum",
+          "status": "promising",
+          "family_score": 117.546424,
+          "family_recommended_action": "continue",
+          "relationship_count": 1,
+          "lineage_count": 0,
+          "cluster": {
+            "cluster_id": 1,
+            "cluster_size": 6,
+            "leader": "mom_20",
+            "dominant_family": "value",
+            "relationship_mix": {
+              "same_family": 4,
+              "hybrid_of": 1,
+              "refinement_of": 2
+            },
+            "members": [
+              {
+                "id": "5032916e-07f4-45e2-9618-3cfc8e700940",
+                "name": "mom_20",
+                "family": "momentum",
+                "status": "promising",
+                "latest_final_score": 4.865683,
+                "avg_final_score": 8.524486,
+                "evaluation_count": 187,
+                "is_primary": true
+              },
+              {
+                "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
+                "name": "value_bp",
+                "family": "value",
+                "status": "promising",
+                "latest_final_score": 1.311582,
+                "avg_final_score": 5.910476,
+                "evaluation_count": 145,
+                "is_primary": false
+              },
+              {
+                "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
+                "name": "mom_plus_value",
+                "family": "momentum",
+                "status": "promising",
+                "latest_final_score": 1.144852,
+                "avg_final_score": 8.11212,
+                "evaluation_count": 185,
+                "is_primary": false
+              },
+              {
+                "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
+                "name": "quality_roe",
+                "family": "quality",
+                "status": "testing",
+                "latest_final_score": 4.41182,
+                "avg_final_score": 4.41182,
+                "evaluation_count": 2,
+                "is_primary": false
+              },
+              {
+                "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
+                "name": "quality_minus_value",
+                "family": "value",
+                "status": "testing",
+                "latest_final_score": 4.197889,
+                "avg_final_score": 4.197889,
+                "evaluation_count": 2,
+                "is_primary": false
+              },
+              {
+                "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
+                "name": "value_ep",
+                "family": "value",
+                "status": "testing",
+                "latest_final_score": 4.071135,
+                "avg_final_score": 7.491671,
+                "evaluation_count": 147,
+                "is_primary": false
+              }
+            ],
+            "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
+            "primary_candidate": "mom_20",
+            "suppressed_member_count": 5
+          },
+          "is_primary_candidate": true,
+          "related_candidates": [
+            {
+              "candidate_id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
+              "candidate_name": "mom_plus_value",
+              "relationship_type": "same_family",
+              "strength": 0.4,
+              "details": {
+                "family": "momentum",
+                "family_size": 2,
+                "source": "backfill"
+              }
+            }
+          ],
+          "lineage": []
+        }
+      ],
+      "family_focus": "momentum",
+      "representative_selection": [
+        {
+          "candidate": "mom_plus_value",
+          "suppressed_into": "mom_20",
+          "cluster_id": 1,
+          "reason": "same_cluster_primary_retained"
+        },
+        {
+          "candidate": "value_ep",
+          "suppressed_into": "mom_20",
+          "cluster_id": 1,
+          "reason": "same_cluster_primary_retained"
+        },
+        {
+          "candidate": "quality_minus_value",
+          "suppressed_into": "mom_20",
+          "cluster_id": 1,
+          "reason": "same_cluster_primary_retained"
+        },
+        {
+          "candidate": "quality_roe",
+          "suppressed_into": "mom_20",
+          "cluster_id": 1,
+          "reason": "same_cluster_primary_retained"
+        },
+        {
+          "candidate": "mom_20",
+          "cluster_id": 1,
+          "suppressed_candidates": [
+            "value_bp",
+            "mom_plus_value",
+            "quality_roe",
+            "quality_minus_value",
+            "value_ep"
+          ]
+        }
+      ],
+      "relationship_signal": {
+        "relationship_count": 1,
+        "lineage_count": 0,
+        "family_score": 117.546424,
+        "duplicate_count": 0
+      },
+      "family_recommendation": {
+        "family": "momentum",
+        "recommended_action": "continue",
+        "family_score": 117.546424,
+        "primary_candidate": "mom_20",
+        "duplicate_pressure": 0,
+        "representative_count": 1
+      },
+      "dedupe_signature": "stable_candidate_validation::diagnostic::mom_20"
+    }
+  ]
 }

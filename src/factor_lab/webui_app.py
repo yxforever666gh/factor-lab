@@ -536,6 +536,12 @@ def health_page():
 @app.get("/research", response_class=HTMLResponse)
 def research_page():
     tasks = ExperimentStore(DB_PATH).list_research_tasks(limit=100)
+    candidate_pool_path = DB_PATH.parent / 'research_candidate_pool.json'
+    branch_plan_path = DB_PATH.parent / 'research_branch_plan.json'
+    family_summary_path = DB_PATH.parent / 'family_summary.json'
+    candidate_pool = json.loads(candidate_pool_path.read_text(encoding='utf-8')) if candidate_pool_path.exists() else {}
+    branch_plan = json.loads(branch_plan_path.read_text(encoding='utf-8')) if branch_plan_path.exists() else {}
+    family_summary = json.loads(family_summary_path.read_text(encoding='utf-8')) if family_summary_path.exists() else []
     summary = {
         "pending": len([t for t in tasks if t["status"] == "pending"]),
         "running": len([t for t in tasks if t["status"] == "running"]),
@@ -545,6 +551,8 @@ def research_page():
         "validation": len([t for t in tasks if (t.get("worker_note") or "").startswith("validation")]),
         "exploration": len([t for t in tasks if (t.get("worker_note") or "").startswith("exploration")]),
         "retry": len([t for t in tasks if (t.get("worker_note") or "").startswith("retry")]),
+        "planner_candidates": len(candidate_pool.get('tasks', []) or []),
+        "planner_suppressed": len(candidate_pool.get('suppressed_tasks', []) or []),
     }
     for task in tasks:
         payload = task.get("payload") or {}
@@ -560,7 +568,15 @@ def research_page():
             task["payload_summary"] = f"{payload.get('diagnostic_type', '-')}: {'; '.join(payload.get('reasons', []))}"
         else:
             task["payload_summary"] = pretty_json_text(payload)
-    return render("research.html", title="研究队列", tasks=tasks, summary=summary)
+    return render(
+        "research.html",
+        title="研究队列",
+        tasks=tasks,
+        summary=summary,
+        candidate_pool=candidate_pool,
+        branch_plan=branch_plan,
+        family_summary=family_summary,
+    )
 
 
 @app.get("/weekly", response_class=HTMLResponse)
@@ -699,6 +715,10 @@ def families_page():
         'family_count': len(families),
         'promising_count': sum(int(row['promising_count']) for row in families),
         'evaluation_count': sum(int(row['evaluation_count']) for row in families),
+        'continue_count': len([row for row in families if row.get('recommended_action') == 'continue']),
+        'refine_count': len([row for row in families if row.get('recommended_action') == 'refine']),
+        'pause_count': len([row for row in families if row.get('recommended_action') == 'pause']),
+        'explore_count': len([row for row in families if row.get('recommended_action') == 'explore_new_branch']),
     }
     return render('families.html', title='候选 Family', families=families, summary=summary)
 
@@ -713,6 +733,7 @@ def candidate_clusters_page():
         'cluster_count': len(clusters),
         'connected_candidate_count': sum(int(row['cluster_size']) for row in clusters),
         'relationship_count': len(relationships),
+        'suppressed_candidate_count': sum(int(row.get('suppressed_member_count') or 0) for row in clusters),
     }
     return render('candidate_clusters.html', title='候选簇', clusters=clusters, summary=summary)
 

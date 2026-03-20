@@ -332,128 +332,128 @@
     "should_throttle": false
   },
   "daemon_status": {
-    "updated_at_utc": "2026-03-20T01:18:46.157763+00:00",
+    "updated_at_utc": "2026-03-20T01:43:48.707862+00:00",
     "pid": 1073652,
     "state": "idle",
     "processed_count": 0
   },
   "heartbeat_tail": [
     {
-      "recorded_at_utc": "2026-03-20T01:12:45.565152+00:00",
+      "recorded_at_utc": "2026-03-20T01:37:48.076317+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:12:45.565375+00:00",
+      "recorded_at_utc": "2026-03-20T01:37:48.076519+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:13:45.651640+00:00",
+      "recorded_at_utc": "2026-03-20T01:38:48.162400+00:00",
       "scope": "research_orchestrator",
       "status": "info",
       "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=5, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:13:45.664815+00:00",
+      "recorded_at_utc": "2026-03-20T01:38:48.175573+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:13:45.665031+00:00",
+      "recorded_at_utc": "2026-03-20T01:38:48.175756+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:14:45.754428+00:00",
+      "recorded_at_utc": "2026-03-20T01:39:48.264820+00:00",
       "scope": "research_orchestrator",
       "status": "info",
       "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=5, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:14:45.767841+00:00",
+      "recorded_at_utc": "2026-03-20T01:39:48.278103+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:14:45.768080+00:00",
+      "recorded_at_utc": "2026-03-20T01:39:48.278327+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:15:45.835677+00:00",
+      "recorded_at_utc": "2026-03-20T01:40:48.359484+00:00",
       "scope": "research_orchestrator",
       "status": "info",
       "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=5, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:15:45.849115+00:00",
+      "recorded_at_utc": "2026-03-20T01:40:48.373737+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:15:45.849323+00:00",
+      "recorded_at_utc": "2026-03-20T01:40:48.374059+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:16:45.937823+00:00",
+      "recorded_at_utc": "2026-03-20T01:41:48.469180+00:00",
       "scope": "research_orchestrator",
       "status": "info",
       "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=5, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:16:45.951335+00:00",
+      "recorded_at_utc": "2026-03-20T01:41:48.485577+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:16:45.951585+00:00",
+      "recorded_at_utc": "2026-03-20T01:41:48.485869+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:17:46.040923+00:00",
+      "recorded_at_utc": "2026-03-20T01:42:48.581919+00:00",
       "scope": "research_orchestrator",
       "status": "info",
       "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=5, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:17:46.055818+00:00",
+      "recorded_at_utc": "2026-03-20T01:42:48.597499+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:17:46.056139+00:00",
+      "recorded_at_utc": "2026-03-20T01:42:48.597726+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:18:46.143543+00:00",
+      "recorded_at_utc": "2026-03-20T01:43:48.689603+00:00",
       "scope": "research_orchestrator",
       "status": "info",
       "summary": "planner pipeline: windows=14, validation_keys=2, graveyard_keys=5, candidates=0, selected=0, accepted=0, injected=0"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:18:46.156826+00:00",
+      "recorded_at_utc": "2026-03-20T01:43:48.706758+00:00",
       "scope": "research_orchestrator",
       "status": "started",
       "summary": "orchestrator awakened (max_tasks=1)"
     },
     {
-      "recorded_at_utc": "2026-03-20T01:18:46.157017+00:00",
+      "recorded_at_utc": "2026-03-20T01:43:48.707036+00:00",
       "scope": "research_orchestrator",
       "status": "idle",
       "summary": "no pending research tasks"
@@ -556,7 +556,15 @@
       "avg_candidate_score": 8.318303,
       "avg_latest_score": 3.005267,
       "avg_best_score": 9.263306,
-      "family_score": 117.546424
+      "family_score": 117.546424,
+      "duplicate_pressure": 0,
+      "cluster_pressure": 6.0,
+      "representative_count": 1,
+      "primary_candidate": "mom_20",
+      "representative_candidates": [
+        "mom_20"
+      ],
+      "recommended_action": "continue"
     },
     {
       "family": "value",
@@ -570,7 +578,13 @@
       "avg_candidate_score": 5.866679,
       "avg_latest_score": 3.193535,
       "avg_best_score": 7.249232,
-      "family_score": 93.933432
+      "family_score": 93.933432,
+      "duplicate_pressure": 0,
+      "cluster_pressure": 6.0,
+      "representative_count": 0,
+      "primary_candidate": null,
+      "representative_candidates": [],
+      "recommended_action": "refine"
     },
     {
       "family": "other",
@@ -584,7 +598,15 @@
       "avg_candidate_score": 7.989338,
       "avg_latest_score": 3.025676,
       "avg_best_score": 8.747369,
-      "family_score": 85.914704
+      "family_score": 85.914704,
+      "duplicate_pressure": 0,
+      "cluster_pressure": 1.0,
+      "representative_count": 1,
+      "primary_candidate": "size_small",
+      "representative_candidates": [
+        "size_small"
+      ],
+      "recommended_action": "continue"
     },
     {
       "family": "liquidity",
@@ -598,7 +620,15 @@
       "avg_candidate_score": 7.969937,
       "avg_latest_score": 2.364005,
       "avg_best_score": 8.835956,
-      "family_score": 85.759496
+      "family_score": 85.759496,
+      "duplicate_pressure": 0,
+      "cluster_pressure": 1.0,
+      "representative_count": 1,
+      "primary_candidate": "liquidity_turnover_shock",
+      "representative_candidates": [
+        "liquidity_turnover_shock"
+      ],
+      "recommended_action": "continue"
     },
     {
       "family": "quality",
@@ -612,7 +642,55 @@
       "avg_candidate_score": 4.41182,
       "avg_latest_score": 4.41182,
       "avg_best_score": 4.41182,
-      "family_score": 45.29456
+      "family_score": 45.29456,
+      "duplicate_pressure": 0,
+      "cluster_pressure": 6.0,
+      "representative_count": 0,
+      "primary_candidate": null,
+      "representative_candidates": [],
+      "recommended_action": "explore_new_branch"
+    }
+  ],
+  "family_recommendations": [
+    {
+      "family": "momentum",
+      "recommended_action": "continue",
+      "family_score": 117.546424,
+      "primary_candidate": "mom_20",
+      "duplicate_pressure": 0,
+      "representative_count": 1
+    },
+    {
+      "family": "value",
+      "recommended_action": "refine",
+      "family_score": 93.933432,
+      "primary_candidate": null,
+      "duplicate_pressure": 0,
+      "representative_count": 0
+    },
+    {
+      "family": "other",
+      "recommended_action": "continue",
+      "family_score": 85.914704,
+      "primary_candidate": "size_small",
+      "duplicate_pressure": 0,
+      "representative_count": 1
+    },
+    {
+      "family": "liquidity",
+      "recommended_action": "continue",
+      "family_score": 85.759496,
+      "primary_candidate": "liquidity_turnover_shock",
+      "duplicate_pressure": 0,
+      "representative_count": 1
+    },
+    {
+      "family": "quality",
+      "recommended_action": "explore_new_branch",
+      "family_score": 45.29456,
+      "primary_candidate": null,
+      "duplicate_pressure": 0,
+      "representative_count": 0
     }
   ],
   "candidate_clusters": [
@@ -634,6 +712,9 @@
         "refinement_of": 2
       },
       "leader": "mom_20",
+      "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
+      "primary_candidate": "mom_20",
+      "suppressed_member_count": 5,
       "members": [
         {
           "id": "5032916e-07f4-45e2-9618-3cfc8e700940",
@@ -642,34 +723,8 @@
           "status": "promising",
           "latest_final_score": 4.865683,
           "avg_final_score": 8.524486,
-          "evaluation_count": 187
-        },
-        {
-          "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
-          "name": "quality_roe",
-          "family": "quality",
-          "status": "testing",
-          "latest_final_score": 4.41182,
-          "avg_final_score": 4.41182,
-          "evaluation_count": 2
-        },
-        {
-          "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
-          "name": "quality_minus_value",
-          "family": "value",
-          "status": "testing",
-          "latest_final_score": 4.197889,
-          "avg_final_score": 4.197889,
-          "evaluation_count": 2
-        },
-        {
-          "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
-          "name": "value_ep",
-          "family": "value",
-          "status": "testing",
-          "latest_final_score": 4.071135,
-          "avg_final_score": 7.491671,
-          "evaluation_count": 147
+          "evaluation_count": 187,
+          "is_primary": true
         },
         {
           "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
@@ -678,7 +733,8 @@
           "status": "promising",
           "latest_final_score": 1.311582,
           "avg_final_score": 5.910476,
-          "evaluation_count": 145
+          "evaluation_count": 145,
+          "is_primary": false
         },
         {
           "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -687,7 +743,38 @@
           "status": "promising",
           "latest_final_score": 1.144852,
           "avg_final_score": 8.11212,
-          "evaluation_count": 185
+          "evaluation_count": 185,
+          "is_primary": false
+        },
+        {
+          "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
+          "name": "quality_roe",
+          "family": "quality",
+          "status": "testing",
+          "latest_final_score": 4.41182,
+          "avg_final_score": 4.41182,
+          "evaluation_count": 2,
+          "is_primary": false
+        },
+        {
+          "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
+          "name": "quality_minus_value",
+          "family": "value",
+          "status": "testing",
+          "latest_final_score": 4.197889,
+          "avg_final_score": 4.197889,
+          "evaluation_count": 2,
+          "is_primary": false
+        },
+        {
+          "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
+          "name": "value_ep",
+          "family": "value",
+          "status": "testing",
+          "latest_final_score": 4.071135,
+          "avg_final_score": 7.491671,
+          "evaluation_count": 147,
+          "is_primary": false
         }
       ]
     },
@@ -703,6 +790,9 @@
       },
       "relationship_mix": {},
       "leader": "liquidity_turnover_shock",
+      "primary_candidate_id": "c75fb8df-b227-4cb1-93c8-a6e65ec95dfc",
+      "primary_candidate": "liquidity_turnover_shock",
+      "suppressed_member_count": 0,
       "members": [
         {
           "id": "c75fb8df-b227-4cb1-93c8-a6e65ec95dfc",
@@ -711,7 +801,8 @@
           "status": "testing",
           "latest_final_score": 2.364005,
           "avg_final_score": 7.969937,
-          "evaluation_count": 187
+          "evaluation_count": 187,
+          "is_primary": true
         }
       ]
     },
@@ -727,6 +818,9 @@
       },
       "relationship_mix": {},
       "leader": "size_small",
+      "primary_candidate_id": "d7e14ed9-6251-425d-a28a-fc75cbf5bbf0",
+      "primary_candidate": "size_small",
+      "suppressed_member_count": 0,
       "members": [
         {
           "id": "d7e14ed9-6251-425d-a28a-fc75cbf5bbf0",
@@ -735,9 +829,49 @@
           "status": "testing",
           "latest_final_score": 3.025676,
           "avg_final_score": 7.989338,
-          "evaluation_count": 185
+          "evaluation_count": 185,
+          "is_primary": true
         }
       ]
+    }
+  ],
+  "cluster_representatives": [
+    {
+      "cluster_id": 1,
+      "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
+      "primary_candidate": "mom_20",
+      "family": "momentum",
+      "cluster_size": 6,
+      "suppressed_candidates": [
+        "value_bp",
+        "mom_plus_value",
+        "quality_roe",
+        "quality_minus_value",
+        "value_ep"
+      ],
+      "relationship_mix": {
+        "same_family": 4,
+        "hybrid_of": 1,
+        "refinement_of": 2
+      }
+    },
+    {
+      "cluster_id": 2,
+      "primary_candidate_id": "c75fb8df-b227-4cb1-93c8-a6e65ec95dfc",
+      "primary_candidate": "liquidity_turnover_shock",
+      "family": "liquidity",
+      "cluster_size": 1,
+      "suppressed_candidates": [],
+      "relationship_mix": {}
+    },
+    {
+      "cluster_id": 3,
+      "primary_candidate_id": "d7e14ed9-6251-425d-a28a-fc75cbf5bbf0",
+      "primary_candidate": "size_small",
+      "family": "other",
+      "cluster_size": 1,
+      "suppressed_candidates": [],
+      "relationship_mix": {}
     }
   ],
   "candidate_context": [
@@ -747,6 +881,7 @@
       "family": "momentum",
       "status": "promising",
       "family_score": 117.546424,
+      "family_recommended_action": "continue",
       "relationship_count": 1,
       "lineage_count": 0,
       "cluster": {
@@ -767,34 +902,8 @@
             "status": "promising",
             "latest_final_score": 4.865683,
             "avg_final_score": 8.524486,
-            "evaluation_count": 187
-          },
-          {
-            "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
-            "name": "quality_roe",
-            "family": "quality",
-            "status": "testing",
-            "latest_final_score": 4.41182,
-            "avg_final_score": 4.41182,
-            "evaluation_count": 2
-          },
-          {
-            "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
-            "name": "quality_minus_value",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.197889,
-            "avg_final_score": 4.197889,
-            "evaluation_count": 2
-          },
-          {
-            "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
-            "name": "value_ep",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.071135,
-            "avg_final_score": 7.491671,
-            "evaluation_count": 147
+            "evaluation_count": 187,
+            "is_primary": true
           },
           {
             "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
@@ -803,7 +912,8 @@
             "status": "promising",
             "latest_final_score": 1.311582,
             "avg_final_score": 5.910476,
-            "evaluation_count": 145
+            "evaluation_count": 145,
+            "is_primary": false
           },
           {
             "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -812,10 +922,45 @@
             "status": "promising",
             "latest_final_score": 1.144852,
             "avg_final_score": 8.11212,
-            "evaluation_count": 185
+            "evaluation_count": 185,
+            "is_primary": false
+          },
+          {
+            "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
+            "name": "quality_roe",
+            "family": "quality",
+            "status": "testing",
+            "latest_final_score": 4.41182,
+            "avg_final_score": 4.41182,
+            "evaluation_count": 2,
+            "is_primary": false
+          },
+          {
+            "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
+            "name": "quality_minus_value",
+            "family": "value",
+            "status": "testing",
+            "latest_final_score": 4.197889,
+            "avg_final_score": 4.197889,
+            "evaluation_count": 2,
+            "is_primary": false
+          },
+          {
+            "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
+            "name": "value_ep",
+            "family": "value",
+            "status": "testing",
+            "latest_final_score": 4.071135,
+            "avg_final_score": 7.491671,
+            "evaluation_count": 147,
+            "is_primary": false
           }
-        ]
+        ],
+        "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
+        "primary_candidate": "mom_20",
+        "suppressed_member_count": 5
       },
+      "is_primary_candidate": true,
       "related_candidates": [
         {
           "candidate_id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -837,6 +982,7 @@
       "family": "quality",
       "status": "testing",
       "family_score": 45.29456,
+      "family_recommended_action": "explore_new_branch",
       "relationship_count": 1,
       "lineage_count": 1,
       "cluster": {
@@ -857,34 +1003,8 @@
             "status": "promising",
             "latest_final_score": 4.865683,
             "avg_final_score": 8.524486,
-            "evaluation_count": 187
-          },
-          {
-            "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
-            "name": "quality_roe",
-            "family": "quality",
-            "status": "testing",
-            "latest_final_score": 4.41182,
-            "avg_final_score": 4.41182,
-            "evaluation_count": 2
-          },
-          {
-            "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
-            "name": "quality_minus_value",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.197889,
-            "avg_final_score": 4.197889,
-            "evaluation_count": 2
-          },
-          {
-            "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
-            "name": "value_ep",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.071135,
-            "avg_final_score": 7.491671,
-            "evaluation_count": 147
+            "evaluation_count": 187,
+            "is_primary": true
           },
           {
             "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
@@ -893,7 +1013,8 @@
             "status": "promising",
             "latest_final_score": 1.311582,
             "avg_final_score": 5.910476,
-            "evaluation_count": 145
+            "evaluation_count": 145,
+            "is_primary": false
           },
           {
             "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -902,10 +1023,45 @@
             "status": "promising",
             "latest_final_score": 1.144852,
             "avg_final_score": 8.11212,
-            "evaluation_count": 185
+            "evaluation_count": 185,
+            "is_primary": false
+          },
+          {
+            "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
+            "name": "quality_roe",
+            "family": "quality",
+            "status": "testing",
+            "latest_final_score": 4.41182,
+            "avg_final_score": 4.41182,
+            "evaluation_count": 2,
+            "is_primary": false
+          },
+          {
+            "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
+            "name": "quality_minus_value",
+            "family": "value",
+            "status": "testing",
+            "latest_final_score": 4.197889,
+            "avg_final_score": 4.197889,
+            "evaluation_count": 2,
+            "is_primary": false
+          },
+          {
+            "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
+            "name": "value_ep",
+            "family": "value",
+            "status": "testing",
+            "latest_final_score": 4.071135,
+            "avg_final_score": 7.491671,
+            "evaluation_count": 147,
+            "is_primary": false
           }
-        ]
+        ],
+        "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
+        "primary_candidate": "mom_20",
+        "suppressed_member_count": 5
       },
+      "is_primary_candidate": false,
       "related_candidates": [
         {
           "candidate_id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
@@ -953,6 +1109,7 @@
       "family": "value",
       "status": "testing",
       "family_score": 93.933432,
+      "family_recommended_action": "refine",
       "relationship_count": 4,
       "lineage_count": 2,
       "cluster": {
@@ -973,34 +1130,8 @@
             "status": "promising",
             "latest_final_score": 4.865683,
             "avg_final_score": 8.524486,
-            "evaluation_count": 187
-          },
-          {
-            "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
-            "name": "quality_roe",
-            "family": "quality",
-            "status": "testing",
-            "latest_final_score": 4.41182,
-            "avg_final_score": 4.41182,
-            "evaluation_count": 2
-          },
-          {
-            "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
-            "name": "quality_minus_value",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.197889,
-            "avg_final_score": 4.197889,
-            "evaluation_count": 2
-          },
-          {
-            "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
-            "name": "value_ep",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.071135,
-            "avg_final_score": 7.491671,
-            "evaluation_count": 147
+            "evaluation_count": 187,
+            "is_primary": true
           },
           {
             "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
@@ -1009,7 +1140,8 @@
             "status": "promising",
             "latest_final_score": 1.311582,
             "avg_final_score": 5.910476,
-            "evaluation_count": 145
+            "evaluation_count": 145,
+            "is_primary": false
           },
           {
             "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -1018,10 +1150,45 @@
             "status": "promising",
             "latest_final_score": 1.144852,
             "avg_final_score": 8.11212,
-            "evaluation_count": 185
+            "evaluation_count": 185,
+            "is_primary": false
+          },
+          {
+            "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
+            "name": "quality_roe",
+            "family": "quality",
+            "status": "testing",
+            "latest_final_score": 4.41182,
+            "avg_final_score": 4.41182,
+            "evaluation_count": 2,
+            "is_primary": false
+          },
+          {
+            "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
+            "name": "quality_minus_value",
+            "family": "value",
+            "status": "testing",
+            "latest_final_score": 4.197889,
+            "avg_final_score": 4.197889,
+            "evaluation_count": 2,
+            "is_primary": false
+          },
+          {
+            "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
+            "name": "value_ep",
+            "family": "value",
+            "status": "testing",
+            "latest_final_score": 4.071135,
+            "avg_final_score": 7.491671,
+            "evaluation_count": 147,
+            "is_primary": false
           }
-        ]
+        ],
+        "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
+        "primary_candidate": "mom_20",
+        "suppressed_member_count": 5
       },
+      "is_primary_candidate": false,
       "related_candidates": [
         {
           "candidate_id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
@@ -1127,6 +1294,7 @@
       "family": "value",
       "status": "testing",
       "family_score": 93.933432,
+      "family_recommended_action": "refine",
       "relationship_count": 3,
       "lineage_count": 1,
       "cluster": {
@@ -1147,34 +1315,8 @@
             "status": "promising",
             "latest_final_score": 4.865683,
             "avg_final_score": 8.524486,
-            "evaluation_count": 187
-          },
-          {
-            "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
-            "name": "quality_roe",
-            "family": "quality",
-            "status": "testing",
-            "latest_final_score": 4.41182,
-            "avg_final_score": 4.41182,
-            "evaluation_count": 2
-          },
-          {
-            "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
-            "name": "quality_minus_value",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.197889,
-            "avg_final_score": 4.197889,
-            "evaluation_count": 2
-          },
-          {
-            "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
-            "name": "value_ep",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.071135,
-            "avg_final_score": 7.491671,
-            "evaluation_count": 147
+            "evaluation_count": 187,
+            "is_primary": true
           },
           {
             "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
@@ -1183,7 +1325,8 @@
             "status": "promising",
             "latest_final_score": 1.311582,
             "avg_final_score": 5.910476,
-            "evaluation_count": 145
+            "evaluation_count": 145,
+            "is_primary": false
           },
           {
             "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -1192,10 +1335,45 @@
             "status": "promising",
             "latest_final_score": 1.144852,
             "avg_final_score": 8.11212,
-            "evaluation_count": 185
+            "evaluation_count": 185,
+            "is_primary": false
+          },
+          {
+            "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
+            "name": "quality_roe",
+            "family": "quality",
+            "status": "testing",
+            "latest_final_score": 4.41182,
+            "avg_final_score": 4.41182,
+            "evaluation_count": 2,
+            "is_primary": false
+          },
+          {
+            "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
+            "name": "quality_minus_value",
+            "family": "value",
+            "status": "testing",
+            "latest_final_score": 4.197889,
+            "avg_final_score": 4.197889,
+            "evaluation_count": 2,
+            "is_primary": false
+          },
+          {
+            "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
+            "name": "value_ep",
+            "family": "value",
+            "status": "testing",
+            "latest_final_score": 4.071135,
+            "avg_final_score": 7.491671,
+            "evaluation_count": 147,
+            "is_primary": false
           }
-        ]
+        ],
+        "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
+        "primary_candidate": "mom_20",
+        "suppressed_member_count": 5
       },
+      "is_primary_candidate": false,
       "related_candidates": [
         {
           "candidate_id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -1265,6 +1443,7 @@
       "family": "other",
       "status": "testing",
       "family_score": 85.914704,
+      "family_recommended_action": "continue",
       "relationship_count": 0,
       "lineage_count": 0,
       "cluster": {
@@ -1281,10 +1460,15 @@
             "status": "testing",
             "latest_final_score": 3.025676,
             "avg_final_score": 7.989338,
-            "evaluation_count": 185
+            "evaluation_count": 185,
+            "is_primary": true
           }
-        ]
+        ],
+        "primary_candidate_id": "d7e14ed9-6251-425d-a28a-fc75cbf5bbf0",
+        "primary_candidate": "size_small",
+        "suppressed_member_count": 0
       },
+      "is_primary_candidate": true,
       "related_candidates": [],
       "lineage": []
     },
@@ -1294,6 +1478,7 @@
       "family": "liquidity",
       "status": "testing",
       "family_score": 85.759496,
+      "family_recommended_action": "continue",
       "relationship_count": 0,
       "lineage_count": 0,
       "cluster": {
@@ -1310,10 +1495,15 @@
             "status": "testing",
             "latest_final_score": 2.364005,
             "avg_final_score": 7.969937,
-            "evaluation_count": 187
+            "evaluation_count": 187,
+            "is_primary": true
           }
-        ]
+        ],
+        "primary_candidate_id": "c75fb8df-b227-4cb1-93c8-a6e65ec95dfc",
+        "primary_candidate": "liquidity_turnover_shock",
+        "suppressed_member_count": 0
       },
+      "is_primary_candidate": true,
       "related_candidates": [],
       "lineage": []
     },
@@ -1323,6 +1513,7 @@
       "family": "value",
       "status": "promising",
       "family_score": 93.933432,
+      "family_recommended_action": "refine",
       "relationship_count": 3,
       "lineage_count": 1,
       "cluster": {
@@ -1343,34 +1534,8 @@
             "status": "promising",
             "latest_final_score": 4.865683,
             "avg_final_score": 8.524486,
-            "evaluation_count": 187
-          },
-          {
-            "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
-            "name": "quality_roe",
-            "family": "quality",
-            "status": "testing",
-            "latest_final_score": 4.41182,
-            "avg_final_score": 4.41182,
-            "evaluation_count": 2
-          },
-          {
-            "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
-            "name": "quality_minus_value",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.197889,
-            "avg_final_score": 4.197889,
-            "evaluation_count": 2
-          },
-          {
-            "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
-            "name": "value_ep",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.071135,
-            "avg_final_score": 7.491671,
-            "evaluation_count": 147
+            "evaluation_count": 187,
+            "is_primary": true
           },
           {
             "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
@@ -1379,7 +1544,8 @@
             "status": "promising",
             "latest_final_score": 1.311582,
             "avg_final_score": 5.910476,
-            "evaluation_count": 145
+            "evaluation_count": 145,
+            "is_primary": false
           },
           {
             "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -1388,10 +1554,45 @@
             "status": "promising",
             "latest_final_score": 1.144852,
             "avg_final_score": 8.11212,
-            "evaluation_count": 185
+            "evaluation_count": 185,
+            "is_primary": false
+          },
+          {
+            "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
+            "name": "quality_roe",
+            "family": "quality",
+            "status": "testing",
+            "latest_final_score": 4.41182,
+            "avg_final_score": 4.41182,
+            "evaluation_count": 2,
+            "is_primary": false
+          },
+          {
+            "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
+            "name": "quality_minus_value",
+            "family": "value",
+            "status": "testing",
+            "latest_final_score": 4.197889,
+            "avg_final_score": 4.197889,
+            "evaluation_count": 2,
+            "is_primary": false
+          },
+          {
+            "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
+            "name": "value_ep",
+            "family": "value",
+            "status": "testing",
+            "latest_final_score": 4.071135,
+            "avg_final_score": 7.491671,
+            "evaluation_count": 147,
+            "is_primary": false
           }
-        ]
+        ],
+        "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
+        "primary_candidate": "mom_20",
+        "suppressed_member_count": 5
       },
+      "is_primary_candidate": false,
       "related_candidates": [
         {
           "candidate_id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
@@ -1461,6 +1662,7 @@
       "family": "momentum",
       "status": "promising",
       "family_score": 117.546424,
+      "family_recommended_action": "continue",
       "relationship_count": 2,
       "lineage_count": 1,
       "cluster": {
@@ -1481,34 +1683,8 @@
             "status": "promising",
             "latest_final_score": 4.865683,
             "avg_final_score": 8.524486,
-            "evaluation_count": 187
-          },
-          {
-            "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
-            "name": "quality_roe",
-            "family": "quality",
-            "status": "testing",
-            "latest_final_score": 4.41182,
-            "avg_final_score": 4.41182,
-            "evaluation_count": 2
-          },
-          {
-            "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
-            "name": "quality_minus_value",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.197889,
-            "avg_final_score": 4.197889,
-            "evaluation_count": 2
-          },
-          {
-            "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
-            "name": "value_ep",
-            "family": "value",
-            "status": "testing",
-            "latest_final_score": 4.071135,
-            "avg_final_score": 7.491671,
-            "evaluation_count": 147
+            "evaluation_count": 187,
+            "is_primary": true
           },
           {
             "id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
@@ -1517,7 +1693,8 @@
             "status": "promising",
             "latest_final_score": 1.311582,
             "avg_final_score": 5.910476,
-            "evaluation_count": 145
+            "evaluation_count": 145,
+            "is_primary": false
           },
           {
             "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -1526,10 +1703,45 @@
             "status": "promising",
             "latest_final_score": 1.144852,
             "avg_final_score": 8.11212,
-            "evaluation_count": 185
+            "evaluation_count": 185,
+            "is_primary": false
+          },
+          {
+            "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
+            "name": "quality_roe",
+            "family": "quality",
+            "status": "testing",
+            "latest_final_score": 4.41182,
+            "avg_final_score": 4.41182,
+            "evaluation_count": 2,
+            "is_primary": false
+          },
+          {
+            "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
+            "name": "quality_minus_value",
+            "family": "value",
+            "status": "testing",
+            "latest_final_score": 4.197889,
+            "avg_final_score": 4.197889,
+            "evaluation_count": 2,
+            "is_primary": false
+          },
+          {
+            "id": "06229569-0a76-4cce-8fc3-1face8be1d58",
+            "name": "value_ep",
+            "family": "value",
+            "status": "testing",
+            "latest_final_score": 4.071135,
+            "avg_final_score": 7.491671,
+            "evaluation_count": 147,
+            "is_primary": false
           }
-        ]
+        ],
+        "primary_candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
+        "primary_candidate": "mom_20",
+        "suppressed_member_count": 5
       },
+      "is_primary_candidate": false,
       "related_candidates": [
         {
           "candidate_id": "06229569-0a76-4cce-8fc3-1face8be1d58",

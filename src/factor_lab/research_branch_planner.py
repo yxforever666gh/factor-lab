@@ -14,6 +14,7 @@ class ResearchBranchPlanner:
         candidate_tasks = (candidate_pool or {}).get("tasks", []) or []
         family_summary = snapshot.get("family_summary", []) or []
         relationship_summary = snapshot.get("relationship_summary", {}) or {}
+        family_recommendations = {row.get("family"): row for row in snapshot.get("family_recommendations", []) if row.get("family")}
 
         top_family_score = max([row.get("family_score") or 0 for row in family_summary] or [0])
         hybrid_count = int(relationship_summary.get("hybrid_of", 0) or 0)
@@ -30,11 +31,30 @@ class ResearchBranchPlanner:
             fatigue_level = (fatigue.get(family) or {}).get("fatigue_level", "low")
             recent_gain = family_recent_gain.get(family, 0)
             score = 0.0
+            action_hint = None
+
+            if family == "stable_candidate_validation":
+                family_action_counts = {}
+                for row in snapshot.get("family_recommendations", []) or []:
+                    action = row.get("recommended_action") or "unknown"
+                    family_action_counts[action] = family_action_counts.get(action, 0) + 1
+                if family_action_counts:
+                    action_hint = max(family_action_counts.items(), key=lambda item: item[1])[0]
+            elif family == "graveyard_diagnosis":
+                action_hint = "refine" if duplicate_count else "continue"
+            elif family == "recent_window_validation":
+                action_hint = "refine" if refinement_count or duplicate_count else "continue"
+            elif family == "window_expansion":
+                action_hint = "continue" if top_family_score >= 70 else "pause"
+            elif family == "exploration":
+                explore_branch_count = len([row for row in family_recommendations.values() if row.get("recommended_action") == "explore_new_branch"])
+                action_hint = "explore_new_branch" if explore_branch_count >= 2 else "pause"
 
             if saturated or next_level is None:
                 branch_decisions.append({
                     "family": family,
                     "decision": "pause",
+                    "recommended_action": action_hint or "pause",
                     "reason": "当前 family 已无下一层或已饱和。",
                 })
                 continue
@@ -42,22 +62,34 @@ class ResearchBranchPlanner:
             if family == "stable_candidate_validation":
                 score += 70 + min(top_family_score / 4, 30) + min(refinement_count * 4, 12)
                 decision = "advance"
+                if action_hint == "refine":
+                    decision = "refine"
+                    score += 6
+                elif action_hint == "pause":
+                    decision = "hold"
+                    score -= 10
                 reason = f"高分 family={top_family_score:.2f}，refinement={refinement_count}，优先把强主线做深。最近增量 {recent_gain}。"
             elif family == "graveyard_diagnosis":
                 score += 52 + min(duplicate_count * 5, 20)
-                decision = "advance"
+                decision = "refine" if duplicate_count >= 2 else "advance"
                 reason = f"duplicate={duplicate_count}，需要确认失败因子是否只是同构重复。最近增量 {recent_gain}。"
             elif family == "recent_window_validation":
                 score += 60 + min(refinement_count * 3, 12)
-                decision = "advance"
+                decision = "refine" if (action_hint == "refine" or duplicate_count >= 2) else "advance"
                 reason = f"近期窗口验证仍有缺口，且 refinement={refinement_count}，适合先确认分支稳定性。最近增量 {recent_gain}。"
             elif family == "window_expansion":
                 score += 48 + min(hybrid_count * 4, 16) + min(top_family_score / 8, 10)
-                decision = "advance"
+                decision = "advance" if action_hint == "continue" else "hold"
                 reason = f"hybrid={hybrid_count}，需要跨更长区间确认组合关系是否持久。最近增量 {recent_gain}。"
             else:
                 score += 35 + min(hybrid_count * 3, 12)
-                decision = "hold" if fatigue_level != "low" or top_family_score < 70 else "advance"
+                if fatigue_level != "low" or top_family_score < 70:
+                    decision = "hold"
+                else:
+                    decision = "advance"
+                if action_hint == "explore_new_branch":
+                    decision = "advance"
+                    score += 8
                 reason = f"exploration 仅在已有 family 分数较强且混合支路出现时推进。最近增量 {recent_gain}。"
 
             if fatigue_level == "medium":
@@ -68,12 +100,13 @@ class ResearchBranchPlanner:
             if recent_gain:
                 score += min(recent_gain * 2, 8)
 
-            if decision == "advance":
+            if decision in {"advance", "refine"}:
                 priority_scored.append((score, family))
 
             branch_decisions.append({
                 "family": family,
                 "decision": decision,
+                "recommended_action": action_hint,
                 "current_level": progress.get("current_level"),
                 "next_level": next_level,
                 "fatigue": fatigue_level,
@@ -104,7 +137,7 @@ class ResearchBranchPlanner:
                 break
 
         return {
-            "summary": "优先推进高分 family 的验证与带 lineage 的分支，再决定扩窗与 exploration。",
+            "summary": "优先推进高分 family 的验证与带 lineage 的分支；duplicate 压力高的主线转向 refine，弱 family 倾向 explore_new_branch。",
             "branch_decisions": branch_decisions,
             "selected_tasks": selected_tasks,
             "selected_families": selected_families,

@@ -92,8 +92,20 @@ def build_research_planner_snapshot(db_path: str | Path, output_path: str | Path
         candidate_graph_context = _read_json(root / "candidate_graph_context.json", {})
         family_summary = candidate_graph_context.get("families") or _read_json(root / "family_summary.json", [])
         candidate_clusters = candidate_graph_context.get("clusters") or _read_json(root / "candidate_clusters.json", [])
+        cluster_representatives = candidate_graph_context.get("cluster_representatives") or _read_json(root / "cluster_representatives.json", [])
         candidate_context = candidate_graph_context.get("candidate_context") or []
         relationship_summary = candidate_graph_context.get("relationship_summary") or {}
+        family_recommendations = [
+            {
+                "family": row.get("family"),
+                "recommended_action": row.get("recommended_action"),
+                "family_score": row.get("family_score"),
+                "primary_candidate": row.get("primary_candidate"),
+                "duplicate_pressure": row.get("duplicate_pressure"),
+                "representative_count": row.get("representative_count"),
+            }
+            for row in family_summary
+        ]
 
         from factor_lab.storage import ExperimentStore
         store = ExperimentStore(db_path)
@@ -137,7 +149,9 @@ def build_research_planner_snapshot(db_path: str | Path, output_path: str | Path
             "recommendation_weights": recommendation_weights,
             "llm_status": llm_status,
             "family_summary": family_summary,
+            "family_recommendations": family_recommendations,
             "candidate_clusters": candidate_clusters,
+            "cluster_representatives": cluster_representatives,
             "candidate_context": candidate_context,
             "relationship_summary": relationship_summary,
             "knowledge_gain_counter": knowledge_gain_counter,

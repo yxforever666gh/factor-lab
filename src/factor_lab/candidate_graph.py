@@ -76,6 +76,7 @@ def _candidate_profile(candidate: dict[str, Any]) -> dict[str, Any]:
     atoms = {token for token in semantic_tokens if token not in {"value_proxy", family}}
     if not atoms and family != "other":
         atoms = {family}
+    signature_tokens = sorted(atoms or semantic_tokens or {family})
     return {
         "id": candidate["id"],
         "name": candidate.get("name"),
@@ -86,7 +87,40 @@ def _candidate_profile(candidate: dict[str, Any]) -> dict[str, Any]:
         "atoms": atoms,
         "operator_count": _operator_count(expression),
         "is_hybrid": len(atoms) >= 2 or _operator_count(expression) > 0,
+        "signature": f"{family}::{'|'.join(signature_tokens)}::{_operator_count(expression)}",
     }
+
+
+def _candidate_rank_key(candidate: dict[str, Any]) -> tuple[float, float, float, str]:
+    status = candidate.get("status") or "new"
+    status_rank = {"promising": 3.0, "testing": 2.0, "new": 1.0, "rejected": 0.0, "archived": -1.0}.get(status, 0.0)
+    latest = float(candidate.get("latest_final_score") or -999.0)
+    avg_score = float(candidate.get("avg_final_score") or -999.0)
+    evals = float(candidate.get("evaluation_count") or 0)
+    return (status_rank, latest, avg_score + evals / 1000.0, candidate.get("name") or "")
+
+
+def _recommend_family_action(row: dict[str, Any]) -> str:
+    family_score = float(row.get("family_score") or 0.0)
+    promising_count = int(row.get("promising_count") or 0)
+    rejected_count = int(row.get("rejected_count") or 0)
+    duplicate_pressure = int(row.get("duplicate_pressure") or 0)
+    cluster_pressure = float(row.get("cluster_pressure") or 0.0)
+    representative_count = int(row.get("representative_count") or 0)
+
+    if family_score >= 95 and promising_count >= 1 and duplicate_pressure <= max(1, representative_count):
+        return "continue"
+    if family_score >= 55 and (duplicate_pressure > representative_count or cluster_pressure >= 1.5):
+        return "refine"
+    if rejected_count >= max(2, promising_count + 1) and family_score < 45:
+        return "pause"
+    if family_score < 35 and promising_count == 0:
+        return "explore_new_branch"
+    if duplicate_pressure >= max(2, representative_count):
+        return "refine"
+    if family_score >= 70:
+        return "continue"
+    return "explore_new_branch"
 
 
 def build_candidate_relationships(
@@ -258,8 +292,19 @@ def build_candidate_relationships(
     return list(rows.values())
 
 
-def family_rollup(candidates: list[dict[str, Any]], evaluations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def family_rollup(candidates: list[dict[str, Any]], evaluations: list[dict[str, Any]], relationships: list[dict[str, Any]] | None = None, cluster_membership: dict[str, dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     by_candidate = {row["id"]: row for row in candidates}
+    cluster_membership = cluster_membership or {}
+    duplicate_pressure_by_candidate = Counter()
+    cluster_size_by_candidate: dict[str, int] = {}
+    if relationships:
+        for rel in relationships:
+            if rel.get("relationship_type") == REL_DUPLICATE:
+                duplicate_pressure_by_candidate[rel["left_candidate_id"]] += 1
+                duplicate_pressure_by_candidate[rel["right_candidate_id"]] += 1
+    for candidate_id, cluster in cluster_membership.items():
+        cluster_size_by_candidate[candidate_id] = int(cluster.get("cluster_size") or 1)
+
     grouped: dict[str, dict[str, Any]] = defaultdict(lambda: {
         "family": "other",
         "candidate_count": 0,
@@ -272,6 +317,10 @@ def family_rollup(candidates: list[dict[str, Any]], evaluations: list[dict[str, 
         "promising_count": 0,
         "testing_count": 0,
         "rejected_count": 0,
+        "duplicate_pressure": 0,
+        "cluster_total": 0.0,
+        "cluster_candidates": 0,
+        "representative_candidates": [],
     })
 
     for candidate in candidates:
@@ -293,6 +342,13 @@ def family_rollup(candidates: list[dict[str, Any]], evaluations: list[dict[str, 
             bucket["latest_scores"].append(float(candidate["latest_final_score"]))
         if candidate.get("best_final_score") is not None:
             bucket["best_scores"].append(float(candidate["best_final_score"]))
+        bucket["duplicate_pressure"] += int(duplicate_pressure_by_candidate.get(candidate["id"], 0))
+        cluster_size = cluster_size_by_candidate.get(candidate["id"], 1)
+        bucket["cluster_total"] += float(cluster_size)
+        bucket["cluster_candidates"] += 1
+        cluster = cluster_membership.get(candidate["id"]) or {}
+        if cluster.get("primary_candidate_id") == candidate["id"]:
+            bucket["representative_candidates"].append(candidate)
 
     for evaluation in evaluations:
         candidate = by_candidate.get(evaluation.get("candidate_id"))
@@ -316,22 +372,30 @@ def family_rollup(candidates: list[dict[str, Any]], evaluations: list[dict[str, 
         score += min(len(bucket["window_labels"]) * 3, 15)
         score += max((avg_score or 0.0) * 8, 0)
         score -= min(bucket["rejected_count"] * 4, 20)
-        rows.append(
-            {
-                "family": family,
-                "candidate_count": candidate_count,
-                "evaluation_count": bucket["evaluation_count"],
-                "window_count": len(bucket["window_labels"]),
-                "promising_count": bucket["promising_count"],
-                "testing_count": bucket["testing_count"],
-                "rejected_count": bucket["rejected_count"],
-                "top_status": status_counter.most_common(1)[0][0] if status_counter else "new",
-                "avg_candidate_score": avg_score,
-                "avg_latest_score": avg_latest,
-                "avg_best_score": avg_best,
-                "family_score": round(score, 6),
-            }
-        )
+        representatives = sorted(bucket["representative_candidates"], key=_candidate_rank_key, reverse=True)
+        primary = representatives[0] if representatives else None
+        cluster_pressure = round(bucket["cluster_total"] / max(bucket["cluster_candidates"], 1), 3) if bucket["cluster_candidates"] else 0.0
+        row = {
+            "family": family,
+            "candidate_count": candidate_count,
+            "evaluation_count": bucket["evaluation_count"],
+            "window_count": len(bucket["window_labels"]),
+            "promising_count": bucket["promising_count"],
+            "testing_count": bucket["testing_count"],
+            "rejected_count": bucket["rejected_count"],
+            "top_status": status_counter.most_common(1)[0][0] if status_counter else "new",
+            "avg_candidate_score": avg_score,
+            "avg_latest_score": avg_latest,
+            "avg_best_score": avg_best,
+            "family_score": round(score, 6),
+            "duplicate_pressure": int(bucket["duplicate_pressure"]),
+            "cluster_pressure": cluster_pressure,
+            "representative_count": len(representatives),
+            "primary_candidate": primary.get("name") if primary else None,
+            "representative_candidates": [row.get("name") for row in representatives[:5]],
+        }
+        row["recommended_action"] = _recommend_family_action(row)
+        rows.append(row)
     rows.sort(key=lambda row: (-row["family_score"], -row["candidate_count"], row["family"]))
     return rows
 
@@ -379,14 +443,8 @@ def candidate_clusters(candidates: list[dict[str, Any]], relationships: list[dic
                 for rel in pair_rels:
                     edge_types[rel["relationship_type"]] += 1
                     strengths.append(float(rel.get("strength") or 0.0))
-        members_sorted = sorted(
-            members,
-            key=lambda row: (
-                -(float(row.get("latest_final_score") or -999.0)),
-                -(int(row.get("evaluation_count") or 0)),
-                row.get("name") or "",
-            ),
-        )
+        members_sorted = sorted(members, key=_candidate_rank_key, reverse=True)
+        primary = members_sorted[0] if members_sorted else None
         cluster_id = len(clusters) + 1
         for member_id in component:
             cluster_index_by_candidate[member_id] = cluster_id
@@ -400,7 +458,10 @@ def candidate_clusters(candidates: list[dict[str, Any]], relationships: list[dic
                 "dominant_family": families.most_common(1)[0][0] if families else "other",
                 "family_mix": dict(families),
                 "relationship_mix": dict(edge_types),
-                "leader": members_sorted[0].get("name"),
+                "leader": primary.get("name") if primary else None,
+                "primary_candidate_id": primary.get("id") if primary else None,
+                "primary_candidate": primary.get("name") if primary else None,
+                "suppressed_member_count": max(len(members_sorted) - 1, 0),
                 "members": [
                     {
                         "id": row["id"],
@@ -410,6 +471,7 @@ def candidate_clusters(candidates: list[dict[str, Any]], relationships: list[dic
                         "latest_final_score": row.get("latest_final_score"),
                         "avg_final_score": row.get("avg_final_score"),
                         "evaluation_count": row.get("evaluation_count"),
+                        "is_primary": bool(primary and row["id"] == primary.get("id")),
                     }
                     for row in members_sorted
                 ],
@@ -424,11 +486,23 @@ def candidate_clusters(candidates: list[dict[str, Any]], relationships: list[dic
 
 
 def build_candidate_graph_context(candidates: list[dict[str, Any]], evaluations: list[dict[str, Any]], relationships: list[dict[str, Any]]) -> dict[str, Any]:
-    families = family_rollup(candidates, evaluations)
     clusters = candidate_clusters(candidates, relationships)
-    family_score_by_name = {row["family"]: row for row in families}
     cluster_by_candidate: dict[str, dict[str, Any]] = {}
+    representative_rows: list[dict[str, Any]] = []
     for cluster in clusters:
+        primary_member = next((member for member in cluster["members"] if member.get("is_primary")), cluster["members"][0] if cluster["members"] else None)
+        if primary_member:
+            representative_rows.append(
+                {
+                    "cluster_id": cluster["cluster_id"],
+                    "primary_candidate_id": primary_member.get("id"),
+                    "primary_candidate": primary_member.get("name"),
+                    "family": primary_member.get("family"),
+                    "cluster_size": cluster.get("cluster_size"),
+                    "suppressed_candidates": [member.get("name") for member in cluster["members"] if member.get("id") != primary_member.get("id")],
+                    "relationship_mix": cluster.get("relationship_mix") or {},
+                }
+            )
         for member in cluster["members"]:
             cluster_by_candidate[member["id"]] = {
                 "cluster_id": cluster["cluster_id"],
@@ -437,7 +511,13 @@ def build_candidate_graph_context(candidates: list[dict[str, Any]], evaluations:
                 "dominant_family": cluster.get("dominant_family"),
                 "relationship_mix": cluster.get("relationship_mix") or {},
                 "members": cluster["members"],
+                "primary_candidate_id": cluster.get("primary_candidate_id"),
+                "primary_candidate": cluster.get("primary_candidate"),
+                "suppressed_member_count": cluster.get("suppressed_member_count", 0),
             }
+
+    families = family_rollup(candidates, evaluations, relationships, cluster_by_candidate)
+    family_score_by_name = {row["family"]: row for row in families}
 
     relationship_summary = Counter(rel["relationship_type"] for rel in relationships)
     relationships_by_candidate: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -464,6 +544,7 @@ def build_candidate_graph_context(candidates: list[dict[str, Any]], evaluations:
             if rel.get("relationship_type") in {REL_DUPLICATE, REL_REFINEMENT, REL_HYBRID}:
                 lineage.append(item)
         family = candidate.get("family") or "other"
+        cluster = cluster_by_candidate.get(candidate["id"])
         candidate_context.append(
             {
                 "candidate_id": candidate["id"],
@@ -471,9 +552,11 @@ def build_candidate_graph_context(candidates: list[dict[str, Any]], evaluations:
                 "family": family,
                 "status": candidate.get("status"),
                 "family_score": (family_score_by_name.get(family) or {}).get("family_score"),
+                "family_recommended_action": (family_score_by_name.get(family) or {}).get("recommended_action"),
                 "relationship_count": len(rels),
                 "lineage_count": len(lineage),
-                "cluster": cluster_by_candidate.get(candidate["id"]),
+                "cluster": cluster,
+                "is_primary_candidate": bool(cluster and cluster.get("primary_candidate_id") == candidate["id"]),
                 "related_candidates": related,
                 "lineage": lineage,
             }
@@ -482,6 +565,7 @@ def build_candidate_graph_context(candidates: list[dict[str, Any]], evaluations:
     return {
         "families": families,
         "clusters": clusters,
+        "cluster_representatives": representative_rows,
         "relationship_summary": dict(relationship_summary),
         "candidate_context": candidate_context,
     }
@@ -590,20 +674,24 @@ def build_graph_artifacts(db_path: str | Path, output_dir: str | Path) -> dict[s
     graph_context = build_candidate_graph_context(candidates, evaluations, relationships)
     families = graph_context["families"]
     clusters = graph_context["clusters"]
+    representatives = graph_context["cluster_representatives"]
 
     family_path = output_dir / "family_summary.json"
     cluster_path = output_dir / "candidate_clusters.json"
     relationship_path = output_dir / "candidate_relationships.json"
     context_path = output_dir / "candidate_graph_context.json"
+    representative_path = output_dir / "cluster_representatives.json"
     family_path.write_text(json.dumps(families, ensure_ascii=False, indent=2), encoding="utf-8")
     cluster_path.write_text(json.dumps(clusters, ensure_ascii=False, indent=2), encoding="utf-8")
     relationship_path.write_text(json.dumps(relationships, ensure_ascii=False, indent=2), encoding="utf-8")
     context_path.write_text(json.dumps(graph_context, ensure_ascii=False, indent=2), encoding="utf-8")
+    representative_path.write_text(json.dumps(representatives, ensure_ascii=False, indent=2), encoding="utf-8")
     return {
         "family_summary_path": str(family_path),
         "candidate_clusters_path": str(cluster_path),
         "candidate_relationships_path": str(relationship_path),
         "candidate_graph_context_path": str(context_path),
+        "cluster_representatives_path": str(representative_path),
         "family_count": len(families),
         "cluster_count": len(clusters),
         "relationship_count": len(relationships),
