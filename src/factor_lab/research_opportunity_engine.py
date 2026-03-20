@@ -7,6 +7,8 @@ from typing import Any
 
 from factor_lab.question_generator import build_research_questions
 from factor_lab.opportunity_scorer import score_opportunity
+from factor_lab.opportunity_learning import build_opportunity_learning
+from factor_lab.opportunity_budget_allocator import allocate_opportunity_budget
 
 ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS = ROOT / "artifacts"
@@ -64,13 +66,20 @@ def build_research_opportunities(snapshot_path: str | Path, output_path: str | P
     flow_state = snapshot.get("research_flow_state") or _read_json(ARTIFACTS / "research_flow_state.json", {})
 
     questions = build_research_questions(snapshot)
+    opportunity_learning = build_opportunity_learning()
+    opportunity_budget = allocate_opportunity_budget(snapshot, opportunity_learning)
+    type_budget = dict(opportunity_budget.get("budget") or {})
+
     opportunities: list[dict[str, Any]] = []
     for question in questions:
+        qtype = question.get("question_type") or "probe"
+        if qtype in type_budget and int(type_budget.get(qtype, 0)) <= 0:
+            continue
         scores = score_opportunity(question, snapshot)
         opportunities.append(
             _make_opportunity(
                 opportunity_id=f"opp-{question['question_id']}",
-                opportunity_type=question.get("question_type") or "probe",
+                opportunity_type=qtype,
                 title=question.get("question") or question.get("question_id") or "untitled",
                 question=question.get("question") or "",
                 hypothesis=question.get("hypothesis") or "",
@@ -85,6 +94,8 @@ def build_research_opportunities(snapshot_path: str | Path, output_path: str | P
                 sources=list(question.get("sources") or []),
             )
         )
+        if qtype in type_budget:
+            type_budget[qtype] = max(0, int(type_budget.get(qtype, 0)) - 1)
 
     opportunities.sort(
         key=lambda row: (
@@ -102,6 +113,8 @@ def build_research_opportunities(snapshot_path: str | Path, output_path: str | P
             "count": len(opportunities),
             "question_count": len(questions),
             "top_types": sorted({row.get("opportunity_type") for row in opportunities if row.get("opportunity_type")}),
+            "opportunity_budget": opportunity_budget,
+            "opportunity_learning": opportunity_learning,
         },
         "opportunities": opportunities[:12],
     }
