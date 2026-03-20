@@ -23,6 +23,7 @@ def build_analyst_feedback_context(base_dir: str | Path | None = None) -> dict[s
     llm_feedback = _read_json(base / "llm_plan_feedback.json", {})
     llm_retrospective = _read_json(base / "llm_retrospective.json", {})
     llm_status = _read_json(base / "llm_status.json", {})
+    main_task_generation = _read_json(base / "main_task_generation_state.json", {})
 
     strategy_runs = list(research_memory.get("strategy_runs") or [])
     branch_history = list(research_memory.get("branch_history") or [])
@@ -89,4 +90,5 @@ def build_analyst_feedback_context(base_dir: str | Path | None = None) -> dict[s
             "retrospective": llm_retrospective,
         },
         "analyst_learning_loop": analyst_learning_loop,
+        "main_task_generation": main_task_generation,
     }
