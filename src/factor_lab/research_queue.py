@@ -416,6 +416,7 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
                     f"selected={planner_result.get('proposal_selected_count', 0)}, "
                     f"strategy_approved={planner_result.get('strategy_approved_count', 0)}, "
                     f"accepted={planner_result.get('validated_accepted_count', 0)}, "
+                    f"recovery={planner_result.get('recovery_used', False)}, "
                     f"injected={planner_result.get('injected_count', 0)}"
                 ),
             )

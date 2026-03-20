@@ -8,7 +8,7 @@ from factor_lab.research_candidate_pool import build_research_candidate_pool
 from factor_lab.research_branch_planner import build_branch_planner_output
 from factor_lab.research_planner import build_research_plan
 from factor_lab.research_planner_validate import validate_research_planner_proposal
-from factor_lab.planner_fallback import build_fallback_candidate_pool
+from factor_lab.planner_recovery import build_recovery_tasks
 from factor_lab.research_space_registry import build_research_space_registry
 from factor_lab.research_space_map import build_research_space_map
 from factor_lab.research_strategy import (
@@ -41,10 +41,10 @@ def run_research_planner_pipeline() -> dict[str, Any]:
     candidate_pool = build_research_candidate_pool(snapshot_path, candidate_pool_path)
     branch_plan = build_branch_planner_output(space_map_path, snapshot_path, candidate_pool_path, branch_plan_path)
     candidate_pool = build_research_candidate_pool(snapshot_path, candidate_pool_path, branch_plan_path)
-    candidate_pool_used_fallback = False
+    recovery_used = False
     if not (candidate_pool.get("tasks") or []):
-        candidate_pool = build_fallback_candidate_pool(snapshot_path, candidate_pool_path, branch_plan_path)
-        candidate_pool_used_fallback = True
+        candidate_pool = build_recovery_tasks(snapshot_path, candidate_pool_path, branch_plan_path)
+        recovery_used = True
     proposal = build_research_plan(snapshot_path, candidate_pool_path, proposal_path, branch_plan_path)
     state_snapshot = build_research_state_snapshot(
         DB_PATH,
@@ -65,7 +65,7 @@ def run_research_planner_pipeline() -> dict[str, Any]:
         "snapshot_latest_run": (snapshot.get("latest_run") or {}).get("config_path"),
         "space_map_families": list((space_map.get("family_progress") or {}).keys()),
         "candidate_count": len(candidate_pool.get("tasks", [])),
-        "candidate_pool_used_fallback": candidate_pool_used_fallback,
+        "recovery_used": recovery_used,
         "branch_selected_families": branch_plan.get("selected_families", []),
         "proposal_selected_count": len(proposal.get("selected_tasks", [])),
         "strategy_approved_count": len(strategy_plan.get("approved_tasks", [])),

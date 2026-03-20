@@ -174,7 +174,7 @@ class ResearchPlannerAgent:
 
         return {
             "summary": "优先选择带 family 分数、fragility、风险信号支撑的 validation / baseline 任务；当候选或 family 触发风险阈值时，先走 robustness/validation，再考虑 refinement。",
-            "fallback_used": bool(candidate_pool.get("fallback")),
+            "recovery_used": bool(candidate_pool.get("recovery_used") or candidate_pool.get("fallback")),
             "selection_policy": {
                 "max_total": 4,
                 "category_limits": limits,
