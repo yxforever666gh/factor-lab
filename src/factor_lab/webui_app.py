@@ -879,12 +879,14 @@ def llm_page():
     retrospective_md_path = DB_PATH.parent / "llm_retrospective.md"
     recommendation_history_path = DB_PATH.parent / "llm_recommendation_history.json"
     recommendation_weights_path = DB_PATH.parent / "llm_recommendation_weights.json"
+    llm_diagnostics_path = DB_PATH.parent / "llm_diagnostics.json"
     recommendation_context = snapshot.get("recommendation_context", {}) or {}
     recommendation_history_tail = snapshot.get("recommendation_history_tail", []) or []
     plan_validation = llm_status.get("plan_validation", {}) or {}
     generated_batch = json.loads(generated_batch_path.read_text(encoding="utf-8")) if generated_batch_path.exists() else {}
     generated_workflow = json.loads(generated_batch_workflow_path.read_text(encoding="utf-8")) if generated_batch_workflow_path.exists() else {}
     recommendation_weights = json.loads(recommendation_weights_path.read_text(encoding="utf-8")) if recommendation_weights_path.exists() else {}
+    llm_diagnostics = json.loads(llm_diagnostics_path.read_text(encoding="utf-8")) if llm_diagnostics_path.exists() else {}
     return render(
         "llm.html",
         title="LLM",

@@ -14,6 +14,7 @@ from factor_lab.research_space_registry import build_research_space_registry
 from factor_lab.research_space_map import build_research_space_map
 from factor_lab.research_flow_state import derive_research_flow_state
 from factor_lab.research_opportunity_engine import build_research_opportunities
+from factor_lab.llm_diagnostics import build_llm_diagnostics
 from factor_lab.research_strategy import (
     build_research_state_snapshot,
     build_strategy_plan,
@@ -71,6 +72,7 @@ def run_research_planner_pipeline() -> dict[str, Any]:
         encoding="utf-8",
     )
     research_opportunities = build_research_opportunities(snapshot_path, ROOT / "artifacts" / "research_opportunities.json")
+    llm_diagnostics = build_llm_diagnostics(snapshot_path, ROOT / "artifacts" / "research_opportunities.json", ROOT / "artifacts" / "llm_diagnostics.json")
 
     return {
         "registry_windows_count": len((registry.get("windows_covered") or {})),
@@ -88,5 +90,6 @@ def run_research_planner_pipeline() -> dict[str, Any]:
         "injected_tasks": injected.get("injected_tasks", []),
         "research_flow_state": research_flow_state,
         "research_opportunity_count": len(research_opportunities.get("opportunities", [])),
+        "llm_diagnostics": llm_diagnostics,
         "state_snapshot_open_questions": len(state_snapshot.get("open_questions", [])),
     }

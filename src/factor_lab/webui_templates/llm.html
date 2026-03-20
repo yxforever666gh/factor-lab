@@ -43,6 +43,12 @@
         <tr><th>重点复核墓地</th><td>{{ llm_plan.review_graveyard|join('、') if llm_plan.review_graveyard else '-' }}</td></tr>
         <tr><th>组合检查项</th><td>{{ llm_plan.portfolio_checks|join('、') if llm_plan.portfolio_checks else '-' }}</td></tr>
         <tr><th>原因</th><td class="text-break">{{ llm_plan.rationale or '-' }}</td></tr>
+        <tr><th>新问题</th><td class="text-break">{{ llm_plan.new_questions|join('、') if llm_plan.new_questions else '-' }}</td></tr>
+        <tr><th>建议机会</th><td class="text-break">{{ llm_plan.suggested_opportunities|join('、') if llm_plan.suggested_opportunities else '-' }}</td></tr>
+        <tr><th>阻断机会</th><td class="text-break">{{ llm_plan.blocked_opportunities|join('、') if llm_plan.blocked_opportunities else '-' }}</td></tr>
+        <tr><th>不确定热点</th><td class="text-break">{{ llm_plan.uncertainty_hotspots|join('、') if llm_plan.uncertainty_hotspots else '-' }}</td></tr>
+        <tr><th>Challenger</th><td class="text-break">{{ llm_plan.challenger_notes|join('；') if llm_plan.challenger_notes else '-' }}</td></tr>
+        <tr><th>Auditor</th><td class="text-break">{{ llm_plan.auditor_notes|join('；') if llm_plan.auditor_notes else '-' }}</td></tr>
       </tbody>
     </table>
   </section>

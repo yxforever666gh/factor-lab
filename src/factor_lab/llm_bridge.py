@@ -55,10 +55,9 @@ def validate_agent_response(response: dict[str, Any]) -> list[str]:
         missing_plan = REQUIRED_PLAN_KEYS - set(plan.keys())
         if missing_plan:
             errors.append(f"next_batch_proposal 缺少字段: {', '.join(sorted(missing_plan))}")
-        if "risk_flags" in plan and not isinstance(plan.get("risk_flags"), list):
-            errors.append("next_batch_proposal.risk_flags 必须是列表")
-        if "suggested_families" in plan and not isinstance(plan.get("suggested_families"), list):
-            errors.append("next_batch_proposal.suggested_families 必须是列表")
+        for list_field in ["risk_flags", "suggested_families", "new_questions", "suggested_opportunities", "blocked_opportunities", "uncertainty_hotspots", "challenger_notes", "auditor_notes"]:
+            if list_field in plan and not isinstance(plan.get(list_field), list):
+                errors.append(f"next_batch_proposal.{list_field} 必须是列表")
         if "must_validate_before_expand" in plan and not isinstance(plan.get("must_validate_before_expand"), bool):
             errors.append("next_batch_proposal.must_validate_before_expand 必须是布尔值")
         if "confidence_score" in plan:
