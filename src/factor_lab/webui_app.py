@@ -18,6 +18,7 @@ from factor_lab.ops import latest_task_states, trigger_script
 from factor_lab.storage import ExperimentStore
 from factor_lab.opportunity_metrics import build_opportunity_metrics
 from factor_lab.opportunity_review import build_opportunity_review
+from factor_lab.opportunity_archive_diagnostics import build_opportunity_archive_diagnostics
 
 
 def pretty_json_text(value: Any, empty_text: str = "暂无数据。") -> str:
@@ -559,6 +560,7 @@ def research_page():
     opportunity_store = json.loads(opportunity_store_path.read_text(encoding='utf-8')) if opportunity_store_path.exists() else {}
     opportunity_review = build_opportunity_review() if opportunity_store_path.exists() else {}
     opportunity_metrics = build_opportunity_metrics() if opportunity_store_path.exists() else {}
+    opportunity_archive_diagnostics = build_opportunity_archive_diagnostics() if opportunity_store_path.exists() else {}
     summary = {
         "pending": len([t for t in tasks if t["status"] == "pending"]),
         "running": len([t for t in tasks if t["status"] == "running"]),
@@ -597,6 +599,7 @@ def research_page():
         opportunity_store=opportunity_store,
         opportunity_review=opportunity_review,
         opportunity_metrics=opportunity_metrics,
+        opportunity_archive_diagnostics=opportunity_archive_diagnostics,
     )
 
 

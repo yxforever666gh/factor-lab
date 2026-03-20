@@ -109,6 +109,29 @@
 </section>
 {% endif %}
 
+{% if opportunity_archive_diagnostics.archive_samples %}
+<section class="card" style="margin-top:18px;">
+  <h2>Recent Archived Opportunities</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>ID</th><th>Type</th><th>Reason</th><th>Priority</th><th>Novelty</th><th>Confidence</th></tr></thead>
+      <tbody>
+        {% for row in opportunity_archive_diagnostics.archive_samples %}
+        <tr>
+          <td>{{ row.opportunity_id }}</td>
+          <td>{{ row.type }}</td>
+          <td>{{ row.reason }}</td>
+          <td class="num">{{ row.priority }}</td>
+          <td class="num">{{ row.novelty }}</td>
+          <td class="num">{{ row.confidence }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
 {% if branch_plan.branch_decisions %}
 <section class="card" style="margin-top:18px;">
   <h2>Branch Planner 决策</h2>
