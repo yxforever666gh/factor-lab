@@ -159,6 +159,7 @@ def build_research_state_snapshot(
             "branch_selected_families": (proposal.get("strategy_summary") or {}).get("selected_families")
             or planner_snapshot.get("family_recommendations")
             or [],
+            "analyst_signals": planner_snapshot.get("analyst_signals") or {},
         },
         "recent_finished_tasks": [
             {
@@ -234,6 +235,10 @@ class StrategyBrain:
         knowledge_gain_counter = state_snapshot.get("knowledge_gain_counter") or {}
         convergence_policy = state_snapshot.get("convergence_policy") or {}
         selected_families = set((branch_plan or {}).get("selected_families") or [])
+        analyst_signals = ((state_snapshot.get("planner") or {}).get("analyst_signals") or {})
+        analyst_focus = set(analyst_signals.get("focus_factors") or [])
+        analyst_core = set(analyst_signals.get("keep_as_core_candidates") or [])
+        analyst_graveyard = set(analyst_signals.get("review_graveyard") or [])
 
         budgets = dict(self.DEFAULT_BUDGETS)
         if exploration_state.get("should_throttle"):
@@ -261,6 +266,15 @@ class StrategyBrain:
             if focus_candidates & stable_candidates:
                 score += 10
                 reason_bits.append("命中稳定候选主线。")
+            if focus_candidates & analyst_focus:
+                score += 10
+                reason_bits.append("命中 analyst focus。")
+            if focus_candidates & analyst_core:
+                score += 12
+                reason_bits.append("命中 analyst core。")
+            if category == "validation" and analyst_graveyard and set((task.get("payload") or {}).get("focus_factors") or []) & analyst_graveyard:
+                score += 8
+                reason_bits.append("命中 analyst 指定复核墓地。")
             if expected_gain & {"stable_candidate_validation_requested", "stable_candidate_confirmed"}:
                 score += 8
             if any(gain.startswith("graveyard_") for gain in expected_gain):
@@ -274,6 +288,9 @@ class StrategyBrain:
             if category == "exploration" and exploration_state.get("should_throttle"):
                 score -= 50
                 reason_bits.append("exploration 当前被 throttle。")
+            if analyst_signals.get("must_validate_before_expand") and category in {"exploration", "baseline"}:
+                score -= 18 if category == "exploration" else 8
+                reason_bits.append("analyst 当前要求先验证再扩张。")
             if selected_families and task.get("family_focus") in selected_families:
                 score += 4
             for failed_type, count in repeated_failures.items():

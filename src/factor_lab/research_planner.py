@@ -12,6 +12,10 @@ class ResearchPlannerAgent:
         failure_state = (snapshot.get("failure_state") or {})
         knowledge_gain_counter = snapshot.get("knowledge_gain_counter") or {}
         selected_families = set((branch_plan or {}).get("selected_families", []))
+        analyst_signals = snapshot.get("analyst_signals") or {}
+        analyst_focus = set(analyst_signals.get("focus_factors") or [])
+        analyst_core = set(analyst_signals.get("keep_as_core_candidates") or [])
+        analyst_graveyard = set(analyst_signals.get("review_graveyard") or [])
 
         ranked = []
         for task in tasks:
@@ -22,6 +26,7 @@ class ResearchPlannerAgent:
             worker_note = task.get("worker_note", "")
             relationship_signal = task.get("relationship_signal", {}) or {}
             family_focus = task.get("family_focus")
+            focus_candidates = {row.get("candidate_name") for row in (task.get("focus_candidates") or []) if row.get("candidate_name")}
 
             if category == "validation":
                 score += 12
@@ -54,6 +59,22 @@ class ResearchPlannerAgent:
                 score += 9
             if "window_stability_check" in expected:
                 score += 6
+
+            if focus_candidates & analyst_focus:
+                score += 12
+                reason_bits.append(f"命中 analyst focus={','.join(sorted(focus_candidates & analyst_focus))}。")
+            if focus_candidates & analyst_core:
+                score += 14
+                reason_bits.append(f"命中 analyst core={','.join(sorted(focus_candidates & analyst_core))}。")
+            if category == "validation" and analyst_graveyard and (analyst_graveyard & set(task.get("payload", {}).get("focus_factors", []) or [])):
+                score += 12
+                reason_bits.append("命中 analyst 指定复核墓地。")
+            if analyst_signals.get("must_validate_before_expand") and category == "exploration":
+                score -= 25
+                reason_bits.append("analyst 要求先验证再扩张，exploration 大幅降权。")
+            if analyst_signals.get("must_validate_before_expand") and category == "baseline":
+                score -= 8
+                reason_bits.append("analyst 要求先验证再扩窗，baseline 略降权。")
 
             if knowledge_gain_counter.get("stable_candidate_confirmed", 0) > 0 and category == "validation":
                 score += 5

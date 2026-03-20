@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from factor_lab.candidate_graph import build_graph_artifacts
+from factor_lab.analyst_signal_bridge import load_analyst_signals
 from factor_lab.research_runtime_state import queue_budget_snapshot, recent_failure_stats, exploration_health
 
 
@@ -131,6 +132,7 @@ def build_research_planner_snapshot(db_path: str | Path, output_path: str | Path
         queue_budget = queue_budget_snapshot(store)
         failure_state = recent_failure_stats(store)
         exploration_state = exploration_health(store)
+        analyst_signals = load_analyst_signals(root)
 
         knowledge_gain_counter = {
             "stable_candidate_confirmed": 0,
@@ -175,6 +177,7 @@ def build_research_planner_snapshot(db_path: str | Path, output_path: str | Path
             "relationship_summary": relationship_summary,
             "knowledge_gain_counter": knowledge_gain_counter,
             "research_trial_summary": research_trial_summary,
+            "analyst_signals": analyst_signals,
             "recent_research_tasks": [
                 {
                     **{k: v for k, v in task.items() if k != "payload_json"},

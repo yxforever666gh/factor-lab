@@ -27,6 +27,7 @@ class ResearchBranchPlanner:
         relationship_summary = snapshot.get("relationship_summary", {}) or {}
         family_recommendations = {row.get("family"): row for row in snapshot.get("family_recommendations", []) if row.get("family")}
         trial_summary = snapshot.get("research_trial_summary", {}) or {}
+        analyst_signals = snapshot.get("analyst_signals") or {}
 
         top_family_score = max([row.get("family_score") or 0 for row in family_summary] or [0])
         hybrid_count = int(relationship_summary.get("hybrid_of", 0) or 0)
@@ -50,6 +51,8 @@ class ResearchBranchPlanner:
             recommended_action = family_rec.get("recommended_action")
             score = 0.0
             action_hint = None
+            analyst_suggested_families = set(analyst_signals.get("suggested_families") or [])
+            analyst_risk_flags = set(analyst_signals.get("risk_flags") or [])
 
             if family == "stable_candidate_validation":
                 family_action_counts = {}
@@ -137,6 +140,17 @@ class ResearchBranchPlanner:
                     score -= 12
                     decision = "pause"
                 reason += f" family_risk_score={family_risk_score:.1f}，优先走 robustness/validation 而不是 refinement。"
+
+            if family in analyst_suggested_families:
+                score += 14
+                reason += " analyst 明确建议该 family 进入本轮主线。"
+            if analyst_signals.get("must_validate_before_expand") and family in {"window_expansion", "exploration"}:
+                score -= 18
+                decision = "pause"
+                reason += " analyst 要求先验证再扩张，本轮压低扩窗/探索。"
+            if "must_validate_neutralization" in analyst_risk_flags and family in {"graveyard_diagnosis", "recent_window_validation"}:
+                score += 10
+                reason += " analyst 标记了中性化风险，需要优先诊断。"
 
             if recent_gain:
                 score += min(recent_gain * 2, 8)

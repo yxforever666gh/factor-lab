@@ -173,8 +173,13 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
     relationship_summary = snapshot.get('relationship_summary', {}) or {}
     family_recommendations = {row.get('family'): row for row in snapshot.get('family_recommendations', []) if row.get('family')}
     trial_summary = snapshot.get('research_trial_summary', {}) or {}
+    analyst_signals = snapshot.get('analyst_signals') or {}
 
     stable_candidates, representative_notes = _prefer_representatives(raw_stable_candidates, candidate_context_by_name, cluster_rep_map)
+    analyst_focus = set(analyst_signals.get('focus_factors') or [])
+    analyst_core = set(analyst_signals.get('keep_as_core_candidates') or [])
+    analyst_graveyard = set(analyst_signals.get('review_graveyard') or [])
+    must_validate_before_expand = bool(analyst_signals.get('must_validate_before_expand'))
 
     base_config = read_json(ROOT / 'configs' / 'tushare_workflow.json')
     end_date = latest_run.get('end_date') or base_config['end_date']
@@ -227,7 +232,9 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
                 'family_risk_score': max_family_risk,
                 'validate_risk_family_count': validate_risk_family_count,
             }
-            task['reason'] += f" 当前候选图中有 {relationship_summary.get('hybrid_of', 0)} 条 hybrid 关系、{len(snapshot.get('candidate_clusters', []) or [])} 个 cluster；但高风险 family={validate_risk_family_count} 个，因此扩窗优先级被下调，先确认结构是否真的跨阶段成立。"
+            if must_validate_before_expand:
+                task['priority_hint'] += 10
+            task['reason'] += f" 当前候选图中有 {relationship_summary.get('hybrid_of', 0)} 条 hybrid 关系、{len(snapshot.get('candidate_clusters', []) or [])} 个 cluster；但高风险 family={validate_risk_family_count} 个，因此扩窗优先级被下调，先确认结构是否真的跨阶段成立。" + (" analyst 要求先验证再扩窗。" if must_validate_before_expand else "")
             task['hypothesis'] = task['payload'].get('hypothesis')
             task['goal'] = task['payload'].get('goal')
             task['branch_id'] = task['payload'].get('branch_id')
@@ -291,12 +298,22 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
             if strongest_family and strongest_family in family_recommendations:
                 task['family_recommendation'] = family_recommendations[strongest_family]
             task['trial_accounting'] = strongest_trial
+            if analyst_core & set(stable_candidates):
+                task['priority_hint'] -= 6
+            if analyst_focus & set(stable_candidates):
+                task['priority_hint'] -= 3
+            task['analyst_alignment'] = {
+                'focus_overlap': sorted(analyst_focus & set(stable_candidates)),
+                'core_overlap': sorted(analyst_core & set(stable_candidates)),
+                'graveyard_overlap': sorted(analyst_graveyard & set(stable_candidates)),
+            }
             task['reason'] += (
                 f" 重点候选累计关系 {relationship_count} 条、lineage {lineage_count} 条"
                 + (f"，最强 family={strongest_family}" if strongest_family else "")
                 + (f"，trial_pressure={strongest_trial.get('trial_pressure')}，false_positive_pressure={strongest_trial.get('false_positive_pressure')}" if strongest_trial else "")
                 + (f"，fragile_candidates={fragile_count}，family_risk_score={family_risk_score}" if fragile_count or family_risk_score is not None else "")
                 + f"。保留 cluster representatives 后实际验证 {len(stable_candidates)} 个代表候选，压制 {len([r for r in representative_notes if r.get('suppressed_into')])} 个重复/近重复候选。"
+                + (f" analyst 核心候选命中 {', '.join(sorted(analyst_core & set(stable_candidates)))}。" if analyst_core & set(stable_candidates) else "")
             )
             task['hypothesis'] = task['payload'].get('hypothesis')
             task['goal'] = task['payload'].get('goal')
@@ -309,7 +326,14 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
                 'duplicate_count': int(relationship_summary.get('duplicate_of', 0)),
                 'same_family_count': int(relationship_summary.get('same_family', 0)),
             }
-            task['reason'] += f" duplicate={relationship_summary.get('duplicate_of', 0)}、same_family={relationship_summary.get('same_family', 0)}，可检查 graveyard 是否集中出现在同构因子支路。"
+            if analyst_graveyard & set(latest_graveyard):
+                task['priority_hint'] -= 5
+            task['analyst_alignment'] = {
+                'focus_overlap': sorted(analyst_focus & set(latest_graveyard)),
+                'core_overlap': sorted(analyst_core & set(latest_graveyard)),
+                'graveyard_overlap': sorted(analyst_graveyard & set(latest_graveyard)),
+            }
+            task['reason'] += f" duplicate={relationship_summary.get('duplicate_of', 0)}、same_family={relationship_summary.get('same_family', 0)}，可检查 graveyard 是否集中出现在同构因子支路。" + (f" analyst 指定复核墓地命中 {', '.join(sorted(analyst_graveyard & set(latest_graveyard)))}。" if analyst_graveyard & set(latest_graveyard) else "")
             task['hypothesis'] = task['payload'].get('hypothesis')
             task['goal'] = task['payload'].get('goal')
             task['branch_id'] = task['payload'].get('branch_id')
@@ -337,7 +361,9 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
                 'hybrid_count': int(relationship_summary.get('hybrid_of', 0)),
                 'top_family_score': max([row.get('family_score') or 0 for row in family_score_map.values()] or [0]),
             }
-            task['reason'] += ' 当前关系图已出现 hybrid 支路，可让 exploration 有针对性地尝试跨 family 组合。'
+            if must_validate_before_expand:
+                task['priority_hint'] += 12
+            task['reason'] += ' 当前关系图已出现 hybrid 支路，可让 exploration 有针对性地尝试跨 family 组合。' + (' analyst 当前要求先验证风险，exploration 仅保留低优先级占位。' if must_validate_before_expand else '')
             append_task(task, 'exploration_batch_already_seen')
 
     payload = {
