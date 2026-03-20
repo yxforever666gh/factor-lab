@@ -47,7 +47,7 @@ def build_research_questions(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
             "sources": ["latest_graveyard", "analyst_signals", "analyst_feedback_context", "exploration_budget"],
         })
 
-    if (relationship_summary.get("hybrid_of") or relationship_summary.get("refinement_of")) and int(question_budget.get("recombine", 0)) > 0:
+    if (relationship_summary.get("hybrid_of") or relationship_summary.get("refinement_of") or stable_candidates) and int(question_budget.get("recombine", 0)) > 0:
         questions.append({
             "question_id": "q-recombine-space",
             "question_type": "recombine",

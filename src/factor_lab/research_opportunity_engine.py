@@ -65,6 +65,7 @@ def _make_opportunity(
 def build_research_opportunities(snapshot_path: str | Path, output_path: str | Path) -> dict[str, Any]:
     snapshot = _read_json(Path(snapshot_path), {})
     flow_state = snapshot.get("research_flow_state") or _read_json(ARTIFACTS / "research_flow_state.json", {})
+    recovery_state = flow_state.get("state")
 
     base_questions = build_research_questions(snapshot)
     child_questions = build_child_opportunities(snapshot)
@@ -121,6 +122,7 @@ def build_research_opportunities(snapshot_path: str | Path, output_path: str | P
             "top_types": sorted({row.get("opportunity_type") for row in opportunities if row.get("opportunity_type")}),
             "opportunity_budget": opportunity_budget,
             "opportunity_learning": opportunity_learning,
+            "recovery_state": recovery_state,
         },
         "opportunities": opportunities[:12],
     }

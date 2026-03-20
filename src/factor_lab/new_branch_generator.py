@@ -24,7 +24,7 @@ def build_new_branch_questions(snapshot: dict[str, Any]) -> list[dict[str, Any]]
             "origin": "new_branch_generator",
         })
 
-    if len(top_scores) >= 4:
+    if len(top_scores) >= 3:
         questions.append({
             "question_id": "q-new-branch-topscore-probe",
             "question_type": "probe",
