@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from factor_lab.opportunity_to_tasks import map_opportunity_to_task
+from factor_lab.opportunity_store import sync_opportunities, update_opportunity_state
 from factor_lab.storage import ExperimentStore
 from factor_lab.research_runtime_state import recently_finished_same_fingerprint
 
@@ -15,6 +16,7 @@ DB_PATH = ROOT / "artifacts" / "factor_lab.db"
 def enqueue_opportunities(opportunities_path: str | Path, output_path: str | Path, db_path: str | Path = DB_PATH, limit: int = 2) -> dict[str, Any]:
     opportunities_doc = json.loads(Path(opportunities_path).read_text(encoding="utf-8")) if Path(opportunities_path).exists() else {}
     opportunities = list(opportunities_doc.get("opportunities") or [])
+    sync_opportunities(opportunities)
     store = ExperimentStore(db_path)
 
     injected = []
@@ -26,11 +28,13 @@ def enqueue_opportunities(opportunities_path: str | Path, output_path: str | Pat
         task = map_opportunity_to_task(opportunity)
         if not task:
             skipped.append({"opportunity_id": opportunity.get("opportunity_id"), "reason": "unmappable"})
+            update_opportunity_state(opportunity.get("opportunity_id"), "rejected", reason="unmappable")
             continue
         considered += 1
         fingerprint = task.get("fingerprint")
         if fingerprint and recently_finished_same_fingerprint(store, fingerprint):
             skipped.append({"opportunity_id": opportunity.get("opportunity_id"), "reason": "recently_finished_same_fingerprint"})
+            update_opportunity_state(opportunity.get("opportunity_id"), "archived", reason="recently_finished_same_fingerprint")
             continue
         task_id = store.enqueue_research_task(
             task_type=task["task_type"],
@@ -45,6 +49,7 @@ def enqueue_opportunities(opportunities_path: str | Path, output_path: str | Pat
             "task_type": task.get("task_type"),
             "priority": task.get("priority"),
         })
+        update_opportunity_state(opportunity.get("opportunity_id"), "scheduled", reason="task_enqueued", extra={"task_id": task_id, "task_type": task.get("task_type")})
 
     payload = {
         "source": str(opportunities_path),

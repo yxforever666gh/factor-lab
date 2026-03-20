@@ -499,7 +499,10 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
                 status="failed",
                 error_text=error_text,
             )
-            processed.append({"task_id": task["task_id"], "status": "failed", "error": error_text, "retry_task_id": retry_task_id})
+            evaluation = evaluate_opportunity_from_task(task, status="failed", error_text=error_text)
+            if evaluation:
+                update_opportunity_state(evaluation["opportunity_id"], evaluation["next_state"], reason=evaluation["evaluation_label"], extra={"evaluation": evaluation})
+            processed.append({"task_id": task["task_id"], "status": "failed", "error": error_text, "retry_task_id": retry_task_id, "opportunity_evaluation": evaluation})
             append_heartbeat("research_orchestrator", "failed", message=error_text, task_id=task["task_id"], task_type=task["task_type"], retry_task_id=retry_task_id)
 
     if not processed:
