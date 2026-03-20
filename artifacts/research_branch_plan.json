@@ -2,7 +2,7 @@
   "generated_from_space_map": "/home/admin/.openclaw/workspace/artifacts/research_space_map.json",
   "generated_from_snapshot": "/home/admin/.openclaw/workspace/artifacts/research_planner_snapshot.json",
   "generated_from_candidate_pool": "/home/admin/.openclaw/workspace/artifacts/research_candidate_pool.json",
-  "summary": "优先继续推进 validation 与更宽窗口，exploration 保持保守。",
+  "summary": "优先推进高分 family 的验证与带 lineage 的分支，再决定扩窗与 exploration。",
   "branch_decisions": [
     {
       "family": "stable_candidate_validation",
@@ -10,7 +10,8 @@
       "current_level": 6,
       "next_level": 7,
       "fatigue": "medium",
-      "reason": "当前 family 已推进到 level 6，建议继续到 level 7。最近增量 5。"
+      "priority_score": 109.387,
+      "reason": "高分 family=117.55，refinement=2，优先把强主线做深。最近增量 7。"
     },
     {
       "family": "graveyard_diagnosis",
@@ -18,7 +19,8 @@
       "current_level": 6,
       "next_level": 7,
       "fatigue": "medium",
-      "reason": "当前 family 已推进到 level 6，建议继续到 level 7。最近增量 14。"
+      "priority_score": 54.0,
+      "reason": "duplicate=0，需要确认失败因子是否只是同构重复。最近增量 18。"
     },
     {
       "family": "recent_window_validation",
@@ -26,12 +28,17 @@
       "current_level": 8,
       "next_level": 9,
       "fatigue": "medium",
-      "reason": "近期窗口验证仍有缺口，可继续补到 level 9。最近增量 0。"
+      "priority_score": 60.0,
+      "reason": "近期窗口验证仍有缺口，且 refinement=2，适合先确认分支稳定性。最近增量 0。"
     },
     {
       "family": "window_expansion",
-      "decision": "pause",
-      "reason": "当前 family 已无下一层或已饱和。"
+      "decision": "advance",
+      "current_level": 10,
+      "next_level": 11,
+      "fatigue": "medium",
+      "priority_score": 56.0,
+      "reason": "hybrid=1，需要跨更长区间确认组合关系是否持久。最近增量 0。"
     },
     {
       "family": "exploration",
@@ -39,14 +46,16 @@
       "current_level": 1,
       "next_level": 2,
       "fatigue": "low",
-      "reason": "exploration 作为低优先级保留位，默认谨慎推进。最近增量 78。"
+      "priority_score": 46.0,
+      "reason": "exploration 仅在已有 family 分数较强且混合支路出现时推进。最近增量 78。"
     }
   ],
   "selected_tasks": [],
   "selected_families": [
     "stable_candidate_validation",
-    "graveyard_diagnosis",
     "recent_window_validation",
+    "window_expansion",
+    "graveyard_diagnosis",
     "exploration"
   ]
 }

@@ -1,5 +1,74 @@
 [
   {
+    "left_candidate_id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
+    "left_name": "value_bp",
+    "right_candidate_id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
+    "right_name": "quality_minus_value",
+    "relationship_type": "refinement_of",
+    "run_id": null,
+    "strength": 0.72,
+    "details": {
+      "basis": "atom_superset",
+      "child_candidate": "quality_minus_value",
+      "extra_atoms": [
+        "roe"
+      ],
+      "parent_candidate": "value_bp",
+      "shared_atoms": [
+        "book_yield"
+      ],
+      "source": "backfill"
+    },
+    "created_at_utc": "2026-03-20T01:18:27.391637+00:00",
+    "updated_at_utc": "2026-03-20T01:18:27.391637+00:00"
+  },
+  {
+    "left_candidate_id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
+    "left_name": "quality_roe",
+    "right_candidate_id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
+    "right_name": "quality_minus_value",
+    "relationship_type": "refinement_of",
+    "run_id": null,
+    "strength": 0.72,
+    "details": {
+      "basis": "atom_superset",
+      "child_candidate": "quality_minus_value",
+      "extra_atoms": [
+        "book_yield"
+      ],
+      "parent_candidate": "quality_roe",
+      "shared_atoms": [
+        "roe"
+      ],
+      "source": "backfill"
+    },
+    "created_at_utc": "2026-03-20T01:18:27.389884+00:00",
+    "updated_at_utc": "2026-03-20T01:18:27.389884+00:00"
+  },
+  {
+    "left_candidate_id": "06229569-0a76-4cce-8fc3-1face8be1d58",
+    "left_name": "value_ep",
+    "right_candidate_id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
+    "right_name": "mom_plus_value",
+    "relationship_type": "hybrid_of",
+    "run_id": null,
+    "strength": 0.63,
+    "details": {
+      "basis": "hybrid_component_overlap",
+      "component_candidate": "value_ep",
+      "hybrid_atoms": [
+        "earnings_yield"
+      ],
+      "hybrid_candidate": "mom_plus_value",
+      "shared_atoms": [
+        "earnings_yield"
+      ],
+      "source": "backfill"
+    },
+    "created_at_utc": "2026-03-20T01:18:27.392610+00:00",
+    "updated_at_utc": "2026-03-20T01:18:27.392610+00:00"
+  },
+  {
     "left_candidate_id": "06229569-0a76-4cce-8fc3-1face8be1d58",
     "left_name": "value_ep",
     "right_candidate_id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",

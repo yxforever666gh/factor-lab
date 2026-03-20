@@ -5,6 +5,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
+from factor_lab.candidate_graph import build_graph_artifacts
 from factor_lab.research_runtime_state import queue_budget_snapshot, recent_failure_stats, exploration_health
 
 
@@ -17,6 +18,7 @@ def _read_json(path: Path, default: Any) -> Any:
 def build_research_planner_snapshot(db_path: str | Path, output_path: str | Path) -> dict[str, Any]:
     db_path = Path(db_path)
     root = db_path.parent
+    build_graph_artifacts(db_path, root)
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     try:
@@ -87,6 +89,11 @@ def build_research_planner_snapshot(db_path: str | Path, output_path: str | Path
         recommendation_context = _read_json(root / "llm_recommendation_context.json", {})
         recommendation_weights = _read_json(root / "llm_recommendation_weights.json", {})
         llm_status = _read_json(root / "llm_status.json", {})
+        candidate_graph_context = _read_json(root / "candidate_graph_context.json", {})
+        family_summary = candidate_graph_context.get("families") or _read_json(root / "family_summary.json", [])
+        candidate_clusters = candidate_graph_context.get("clusters") or _read_json(root / "candidate_clusters.json", [])
+        candidate_context = candidate_graph_context.get("candidate_context") or []
+        relationship_summary = candidate_graph_context.get("relationship_summary") or {}
 
         from factor_lab.storage import ExperimentStore
         store = ExperimentStore(db_path)
@@ -129,6 +136,10 @@ def build_research_planner_snapshot(db_path: str | Path, output_path: str | Path
             "recommendation_context": recommendation_context,
             "recommendation_weights": recommendation_weights,
             "llm_status": llm_status,
+            "family_summary": family_summary,
+            "candidate_clusters": candidate_clusters,
+            "candidate_context": candidate_context,
+            "relationship_summary": relationship_summary,
             "knowledge_gain_counter": knowledge_gain_counter,
             "recent_research_tasks": [
                 {

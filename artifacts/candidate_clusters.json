@@ -1,18 +1,41 @@
 [
   {
-    "cluster_key": "06229569-0a76-4cce-8fc3-1face8be1d58::35ea6eda-67c4-403d-8e74-acf91eb2b9a7::821208b3-6f47-41ed-9a77-e63f2ab52638",
-    "cluster_size": 3,
-    "edge_count": 3,
-    "avg_strength": 0.5,
+    "cluster_id": 1,
+    "cluster_key": "06229569-0a76-4cce-8fc3-1face8be1d58::35ea6eda-67c4-403d-8e74-acf91eb2b9a7::4cadc3c9-a2f7-47f1-a130-b53479e5ba8e::5032916e-07f4-45e2-9618-3cfc8e700940::7adf7ff3-658f-40c5-b228-9e06aa2426f3::821208b3-6f47-41ed-9a77-e63f2ab52638",
+    "cluster_size": 6,
+    "edge_count": 7,
+    "avg_strength": 0.567143,
     "dominant_family": "value",
     "family_mix": {
-      "value": 3
+      "momentum": 2,
+      "value": 3,
+      "quality": 1
     },
     "relationship_mix": {
-      "same_family": 3
+      "same_family": 4,
+      "hybrid_of": 1,
+      "refinement_of": 2
     },
-    "leader": "quality_minus_value",
+    "leader": "mom_20",
     "members": [
+      {
+        "id": "5032916e-07f4-45e2-9618-3cfc8e700940",
+        "name": "mom_20",
+        "family": "momentum",
+        "status": "promising",
+        "latest_final_score": 4.865683,
+        "avg_final_score": 8.524486,
+        "evaluation_count": 187
+      },
+      {
+        "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
+        "name": "quality_roe",
+        "family": "quality",
+        "status": "testing",
+        "latest_final_score": 4.41182,
+        "avg_final_score": 4.41182,
+        "evaluation_count": 2
+      },
       {
         "id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
         "name": "quality_minus_value",
@@ -39,31 +62,6 @@
         "latest_final_score": 1.311582,
         "avg_final_score": 5.910476,
         "evaluation_count": 145
-      }
-    ]
-  },
-  {
-    "cluster_key": "5032916e-07f4-45e2-9618-3cfc8e700940::7adf7ff3-658f-40c5-b228-9e06aa2426f3",
-    "cluster_size": 2,
-    "edge_count": 1,
-    "avg_strength": 0.4,
-    "dominant_family": "momentum",
-    "family_mix": {
-      "momentum": 2
-    },
-    "relationship_mix": {
-      "same_family": 1
-    },
-    "leader": "mom_20",
-    "members": [
-      {
-        "id": "5032916e-07f4-45e2-9618-3cfc8e700940",
-        "name": "mom_20",
-        "family": "momentum",
-        "status": "promising",
-        "latest_final_score": 4.865683,
-        "avg_final_score": 8.524486,
-        "evaluation_count": 187
       },
       {
         "id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
@@ -77,6 +75,7 @@
     ]
   },
   {
+    "cluster_id": 2,
     "cluster_key": "c75fb8df-b227-4cb1-93c8-a6e65ec95dfc",
     "cluster_size": 1,
     "edge_count": 0,
@@ -100,29 +99,7 @@
     ]
   },
   {
-    "cluster_key": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
-    "cluster_size": 1,
-    "edge_count": 0,
-    "avg_strength": null,
-    "dominant_family": "quality",
-    "family_mix": {
-      "quality": 1
-    },
-    "relationship_mix": {},
-    "leader": "quality_roe",
-    "members": [
-      {
-        "id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
-        "name": "quality_roe",
-        "family": "quality",
-        "status": "testing",
-        "latest_final_score": 4.41182,
-        "avg_final_score": 4.41182,
-        "evaluation_count": 2
-      }
-    ]
-  },
-  {
+    "cluster_id": 3,
     "cluster_key": "d7e14ed9-6251-425d-a28a-fc75cbf5bbf0",
     "cluster_size": 1,
     "edge_count": 0,

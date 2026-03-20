@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from factor_lab.candidate_graph import build_graph_artifacts, candidate_clusters, family_rollup
+from factor_lab.candidate_graph import build_graph_artifacts, build_candidate_graph_context, candidate_clusters, family_rollup
 from factor_lab.db_views import ensure_views
 from factor_lab.ops import latest_task_states, trigger_script
 from factor_lab.storage import ExperimentStore
@@ -425,6 +425,27 @@ def render(template_name: str, **context) -> HTMLResponse:
     return HTMLResponse(template.render(**localize_times(context)))
 
 
+def build_candidate_detail_context(store: ExperimentStore, candidate_id: str) -> dict[str, Any]:
+    candidates = store.list_factor_candidates(limit=1000)
+    evaluations = store.list_factor_evaluations(limit=5000)
+    relationships = store.list_candidate_relationships(limit=5000)
+    graph_context = build_candidate_graph_context(candidates, evaluations, relationships)
+    candidate_context = next((row for row in graph_context.get('candidate_context', []) if row.get('candidate_id') == candidate_id), None) or {}
+    family_lookup = {row.get('family'): row for row in graph_context.get('families', [])}
+    cluster = candidate_context.get('cluster') or {}
+    lineage = candidate_context.get('lineage', [])
+    related_candidates = candidate_context.get('related_candidates', [])
+    family_row = family_lookup.get(candidate_context.get('family')) or {}
+    return {
+        'candidate_context': candidate_context,
+        'candidate_lineage': lineage,
+        'related_candidates': related_candidates,
+        'cluster_membership': cluster,
+        'family_rollup': family_row,
+        'relationship_summary': graph_context.get('relationship_summary', {}),
+    }
+
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard():
     health = compute_health_metrics()
@@ -657,7 +678,15 @@ def candidate_detail_page(candidate_id: str):
         raise HTTPException(status_code=404, detail='未找到该候选因子')
     evaluations = store.list_factor_evaluations(candidate_id=candidate_id, limit=200)
     hypothesis = store.get_hypothesis_for_candidate(candidate_id)
-    return render('candidate_detail.html', title=f"候选详情 {candidate['name']}", candidate=candidate, evaluations=evaluations, hypothesis=hypothesis)
+    detail_context = build_candidate_detail_context(store, candidate_id)
+    return render(
+        'candidate_detail.html',
+        title=f"候选详情 {candidate['name']}",
+        candidate=candidate,
+        evaluations=evaluations,
+        hypothesis=hypothesis,
+        **detail_context,
+    )
 
 
 @app.get("/families", response_class=HTMLResponse)

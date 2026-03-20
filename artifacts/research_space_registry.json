@@ -1,5 +1,29 @@
 {
   "windows_covered": {
+    "window_recent_270d": {
+      "task_id": "ecbbefa3-ea8f-4316-b6ee-7495d24b462b",
+      "config_path": "artifacts/generated_configs/rolling_recent_270d.json",
+      "status": "finished",
+      "finished_at_utc": "2026-03-19T20:22:03.826228+00:00"
+    },
+    "window_recent_240d": {
+      "task_id": "adacd16c-54ea-44ea-9c77-72b58bd5f8bd",
+      "config_path": "artifacts/generated_configs/rolling_recent_240d.json",
+      "status": "finished",
+      "finished_at_utc": "2026-03-19T20:14:02.839279+00:00"
+    },
+    "window_recent_210d": {
+      "task_id": "3640b1ea-ae79-49c1-bb18-3dea40639a76",
+      "config_path": "artifacts/generated_configs/rolling_recent_210d.json",
+      "status": "finished",
+      "finished_at_utc": "2026-03-19T20:05:56.704077+00:00"
+    },
+    "window_recent_180d": {
+      "task_id": "7acc9178-d768-4a75-940a-58f1be5814d4",
+      "config_path": "artifacts/generated_configs/rolling_recent_180d.json",
+      "status": "finished",
+      "finished_at_utc": "2026-03-19T19:44:28.022048+00:00"
+    },
     "window_expanding_2025_10_01": {
       "task_id": "3daab80e-b560-42dd-8043-d7daa59e1c9b",
       "config_path": "artifacts/generated_configs/expanding_from_2025_10_01.json",
@@ -62,13 +86,15 @@
     }
   },
   "validation_depth": {
+    "mom_20,mom_plus_value,quality_minus_value,quality_roe,value_ep": 1,
     "mom_20,mom_plus_value,value_bp,value_ep": 6
   },
   "graveyard_diagnostics": {
-    "liquidity_turnover_shock,size_small,value_bp,value_ep": 2,
+    "liquidity_turnover_shock": 1,
+    "liquidity_turnover_shock,size_small,value_bp,value_ep": 6,
     "consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep,stable_candidates:mom_20, mom_plus_value": 1,
-    "liquidity_turnover_shock,size_small": 6,
-    "liquidity_turnover_shock,mom_20,mom_plus_value,size_small,value_bp": 6
+    "liquidity_turnover_shock,mom_20,mom_plus_value,size_small,value_bp": 6,
+    "liquidity_turnover_shock,size_small": 6
   },
   "exploration_lines": {
     "artifacts/generated_batch_from_llm.json": {
@@ -79,15 +105,17 @@
     }
   },
   "knowledge_gain_counter": {
-    "neutralization_diagnosis_requested": 35,
-    "stable_candidate_confirmed": 38,
-    "repeated_graveyard_confirmed": 38,
-    "exploration_candidate_survived": 37,
-    "exploration_graveyard_identified": 37,
-    "graveyard_regime_shift_requested": 2,
-    "graveyard_cross_window_requested": 2,
-    "graveyard_construction_requested": 2,
-    "graveyard_raw_vs_neutral_requested": 2,
+    "graveyard_diagnosis_level_7_requested": 4,
+    "stable_candidate_validation_v7_requested": 2,
+    "neutralization_diagnosis_requested": 37,
+    "stable_candidate_confirmed": 40,
+    "repeated_graveyard_confirmed": 40,
+    "exploration_candidate_survived": 39,
+    "exploration_graveyard_identified": 39,
+    "graveyard_regime_shift_requested": 3,
+    "graveyard_cross_window_requested": 3,
+    "graveyard_construction_requested": 3,
+    "graveyard_raw_vs_neutral_requested": 3,
     "graveyard_window_sensitivity_requested": 2,
     "stable_candidate_validation_v5_requested": 1,
     "stable_candidate_validation_v4_requested": 1,

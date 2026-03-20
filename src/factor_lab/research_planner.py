@@ -8,7 +8,6 @@ from typing import Any
 class ResearchPlannerAgent:
     def rank_tasks(self, snapshot: dict[str, Any], candidate_pool: dict[str, Any], branch_plan: dict[str, Any] | None = None) -> dict[str, Any]:
         tasks = list(candidate_pool.get("tasks", []))
-        queue_budget = (snapshot.get("queue_budget") or {})
         exploration_state = (snapshot.get("exploration_state") or {})
         failure_state = (snapshot.get("failure_state") or {})
         knowledge_gain_counter = snapshot.get("knowledge_gain_counter") or {}
@@ -21,6 +20,8 @@ class ResearchPlannerAgent:
             category = task.get("category")
             expected = set(task.get("expected_knowledge_gain", []))
             worker_note = task.get("worker_note", "")
+            relationship_signal = task.get("relationship_signal", {}) or {}
+            family_focus = task.get("family_focus")
 
             if category == "validation":
                 score += 12
@@ -59,6 +60,23 @@ class ResearchPlannerAgent:
             if knowledge_gain_counter.get("repeated_graveyard_confirmed", 0) > 0 and category == "validation":
                 score += 4
 
+            if relationship_signal.get("lineage_count"):
+                score += min(int(relationship_signal["lineage_count"]) * 3, 12)
+                reason_bits.append(f"lineage_count={relationship_signal['lineage_count']}，适合沿候选谱系继续推进。")
+            if relationship_signal.get("relationship_count"):
+                score += min(int(relationship_signal["relationship_count"]) * 1.5, 8)
+            if relationship_signal.get("hybrid_count") and category in {"baseline", "exploration"}:
+                score += min(int(relationship_signal["hybrid_count"]) * 2, 10)
+                reason_bits.append("已有 hybrid 线索，扩窗/探索都更有针对性。")
+            if relationship_signal.get("duplicate_count") and category == "validation":
+                score += min(int(relationship_signal["duplicate_count"]) * 2, 8)
+                reason_bits.append("duplicate 关系增多，优先做去重/诊断型验证。")
+            if relationship_signal.get("family_score") is not None:
+                score += min(float(relationship_signal["family_score"]) / 10, 12)
+                reason_bits.append(f"family_score={relationship_signal['family_score']}。")
+            if family_focus:
+                reason_bits.append(f"focus_family={family_focus}。")
+
             if failure_state.get("cooldown_active"):
                 if category == "exploration":
                     score -= 20
@@ -69,7 +87,7 @@ class ResearchPlannerAgent:
             ranked.append(
                 {
                     **task,
-                    "planner_score": score,
+                    "planner_score": round(score, 3),
                     "planner_reason": " ".join(bit for bit in reason_bits if bit),
                 }
             )
@@ -90,7 +108,7 @@ class ResearchPlannerAgent:
                 break
 
         return {
-            "summary": "优先选择 validation 与 baseline 任务，exploration 保守进入。",
+            "summary": "优先选择带 family 分数与关系信号支撑的 validation / baseline 任务，exploration 保守进入。",
             "selection_policy": {
                 "max_total": 4,
                 "category_limits": limits,

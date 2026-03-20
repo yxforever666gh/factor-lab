@@ -4,7 +4,7 @@
   "generated_from_space_map": "/home/admin/.openclaw/workspace/artifacts/research_space_map.json",
   "generated_from_branch_plan": "/home/admin/.openclaw/workspace/artifacts/research_branch_plan.json",
   "summary": {
-    "latest_run_config": "artifacts/generated_workflow_from_llm.json",
+    "latest_run_config": "configs/first_workflow.json",
     "queue_budget": {
       "baseline": 0,
       "validation": 0,
@@ -21,9 +21,14 @@
       "recent_gain": 3,
       "should_throttle": false
     },
-    "stable_candidate_count": 4,
-    "graveyard_count": 2,
-    "candidate_count": 0
+    "stable_candidate_count": 5,
+    "graveyard_count": 1,
+    "candidate_count": 0,
+    "relationship_summary": {
+      "refinement_of": 2,
+      "hybrid_of": 1,
+      "same_family": 4
+    }
   },
   "tasks": []
 }

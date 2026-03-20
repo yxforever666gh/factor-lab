@@ -2,7 +2,7 @@
   "generated_from_snapshot": "/home/admin/.openclaw/workspace/artifacts/research_planner_snapshot.json",
   "generated_from_candidate_pool": "/home/admin/.openclaw/workspace/artifacts/research_candidate_pool.json",
   "generated_from_branch_plan": "/home/admin/.openclaw/workspace/artifacts/research_branch_plan.json",
-  "summary": "优先选择 validation 与 baseline 任务，exploration 保守进入。",
+  "summary": "优先选择带 family 分数与关系信号支撑的 validation / baseline 任务，exploration 保守进入。",
   "selection_policy": {
     "max_total": 4,
     "category_limits": {

@@ -12,9 +12,16 @@ class ResearchBranchPlanner:
         saturation = space_map.get("family_saturation", {}) or {}
         family_recent_gain = space_map.get("family_recent_gain", {}) or {}
         candidate_tasks = (candidate_pool or {}).get("tasks", []) or []
+        family_summary = snapshot.get("family_summary", []) or []
+        relationship_summary = snapshot.get("relationship_summary", {}) or {}
+
+        top_family_score = max([row.get("family_score") or 0 for row in family_summary] or [0])
+        hybrid_count = int(relationship_summary.get("hybrid_of", 0) or 0)
+        refinement_count = int(relationship_summary.get("refinement_of", 0) or 0)
+        duplicate_count = int(relationship_summary.get("duplicate_of", 0) or 0)
 
         branch_decisions = []
-        priority_order: list[str] = []
+        priority_scored: list[tuple[float, str]] = []
 
         for family in ["stable_candidate_validation", "graveyard_diagnosis", "recent_window_validation", "window_expansion", "exploration"]:
             progress = family_progress.get(family, {}) or {}
@@ -22,6 +29,7 @@ class ResearchBranchPlanner:
             saturated = (saturation.get(family) or {}).get("saturated", False)
             fatigue_level = (fatigue.get(family) or {}).get("fatigue_level", "low")
             recent_gain = family_recent_gain.get(family, 0)
+            score = 0.0
 
             if saturated or next_level is None:
                 branch_decisions.append({
@@ -31,21 +39,37 @@ class ResearchBranchPlanner:
                 })
                 continue
 
-            if family in {"stable_candidate_validation", "graveyard_diagnosis"}:
+            if family == "stable_candidate_validation":
+                score += 70 + min(top_family_score / 4, 30) + min(refinement_count * 4, 12)
                 decision = "advance"
-                reason = f"当前 family 已推进到 level {progress.get('current_level', 0)}，建议继续到 level {next_level}。最近增量 {recent_gain}。"
+                reason = f"高分 family={top_family_score:.2f}，refinement={refinement_count}，优先把强主线做深。最近增量 {recent_gain}。"
+            elif family == "graveyard_diagnosis":
+                score += 52 + min(duplicate_count * 5, 20)
+                decision = "advance"
+                reason = f"duplicate={duplicate_count}，需要确认失败因子是否只是同构重复。最近增量 {recent_gain}。"
             elif family == "recent_window_validation":
+                score += 60 + min(refinement_count * 3, 12)
                 decision = "advance"
-                reason = f"近期窗口验证仍有缺口，可继续补到 level {next_level}。最近增量 {recent_gain}。"
+                reason = f"近期窗口验证仍有缺口，且 refinement={refinement_count}，适合先确认分支稳定性。最近增量 {recent_gain}。"
             elif family == "window_expansion":
+                score += 48 + min(hybrid_count * 4, 16) + min(top_family_score / 8, 10)
                 decision = "advance"
-                reason = f"历史窗口仍未覆盖完，可继续补到 level {next_level}。最近增量 {recent_gain}。"
+                reason = f"hybrid={hybrid_count}，需要跨更长区间确认组合关系是否持久。最近增量 {recent_gain}。"
             else:
-                decision = "hold" if fatigue_level != "low" else "advance"
-                reason = f"exploration 作为低优先级保留位，默认谨慎推进。最近增量 {recent_gain}。"
+                score += 35 + min(hybrid_count * 3, 12)
+                decision = "hold" if fatigue_level != "low" or top_family_score < 70 else "advance"
+                reason = f"exploration 仅在已有 family 分数较强且混合支路出现时推进。最近增量 {recent_gain}。"
+
+            if fatigue_level == "medium":
+                score -= 6
+            elif fatigue_level == "high":
+                score -= 14
+
+            if recent_gain:
+                score += min(recent_gain * 2, 8)
 
             if decision == "advance":
-                priority_order.append(family)
+                priority_scored.append((score, family))
 
             branch_decisions.append({
                 "family": family,
@@ -53,36 +77,37 @@ class ResearchBranchPlanner:
                 "current_level": progress.get("current_level"),
                 "next_level": next_level,
                 "fatigue": fatigue_level,
+                "priority_score": round(score, 3),
                 "reason": reason,
             })
 
         selected_tasks = []
-        for family in priority_order:
+        selected_families = [family for _, family in sorted(priority_scored, key=lambda item: (-item[0], item[1]))]
+        for family in selected_families:
+            family_matches = []
             for task in candidate_tasks:
                 worker_note = task.get("worker_note", "")
                 if family == "stable_candidate_validation" and "稳定候选" in worker_note:
-                    selected_tasks.append(task)
-                    break
-                if family == "graveyard_diagnosis" and "graveyard" in worker_note:
-                    selected_tasks.append(task)
-                    break
-                if family == "recent_window_validation" and "近期" in worker_note:
-                    selected_tasks.append(task)
-                    break
-                if family == "window_expansion" and ("扩窗" in worker_note or "expanding" in worker_note):
-                    selected_tasks.append(task)
-                    break
-                if family == "exploration" and "exploration" in worker_note:
-                    selected_tasks.append(task)
-                    break
+                    family_matches.append(task)
+                elif family == "graveyard_diagnosis" and "graveyard" in worker_note:
+                    family_matches.append(task)
+                elif family == "recent_window_validation" and "近期" in worker_note:
+                    family_matches.append(task)
+                elif family == "window_expansion" and ("扩窗" in worker_note or "expanding" in worker_note):
+                    family_matches.append(task)
+                elif family == "exploration" and "exploration" in worker_note:
+                    family_matches.append(task)
+            family_matches.sort(key=lambda row: (row.get("priority_hint", 999), -(row.get("relationship_signal", {}) or {}).get("lineage_count", 0)))
+            if family_matches:
+                selected_tasks.append(family_matches[0])
             if len(selected_tasks) >= 4:
                 break
 
         return {
-            "summary": "优先继续推进 validation 与更宽窗口，exploration 保持保守。",
+            "summary": "优先推进高分 family 的验证与带 lineage 的分支，再决定扩窗与 exploration。",
             "branch_decisions": branch_decisions,
             "selected_tasks": selected_tasks,
-            "selected_families": priority_order,
+            "selected_families": selected_families,
         }
 
 
