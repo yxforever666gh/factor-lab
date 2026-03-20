@@ -49,21 +49,36 @@
   </section>
 </div>
 
+{% if opportunity_metrics.rates %}
+<section class="card" style="margin-top:18px;">
+  <h2>Opportunity Metrics</h2>
+  <div class="grid cols-3">
+    <div><strong>成功率</strong><div style="font-size:28px; font-weight:700;">{{ opportunity_metrics.rates.success_rate if opportunity_metrics.rates.success_rate is not none else '-' }}</div></div>
+    <div><strong>知识增益率</strong><div style="font-size:28px; font-weight:700;">{{ opportunity_metrics.rates.knowledge_gain_rate if opportunity_metrics.rates.knowledge_gain_rate is not none else '-' }}</div></div>
+    <div><strong>分支增长率</strong><div style="font-size:28px; font-weight:700;">{{ opportunity_metrics.rates.branch_growth_rate if opportunity_metrics.rates.branch_growth_rate is not none else '-' }}</div></div>
+  </div>
+  <div class="muted" style="margin-top:10px;">total={{ opportunity_metrics.counts.total or 0 }} · promoted={{ opportunity_metrics.counts.promoted or 0 }} · archived={{ opportunity_metrics.counts.archived or 0 }} · child={{ opportunity_metrics.counts.child_count or 0 }}</div>
+</section>
+{% endif %}
+
 {% if opportunities.opportunities %}
 <section class="card" style="margin-top:18px;">
   <h2>Research Opportunities</h2>
-  <div class="muted" style="margin-bottom:10px;">最小诊断维度：优先级、置信度、新颖度已进入 LLM 诊断面板，可辅助判断机会质量。</div>
+  <div class="muted" style="margin-bottom:10px;">当前已进入 opportunity-first 展示：机会对象优先于底层任务。</div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Type</th><th>Title</th><th>Priority</th><th>Novelty</th><th>Confidence</th><th>Target Family</th><th>Question</th></tr></thead>
+      <thead><tr><th>Type</th><th>Title</th><th>State</th><th>Priority</th><th>Novelty</th><th>Confidence</th><th>Parent</th><th>Target Family</th><th>Question</th></tr></thead>
       <tbody>
         {% for row in opportunities.opportunities %}
+        {% set store_row = opportunity_store.opportunities[row.opportunity_id] if opportunity_store.opportunities and row.opportunity_id in opportunity_store.opportunities else {} %}
         <tr>
           <td>{{ row.opportunity_type }}</td>
           <td>{{ row.title }}</td>
+          <td>{{ store_row.state or 'proposed' }}</td>
           <td class="num">{{ row.priority }}</td>
           <td class="num">{{ row.novelty_score }}</td>
           <td class="num">{{ row.confidence }}</td>
+          <td class="text-break">{{ row.parent_opportunity_id or '-' }}</td>
           <td>{{ row.target_family or '-' }}</td>
           <td class="text-break">{{ row.question }}</td>
         </tr>

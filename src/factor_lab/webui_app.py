@@ -16,6 +16,8 @@ from factor_lab.factor_candidates import summarize_candidate_status
 from factor_lab.db_views import ensure_views
 from factor_lab.ops import latest_task_states, trigger_script
 from factor_lab.storage import ExperimentStore
+from factor_lab.opportunity_metrics import build_opportunity_metrics
+from factor_lab.opportunity_review import build_opportunity_review
 
 
 def pretty_json_text(value: Any, empty_text: str = "暂无数据。") -> str:
@@ -549,12 +551,14 @@ def research_page():
     opportunities_path = DB_PATH.parent / 'research_opportunities.json'
     opportunity_store_path = DB_PATH.parent / 'research_opportunity_store.json'
     opportunity_review_path = DB_PATH.parent / 'opportunity_review.json'
+    opportunity_metrics_path = DB_PATH.parent / 'opportunity_metrics.json'
     candidate_pool = json.loads(candidate_pool_path.read_text(encoding='utf-8')) if candidate_pool_path.exists() else {}
     branch_plan = json.loads(branch_plan_path.read_text(encoding='utf-8')) if branch_plan_path.exists() else {}
     family_summary = json.loads(family_summary_path.read_text(encoding='utf-8')) if family_summary_path.exists() else []
     opportunities = json.loads(opportunities_path.read_text(encoding='utf-8')) if opportunities_path.exists() else {}
     opportunity_store = json.loads(opportunity_store_path.read_text(encoding='utf-8')) if opportunity_store_path.exists() else {}
-    opportunity_review = json.loads(opportunity_review_path.read_text(encoding='utf-8')) if opportunity_review_path.exists() else {}
+    opportunity_review = build_opportunity_review() if opportunity_store_path.exists() else {}
+    opportunity_metrics = build_opportunity_metrics() if opportunity_store_path.exists() else {}
     summary = {
         "pending": len([t for t in tasks if t["status"] == "pending"]),
         "running": len([t for t in tasks if t["status"] == "running"]),
@@ -592,6 +596,7 @@ def research_page():
         opportunities=opportunities,
         opportunity_store=opportunity_store,
         opportunity_review=opportunity_review,
+        opportunity_metrics=opportunity_metrics,
     )
 
 
