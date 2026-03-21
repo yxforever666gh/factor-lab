@@ -40,6 +40,17 @@ def score_opportunity(question: dict[str, Any], snapshot: dict[str, Any]) -> dic
         confidence -= 0.10
         rationale_bits.append("family_learning=cooldown")
 
+    epistemic_value = float(family_learning.get("epistemic_value_score") or 0.0)
+    if epistemic_value >= 0.45:
+        priority += 0.06
+        novelty += 0.04
+        confidence += 0.04
+        rationale_bits.append("epistemic_learning=high_value")
+    elif epistemic_value <= -0.25:
+        priority -= 0.07
+        confidence -= 0.05
+        rationale_bits.append("epistemic_learning=low_value")
+
     if flow_state.get("state") == "recovering" and qtype in {"confirm", "diagnose"}:
         priority += 0.06
         rationale_bits.append("recovering_prefers_confirm_diagnose")

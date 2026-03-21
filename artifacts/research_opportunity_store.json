@@ -1,5 +1,5 @@
 {
-  "updated_at_utc": "2026-03-21T00:08:52.659129+00:00",
+  "updated_at_utc": "2026-03-21T00:14:51.571687+00:00",
   "opportunities": {
     "opp-q-stable-boundary": {
       "opportunity_id": "opp-q-stable-boundary",
@@ -302,7 +302,7 @@
         "opp-q-graveyard-cause"
       ],
       "parent_opportunity_id": "opp-q-graveyard-cause",
-      "state": "scheduled",
+      "state": "evaluated",
       "history": [
         {
           "updated_at_utc": "2026-03-20T23:24:03.457964+00:00",
@@ -313,12 +313,30 @@
           "updated_at_utc": "2026-03-20T23:58:41.125768+00:00",
           "state": "scheduled",
           "reason": "task_enqueued"
+        },
+        {
+          "updated_at_utc": "2026-03-21T00:14:51.571656+00:00",
+          "state": "evaluated",
+          "reason": "hybrid_invalidated"
         }
       ],
       "last_synced_at_utc": "2026-03-20T23:58:41.084373+00:00",
       "task_id": "c4bd314b-20c1-4e82-9373-9098e8bedaeb",
       "task_type": "generated_batch",
-      "updated_at_utc": "2026-03-20T23:58:41.125778+00:00"
+      "updated_at_utc": "2026-03-21T00:14:51.571683+00:00",
+      "evaluation": {
+        "opportunity_id": "opp-child-recombine-from-opp-q-graveyard-cause",
+        "evaluation_label": "hybrid_invalidated",
+        "epistemic_gain": [
+          "hybrid_invalidated",
+          "search_space_reduced",
+          "negative_result_recorded"
+        ],
+        "knowledge_gain": [
+          "exploration_graveyard_identified"
+        ],
+        "next_state": "evaluated"
+      }
     },
     "opp-child-expand-from-opp-q-stable-boundary": {
       "opportunity_id": "opp-child-expand-from-opp-q-stable-boundary",

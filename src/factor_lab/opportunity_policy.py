@@ -35,6 +35,12 @@ def build_opportunity_learning(store_path: str | Path | None = None, output_path
             "archived": 0,
             "success_rate": None,
             "recommended_action": "keep",
+            "epistemic_value_score": 0.0,
+            "uncertainty_reduction_count": 0,
+            "repeat_signal_count": 0,
+            "negative_informative_count": 0,
+            "new_branch_count": 0,
+            "inconclusive_count": 0,
         })
         meta["count"] += 1
         state = row.get("state")
@@ -47,16 +53,37 @@ def build_opportunity_learning(store_path: str | Path | None = None, output_path
         elif state == "archived":
             meta["archived"] += 1
 
+        evaluation = row.get("evaluation") or {}
+        epistemic_gain = list(evaluation.get("epistemic_gain") or [])
+        if any(tag in epistemic_gain for tag in {"uncertainty_reduced", "boundary_confirmed", "new_branch_opened", "probe_promising", "hypothesis_supported", "partial_support"}):
+            meta["uncertainty_reduction_count"] += 1
+            meta["epistemic_value_score"] += 1.0
+        if any(tag in epistemic_gain for tag in {"repeat_without_new_information", "low_novelty_realized"}):
+            meta["repeat_signal_count"] += 1
+            meta["epistemic_value_score"] -= 0.7
+        if any(tag in epistemic_gain for tag in {"negative_result_recorded", "search_space_reduced", "hybrid_invalidated", "probe_negative_but_informative", "boundary_broken"}):
+            meta["negative_informative_count"] += 1
+            meta["epistemic_value_score"] += 0.6
+        if any(tag in epistemic_gain for tag in {"new_branch_opened", "search_space_expanded"}):
+            meta["new_branch_count"] += 1
+            meta["epistemic_value_score"] += 0.8
+        if any(tag in epistemic_gain for tag in {"inconclusive", "uncertainty_preserved"}):
+            meta["inconclusive_count"] += 1
+            meta["epistemic_value_score"] -= 0.2
+
     for meta in types.values():
         terminal = meta["promoted"] + meta["evaluated"] + meta["rejected"] + meta["archived"]
         if terminal > 0:
             meta["success_rate"] = round(meta["promoted"] / terminal, 3)
+            meta["epistemic_value_score"] = round(meta["epistemic_value_score"] / terminal, 3)
         if meta["success_rate"] is None:
             meta["recommended_action"] = "keep"
-        elif meta["success_rate"] >= 0.5:
+        elif meta["uncertainty_reduction_count"] >= 2 or meta["new_branch_count"] >= 1 or meta["epistemic_value_score"] >= 0.45:
             meta["recommended_action"] = "upweight"
-        elif meta["rejected"] + meta["archived"] >= max(2, meta["promoted"] + meta["evaluated"]):
+        elif meta["repeat_signal_count"] >= max(2, meta["uncertainty_reduction_count"] + meta["negative_informative_count"]) or meta["epistemic_value_score"] <= -0.25:
             meta["recommended_action"] = "downweight"
+        elif meta["negative_informative_count"] >= 1 and meta["repeat_signal_count"] == 0:
+            meta["recommended_action"] = "keep"
         else:
             meta["recommended_action"] = "keep"
 
