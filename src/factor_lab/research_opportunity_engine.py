@@ -7,6 +7,7 @@ from typing import Any
 
 from factor_lab.question_generator import build_research_questions
 from factor_lab.critic_question_generator import build_critic_questions
+from factor_lab.cheap_screen_promotion import build_full_run_followups
 from factor_lab.opportunity_scorer import score_opportunity
 from factor_lab.opportunity_policy import build_opportunity_learning, allocate_opportunity_budget, build_child_opportunities
 from factor_lab.research_portfolio import build_research_portfolio_plan
@@ -98,7 +99,8 @@ def build_research_opportunities(snapshot_path: str | Path, output_path: str | P
     research_portfolio = build_research_portfolio_plan(snapshot, opportunity_learning, ARTIFACTS / "research_portfolio_plan.json")
     meta_research_critique = build_meta_research_critique(snapshot, opportunity_learning, research_portfolio, ARTIFACTS / "meta_research_critique.json")
     critic_questions = build_critic_questions(snapshot, meta_research_critique)
-    questions = list(base_questions) + list(critic_questions) + list(child_questions)
+    promoted_full_run_questions = build_full_run_followups()
+    questions = list(base_questions) + list(critic_questions) + list(promoted_full_run_questions) + list(child_questions)
     opportunity_budget = allocate_opportunity_budget(snapshot, opportunity_learning)
     type_budget = dict(opportunity_budget.get("budget") or {})
     child_budget = dict(opportunity_budget.get("child_budget") or {})
