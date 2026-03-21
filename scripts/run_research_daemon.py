@@ -131,12 +131,13 @@ if __name__ == "__main__":
                 continue
 
             if processed:
-                write_status("running", processed_count=len(processed), last_processed=processed[0])
-                first = processed[0]
-                if first.get("status") == "finished":
-                    emit_wake_event(f"Factor Lab task finished: {first.get('summary', 'task completed')}")
-                elif first.get("status") == "failed":
-                    emit_wake_event(f"Factor Lab task failed: {first.get('error', 'unknown error')}")
+                # processed is appended in execution order; the last element is the most recently processed task.
+                latest = processed[-1]
+                write_status("running", processed_count=len(processed), last_processed=latest)
+                if latest.get("status") == "finished":
+                    emit_wake_event(f"Factor Lab task finished: {latest.get('summary', 'task completed')}")
+                elif latest.get("status") == "failed":
+                    emit_wake_event(f"Factor Lab task failed: {latest.get('error', 'unknown error')}")
                 time.sleep(2)
             else:
                 remaining_preview = result.get("remaining_preview") or []
