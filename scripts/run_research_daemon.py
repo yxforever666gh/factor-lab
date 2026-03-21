@@ -40,6 +40,35 @@ def emit_wake_event(text: str) -> None:
     os.system(f'openclaw system event --mode now --text {json.dumps(text, ensure_ascii=False)} >/dev/null 2>&1')
 
 
+def maybe_emit_stall_alert(status: dict, *, cooldown_seconds: int = 300) -> None:
+    """Send a proactive system event if the daemon is stuck/idling for too long.
+
+    This reduces the "silent stall" failure mode: the loop is alive but doing nothing.
+    """
+    try:
+        last_alert_at = float(status.get("stall_alert_last_sent_at") or 0.0)
+    except Exception:
+        last_alert_at = 0.0
+
+    now = time.time()
+    if last_alert_at and now - last_alert_at < cooldown_seconds:
+        return
+
+    state = status.get("state")
+    if state not in {"idle", "guardrail"}:
+        return
+
+    guardrail = status.get("guardrail")
+    reason = f"guardrail={guardrail}" if guardrail else "idle"
+    msg = (
+        "Reminder: Factor Lab research daemon appears stalled (" + reason + "). "
+        "If this persists, check artifacts/system_heartbeat.jsonl and artifacts/research_stagnation.json."
+    )
+    emit_wake_event(msg)
+    status["stall_alert_last_sent_at"] = now
+    write_status(state or "unknown", **{k: v for k, v in status.items() if k not in {"state"}})
+
+
 def maybe_run_prewarm() -> dict | None:
     global LAST_PREWARM_AT
     windows_env = os.getenv("RESEARCH_DAEMON_PREWARM_WINDOWS", "").strip()
@@ -123,6 +152,12 @@ if __name__ == "__main__":
                             emit_wake_event(f"Factor Lab prewarm failed: {prewarm.get('stderr') or prewarm.get('stdout') or 'unknown error'}")
                     else:
                         write_status("idle", processed_count=0)
+                    # Proactive alert if we are idling/guardrailed for too long.
+                    try:
+                        status_doc = json.loads(STATUS_PATH.read_text(encoding="utf-8")) if STATUS_PATH.exists() else {}
+                    except Exception:
+                        status_doc = {}
+                    maybe_emit_stall_alert(status_doc, cooldown_seconds=300)
                     time.sleep(idle_sleep_seconds)
         except Exception as exc:
             append_heartbeat("research_daemon", "failed", message=str(exc))
