@@ -17,6 +17,68 @@ def _read_json(path: Path, default: Any) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _template_key(row: dict[str, Any]) -> str:
+    otype = row.get("opportunity_type") or "unknown"
+    family = row.get("target_family") or "none"
+    parent = "child" if row.get("parent_opportunity_id") else "root"
+    return f"{otype}::{family}::{parent}"
+
+
+def _apply_epistemic_updates(meta: dict[str, Any], evaluation: dict[str, Any]) -> None:
+    epistemic_gain = list(evaluation.get("epistemic_gain") or [])
+    if any(tag in epistemic_gain for tag in {"uncertainty_reduced", "boundary_confirmed", "new_branch_opened", "probe_promising", "hypothesis_supported", "partial_support"}):
+        meta["uncertainty_reduction_count"] += 1
+        meta["epistemic_value_score"] += 1.0
+    if any(tag in epistemic_gain for tag in {"repeat_without_new_information", "low_novelty_realized"}):
+        meta["repeat_signal_count"] += 1
+        meta["epistemic_value_score"] -= 0.7
+    if any(tag in epistemic_gain for tag in {"negative_result_recorded", "search_space_reduced", "hybrid_invalidated", "probe_negative_but_informative", "boundary_broken"}):
+        meta["negative_informative_count"] += 1
+        meta["epistemic_value_score"] += 0.6
+    if any(tag in epistemic_gain for tag in {"new_branch_opened", "search_space_expanded"}):
+        meta["new_branch_count"] += 1
+        meta["epistemic_value_score"] += 0.8
+    if any(tag in epistemic_gain for tag in {"inconclusive", "uncertainty_preserved"}):
+        meta["inconclusive_count"] += 1
+        meta["epistemic_value_score"] -= 0.2
+
+
+def _finalize_learning_bucket(meta: dict[str, Any]) -> None:
+    terminal = meta["promoted"] + meta["evaluated"] + meta["rejected"] + meta["archived"]
+    if terminal > 0:
+        meta["success_rate"] = round(meta["promoted"] / terminal, 3)
+        meta["epistemic_value_score"] = round(meta["epistemic_value_score"] / terminal, 3)
+    if meta["success_rate"] is None:
+        meta["recommended_action"] = "keep"
+    elif meta["uncertainty_reduction_count"] >= 2 or meta["new_branch_count"] >= 1 or meta["epistemic_value_score"] >= 0.45:
+        meta["recommended_action"] = "upweight"
+    elif meta["repeat_signal_count"] >= max(2, meta["uncertainty_reduction_count"] + meta["negative_informative_count"]) or meta["epistemic_value_score"] <= -0.25:
+        meta["recommended_action"] = "downweight"
+    elif meta["negative_informative_count"] >= 1 and meta["repeat_signal_count"] == 0:
+        meta["recommended_action"] = "keep"
+    else:
+        meta["recommended_action"] = "keep"
+
+
+def _new_meta(identity_key: str, label_key: str) -> dict[str, Any]:
+    return {
+        label_key: identity_key,
+        "count": 0,
+        "promoted": 0,
+        "evaluated": 0,
+        "rejected": 0,
+        "archived": 0,
+        "success_rate": None,
+        "recommended_action": "keep",
+        "epistemic_value_score": 0.0,
+        "uncertainty_reduction_count": 0,
+        "repeat_signal_count": 0,
+        "negative_informative_count": 0,
+        "new_branch_count": 0,
+        "inconclusive_count": 0,
+    }
+
+
 def build_opportunity_learning(store_path: str | Path | None = None, output_path: str | Path | None = None) -> dict[str, Any]:
     spath = Path(store_path) if store_path else STORE_PATH
     opath = Path(output_path) if output_path else (ARTIFACTS / "opportunity_learning.json")
@@ -24,70 +86,39 @@ def build_opportunity_learning(store_path: str | Path | None = None, output_path
     items = list((store.get("opportunities") or {}).values())
 
     types: dict[str, dict[str, Any]] = {}
+    families: dict[str, dict[str, Any]] = {}
+    templates: dict[str, dict[str, Any]] = {}
+
     for row in items:
         otype = row.get("opportunity_type") or "unknown"
-        meta = types.setdefault(otype, {
-            "opportunity_type": otype,
-            "count": 0,
-            "promoted": 0,
-            "evaluated": 0,
-            "rejected": 0,
-            "archived": 0,
-            "success_rate": None,
-            "recommended_action": "keep",
-            "epistemic_value_score": 0.0,
-            "uncertainty_reduction_count": 0,
-            "repeat_signal_count": 0,
-            "negative_informative_count": 0,
-            "new_branch_count": 0,
-            "inconclusive_count": 0,
-        })
-        meta["count"] += 1
+        family = row.get("target_family") or "none"
+        template = _template_key(row)
+        buckets = [
+            (types, otype, "opportunity_type"),
+            (families, family, "family"),
+            (templates, template, "template"),
+        ]
         state = row.get("state")
-        if state == "promoted":
-            meta["promoted"] += 1
-        elif state == "evaluated":
-            meta["evaluated"] += 1
-        elif state == "rejected":
-            meta["rejected"] += 1
-        elif state == "archived":
-            meta["archived"] += 1
-
         evaluation = row.get("evaluation") or {}
-        epistemic_gain = list(evaluation.get("epistemic_gain") or [])
-        if any(tag in epistemic_gain for tag in {"uncertainty_reduced", "boundary_confirmed", "new_branch_opened", "probe_promising", "hypothesis_supported", "partial_support"}):
-            meta["uncertainty_reduction_count"] += 1
-            meta["epistemic_value_score"] += 1.0
-        if any(tag in epistemic_gain for tag in {"repeat_without_new_information", "low_novelty_realized"}):
-            meta["repeat_signal_count"] += 1
-            meta["epistemic_value_score"] -= 0.7
-        if any(tag in epistemic_gain for tag in {"negative_result_recorded", "search_space_reduced", "hybrid_invalidated", "probe_negative_but_informative", "boundary_broken"}):
-            meta["negative_informative_count"] += 1
-            meta["epistemic_value_score"] += 0.6
-        if any(tag in epistemic_gain for tag in {"new_branch_opened", "search_space_expanded"}):
-            meta["new_branch_count"] += 1
-            meta["epistemic_value_score"] += 0.8
-        if any(tag in epistemic_gain for tag in {"inconclusive", "uncertainty_preserved"}):
-            meta["inconclusive_count"] += 1
-            meta["epistemic_value_score"] -= 0.2
 
-    for meta in types.values():
-        terminal = meta["promoted"] + meta["evaluated"] + meta["rejected"] + meta["archived"]
-        if terminal > 0:
-            meta["success_rate"] = round(meta["promoted"] / terminal, 3)
-            meta["epistemic_value_score"] = round(meta["epistemic_value_score"] / terminal, 3)
-        if meta["success_rate"] is None:
-            meta["recommended_action"] = "keep"
-        elif meta["uncertainty_reduction_count"] >= 2 or meta["new_branch_count"] >= 1 or meta["epistemic_value_score"] >= 0.45:
-            meta["recommended_action"] = "upweight"
-        elif meta["repeat_signal_count"] >= max(2, meta["uncertainty_reduction_count"] + meta["negative_informative_count"]) or meta["epistemic_value_score"] <= -0.25:
-            meta["recommended_action"] = "downweight"
-        elif meta["negative_informative_count"] >= 1 and meta["repeat_signal_count"] == 0:
-            meta["recommended_action"] = "keep"
-        else:
-            meta["recommended_action"] = "keep"
+        for container, identity, label_key in buckets:
+            meta = container.setdefault(identity, _new_meta(identity, label_key))
+            meta["count"] += 1
+            if state == "promoted":
+                meta["promoted"] += 1
+            elif state == "evaluated":
+                meta["evaluated"] += 1
+            elif state == "rejected":
+                meta["rejected"] += 1
+            elif state == "archived":
+                meta["archived"] += 1
+            _apply_epistemic_updates(meta, evaluation)
 
-    payload = {"types": types}
+    for bucket in (types, families, templates):
+        for meta in bucket.values():
+            _finalize_learning_bucket(meta)
+
+    payload = {"types": types, "families": families, "templates": templates}
     opath.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return payload
 

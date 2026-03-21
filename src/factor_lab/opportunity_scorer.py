@@ -21,6 +21,10 @@ def score_opportunity(question: dict[str, Any], snapshot: dict[str, Any]) -> dic
     qtype = question.get("question_type") or "probe"
     family = question.get("target_family")
     family_learning = (learning.get("families") or {}).get(family or "", {})
+    parent_kind = "child" if question.get("parent_opportunity_id") else "root"
+    template_key = f"{qtype}::{family or 'none'}::{parent_kind}"
+    template_learning = (learning.get("templates") or {}).get(template_key, {})
+    type_learning = (learning.get("types") or {}).get(qtype, {})
 
     priority = float(TYPE_BASE.get(qtype, 0.55))
     novelty = 0.45
@@ -40,7 +44,10 @@ def score_opportunity(question: dict[str, Any], snapshot: dict[str, Any]) -> dic
         confidence -= 0.10
         rationale_bits.append("family_learning=cooldown")
 
-    epistemic_value = float(family_learning.get("epistemic_value_score") or 0.0)
+    family_epistemic_value = float(family_learning.get("epistemic_value_score") or 0.0)
+    template_epistemic_value = float(template_learning.get("epistemic_value_score") or 0.0)
+    type_epistemic_value = float(type_learning.get("epistemic_value_score") or 0.0)
+    epistemic_value = max(family_epistemic_value, template_epistemic_value, type_epistemic_value)
     if epistemic_value >= 0.45:
         priority += 0.06
         novelty += 0.04
@@ -50,6 +57,16 @@ def score_opportunity(question: dict[str, Any], snapshot: dict[str, Any]) -> dic
         priority -= 0.07
         confidence -= 0.05
         rationale_bits.append("epistemic_learning=low_value")
+
+    if template_learning.get("recommended_action") == "upweight":
+        priority += 0.05
+        novelty += 0.05
+        confidence += 0.03
+        rationale_bits.append(f"template_learning=upweight:{template_key}")
+    elif template_learning.get("recommended_action") == "downweight":
+        priority -= 0.06
+        confidence -= 0.04
+        rationale_bits.append(f"template_learning=downweight:{template_key}")
 
     if flow_state.get("state") == "recovering" and qtype in {"confirm", "diagnose"}:
         priority += 0.06
