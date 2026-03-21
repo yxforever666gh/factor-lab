@@ -211,6 +211,10 @@ def evaluate_opportunity_from_task(task: dict[str, Any], *, status: str, summary
     evidence.setdefault("expected_information_gain", list(payload.get("expected_information_gain") or []))
     evidence["epistemic_gain"] = epistemic_gain
 
+    full_run_recommended = False
+    if task.get("task_type") == "generated_batch" and (payload.get("execution_mode") == "cheap_screen") and has_gain:
+        full_run_recommended = True
+
     evaluation = {
         "opportunity_id": opportunity_id,
         "status": status,
@@ -224,6 +228,7 @@ def evaluate_opportunity_from_task(task: dict[str, Any], *, status: str, summary
         "knowledge_gain": knowledge_gain,
         "epistemic_gain": epistemic_gain,
         "next_state": next_state,
+        "full_run_recommended": full_run_recommended,
         "evidence": evidence,
     }
     delta = compute_parent_child_delta(store_payload, opportunity_id)
