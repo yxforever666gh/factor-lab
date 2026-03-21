@@ -462,8 +462,36 @@ def execute_task(task: dict[str, Any]) -> str:
     raise ValueError(f"unsupported task_type: {task_type}")
 
 
+def _cleanup_stale_running_tasks(store: ExperimentStore, *, stale_minutes: int = 30) -> list[str]:
+    tasks = store.list_research_tasks(limit=300)
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=stale_minutes)
+    cleaned: list[str] = []
+    for task in tasks:
+        if task.get("status") != "running":
+            continue
+        started_at = parse_iso_utc(task.get("started_at_utc")) or parse_iso_utc(task.get("created_at_utc"))
+        if not started_at or started_at >= cutoff:
+            continue
+        # Mark stale running task as failed so it no longer blocks expansion/reseeding.
+        store.finish_research_task(
+            task["task_id"],
+            status="failed",
+            last_error="stale_running_task_cleaned",
+            worker_note=((task.get("worker_note") or "") + "｜auto_cleaned_stale_running"),
+        )
+        cleaned.append(task["task_id"])
+    return cleaned
+
+
 def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
     store = ExperimentStore(DB_PATH)
+    cleaned_running = _cleanup_stale_running_tasks(store, stale_minutes=30)
+    if cleaned_running:
+        append_heartbeat(
+            "research_orchestrator",
+            "warning",
+            summary=f"cleaned stale running tasks={len(cleaned_running)}",
+        )
     existing_tasks = store.list_research_tasks(limit=50)
     if not existing_tasks or not any(t["status"] in {"pending", "running"} for t in existing_tasks):
         planner_result = None
