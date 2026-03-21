@@ -465,6 +465,9 @@ def dashboard():
     stable_candidates = fetch_all(
         "SELECT factor_name, candidate_runs FROM v_stable_candidates ORDER BY candidate_runs DESC, factor_name ASC"
     )
+    exposure_leaderboard = fetch_all(
+        "SELECT factor_name, exposure_type, strength_score, raw_rank_ic_mean, split_fail_count, crowding_peers, recommended_max_weight, status FROM v_exposure_leaderboard WHERE run_id = (SELECT run_id FROM workflow_runs WHERE status='finished' ORDER BY created_at_utc DESC LIMIT 1) ORDER BY COALESCE(strength_score, -999) DESC LIMIT 8"
+    )
     top_factors = fetch_all(
         "SELECT factor_name, ROUND(avg_score, 6) AS avg_score, runs FROM v_factor_score_avg ORDER BY avg_score DESC LIMIT 8"
     )
@@ -529,6 +532,7 @@ def dashboard():
         health=health,
         latest_runs=latest_runs,
         stable_candidates=stable_candidates,
+        exposure_leaderboard=exposure_leaderboard,
         top_factors=top_factors,
         candidate_leaderboard=candidate_leaderboard,
         top_strategies=top_strategies,
@@ -660,6 +664,23 @@ def cockpit_page():
         paper_portfolio_text=pretty_json_text(paper_portfolio, "暂无纸面组合。"),
         change_report=change_report_path.read_text(encoding="utf-8") if change_report_path.exists() else "暂无变化报告。",
     )
+
+
+@app.get("/exposure", response_class=HTMLResponse)
+def exposure_page():
+    # Latest finished run exposure factors
+    exposure_rows = fetch_all(
+        """
+        SELECT factor_name, exposure_type, exposure_label, strength_score,
+               raw_rank_ic_mean, raw_rank_ic_ir, neutralized_rank_ic_mean,
+               split_fail_count, crowding_peers, recommended_max_weight, status, updated_at_utc
+        FROM exposure_factors
+        WHERE run_id = (SELECT run_id FROM workflow_runs WHERE status='finished' ORDER BY created_at_utc DESC LIMIT 1)
+        ORDER BY COALESCE(strength_score, -999) DESC, COALESCE(raw_rank_ic_mean, -999) DESC
+        LIMIT 200
+        """
+    )
+    return render("exposure.html", title="Exposure Track", exposure_rows=exposure_rows)
 
 
 @app.get("/runs", response_class=HTMLResponse)

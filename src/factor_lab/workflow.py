@@ -582,6 +582,15 @@ def run_workflow(config_path: str, output_dir: str) -> None:
             )
             refresh_candidate_risk_profiles(store, run_id=run_id, output_dir=Path("artifacts"))
 
+            # Exposure Track: strength-first factors for style/industry rotation.
+            try:
+                from factor_lab.exposure_track import refresh_exposure_track
+
+                refresh_exposure_track(store, run_id=run_id)
+            except Exception:
+                # Exposure track should not break the main workflow.
+                pass
+
             _write_summary(
                 results=results,
                 neutralized_results=neutralized_results,

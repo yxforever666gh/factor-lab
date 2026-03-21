@@ -99,6 +99,26 @@ CREATE TABLE IF NOT EXISTS factor_candidates (
     updated_at_utc TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS exposure_factors (
+    run_id TEXT NOT NULL,
+    factor_name TEXT NOT NULL,
+    exposure_type TEXT NOT NULL,
+    exposure_label TEXT,
+    strength_score REAL,
+    raw_rank_ic_mean REAL,
+    raw_rank_ic_ir REAL,
+    neutralized_rank_ic_mean REAL,
+    neutralized_pass_gate INTEGER,
+    split_fail_count INTEGER,
+    crowding_peers INTEGER,
+    recommended_max_weight REAL,
+    status TEXT NOT NULL,
+    notes_json TEXT,
+    created_at_utc TEXT NOT NULL,
+    updated_at_utc TEXT NOT NULL,
+    PRIMARY KEY (run_id, factor_name)
+);
+
 CREATE TABLE IF NOT EXISTS factor_evaluations (
     id TEXT PRIMARY KEY,
     candidate_id TEXT NOT NULL,
@@ -208,9 +228,42 @@ class ExperimentStore:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.conn = sqlite3.connect(self.db_path)
         self.conn.execute("PRAGMA journal_mode=WAL")
-        self.conn.executescript(SCHEMA)
+        try:
+            self.conn.executescript(SCHEMA)
+        except sqlite3.DatabaseError as exc:
+            # Rare SQLite edge case: if the process crashed mid-migration, we may end up with an orphan
+            # auto-index entry referencing a missing table definition. This blocks any subsequent schema work.
+            # Best-effort repair: drop the orphan index from sqlite_master and retry.
+            msg = str(exc)
+            if "orphan index" in msg and "sqlite_autoindex_" in msg:
+                try:
+                    name = msg.split("(", 1)[-1].split(")", 1)[0]
+                except Exception:
+                    name = None
+                if name:
+                    self._drop_orphan_index(name)
+                    self.conn.executescript(SCHEMA)
+                else:
+                    raise
+            else:
+                raise
         self._migrate()
         self.conn.commit()
+
+    def _drop_orphan_index(self, index_name: str) -> None:
+        # Danger zone: writable_schema is normally off-limits; we use it only to recover from a corrupted schema
+        # state where SQLite reports an orphan index.
+        self.conn.execute("PRAGMA writable_schema=ON")
+        self.conn.execute("DELETE FROM sqlite_master WHERE type='index' AND name=?", (index_name,))
+        self.conn.execute("PRAGMA writable_schema=OFF")
+        self.conn.commit()
+        # VACUUM/REINDEX must run outside a transaction.
+        self.conn.isolation_level = None
+        try:
+            self.conn.execute("VACUUM")
+            self.conn.execute("REINDEX")
+        finally:
+            self.conn.isolation_level = ""  # restore default implicit transactions
 
     def _migrate(self) -> None:
         cols = {row[1] for row in self.conn.execute("PRAGMA table_info(workflow_runs)").fetchall()}
@@ -296,6 +349,44 @@ class ExperimentStore:
                 )
                 for row in rows
             ],
+        )
+        self.conn.commit()
+
+    def upsert_exposure_rows(self, rows: Iterable[dict[str, Any]]) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        payload_rows = []
+        for row in rows:
+            payload_rows.append(
+                (
+                    row["run_id"],
+                    row["factor_name"],
+                    row["exposure_type"],
+                    row.get("exposure_label"),
+                    row.get("strength_score"),
+                    row.get("raw_rank_ic_mean"),
+                    row.get("raw_rank_ic_ir"),
+                    row.get("neutralized_rank_ic_mean"),
+                    (int(bool(row.get("neutralized_pass_gate"))) if row.get("neutralized_pass_gate") is not None else None),
+                    row.get("split_fail_count"),
+                    row.get("crowding_peers"),
+                    row.get("recommended_max_weight"),
+                    row.get("status") or "watch",
+                    json.dumps(row.get("notes") or {}, ensure_ascii=False),
+                    row.get("created_at_utc") or now,
+                    row.get("updated_at_utc") or now,
+                )
+            )
+
+        self.conn.executemany(
+            """
+            INSERT OR REPLACE INTO exposure_factors (
+                run_id, factor_name, exposure_type, exposure_label, strength_score,
+                raw_rank_ic_mean, raw_rank_ic_ir, neutralized_rank_ic_mean, neutralized_pass_gate,
+                split_fail_count, crowding_peers, recommended_max_weight, status, notes_json,
+                created_at_utc, updated_at_utc
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            payload_rows,
         )
         self.conn.commit()
 

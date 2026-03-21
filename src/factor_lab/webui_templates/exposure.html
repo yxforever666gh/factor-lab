@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+  <h2>Exposure Track（强度优先 / 可控风险）</h2>
+  <div class="muted" style="margin-bottom:12px;">
+    这里列出最新完成运行的暴露型因子（适用于风格/行业轮动）。
+    neutralized 结果不作为淘汰条件，只用于解释与风险标签；建议权重上限是基于拥挤度与 split 失败的启发式。
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>因子</th>
+          <th>类型</th>
+          <th>强度分</th>
+          <th>Raw IC</th>
+          <th>Raw IR</th>
+          <th>Neutral IC</th>
+          <th>Split Fail</th>
+          <th>拥挤</th>
+          <th>建议权重上限</th>
+          <th>状态</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in exposure_rows %}
+        <tr>
+          <td>{{ row.factor_name }}</td>
+          <td>{{ row.exposure_label }}</td>
+          <td>{{ row.strength_score }}</td>
+          <td>{{ row.raw_rank_ic_mean }}</td>
+          <td>{{ row.raw_rank_ic_ir }}</td>
+          <td>{{ row.neutralized_rank_ic_mean }}</td>
+          <td>{{ row.split_fail_count }}</td>
+          <td>{{ row.crowding_peers }}</td>
+          <td>{{ row.recommended_max_weight }}</td>
+          <td><span class="pill {{ 'good' if row.status == 'usable' else '' }}">{{ row.status }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

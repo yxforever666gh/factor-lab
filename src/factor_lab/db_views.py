@@ -119,6 +119,25 @@ SELECT
 FROM candidate_risk_profile rp
 LEFT JOIN factor_candidates fc ON fc.id = rp.candidate_id
 GROUP BY COALESCE(fc.family, 'other');
+
+DROP VIEW IF EXISTS v_exposure_leaderboard;
+CREATE VIEW v_exposure_leaderboard AS
+SELECT
+  run_id,
+  factor_name,
+  exposure_type,
+  exposure_label,
+  strength_score,
+  raw_rank_ic_mean,
+  raw_rank_ic_ir,
+  neutralized_rank_ic_mean,
+  neutralized_pass_gate,
+  split_fail_count,
+  crowding_peers,
+  recommended_max_weight,
+  status,
+  updated_at_utc
+FROM exposure_factors;
 """
 
 
