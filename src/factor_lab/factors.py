@@ -27,6 +27,13 @@ class SafeExpressionEvaluator:
         self.columns: Dict[str, pd.Series] = {
             column: frame[column] for column in frame.columns if column not in {"date", "ticker"}
         }
+        # Backward-compatible aliases for factor expressions.
+        # Some candidate definitions refer to fields not present in the current feature frame.
+        # Provide conservative proxies to avoid hard-stopping the research loop.
+        self.aliases: Dict[str, str] = {
+            # ROE is not currently materialized by TushareDataProvider; use earnings_yield as a quality proxy.
+            "roe": "earnings_yield",
+        }
 
     def evaluate(self, expression: str) -> pd.Series:
         tree = ast.parse(expression, mode="eval")
@@ -34,9 +41,14 @@ class SafeExpressionEvaluator:
 
     def _eval(self, node):
         if isinstance(node, ast.Name):
-            if node.id not in self.columns:
-                raise ValueError(f"Unknown field in expression: {node.id}")
-            return self.columns[node.id]
+            name = node.id
+            if name not in self.columns and name in self.aliases:
+                alias = self.aliases[name]
+                if alias in self.columns:
+                    return self.columns[alias]
+            if name not in self.columns:
+                raise ValueError(f"Unknown field in expression: {name}")
+            return self.columns[name]
         if isinstance(node, ast.Constant):
             return node.value
         if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub):
