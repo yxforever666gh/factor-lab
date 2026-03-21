@@ -5,6 +5,7 @@ from typing import Any
 import json
 import hashlib
 from datetime import datetime, timedelta, timezone
+from concurrent.futures import ThreadPoolExecutor
 
 from factor_lab.research_planner_snapshot import build_research_planner_snapshot
 from factor_lab.research_candidate_pool import build_research_candidate_pool
@@ -107,9 +108,14 @@ def run_research_planner_pipeline() -> dict[str, Any]:
     validated_path = ROOT / "artifacts" / "research_planner_validated.json"
     injected_path = ROOT / "artifacts" / "research_planner_injected.json"
 
-    registry = build_research_space_registry(DB_PATH, registry_path)
-    space_map = build_research_space_map(DB_PATH, space_map_path)
-    snapshot = build_research_planner_snapshot(DB_PATH, snapshot_path)
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        registry_future = executor.submit(build_research_space_registry, DB_PATH, registry_path)
+        space_map_future = executor.submit(build_research_space_map, DB_PATH, space_map_path)
+        snapshot_future = executor.submit(build_research_planner_snapshot, DB_PATH, snapshot_path)
+        registry = registry_future.result()
+        space_map = space_map_future.result()
+        snapshot = snapshot_future.result()
+
     candidate_pool = build_research_candidate_pool(snapshot_path, candidate_pool_path)
     branch_plan = build_branch_planner_output(space_map_path, snapshot_path, candidate_pool_path, branch_plan_path)
     candidate_pool = build_research_candidate_pool(snapshot_path, candidate_pool_path, branch_plan_path)
