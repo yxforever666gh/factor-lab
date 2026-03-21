@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from factor_lab.parent_child_delta import compute_parent_child_delta
+
 
 def _read_json(path: Path) -> dict[str, Any]:
     if not path.exists():
@@ -164,6 +166,8 @@ def evaluate_opportunity_from_task(task: dict[str, Any], *, status: str, summary
     opportunity_id = payload.get("opportunity_id")
     if not opportunity_id:
         return None
+    store_path = Path(__file__).resolve().parents[2] / "artifacts" / "research_opportunity_store.json"
+    store_payload = _read_json(store_path)
 
     evidence: dict[str, Any] = {}
     summary_text = (summary or "") + " " + (error_text or "")
@@ -222,4 +226,8 @@ def evaluate_opportunity_from_task(task: dict[str, Any], *, status: str, summary
         "next_state": next_state,
         "evidence": evidence,
     }
+    delta = compute_parent_child_delta(store_payload, opportunity_id)
+    if delta:
+        evaluation["parent_child_delta"] = delta
+        evaluation["evidence"]["parent_child_delta"] = delta
     return evaluation
