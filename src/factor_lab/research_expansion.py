@@ -8,6 +8,8 @@ from typing import Any
 
 from factor_lab.dedup import config_fingerprint
 from factor_lab.storage import ExperimentStore
+from factor_lab.feature_schema import TUSHARE_FEATURE_COLUMNS
+from factor_lab.expression_validation import validate_expression
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -45,6 +47,12 @@ def _candidate_validation_specs(store: ExperimentStore, base_recent: dict[str, A
         definition = candidate.get("definition") or {}
         if not definition.get("name"):
             continue
+        expression = definition.get("expression") or ""
+        if expression:
+            validation = validate_expression(expression, available_fields=TUSHARE_FEATURE_COLUMNS)
+            if not validation.ok:
+                # Skip deterministic invalid expressions (prevents circuit breaker stalls).
+                continue
         for days, priority in [(45, 12), (90, 14)]:
             name = f"candidate_{definition['name']}_recent_{days}d"
             output_dir = f"artifacts/generated_candidate_{definition['name']}_recent_{days}d"
