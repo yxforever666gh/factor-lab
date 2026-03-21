@@ -24,6 +24,7 @@ from factor_lab.research_strategy import update_research_memory_from_task_result
 from factor_lab.opportunity_store import update_opportunity_state
 from factor_lab.opportunity_evaluator import evaluate_opportunity_from_task
 from datetime import datetime, timezone, timedelta
+import os
 
 
 BASELINE_PRIORITY = 10
@@ -41,6 +42,7 @@ TASK_REPEAT_COOLDOWN_MINUTES = 180
 
 
 DB_PATH = Path("artifacts") / "factor_lab.db"
+STAGNATION_PATH = Path("artifacts") / "research_stagnation.json"
 
 
 def _category_from_note(note: str | None) -> str:
@@ -98,6 +100,40 @@ def parse_iso_utc(ts: str | None) -> datetime | None:
         return datetime.fromisoformat(ts)
     except Exception:
         return None
+
+
+def _read_json(path: Path, default: Any) -> Any:
+    if not path.exists():
+        return default
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _write_json(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _stagnation_state() -> dict[str, Any]:
+    return _read_json(STAGNATION_PATH, {"consecutive_no_injection": 0, "last_reason": None, "updated_at_utc": None})
+
+
+def _bump_stagnation(*, reason: str) -> dict[str, Any]:
+    state = _stagnation_state()
+    state["consecutive_no_injection"] = int(state.get("consecutive_no_injection") or 0) + 1
+    state["last_reason"] = reason
+    state["updated_at_utc"] = datetime.now(timezone.utc).isoformat()
+    _write_json(STAGNATION_PATH, state)
+    return state
+
+
+def _reset_stagnation(*, reason: str) -> dict[str, Any]:
+    state = {
+        "consecutive_no_injection": 0,
+        "last_reason": reason,
+        "updated_at_utc": datetime.now(timezone.utc).isoformat(),
+    }
+    _write_json(STAGNATION_PATH, state)
+    return state
 
 
 def can_reseed_baseline(store: ExperimentStore) -> bool:
@@ -432,22 +468,50 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
                 summary=f"planner pipeline failed, fallback to rules: {planner_error}",
             )
 
-        if planner_result and planner_result.get("injected_count", 0) > 0:
+        planner_injected = int((planner_result or {}).get("injected_count") or 0)
+        opp_injected = int((((planner_result or {}).get("opportunity_execution") or {}).get("injected_count") or 0))
+        injected_total = planner_injected + opp_injected
+
+        if injected_total > 0:
+            _reset_stagnation(reason="injected")
             append_heartbeat(
                 "research_orchestrator",
                 "info",
-                summary=f"planner injected {planner_result['injected_count']} tasks",
+                summary=f"planner/opportunities injected tasks={planner_injected}+{opp_injected}",
             )
         else:
             expanded = maybe_expand_research_space(store, max_new_tasks=2)
             if expanded:
+                _reset_stagnation(reason="expanded")
                 append_heartbeat("research_orchestrator", "info", summary=f"research space expanded with {len(expanded)} tasks")
             elif can_reseed_baseline(store):
                 seeded = enqueue_baseline_tasks(store)
                 if seeded:
+                    _reset_stagnation(reason="reseeded")
                     append_heartbeat("research_orchestrator", "info", summary=f"queue reseeded with {len(seeded)} baseline tasks")
+                else:
+                    st = _bump_stagnation(reason="reseed_attempt_noop")
+                    append_heartbeat("research_orchestrator", "info", summary=f"queue empty; reseed noop; stagnation={st.get('consecutive_no_injection')}")
             else:
-                append_heartbeat("research_orchestrator", "info", summary="queue empty but reseed cooldown active")
+                st = _bump_stagnation(reason="reseed_cooldown_active")
+                append_heartbeat("research_orchestrator", "info", summary=f"queue empty; reseed cooldown active; stagnation={st.get('consecutive_no_injection')}")
+
+            threshold = int(os.getenv("RESEARCH_STAGNATION_THRESHOLD", "3"))
+            if threshold < 1:
+                threshold = 1
+            force_tasks = int(os.getenv("RESEARCH_STAGNATION_FORCE_EXPAND_TASKS", "4"))
+            force_tasks = max(1, min(8, force_tasks))
+
+            st = _stagnation_state()
+            if int(st.get("consecutive_no_injection") or 0) >= threshold:
+                forced = maybe_expand_research_space(store, max_new_tasks=force_tasks)
+                if forced:
+                    _reset_stagnation(reason="forced_expand")
+                    append_heartbeat(
+                        "research_orchestrator",
+                        "stagnation_break",
+                        summary=f"stagnation reached {threshold}, forced expansion injected {len(forced)} tasks",
+                    )
 
     failure_state = recent_failure_stats(store)
     if failure_state["consecutive_failures"] >= MAX_CONSECUTIVE_FAILURES and failure_state["cooldown_active"]:
