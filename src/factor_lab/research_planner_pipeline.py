@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 import json
 import hashlib
+import os
 from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor
 
@@ -152,7 +153,16 @@ def run_research_planner_pipeline() -> dict[str, Any]:
         encoding="utf-8",
     )
     research_opportunities = build_research_opportunities(snapshot_path, ROOT / "artifacts" / "research_opportunities.json")
-    opportunity_execution = enqueue_opportunities(ROOT / "artifacts" / "research_opportunities.json", ROOT / "artifacts" / "opportunity_execution_plan.json", DB_PATH, limit=2)
+    # Autonomy knob: allow more scheduled opportunities per planner loop.
+    # Keep conservative by default but not artificially capped.
+    opportunity_limit = int(os.getenv("RESEARCH_OPPORTUNITY_ENQUEUE_LIMIT", "4"))
+    opportunity_limit = max(1, min(8, opportunity_limit))
+    opportunity_execution = enqueue_opportunities(
+        ROOT / "artifacts" / "research_opportunities.json",
+        ROOT / "artifacts" / "opportunity_execution_plan.json",
+        DB_PATH,
+        limit=opportunity_limit,
+    )
     llm_diagnostics = build_llm_diagnostics(snapshot_path, ROOT / "artifacts" / "research_opportunities.json", ROOT / "artifacts" / "llm_diagnostics.json")
 
     result = {

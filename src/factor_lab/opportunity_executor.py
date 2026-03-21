@@ -85,13 +85,20 @@ def enqueue_opportunities(opportunities_path: str | Path, output_path: str | Pat
         })
         considered += 1
 
-    channel_limits = {
-        "validation": min(1, limit),
-        "exploration": min(1, max(0, limit - min(1, limit))),
-    }
+    # Scale scheduling with `limit` (previously hard-capped at 1 validation + 1 exploration).
+    # Default policy: always keep some validation, spend the rest on exploration.
+    if limit <= 0:
+        channel_limits = {"validation": 0, "exploration": 0}
+    elif limit == 1:
+        channel_limits = {"validation": 1, "exploration": 0}
+    else:
+        validation_quota = 1
+        exploration_quota = max(0, int(limit) - validation_quota)
+        channel_limits = {"validation": validation_quota, "exploration": exploration_quota}
+
     if force_positive_frontier_probe:
         channel_limits["exploration"] = max(1, channel_limits.get("exploration", 0))
-        channel_limits["validation"] = max(0, min(limit - channel_limits["exploration"], channel_limits.get("validation", 0)))
+        channel_limits["validation"] = max(0, limit - channel_limits["exploration"])
 
     selected: list[dict[str, Any]] = []
     selected_ids: set[str] = set()
