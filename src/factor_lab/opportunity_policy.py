@@ -24,6 +24,32 @@ def _template_key(row: dict[str, Any]) -> str:
     return f"{otype}::{family}::{parent}"
 
 
+def _target_shape(row: dict[str, Any]) -> str:
+    targets = list(row.get("target_candidates") or [])
+    if not targets:
+        return "no_targets"
+    if len(targets) == 1:
+        return "single_target"
+    if len(targets) == 2:
+        return "pair_target"
+    return "multi_target"
+
+
+def _intent_signature(row: dict[str, Any]) -> str:
+    expected = sorted([str(x) for x in (row.get("expected_knowledge_gain") or []) if x])
+    if not expected:
+        return "no_expected_gain"
+    return "+".join(expected[:3])
+
+
+def _pattern_signature(row: dict[str, Any]) -> str:
+    template = _template_key(row)
+    evaluation = row.get("evaluation") or {}
+    epistemic = sorted([str(x) for x in (evaluation.get("epistemic_gain") or []) if x])
+    epistemic_part = "+".join(epistemic[:3]) if epistemic else "pre_eval"
+    return f"{template}::{_target_shape(row)}::{_intent_signature(row)}::{epistemic_part}"
+
+
 def _apply_epistemic_updates(meta: dict[str, Any], evaluation: dict[str, Any]) -> None:
     epistemic_gain = list(evaluation.get("epistemic_gain") or [])
     if any(tag in epistemic_gain for tag in {"uncertainty_reduced", "boundary_confirmed", "new_branch_opened", "probe_promising", "hypothesis_supported", "partial_support"}):
@@ -88,15 +114,18 @@ def build_opportunity_learning(store_path: str | Path | None = None, output_path
     types: dict[str, dict[str, Any]] = {}
     families: dict[str, dict[str, Any]] = {}
     templates: dict[str, dict[str, Any]] = {}
+    patterns: dict[str, dict[str, Any]] = {}
 
     for row in items:
         otype = row.get("opportunity_type") or "unknown"
         family = row.get("target_family") or "none"
         template = _template_key(row)
+        pattern = _pattern_signature(row)
         buckets = [
             (types, otype, "opportunity_type"),
             (families, family, "family"),
             (templates, template, "template"),
+            (patterns, pattern, "pattern"),
         ]
         state = row.get("state")
         evaluation = row.get("evaluation") or {}
@@ -114,11 +143,11 @@ def build_opportunity_learning(store_path: str | Path | None = None, output_path
                 meta["archived"] += 1
             _apply_epistemic_updates(meta, evaluation)
 
-    for bucket in (types, families, templates):
+    for bucket in (types, families, templates, patterns):
         for meta in bucket.values():
             _finalize_learning_bucket(meta)
 
-    payload = {"types": types, "families": families, "templates": templates}
+    payload = {"types": types, "families": families, "templates": templates, "patterns": patterns}
     opath.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return payload
 

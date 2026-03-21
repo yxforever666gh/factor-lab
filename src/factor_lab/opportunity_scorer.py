@@ -23,6 +23,24 @@ def score_opportunity(question: dict[str, Any], snapshot: dict[str, Any]) -> dic
     family_learning = (learning.get("families") or {}).get(family or "", {})
     parent_kind = "child" if question.get("parent_opportunity_id") else "root"
     template_key = f"{qtype}::{family or 'none'}::{parent_kind}"
+    target_candidates = list(question.get("target_candidates") or [])
+    if not target_candidates:
+        target_shape = "no_targets"
+    elif len(target_candidates) == 1:
+        target_shape = "single_target"
+    elif len(target_candidates) == 2:
+        target_shape = "pair_target"
+    else:
+        target_shape = "multi_target"
+    expected_gain = sorted([str(x) for x in (question.get("expected_knowledge_gain") or []) if x])
+    intent_signature = "+".join(expected_gain[:3]) if expected_gain else "no_expected_gain"
+    pattern_prefix = f"{template_key}::{target_shape}::{intent_signature}::"
+    pattern_learning_candidates = learning.get("patterns") or {}
+    pattern_learning = {}
+    for key, value in pattern_learning_candidates.items():
+        if str(key).startswith(pattern_prefix):
+            pattern_learning = value
+            break
     template_learning = (learning.get("templates") or {}).get(template_key, {})
     type_learning = (learning.get("types") or {}).get(qtype, {})
 
@@ -46,8 +64,9 @@ def score_opportunity(question: dict[str, Any], snapshot: dict[str, Any]) -> dic
 
     family_epistemic_value = float(family_learning.get("epistemic_value_score") or 0.0)
     template_epistemic_value = float(template_learning.get("epistemic_value_score") or 0.0)
+    pattern_epistemic_value = float(pattern_learning.get("epistemic_value_score") or 0.0)
     type_epistemic_value = float(type_learning.get("epistemic_value_score") or 0.0)
-    epistemic_value = max(family_epistemic_value, template_epistemic_value, type_epistemic_value)
+    epistemic_value = max(family_epistemic_value, template_epistemic_value, pattern_epistemic_value, type_epistemic_value)
     if epistemic_value >= 0.45:
         priority += 0.06
         novelty += 0.04
@@ -67,6 +86,16 @@ def score_opportunity(question: dict[str, Any], snapshot: dict[str, Any]) -> dic
         priority -= 0.06
         confidence -= 0.04
         rationale_bits.append(f"template_learning=downweight:{template_key}")
+
+    if pattern_learning.get("recommended_action") == "upweight":
+        priority += 0.04
+        novelty += 0.06
+        confidence += 0.03
+        rationale_bits.append(f"pattern_learning=upweight:{pattern_prefix}")
+    elif pattern_learning.get("recommended_action") == "downweight":
+        priority -= 0.05
+        confidence -= 0.04
+        rationale_bits.append(f"pattern_learning=downweight:{pattern_prefix}")
 
     if flow_state.get("state") == "recovering" and qtype in {"confirm", "diagnose"}:
         priority += 0.06
