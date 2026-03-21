@@ -37,6 +37,10 @@ def write_status(state: str, **extra):
 
 
 def emit_wake_event(text: str) -> None:
+    # Factor Lab notifications are noisy in chat; keep them opt-in.
+    # Set RESEARCH_DAEMON_WAKE_EVENTS=1 to re-enable proactive chat wake events.
+    if os.getenv("RESEARCH_DAEMON_WAKE_EVENTS", "0").strip().lower() not in {"1", "true", "yes", "on"}:
+        return
     os.system(f'openclaw system event --mode now --text {json.dumps(text, ensure_ascii=False)} >/dev/null 2>&1')
 
 
