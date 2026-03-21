@@ -471,6 +471,7 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
         planner_injected = int((planner_result or {}).get("injected_count") or 0)
         opp_injected = int((((planner_result or {}).get("opportunity_execution") or {}).get("injected_count") or 0))
         injected_total = planner_injected + opp_injected
+        recovery_used = bool((planner_result or {}).get("recovery_used"))
 
         if injected_total > 0:
             _reset_stagnation(reason="injected")
@@ -480,7 +481,9 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
                 summary=f"planner/opportunities injected tasks={planner_injected}+{opp_injected}",
             )
         else:
-            expanded = maybe_expand_research_space(store, max_new_tasks=2)
+            # If the planner is already in recovery mode but still injected nothing,
+            # don't wait for stagnation counters to accumulate: immediately try autonomous expansion.
+            expanded = maybe_expand_research_space(store, max_new_tasks=(4 if recovery_used else 2), allow_repeat=recovery_used)
             if expanded:
                 _reset_stagnation(reason="expanded")
                 append_heartbeat("research_orchestrator", "info", summary=f"research space expanded with {len(expanded)} tasks")

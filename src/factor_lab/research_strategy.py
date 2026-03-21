@@ -684,11 +684,17 @@ def apply_strategy_plan(
     skipped = []
     for task in approved_tasks:
         fingerprint = task.get("fingerprint")
-        if fingerprint and recently_finished_same_fingerprint(store, fingerprint):
-            skipped.append({"fingerprint": fingerprint, "reason": "recently_finished_same_fingerprint"})
-            continue
         validated_task = validated_by_fingerprint.get(fingerprint, task)
         payload = dict(validated_task.get("payload") or task.get("payload") or {})
+        reasons = payload.get("reasons") or []
+        repeat_blocked = recently_finished_same_fingerprint(
+            store,
+            fingerprint,
+            cooldown_minutes=30 if "recovery_step" in reasons else 180,
+        ) if fingerprint else False
+        if repeat_blocked:
+            skipped.append({"fingerprint": fingerprint, "reason": "recently_finished_same_fingerprint"})
+            continue
         payload["strategy"] = task.get("strategy_meta") or {}
         worker_note = (validated_task.get("worker_note") or task.get("worker_note") or "")
         strategy_reason = ((task.get("strategy_meta") or {}).get("reason") or "").strip()

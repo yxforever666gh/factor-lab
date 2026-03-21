@@ -8,6 +8,22 @@ from factor_lab.research_runtime_state import recently_finished_same_fingerprint
 from factor_lab.storage import ExperimentStore
 
 
+RECOVERY_REPEAT_COOLDOWN_MINUTES = 30
+
+
+def _task_repeat_blocked(store: ExperimentStore, task: dict[str, Any], fingerprint: str | None) -> bool:
+    if not fingerprint:
+        return False
+    payload = task.get("payload") or {}
+    reasons = payload.get("reasons") or []
+    # Recovery / fallback tasks should be allowed to re-run on a shorter cadence,
+    # otherwise the planner can deadlock itself in an empty-queue recovery loop.
+    cooldown = RECOVERY_REPEAT_COOLDOWN_MINUTES if "recovery_step" in reasons else None
+    if cooldown is not None:
+        return recently_finished_same_fingerprint(store, fingerprint, cooldown_minutes=cooldown)
+    return recently_finished_same_fingerprint(store, fingerprint)
+
+
 CATEGORY_LIMITS_DEFAULT = {"baseline": 2, "validation": 2, "exploration": 1}
 DB_PATH = Path("artifacts") / "factor_lab.db"
 
@@ -35,7 +51,7 @@ def validate_research_planner_proposal(proposal_path: str | Path, output_path: s
             ok = False
             reason.append(f"category_limit_exceeded:{category}")
 
-        if fingerprint and recently_finished_same_fingerprint(store, fingerprint):
+        if _task_repeat_blocked(store, task, fingerprint):
             ok = False
             reason.append("recently_finished_same_fingerprint")
 
