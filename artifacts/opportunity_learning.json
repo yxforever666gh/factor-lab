@@ -22,7 +22,7 @@
     },
     "recombine": {
       "opportunity_type": "recombine",
-      "count": 1,
+      "count": 3,
       "promoted": 0,
       "evaluated": 0,
       "rejected": 0,
@@ -36,8 +36,28 @@
       "promoted": 0,
       "evaluated": 0,
       "rejected": 0,
+      "archived": 1,
+      "success_rate": 0.0,
+      "recommended_action": "keep"
+    },
+    "probe": {
+      "opportunity_type": "probe",
+      "count": 1,
+      "promoted": 0,
+      "evaluated": 0,
+      "rejected": 0,
       "archived": 0,
       "success_rate": null,
+      "recommended_action": "keep"
+    },
+    "unknown": {
+      "opportunity_type": "unknown",
+      "count": 1,
+      "promoted": 0,
+      "evaluated": 1,
+      "rejected": 0,
+      "archived": 0,
+      "success_rate": 0.0,
       "recommended_action": "keep"
     }
   }

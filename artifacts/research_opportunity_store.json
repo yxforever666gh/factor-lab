@@ -1,5 +1,5 @@
 {
-  "updated_at_utc": "2026-03-20T23:58:41.125782+00:00",
+  "updated_at_utc": "2026-03-21T00:08:52.659129+00:00",
   "opportunities": {
     "opp-q-stable-boundary": {
       "opportunity_id": "opp-q-stable-boundary",
@@ -467,6 +467,23 @@
         }
       ],
       "last_synced_at_utc": "2026-03-20T23:52:55.244476+00:00"
+    },
+    "opp-state-machine-test": {
+      "opportunity_id": "opp-state-machine-test",
+      "history": [
+        {
+          "updated_at_utc": "2026-03-21T00:08:52.655662+00:00",
+          "state": "evaluated",
+          "reason": "test_evaluated"
+        },
+        {
+          "updated_at_utc": "2026-03-21T00:08:52.659114+00:00",
+          "state": "evaluated",
+          "reason": "ignored_regressive_transition:evaluated->archived:should_not_override"
+        }
+      ],
+      "state": "evaluated",
+      "updated_at_utc": "2026-03-21T00:08:52.659126+00:00"
     }
   }
 }

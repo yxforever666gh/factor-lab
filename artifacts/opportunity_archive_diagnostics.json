@@ -1,0 +1,35 @@
+{
+  "funnel": {
+    "proposed": 4,
+    "scheduled": 2,
+    "running": 0,
+    "evaluated": 1,
+    "promoted": 0,
+    "rejected": 0,
+    "archived": 2
+  },
+  "archive_counts": {
+    "recently_finished_same_fingerprint": 2
+  },
+  "archive_samples": [
+    {
+      "opportunity_id": "opp-q-stable-boundary",
+      "type": "confirm",
+      "reason": "recently_finished_same_fingerprint",
+      "priority": 0.92,
+      "novelty": 0.45,
+      "confidence": 0.63,
+      "target_family": "stable_candidate_validation"
+    },
+    {
+      "opportunity_id": "opp-child-expand-from-opp-q-stable-boundary",
+      "type": "expand",
+      "reason": "recently_finished_same_fingerprint",
+      "priority": 0.73,
+      "novelty": 0.55,
+      "confidence": 0.63,
+      "target_family": "stable_candidate_validation"
+    }
+  ],
+  "skipped_count": 3
+}
