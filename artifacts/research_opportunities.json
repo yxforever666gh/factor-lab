@@ -1,13 +1,13 @@
 {
-  "generated_at_utc": "2026-03-21T00:24:38.050487+00:00",
+  "generated_at_utc": "2026-03-21T00:44:59.337544+00:00",
   "schema_version": "factor_lab.research_opportunity.v1",
   "flow_state": {
     "state": "recovering",
     "reasons": [
-      "recovery_step_triggered"
+      "recovery_branch_still_active"
     ],
-    "candidate_count": 2,
-    "recovery_used": true,
+    "candidate_count": 1,
+    "recovery_used": false,
     "recovery_active_branch_count": 2,
     "recent_recovery_event_count": 1,
     "recent_recovery_success": true,
@@ -20,8 +20,8 @@
     }
   },
   "summary": {
-    "count": 5,
-    "question_count": 5,
+    "count": 6,
+    "question_count": 6,
     "child_question_count": 2,
     "top_types": [
       "confirm",
@@ -491,9 +491,7 @@
       "hypothesis": "至少部分 graveyard 因子并非随机失败，而是共享可解释的结构性原因。",
       "target_family": "graveyard_diagnosis",
       "target_candidates": [
-        "hybrid_liquidity_turnover_shock_mom_20",
-        "liquidity_turnover_shock",
-        "mom_20"
+        "liquidity_turnover_shock"
       ],
       "expected_knowledge_gain": [
         "neutralization_diagnosis_requested",
@@ -569,8 +567,8 @@
       "hypothesis": "diagnose 类型机会在给出失败解释后，应该派生出更高层的重组或替代方向。",
       "target_family": "graveyard_diagnosis",
       "target_candidates": [
-        "liquidity_turnover_shock",
-        "mom_20"
+        "hybrid_liquidity_turnover_shock_mom_20",
+        "liquidity_turnover_shock"
       ],
       "expected_knowledge_gain": [
         "exploration_candidate_survived"
@@ -585,6 +583,30 @@
         "opp-q-graveyard-cause"
       ],
       "parent_opportunity_id": "opp-q-graveyard-cause"
+    },
+    {
+      "opportunity_id": "opp-pattern-native-recombine-graveyard_diagnosis-child-pair_target-exploration_candidate_survived-hybrid_invalidated-negative_result_recorded-search_space_reduced",
+      "schema_version": "factor_lab.research_opportunity.v1",
+      "opportunity_type": "recombine",
+      "title": "模式 recombine / graveyard_diagnosis / hybrid_invalidated+negative_result_recorded+search_space_reduced 是否值得继续作为研究主线？",
+      "question": "模式 recombine / graveyard_diagnosis / hybrid_invalidated+negative_result_recorded+search_space_reduced 是否值得继续作为研究主线？",
+      "hypothesis": "历史上呈现 hybrid_invalidated+negative_result_recorded+search_space_reduced 的 recombine 模式，对 graveyard_diagnosis family 具有持续的认知价值。",
+      "target_family": "graveyard_diagnosis",
+      "target_candidates": [
+        "liquidity_turnover_shock"
+      ],
+      "expected_knowledge_gain": [
+        "exploration_candidate_survived"
+      ],
+      "evidence_gap": "pattern learning 已将该模式标为高价值（score=0.6），但当前问题空间尚未显式把它作为一等研究入口。",
+      "priority": 0.74,
+      "novelty_score": 0.63,
+      "confidence": 0.63,
+      "rationale": "base_type=recombine; analyst_focus_overlap; analyst_graveyard_overlap",
+      "sources": [
+        "pattern_learning",
+        "recombine::graveyard_diagnosis::child::pair_target::exploration_candidate_survived::hybrid_invalidated+negative_result_recorded+search_space_reduced"
+      ]
     },
     {
       "opportunity_id": "opp-child-expand-from-opp-q-stable-boundary",

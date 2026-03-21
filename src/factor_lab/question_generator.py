@@ -4,6 +4,7 @@ from typing import Any
 
 from factor_lab.exploration_budget import build_exploration_budget
 from factor_lab.new_branch_generator import build_new_branch_questions
+from factor_lab.pattern_question_generator import build_pattern_native_questions
 from factor_lab.recovery_opportunity_bridge import build_recovery_bridge_questions
 
 
@@ -51,6 +52,9 @@ def build_research_questions(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
     question_budget = budget_payload.get("budget") or {}
 
     questions: list[dict[str, Any]] = []
+
+    # Pattern-native questions come first; rules now act as fallback/coverage.
+    questions.extend(build_pattern_native_questions(snapshot))
 
     if stable_candidates and int(question_budget.get("confirm", 0)) > 0:
         expected_gain = ["stable_candidate_confirmed"]
