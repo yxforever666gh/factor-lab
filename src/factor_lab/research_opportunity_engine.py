@@ -11,6 +11,8 @@ from factor_lab.opportunity_scorer import score_opportunity
 from factor_lab.opportunity_policy import build_opportunity_learning, allocate_opportunity_budget, build_child_opportunities
 from factor_lab.research_portfolio import build_research_portfolio_plan
 from factor_lab.meta_research_critic import build_meta_research_critique
+from factor_lab.storage import ExperimentStore
+from factor_lab.research_runtime_state import recently_finished_same_fingerprint
 
 ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS = ROOT / "artifacts"
@@ -63,10 +65,31 @@ def _make_opportunity(
     }
 
 
+def _question_fingerprint(question: dict[str, Any]) -> str:
+    payload = {
+        "type": question.get("question_type"),
+        "family": question.get("target_family"),
+        "targets": list(question.get("target_candidates") or []),
+        "expected": list(question.get("expected_knowledge_gain") or []),
+        "parent": question.get("parent_opportunity_id"),
+    }
+    return json.dumps(payload, ensure_ascii=False, sort_keys=True)
+
+
+def _should_pre_suppress_question(question: dict[str, Any], store: ExperimentStore) -> bool:
+    sources = set(question.get("sources") or [])
+    # Let critic/pattern-native questions punch through; suppress plain repeats early.
+    if "meta_research_critique" in "".join(sources) or "pattern_learning" in "".join(sources):
+        return False
+    fingerprint = f"pre_question::{_question_fingerprint(question)}"
+    return recently_finished_same_fingerprint(store, fingerprint, cooldown_minutes=180)
+
+
 def build_research_opportunities(snapshot_path: str | Path, output_path: str | Path) -> dict[str, Any]:
     snapshot = _read_json(Path(snapshot_path), {})
     flow_state = snapshot.get("research_flow_state") or _read_json(ARTIFACTS / "research_flow_state.json", {})
     recovery_state = flow_state.get("state")
+    store = ExperimentStore(ROOT / "artifacts" / "factor_lab.db")
 
     base_questions = build_research_questions(snapshot)
     child_questions = build_child_opportunities(snapshot)
@@ -81,9 +104,17 @@ def build_research_opportunities(snapshot_path: str | Path, output_path: str | P
     child_budget = dict(opportunity_budget.get("child_budget") or {})
 
     opportunities: list[dict[str, Any]] = []
+    suppressed_questions: list[dict[str, Any]] = []
     for question in questions:
         qtype = question.get("question_type") or "probe"
         if qtype in type_budget and int(type_budget.get(qtype, 0)) <= 0:
+            continue
+        if _should_pre_suppress_question(question, store):
+            suppressed_questions.append({
+                "question_id": question.get("question_id"),
+                "reason": "pre_suppressed_recent_repeat",
+                "sources": question.get("sources") or [],
+            })
             continue
         scores = score_opportunity(question, snapshot)
         opportunity = _make_opportunity(
@@ -123,6 +154,7 @@ def build_research_opportunities(snapshot_path: str | Path, output_path: str | P
         "summary": {
             "count": len(opportunities),
             "question_count": len(questions),
+            "suppressed_question_count": len(suppressed_questions),
             "child_question_count": len(child_questions),
             "top_types": sorted({row.get("opportunity_type") for row in opportunities if row.get("opportunity_type")}),
             "opportunity_budget": opportunity_budget,
