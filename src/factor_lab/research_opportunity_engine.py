@@ -8,6 +8,7 @@ from typing import Any
 from factor_lab.question_generator import build_research_questions
 from factor_lab.opportunity_scorer import score_opportunity
 from factor_lab.opportunity_policy import build_opportunity_learning, allocate_opportunity_budget, build_child_opportunities
+from factor_lab.research_portfolio import build_research_portfolio_plan
 
 ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS = ROOT / "artifacts"
@@ -70,6 +71,7 @@ def build_research_opportunities(snapshot_path: str | Path, output_path: str | P
     questions = list(base_questions) + list(child_questions)
 
     opportunity_learning = build_opportunity_learning()
+    research_portfolio = build_research_portfolio_plan(snapshot, opportunity_learning, ARTIFACTS / "research_portfolio_plan.json")
     opportunity_budget = allocate_opportunity_budget(snapshot, opportunity_learning)
     type_budget = dict(opportunity_budget.get("budget") or {})
     child_budget = dict(opportunity_budget.get("child_budget") or {})
@@ -121,6 +123,7 @@ def build_research_opportunities(snapshot_path: str | Path, output_path: str | P
             "top_types": sorted({row.get("opportunity_type") for row in opportunities if row.get("opportunity_type")}),
             "opportunity_budget": opportunity_budget,
             "opportunity_learning": opportunity_learning,
+            "research_portfolio": research_portfolio,
             "recovery_state": recovery_state,
             "child_budget_remaining": child_budget,
         },

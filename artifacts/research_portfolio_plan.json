@@ -1,0 +1,109 @@
+{
+  "generated_at_utc": "2026-03-21T00:47:26.178168+00:00",
+  "flow_state": {
+    "state": "recovering",
+    "reasons": [
+      "recovery_branch_still_active"
+    ],
+    "candidate_count": 2,
+    "recovery_used": false,
+    "recovery_active_branch_count": 2,
+    "recent_recovery_event_count": 1,
+    "recent_recovery_success": true,
+    "injected_count": 1,
+    "queue_counts": {
+      "pending": 0,
+      "running": 1,
+      "finished": 98,
+      "failed": 1
+    }
+  },
+  "family_allocations": [
+    {
+      "family": "graveyard_diagnosis",
+      "epistemic_value_score": 0.6,
+      "recommended_action": "upweight",
+      "negative_informative_count": 1,
+      "uncertainty_reduction_count": 0
+    },
+    {
+      "family": "exploration",
+      "epistemic_value_score": 0.0,
+      "recommended_action": "keep",
+      "negative_informative_count": 0,
+      "uncertainty_reduction_count": 0
+    },
+    {
+      "family": "none",
+      "epistemic_value_score": 0.0,
+      "recommended_action": "keep",
+      "negative_informative_count": 0,
+      "uncertainty_reduction_count": 0
+    },
+    {
+      "family": "stable_candidate_validation",
+      "epistemic_value_score": 0.0,
+      "recommended_action": "keep",
+      "negative_informative_count": 0,
+      "uncertainty_reduction_count": 0
+    }
+  ],
+  "top_patterns": [
+    {
+      "pattern": "recombine::graveyard_diagnosis::child::pair_target::exploration_candidate_survived::hybrid_invalidated+negative_result_recorded+search_space_reduced",
+      "count": 1,
+      "promoted": 0,
+      "evaluated": 1,
+      "rejected": 0,
+      "archived": 0,
+      "success_rate": 0.0,
+      "recommended_action": "upweight",
+      "epistemic_value_score": 0.6,
+      "uncertainty_reduction_count": 0,
+      "repeat_signal_count": 0,
+      "negative_informative_count": 1,
+      "new_branch_count": 0,
+      "inconclusive_count": 0
+    }
+  ],
+  "horizon": [
+    {
+      "slot": 1,
+      "focus": "stabilize_core_validation",
+      "goal": "先保证核心稳定候选与高价值诊断主线继续可解释。",
+      "budget_mix": {
+        "validation": 0.5,
+        "exploration": 0.3,
+        "invalidation": 0.2
+      },
+      "families": [
+        "graveyard_diagnosis",
+        "exploration"
+      ]
+    },
+    {
+      "slot": 2,
+      "focus": "pattern_exploitation",
+      "goal": "优先利用已证明具有 epistemic value 的模式，继续压缩高价值搜索空间。",
+      "budget_mix": {
+        "validation": 0.3,
+        "exploration": 0.4,
+        "invalidation": 0.3
+      },
+      "patterns": [
+        "recombine::graveyard_diagnosis::child::pair_target::exploration_candidate_survived::hybrid_invalidated+negative_result_recorded+search_space_reduced"
+      ]
+    },
+    {
+      "slot": 3,
+      "focus": "frontier_probe",
+      "goal": "保留一部分预算给边缘高分/高新颖度方向，避免研究空间塌缩。",
+      "budget_mix": {
+        "validation": 0.2,
+        "exploration": 0.5,
+        "invalidation": 0.3
+      },
+      "patterns": []
+    }
+  ]
+}
