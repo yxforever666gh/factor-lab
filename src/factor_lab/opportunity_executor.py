@@ -33,6 +33,14 @@ def enqueue_opportunities(opportunities_path: str | Path, output_path: str | Pat
     review = build_opportunity_review()
     blocks = review.get("blocks") or {}
     downweights = review.get("downweights") or {}
+    critique_path = ROOT / "artifacts" / "meta_research_critique.json"
+    portfolio_path = ROOT / "artifacts" / "research_portfolio_plan.json"
+    critique = json.loads(critique_path.read_text(encoding="utf-8")) if critique_path.exists() else {}
+    portfolio = json.loads(portfolio_path.read_text(encoding="utf-8")) if portfolio_path.exists() else {}
+    corrective_actions = critique.get("corrective_actions") or []
+    family_allocations = portfolio.get("family_allocations") or []
+    diversified_family = next((row.get("suggested_family") for row in corrective_actions if row.get("action") == "diversify_family_allocation"), None)
+    force_positive_frontier_probe = any(row.get("action") == "force_positive_frontier_probe" for row in corrective_actions)
     store = ExperimentStore(db_path)
 
     prepared: list[dict[str, Any]] = []
@@ -81,17 +89,31 @@ def enqueue_opportunities(opportunities_path: str | Path, output_path: str | Pat
         "validation": min(1, limit),
         "exploration": min(1, max(0, limit - min(1, limit))),
     }
+    if force_positive_frontier_probe:
+        channel_limits["exploration"] = max(1, channel_limits.get("exploration", 0))
+        channel_limits["validation"] = max(0, min(limit - channel_limits["exploration"], channel_limits.get("validation", 0)))
+
     selected: list[dict[str, Any]] = []
     selected_ids: set[str] = set()
+    selected_families: set[str] = set()
 
     for channel in ("validation", "exploration"):
         quota = channel_limits.get(channel, 0)
         if quota <= 0:
             continue
         channel_rows = [row for row in prepared if row["channel"] == channel]
-        for row in channel_rows[:quota]:
+        diversified_rows = []
+        fallback_rows = []
+        for row in channel_rows:
+            family = row["opportunity"].get("target_family") or "none"
+            if diversified_family and family == diversified_family and family in selected_families:
+                fallback_rows.append(row)
+            else:
+                diversified_rows.append(row)
+        for row in (diversified_rows + fallback_rows)[:quota]:
             selected.append(row)
             selected_ids.add(row["opportunity"].get("opportunity_id"))
+            selected_families.add(row["opportunity"].get("target_family") or "none")
 
     remaining_slots = max(0, limit - len(selected))
     if remaining_slots > 0:

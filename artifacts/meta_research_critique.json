@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-03-21T01:00:18.438160+00:00",
+  "generated_at_utc": "2026-03-21T01:17:41.665817+00:00",
   "summary": {
     "finding_count": 4,
     "corrective_action_count": 4
@@ -11,7 +11,7 @@
       "message": "当前研究资本明显集中在 family=graveyard_diagnosis。",
       "evidence": {
         "family": "graveyard_diagnosis",
-        "count": 4,
+        "count": 5,
         "promoted": 0,
         "evaluated": 1,
         "rejected": 0,

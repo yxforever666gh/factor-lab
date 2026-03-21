@@ -1,12 +1,12 @@
 {
-  "generated_at_utc": "2026-03-21T01:00:18.438594+00:00",
+  "generated_at_utc": "2026-03-21T01:17:41.666366+00:00",
   "schema_version": "factor_lab.research_opportunity.v1",
   "flow_state": {
     "state": "recovering",
     "reasons": [
       "recovery_branch_still_active"
     ],
-    "candidate_count": 1,
+    "candidate_count": 2,
     "recovery_used": false,
     "recovery_active_branch_count": 2,
     "recent_recovery_event_count": 1,
@@ -20,13 +20,14 @@
     }
   },
   "summary": {
-    "count": 6,
-    "question_count": 6,
+    "count": 7,
+    "question_count": 9,
     "child_question_count": 2,
     "top_types": [
       "confirm",
       "diagnose",
       "expand",
+      "probe",
       "recombine"
     ],
     "opportunity_budget": {
@@ -84,7 +85,7 @@
         },
         "recombine": {
           "opportunity_type": "recombine",
-          "count": 4,
+          "count": 5,
           "promoted": 0,
           "evaluated": 1,
           "rejected": 0,
@@ -166,7 +167,7 @@
         },
         "graveyard_diagnosis": {
           "family": "graveyard_diagnosis",
-          "count": 4,
+          "count": 5,
           "promoted": 0,
           "evaluated": 1,
           "rejected": 0,
@@ -328,7 +329,7 @@
         },
         "recombine::graveyard_diagnosis::root": {
           "template": "recombine::graveyard_diagnosis::root",
-          "count": 1,
+          "count": 2,
           "promoted": 0,
           "evaluated": 0,
           "rejected": 0,
@@ -490,7 +491,7 @@
         },
         "recombine::graveyard_diagnosis::root::single_target::exploration_candidate_survived::pre_eval": {
           "pattern": "recombine::graveyard_diagnosis::root::single_target::exploration_candidate_survived::pre_eval",
-          "count": 1,
+          "count": 2,
           "promoted": 0,
           "evaluated": 0,
           "rejected": 0,
@@ -507,13 +508,13 @@
       }
     },
     "research_portfolio": {
-      "generated_at_utc": "2026-03-21T01:00:18.437858+00:00",
+      "generated_at_utc": "2026-03-21T01:17:41.665376+00:00",
       "flow_state": {
         "state": "recovering",
         "reasons": [
           "recovery_branch_still_active"
         ],
-        "candidate_count": 1,
+        "candidate_count": 2,
         "recovery_used": false,
         "recovery_active_branch_count": 2,
         "recent_recovery_event_count": 1,
@@ -616,7 +617,7 @@
       ]
     },
     "meta_research_critique": {
-      "generated_at_utc": "2026-03-21T01:00:18.438160+00:00",
+      "generated_at_utc": "2026-03-21T01:17:41.665817+00:00",
       "summary": {
         "finding_count": 4,
         "corrective_action_count": 4
@@ -628,7 +629,7 @@
           "message": "当前研究资本明显集中在 family=graveyard_diagnosis。",
           "evidence": {
             "family": "graveyard_diagnosis",
-            "count": 4,
+            "count": 5,
             "promoted": 0,
             "evaluated": 1,
             "rejected": 0,
@@ -856,6 +857,31 @@
         "opp-q-stable-boundary"
       ],
       "parent_opportunity_id": "opp-q-stable-boundary"
+    },
+    {
+      "opportunity_id": "opp-critic-frontier-positive-probe",
+      "schema_version": "factor_lab.research_opportunity.v1",
+      "opportunity_type": "probe",
+      "title": "当前是否存在一个能对冲负结果循环的正向 frontier probe？",
+      "question": "当前是否存在一个能对冲负结果循环的正向 frontier probe？",
+      "hypothesis": "系统需要主动寻找能长出 survived candidate 的新试探方向，而不只是高价值负结果。",
+      "target_family": "exploration",
+      "target_candidates": [
+        "mom_20",
+        "mom_plus_value"
+      ],
+      "expected_knowledge_gain": [
+        "exploration_candidate_survived"
+      ],
+      "evidence_gap": "critic 发现系统陷入高价值负结果循环，需要强制注入正向 frontier probe。",
+      "priority": 0.63,
+      "novelty_score": 0.63,
+      "confidence": 0.63,
+      "rationale": "base_type=probe; analyst_focus_overlap",
+      "sources": [
+        "meta_research_critique",
+        "critic_action:force_positive_frontier_probe"
+      ]
     }
   ]
 }
