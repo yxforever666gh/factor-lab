@@ -550,6 +550,37 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
             append_heartbeat("research_orchestrator", "finished", summary=note, task_id=task["task_id"], task_type=task["task_type"])
         except Exception as exc:
             error_text = str(exc)
+
+            # Deterministic config/data errors should not trip the circuit breaker.
+            # Mark them as skipped (finished) and do not retry.
+            if error_text.startswith("Unknown field in expression:"):
+                note = f"skipped｜invalid_expression_field｜{error_text}"
+                store.finish_research_task(task["task_id"], status="finished", worker_note=note)
+                update_research_memory_from_task_result(
+                    "artifacts/research_memory.json",
+                    task,
+                    status="finished",
+                    summary=note,
+                    error_text=error_text,
+                )
+                evaluation = evaluate_opportunity_from_task(task, status="failed", error_text=error_text)
+                if evaluation:
+                    update_opportunity_state(
+                        evaluation["opportunity_id"],
+                        "rejected",
+                        reason="invalid_expression_field",
+                        extra={"evaluation": evaluation, "error": error_text},
+                    )
+                processed.append({"task_id": task["task_id"], "status": "skipped", "error": error_text, "retry_task_id": None, "opportunity_evaluation": evaluation})
+                append_heartbeat(
+                    "research_orchestrator",
+                    "skipped",
+                    summary=note,
+                    task_id=task["task_id"],
+                    task_type=task["task_type"],
+                )
+                continue
+
             retry_task_id = None
             if (task.get("attempt_count") or 0) < 2:
                 retry_fingerprint = f"retry::{task['task_id']}::{task.get('attempt_count', 0)}"
