@@ -114,7 +114,16 @@ def _write_json(path: Path, payload: Any) -> None:
 
 
 def _stagnation_state() -> dict[str, Any]:
-    return _read_json(STAGNATION_PATH, {"consecutive_no_injection": 0, "last_reason": None, "updated_at_utc": None})
+    return _read_json(
+        STAGNATION_PATH,
+        {
+            "consecutive_no_injection": 0,
+            "last_reason": None,
+            "updated_at_utc": None,
+            "recovery_zero_injection_count": 0,
+            "last_recovery_deadlock_at_utc": None,
+        },
+    )
 
 
 def _bump_stagnation(*, reason: str) -> dict[str, Any]:
@@ -131,7 +140,25 @@ def _reset_stagnation(*, reason: str) -> dict[str, Any]:
         "consecutive_no_injection": 0,
         "last_reason": reason,
         "updated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "recovery_zero_injection_count": 0,
+        "last_recovery_deadlock_at_utc": None,
     }
+    _write_json(STAGNATION_PATH, state)
+    return state
+
+
+def _bump_recovery_zero_injection() -> dict[str, Any]:
+    state = _stagnation_state()
+    state["recovery_zero_injection_count"] = int(state.get("recovery_zero_injection_count") or 0) + 1
+    state["updated_at_utc"] = datetime.now(timezone.utc).isoformat()
+    _write_json(STAGNATION_PATH, state)
+    return state
+
+
+def _mark_recovery_deadlock() -> dict[str, Any]:
+    state = _stagnation_state()
+    state["last_recovery_deadlock_at_utc"] = datetime.now(timezone.utc).isoformat()
+    state["updated_at_utc"] = state["last_recovery_deadlock_at_utc"]
     _write_json(STAGNATION_PATH, state)
     return state
 
@@ -481,12 +508,50 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
                 summary=f"planner/opportunities injected tasks={planner_injected}+{opp_injected}",
             )
         else:
+            # Recovery deadlock protection: if recovery keeps producing zero injections while the queue is empty,
+            # escalate quickly into autonomous expansion / forced reseed instead of looping forever.
+            if recovery_used:
+                rz = _bump_recovery_zero_injection()
+                append_heartbeat(
+                    "research_orchestrator",
+                    "warning",
+                    summary=f"recovery injected 0 tasks; zero_injection_count={rz.get('recovery_zero_injection_count')}",
+                )
+            else:
+                rz = _stagnation_state()
+
             # If the planner is already in recovery mode but still injected nothing,
             # don't wait for stagnation counters to accumulate: immediately try autonomous expansion.
             expanded = maybe_expand_research_space(store, max_new_tasks=(4 if recovery_used else 2), allow_repeat=recovery_used)
             if expanded:
                 _reset_stagnation(reason="expanded")
                 append_heartbeat("research_orchestrator", "info", summary=f"research space expanded with {len(expanded)} tasks")
+            elif recovery_used and int(rz.get("recovery_zero_injection_count") or 0) >= 2:
+                _mark_recovery_deadlock()
+                seeded = enqueue_baseline_tasks(store)
+                if seeded:
+                    _reset_stagnation(reason="recovery_deadlock_reseeded")
+                    append_heartbeat(
+                        "research_orchestrator",
+                        "stagnation_break",
+                        summary=f"recovery deadlock detected; forced reseed injected {len(seeded)} baseline tasks",
+                    )
+                else:
+                    forced = maybe_expand_research_space(store, max_new_tasks=4, allow_repeat=True)
+                    if forced:
+                        _reset_stagnation(reason="recovery_deadlock_forced_expand")
+                        append_heartbeat(
+                            "research_orchestrator",
+                            "stagnation_break",
+                            summary=f"recovery deadlock detected; forced expansion injected {len(forced)} tasks",
+                        )
+                    else:
+                        st = _bump_stagnation(reason="recovery_deadlock_noop")
+                        append_heartbeat(
+                            "research_orchestrator",
+                            "warning",
+                            summary=f"recovery deadlock detected but no reseed/expansion succeeded; stagnation={st.get('consecutive_no_injection')}",
+                        )
             elif can_reseed_baseline(store):
                 seeded = enqueue_baseline_tasks(store)
                 if seeded:
