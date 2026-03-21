@@ -11,6 +11,37 @@ from factor_lab.opportunity_diagnostics import build_opportunity_review
 from factor_lab.storage import ExperimentStore
 from factor_lab.research_runtime_state import recently_finished_same_fingerprint
 
+
+def _queue_counts(store: ExperimentStore, limit: int = 200) -> dict[str, int]:
+    tasks = store.list_research_tasks(limit=limit)
+    counts = {"validation": 0, "exploration": 0}
+
+    def channel_from_task(task_type: str | None) -> str | None:
+        if task_type == "diagnostic":
+            return "validation"
+        if task_type == "generated_batch":
+            return "exploration"
+        return None
+
+    for task in tasks:
+        if task.get("status") not in {"pending", "running"}:
+            continue
+        channel = channel_from_task(task.get("task_type"))
+        if channel in counts:
+            counts[channel] += 1
+    return counts
+
+
+def _queue_capacity() -> dict[str, int]:
+    # These caps prevent the opportunity system from flooding the queue.
+    # Make exploration larger than validation by default to encourage autonomy.
+    import os
+
+    return {
+        "validation": int(os.getenv("RESEARCH_QUEUE_MAX_PENDING_VALIDATION", "2")),
+        "exploration": int(os.getenv("RESEARCH_QUEUE_MAX_PENDING_EXPLORATION", "2")),
+    }
+
 ROOT = Path(__file__).resolve().parents[2]
 DB_PATH = ROOT / "artifacts" / "factor_lab.db"
 
@@ -26,7 +57,14 @@ def _opportunity_channel(task: dict[str, Any] | None) -> str | None:
     return None
 
 
-def enqueue_opportunities(opportunities_path: str | Path, output_path: str | Path, db_path: str | Path = DB_PATH, limit: int = 2) -> dict[str, Any]:
+def enqueue_opportunities(
+    opportunities_path: str | Path,
+    output_path: str | Path,
+    db_path: str | Path = DB_PATH,
+    limit: int = 2,
+    *,
+    queue_aware: bool = True,
+) -> dict[str, Any]:
     opportunities_doc = json.loads(Path(opportunities_path).read_text(encoding="utf-8")) if Path(opportunities_path).exists() else {}
     opportunities = list(opportunities_doc.get("opportunities") or [])
     sync_opportunities(opportunities)
@@ -99,6 +137,14 @@ def enqueue_opportunities(opportunities_path: str | Path, output_path: str | Pat
     if force_positive_frontier_probe:
         channel_limits["exploration"] = max(1, channel_limits.get("exploration", 0))
         channel_limits["validation"] = max(0, limit - channel_limits["exploration"])
+
+    if queue_aware:
+        pending = _queue_counts(store)
+        caps = _queue_capacity()
+        channel_limits = {
+            ch: max(0, min(int(channel_limits.get(ch, 0)), max(0, int(caps.get(ch, 0)) - int(pending.get(ch, 0)))))
+            for ch in ("validation", "exploration")
+        }
 
     selected: list[dict[str, Any]] = []
     selected_ids: set[str] = set()

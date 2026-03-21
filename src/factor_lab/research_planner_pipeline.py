@@ -162,6 +162,7 @@ def run_research_planner_pipeline() -> dict[str, Any]:
         ROOT / "artifacts" / "opportunity_execution_plan.json",
         DB_PATH,
         limit=opportunity_limit,
+        queue_aware=True,
     )
     llm_diagnostics = build_llm_diagnostics(snapshot_path, ROOT / "artifacts" / "research_opportunities.json", ROOT / "artifacts" / "llm_diagnostics.json")
 
