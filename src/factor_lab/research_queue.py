@@ -504,7 +504,7 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
 
             st = _stagnation_state()
             if int(st.get("consecutive_no_injection") or 0) >= threshold:
-                forced = maybe_expand_research_space(store, max_new_tasks=force_tasks)
+                forced = maybe_expand_research_space(store, max_new_tasks=force_tasks, allow_repeat=True)
                 if forced:
                     _reset_stagnation(reason="forced_expand")
                     append_heartbeat(

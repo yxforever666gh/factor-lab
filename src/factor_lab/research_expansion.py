@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from copy import deepcopy
 from datetime import datetime, timedelta
+import time
 from pathlib import Path
 from typing import Any
 
@@ -75,10 +76,16 @@ def _candidate_validation_specs(store: ExperimentStore, base_recent: dict[str, A
     return specs
 
 
-def expansion_candidates(store: ExperimentStore) -> list[dict[str, Any]]:
+def expansion_candidates(store: ExperimentStore, *, allow_repeat: bool = False) -> list[dict[str, Any]]:
     recent_tasks = store.list_research_tasks(limit=300)
     existing_fingerprints = {
         t.get("fingerprint") for t in recent_tasks if t.get("status") in {"pending", "running", "finished"}
+    }
+
+    # When breaking stagnation, we may intentionally repeat expansions.
+    # In that mode we still avoid duplicating *pending/running* work, but we allow new unique runs.
+    pending_or_running_fingerprints = {
+        t.get("fingerprint") for t in recent_tasks if t.get("status") in {"pending", "running"}
     }
     candidates: list[dict[str, Any]] = []
 
@@ -150,7 +157,7 @@ def expansion_candidates(store: ExperimentStore) -> list[dict[str, Any]]:
         if "start_date" in spec:
             config = _make_window_config(base_recent, spec["start_date"], spec["end_date"], spec["output_dir"])
             fingerprint = f"workflow::{config_fingerprint(config)}::{spec['output_dir']}"
-            if fingerprint in existing_fingerprints:
+            if (not allow_repeat and fingerprint in existing_fingerprints) or (fingerprint in pending_or_running_fingerprints):
                 continue
             config_path = _write_generated_config(config, spec["name"])
             candidates.append(
@@ -163,20 +170,37 @@ def expansion_candidates(store: ExperimentStore) -> list[dict[str, Any]]:
                 }
             )
             continue
-        if spec["fingerprint"] in existing_fingerprints:
+        if (not allow_repeat and spec["fingerprint"] in existing_fingerprints) or (spec["fingerprint"] in pending_or_running_fingerprints):
             continue
         candidates.append(spec)
 
     return candidates
 
 
-def maybe_expand_research_space(store: ExperimentStore, max_new_tasks: int = 3) -> list[str]:
+def maybe_expand_research_space(store: ExperimentStore, max_new_tasks: int = 3, *, allow_repeat: bool = False) -> list[str]:
     recent_tasks = store.list_research_tasks(limit=50)
     pending_or_running = [t for t in recent_tasks if t["status"] in {"pending", "running"}]
     if pending_or_running:
         return []
 
-    task_specs = expansion_candidates(store)[:max_new_tasks]
+    task_specs = expansion_candidates(store, allow_repeat=allow_repeat)[:max_new_tasks]
+
+    # If we're breaking stagnation and have nothing new, force a unique repeat baseline run.
+    if not task_specs and allow_repeat:
+        base_recent = json.loads((ROOT / "configs" / "tushare_workflow.json").read_text(encoding="utf-8"))
+        nonce = int(time.time())
+        output_dir = f"artifacts/forced_expand_{nonce}"
+        cfg = deepcopy(base_recent)
+        cfg["output_dir"] = output_dir
+        config_path = _write_generated_config(cfg, f"forced_expand_{nonce}")
+        fingerprint = f"workflow::{config_fingerprint(cfg)}::{output_dir}"
+        task_specs = [{
+            "task_type": "workflow",
+            "priority": 26,
+            "payload": {"config_path": config_path, "output_dir": output_dir},
+            "fingerprint": fingerprint,
+            "worker_note": "exploration｜forced expansion to break stagnation",
+        }]
     new_task_ids = []
     for spec in task_specs:
         task_id = store.enqueue_research_task(
