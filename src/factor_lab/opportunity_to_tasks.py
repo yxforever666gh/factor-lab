@@ -84,23 +84,27 @@ def _build_opportunity_batch(opportunity: dict[str, Any]) -> Path | None:
     start_dt = _parse_date(start_date)
     factors = _select_factor_defs(list(opportunity.get("target_candidates") or []))
     jobs: list[dict[str, Any]] = []
+    execution_mode = (opportunity.get("execution_mode") or "cheap_screen").strip()
 
     if otype == "expand":
         jobs.append({"name": "recent_45d", "config_path": str(_make_workflow_config(opportunity, suffix="recent_45d", start_date=_fmt_date(end_dt - timedelta(days=45)), end_date=end_date, factors=factors).relative_to(ROOT))})
-        jobs.append({"name": "recent_90d", "config_path": str(_make_workflow_config(opportunity, suffix="recent_90d", start_date=_fmt_date(end_dt - timedelta(days=90)), end_date=end_date, factors=factors).relative_to(ROOT))})
-        jobs.append({"name": "expanding_back_180d", "config_path": str(_make_workflow_config(opportunity, suffix="expanding_back_180d", start_date=_fmt_date(start_dt - timedelta(days=180)), end_date=end_date, factors=factors).relative_to(ROOT))})
+        if execution_mode == "full":
+            jobs.append({"name": "recent_90d", "config_path": str(_make_workflow_config(opportunity, suffix="recent_90d", start_date=_fmt_date(end_dt - timedelta(days=90)), end_date=end_date, factors=factors).relative_to(ROOT))})
+            jobs.append({"name": "expanding_back_180d", "config_path": str(_make_workflow_config(opportunity, suffix="expanding_back_180d", start_date=_fmt_date(start_dt - timedelta(days=180)), end_date=end_date, factors=factors).relative_to(ROOT))})
     elif otype == "recombine":
         hybrid_factors = deepcopy(factors)
         if len(hybrid_factors) >= 2:
             hybrid_name = f"hybrid_{hybrid_factors[0]['name']}_{hybrid_factors[1]['name']}"
             hybrid_expression = f"({hybrid_factors[0]['expression']}) + ({hybrid_factors[1]['expression']})"
             hybrid_factors.append({"name": hybrid_name, "expression": hybrid_expression})
-        jobs.append({"name": "recent_hybrid", "config_path": str(_make_workflow_config(opportunity, suffix="recent_hybrid", start_date=_fmt_date(end_dt - timedelta(days=90)), end_date=end_date, factors=hybrid_factors).relative_to(ROOT))})
-        jobs.append({"name": "expanding_hybrid", "config_path": str(_make_workflow_config(opportunity, suffix="expanding_hybrid", start_date=_fmt_date(start_dt - timedelta(days=120)), end_date=end_date, factors=hybrid_factors).relative_to(ROOT))})
+        jobs.append({"name": "recent_hybrid", "config_path": str(_make_workflow_config(opportunity, suffix="recent_hybrid", start_date=_fmt_date(end_dt - timedelta(days=45)), end_date=end_date, factors=hybrid_factors).relative_to(ROOT))})
+        if execution_mode == "full":
+            jobs.append({"name": "expanding_hybrid", "config_path": str(_make_workflow_config(opportunity, suffix="expanding_hybrid", start_date=_fmt_date(start_dt - timedelta(days=120)), end_date=end_date, factors=hybrid_factors).relative_to(ROOT))})
     elif otype == "probe":
         probe_factors = deepcopy(factors[: min(2, len(factors))]) or deepcopy(factors)
         jobs.append({"name": "probe_recent_30d", "config_path": str(_make_workflow_config(opportunity, suffix="probe_recent_30d", start_date=_fmt_date(end_dt - timedelta(days=30)), end_date=end_date, factors=probe_factors).relative_to(ROOT))})
-        jobs.append({"name": "probe_recent_60d", "config_path": str(_make_workflow_config(opportunity, suffix="probe_recent_60d", start_date=_fmt_date(end_dt - timedelta(days=60)), end_date=end_date, factors=probe_factors).relative_to(ROOT))})
+        if execution_mode == "full":
+            jobs.append({"name": "probe_recent_60d", "config_path": str(_make_workflow_config(opportunity, suffix="probe_recent_60d", start_date=_fmt_date(end_dt - timedelta(days=60)), end_date=end_date, factors=probe_factors).relative_to(ROOT))})
     else:
         return None
 
@@ -165,6 +169,7 @@ def map_opportunity_to_task(opportunity: dict[str, Any]) -> dict[str, Any] | Non
                     **payload_base,
                     "batch_path": str(batch_path),
                     "output_dir": f"artifacts/opportunity_generated_batch_run/{_sanitize_name(opportunity.get('opportunity_id') or 'opportunity')}",
+                    "execution_mode": opportunity.get("execution_mode") or "cheap_screen",
                     "goal": opportunity.get("question") or otype,
                     "branch_id": opportunity.get("opportunity_id"),
                     "stop_if": [],
