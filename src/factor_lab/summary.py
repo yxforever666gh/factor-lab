@@ -9,7 +9,7 @@ def build_run_summary(db_path: str | Path, output_path: str | Path) -> None:
     cur = conn.cursor()
 
     latest_run = cur.execute(
-        "SELECT run_id, created_at_utc, config_path FROM workflow_runs ORDER BY created_at_utc DESC LIMIT 1"
+        "SELECT run_id, created_at_utc, config_path FROM workflow_runs WHERE status='finished' ORDER BY created_at_utc DESC LIMIT 1"
     ).fetchone()
     stable_candidates = cur.execute(
         "SELECT factor_name, COUNT(*) FROM factor_results WHERE variant='candidate' GROUP BY factor_name ORDER BY COUNT(*) DESC, factor_name ASC LIMIT 5"

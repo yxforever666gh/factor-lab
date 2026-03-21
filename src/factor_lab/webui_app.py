@@ -110,8 +110,12 @@ def compute_weekly_report(health: dict[str, Any] | None = None) -> dict[str, Any
             """
         ).fetchall()]
         recent_finished = [row for row in week_runs if row.get('status') == 'finished']
-        latest_run_id = week_runs[0]['run_id'] if week_runs else None
-        prev_run_id = week_runs[1]['run_id'] if len(week_runs) > 1 else None
+
+        # Unify "latest run" semantics across the UI: prefer the latest *finished* run.
+        # Fallback to the latest run (any status) only if nothing finished in the window.
+        finished_week_runs = [row for row in week_runs if row.get('status') == 'finished']
+        latest_run_id = (finished_week_runs[0]['run_id'] if finished_week_runs else (week_runs[0]['run_id'] if week_runs else None))
+        prev_run_id = (finished_week_runs[1]['run_id'] if len(finished_week_runs) > 1 else (week_runs[1]['run_id'] if len(week_runs) > 1 else None))
 
         def candidate_set(run_id: str | None) -> set[str]:
             if not run_id:
@@ -177,7 +181,8 @@ def compute_health_metrics() -> dict[str, Any]:
             LIMIT 30
             """
         ).fetchall()]
-        latest_run = runs[0] if runs else None
+        # Unify "latest run" semantics across the UI: prefer the latest *finished* run.
+        latest_run = next((row for row in runs if row.get('status') == 'finished'), None) if runs else None
         recent_24h_total = conn.execute(
             "SELECT COUNT(*) FROM workflow_runs WHERE created_at_utc >= datetime('now', '-1 day')"
         ).fetchone()[0]
@@ -205,7 +210,10 @@ def compute_health_metrics() -> dict[str, Any]:
 
         candidate_runs = [r for r in runs if r['run_id'] in candidate_by_run]
         latest_candidates = candidate_by_run.get(latest_run['run_id'], []) if latest_run else []
-        previous_candidates = candidate_by_run.get(runs[1]['run_id'], []) if len(runs) > 1 else []
+        previous_finished_run = None
+        if latest_run:
+            previous_finished_run = next((row for row in runs if row.get('status') == 'finished' and row.get('run_id') != latest_run.get('run_id')), None)
+        previous_candidates = candidate_by_run.get((previous_finished_run or {}).get('run_id'), []) if previous_finished_run else []
         stable_candidate_count = conn.execute(
             "SELECT COUNT(*) FROM v_stable_candidates WHERE candidate_runs >= 2"
         ).fetchone()[0]
@@ -467,7 +475,7 @@ def dashboard():
         "SELECT strategy_name, ROUND(avg_sharpe, 6) AS avg_sharpe, ROUND(avg_return, 6) AS avg_return, runs FROM v_portfolio_strategy_avg ORDER BY avg_sharpe DESC LIMIT 8"
     )
     latest_run = fetch_one(
-        "SELECT run_id, created_at_utc, config_path, status FROM workflow_runs ORDER BY created_at_utc DESC LIMIT 1"
+        "SELECT run_id, created_at_utc, config_path, status FROM workflow_runs WHERE status='finished' ORDER BY created_at_utc DESC LIMIT 1"
     )
     previous_finished = fetch_one(
         "SELECT run_id, created_at_utc, config_path FROM workflow_runs WHERE status='finished' ORDER BY created_at_utc DESC LIMIT 1 OFFSET 1"
@@ -612,7 +620,7 @@ def weekly_page():
 def cockpit_page():
     base = DB_PATH.parent
     latest_run = fetch_one(
-        "SELECT run_id, created_at_utc, config_path, status FROM workflow_runs ORDER BY created_at_utc DESC LIMIT 1"
+        "SELECT run_id, created_at_utc, config_path, status FROM workflow_runs WHERE status='finished' ORDER BY created_at_utc DESC LIMIT 1"
     )
     stable_candidates = fetch_all(
         "SELECT factor_name, candidate_runs FROM v_stable_candidates ORDER BY candidate_runs DESC, factor_name ASC LIMIT 10"

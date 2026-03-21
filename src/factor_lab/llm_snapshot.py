@@ -13,7 +13,13 @@ def build_snapshot(db_path: str | Path, output_path: str | Path) -> dict:
     cur = conn.cursor()
 
     latest_run = cur.execute(
-        "SELECT run_id, created_at_utc, config_path, data_source, start_date, end_date, status, dataset_rows, factor_count FROM workflow_runs ORDER BY created_at_utc DESC LIMIT 1"
+        """
+        SELECT run_id, created_at_utc, config_path, data_source, start_date, end_date, status, dataset_rows, factor_count
+        FROM workflow_runs
+        WHERE status = 'finished'
+        ORDER BY created_at_utc DESC
+        LIMIT 1
+        """
     ).fetchone()
 
     top_scores = [dict(row) for row in cur.execute(
