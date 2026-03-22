@@ -1,5 +1,5 @@
 {
-  "updated_at_utc": "2026-03-22T18:00:44.629067+00:00",
+  "updated_at_utc": "2026-03-22T18:06:16.090764+00:00",
   "opportunities": {
     "opp-q-stable-boundary": {
       "opportunity_id": "opp-q-stable-boundary",
@@ -30,21 +30,6 @@
       ],
       "state": "evaluated",
       "history": [
-        {
-          "updated_at_utc": "2026-03-22T17:15:42.684764+00:00",
-          "state": "evaluated",
-          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:17:23.499455+00:00",
-          "state": "evaluated",
-          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:19:04.450303+00:00",
-          "state": "evaluated",
-          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
-        },
         {
           "updated_at_utc": "2026-03-22T17:20:45.288787+00:00",
           "state": "evaluated",
@@ -184,10 +169,25 @@
           "updated_at_utc": "2026-03-22T18:00:44.206326+00:00",
           "state": "evaluated",
           "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:02:42.009370+00:00",
+          "state": "evaluated",
+          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:04:29.484782+00:00",
+          "state": "evaluated",
+          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:06:15.594334+00:00",
+          "state": "evaluated",
+          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
         }
       ],
-      "last_synced_at_utc": "2026-03-22T18:00:43.826257+00:00",
-      "updated_at_utc": "2026-03-22T18:00:44.206347+00:00",
+      "last_synced_at_utc": "2026-03-22T18:06:15.136648+00:00",
+      "updated_at_utc": "2026-03-22T18:06:15.594365+00:00",
       "task_id": "83ca7cbe-850b-42d6-8134-9f8b75502ed0",
       "task_type": "diagnostic",
       "evaluation": {
@@ -253,21 +253,6 @@
       ],
       "state": "promoted",
       "history": [
-        {
-          "updated_at_utc": "2026-03-22T17:22:25.864322+00:00",
-          "state": "promoted",
-          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:24:06.928567+00:00",
-          "state": "promoted",
-          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:25:47.904427+00:00",
-          "state": "promoted",
-          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
-        },
         {
           "updated_at_utc": "2026-03-22T17:27:28.785160+00:00",
           "state": "promoted",
@@ -407,10 +392,25 @@
           "updated_at_utc": "2026-03-22T18:00:43.954838+00:00",
           "state": "promoted",
           "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:02:41.538511+00:00",
+          "state": "promoted",
+          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:04:29.235997+00:00",
+          "state": "promoted",
+          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:06:15.297032+00:00",
+          "state": "promoted",
+          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
         }
       ],
-      "last_synced_at_utc": "2026-03-22T18:00:43.826236+00:00",
-      "updated_at_utc": "2026-03-22T18:00:43.954860+00:00",
+      "last_synced_at_utc": "2026-03-22T18:06:15.136614+00:00",
+      "updated_at_utc": "2026-03-22T18:06:15.297054+00:00",
       "task_id": "7b84005b-a72d-4b40-8dad-50e7b2de2d89",
       "task_type": "diagnostic",
       "evaluation": {
@@ -468,21 +468,6 @@
       ],
       "state": "evaluated",
       "history": [
-        {
-          "updated_at_utc": "2026-03-22T17:10:40.029411+00:00",
-          "state": "evaluated",
-          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:12:20.883181+00:00",
-          "state": "evaluated",
-          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:14:01.661455+00:00",
-          "state": "evaluated",
-          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
-        },
         {
           "updated_at_utc": "2026-03-22T17:15:42.496619+00:00",
           "state": "evaluated",
@@ -622,12 +607,27 @@
           "updated_at_utc": "2026-03-22T18:00:44.020154+00:00",
           "state": "evaluated",
           "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:02:41.661994+00:00",
+          "state": "evaluated",
+          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:04:29.297730+00:00",
+          "state": "evaluated",
+          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:06:15.375140+00:00",
+          "state": "evaluated",
+          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
         }
       ],
-      "last_synced_at_utc": "2026-03-22T18:00:43.826242+00:00",
+      "last_synced_at_utc": "2026-03-22T18:06:15.136623+00:00",
       "task_id": "97a06d34-fb71-4d3f-b156-83dea3534574",
       "task_type": "diagnostic",
-      "updated_at_utc": "2026-03-22T18:00:44.020176+00:00",
+      "updated_at_utc": "2026-03-22T18:06:15.375172+00:00",
       "evaluation": {
         "opportunity_id": "opp-q-recovery-to-opportunity-graveyard",
         "status": "finished",
@@ -813,21 +813,6 @@
       "state": "promoted",
       "history": [
         {
-          "updated_at_utc": "2026-03-22T17:17:23.566394+00:00",
-          "state": "promoted",
-          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:19:04.512320+00:00",
-          "state": "promoted",
-          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:20:45.352841+00:00",
-          "state": "promoted",
-          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
-        },
-        {
           "updated_at_utc": "2026-03-22T17:22:26.178263+00:00",
           "state": "promoted",
           "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
@@ -966,12 +951,27 @@
           "updated_at_utc": "2026-03-22T18:00:44.268509+00:00",
           "state": "promoted",
           "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:02:42.133027+00:00",
+          "state": "promoted",
+          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:04:29.577167+00:00",
+          "state": "promoted",
+          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:06:15.675417+00:00",
+          "state": "promoted",
+          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
         }
       ],
-      "last_synced_at_utc": "2026-03-22T18:00:43.826262+00:00",
+      "last_synced_at_utc": "2026-03-22T18:06:15.136657+00:00",
       "task_id": "c5468f17-7310-49ff-94ab-8ae2a10deaa3",
       "task_type": "generated_batch",
-      "updated_at_utc": "2026-03-22T18:00:44.268531+00:00",
+      "updated_at_utc": "2026-03-22T18:06:15.675446+00:00",
       "evaluation": {
         "opportunity_id": "opp-child-expand-from-opp-q-stable-boundary",
         "status": "finished",
@@ -1574,21 +1574,6 @@
       "state": "promoted",
       "history": [
         {
-          "updated_at_utc": "2026-03-22T17:22:25.803184+00:00",
-          "state": "promoted",
-          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:24:06.865923+00:00",
-          "state": "promoted",
-          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:25:47.843162+00:00",
-          "state": "promoted",
-          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
-        },
-        {
           "updated_at_utc": "2026-03-22T17:27:28.721355+00:00",
           "state": "promoted",
           "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
@@ -1727,12 +1712,27 @@
           "updated_at_utc": "2026-03-22T18:00:43.890759+00:00",
           "state": "promoted",
           "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:02:41.412684+00:00",
+          "state": "promoted",
+          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:04:29.174208+00:00",
+          "state": "promoted",
+          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:06:15.221575+00:00",
+          "state": "promoted",
+          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
         }
       ],
-      "last_synced_at_utc": "2026-03-22T18:00:43.826214+00:00",
+      "last_synced_at_utc": "2026-03-22T18:06:15.136585+00:00",
       "task_id": "3682249c-4250-493e-b6ae-09475fbe84c1",
       "task_type": "diagnostic",
-      "updated_at_utc": "2026-03-22T18:00:43.890779+00:00",
+      "updated_at_utc": "2026-03-22T18:06:15.221595+00:00",
       "evaluation": {
         "opportunity_id": "opp-full-run-followup-opp-q-graveyard-cause",
         "status": "finished",
@@ -1813,21 +1813,6 @@
       "parent_opportunity_id": "opp-q-stable-boundary",
       "state": "evaluated",
       "history": [
-        {
-          "updated_at_utc": "2026-03-22T17:15:42.558872+00:00",
-          "state": "evaluated",
-          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:17:23.367696+00:00",
-          "state": "evaluated",
-          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:19:04.326833+00:00",
-          "state": "evaluated",
-          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
-        },
         {
           "updated_at_utc": "2026-03-22T17:20:45.166095+00:00",
           "state": "evaluated",
@@ -1967,12 +1952,27 @@
           "updated_at_utc": "2026-03-22T18:00:44.082756+00:00",
           "state": "evaluated",
           "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:02:41.804948+00:00",
+          "state": "evaluated",
+          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:04:29.359071+00:00",
+          "state": "evaluated",
+          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:06:15.449386+00:00",
+          "state": "evaluated",
+          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
         }
       ],
-      "last_synced_at_utc": "2026-03-22T18:00:43.826247+00:00",
+      "last_synced_at_utc": "2026-03-22T18:06:15.136631+00:00",
       "task_id": "b09b3457-c0c5-4edc-bcf6-05ef2630ebfc",
       "task_type": "diagnostic",
-      "updated_at_utc": "2026-03-22T18:00:44.082778+00:00",
+      "updated_at_utc": "2026-03-22T18:06:15.449407+00:00",
       "evaluation": {
         "opportunity_id": "opp-full-run-followup-opp-q-stable-boundary",
         "status": "finished",
@@ -2049,21 +2049,6 @@
       ],
       "state": "evaluated",
       "history": [
-        {
-          "updated_at_utc": "2026-03-22T16:03:53.921699+00:00",
-          "state": "evaluated",
-          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T16:05:51.191547+00:00",
-          "state": "evaluated",
-          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T16:28:34.858711+00:00",
-          "state": "evaluated",
-          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
-        },
         {
           "updated_at_utc": "2026-03-22T16:30:15.482145+00:00",
           "state": "evaluated",
@@ -2203,12 +2188,27 @@
           "updated_at_utc": "2026-03-22T18:00:44.565457+00:00",
           "state": "evaluated",
           "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:02:42.568767+00:00",
+          "state": "evaluated",
+          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:04:29.825090+00:00",
+          "state": "evaluated",
+          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:06:16.009949+00:00",
+          "state": "evaluated",
+          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
         }
       ],
-      "last_synced_at_utc": "2026-03-22T18:00:43.826282+00:00",
+      "last_synced_at_utc": "2026-03-22T18:06:15.136692+00:00",
       "task_id": "681d31b5-f960-411f-93e1-2f981a9a3b4c",
       "task_type": "generated_batch",
-      "updated_at_utc": "2026-03-22T18:00:44.565479+00:00",
+      "updated_at_utc": "2026-03-22T18:06:16.009974+00:00",
       "evaluation": {
         "opportunity_id": "opp-critic-frontier-positive-probe",
         "status": "finished",
@@ -2282,21 +2282,6 @@
       ],
       "state": "evaluated",
       "history": [
-        {
-          "updated_at_utc": "2026-03-22T17:15:42.622044+00:00",
-          "state": "evaluated",
-          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:17:23.438001+00:00",
-          "state": "evaluated",
-          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:19:04.387897+00:00",
-          "state": "evaluated",
-          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
-        },
         {
           "updated_at_utc": "2026-03-22T17:20:45.227391+00:00",
           "state": "evaluated",
@@ -2436,12 +2421,27 @@
           "updated_at_utc": "2026-03-22T18:00:44.144687+00:00",
           "state": "evaluated",
           "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:02:41.897379+00:00",
+          "state": "evaluated",
+          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:04:29.421472+00:00",
+          "state": "evaluated",
+          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:06:15.520302+00:00",
+          "state": "evaluated",
+          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
         }
       ],
-      "last_synced_at_utc": "2026-03-22T18:00:43.826252+00:00",
+      "last_synced_at_utc": "2026-03-22T18:06:15.136640+00:00",
       "task_id": "eaa59425-fcf0-496d-9917-cdcf2582a1ce",
       "task_type": "diagnostic",
-      "updated_at_utc": "2026-03-22T18:00:44.144709+00:00",
+      "updated_at_utc": "2026-03-22T18:06:15.520322+00:00",
       "evaluation": {
         "opportunity_id": "opp-pattern-native-confirm-stable_candidate_validation-child-multi_target-stable_candidate_confirmed-partial_support-uncertainty_reduced",
         "status": "finished",
@@ -2802,21 +2802,6 @@
       "state": "evaluated",
       "history": [
         {
-          "updated_at_utc": "2026-03-22T17:17:23.886047+00:00",
-          "state": "evaluated",
-          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:19:04.825459+00:00",
-          "state": "evaluated",
-          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:20:45.666912+00:00",
-          "state": "evaluated",
-          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
-        },
-        {
           "updated_at_utc": "2026-03-22T17:22:26.488347+00:00",
           "state": "evaluated",
           "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
@@ -2955,12 +2940,27 @@
           "updated_at_utc": "2026-03-22T18:00:44.629037+00:00",
           "state": "evaluated",
           "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:02:42.689468+00:00",
+          "state": "evaluated",
+          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:04:29.887067+00:00",
+          "state": "evaluated",
+          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:06:16.090740+00:00",
+          "state": "evaluated",
+          "reason": "ignored_regressive_transition:evaluated->archived:recently_finished_same_fingerprint"
         }
       ],
-      "last_synced_at_utc": "2026-03-22T18:00:43.826287+00:00",
+      "last_synced_at_utc": "2026-03-22T18:06:15.136700+00:00",
       "task_id": "d732d051-ba1b-4552-8764-49e4ba3760be",
       "task_type": "generated_batch",
-      "updated_at_utc": "2026-03-22T18:00:44.629062+00:00",
+      "updated_at_utc": "2026-03-22T18:06:16.090759+00:00",
       "evaluation": {
         "opportunity_id": "opp-critic-meta-diversity-probe",
         "status": "finished",
@@ -3032,21 +3032,6 @@
       ],
       "state": "promoted",
       "history": [
-        {
-          "updated_at_utc": "2026-03-22T17:20:45.542122+00:00",
-          "state": "promoted",
-          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:22:26.364337+00:00",
-          "state": "promoted",
-          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:24:07.462831+00:00",
-          "state": "promoted",
-          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
-        },
         {
           "updated_at_utc": "2026-03-22T17:25:48.412892+00:00",
           "state": "promoted",
@@ -3186,10 +3171,25 @@
           "updated_at_utc": "2026-03-22T18:00:44.503305+00:00",
           "state": "promoted",
           "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:02:42.468508+00:00",
+          "state": "promoted",
+          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:04:29.763247+00:00",
+          "state": "promoted",
+          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:06:15.931015+00:00",
+          "state": "promoted",
+          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
         }
       ],
-      "last_synced_at_utc": "2026-03-22T18:00:43.826277+00:00",
-      "updated_at_utc": "2026-03-22T18:00:44.503325+00:00",
+      "last_synced_at_utc": "2026-03-22T18:06:15.136683+00:00",
+      "updated_at_utc": "2026-03-22T18:06:15.931040+00:00",
       "task_id": "6088f680-d402-49d8-956c-1ddf99b81b81",
       "task_type": "generated_batch",
       "evaluation": {
@@ -4309,21 +4309,6 @@
       "state": "promoted",
       "history": [
         {
-          "updated_at_utc": "2026-03-22T17:15:42.814437+00:00",
-          "state": "promoted",
-          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:17:23.629291+00:00",
-          "state": "promoted",
-          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:19:04.576550+00:00",
-          "state": "promoted",
-          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
-        },
-        {
           "updated_at_utc": "2026-03-22T17:20:45.414918+00:00",
           "state": "promoted",
           "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
@@ -4462,12 +4447,27 @@
           "updated_at_utc": "2026-03-22T18:00:44.366264+00:00",
           "state": "promoted",
           "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:02:42.254708+00:00",
+          "state": "promoted",
+          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:04:29.639491+00:00",
+          "state": "promoted",
+          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:06:15.781180+00:00",
+          "state": "promoted",
+          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
         }
       ],
-      "last_synced_at_utc": "2026-03-22T18:00:43.826267+00:00",
+      "last_synced_at_utc": "2026-03-22T18:06:15.136665+00:00",
       "task_id": "6609fe38-5416-4224-996f-814bfd143881",
       "task_type": "generated_batch",
-      "updated_at_utc": "2026-03-22T18:00:44.366288+00:00",
+      "updated_at_utc": "2026-03-22T18:06:15.781203+00:00",
       "evaluation": {
         "opportunity_id": "opp-q-recovery-to-opportunity-stable",
         "status": "finished",
@@ -4545,21 +4545,6 @@
       ],
       "state": "promoted",
       "history": [
-        {
-          "updated_at_utc": "2026-03-22T17:15:42.876806+00:00",
-          "state": "promoted",
-          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:17:23.691807+00:00",
-          "state": "promoted",
-          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:19:04.637840+00:00",
-          "state": "promoted",
-          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
-        },
         {
           "updated_at_utc": "2026-03-22T17:20:45.477365+00:00",
           "state": "promoted",
@@ -4699,12 +4684,27 @@
           "updated_at_utc": "2026-03-22T18:00:44.435677+00:00",
           "state": "promoted",
           "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:02:42.365838+00:00",
+          "state": "promoted",
+          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:04:29.701361+00:00",
+          "state": "promoted",
+          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:06:15.855908+00:00",
+          "state": "promoted",
+          "reason": "ignored_regressive_transition:promoted->archived:recently_finished_same_fingerprint"
         }
       ],
-      "last_synced_at_utc": "2026-03-22T18:00:43.826272+00:00",
+      "last_synced_at_utc": "2026-03-22T18:06:15.136674+00:00",
       "task_id": "1f832ea8-044b-4797-a858-642ae289d7e5",
       "task_type": "generated_batch",
-      "updated_at_utc": "2026-03-22T18:00:44.435703+00:00",
+      "updated_at_utc": "2026-03-22T18:06:15.855929+00:00",
       "evaluation": {
         "opportunity_id": "opp-pattern-native-recombine-exploration-root-pair_target-exploration_candidate_survived-new_branch_opened-recombination_productive-search_space_expanded",
         "status": "finished",

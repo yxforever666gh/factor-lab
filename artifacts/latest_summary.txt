@@ -1,5 +1,7 @@
 最新一次完成的研究任务来自 artifacts/generated_configs/rolling_60d_back.json。
-运行时间：2026-03-22T18:01:43.663421+00:00。
+运行时间：2026-03-22T18:07:27.590702+00:00。
 当前长期平均表现最好的策略是 long_short_top_bottom_candidates_only，平均夏普 7.10。
 目前最稳定的候选因子：mom_20、liquidity_turnover_shock、mom_plus_value、hybrid_mom_20_value_ep、hybrid_mom_20_liquidity_turnover_shock。
 当前候选榜单前列：hybrid_mom_20_liquidity_turnover_shock(fragile, 10.072773)；hybrid_liquidity_turnover_shock_mom_20(fragile, 10.072773)；hybrid_mom_20_value_ep(fragile, 9.400734)；hybrid_size_small_value_bp(fragile, 8.689527)；size_small(fragile, 1.821213)。
+晋级赛统计：保留核心 0 个，继续验证 0 个，先去重 4 个，降级为 regime-sensitive 0 个。
+当前晋级赛优先处理：hybrid_mom_20_liquidity_turnover_shock(先去重：窗口覆盖还不够厚；存在近重复候选)；hybrid_liquidity_turnover_shock_mom_20(先去重：窗口覆盖还不够厚；独立评估次数偏少；存在近重复候选)；hybrid_mom_20_value_ep(先去重：窗口覆盖还不够厚；存在过多 refinement 变体)。

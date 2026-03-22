@@ -14,10 +14,10 @@
     },
     "relationship_mix": {
       "duplicate_of": 1,
-      "same_family": 4,
+      "hybrid_of": 7,
       "high_corr": 5,
       "refinement_of": 12,
-      "hybrid_of": 7
+      "same_family": 4
     },
     "leader": "hybrid_mom_20_liquidity_turnover_shock",
     "primary_candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",

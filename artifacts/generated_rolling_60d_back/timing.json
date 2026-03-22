@@ -1,14 +1,14 @@
 {
-  "load_config_ms": 0.093,
-  "load_dataset_ms": 74.13,
-  "factor_eval_ms": 7180.716,
-  "persist_intermediate_ms": 0.922,
-  "correlation_ms": 5.302,
-  "portfolio_ms": 5763.548,
+  "load_config_ms": 0.163,
+  "load_dataset_ms": 97.851,
+  "factor_eval_ms": 7705.843,
+  "persist_intermediate_ms": 1.5,
+  "correlation_ms": 6.151,
+  "portfolio_ms": 6187.74,
   "cache_hit_type": "request_exact",
   "coverage_fetch_segments": 1,
   "coverage_segment_1": "2026-02-10:2026-03-23",
   "factor_count": 6,
   "dataset_rows": 931,
-  "total_ms": 13785.639
+  "total_ms": 14878.109
 }

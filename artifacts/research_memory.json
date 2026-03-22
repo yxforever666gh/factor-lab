@@ -1,5 +1,5 @@
 {
-  "updated_at_utc": "2026-03-22T18:02:00.447249+00:00",
+  "updated_at_utc": "2026-03-22T18:07:45.636121+00:00",
   "stable_candidates": [
     "hybrid_liquidity_turnover_shock_mom_20",
     "hybrid_liquidity_turnover_shock_value_ep",
@@ -423,160 +423,6 @@
       "next_state": "terminated",
       "action": "terminate",
       "reason": "too_many_consecutive_holds",
-      "policy": {
-        "archive_after_no_gain_runs": 2,
-        "terminate_after_duplicate_pressure": 4,
-        "promote_after_validation_score": 145,
-        "demote_below_strategy_score": 90,
-        "terminate_after_hold_count": 3
-      }
-    },
-    {
-      "branch_id": "stable_candidate_validation_level_6",
-      "previous_state": "stable_candidate",
-      "next_state": "stable_candidate",
-      "action": "promote",
-      "reason": "validated_above_promotion_threshold",
-      "policy": {
-        "archive_after_no_gain_runs": 2,
-        "terminate_after_duplicate_pressure": 4,
-        "promote_after_validation_score": 145,
-        "demote_below_strategy_score": 90,
-        "terminate_after_hold_count": 3
-      }
-    },
-    {
-      "branch_id": "stable_candidate_validation_level_6",
-      "previous_state": "stable_candidate",
-      "next_state": "stable_candidate",
-      "action": "promote",
-      "reason": "validated_above_promotion_threshold",
-      "policy": {
-        "archive_after_no_gain_runs": 2,
-        "terminate_after_duplicate_pressure": 4,
-        "promote_after_validation_score": 145,
-        "demote_below_strategy_score": 90,
-        "terminate_after_hold_count": 3
-      }
-    },
-    {
-      "branch_id": "stable_candidate_validation_level_6",
-      "previous_state": "stable_candidate",
-      "next_state": "stable_candidate",
-      "action": "promote",
-      "reason": "validated_above_promotion_threshold",
-      "policy": {
-        "archive_after_no_gain_runs": 2,
-        "terminate_after_duplicate_pressure": 4,
-        "promote_after_validation_score": 145,
-        "demote_below_strategy_score": 90,
-        "terminate_after_hold_count": 3
-      }
-    },
-    {
-      "branch_id": "stable_candidate_validation_level_6",
-      "previous_state": "stable_candidate",
-      "next_state": "stable_candidate",
-      "action": "promote",
-      "reason": "validated_above_promotion_threshold",
-      "policy": {
-        "archive_after_no_gain_runs": 2,
-        "terminate_after_duplicate_pressure": 4,
-        "promote_after_validation_score": 145,
-        "demote_below_strategy_score": 90,
-        "terminate_after_hold_count": 3
-      }
-    },
-    {
-      "branch_id": "stable_candidate_validation_level_6",
-      "previous_state": "stable_candidate",
-      "next_state": "stable_candidate",
-      "action": "promote",
-      "reason": "validated_above_promotion_threshold",
-      "policy": {
-        "archive_after_no_gain_runs": 2,
-        "terminate_after_duplicate_pressure": 4,
-        "promote_after_validation_score": 145,
-        "demote_below_strategy_score": 90,
-        "terminate_after_hold_count": 3
-      }
-    },
-    {
-      "branch_id": "stable_candidate_validation_level_6",
-      "previous_state": "stable_candidate",
-      "next_state": "stable_candidate",
-      "action": "promote",
-      "reason": "validated_above_promotion_threshold",
-      "policy": {
-        "archive_after_no_gain_runs": 2,
-        "terminate_after_duplicate_pressure": 4,
-        "promote_after_validation_score": 145,
-        "demote_below_strategy_score": 90,
-        "terminate_after_hold_count": 3
-      }
-    },
-    {
-      "branch_id": "stable_candidate_validation_level_6",
-      "previous_state": "stable_candidate",
-      "next_state": "stable_candidate",
-      "action": "promote",
-      "reason": "validated_above_promotion_threshold",
-      "policy": {
-        "archive_after_no_gain_runs": 2,
-        "terminate_after_duplicate_pressure": 4,
-        "promote_after_validation_score": 145,
-        "demote_below_strategy_score": 90,
-        "terminate_after_hold_count": 3
-      }
-    },
-    {
-      "branch_id": "stable_candidate_validation_level_6",
-      "previous_state": "stable_candidate",
-      "next_state": "stable_candidate",
-      "action": "promote",
-      "reason": "validated_above_promotion_threshold",
-      "policy": {
-        "archive_after_no_gain_runs": 2,
-        "terminate_after_duplicate_pressure": 4,
-        "promote_after_validation_score": 145,
-        "demote_below_strategy_score": 90,
-        "terminate_after_hold_count": 3
-      }
-    },
-    {
-      "branch_id": "stable_candidate_validation_level_6",
-      "previous_state": "stable_candidate",
-      "next_state": "stable_candidate",
-      "action": "promote",
-      "reason": "validated_above_promotion_threshold",
-      "policy": {
-        "archive_after_no_gain_runs": 2,
-        "terminate_after_duplicate_pressure": 4,
-        "promote_after_validation_score": 145,
-        "demote_below_strategy_score": 90,
-        "terminate_after_hold_count": 3
-      }
-    },
-    {
-      "branch_id": "stable_candidate_validation_level_6",
-      "previous_state": "stable_candidate",
-      "next_state": "stable_candidate",
-      "action": "promote",
-      "reason": "validated_above_promotion_threshold",
-      "policy": {
-        "archive_after_no_gain_runs": 2,
-        "terminate_after_duplicate_pressure": 4,
-        "promote_after_validation_score": 145,
-        "demote_below_strategy_score": 90,
-        "terminate_after_hold_count": 3
-      }
-    },
-    {
-      "branch_id": "stable_candidate_validation_level_6",
-      "previous_state": "stable_candidate",
-      "next_state": "stable_candidate",
-      "action": "promote",
-      "reason": "validated_above_promotion_threshold",
       "policy": {
         "archive_after_no_gain_runs": 2,
         "terminate_after_duplicate_pressure": 4,
@@ -1037,95 +883,7 @@
       "next_state": "terminated"
     },
     {
-      "updated_at_utc": "2026-03-22T17:47:24.219956+00:00",
-      "target": "stable_candidate_validation_level_6",
-      "category": "validation",
-      "strategy_score": 194.422,
-      "action": "promote",
-      "next_state": "stable_candidate"
-    },
-    {
-      "updated_at_utc": "2026-03-22T17:49:21.791163+00:00",
-      "target": "stable_candidate_validation_level_6",
-      "category": "validation",
-      "strategy_score": 194.397,
-      "action": "promote",
-      "next_state": "stable_candidate"
-    },
-    {
-      "updated_at_utc": "2026-03-22T17:49:35.700475+00:00",
-      "target": "stable_candidate_validation_level_6",
-      "category": "validation",
-      "strategy_score": 194.397,
-      "action": "promote",
-      "next_state": "stable_candidate"
-    },
-    {
-      "updated_at_utc": "2026-03-22T17:49:44.474697+00:00",
-      "target": "stable_candidate_validation_level_6",
-      "category": "validation",
-      "strategy_score": 194.397,
-      "action": "promote",
-      "next_state": "stable_candidate"
-    },
-    {
-      "updated_at_utc": "2026-03-22T17:49:55.490343+00:00",
-      "target": "stable_candidate_validation_level_6",
-      "category": "validation",
-      "strategy_score": 194.397,
-      "action": "promote",
-      "next_state": "stable_candidate"
-    },
-    {
-      "updated_at_utc": "2026-03-22T17:51:51.438313+00:00",
-      "target": "stable_candidate_validation_level_6",
-      "category": "validation",
-      "strategy_score": 194.397,
-      "action": "promote",
-      "next_state": "stable_candidate"
-    },
-    {
-      "updated_at_utc": "2026-03-22T17:53:37.065470+00:00",
-      "target": "stable_candidate_validation_level_6",
-      "category": "validation",
-      "strategy_score": 194.384,
-      "action": "promote",
-      "next_state": "stable_candidate"
-    },
-    {
-      "updated_at_utc": "2026-03-22T17:55:21.532347+00:00",
-      "target": "stable_candidate_validation_level_6",
-      "category": "validation",
-      "strategy_score": 194.364,
-      "action": "promote",
-      "next_state": "stable_candidate"
-    },
-    {
-      "updated_at_utc": "2026-03-22T17:57:02.511438+00:00",
-      "target": "stable_candidate_validation_level_6",
-      "category": "validation",
-      "strategy_score": 194.364,
-      "action": "promote",
-      "next_state": "stable_candidate"
-    },
-    {
-      "updated_at_utc": "2026-03-22T17:57:10.850703+00:00",
-      "target": "stable_candidate_validation_level_6",
-      "category": "validation",
-      "strategy_score": 194.364,
-      "action": "promote",
-      "next_state": "stable_candidate"
-    },
-    {
-      "updated_at_utc": "2026-03-22T17:58:53.293228+00:00",
-      "target": "stable_candidate_validation_level_6",
-      "category": "validation",
-      "strategy_score": 194.371,
-      "action": "promote",
-      "next_state": "stable_candidate"
-    },
-    {
-      "updated_at_utc": "2026-03-22T18:00:43.468742+00:00",
+      "updated_at_utc": "2026-03-22T18:06:14.691187+00:00",
       "target": "stable_candidate_validation_level_6",
       "category": "validation",
       "strategy_score": 194.371,
@@ -1134,111 +892,6 @@
     }
   ],
   "strategy_runs": [
-    {
-      "updated_at_utc": "2026-03-22T16:56:01.418752+00:00",
-      "approved_count": 2,
-      "injected_count": 0,
-      "branch_actions": [
-        {
-          "branch_id": "fallback_stable_candidate_validation",
-          "previous_state": "stable_candidate",
-          "next_state": "stable_candidate",
-          "action": "promote",
-          "reason": "validated_above_promotion_threshold",
-          "policy": {
-            "archive_after_no_gain_runs": 2,
-            "terminate_after_duplicate_pressure": 4,
-            "promote_after_validation_score": 145,
-            "demote_below_strategy_score": 90,
-            "terminate_after_hold_count": 3
-          }
-        },
-        {
-          "branch_id": "fallback_graveyard_diagnosis",
-          "previous_state": "validating",
-          "next_state": "validating",
-          "action": "promote",
-          "reason": "high_confidence_validation_branch",
-          "policy": {
-            "archive_after_no_gain_runs": 2,
-            "terminate_after_duplicate_pressure": 4,
-            "promote_after_validation_score": 145,
-            "demote_below_strategy_score": 90,
-            "terminate_after_hold_count": 3
-          }
-        }
-      ]
-    },
-    {
-      "updated_at_utc": "2026-03-22T16:56:58.769936+00:00",
-      "approved_count": 2,
-      "injected_count": 0,
-      "branch_actions": [
-        {
-          "branch_id": "fallback_stable_candidate_validation",
-          "previous_state": "stable_candidate",
-          "next_state": "stable_candidate",
-          "action": "promote",
-          "reason": "validated_above_promotion_threshold",
-          "policy": {
-            "archive_after_no_gain_runs": 2,
-            "terminate_after_duplicate_pressure": 4,
-            "promote_after_validation_score": 145,
-            "demote_below_strategy_score": 90,
-            "terminate_after_hold_count": 3
-          }
-        },
-        {
-          "branch_id": "fallback_graveyard_diagnosis",
-          "previous_state": "validating",
-          "next_state": "validating",
-          "action": "promote",
-          "reason": "high_confidence_validation_branch",
-          "policy": {
-            "archive_after_no_gain_runs": 2,
-            "terminate_after_duplicate_pressure": 4,
-            "promote_after_validation_score": 145,
-            "demote_below_strategy_score": 90,
-            "terminate_after_hold_count": 3
-          }
-        }
-      ]
-    },
-    {
-      "updated_at_utc": "2026-03-22T16:57:56.003590+00:00",
-      "approved_count": 2,
-      "injected_count": 0,
-      "branch_actions": [
-        {
-          "branch_id": "fallback_stable_candidate_validation",
-          "previous_state": "stable_candidate",
-          "next_state": "stable_candidate",
-          "action": "promote",
-          "reason": "validated_above_promotion_threshold",
-          "policy": {
-            "archive_after_no_gain_runs": 2,
-            "terminate_after_duplicate_pressure": 4,
-            "promote_after_validation_score": 145,
-            "demote_below_strategy_score": 90,
-            "terminate_after_hold_count": 3
-          }
-        },
-        {
-          "branch_id": "fallback_graveyard_diagnosis",
-          "previous_state": "validating",
-          "next_state": "validating",
-          "action": "promote",
-          "reason": "high_confidence_validation_branch",
-          "policy": {
-            "archive_after_no_gain_runs": 2,
-            "terminate_after_duplicate_pressure": 4,
-            "promote_after_validation_score": 145,
-            "demote_below_strategy_score": 90,
-            "terminate_after_hold_count": 3
-          }
-        }
-      ]
-    },
     {
       "updated_at_utc": "2026-03-22T16:58:53.350053+00:00",
       "approved_count": 2,
@@ -2309,6 +1962,69 @@
           }
         }
       ]
+    },
+    {
+      "updated_at_utc": "2026-03-22T18:02:40.767609+00:00",
+      "approved_count": 1,
+      "injected_count": 0,
+      "branch_actions": [
+        {
+          "branch_id": "stable_candidate_validation_level_6",
+          "previous_state": "stable_candidate",
+          "next_state": "stable_candidate",
+          "action": "promote",
+          "reason": "validated_above_promotion_threshold",
+          "policy": {
+            "archive_after_no_gain_runs": 2,
+            "terminate_after_duplicate_pressure": 4,
+            "promote_after_validation_score": 145,
+            "demote_below_strategy_score": 90,
+            "terminate_after_hold_count": 3
+          }
+        }
+      ]
+    },
+    {
+      "updated_at_utc": "2026-03-22T18:04:28.846442+00:00",
+      "approved_count": 1,
+      "injected_count": 0,
+      "branch_actions": [
+        {
+          "branch_id": "stable_candidate_validation_level_6",
+          "previous_state": "stable_candidate",
+          "next_state": "stable_candidate",
+          "action": "promote",
+          "reason": "validated_above_promotion_threshold",
+          "policy": {
+            "archive_after_no_gain_runs": 2,
+            "terminate_after_duplicate_pressure": 4,
+            "promote_after_validation_score": 145,
+            "demote_below_strategy_score": 90,
+            "terminate_after_hold_count": 3
+          }
+        }
+      ]
+    },
+    {
+      "updated_at_utc": "2026-03-22T18:06:14.815188+00:00",
+      "approved_count": 1,
+      "injected_count": 0,
+      "branch_actions": [
+        {
+          "branch_id": "stable_candidate_validation_level_6",
+          "previous_state": "stable_candidate",
+          "next_state": "stable_candidate",
+          "action": "promote",
+          "reason": "validated_above_promotion_threshold",
+          "policy": {
+            "archive_after_no_gain_runs": 2,
+            "terminate_after_duplicate_pressure": 4,
+            "promote_after_validation_score": 145,
+            "demote_below_strategy_score": 90,
+            "terminate_after_hold_count": 3
+          }
+        }
+      ]
     }
   ],
   "candidate_lifecycle": {
@@ -2445,25 +2161,6 @@
     "liquidity_turnover_shock": {
       "history": [
         {
-          "updated_at_utc": "2026-03-22T17:34:42.359923+00:00",
-          "next_state": "stable_candidate",
-          "action": "promote",
-          "source_branch_id": "stable_candidate_validation_level_6"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:36:20.185599+00:00",
-          "next_state": "provisional",
-          "action": "demote",
-          "source_branch_id": "frontier_reconcile",
-          "reason": "frontier_suppressed"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:36:43.596266+00:00",
-          "next_state": "stable_candidate",
-          "action": "promote",
-          "source_branch_id": "stable_candidate_validation_level_6"
-        },
-        {
           "updated_at_utc": "2026-03-22T17:38:38.801221+00:00",
           "next_state": "stable_candidate",
           "action": "promote",
@@ -2565,13 +2262,31 @@
           "next_state": "stable_candidate",
           "action": "promote",
           "source_branch_id": "stable_candidate_validation_level_6"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:02:40.767571+00:00",
+          "next_state": "stable_candidate",
+          "action": "promote",
+          "source_branch_id": "stable_candidate_validation_level_6"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:04:28.846418+00:00",
+          "next_state": "stable_candidate",
+          "action": "promote",
+          "source_branch_id": "stable_candidate_validation_level_6"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:06:14.815163+00:00",
+          "next_state": "stable_candidate",
+          "action": "promote",
+          "source_branch_id": "stable_candidate_validation_level_6"
         }
       ],
       "candidate_name": "liquidity_turnover_shock",
       "next_state": "stable_candidate",
       "action": "promote",
       "source_branch_id": "stable_candidate_validation_level_6",
-      "updated_at_utc": "2026-03-22T18:00:43.570074+00:00"
+      "updated_at_utc": "2026-03-22T18:06:14.815167+00:00"
     },
     "mom_plus_value": {
       "history": [
@@ -3490,26 +3205,8 @@
       "next_state": "stable_candidate",
       "source_branch_id": "stable_candidate_validation_level_6",
       "action": "promote",
-      "updated_at_utc": "2026-03-22T18:00:43.570066+00:00",
+      "updated_at_utc": "2026-03-22T18:06:14.815158+00:00",
       "history": [
-        {
-          "updated_at_utc": "2026-03-22T17:32:46.914537+00:00",
-          "next_state": "stable_candidate",
-          "action": "promote",
-          "source_branch_id": "stable_candidate_validation_level_6"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:34:42.359911+00:00",
-          "next_state": "stable_candidate",
-          "action": "promote",
-          "source_branch_id": "stable_candidate_validation_level_6"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:36:43.596248+00:00",
-          "next_state": "stable_candidate",
-          "action": "promote",
-          "source_branch_id": "stable_candidate_validation_level_6"
-        },
         {
           "updated_at_utc": "2026-03-22T17:38:38.801209+00:00",
           "next_state": "stable_candidate",
@@ -3608,6 +3305,24 @@
         },
         {
           "updated_at_utc": "2026-03-22T18:00:43.570060+00:00",
+          "next_state": "stable_candidate",
+          "action": "promote",
+          "source_branch_id": "stable_candidate_validation_level_6"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:02:40.767553+00:00",
+          "next_state": "stable_candidate",
+          "action": "promote",
+          "source_branch_id": "stable_candidate_validation_level_6"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:04:28.846407+00:00",
+          "next_state": "stable_candidate",
+          "action": "promote",
+          "source_branch_id": "stable_candidate_validation_level_6"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:06:14.815152+00:00",
           "next_state": "stable_candidate",
           "action": "promote",
           "source_branch_id": "stable_candidate_validation_level_6"
@@ -3749,30 +3464,6 @@
     "opp-full-run-followup-opp-q-graveyard-cause": {
       "history": [
         {
-          "updated_at_utc": "2026-03-22T17:08:56.461282+00:00",
-          "state": "exploring",
-          "last_action": "hold",
-          "reason": "knowledge_gain_detected"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:49:45.794060+00:00",
-          "state": "exploring",
-          "last_action": "hold",
-          "reason": "knowledge_gain_detected"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:49:56.844525+00:00",
-          "state": "exploring",
-          "last_action": "hold",
-          "reason": "knowledge_gain_detected"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:51:52.966399+00:00",
-          "state": "exploring",
-          "last_action": "hold",
-          "reason": "knowledge_gain_detected"
-        },
-        {
           "updated_at_utc": "2026-03-22T17:53:38.246227+00:00",
           "state": "exploring",
           "last_action": "hold",
@@ -3784,7 +3475,7 @@
       "last_status": "finished",
       "goal": "当前 graveyard 因子的失败是否共享共同原因？（cheap screen 已显示信号，是否升级完整验证？）",
       "hypothesis": "至少部分 graveyard 因子并非随机失败，而是共享可解释的结构性原因。 在 cheap screen 显示出足够信号，值得升级 full run。",
-      "validation_runs": 4,
+      "validation_runs": 0,
       "no_gain_runs": 0,
       "last_action": "hold",
       "state": "exploring",
@@ -3984,12 +3675,6 @@
     },
     "opp-critic-meta-diversity-probe": {
       "history": [
-        {
-          "updated_at_utc": "2026-03-22T16:19:04.898750+00:00",
-          "state": "exploring",
-          "last_action": "hold",
-          "reason": "knowledge_gain_detected"
-        },
         {
           "updated_at_utc": "2026-03-22T17:57:07.420336+00:00",
           "state": "exploring",
@@ -4191,36 +3876,6 @@
     "opp-q-graveyard-cause": {
       "history": [
         {
-          "updated_at_utc": "2026-03-22T17:07:54.243734+00:00",
-          "state": "exploring",
-          "last_action": "hold",
-          "reason": "knowledge_gain_detected"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:49:37.019099+00:00",
-          "state": "exploring",
-          "last_action": "hold",
-          "reason": "knowledge_gain_detected"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:49:45.870773+00:00",
-          "state": "exploring",
-          "last_action": "hold",
-          "reason": "knowledge_gain_detected"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:49:56.922125+00:00",
-          "state": "exploring",
-          "last_action": "hold",
-          "reason": "knowledge_gain_detected"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:51:53.057056+00:00",
-          "state": "exploring",
-          "last_action": "hold",
-          "reason": "knowledge_gain_detected"
-        },
-        {
           "updated_at_utc": "2026-03-22T17:53:38.323609+00:00",
           "state": "exploring",
           "last_action": "hold",
@@ -4232,7 +3887,7 @@
       "last_status": "finished",
       "goal": "当前 graveyard 因子的失败是否共享共同原因？",
       "hypothesis": "至少部分 graveyard 因子并非随机失败，而是共享可解释的结构性原因。",
-      "validation_runs": 5,
+      "validation_runs": 0,
       "no_gain_runs": 0,
       "last_action": "hold",
       "state": "exploring",
@@ -4240,24 +3895,6 @@
     },
     "opp-pattern-native-recombine-graveyard_diagnosis-child-pair_target-exploration_candidate_survived-new_branch_opened-recombination_productive-search_space_expanded": {
       "history": [
-        {
-          "updated_at_utc": "2026-03-22T16:35:41.950599+00:00",
-          "state": "exploring",
-          "last_action": "hold",
-          "reason": "knowledge_gain_detected"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:49:31.396690+00:00",
-          "state": "exploring",
-          "last_action": "hold",
-          "reason": "knowledge_gain_detected"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:49:40.942415+00:00",
-          "state": "exploring",
-          "last_action": "hold",
-          "reason": "knowledge_gain_detected"
-        },
         {
           "updated_at_utc": "2026-03-22T17:49:51.948156+00:00",
           "state": "exploring",
@@ -5143,124 +4780,40 @@
     "workflow::aec26a80ff4107763e4df70188bf97914ae44edf1add208b560b47ca0ca45b56::artifacts/generated_rolling_30d_back": {
       "history": [
         {
-          "updated_at_utc": "2026-03-22T17:48:24.305054+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:51:00.381509+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:52:52.398796+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:54:36.847903+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:56:17.899704+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:58:07.096564+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:59:52.751520+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T18:01:43.640160+00:00",
+          "updated_at_utc": "2026-03-22T18:07:27.572858+00:00",
           "state": "archived",
           "last_action": "hold",
           "reason": "no_significant_information_gain"
         }
       ],
-      "updated_at_utc": "2026-03-22T18:01:43.640150+00:00",
+      "updated_at_utc": "2026-03-22T18:07:27.572850+00:00",
       "last_task_type": "workflow",
       "last_status": "finished",
       "goal": null,
       "hypothesis": null,
       "validation_runs": 0,
-      "no_gain_runs": 8,
-      "last_action": "archive",
+      "no_gain_runs": 1,
+      "last_action": "hold",
       "state": "archived",
       "reason": "no_significant_information_gain"
     },
     "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back": {
       "history": [
         {
-          "updated_at_utc": "2026-03-22T17:48:41.367109+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:51:15.829696+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:53:06.277856+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:54:50.887627+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:56:31.823797+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:58:21.163700+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T18:00:09.469441+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T18:02:00.447292+00:00",
+          "updated_at_utc": "2026-03-22T18:07:45.636145+00:00",
           "state": "archived",
           "last_action": "hold",
           "reason": "no_significant_information_gain"
         }
       ],
-      "updated_at_utc": "2026-03-22T18:02:00.447278+00:00",
+      "updated_at_utc": "2026-03-22T18:07:45.636136+00:00",
       "last_task_type": "workflow",
       "last_status": "finished",
       "goal": null,
       "hypothesis": null,
       "validation_runs": 0,
-      "no_gain_runs": 8,
-      "last_action": "archive",
+      "no_gain_runs": 1,
+      "last_action": "hold",
       "state": "archived",
       "reason": "no_significant_information_gain"
     },
@@ -5287,124 +4840,40 @@
     "workflow::badcb06ce65d4c9460bc793e6fb9636582f9189dd63f337d26e2596390927b2c::artifacts/generated_rolling_120d_back": {
       "history": [
         {
-          "updated_at_utc": "2026-03-22T17:47:12.470644+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:49:09.360787+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:51:39.705115+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:53:27.042952+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:55:11.521432+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:56:52.546588+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:58:42.245316+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T18:00:33.004325+00:00",
+          "updated_at_utc": "2026-03-22T18:06:02.825265+00:00",
           "state": "archived",
           "last_action": "hold",
           "reason": "no_significant_information_gain"
         }
       ],
-      "updated_at_utc": "2026-03-22T18:00:33.004315+00:00",
+      "updated_at_utc": "2026-03-22T18:06:02.825255+00:00",
       "last_task_type": "workflow",
       "last_status": "finished",
       "goal": null,
       "hypothesis": null,
       "validation_runs": 0,
-      "no_gain_runs": 8,
-      "last_action": "archive",
+      "no_gain_runs": 1,
+      "last_action": "hold",
       "state": "archived",
       "reason": "no_significant_information_gain"
     },
     "workflow::2d0cb3c1564581274c03388ad177e943b554916b9351274c8935f9133b7d9769::artifacts/generated_recent_45d": {
       "history": [
         {
-          "updated_at_utc": "2026-03-22T17:47:20.507201+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:49:17.939843+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:51:47.726851+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:53:33.619384+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:55:18.101597+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:56:59.073830+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:58:49.600192+00:00",
-          "state": "archived",
-          "last_action": "hold",
-          "reason": "no_significant_information_gain"
-        },
-        {
-          "updated_at_utc": "2026-03-22T18:00:39.995956+00:00",
+          "updated_at_utc": "2026-03-22T18:06:10.965966+00:00",
           "state": "archived",
           "last_action": "hold",
           "reason": "no_significant_information_gain"
         }
       ],
-      "updated_at_utc": "2026-03-22T18:00:39.995947+00:00",
+      "updated_at_utc": "2026-03-22T18:06:10.965954+00:00",
       "last_task_type": "workflow",
       "last_status": "finished",
       "goal": null,
       "hypothesis": null,
       "validation_runs": 0,
-      "no_gain_runs": 8,
-      "last_action": "archive",
+      "no_gain_runs": 1,
+      "last_action": "hold",
       "state": "archived",
       "reason": "no_significant_information_gain"
     },
@@ -5932,84 +5401,18 @@
       "state": "stable_candidate",
       "last_action": "promote",
       "reason": "validated_above_promotion_threshold",
-      "updated_at_utc": "2026-03-22T18:00:43.468756+00:00",
+      "updated_at_utc": "2026-03-22T18:06:14.691202+00:00",
       "goal": "validate_stable_candidates",
       "hypothesis": "当前稳定候选在更深一层诊断下依然成立，而不是被 cluster/窗口偶然性抬高。",
       "history": [
         {
-          "updated_at_utc": "2026-03-22T17:47:24.353819+00:00",
-          "state": "stable_candidate",
-          "last_action": "promote",
-          "reason": "validated_above_promotion_threshold"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:49:21.922186+00:00",
-          "state": "stable_candidate",
-          "last_action": "promote",
-          "reason": "validated_above_promotion_threshold"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:49:35.805967+00:00",
-          "state": "stable_candidate",
-          "last_action": "promote",
-          "reason": "validated_above_promotion_threshold"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:49:44.574379+00:00",
-          "state": "stable_candidate",
-          "last_action": "promote",
-          "reason": "validated_above_promotion_threshold"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:49:55.613241+00:00",
-          "state": "stable_candidate",
-          "last_action": "promote",
-          "reason": "validated_above_promotion_threshold"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:51:51.562364+00:00",
-          "state": "stable_candidate",
-          "last_action": "promote",
-          "reason": "validated_above_promotion_threshold"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:53:37.166219+00:00",
-          "state": "stable_candidate",
-          "last_action": "promote",
-          "reason": "validated_above_promotion_threshold"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:55:21.639481+00:00",
-          "state": "stable_candidate",
-          "last_action": "promote",
-          "reason": "validated_above_promotion_threshold"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:57:02.612903+00:00",
-          "state": "stable_candidate",
-          "last_action": "promote",
-          "reason": "validated_above_promotion_threshold"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:57:10.950904+00:00",
-          "state": "stable_candidate",
-          "last_action": "promote",
-          "reason": "validated_above_promotion_threshold"
-        },
-        {
-          "updated_at_utc": "2026-03-22T17:58:53.412882+00:00",
-          "state": "stable_candidate",
-          "last_action": "promote",
-          "reason": "validated_above_promotion_threshold"
-        },
-        {
-          "updated_at_utc": "2026-03-22T18:00:43.570081+00:00",
+          "updated_at_utc": "2026-03-22T18:06:14.815174+00:00",
           "state": "stable_candidate",
           "last_action": "promote",
           "reason": "validated_above_promotion_threshold"
         }
       ],
-      "validation_runs": 12,
+      "validation_runs": 1,
       "no_gain_runs": 0,
       "last_task_type": "diagnostic",
       "last_status": "finished"
@@ -6264,164 +5667,6 @@
     "terminate_after_hold_count": 3
   },
   "execution_feedback": [
-    {
-      "updated_at_utc": "2026-03-22T17:44:55.430209+00:00",
-      "branch_id": "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back",
-      "task_type": "workflow",
-      "status": "finished",
-      "has_gain": false,
-      "summary": "workflow finished: artifacts/generated_configs/rolling_60d_back.json",
-      "error_text": null,
-      "focus_candidates": [],
-      "knowledge_gain": [],
-      "goal": null,
-      "hypothesis": null
-    },
-    {
-      "updated_at_utc": "2026-03-22T17:45:19.084781+00:00",
-      "branch_id": "workflow::badcb06ce65d4c9460bc793e6fb9636582f9189dd63f337d26e2596390927b2c::artifacts/generated_rolling_120d_back",
-      "task_type": "workflow",
-      "status": "finished",
-      "has_gain": false,
-      "summary": "workflow finished: artifacts/generated_configs/rolling_120d_back.json",
-      "error_text": null,
-      "focus_candidates": [],
-      "knowledge_gain": [],
-      "goal": null,
-      "hypothesis": null
-    },
-    {
-      "updated_at_utc": "2026-03-22T17:45:26.854211+00:00",
-      "branch_id": "workflow::2d0cb3c1564581274c03388ad177e943b554916b9351274c8935f9133b7d9769::artifacts/generated_recent_45d",
-      "task_type": "workflow",
-      "status": "finished",
-      "has_gain": false,
-      "summary": "workflow finished: artifacts/generated_configs/rolling_recent_45d.json",
-      "error_text": null,
-      "focus_candidates": [],
-      "knowledge_gain": [],
-      "goal": null,
-      "hypothesis": null
-    },
-    {
-      "updated_at_utc": "2026-03-22T17:46:30.630828+00:00",
-      "branch_id": "workflow::aec26a80ff4107763e4df70188bf97914ae44edf1add208b560b47ca0ca45b56::artifacts/generated_rolling_30d_back",
-      "task_type": "workflow",
-      "status": "finished",
-      "has_gain": false,
-      "summary": "workflow finished: artifacts/generated_configs/rolling_30d_back.json",
-      "error_text": null,
-      "focus_candidates": [],
-      "knowledge_gain": [],
-      "goal": null,
-      "hypothesis": null
-    },
-    {
-      "updated_at_utc": "2026-03-22T17:46:47.632156+00:00",
-      "branch_id": "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back",
-      "task_type": "workflow",
-      "status": "finished",
-      "has_gain": false,
-      "summary": "workflow finished: artifacts/generated_configs/rolling_60d_back.json",
-      "error_text": null,
-      "focus_candidates": [],
-      "knowledge_gain": [],
-      "goal": null,
-      "hypothesis": null
-    },
-    {
-      "updated_at_utc": "2026-03-22T17:47:12.470648+00:00",
-      "branch_id": "workflow::badcb06ce65d4c9460bc793e6fb9636582f9189dd63f337d26e2596390927b2c::artifacts/generated_rolling_120d_back",
-      "task_type": "workflow",
-      "status": "finished",
-      "has_gain": false,
-      "summary": "workflow finished: artifacts/generated_configs/rolling_120d_back.json",
-      "error_text": null,
-      "focus_candidates": [],
-      "knowledge_gain": [],
-      "goal": null,
-      "hypothesis": null
-    },
-    {
-      "updated_at_utc": "2026-03-22T17:47:20.507205+00:00",
-      "branch_id": "workflow::2d0cb3c1564581274c03388ad177e943b554916b9351274c8935f9133b7d9769::artifacts/generated_recent_45d",
-      "task_type": "workflow",
-      "status": "finished",
-      "has_gain": false,
-      "summary": "workflow finished: artifacts/generated_configs/rolling_recent_45d.json",
-      "error_text": null,
-      "focus_candidates": [],
-      "knowledge_gain": [],
-      "goal": null,
-      "hypothesis": null
-    },
-    {
-      "updated_at_utc": "2026-03-22T17:48:24.305059+00:00",
-      "branch_id": "workflow::aec26a80ff4107763e4df70188bf97914ae44edf1add208b560b47ca0ca45b56::artifacts/generated_rolling_30d_back",
-      "task_type": "workflow",
-      "status": "finished",
-      "has_gain": false,
-      "summary": "workflow finished: artifacts/generated_configs/rolling_30d_back.json",
-      "error_text": null,
-      "focus_candidates": [],
-      "knowledge_gain": [],
-      "goal": null,
-      "hypothesis": null
-    },
-    {
-      "updated_at_utc": "2026-03-22T17:48:41.367115+00:00",
-      "branch_id": "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back",
-      "task_type": "workflow",
-      "status": "finished",
-      "has_gain": false,
-      "summary": "workflow finished: artifacts/generated_configs/rolling_60d_back.json",
-      "error_text": null,
-      "focus_candidates": [],
-      "knowledge_gain": [],
-      "goal": null,
-      "hypothesis": null
-    },
-    {
-      "updated_at_utc": "2026-03-22T17:49:09.360792+00:00",
-      "branch_id": "workflow::badcb06ce65d4c9460bc793e6fb9636582f9189dd63f337d26e2596390927b2c::artifacts/generated_rolling_120d_back",
-      "task_type": "workflow",
-      "status": "finished",
-      "has_gain": false,
-      "summary": "workflow finished: artifacts/generated_configs/rolling_120d_back.json",
-      "error_text": null,
-      "focus_candidates": [],
-      "knowledge_gain": [],
-      "goal": null,
-      "hypothesis": null
-    },
-    {
-      "updated_at_utc": "2026-03-22T17:49:17.939849+00:00",
-      "branch_id": "workflow::2d0cb3c1564581274c03388ad177e943b554916b9351274c8935f9133b7d9769::artifacts/generated_recent_45d",
-      "task_type": "workflow",
-      "status": "finished",
-      "has_gain": false,
-      "summary": "workflow finished: artifacts/generated_configs/rolling_recent_45d.json",
-      "error_text": null,
-      "focus_candidates": [],
-      "knowledge_gain": [],
-      "goal": null,
-      "hypothesis": null
-    },
-    {
-      "updated_at_utc": "2026-03-22T17:49:31.396697+00:00",
-      "branch_id": "opp-pattern-native-recombine-graveyard_diagnosis-child-pair_target-exploration_candidate_survived-new_branch_opened-recombination_productive-search_space_expanded",
-      "task_type": "generated_batch",
-      "status": "finished",
-      "has_gain": true,
-      "summary": "generated batch finished: /home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-pattern-native-recombine-graveyard_diagnosis-child-pair_target-exploration_candidate_survived-new_branch_opened-recombination_productive-search_space_expanded.json | knowledge_gain=exploration_graveyard_identified",
-      "error_text": null,
-      "focus_candidates": [],
-      "knowledge_gain": [
-        "exploration_candidate_survived"
-      ],
-      "goal": "模式 recombine / graveyard_diagnosis / new_branch_opened+recombination_productive+search_space_expanded 是否值得继续作为研究主线？",
-      "hypothesis": "历史上呈现 new_branch_opened+recombination_productive+search_space_expanded 的 recombine 模式，对 graveyard_diagnosis family 具有持续的认知价值。"
-    },
     {
       "updated_at_utc": "2026-03-22T17:49:37.019103+00:00",
       "branch_id": "opp-q-graveyard-cause",
@@ -6966,6 +6211,162 @@
     },
     {
       "updated_at_utc": "2026-03-22T18:02:00.447298+00:00",
+      "branch_id": "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back",
+      "task_type": "workflow",
+      "status": "finished",
+      "has_gain": false,
+      "summary": "workflow finished: artifacts/generated_configs/rolling_60d_back.json",
+      "error_text": null,
+      "focus_candidates": [],
+      "knowledge_gain": [],
+      "goal": null,
+      "hypothesis": null
+    },
+    {
+      "updated_at_utc": "2026-03-22T18:02:27.635632+00:00",
+      "branch_id": "workflow::badcb06ce65d4c9460bc793e6fb9636582f9189dd63f337d26e2596390927b2c::artifacts/generated_rolling_120d_back",
+      "task_type": "workflow",
+      "status": "finished",
+      "has_gain": false,
+      "summary": "workflow finished: artifacts/generated_configs/rolling_120d_back.json",
+      "error_text": null,
+      "focus_candidates": [],
+      "knowledge_gain": [],
+      "goal": null,
+      "hypothesis": null
+    },
+    {
+      "updated_at_utc": "2026-03-22T18:02:36.254749+00:00",
+      "branch_id": "workflow::2d0cb3c1564581274c03388ad177e943b554916b9351274c8935f9133b7d9769::artifacts/generated_recent_45d",
+      "task_type": "workflow",
+      "status": "finished",
+      "has_gain": false,
+      "summary": "workflow finished: artifacts/generated_configs/rolling_recent_45d.json",
+      "error_text": null,
+      "focus_candidates": [],
+      "knowledge_gain": [],
+      "goal": null,
+      "hypothesis": null
+    },
+    {
+      "updated_at_utc": "2026-03-22T18:03:39.477634+00:00",
+      "branch_id": "workflow::aec26a80ff4107763e4df70188bf97914ae44edf1add208b560b47ca0ca45b56::artifacts/generated_rolling_30d_back",
+      "task_type": "workflow",
+      "status": "finished",
+      "has_gain": false,
+      "summary": "workflow finished: artifacts/generated_configs/rolling_30d_back.json",
+      "error_text": null,
+      "focus_candidates": [],
+      "knowledge_gain": [],
+      "goal": null,
+      "hypothesis": null
+    },
+    {
+      "updated_at_utc": "2026-03-22T18:03:55.461141+00:00",
+      "branch_id": "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back",
+      "task_type": "workflow",
+      "status": "finished",
+      "has_gain": false,
+      "summary": "workflow finished: artifacts/generated_configs/rolling_60d_back.json",
+      "error_text": null,
+      "focus_candidates": [],
+      "knowledge_gain": [],
+      "goal": null,
+      "hypothesis": null
+    },
+    {
+      "updated_at_utc": "2026-03-22T18:04:18.787139+00:00",
+      "branch_id": "workflow::badcb06ce65d4c9460bc793e6fb9636582f9189dd63f337d26e2596390927b2c::artifacts/generated_rolling_120d_back",
+      "task_type": "workflow",
+      "status": "finished",
+      "has_gain": false,
+      "summary": "workflow finished: artifacts/generated_configs/rolling_120d_back.json",
+      "error_text": null,
+      "focus_candidates": [],
+      "knowledge_gain": [],
+      "goal": null,
+      "hypothesis": null
+    },
+    {
+      "updated_at_utc": "2026-03-22T18:04:25.332755+00:00",
+      "branch_id": "workflow::2d0cb3c1564581274c03388ad177e943b554916b9351274c8935f9133b7d9769::artifacts/generated_recent_45d",
+      "task_type": "workflow",
+      "status": "finished",
+      "has_gain": false,
+      "summary": "workflow finished: artifacts/generated_configs/rolling_recent_45d.json",
+      "error_text": null,
+      "focus_candidates": [],
+      "knowledge_gain": [],
+      "goal": null,
+      "hypothesis": null
+    },
+    {
+      "updated_at_utc": "2026-03-22T18:05:25.124242+00:00",
+      "branch_id": "workflow::aec26a80ff4107763e4df70188bf97914ae44edf1add208b560b47ca0ca45b56::artifacts/generated_rolling_30d_back",
+      "task_type": "workflow",
+      "status": "finished",
+      "has_gain": false,
+      "summary": "workflow finished: artifacts/generated_configs/rolling_30d_back.json",
+      "error_text": null,
+      "focus_candidates": [],
+      "knowledge_gain": [],
+      "goal": null,
+      "hypothesis": null
+    },
+    {
+      "updated_at_utc": "2026-03-22T18:05:39.506721+00:00",
+      "branch_id": "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back",
+      "task_type": "workflow",
+      "status": "finished",
+      "has_gain": false,
+      "summary": "workflow finished: artifacts/generated_configs/rolling_60d_back.json",
+      "error_text": null,
+      "focus_candidates": [],
+      "knowledge_gain": [],
+      "goal": null,
+      "hypothesis": null
+    },
+    {
+      "updated_at_utc": "2026-03-22T18:06:02.825270+00:00",
+      "branch_id": "workflow::badcb06ce65d4c9460bc793e6fb9636582f9189dd63f337d26e2596390927b2c::artifacts/generated_rolling_120d_back",
+      "task_type": "workflow",
+      "status": "finished",
+      "has_gain": false,
+      "summary": "workflow finished: artifacts/generated_configs/rolling_120d_back.json",
+      "error_text": null,
+      "focus_candidates": [],
+      "knowledge_gain": [],
+      "goal": null,
+      "hypothesis": null
+    },
+    {
+      "updated_at_utc": "2026-03-22T18:06:10.965970+00:00",
+      "branch_id": "workflow::2d0cb3c1564581274c03388ad177e943b554916b9351274c8935f9133b7d9769::artifacts/generated_recent_45d",
+      "task_type": "workflow",
+      "status": "finished",
+      "has_gain": false,
+      "summary": "workflow finished: artifacts/generated_configs/rolling_recent_45d.json",
+      "error_text": null,
+      "focus_candidates": [],
+      "knowledge_gain": [],
+      "goal": null,
+      "hypothesis": null
+    },
+    {
+      "updated_at_utc": "2026-03-22T18:07:27.572862+00:00",
+      "branch_id": "workflow::aec26a80ff4107763e4df70188bf97914ae44edf1add208b560b47ca0ca45b56::artifacts/generated_rolling_30d_back",
+      "task_type": "workflow",
+      "status": "finished",
+      "has_gain": false,
+      "summary": "workflow finished: artifacts/generated_configs/rolling_30d_back.json",
+      "error_text": null,
+      "focus_candidates": [],
+      "knowledge_gain": [],
+      "goal": null,
+      "hypothesis": null
+    },
+    {
+      "updated_at_utc": "2026-03-22T18:07:45.636149+00:00",
       "branch_id": "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back",
       "task_type": "workflow",
       "status": "finished",

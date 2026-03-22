@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-03-22T18:00:43.821334+00:00",
+  "generated_at_utc": "2026-03-22T18:06:15.130302+00:00",
   "schema_version": "factor_lab.research_opportunity.v1",
   "flow_state": {
     "state": "recovering",
@@ -590,8 +590,8 @@
           "new_branch_count": 2,
           "inconclusive_count": 0
         },
-        "diagnose::graveyard_diagnosis::child::pair_target::neutralization_diagnosis_requested+repeated_graveyard_confirmed::hypothesis_supported+uncertainty_reduced": {
-          "pattern": "diagnose::graveyard_diagnosis::child::pair_target::neutralization_diagnosis_requested+repeated_graveyard_confirmed::hypothesis_supported+uncertainty_reduced",
+        "diagnose::graveyard_diagnosis::child::multi_target::neutralization_diagnosis_requested+repeated_graveyard_confirmed::hypothesis_supported+uncertainty_reduced": {
+          "pattern": "diagnose::graveyard_diagnosis::child::multi_target::neutralization_diagnosis_requested+repeated_graveyard_confirmed::hypothesis_supported+uncertainty_reduced",
           "count": 1,
           "promoted": 1,
           "evaluated": 0,
@@ -721,7 +721,7 @@
       }
     },
     "research_portfolio": {
-      "generated_at_utc": "2026-03-22T18:00:43.590438+00:00",
+      "generated_at_utc": "2026-03-22T18:06:14.840291+00:00",
       "flow_state": {
         "state": "recovering",
         "reasons": [
@@ -898,7 +898,7 @@
       ]
     },
     "meta_research_critique": {
-      "generated_at_utc": "2026-03-22T18:00:43.590805+00:00",
+      "generated_at_utc": "2026-03-22T18:06:14.840748+00:00",
       "summary": {
         "finding_count": 3,
         "corrective_action_count": 3

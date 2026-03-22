@@ -1,10 +1,10 @@
 {
-  "updated_at_utc": "2026-03-22T18:02:00.485402+00:00",
-  "pid": 37575,
+  "updated_at_utc": "2026-03-22T18:07:45.678359+00:00",
+  "pid": 478234,
   "state": "running",
   "processed_count": 2,
   "last_processed": {
-    "task_id": "7930a6ea-4054-43e7-a2ac-a73ac14cd79f",
+    "task_id": "98f66697-e5b6-48c7-9158-1a151184e540",
     "status": "finished",
     "summary": "workflow finished: artifacts/generated_configs/rolling_60d_back.json",
     "followup_task_ids": [],

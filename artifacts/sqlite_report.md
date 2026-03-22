@@ -22,7 +22,7 @@
 
 ## Candidate Relationship Pairs
 
-- mom_plus_value <-> mom_20 | type=high_corr | strength=1.0 | run_id=a7e9c7d8-a2ac-45d7-86a6-5011370b66da
+- mom_plus_value <-> mom_20 | type=high_corr | strength=1.0 | run_id=527db357-4fbc-49e2-9648-a0f138e6325a
 - hybrid_mom_20_liquidity_turnover_shock <-> liquidity_turnover_shock | type=high_corr | strength=1.0 | run_id=9ef112b7-0226-452b-84c6-e09472cb1e95
 - hybrid_mom_20_value_ep <-> mom_20 | type=high_corr | strength=1.0 | run_id=238da830-8d4f-45f9-8606-d6b280ece4ed
 - hybrid_liquidity_turnover_shock_mom_20 <-> liquidity_turnover_shock | type=high_corr | strength=1.0 | run_id=fa2b1ba8-bfae-4f1a-a855-3108f7eabafa
@@ -42,17 +42,17 @@
 - hybrid_mom_20_value_ep | avg_score=1.054826 | runs=98
 - hybrid_liquidity_turnover_shock_value_ep | avg_score=0.985774 | runs=3
 - hybrid_size_small_value_bp | avg_score=0.511823 | runs=35
-- liquidity_turnover_shock | avg_score=0.258373 | runs=3612
-- value_ep | avg_score=0.232343 | runs=3531
-- size_small | avg_score=0.077029 | runs=3450
-- mom_20 | avg_score=-0.000335 | runs=3732
-- value_bp | avg_score=-0.228696 | runs=3385
+- liquidity_turnover_shock | avg_score=0.258168 | runs=3624
+- value_ep | avg_score=0.232319 | runs=3543
+- size_small | avg_score=0.076991 | runs=3462
+- mom_20 | avg_score=-0.000711 | runs=3744
+- value_bp | avg_score=-0.228772 | runs=3397
 
 ## Stable Candidates
 
-- mom_20 | candidate_runs=1071
-- liquidity_turnover_shock | candidate_runs=964
-- mom_plus_value | candidate_runs=803
+- mom_20 | candidate_runs=1074
+- liquidity_turnover_shock | candidate_runs=967
+- mom_plus_value | candidate_runs=806
 - hybrid_mom_20_value_ep | candidate_runs=89
 - hybrid_mom_20_liquidity_turnover_shock | candidate_runs=74
 - hybrid_liquidity_turnover_shock_mom_20 | candidate_runs=34
@@ -61,9 +61,9 @@
 
 ## Portfolio Strategy Averages
 
-- long_short_top_bottom_candidates_only | avg_sharpe=7.100386 | avg_return=1.365066 | runs=1120
-- long_short_top_bottom_all_factors | avg_sharpe=3.331906 | avg_return=0.559127 | runs=3917
-- long_short_top_bottom_cluster_representatives | avg_sharpe=2.774140 | avg_return=0.413971 | runs=3917
-- long_short_top_bottom_candidates_only_neutralized | avg_sharpe=2.170886 | avg_return=0.342567 | runs=1120
-- long_short_top_bottom_neutralized | avg_sharpe=-0.117266 | avg_return=-0.034281 | runs=3917
-- long_short_top_bottom_cluster_representatives_neutralized | avg_sharpe=-0.500729 | avg_return=-0.124716 | runs=3917
+- long_short_top_bottom_candidates_only | avg_sharpe=7.101309 | avg_return=1.365279 | runs=1123
+- long_short_top_bottom_all_factors | avg_sharpe=3.330949 | avg_return=0.558921 | runs=3929
+- long_short_top_bottom_cluster_representatives | avg_sharpe=2.773006 | avg_return=0.413687 | runs=3929
+- long_short_top_bottom_candidates_only_neutralized | avg_sharpe=2.170768 | avg_return=0.342485 | runs=1123
+- long_short_top_bottom_neutralized | avg_sharpe=-0.118171 | avg_return=-0.034459 | runs=3929
+- long_short_top_bottom_cluster_representatives_neutralized | avg_sharpe=-0.501690 | avg_return=-0.124916 | runs=3929

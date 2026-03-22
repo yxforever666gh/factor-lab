@@ -19,28 +19,28 @@
       "finished_at_utc": "2026-03-22T15:38:50.249719+00:00"
     },
     "window_rolling_30d_back": {
-      "task_id": "09174a1c-6a30-4d92-8540-ddc7fc07b8fc",
+      "task_id": "ddb1fdc3-a212-422c-83bc-0a50cdc938c8",
       "config_path": "artifacts/generated_configs/rolling_30d_back.json",
       "status": "finished",
-      "finished_at_utc": "2026-03-22T15:38:35.906711+00:00"
+      "finished_at_utc": "2026-03-22T15:40:36.295354+00:00"
     },
     "window_expanding_2025_10_01": {
-      "task_id": "bec362fd-f67c-4fb8-9a7d-4edd0c6f89a5",
+      "task_id": "1e5caf17-bdfd-4e4b-b7d2-8673990e9af9",
       "config_path": "artifacts/generated_configs/expanding_from_2025_10_01.json",
       "status": "finished",
-      "finished_at_utc": "2026-03-22T15:37:33.074998+00:00"
+      "finished_at_utc": "2026-03-22T17:02:35.141548+00:00"
     },
     "window_recent_120d": {
-      "task_id": "cc61be20-a89e-481a-872c-8625b13e3622",
+      "task_id": "b9cef6d4-ca4c-41b5-9252-9cb058a06553",
       "config_path": "artifacts/generated_configs/rolling_recent_120d.json",
       "status": "finished",
-      "finished_at_utc": "2026-03-22T15:37:09.095744+00:00"
+      "finished_at_utc": "2026-03-22T17:01:12.291481+00:00"
     },
     "window_recent_90d": {
-      "task_id": "a916b9b4-23f8-4a7f-aea4-34b1cc4d45b1",
+      "task_id": "92223dd5-a6ff-4a87-9411-38144198f07f",
       "config_path": "artifacts/generated_configs/rolling_recent_90d.json",
       "status": "finished",
-      "finished_at_utc": "2026-03-22T15:36:56.596358+00:00"
+      "finished_at_utc": "2026-03-22T17:00:59.760469+00:00"
     }
   },
   "validation_depth": {

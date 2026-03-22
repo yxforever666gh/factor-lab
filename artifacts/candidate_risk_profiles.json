@@ -110,12 +110,12 @@
       "risk_score": 100.0,
       "trigger_bits": [
         "split_fail_max=1",
-        "neutralization_breaks=775"
+        "neutralization_breaks=776"
       ],
       "robustness_ratio": 1.0,
       "split_fail_max": 1,
       "high_corr_peer_max": 1,
-      "neutralization_break_count": 775
+      "neutralization_break_count": 776
     },
     "acceptance_gate": {
       "version": "2.0",
@@ -144,8 +144,8 @@
       "metrics": {
         "official_eval_count": 1688,
         "official_window_count": 6,
-        "avg_score": 2.277055,
-        "pass_rate": 0.2613,
+        "avg_score": 2.271515,
+        "pass_rate": 0.2607,
         "fragility_risk_score": 100.0
       },
       "fragility_gate": {
@@ -153,7 +153,7 @@
         "risk_score": 100.0,
         "triggers": [
           "split_fail_max=1",
-          "neutralization_breaks=775"
+          "neutralization_breaks=776"
         ]
       }
     },
@@ -270,12 +270,12 @@
       "risk_score": 100.0,
       "trigger_bits": [
         "split_fail_max=2",
-        "neutralization_breaks=382"
+        "neutralization_breaks=383"
       ],
       "robustness_ratio": 1.0,
       "split_fail_max": 2,
       "high_corr_peer_max": 1,
-      "neutralization_break_count": 382
+      "neutralization_break_count": 383
     },
     "acceptance_gate": {
       "version": "2.0",
@@ -302,10 +302,10 @@
         }
       },
       "metrics": {
-        "official_eval_count": 1606,
+        "official_eval_count": 1607,
         "official_window_count": 6,
-        "avg_score": 1.148664,
-        "pass_rate": 0.2391,
+        "avg_score": 1.147368,
+        "pass_rate": 0.239,
         "fragility_risk_score": 100.0
       },
       "fragility_gate": {
@@ -313,7 +313,7 @@
         "risk_score": 100.0,
         "triggers": [
           "split_fail_max=2",
-          "neutralization_breaks=382"
+          "neutralization_breaks=383"
         ]
       }
     },
@@ -465,7 +465,7 @@
       "metrics": {
         "official_eval_count": 1627,
         "official_window_count": 6,
-        "avg_score": 2.606844,
+        "avg_score": 2.602958,
         "pass_rate": 0.0,
         "fragility_risk_score": 100.0
       },
@@ -625,8 +625,8 @@
       "metrics": {
         "official_eval_count": 1724,
         "official_window_count": 6,
-        "avg_score": 2.081572,
-        "pass_rate": 0.2744,
+        "avg_score": 2.073229,
+        "pass_rate": 0.2738,
         "fragility_risk_score": 100.0
       },
       "fragility_gate": {
@@ -784,7 +784,7 @@
       "metrics": {
         "official_eval_count": 1602,
         "official_window_count": 6,
-        "avg_score": 1.106272,
+        "avg_score": 1.100127,
         "pass_rate": 0.2385,
         "fragility_risk_score": 62.0
       },
@@ -909,12 +909,12 @@
       "risk_score": 100.0,
       "trigger_bits": [
         "split_fail_max=1",
-        "neutralization_breaks=17"
+        "neutralization_breaks=16"
       ],
       "robustness_ratio": 1.0,
       "split_fail_max": 1,
       "high_corr_peer_max": 1,
-      "neutralization_break_count": 17
+      "neutralization_break_count": 16
     },
     "acceptance_gate": {
       "version": "2.0",
@@ -941,9 +941,9 @@
         }
       },
       "metrics": {
-        "official_eval_count": 18,
+        "official_eval_count": 17,
         "official_window_count": 2,
-        "avg_score": 7.712251,
+        "avg_score": 7.654765,
         "pass_rate": 0.0,
         "fragility_risk_score": 100.0
       },
@@ -952,7 +952,7 @@
         "risk_score": 100.0,
         "triggers": [
           "split_fail_max=1",
-          "neutralization_breaks=17"
+          "neutralization_breaks=16"
         ]
       }
     },
@@ -1249,10 +1249,10 @@
         }
       },
       "metrics": {
-        "official_eval_count": 1651,
+        "official_eval_count": 1652,
         "official_window_count": 6,
-        "avg_score": 2.539305,
-        "pass_rate": 0.2532,
+        "avg_score": 2.536173,
+        "pass_rate": 0.253,
         "fragility_risk_score": 40.0
       },
       "fragility_gate": {
@@ -1720,10 +1720,10 @@
         }
       },
       "metrics": {
-        "official_eval_count": 28,
+        "official_eval_count": 27,
         "official_window_count": 2,
-        "avg_score": 8.742705,
-        "pass_rate": 0.8571,
+        "avg_score": 8.693444,
+        "pass_rate": 0.8519,
         "fragility_risk_score": 29.0
       },
       "fragility_gate": {

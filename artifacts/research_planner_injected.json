@@ -16,7 +16,7 @@
       "state": "stable_candidate",
       "last_action": "promote",
       "reason": "validated_above_promotion_threshold",
-      "updated_at_utc": "2026-03-22T18:00:43.468756+00:00",
+      "updated_at_utc": "2026-03-22T18:06:14.691202+00:00",
       "goal": "validate_stable_candidates",
       "hypothesis": "当前稳定候选在更深一层诊断下依然成立，而不是被 cluster/窗口偶然性抬高。"
     }

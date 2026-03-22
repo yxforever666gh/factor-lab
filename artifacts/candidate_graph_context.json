@@ -3,7 +3,7 @@
     {
       "family": "momentum",
       "candidate_count": 5,
-      "evaluation_count": 1716,
+      "evaluation_count": 1717,
       "window_count": 6,
       "promising_count": 0,
       "testing_count": 5,
@@ -100,21 +100,21 @@
       "representative_candidates": [],
       "recommended_action": "validate_risk",
       "family_risk_profile": {
-        "trial_count": 901,
-        "informative_trial_count": 28,
-        "no_gain_trial_count": 873,
+        "trial_count": 902,
+        "informative_trial_count": 26,
+        "no_gain_trial_count": 876,
         "failed_trial_count": 0,
-        "knowledge_gain_per_trial": 0.031077,
+        "knowledge_gain_per_trial": 0.028825,
         "trial_pressure": 100.0,
         "false_positive_pressure": 100.0,
         "risk_score": 100.0,
         "recommended_action": "validate_risk"
       },
-      "trial_count": 901,
-      "informative_trial_count": 28,
-      "no_gain_trial_count": 873,
+      "trial_count": 902,
+      "informative_trial_count": 26,
+      "no_gain_trial_count": 876,
       "failed_trial_count": 0,
-      "knowledge_gain_per_trial": 0.031077,
+      "knowledge_gain_per_trial": 0.028825,
       "trial_pressure": 100.0,
       "false_positive_pressure": 100.0,
       "family_risk_score": 100.0
@@ -122,7 +122,7 @@
     {
       "family": "liquidity",
       "candidate_count": 1,
-      "evaluation_count": 842,
+      "evaluation_count": 841,
       "window_count": 6,
       "promising_count": 0,
       "testing_count": 1,
@@ -175,10 +175,10 @@
       },
       "relationship_mix": {
         "duplicate_of": 1,
-        "same_family": 4,
+        "hybrid_of": 7,
         "high_corr": 5,
         "refinement_of": 12,
-        "hybrid_of": 7
+        "same_family": 4
       },
       "leader": "hybrid_mom_20_liquidity_turnover_shock",
       "primary_candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
@@ -339,10 +339,10 @@
       ],
       "relationship_mix": {
         "duplicate_of": 1,
-        "same_family": 4,
+        "hybrid_of": 7,
         "high_corr": 5,
         "refinement_of": 12,
-        "hybrid_of": 7
+        "same_family": 4
       }
     },
     {
@@ -367,10 +367,10 @@
       ],
       "relationship_mix": {
         "duplicate_of": 1,
-        "same_family": 4,
+        "hybrid_of": 7,
         "high_corr": 5,
         "refinement_of": 12,
-        "hybrid_of": 7
+        "same_family": 4
       }
     },
     {
@@ -395,10 +395,10 @@
       ],
       "relationship_mix": {
         "duplicate_of": 1,
-        "same_family": 4,
+        "hybrid_of": 7,
         "high_corr": 5,
         "refinement_of": 12,
-        "hybrid_of": 7
+        "same_family": 4
       }
     },
     {
@@ -423,10 +423,10 @@
       ],
       "relationship_mix": {
         "duplicate_of": 1,
-        "same_family": 4,
+        "hybrid_of": 7,
         "high_corr": 5,
         "refinement_of": 12,
-        "hybrid_of": 7
+        "same_family": 4
       }
     }
   ],
@@ -454,10 +454,10 @@
         "dominant_family": "momentum",
         "relationship_mix": {
           "duplicate_of": 1,
-          "same_family": 4,
+          "hybrid_of": 7,
           "high_corr": 5,
           "refinement_of": 12,
-          "hybrid_of": 7
+          "same_family": 4
         },
         "members": [
           {
@@ -825,10 +825,10 @@
         "dominant_family": "momentum",
         "relationship_mix": {
           "duplicate_of": 1,
-          "same_family": 4,
+          "hybrid_of": 7,
           "high_corr": 5,
           "refinement_of": 12,
-          "hybrid_of": 7
+          "same_family": 4
         },
         "members": [
           {
@@ -1196,10 +1196,10 @@
         "dominant_family": "momentum",
         "relationship_mix": {
           "duplicate_of": 1,
-          "same_family": 4,
+          "hybrid_of": 7,
           "high_corr": 5,
           "refinement_of": 12,
-          "hybrid_of": 7
+          "same_family": 4
         },
         "members": [
           {
@@ -1613,10 +1613,10 @@
         "dominant_family": "momentum",
         "relationship_mix": {
           "duplicate_of": 1,
-          "same_family": 4,
+          "hybrid_of": 7,
           "high_corr": 5,
           "refinement_of": 12,
-          "hybrid_of": 7
+          "same_family": 4
         },
         "members": [
           {
@@ -2035,10 +2035,10 @@
         "dominant_family": "momentum",
         "relationship_mix": {
           "duplicate_of": 1,
-          "same_family": 4,
+          "hybrid_of": 7,
           "high_corr": 5,
           "refinement_of": 12,
-          "hybrid_of": 7
+          "same_family": 4
         },
         "members": [
           {
@@ -2239,10 +2239,10 @@
         "dominant_family": "momentum",
         "relationship_mix": {
           "duplicate_of": 1,
-          "same_family": 4,
+          "hybrid_of": 7,
           "high_corr": 5,
           "refinement_of": 12,
-          "hybrid_of": 7
+          "same_family": 4
         },
         "members": [
           {
@@ -2513,10 +2513,10 @@
         "dominant_family": "momentum",
         "relationship_mix": {
           "duplicate_of": 1,
-          "same_family": 4,
+          "hybrid_of": 7,
           "high_corr": 5,
           "refinement_of": 12,
-          "hybrid_of": 7
+          "same_family": 4
         },
         "members": [
           {
@@ -2966,10 +2966,10 @@
         "dominant_family": "momentum",
         "relationship_mix": {
           "duplicate_of": 1,
-          "same_family": 4,
+          "hybrid_of": 7,
           "high_corr": 5,
           "refinement_of": 12,
-          "hybrid_of": 7
+          "same_family": 4
         },
         "members": [
           {
@@ -3265,10 +3265,10 @@
         "dominant_family": "momentum",
         "relationship_mix": {
           "duplicate_of": 1,
-          "same_family": 4,
+          "hybrid_of": 7,
           "high_corr": 5,
           "refinement_of": 12,
-          "hybrid_of": 7
+          "same_family": 4
         },
         "members": [
           {
@@ -3484,10 +3484,10 @@
         "dominant_family": "momentum",
         "relationship_mix": {
           "duplicate_of": 1,
-          "same_family": 4,
+          "hybrid_of": 7,
           "high_corr": 5,
           "refinement_of": 12,
-          "hybrid_of": 7
+          "same_family": 4
         },
         "members": [
           {
@@ -3688,10 +3688,10 @@
         "dominant_family": "momentum",
         "relationship_mix": {
           "duplicate_of": 1,
-          "same_family": 4,
+          "hybrid_of": 7,
           "high_corr": 5,
           "refinement_of": 12,
-          "hybrid_of": 7
+          "same_family": 4
         },
         "members": [
           {

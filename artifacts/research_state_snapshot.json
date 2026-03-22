@@ -1,5 +1,5 @@
 {
-  "updated_at_utc": "2026-03-22T18:00:43.453650+00:00",
+  "updated_at_utc": "2026-03-22T18:06:14.673643+00:00",
   "generated_from_planner_snapshot": "/home/admin/.openclaw/workspace/artifacts/research_planner_snapshot.json",
   "generated_from_candidate_pool": "/home/admin/.openclaw/workspace/artifacts/research_candidate_pool.json",
   "generated_from_proposal": "/home/admin/.openclaw/workspace/artifacts/research_planner_proposal.json",
@@ -199,6 +199,222 @@
   },
   "recent_finished_tasks": [
     {
+      "task_id": "ad36637c-f4e3-4133-addd-13bbfbaa1b7d",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 22,
+      "fingerprint": "workflow::2d0cb3c1564581274c03388ad177e943b554916b9351274c8935f9133b7d9769::artifacts/generated_recent_45d",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-22T18:05:13.633233+00:00",
+      "started_at_utc": "2026-03-22T18:06:02.842409+00:00",
+      "finished_at_utc": "2026-03-22T18:06:10.963207+00:00",
+      "worker_note": "workflow finished: artifacts/generated_configs/rolling_recent_45d.json",
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_recent_45d.json",
+        "output_dir": "artifacts/generated_recent_45d"
+      }
+    },
+    {
+      "task_id": "dba43f00-803d-4062-9e0b-f61f3f4cda36",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 20,
+      "fingerprint": "workflow::badcb06ce65d4c9460bc793e6fb9636582f9189dd63f337d26e2596390927b2c::artifacts/generated_rolling_120d_back",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-22T18:05:13.628256+00:00",
+      "started_at_utc": "2026-03-22T18:05:41.683168+00:00",
+      "finished_at_utc": "2026-03-22T18:06:02.821545+00:00",
+      "worker_note": "workflow finished: artifacts/generated_configs/rolling_120d_back.json",
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_120d_back.json",
+        "output_dir": "artifacts/generated_rolling_120d_back"
+      }
+    },
+    {
+      "task_id": "de055472-c1bd-454b-9d14-70905de82aad",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 19,
+      "fingerprint": "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-22T18:05:13.623066+00:00",
+      "started_at_utc": "2026-03-22T18:05:25.138800+00:00",
+      "finished_at_utc": "2026-03-22T18:05:39.503723+00:00",
+      "worker_note": "workflow finished: artifacts/generated_configs/rolling_60d_back.json",
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_60d_back.json",
+        "output_dir": "artifacts/generated_rolling_60d_back"
+      }
+    },
+    {
+      "task_id": "bf8c0645-7086-47c4-bcad-7e04718aaea3",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 18,
+      "fingerprint": "workflow::aec26a80ff4107763e4df70188bf97914ae44edf1add208b560b47ca0ca45b56::artifacts/generated_rolling_30d_back",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-22T18:05:13.616314+00:00",
+      "started_at_utc": "2026-03-22T18:05:13.660400+00:00",
+      "finished_at_utc": "2026-03-22T18:05:25.120737+00:00",
+      "worker_note": "workflow finished: artifacts/generated_configs/rolling_30d_back.json",
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_30d_back.json",
+        "output_dir": "artifacts/generated_rolling_30d_back"
+      }
+    },
+    {
+      "task_id": "6df4f08b-73b9-48e3-b85b-f5f77256d4ce",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 22,
+      "fingerprint": "workflow::2d0cb3c1564581274c03388ad177e943b554916b9351274c8935f9133b7d9769::artifacts/generated_recent_45d",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-22T18:03:26.790557+00:00",
+      "started_at_utc": "2026-03-22T18:04:18.801317+00:00",
+      "finished_at_utc": "2026-03-22T18:04:25.330114+00:00",
+      "worker_note": "workflow finished: artifacts/generated_configs/rolling_recent_45d.json",
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_recent_45d.json",
+        "output_dir": "artifacts/generated_recent_45d"
+      }
+    },
+    {
+      "task_id": "07e091f1-13ae-4dab-9014-2dba87a44cc1",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 20,
+      "fingerprint": "workflow::badcb06ce65d4c9460bc793e6fb9636582f9189dd63f337d26e2596390927b2c::artifacts/generated_rolling_120d_back",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-22T18:03:26.784930+00:00",
+      "started_at_utc": "2026-03-22T18:03:57.652152+00:00",
+      "finished_at_utc": "2026-03-22T18:04:18.783806+00:00",
+      "worker_note": "workflow finished: artifacts/generated_configs/rolling_120d_back.json",
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_120d_back.json",
+        "output_dir": "artifacts/generated_rolling_120d_back"
+      }
+    },
+    {
+      "task_id": "1154d0bc-386c-48b8-ba05-22ffdb20b823",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 19,
+      "fingerprint": "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-22T18:03:26.779617+00:00",
+      "started_at_utc": "2026-03-22T18:03:39.497028+00:00",
+      "finished_at_utc": "2026-03-22T18:03:55.456659+00:00",
+      "worker_note": "workflow finished: artifacts/generated_configs/rolling_60d_back.json",
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_60d_back.json",
+        "output_dir": "artifacts/generated_rolling_60d_back"
+      }
+    },
+    {
+      "task_id": "476641e9-99c0-4b9d-a8b1-e9b2ab5c8482",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 18,
+      "fingerprint": "workflow::aec26a80ff4107763e4df70188bf97914ae44edf1add208b560b47ca0ca45b56::artifacts/generated_rolling_30d_back",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-22T18:03:26.773769+00:00",
+      "started_at_utc": "2026-03-22T18:03:26.817768+00:00",
+      "finished_at_utc": "2026-03-22T18:03:39.474168+00:00",
+      "worker_note": "workflow finished: artifacts/generated_configs/rolling_30d_back.json",
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_30d_back.json",
+        "output_dir": "artifacts/generated_rolling_30d_back"
+      }
+    },
+    {
+      "task_id": "5216bd73-77f7-4c92-8d63-670d14940620",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 22,
+      "fingerprint": "workflow::2d0cb3c1564581274c03388ad177e943b554916b9351274c8935f9133b7d9769::artifacts/generated_recent_45d",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-22T18:01:29.073118+00:00",
+      "started_at_utc": "2026-03-22T18:02:27.653314+00:00",
+      "finished_at_utc": "2026-03-22T18:02:36.251948+00:00",
+      "worker_note": "workflow finished: artifacts/generated_configs/rolling_recent_45d.json",
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_recent_45d.json",
+        "output_dir": "artifacts/generated_recent_45d"
+      }
+    },
+    {
+      "task_id": "cf9e8357-2057-4e43-8a38-c9503b4589d2",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 20,
+      "fingerprint": "workflow::badcb06ce65d4c9460bc793e6fb9636582f9189dd63f337d26e2596390927b2c::artifacts/generated_rolling_120d_back",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-22T18:01:29.067382+00:00",
+      "started_at_utc": "2026-03-22T18:02:02.618472+00:00",
+      "finished_at_utc": "2026-03-22T18:02:27.602718+00:00",
+      "worker_note": "workflow finished: artifacts/generated_configs/rolling_120d_back.json",
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_120d_back.json",
+        "output_dir": "artifacts/generated_rolling_120d_back"
+      }
+    },
+    {
+      "task_id": "7930a6ea-4054-43e7-a2ac-a73ac14cd79f",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 19,
+      "fingerprint": "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-22T18:01:29.061900+00:00",
+      "started_at_utc": "2026-03-22T18:01:43.661066+00:00",
+      "finished_at_utc": "2026-03-22T18:02:00.443668+00:00",
+      "worker_note": "workflow finished: artifacts/generated_configs/rolling_60d_back.json",
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_60d_back.json",
+        "output_dir": "artifacts/generated_rolling_60d_back"
+      }
+    },
+    {
+      "task_id": "4a22ac03-0626-4e6b-96a9-08420b257966",
+      "task_type": "workflow",
+      "status": "finished",
+      "priority": 18,
+      "fingerprint": "workflow::aec26a80ff4107763e4df70188bf97914ae44edf1add208b560b47ca0ca45b56::artifacts/generated_rolling_30d_back",
+      "parent_task_id": null,
+      "attempt_count": 1,
+      "last_error": null,
+      "created_at_utc": "2026-03-22T18:01:29.055490+00:00",
+      "started_at_utc": "2026-03-22T18:01:29.105819+00:00",
+      "finished_at_utc": "2026-03-22T18:01:43.635924+00:00",
+      "worker_note": "workflow finished: artifacts/generated_configs/rolling_30d_back.json",
+      "payload": {
+        "config_path": "artifacts/generated_configs/rolling_30d_back.json",
+        "output_dir": "artifacts/generated_rolling_30d_back"
+      }
+    },
+    {
       "task_id": "61261b2b-34be-4b81-81d0-6c2eec897ecb",
       "task_type": "workflow",
       "status": "finished",
@@ -251,243 +467,6 @@
         "config_path": "artifacts/generated_configs/rolling_60d_back.json",
         "output_dir": "artifacts/generated_rolling_60d_back"
       }
-    },
-    {
-      "task_id": "f6151e3d-c4fe-486d-8426-afd5a318597c",
-      "task_type": "workflow",
-      "status": "finished",
-      "priority": 18,
-      "fingerprint": "workflow::aec26a80ff4107763e4df70188bf97914ae44edf1add208b560b47ca0ca45b56::artifacts/generated_rolling_30d_back",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-22T17:59:39.036486+00:00",
-      "started_at_utc": "2026-03-22T17:59:39.094223+00:00",
-      "finished_at_utc": "2026-03-22T17:59:52.746966+00:00",
-      "worker_note": "workflow finished: artifacts/generated_configs/rolling_30d_back.json",
-      "payload": {
-        "config_path": "artifacts/generated_configs/rolling_30d_back.json",
-        "output_dir": "artifacts/generated_rolling_30d_back"
-      }
-    },
-    {
-      "task_id": "447a9f40-dd89-4529-8752-df7240139e63",
-      "task_type": "workflow",
-      "status": "finished",
-      "priority": 22,
-      "fingerprint": "workflow::2d0cb3c1564581274c03388ad177e943b554916b9351274c8935f9133b7d9769::artifacts/generated_recent_45d",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-22T17:57:55.740948+00:00",
-      "started_at_utc": "2026-03-22T17:58:42.260246+00:00",
-      "finished_at_utc": "2026-03-22T17:58:49.597449+00:00",
-      "worker_note": "workflow finished: artifacts/generated_configs/rolling_recent_45d.json",
-      "payload": {
-        "config_path": "artifacts/generated_configs/rolling_recent_45d.json",
-        "output_dir": "artifacts/generated_recent_45d"
-      }
-    },
-    {
-      "task_id": "8f0e6002-0228-447d-8cdd-9024eb9e1f99",
-      "task_type": "workflow",
-      "status": "finished",
-      "priority": 20,
-      "fingerprint": "workflow::badcb06ce65d4c9460bc793e6fb9636582f9189dd63f337d26e2596390927b2c::artifacts/generated_rolling_120d_back",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-22T17:57:55.735864+00:00",
-      "started_at_utc": "2026-03-22T17:58:23.305853+00:00",
-      "finished_at_utc": "2026-03-22T17:58:42.242024+00:00",
-      "worker_note": "workflow finished: artifacts/generated_configs/rolling_120d_back.json",
-      "payload": {
-        "config_path": "artifacts/generated_configs/rolling_120d_back.json",
-        "output_dir": "artifacts/generated_rolling_120d_back"
-      }
-    },
-    {
-      "task_id": "6ee6fdb3-8613-4430-8471-03707d29604f",
-      "task_type": "workflow",
-      "status": "finished",
-      "priority": 19,
-      "fingerprint": "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-22T17:57:55.730530+00:00",
-      "started_at_utc": "2026-03-22T17:58:07.110873+00:00",
-      "finished_at_utc": "2026-03-22T17:58:21.160944+00:00",
-      "worker_note": "workflow finished: artifacts/generated_configs/rolling_60d_back.json",
-      "payload": {
-        "config_path": "artifacts/generated_configs/rolling_60d_back.json",
-        "output_dir": "artifacts/generated_rolling_60d_back"
-      }
-    },
-    {
-      "task_id": "9eb38c02-b524-40ae-b467-9640a82c6ff3",
-      "task_type": "workflow",
-      "status": "finished",
-      "priority": 18,
-      "fingerprint": "workflow::aec26a80ff4107763e4df70188bf97914ae44edf1add208b560b47ca0ca45b56::artifacts/generated_rolling_30d_back",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-22T17:57:55.724627+00:00",
-      "started_at_utc": "2026-03-22T17:57:55.768825+00:00",
-      "finished_at_utc": "2026-03-22T17:58:07.093234+00:00",
-      "worker_note": "workflow finished: artifacts/generated_configs/rolling_30d_back.json",
-      "payload": {
-        "config_path": "artifacts/generated_configs/rolling_30d_back.json",
-        "output_dir": "artifacts/generated_rolling_30d_back"
-      }
-    },
-    {
-      "task_id": "d732d051-ba1b-4552-8764-49e4ba3760be",
-      "task_type": "generated_batch",
-      "status": "finished",
-      "priority": 42,
-      "fingerprint": "opportunity::opp-critic-meta-diversity-probe::probe::[\"mom_20\", \"liquidity_turnover_shock\", \"mom_plus_value\", \"hybrid_mom_20_value_ep\"]",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-22T17:57:03.698056+00:00",
-      "started_at_utc": "2026-03-22T17:57:03.748641+00:00",
-      "finished_at_utc": "2026-03-22T17:57:07.415901+00:00",
-      "worker_note": "generated batch finished: /home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-critic-meta-diversity-probe.json | knowledge_gain=exploration_graveyard_identified",
-      "payload": {
-        "batch_path": "/home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-critic-meta-diversity-probe.json",
-        "branch_id": "opp-critic-meta-diversity-probe",
-        "disconfirm_if": [],
-        "execution_mode": "cheap_screen",
-        "expected_information_gain": [
-          "exploration_candidate_survived"
-        ],
-        "goal": "当前研究问题空间是否过窄，遗漏了尚未表达的新方向？",
-        "hypothesis": "当前开放问题过少，系统需要主动补一个高多样性 meta probe。",
-        "opportunity_id": "opp-critic-meta-diversity-probe",
-        "opportunity_type": "probe",
-        "output_dir": "artifacts/opportunity_generated_batch_run/opp-critic-meta-diversity-probe",
-        "promote_if": [],
-        "question": "当前研究问题空间是否过窄，遗漏了尚未表达的新方向？",
-        "source": "research_opportunity",
-        "stop_if": [],
-        "target_candidates": [
-          "mom_20",
-          "liquidity_turnover_shock",
-          "mom_plus_value",
-          "hybrid_mom_20_value_ep"
-        ],
-        "target_family": null
-      }
-    },
-    {
-      "task_id": "07333f0c-5590-4f79-8473-c8ee8fef01f3",
-      "task_type": "workflow",
-      "status": "finished",
-      "priority": 22,
-      "fingerprint": "workflow::2d0cb3c1564581274c03388ad177e943b554916b9351274c8935f9133b7d9769::artifacts/generated_recent_45d",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-22T17:56:06.472318+00:00",
-      "started_at_utc": "2026-03-22T17:56:52.560517+00:00",
-      "finished_at_utc": "2026-03-22T17:56:59.071205+00:00",
-      "worker_note": "workflow finished: artifacts/generated_configs/rolling_recent_45d.json",
-      "payload": {
-        "config_path": "artifacts/generated_configs/rolling_recent_45d.json",
-        "output_dir": "artifacts/generated_recent_45d"
-      }
-    },
-    {
-      "task_id": "08c17525-3a6b-4329-a4e2-e8a81ad01176",
-      "task_type": "workflow",
-      "status": "finished",
-      "priority": 20,
-      "fingerprint": "workflow::badcb06ce65d4c9460bc793e6fb9636582f9189dd63f337d26e2596390927b2c::artifacts/generated_rolling_120d_back",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-22T17:56:06.467049+00:00",
-      "started_at_utc": "2026-03-22T17:56:33.962529+00:00",
-      "finished_at_utc": "2026-03-22T17:56:52.543281+00:00",
-      "worker_note": "workflow finished: artifacts/generated_configs/rolling_120d_back.json",
-      "payload": {
-        "config_path": "artifacts/generated_configs/rolling_120d_back.json",
-        "output_dir": "artifacts/generated_rolling_120d_back"
-      }
-    },
-    {
-      "task_id": "02ba4d68-4b84-4990-af70-c11613b6ab72",
-      "task_type": "workflow",
-      "status": "finished",
-      "priority": 19,
-      "fingerprint": "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-22T17:56:06.461532+00:00",
-      "started_at_utc": "2026-03-22T17:56:17.913986+00:00",
-      "finished_at_utc": "2026-03-22T17:56:31.821063+00:00",
-      "worker_note": "workflow finished: artifacts/generated_configs/rolling_60d_back.json",
-      "payload": {
-        "config_path": "artifacts/generated_configs/rolling_60d_back.json",
-        "output_dir": "artifacts/generated_rolling_60d_back"
-      }
-    },
-    {
-      "task_id": "599549e1-94c8-4bde-a0d8-c4added256e7",
-      "task_type": "workflow",
-      "status": "finished",
-      "priority": 18,
-      "fingerprint": "workflow::aec26a80ff4107763e4df70188bf97914ae44edf1add208b560b47ca0ca45b56::artifacts/generated_rolling_30d_back",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-22T17:56:06.455731+00:00",
-      "started_at_utc": "2026-03-22T17:56:06.500003+00:00",
-      "finished_at_utc": "2026-03-22T17:56:17.896310+00:00",
-      "worker_note": "workflow finished: artifacts/generated_configs/rolling_30d_back.json",
-      "payload": {
-        "config_path": "artifacts/generated_configs/rolling_30d_back.json",
-        "output_dir": "artifacts/generated_rolling_30d_back"
-      }
-    },
-    {
-      "task_id": "c25a09ad-b1a6-40fe-85ea-306e5b289f3f",
-      "task_type": "workflow",
-      "status": "finished",
-      "priority": 22,
-      "fingerprint": "workflow::2d0cb3c1564581274c03388ad177e943b554916b9351274c8935f9133b7d9769::artifacts/generated_recent_45d",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-22T17:54:25.388153+00:00",
-      "started_at_utc": "2026-03-22T17:55:11.535482+00:00",
-      "finished_at_utc": "2026-03-22T17:55:18.098964+00:00",
-      "worker_note": "workflow finished: artifacts/generated_configs/rolling_recent_45d.json",
-      "payload": {
-        "config_path": "artifacts/generated_configs/rolling_recent_45d.json",
-        "output_dir": "artifacts/generated_recent_45d"
-      }
-    },
-    {
-      "task_id": "3ba9cc73-3246-45f5-a2db-7c8644ccc2fc",
-      "task_type": "workflow",
-      "status": "finished",
-      "priority": 20,
-      "fingerprint": "workflow::badcb06ce65d4c9460bc793e6fb9636582f9189dd63f337d26e2596390927b2c::artifacts/generated_rolling_120d_back",
-      "parent_task_id": null,
-      "attempt_count": 1,
-      "last_error": null,
-      "created_at_utc": "2026-03-22T17:54:25.382982+00:00",
-      "started_at_utc": "2026-03-22T17:54:53.026812+00:00",
-      "finished_at_utc": "2026-03-22T17:55:11.517890+00:00",
-      "worker_note": "workflow finished: artifacts/generated_configs/rolling_120d_back.json",
-      "payload": {
-        "config_path": "artifacts/generated_configs/rolling_120d_back.json",
-        "output_dir": "artifacts/generated_rolling_120d_back"
-      }
     }
   ],
   "recent_failed_tasks": [],
@@ -510,7 +489,7 @@
     }
   ],
   "memory": {
-    "updated_at_utc": "2026-03-22T18:00:39.995921+00:00",
+    "updated_at_utc": "2026-03-22T18:06:10.965901+00:00",
     "stable_candidates": [
       "hybrid_liquidity_turnover_shock_mom_20",
       "hybrid_liquidity_turnover_shock_value_ep",
@@ -934,6 +913,48 @@
         "next_state": "terminated",
         "action": "terminate",
         "reason": "too_many_consecutive_holds",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "stable_candidate_validation_level_6",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "stable_candidate_validation_level_6",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
+        "policy": {
+          "archive_after_no_gain_runs": 2,
+          "terminate_after_duplicate_pressure": 4,
+          "promote_after_validation_score": 145,
+          "demote_below_strategy_score": 90,
+          "terminate_after_hold_count": 3
+        }
+      },
+      {
+        "branch_id": "stable_candidate_validation_level_6",
+        "previous_state": "stable_candidate",
+        "next_state": "stable_candidate",
+        "action": "promote",
+        "reason": "validated_above_promotion_threshold",
         "policy": {
           "archive_after_no_gain_runs": 2,
           "terminate_after_duplicate_pressure": 4,
@@ -1620,114 +1641,33 @@
         "strategy_score": 194.371,
         "action": "promote",
         "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-22T18:00:43.468742+00:00",
+        "target": "stable_candidate_validation_level_6",
+        "category": "validation",
+        "strategy_score": 194.371,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-22T18:02:40.598444+00:00",
+        "target": "stable_candidate_validation_level_6",
+        "category": "validation",
+        "strategy_score": 194.371,
+        "action": "promote",
+        "next_state": "stable_candidate"
+      },
+      {
+        "updated_at_utc": "2026-03-22T18:04:28.747040+00:00",
+        "target": "stable_candidate_validation_level_6",
+        "category": "validation",
+        "strategy_score": 194.371,
+        "action": "promote",
+        "next_state": "stable_candidate"
       }
     ],
     "strategy_runs": [
-      {
-        "updated_at_utc": "2026-03-22T16:55:04.252286+00:00",
-        "approved_count": 2,
-        "injected_count": 0,
-        "branch_actions": [
-          {
-            "branch_id": "fallback_stable_candidate_validation",
-            "previous_state": "stable_candidate",
-            "next_state": "stable_candidate",
-            "action": "promote",
-            "reason": "validated_above_promotion_threshold",
-            "policy": {
-              "archive_after_no_gain_runs": 2,
-              "terminate_after_duplicate_pressure": 4,
-              "promote_after_validation_score": 145,
-              "demote_below_strategy_score": 90,
-              "terminate_after_hold_count": 3
-            }
-          },
-          {
-            "branch_id": "fallback_graveyard_diagnosis",
-            "previous_state": "validating",
-            "next_state": "validating",
-            "action": "promote",
-            "reason": "high_confidence_validation_branch",
-            "policy": {
-              "archive_after_no_gain_runs": 2,
-              "terminate_after_duplicate_pressure": 4,
-              "promote_after_validation_score": 145,
-              "demote_below_strategy_score": 90,
-              "terminate_after_hold_count": 3
-            }
-          }
-        ]
-      },
-      {
-        "updated_at_utc": "2026-03-22T16:56:01.418752+00:00",
-        "approved_count": 2,
-        "injected_count": 0,
-        "branch_actions": [
-          {
-            "branch_id": "fallback_stable_candidate_validation",
-            "previous_state": "stable_candidate",
-            "next_state": "stable_candidate",
-            "action": "promote",
-            "reason": "validated_above_promotion_threshold",
-            "policy": {
-              "archive_after_no_gain_runs": 2,
-              "terminate_after_duplicate_pressure": 4,
-              "promote_after_validation_score": 145,
-              "demote_below_strategy_score": 90,
-              "terminate_after_hold_count": 3
-            }
-          },
-          {
-            "branch_id": "fallback_graveyard_diagnosis",
-            "previous_state": "validating",
-            "next_state": "validating",
-            "action": "promote",
-            "reason": "high_confidence_validation_branch",
-            "policy": {
-              "archive_after_no_gain_runs": 2,
-              "terminate_after_duplicate_pressure": 4,
-              "promote_after_validation_score": 145,
-              "demote_below_strategy_score": 90,
-              "terminate_after_hold_count": 3
-            }
-          }
-        ]
-      },
-      {
-        "updated_at_utc": "2026-03-22T16:56:58.769936+00:00",
-        "approved_count": 2,
-        "injected_count": 0,
-        "branch_actions": [
-          {
-            "branch_id": "fallback_stable_candidate_validation",
-            "previous_state": "stable_candidate",
-            "next_state": "stable_candidate",
-            "action": "promote",
-            "reason": "validated_above_promotion_threshold",
-            "policy": {
-              "archive_after_no_gain_runs": 2,
-              "terminate_after_duplicate_pressure": 4,
-              "promote_after_validation_score": 145,
-              "demote_below_strategy_score": 90,
-              "terminate_after_hold_count": 3
-            }
-          },
-          {
-            "branch_id": "fallback_graveyard_diagnosis",
-            "previous_state": "validating",
-            "next_state": "validating",
-            "action": "promote",
-            "reason": "high_confidence_validation_branch",
-            "policy": {
-              "archive_after_no_gain_runs": 2,
-              "terminate_after_duplicate_pressure": 4,
-              "promote_after_validation_score": 145,
-              "demote_below_strategy_score": 90,
-              "terminate_after_hold_count": 3
-            }
-          }
-        ]
-      },
       {
         "updated_at_utc": "2026-03-22T16:57:56.003590+00:00",
         "approved_count": 2,
@@ -2812,6 +2752,69 @@
             }
           }
         ]
+      },
+      {
+        "updated_at_utc": "2026-03-22T18:00:43.570095+00:00",
+        "approved_count": 1,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "stable_candidate_validation_level_6",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-22T18:02:40.767609+00:00",
+        "approved_count": 1,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "stable_candidate_validation_level_6",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
+      },
+      {
+        "updated_at_utc": "2026-03-22T18:04:28.846442+00:00",
+        "approved_count": 1,
+        "injected_count": 0,
+        "branch_actions": [
+          {
+            "branch_id": "stable_candidate_validation_level_6",
+            "previous_state": "stable_candidate",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "reason": "validated_above_promotion_threshold",
+            "policy": {
+              "archive_after_no_gain_runs": 2,
+              "terminate_after_duplicate_pressure": 4,
+              "promote_after_validation_score": 145,
+              "demote_below_strategy_score": 90,
+              "terminate_after_hold_count": 3
+            }
+          }
+        ]
       }
     ],
     "candidate_lifecycle": {
@@ -2948,25 +2951,6 @@
       "liquidity_turnover_shock": {
         "history": [
           {
-            "updated_at_utc": "2026-03-22T17:32:46.914549+00:00",
-            "next_state": "stable_candidate",
-            "action": "promote",
-            "source_branch_id": "stable_candidate_validation_level_6"
-          },
-          {
-            "updated_at_utc": "2026-03-22T17:34:42.359923+00:00",
-            "next_state": "stable_candidate",
-            "action": "promote",
-            "source_branch_id": "stable_candidate_validation_level_6"
-          },
-          {
-            "updated_at_utc": "2026-03-22T17:36:20.185599+00:00",
-            "next_state": "provisional",
-            "action": "demote",
-            "source_branch_id": "frontier_reconcile",
-            "reason": "frontier_suppressed"
-          },
-          {
             "updated_at_utc": "2026-03-22T17:36:43.596266+00:00",
             "next_state": "stable_candidate",
             "action": "promote",
@@ -3068,13 +3052,31 @@
             "next_state": "stable_candidate",
             "action": "promote",
             "source_branch_id": "stable_candidate_validation_level_6"
+          },
+          {
+            "updated_at_utc": "2026-03-22T18:00:43.570071+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "stable_candidate_validation_level_6"
+          },
+          {
+            "updated_at_utc": "2026-03-22T18:02:40.767571+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "stable_candidate_validation_level_6"
+          },
+          {
+            "updated_at_utc": "2026-03-22T18:04:28.846418+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "stable_candidate_validation_level_6"
           }
         ],
         "candidate_name": "liquidity_turnover_shock",
         "next_state": "stable_candidate",
         "action": "promote",
         "source_branch_id": "stable_candidate_validation_level_6",
-        "updated_at_utc": "2026-03-22T17:58:53.412873+00:00"
+        "updated_at_utc": "2026-03-22T18:04:28.846422+00:00"
       },
       "mom_plus_value": {
         "history": [
@@ -3993,26 +3995,8 @@
         "next_state": "stable_candidate",
         "source_branch_id": "stable_candidate_validation_level_6",
         "action": "promote",
-        "updated_at_utc": "2026-03-22T17:58:53.412860+00:00",
+        "updated_at_utc": "2026-03-22T18:04:28.846413+00:00",
         "history": [
-          {
-            "updated_at_utc": "2026-03-22T17:32:36.268594+00:00",
-            "next_state": "stable_candidate",
-            "action": "promote",
-            "source_branch_id": "stable_candidate_validation_level_6"
-          },
-          {
-            "updated_at_utc": "2026-03-22T17:32:46.914537+00:00",
-            "next_state": "stable_candidate",
-            "action": "promote",
-            "source_branch_id": "stable_candidate_validation_level_6"
-          },
-          {
-            "updated_at_utc": "2026-03-22T17:34:42.359911+00:00",
-            "next_state": "stable_candidate",
-            "action": "promote",
-            "source_branch_id": "stable_candidate_validation_level_6"
-          },
           {
             "updated_at_utc": "2026-03-22T17:36:43.596248+00:00",
             "next_state": "stable_candidate",
@@ -4111,6 +4095,24 @@
           },
           {
             "updated_at_utc": "2026-03-22T17:58:53.412851+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "stable_candidate_validation_level_6"
+          },
+          {
+            "updated_at_utc": "2026-03-22T18:00:43.570060+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "stable_candidate_validation_level_6"
+          },
+          {
+            "updated_at_utc": "2026-03-22T18:02:40.767553+00:00",
+            "next_state": "stable_candidate",
+            "action": "promote",
+            "source_branch_id": "stable_candidate_validation_level_6"
+          },
+          {
+            "updated_at_utc": "2026-03-22T18:04:28.846407+00:00",
             "next_state": "stable_candidate",
             "action": "promote",
             "source_branch_id": "stable_candidate_validation_level_6"
@@ -5686,15 +5688,33 @@
             "state": "archived",
             "last_action": "hold",
             "reason": "no_significant_information_gain"
+          },
+          {
+            "updated_at_utc": "2026-03-22T18:01:43.640160+00:00",
+            "state": "archived",
+            "last_action": "hold",
+            "reason": "no_significant_information_gain"
+          },
+          {
+            "updated_at_utc": "2026-03-22T18:03:39.477630+00:00",
+            "state": "archived",
+            "last_action": "hold",
+            "reason": "no_significant_information_gain"
+          },
+          {
+            "updated_at_utc": "2026-03-22T18:05:25.124239+00:00",
+            "state": "archived",
+            "last_action": "hold",
+            "reason": "no_significant_information_gain"
           }
         ],
-        "updated_at_utc": "2026-03-22T17:59:52.751506+00:00",
+        "updated_at_utc": "2026-03-22T18:05:25.124229+00:00",
         "last_task_type": "workflow",
         "last_status": "finished",
         "goal": null,
         "hypothesis": null,
         "validation_runs": 0,
-        "no_gain_runs": 7,
+        "no_gain_runs": 10,
         "last_action": "archive",
         "state": "archived",
         "reason": "no_significant_information_gain"
@@ -5742,15 +5762,33 @@
             "state": "archived",
             "last_action": "hold",
             "reason": "no_significant_information_gain"
+          },
+          {
+            "updated_at_utc": "2026-03-22T18:02:00.447292+00:00",
+            "state": "archived",
+            "last_action": "hold",
+            "reason": "no_significant_information_gain"
+          },
+          {
+            "updated_at_utc": "2026-03-22T18:03:55.461135+00:00",
+            "state": "archived",
+            "last_action": "hold",
+            "reason": "no_significant_information_gain"
+          },
+          {
+            "updated_at_utc": "2026-03-22T18:05:39.506717+00:00",
+            "state": "archived",
+            "last_action": "hold",
+            "reason": "no_significant_information_gain"
           }
         ],
-        "updated_at_utc": "2026-03-22T18:00:09.469432+00:00",
+        "updated_at_utc": "2026-03-22T18:05:39.506707+00:00",
         "last_task_type": "workflow",
         "last_status": "finished",
         "goal": null,
         "hypothesis": null,
         "validation_runs": 0,
-        "no_gain_runs": 7,
+        "no_gain_runs": 10,
         "last_action": "archive",
         "state": "archived",
         "reason": "no_significant_information_gain"
@@ -5824,15 +5862,33 @@
             "state": "archived",
             "last_action": "hold",
             "reason": "no_significant_information_gain"
+          },
+          {
+            "updated_at_utc": "2026-03-22T18:02:27.635627+00:00",
+            "state": "archived",
+            "last_action": "hold",
+            "reason": "no_significant_information_gain"
+          },
+          {
+            "updated_at_utc": "2026-03-22T18:04:18.787136+00:00",
+            "state": "archived",
+            "last_action": "hold",
+            "reason": "no_significant_information_gain"
+          },
+          {
+            "updated_at_utc": "2026-03-22T18:06:02.825265+00:00",
+            "state": "archived",
+            "last_action": "hold",
+            "reason": "no_significant_information_gain"
           }
         ],
-        "updated_at_utc": "2026-03-22T18:00:33.004315+00:00",
+        "updated_at_utc": "2026-03-22T18:06:02.825255+00:00",
         "last_task_type": "workflow",
         "last_status": "finished",
         "goal": null,
         "hypothesis": null,
         "validation_runs": 0,
-        "no_gain_runs": 8,
+        "no_gain_runs": 11,
         "last_action": "archive",
         "state": "archived",
         "reason": "no_significant_information_gain"
@@ -5886,15 +5942,33 @@
             "state": "archived",
             "last_action": "hold",
             "reason": "no_significant_information_gain"
+          },
+          {
+            "updated_at_utc": "2026-03-22T18:02:36.254745+00:00",
+            "state": "archived",
+            "last_action": "hold",
+            "reason": "no_significant_information_gain"
+          },
+          {
+            "updated_at_utc": "2026-03-22T18:04:25.332751+00:00",
+            "state": "archived",
+            "last_action": "hold",
+            "reason": "no_significant_information_gain"
+          },
+          {
+            "updated_at_utc": "2026-03-22T18:06:10.965966+00:00",
+            "state": "archived",
+            "last_action": "hold",
+            "reason": "no_significant_information_gain"
           }
         ],
-        "updated_at_utc": "2026-03-22T18:00:39.995947+00:00",
+        "updated_at_utc": "2026-03-22T18:06:10.965954+00:00",
         "last_task_type": "workflow",
         "last_status": "finished",
         "goal": null,
         "hypothesis": null,
         "validation_runs": 0,
-        "no_gain_runs": 8,
+        "no_gain_runs": 11,
         "last_action": "archive",
         "state": "archived",
         "reason": "no_significant_information_gain"
@@ -6423,7 +6497,7 @@
         "state": "stable_candidate",
         "last_action": "promote",
         "reason": "validated_above_promotion_threshold",
-        "updated_at_utc": "2026-03-22T17:58:53.293243+00:00",
+        "updated_at_utc": "2026-03-22T18:04:28.747054+00:00",
         "goal": "validate_stable_candidates",
         "hypothesis": "当前稳定候选在更深一层诊断下依然成立，而不是被 cluster/窗口偶然性抬高。",
         "history": [
@@ -6492,9 +6566,27 @@
             "state": "stable_candidate",
             "last_action": "promote",
             "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-22T18:00:43.570081+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-22T18:02:40.767588+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
+          },
+          {
+            "updated_at_utc": "2026-03-22T18:04:28.846428+00:00",
+            "state": "stable_candidate",
+            "last_action": "promote",
+            "reason": "validated_above_promotion_threshold"
           }
         ],
-        "validation_runs": 11,
+        "validation_runs": 14,
         "no_gain_runs": 0,
         "last_task_type": "diagnostic",
         "last_status": "finished"
@@ -6749,162 +6841,6 @@
       "terminate_after_hold_count": 3
     },
     "execution_feedback": [
-      {
-        "updated_at_utc": "2026-03-22T17:43:41.017431+00:00",
-        "branch_id": "workflow::2d0cb3c1564581274c03388ad177e943b554916b9351274c8935f9133b7d9769::artifacts/generated_recent_45d",
-        "task_type": "workflow",
-        "status": "finished",
-        "has_gain": false,
-        "summary": "workflow finished: artifacts/generated_configs/rolling_recent_45d.json",
-        "error_text": null,
-        "focus_candidates": [],
-        "knowledge_gain": [],
-        "goal": null,
-        "hypothesis": null
-      },
-      {
-        "updated_at_utc": "2026-03-22T17:44:40.633726+00:00",
-        "branch_id": "workflow::aec26a80ff4107763e4df70188bf97914ae44edf1add208b560b47ca0ca45b56::artifacts/generated_rolling_30d_back",
-        "task_type": "workflow",
-        "status": "finished",
-        "has_gain": false,
-        "summary": "workflow finished: artifacts/generated_configs/rolling_30d_back.json",
-        "error_text": null,
-        "focus_candidates": [],
-        "knowledge_gain": [],
-        "goal": null,
-        "hypothesis": null
-      },
-      {
-        "updated_at_utc": "2026-03-22T17:44:55.430209+00:00",
-        "branch_id": "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back",
-        "task_type": "workflow",
-        "status": "finished",
-        "has_gain": false,
-        "summary": "workflow finished: artifacts/generated_configs/rolling_60d_back.json",
-        "error_text": null,
-        "focus_candidates": [],
-        "knowledge_gain": [],
-        "goal": null,
-        "hypothesis": null
-      },
-      {
-        "updated_at_utc": "2026-03-22T17:45:19.084781+00:00",
-        "branch_id": "workflow::badcb06ce65d4c9460bc793e6fb9636582f9189dd63f337d26e2596390927b2c::artifacts/generated_rolling_120d_back",
-        "task_type": "workflow",
-        "status": "finished",
-        "has_gain": false,
-        "summary": "workflow finished: artifacts/generated_configs/rolling_120d_back.json",
-        "error_text": null,
-        "focus_candidates": [],
-        "knowledge_gain": [],
-        "goal": null,
-        "hypothesis": null
-      },
-      {
-        "updated_at_utc": "2026-03-22T17:45:26.854211+00:00",
-        "branch_id": "workflow::2d0cb3c1564581274c03388ad177e943b554916b9351274c8935f9133b7d9769::artifacts/generated_recent_45d",
-        "task_type": "workflow",
-        "status": "finished",
-        "has_gain": false,
-        "summary": "workflow finished: artifacts/generated_configs/rolling_recent_45d.json",
-        "error_text": null,
-        "focus_candidates": [],
-        "knowledge_gain": [],
-        "goal": null,
-        "hypothesis": null
-      },
-      {
-        "updated_at_utc": "2026-03-22T17:46:30.630828+00:00",
-        "branch_id": "workflow::aec26a80ff4107763e4df70188bf97914ae44edf1add208b560b47ca0ca45b56::artifacts/generated_rolling_30d_back",
-        "task_type": "workflow",
-        "status": "finished",
-        "has_gain": false,
-        "summary": "workflow finished: artifacts/generated_configs/rolling_30d_back.json",
-        "error_text": null,
-        "focus_candidates": [],
-        "knowledge_gain": [],
-        "goal": null,
-        "hypothesis": null
-      },
-      {
-        "updated_at_utc": "2026-03-22T17:46:47.632156+00:00",
-        "branch_id": "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back",
-        "task_type": "workflow",
-        "status": "finished",
-        "has_gain": false,
-        "summary": "workflow finished: artifacts/generated_configs/rolling_60d_back.json",
-        "error_text": null,
-        "focus_candidates": [],
-        "knowledge_gain": [],
-        "goal": null,
-        "hypothesis": null
-      },
-      {
-        "updated_at_utc": "2026-03-22T17:47:12.470648+00:00",
-        "branch_id": "workflow::badcb06ce65d4c9460bc793e6fb9636582f9189dd63f337d26e2596390927b2c::artifacts/generated_rolling_120d_back",
-        "task_type": "workflow",
-        "status": "finished",
-        "has_gain": false,
-        "summary": "workflow finished: artifacts/generated_configs/rolling_120d_back.json",
-        "error_text": null,
-        "focus_candidates": [],
-        "knowledge_gain": [],
-        "goal": null,
-        "hypothesis": null
-      },
-      {
-        "updated_at_utc": "2026-03-22T17:47:20.507205+00:00",
-        "branch_id": "workflow::2d0cb3c1564581274c03388ad177e943b554916b9351274c8935f9133b7d9769::artifacts/generated_recent_45d",
-        "task_type": "workflow",
-        "status": "finished",
-        "has_gain": false,
-        "summary": "workflow finished: artifacts/generated_configs/rolling_recent_45d.json",
-        "error_text": null,
-        "focus_candidates": [],
-        "knowledge_gain": [],
-        "goal": null,
-        "hypothesis": null
-      },
-      {
-        "updated_at_utc": "2026-03-22T17:48:24.305059+00:00",
-        "branch_id": "workflow::aec26a80ff4107763e4df70188bf97914ae44edf1add208b560b47ca0ca45b56::artifacts/generated_rolling_30d_back",
-        "task_type": "workflow",
-        "status": "finished",
-        "has_gain": false,
-        "summary": "workflow finished: artifacts/generated_configs/rolling_30d_back.json",
-        "error_text": null,
-        "focus_candidates": [],
-        "knowledge_gain": [],
-        "goal": null,
-        "hypothesis": null
-      },
-      {
-        "updated_at_utc": "2026-03-22T17:48:41.367115+00:00",
-        "branch_id": "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back",
-        "task_type": "workflow",
-        "status": "finished",
-        "has_gain": false,
-        "summary": "workflow finished: artifacts/generated_configs/rolling_60d_back.json",
-        "error_text": null,
-        "focus_candidates": [],
-        "knowledge_gain": [],
-        "goal": null,
-        "hypothesis": null
-      },
-      {
-        "updated_at_utc": "2026-03-22T17:49:09.360792+00:00",
-        "branch_id": "workflow::badcb06ce65d4c9460bc793e6fb9636582f9189dd63f337d26e2596390927b2c::artifacts/generated_rolling_120d_back",
-        "task_type": "workflow",
-        "status": "finished",
-        "has_gain": false,
-        "summary": "workflow finished: artifacts/generated_configs/rolling_120d_back.json",
-        "error_text": null,
-        "focus_candidates": [],
-        "knowledge_gain": [],
-        "goal": null,
-        "hypothesis": null
-      },
       {
         "updated_at_utc": "2026-03-22T17:49:17.939849+00:00",
         "branch_id": "workflow::2d0cb3c1564581274c03388ad177e943b554916b9351274c8935f9133b7d9769::artifacts/generated_recent_45d",
@@ -7451,6 +7387,162 @@
       },
       {
         "updated_at_utc": "2026-03-22T18:00:39.995961+00:00",
+        "branch_id": "workflow::2d0cb3c1564581274c03388ad177e943b554916b9351274c8935f9133b7d9769::artifacts/generated_recent_45d",
+        "task_type": "workflow",
+        "status": "finished",
+        "has_gain": false,
+        "summary": "workflow finished: artifacts/generated_configs/rolling_recent_45d.json",
+        "error_text": null,
+        "focus_candidates": [],
+        "knowledge_gain": [],
+        "goal": null,
+        "hypothesis": null
+      },
+      {
+        "updated_at_utc": "2026-03-22T18:01:43.640164+00:00",
+        "branch_id": "workflow::aec26a80ff4107763e4df70188bf97914ae44edf1add208b560b47ca0ca45b56::artifacts/generated_rolling_30d_back",
+        "task_type": "workflow",
+        "status": "finished",
+        "has_gain": false,
+        "summary": "workflow finished: artifacts/generated_configs/rolling_30d_back.json",
+        "error_text": null,
+        "focus_candidates": [],
+        "knowledge_gain": [],
+        "goal": null,
+        "hypothesis": null
+      },
+      {
+        "updated_at_utc": "2026-03-22T18:02:00.447298+00:00",
+        "branch_id": "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back",
+        "task_type": "workflow",
+        "status": "finished",
+        "has_gain": false,
+        "summary": "workflow finished: artifacts/generated_configs/rolling_60d_back.json",
+        "error_text": null,
+        "focus_candidates": [],
+        "knowledge_gain": [],
+        "goal": null,
+        "hypothesis": null
+      },
+      {
+        "updated_at_utc": "2026-03-22T18:02:27.635632+00:00",
+        "branch_id": "workflow::badcb06ce65d4c9460bc793e6fb9636582f9189dd63f337d26e2596390927b2c::artifacts/generated_rolling_120d_back",
+        "task_type": "workflow",
+        "status": "finished",
+        "has_gain": false,
+        "summary": "workflow finished: artifacts/generated_configs/rolling_120d_back.json",
+        "error_text": null,
+        "focus_candidates": [],
+        "knowledge_gain": [],
+        "goal": null,
+        "hypothesis": null
+      },
+      {
+        "updated_at_utc": "2026-03-22T18:02:36.254749+00:00",
+        "branch_id": "workflow::2d0cb3c1564581274c03388ad177e943b554916b9351274c8935f9133b7d9769::artifacts/generated_recent_45d",
+        "task_type": "workflow",
+        "status": "finished",
+        "has_gain": false,
+        "summary": "workflow finished: artifacts/generated_configs/rolling_recent_45d.json",
+        "error_text": null,
+        "focus_candidates": [],
+        "knowledge_gain": [],
+        "goal": null,
+        "hypothesis": null
+      },
+      {
+        "updated_at_utc": "2026-03-22T18:03:39.477634+00:00",
+        "branch_id": "workflow::aec26a80ff4107763e4df70188bf97914ae44edf1add208b560b47ca0ca45b56::artifacts/generated_rolling_30d_back",
+        "task_type": "workflow",
+        "status": "finished",
+        "has_gain": false,
+        "summary": "workflow finished: artifacts/generated_configs/rolling_30d_back.json",
+        "error_text": null,
+        "focus_candidates": [],
+        "knowledge_gain": [],
+        "goal": null,
+        "hypothesis": null
+      },
+      {
+        "updated_at_utc": "2026-03-22T18:03:55.461141+00:00",
+        "branch_id": "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back",
+        "task_type": "workflow",
+        "status": "finished",
+        "has_gain": false,
+        "summary": "workflow finished: artifacts/generated_configs/rolling_60d_back.json",
+        "error_text": null,
+        "focus_candidates": [],
+        "knowledge_gain": [],
+        "goal": null,
+        "hypothesis": null
+      },
+      {
+        "updated_at_utc": "2026-03-22T18:04:18.787139+00:00",
+        "branch_id": "workflow::badcb06ce65d4c9460bc793e6fb9636582f9189dd63f337d26e2596390927b2c::artifacts/generated_rolling_120d_back",
+        "task_type": "workflow",
+        "status": "finished",
+        "has_gain": false,
+        "summary": "workflow finished: artifacts/generated_configs/rolling_120d_back.json",
+        "error_text": null,
+        "focus_candidates": [],
+        "knowledge_gain": [],
+        "goal": null,
+        "hypothesis": null
+      },
+      {
+        "updated_at_utc": "2026-03-22T18:04:25.332755+00:00",
+        "branch_id": "workflow::2d0cb3c1564581274c03388ad177e943b554916b9351274c8935f9133b7d9769::artifacts/generated_recent_45d",
+        "task_type": "workflow",
+        "status": "finished",
+        "has_gain": false,
+        "summary": "workflow finished: artifacts/generated_configs/rolling_recent_45d.json",
+        "error_text": null,
+        "focus_candidates": [],
+        "knowledge_gain": [],
+        "goal": null,
+        "hypothesis": null
+      },
+      {
+        "updated_at_utc": "2026-03-22T18:05:25.124242+00:00",
+        "branch_id": "workflow::aec26a80ff4107763e4df70188bf97914ae44edf1add208b560b47ca0ca45b56::artifacts/generated_rolling_30d_back",
+        "task_type": "workflow",
+        "status": "finished",
+        "has_gain": false,
+        "summary": "workflow finished: artifacts/generated_configs/rolling_30d_back.json",
+        "error_text": null,
+        "focus_candidates": [],
+        "knowledge_gain": [],
+        "goal": null,
+        "hypothesis": null
+      },
+      {
+        "updated_at_utc": "2026-03-22T18:05:39.506721+00:00",
+        "branch_id": "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back",
+        "task_type": "workflow",
+        "status": "finished",
+        "has_gain": false,
+        "summary": "workflow finished: artifacts/generated_configs/rolling_60d_back.json",
+        "error_text": null,
+        "focus_candidates": [],
+        "knowledge_gain": [],
+        "goal": null,
+        "hypothesis": null
+      },
+      {
+        "updated_at_utc": "2026-03-22T18:06:02.825270+00:00",
+        "branch_id": "workflow::badcb06ce65d4c9460bc793e6fb9636582f9189dd63f337d26e2596390927b2c::artifacts/generated_rolling_120d_back",
+        "task_type": "workflow",
+        "status": "finished",
+        "has_gain": false,
+        "summary": "workflow finished: artifacts/generated_configs/rolling_120d_back.json",
+        "error_text": null,
+        "focus_candidates": [],
+        "knowledge_gain": [],
+        "goal": null,
+        "hypothesis": null
+      },
+      {
+        "updated_at_utc": "2026-03-22T18:06:10.965970+00:00",
         "branch_id": "workflow::2d0cb3c1564581274c03388ad177e943b554916b9351274c8935f9133b7d9769::artifacts/generated_recent_45d",
         "task_type": "workflow",
         "status": "finished",

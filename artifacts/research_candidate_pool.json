@@ -22,7 +22,7 @@
       "should_throttle": false
     },
     "stable_candidate_count": 2,
-    "raw_stable_candidate_count": 5,
+    "raw_stable_candidate_count": 3,
     "graveyard_count": 3,
     "candidate_count": 1,
     "suppressed_candidate_count": 2,
@@ -34,7 +34,7 @@
       "same_family": 4
     },
     "research_learning": {
-      "updated_at_utc": "2026-03-22T18:00:43.570034+00:00",
+      "updated_at_utc": "2026-03-22T18:06:14.815126+00:00",
       "families": {}
     },
     "research_promoter": {
@@ -44,30 +44,6 @@
     }
   },
   "representative_selection": [
-    {
-      "candidate": "mom_20",
-      "suppressed_into": "hybrid_mom_20_liquidity_turnover_shock",
-      "cluster_id": 1,
-      "available_representatives": [
-        "hybrid_mom_20_liquidity_turnover_shock",
-        "hybrid_liquidity_turnover_shock_mom_20",
-        "liquidity_turnover_shock",
-        "value_ep"
-      ],
-      "reason": "cluster_representative_retained"
-    },
-    {
-      "candidate": "mom_plus_value",
-      "suppressed_into": "hybrid_mom_20_liquidity_turnover_shock",
-      "cluster_id": 1,
-      "available_representatives": [
-        "hybrid_mom_20_liquidity_turnover_shock",
-        "hybrid_liquidity_turnover_shock_mom_20",
-        "liquidity_turnover_shock",
-        "value_ep"
-      ],
-      "reason": "cluster_representative_retained"
-    },
     {
       "candidate": "hybrid_mom_20_value_ep",
       "suppressed_into": "hybrid_mom_20_liquidity_turnover_shock",
@@ -97,9 +73,9 @@
       ]
     },
     {
-      "candidate": "liquidity_turnover_shock",
+      "candidate": "value_ep",
       "cluster_id": 1,
-      "representative_rank": 3,
+      "representative_rank": 4,
       "representative_count": 4,
       "is_primary_representative": false,
       "suppressed_candidates": [
@@ -134,7 +110,7 @@
       "task_type": "diagnostic",
       "category": "validation",
       "priority_hint": 21,
-      "reason": "稳定候选当前已完成到第 5 层，建议进入第 6 层验证。 重点候选累计关系 13 条、lineage 8 条，最强 family=momentum，fragile_candidates=0，family_risk_score=100.0。保留 cluster representatives 后实际验证 2 个代表候选，压制 3 个重复/近重复候选。",
+      "reason": "稳定候选当前已完成到第 5 层，建议进入第 6 层验证。 重点候选累计关系 10 条、lineage 8 条，最强 family=momentum，fragile_candidates=0，family_risk_score=100.0。frontier 当前优先 family=momentum, value, liquidity，优先候选=hybrid_mom_20_liquidity_turnover_shock, hybrid_mom_20_value_ep, value_ep。 保留 cluster representatives 后实际验证 2 个代表候选，压制 1 个重复/近重复候选。",
       "goal": "validate_stable_candidates",
       "hypothesis": "当前稳定候选在更深一层诊断下依然成立，而不是被 cluster/窗口偶然性抬高。",
       "branch_id": "stable_candidate_validation_level_6",
@@ -154,7 +130,7 @@
         "diagnostic_type": "stable_candidate_validation_review_v6",
         "focus_factors": [
           "hybrid_mom_20_liquidity_turnover_shock",
-          "liquidity_turnover_shock"
+          "value_ep"
         ],
         "reasons": [
           "stable_candidates_need_deeper_validation"
@@ -179,7 +155,7 @@
           "stable_candidate_validation_reclassifies_candidates_as_fragile"
         ]
       },
-      "fingerprint": "diagnostic::stable_candidate_validation_review_v6::{\"branch_id\": \"stable_candidate_validation_level_6\", \"diagnostic_type\": \"stable_candidate_validation_review_v6\", \"disconfirm_if\": [\"stable_candidate_validation_reclassifies_candidates_as_fragile\"], \"expected_information_gain\": [\"stable_candidate_validation_v6_requested\"], \"focus_factors\": [\"hybrid_mom_20_liquidity_turnover_shock\", \"liquidity_turnover_shock\"], \"goal\": \"validate_stable_candidates\", \"hypothesis\": \"当前稳定候选在更深一层诊断下依然成立，而不是被 cluster/窗口偶然性抬高。\", \"knowledge_gain\": [\"stable_candidate_validation_v6_requested\"], \"promote_if\": [\"stable_candidate_validation_confirms_cross_window_robustness\"], \"reasons\": [\"stable_candidates_need_deeper_validation\"], \"source_output_dir\": \"artifacts/tushare_batch\", \"stop_if\": [\"stable_candidate_validation_fails_in_two_more_levels\"]}",
+      "fingerprint": "diagnostic::stable_candidate_validation_review_v6::{\"branch_id\": \"stable_candidate_validation_level_6\", \"diagnostic_type\": \"stable_candidate_validation_review_v6\", \"disconfirm_if\": [\"stable_candidate_validation_reclassifies_candidates_as_fragile\"], \"expected_information_gain\": [\"stable_candidate_validation_v6_requested\"], \"focus_factors\": [\"hybrid_mom_20_liquidity_turnover_shock\", \"value_ep\"], \"goal\": \"validate_stable_candidates\", \"hypothesis\": \"当前稳定候选在更深一层诊断下依然成立，而不是被 cluster/窗口偶然性抬高。\", \"knowledge_gain\": [\"stable_candidate_validation_v6_requested\"], \"promote_if\": [\"stable_candidate_validation_confirms_cross_window_robustness\"], \"reasons\": [\"stable_candidates_need_deeper_validation\"], \"source_output_dir\": \"artifacts/tushare_batch\", \"stop_if\": [\"stable_candidate_validation_fails_in_two_more_levels\"]}",
       "worker_note": "validation｜稳定候选深化验证 v6",
       "focus_candidates": [
         {
@@ -198,10 +174,10 @@
             "dominant_family": "momentum",
             "relationship_mix": {
               "duplicate_of": 1,
-              "same_family": 4,
+              "hybrid_of": 7,
               "high_corr": 5,
               "refinement_of": 12,
-              "hybrid_of": 7
+              "same_family": 4
             },
             "members": [
               {
@@ -559,13 +535,13 @@
           "acceptance_gate": {}
         },
         {
-          "candidate_id": "f0356652-fafa-4f95-b588-cdcb661382f3",
-          "candidate_name": "liquidity_turnover_shock",
-          "family": "liquidity",
+          "candidate_id": "842ba988-63d3-4815-81ca-ced125ae7146",
+          "candidate_name": "value_ep",
+          "family": "value",
           "status": "fragile",
-          "family_score": 38.95836,
-          "family_recommended_action": "explore_new_branch",
-          "relationship_count": 6,
+          "family_score": 72.409736,
+          "family_recommended_action": "refine",
+          "relationship_count": 3,
           "lineage_count": 3,
           "cluster": {
             "cluster_id": 1,
@@ -574,10 +550,10 @@
             "dominant_family": "momentum",
             "relationship_mix": {
               "duplicate_of": 1,
-              "same_family": 4,
+              "hybrid_of": 7,
               "high_corr": 5,
               "refinement_of": 12,
-              "hybrid_of": 7
+              "same_family": 4
             },
             "members": [
               {
@@ -717,178 +693,129 @@
           "is_primary_candidate": false,
           "related_candidates": [
             {
-              "candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-              "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
-              "relationship_type": "high_corr",
-              "strength": 1.0,
-              "details": {
-                "peer_count": 1
-              }
-            },
-            {
-              "candidate_id": "82f8128b-7227-494a-9382-77d288a4bfa4",
-              "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
-              "relationship_type": "high_corr",
-              "strength": 1.0,
-              "details": {
-                "peer_count": 1
-              }
-            },
-            {
-              "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
-              "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
-              "relationship_type": "high_corr",
-              "strength": 1.0,
-              "details": {
-                "peer_count": 1
-              }
-            },
-            {
-              "candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-              "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
-              "relationship_type": "refinement_of",
-              "strength": 0.82,
-              "details": {
-                "basis": "atom_superset",
-                "child_candidate": "hybrid_mom_20_liquidity_turnover_shock",
-                "extra_atoms": [
-                  "hybrid"
-                ],
-                "parent_candidate": "liquidity_turnover_shock",
-                "shared_atoms": [
-                  "shock",
-                  "turnover_shock"
-                ]
-              }
-            },
-            {
-              "candidate_id": "82f8128b-7227-494a-9382-77d288a4bfa4",
-              "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
-              "relationship_type": "refinement_of",
-              "strength": 0.82,
-              "details": {
-                "basis": "atom_superset",
-                "child_candidate": "hybrid_liquidity_turnover_shock_mom_20",
-                "extra_atoms": [
-                  "hybrid"
-                ],
-                "parent_candidate": "liquidity_turnover_shock",
-                "shared_atoms": [
-                  "shock",
-                  "turnover_shock"
-                ]
-              }
-            },
-            {
               "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
               "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
               "relationship_type": "refinement_of",
-              "strength": 0.82,
+              "strength": 0.72,
               "details": {
                 "basis": "atom_superset",
                 "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
                 "extra_atoms": [
-                  "earnings_yield",
-                  "hybrid"
-                ],
-                "parent_candidate": "liquidity_turnover_shock",
-                "shared_atoms": [
+                  "hybrid",
                   "shock",
                   "turnover_shock"
-                ]
+                ],
+                "parent_candidate": "value_ep",
+                "shared_atoms": [
+                  "earnings_yield"
+                ],
+                "source": "backfill"
+              }
+            },
+            {
+              "candidate_id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
+              "candidate_name": "hybrid_mom_20_value_ep",
+              "relationship_type": "refinement_of",
+              "strength": 0.72,
+              "details": {
+                "basis": "atom_superset",
+                "child_candidate": "hybrid_mom_20_value_ep",
+                "extra_atoms": [
+                  "hybrid"
+                ],
+                "parent_candidate": "value_ep",
+                "shared_atoms": [
+                  "earnings_yield"
+                ],
+                "source": "backfill"
+              }
+            },
+            {
+              "candidate_id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
+              "candidate_name": "mom_plus_value",
+              "relationship_type": "hybrid_of",
+              "strength": 0.63,
+              "details": {
+                "basis": "hybrid_component_overlap",
+                "component_candidate": "value_ep",
+                "hybrid_atoms": [
+                  "earnings_yield"
+                ],
+                "hybrid_candidate": "mom_plus_value",
+                "shared_atoms": [
+                  "earnings_yield"
+                ],
+                "source": "backfill"
               }
             }
           ],
           "lineage": [
             {
-              "candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-              "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
-              "relationship_type": "refinement_of",
-              "strength": 0.82,
-              "details": {
-                "basis": "atom_superset",
-                "child_candidate": "hybrid_mom_20_liquidity_turnover_shock",
-                "extra_atoms": [
-                  "hybrid"
-                ],
-                "parent_candidate": "liquidity_turnover_shock",
-                "shared_atoms": [
-                  "shock",
-                  "turnover_shock"
-                ]
-              }
-            },
-            {
-              "candidate_id": "82f8128b-7227-494a-9382-77d288a4bfa4",
-              "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
-              "relationship_type": "refinement_of",
-              "strength": 0.82,
-              "details": {
-                "basis": "atom_superset",
-                "child_candidate": "hybrid_liquidity_turnover_shock_mom_20",
-                "extra_atoms": [
-                  "hybrid"
-                ],
-                "parent_candidate": "liquidity_turnover_shock",
-                "shared_atoms": [
-                  "shock",
-                  "turnover_shock"
-                ]
-              }
-            },
-            {
               "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
               "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
               "relationship_type": "refinement_of",
-              "strength": 0.82,
+              "strength": 0.72,
               "details": {
                 "basis": "atom_superset",
                 "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
                 "extra_atoms": [
-                  "earnings_yield",
-                  "hybrid"
-                ],
-                "parent_candidate": "liquidity_turnover_shock",
-                "shared_atoms": [
+                  "hybrid",
                   "shock",
                   "turnover_shock"
-                ]
+                ],
+                "parent_candidate": "value_ep",
+                "shared_atoms": [
+                  "earnings_yield"
+                ],
+                "source": "backfill"
+              }
+            },
+            {
+              "candidate_id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
+              "candidate_name": "hybrid_mom_20_value_ep",
+              "relationship_type": "refinement_of",
+              "strength": 0.72,
+              "details": {
+                "basis": "atom_superset",
+                "child_candidate": "hybrid_mom_20_value_ep",
+                "extra_atoms": [
+                  "hybrid"
+                ],
+                "parent_candidate": "value_ep",
+                "shared_atoms": [
+                  "earnings_yield"
+                ],
+                "source": "backfill"
+              }
+            },
+            {
+              "candidate_id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
+              "candidate_name": "mom_plus_value",
+              "relationship_type": "hybrid_of",
+              "strength": 0.63,
+              "details": {
+                "basis": "hybrid_component_overlap",
+                "component_candidate": "value_ep",
+                "hybrid_atoms": [
+                  "earnings_yield"
+                ],
+                "hybrid_candidate": "mom_plus_value",
+                "shared_atoms": [
+                  "earnings_yield"
+                ],
+                "source": "backfill"
               }
             }
           ],
-          "risk_level": "high",
-          "risk_score": 96.9596,
-          "robustness_score": 0.690404,
+          "risk_level": "medium",
+          "risk_score": 60.7863,
+          "robustness_score": 0.782137,
           "fragile": false,
           "acceptance_gate": {}
         }
       ],
       "family_focus": "momentum",
       "representative_selection": [
-        {
-          "candidate": "mom_20",
-          "suppressed_into": "hybrid_mom_20_liquidity_turnover_shock",
-          "cluster_id": 1,
-          "available_representatives": [
-            "hybrid_mom_20_liquidity_turnover_shock",
-            "hybrid_liquidity_turnover_shock_mom_20",
-            "liquidity_turnover_shock",
-            "value_ep"
-          ],
-          "reason": "cluster_representative_retained"
-        },
-        {
-          "candidate": "mom_plus_value",
-          "suppressed_into": "hybrid_mom_20_liquidity_turnover_shock",
-          "cluster_id": 1,
-          "available_representatives": [
-            "hybrid_mom_20_liquidity_turnover_shock",
-            "hybrid_liquidity_turnover_shock_mom_20",
-            "liquidity_turnover_shock",
-            "value_ep"
-          ],
-          "reason": "cluster_representative_retained"
-        },
         {
           "candidate": "hybrid_mom_20_value_ep",
           "suppressed_into": "hybrid_mom_20_liquidity_turnover_shock",
@@ -918,9 +845,9 @@
           ]
         },
         {
-          "candidate": "liquidity_turnover_shock",
+          "candidate": "value_ep",
           "cluster_id": 1,
-          "representative_rank": 3,
+          "representative_rank": 4,
           "representative_count": 4,
           "is_primary_representative": false,
           "suppressed_candidates": [
@@ -935,7 +862,7 @@
         }
       ],
       "relationship_signal": {
-        "relationship_count": 13,
+        "relationship_count": 10,
         "lineage_count": 8,
         "family_score": 83.705056,
         "duplicate_count": 1,
@@ -975,7 +902,7 @@
         "core_overlap": [],
         "graveyard_overlap": []
       },
-      "dedupe_signature": "stable_candidate_validation::diagnostic::hybrid_mom_20_liquidity_turnover_shock|liquidity_turnover_shock"
+      "dedupe_signature": "stable_candidate_validation::diagnostic::hybrid_mom_20_liquidity_turnover_shock|value_ep"
     }
   ]
 }

@@ -21,10 +21,10 @@
     ],
     "relationship_mix": {
       "duplicate_of": 1,
-      "same_family": 4,
+      "hybrid_of": 7,
       "high_corr": 5,
       "refinement_of": 12,
-      "hybrid_of": 7
+      "same_family": 4
     }
   },
   {
@@ -49,10 +49,10 @@
     ],
     "relationship_mix": {
       "duplicate_of": 1,
-      "same_family": 4,
+      "hybrid_of": 7,
       "high_corr": 5,
       "refinement_of": 12,
-      "hybrid_of": 7
+      "same_family": 4
     }
   },
   {
@@ -77,10 +77,10 @@
     ],
     "relationship_mix": {
       "duplicate_of": 1,
-      "same_family": 4,
+      "hybrid_of": 7,
       "high_corr": 5,
       "refinement_of": 12,
-      "hybrid_of": 7
+      "same_family": 4
     }
   },
   {
@@ -105,10 +105,10 @@
     ],
     "relationship_mix": {
       "duplicate_of": 1,
-      "same_family": 4,
+      "hybrid_of": 7,
       "high_corr": 5,
       "refinement_of": 12,
-      "hybrid_of": 7
+      "same_family": 4
     }
   }
 ]
