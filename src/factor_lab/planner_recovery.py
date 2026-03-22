@@ -63,8 +63,23 @@ def build_recovery_tasks(snapshot_path: str | Path, output_path: str | Path, bra
     memory = _read_json(ROOT / "artifacts" / "research_memory.json", {})
     selected_families = set(branch_plan.get("selected_families") or analyst.get("suggested_families") or [])
 
-    stable_candidates = [row.get("factor_name") for row in (snapshot.get("stable_candidates") or []) if row.get("factor_name")][:2]
-    latest_graveyard = list(snapshot.get("latest_graveyard") or [])[:4]
+    frontier_focus = snapshot.get("frontier_focus") or {}
+    frontier_preferred = [name for name in (frontier_focus.get("preferred_candidates") or []) if name]
+    frontier_suppressed = {name for name in (frontier_focus.get("suppressed_candidates") or []) if name}
+    stable_candidates = frontier_preferred[:2] or [
+        row.get("factor_name")
+        for row in (snapshot.get("stable_candidates") or [])
+        if row.get("factor_name") and row.get("factor_name") not in frontier_suppressed
+    ][:2]
+    latest_graveyard = [
+        name for name in (snapshot.get("latest_graveyard") or [])
+        if name in frontier_preferred
+    ][:4]
+    if not latest_graveyard and not frontier_preferred:
+        latest_graveyard = [
+            name for name in (snapshot.get("latest_graveyard") or [])
+            if name not in frontier_suppressed
+        ][:4]
     family_summary = {row.get("family"): row for row in (snapshot.get("family_summary") or []) if row.get("family")}
     candidate_context = {row.get("candidate_name"): row for row in (snapshot.get("candidate_context") or []) if row.get("candidate_name")}
 
@@ -120,6 +135,7 @@ def build_recovery_tasks(snapshot_path: str | Path, output_path: str | Path, bra
             task["reason"] += (
                 f" recovery_history={stable_stats['history_count']}，recent_success={stable_stats['recent_success']}，"
                 f"recent_no_gain={stable_stats['recent_no_gain']}，consecutive_no_gain={stable_stats['consecutive_no_gain']}。"
+                + (f" frontier 仅保留 {', '.join(focus)} 作为 recovery 主线。" if focus else "")
             )
             tasks.append(task)
             recovery_reasons.append("stable_candidate_validation_recovery")
@@ -170,6 +186,7 @@ def build_recovery_tasks(snapshot_path: str | Path, output_path: str | Path, bra
             task["reason"] += (
                 f" recovery_history={graveyard_stats['history_count']}，recent_success={graveyard_stats['recent_success']}，"
                 f"recent_no_gain={graveyard_stats['recent_no_gain']}，consecutive_no_gain={graveyard_stats['consecutive_no_gain']}。"
+                + (f" frontier 只对仍在主线内且落入 graveyard 的候选做恢复诊断：{', '.join(focus)}。" if focus else "")
             )
             tasks.append(task)
             recovery_reasons.append("graveyard_diagnosis_recovery")

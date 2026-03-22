@@ -164,8 +164,12 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
     existing_signatures = _existing_signatures(snapshot)
     latest_run = snapshot.get('latest_run') or {}
     generated_configs = set(snapshot.get('generated_configs', []))
-    raw_stable_candidates = [row['factor_name'] for row in snapshot.get('stable_candidates', [])[:5]]
-    latest_graveyard = snapshot.get('latest_graveyard', [])[:5]
+    frontier_focus = snapshot.get('frontier_focus') or {}
+    frontier_preferred = [name for name in (frontier_focus.get('preferred_candidates') or []) if name]
+    frontier_secondary = [name for name in (frontier_focus.get('secondary_candidates') or []) if name]
+    frontier_suppressed = set(frontier_focus.get('suppressed_candidates') or [])
+    raw_stable_candidates = frontier_preferred[:5] or [row['factor_name'] for row in snapshot.get('stable_candidates', [])[:5]]
+    latest_graveyard = [name for name in (snapshot.get('latest_graveyard', []) or []) if name not in frontier_suppressed][:5]
     queue_budget = snapshot.get('queue_budget', {})
     exploration_state = snapshot.get('exploration_state', {})
     failure_state = snapshot.get('failure_state', {})
@@ -182,6 +186,11 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
     promotable_families = set(promotion.get('promotable_families') or [])
 
     stable_candidates, representative_notes = _prefer_representatives(raw_stable_candidates, candidate_context_by_name, cluster_rep_map)
+    stable_candidates = [name for name in stable_candidates if name not in frontier_suppressed]
+    if not stable_candidates and frontier_secondary:
+        stable_candidates, extra_notes = _prefer_representatives(frontier_secondary[:5], candidate_context_by_name, cluster_rep_map)
+        stable_candidates = [name for name in stable_candidates if name not in frontier_suppressed]
+        representative_notes.extend(extra_notes)
     analyst_focus = set(analyst_signals.get('focus_factors') or [])
     analyst_core = set(analyst_signals.get('keep_as_core_candidates') or [])
     analyst_graveyard = set(analyst_signals.get('review_graveyard') or [])
@@ -340,7 +349,8 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
                 + (f"，最强 family={strongest_family}" if strongest_family else "")
                 + (f"，trial_pressure={strongest_trial.get('trial_pressure')}，false_positive_pressure={strongest_trial.get('false_positive_pressure')}" if strongest_trial else "")
                 + (f"，fragile_candidates={fragile_count}，family_risk_score={family_risk_score}" if fragile_count or family_risk_score is not None else "")
-                + f"。保留 cluster representatives 后实际验证 {len(stable_candidates)} 个代表候选，压制 {len([r for r in representative_notes if r.get('suppressed_into')])} 个重复/近重复候选。"
+                + (f"。frontier 当前优先 family={', '.join((frontier_focus.get('preferred_families') or [])[:3])}，优先候选={', '.join(frontier_preferred[:4])}。" if frontier_preferred else "")
+                + f" 保留 cluster representatives 后实际验证 {len(stable_candidates)} 个代表候选，压制 {len([r for r in representative_notes if r.get('suppressed_into')])} 个重复/近重复候选。"
                 + (f" analyst 核心候选命中 {', '.join(sorted(analyst_core & set(stable_candidates)))}。" if analyst_core & set(stable_candidates) else "")
             )
             task['hypothesis'] = task['payload'].get('hypothesis')
@@ -391,7 +401,14 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
             }
             if must_validate_before_expand:
                 task['priority_hint'] += 12
-            task['reason'] += ' 当前关系图已出现 hybrid 支路，可让 exploration 有针对性地尝试跨 family 组合。' + (' analyst 当前要求先验证风险，exploration 仅保留低优先级占位。' if must_validate_before_expand else '')
+            if frontier_focus.get('preferred_families'):
+                task['priority_hint'] -= 3
+                task['payload']['frontier_focus'] = {
+                    'preferred_families': frontier_focus.get('preferred_families')[:3],
+                    'preferred_candidates': frontier_preferred[:4],
+                    'secondary_candidates': frontier_secondary[:4],
+                }
+            task['reason'] += ' 当前关系图已出现 hybrid 支路，可让 exploration 有针对性地尝试跨 family 组合。' + (f" frontier 当前建议围绕 {', '.join((frontier_focus.get('preferred_families') or [])[:3])} 主线继续探索。" if frontier_focus.get('preferred_families') else '') + (' analyst 当前要求先验证风险，exploration 仅保留低优先级占位。' if must_validate_before_expand else '')
             append_task(task, 'exploration_batch_already_seen')
 
     payload = {

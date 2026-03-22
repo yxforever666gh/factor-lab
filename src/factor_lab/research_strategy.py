@@ -42,14 +42,185 @@ def _task_payload(task: dict[str, Any]) -> dict[str, Any]:
     return {}
 
 
+def _frontier_preferred_candidates(source: dict[str, Any]) -> set[str]:
+    frontier = source.get("frontier_focus") or {}
+    preferred = frontier.get("preferred_candidates") or []
+    if preferred:
+        return {name for name in preferred if name}
+    return {name for name in ((source.get("candidates") or {}).get("stable") or []) if name}
+
+
+def _frontier_suppressed_candidates(source: dict[str, Any]) -> set[str]:
+    frontier = source.get("frontier_focus") or {}
+    return {name for name in (frontier.get("suppressed_candidates") or []) if name}
+
+
+def _is_explicit_stable_validation(
+    *,
+    task: dict[str, Any],
+    payload: dict[str, Any],
+    strategy: dict[str, Any],
+    knowledge_gain: list[str],
+    summary_text: str,
+) -> bool:
+    branch_id = str(payload.get("branch_id") or strategy.get("branch_id") or task.get("fingerprint") or "")
+    goal = str(payload.get("goal") or strategy.get("goal") or "")
+    worker_note = str(task.get("worker_note") or "")
+    promote_if = payload.get("promote_if") or strategy.get("promote_if") or []
+    text_haystack = " ".join([
+        branch_id,
+        goal,
+        worker_note,
+        summary_text,
+        " ".join(promote_if),
+        " ".join(knowledge_gain),
+    ]).lower()
+    return (
+        "stable_candidate_validation" in text_haystack
+        or "validate_stable_candidates" in text_haystack
+        or "stable_candidate_confirmed" in text_haystack
+    )
+
+
+def _reconcile_candidate_lifecycle(
+    candidate_lifecycle: dict[str, dict[str, Any]],
+    *,
+    preferred_candidates: set[str],
+    suppressed_candidates: set[str],
+) -> dict[str, dict[str, Any]]:
+    now = _iso_now()
+    for name, current in candidate_lifecycle.items():
+        current_state = current.get("next_state") or "provisional"
+        target_state = current_state
+        target_action = current.get("action") or "hold"
+        reason = None
+        if name in suppressed_candidates and current_state in {"stable_candidate", "validating"}:
+            target_state = "provisional"
+            target_action = "demote"
+            reason = "frontier_suppressed"
+        elif current_state == "stable_candidate" and name not in preferred_candidates:
+            target_state = "validating"
+            target_action = "demote"
+            reason = "frontier_not_preferred"
+        if not reason:
+            continue
+        history = list(current.get("history") or [])
+        history.append({
+            "updated_at_utc": now,
+            "next_state": target_state,
+            "action": target_action,
+            "source_branch_id": "frontier_reconcile",
+            "reason": reason,
+        })
+        current.update({
+            "candidate_name": name,
+            "next_state": target_state,
+            "action": target_action,
+            "source_branch_id": "frontier_reconcile",
+            "updated_at_utc": now,
+        })
+        current["history"] = history[-20:]
+    return candidate_lifecycle
+
+
+def _compact_branch_action_rows(rows: list[dict[str, Any]], *, key_fields: tuple[str, ...]) -> list[dict[str, Any]]:
+    compacted: list[dict[str, Any]] = []
+    last_key: tuple[Any, ...] | None = None
+    for row in rows:
+        key = tuple(row.get(field) for field in key_fields)
+        if compacted and key == last_key:
+            compacted[-1] = row
+            continue
+        compacted.append(row)
+        last_key = key
+    return compacted
+
+
+def _compact_fallback_history(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    compacted: list[dict[str, Any]] = []
+    last_key: tuple[Any, ...] | None = None
+    for row in rows:
+        key = (
+            row.get("branch_id"),
+            row.get("status"),
+            row.get("has_gain"),
+            row.get("task_type"),
+            row.get("goal"),
+            tuple(row.get("focus_candidates") or []),
+            tuple(row.get("knowledge_gain") or []),
+        )
+        if compacted and key == last_key:
+            compacted[-1] = row
+            continue
+        compacted.append(row)
+        last_key = key
+    return compacted
+
+
+def _compact_branch_lifecycle(branch_lifecycle: dict[str, dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    no_gain_reasons = {
+        "no_significant_information_gain",
+        "task_failed",
+        "frontier_suppressed",
+        "frontier_not_preferred",
+        "low_strategy_score",
+        "repeated_no_gain_or_demote",
+    }
+    compacted_lifecycle: dict[str, dict[str, Any]] = {}
+    for branch_id, current in (branch_lifecycle or {}).items():
+        current = dict(current or {})
+        history = _compact_branch_action_rows(
+            list(current.get("history") or []),
+            key_fields=("state", "last_action", "reason"),
+        )[-20:]
+        current["history"] = history
+        if history:
+            tail = history[-1]
+            current["state"] = tail.get("state", current.get("state"))
+            current["last_action"] = tail.get("last_action", current.get("last_action"))
+            current["reason"] = tail.get("reason", current.get("reason"))
+        current["validation_runs"] = sum(1 for row in history if row.get("state") in {"validating", "stable_candidate"})
+        no_gain_runs = 0
+        for row in reversed(history):
+            if row.get("reason") in no_gain_reasons:
+                no_gain_runs += 1
+            else:
+                break
+        current["no_gain_runs"] = no_gain_runs
+        compacted_lifecycle[branch_id] = current
+    return compacted_lifecycle
+
+
+def _compact_memory_state(memory: dict[str, Any]) -> dict[str, Any]:
+    memory = dict(memory or {})
+    memory.setdefault("suppressed_candidates", [])
+    memory["candidate_lifecycle"] = _reconcile_candidate_lifecycle(
+        dict(memory.get("candidate_lifecycle") or {}),
+        preferred_candidates=set(memory.get("stable_candidates") or []),
+        suppressed_candidates=set(memory.get("suppressed_candidates") or []),
+    )
+    memory["branch_lifecycle"] = _compact_branch_lifecycle(dict(memory.get("branch_lifecycle") or {}))
+    memory["branch_history"] = _compact_branch_action_rows(
+        list(memory.get("branch_history") or [])[-120:],
+        key_fields=("target", "action", "next_state"),
+    )[-100:]
+    memory["repeated_failure_patterns"] = _compact_branch_action_rows(
+        list(memory.get("repeated_failure_patterns") or [])[-80:],
+        key_fields=("branch_id", "action", "next_state", "reason"),
+    )[-50:]
+    memory["fallback_history"] = _compact_fallback_history(list(memory.get("fallback_history") or [])[-60:])[-30:]
+    return memory
+
+
 def load_or_initialize_research_memory(memory_path: str | Path) -> dict[str, Any]:
     path = Path(memory_path)
     memory = _read_json(path, None)
     if isinstance(memory, dict):
-        return memory
+        return _compact_memory_state(memory)
     memory = {
         "updated_at_utc": None,
         "stable_candidates": [],
+        "suppressed_candidates": [],
         "repeated_failure_patterns": [],
         "high_value_open_questions": [],
         "branch_history": [],
@@ -103,6 +274,7 @@ def build_research_state_snapshot(
 
     stable_candidates = [row.get("factor_name") for row in (planner_snapshot.get("stable_candidates") or []) if row.get("factor_name")]
     latest_graveyard = planner_snapshot.get("latest_graveyard") or []
+    frontier_focus = planner_snapshot.get("frontier_focus") or {}
 
     candidate_tasks = candidate_pool.get("tasks") or []
     proposal_selected = proposal.get("selected_tasks") or []
@@ -163,6 +335,7 @@ def build_research_state_snapshot(
             or [],
             "analyst_signals": planner_snapshot.get("analyst_signals") or {},
         },
+        "frontier_focus": frontier_focus,
         "recent_finished_tasks": [
             {
                 **{k: v for k, v in task.items() if k != "payload_json"},
@@ -226,7 +399,8 @@ class StrategyBrain:
             }
 
         memory = state_snapshot.get("memory") or {}
-        stable_candidates = set((state_snapshot.get("candidates") or {}).get("stable") or [])
+        stable_candidates = _frontier_preferred_candidates(state_snapshot)
+        suppressed_candidates = _frontier_suppressed_candidates(state_snapshot)
         graveyard_candidates = set((state_snapshot.get("candidates") or {}).get("graveyard") or [])
         repeated_failures = {
             row.get("task_type"): int(row.get("count") or 0)
@@ -310,7 +484,7 @@ class StrategyBrain:
             for candidate_name in sorted(focus_candidates):
                 candidate_updates[candidate_name] = {
                     "candidate_name": candidate_name,
-                    "next_state": _candidate_lifecycle_state(candidate_name, stable_candidates, graveyard_candidates, task),
+                    "next_state": _candidate_lifecycle_state(candidate_name, stable_candidates, graveyard_candidates, task, suppressed_candidates),
                     "source_branch_id": task.get("branch_id") or task.get("dedupe_signature") or task.get("fingerprint"),
                     "action": branch_action.get("action"),
                 }
@@ -371,6 +545,7 @@ class StrategyBrain:
 
         memory_updates = {
             "stable_candidates": sorted(stable_candidates),
+            "suppressed_candidates": sorted(suppressed_candidates),
             "high_value_open_questions": _derive_open_questions(approved),
             "branch_history_append": branch_history_append,
             "branch_lifecycle_updates": branch_lifecycle_updates,
@@ -394,7 +569,16 @@ class StrategyBrain:
         }
 
 
-def _candidate_lifecycle_state(name: str, stable_candidates: set[str], graveyard_candidates: set[str], task: dict[str, Any] | None = None) -> str:
+def _candidate_lifecycle_state(
+    name: str,
+    stable_candidates: set[str],
+    graveyard_candidates: set[str],
+    task: dict[str, Any] | None = None,
+    suppressed_candidates: set[str] | None = None,
+) -> str:
+    suppressed_candidates = suppressed_candidates or set()
+    if name in suppressed_candidates:
+        return "provisional"
     if name in stable_candidates:
         return "stable_candidate"
     if name in graveyard_candidates:
@@ -623,13 +807,24 @@ def update_research_memory_from_task_result(
 
     candidate_lifecycle = dict(memory.get("candidate_lifecycle") or {})
     stable_candidates = set(memory.get("stable_candidates") or [])
+    suppressed_candidates = set(memory.get("suppressed_candidates") or [])
+    explicit_stable_validation = _is_explicit_stable_validation(
+        task=task,
+        payload=payload,
+        strategy=strategy,
+        knowledge_gain=knowledge_gain,
+        summary_text=summary_text,
+    )
     for name in focus_candidates:
         current = dict(candidate_lifecycle.get(name, {}))
         current.setdefault("history", [])
         if status != "finished":
             next_state = "provisional"
             action = "demote"
-        elif has_gain and name in stable_candidates:
+        elif name in suppressed_candidates:
+            next_state = "provisional"
+            action = "demote"
+        elif explicit_stable_validation and has_gain and name in stable_candidates:
             next_state = "stable_candidate"
             action = "promote"
         elif has_gain:
@@ -648,7 +843,11 @@ def update_research_memory_from_task_result(
         current["history"].append({"updated_at_utc": _iso_now(), "next_state": next_state, "action": action, "source_branch_id": branch_id})
         current["history"] = current["history"][-20:]
         candidate_lifecycle[name] = current
-    memory["candidate_lifecycle"] = candidate_lifecycle
+    memory["candidate_lifecycle"] = _reconcile_candidate_lifecycle(
+        candidate_lifecycle,
+        preferred_candidates=stable_candidates,
+        suppressed_candidates=suppressed_candidates,
+    )
 
     convergence_policy = memory.get("convergence_policy") or {}
     archive_after_no_gain = int(convergence_policy.get("archive_after_no_gain_runs") or 2)
@@ -662,6 +861,8 @@ def update_research_memory_from_task_result(
         branch_lifecycle[branch_id] = branch_state
         memory["branch_lifecycle"] = branch_lifecycle
 
+    memory = _compact_memory_state(memory)
+    memory = _compact_memory_state(memory)
     _write_json(Path(memory_path), memory)
     return memory
 
@@ -718,8 +919,10 @@ def apply_strategy_plan(
     memory = load_or_initialize_research_memory(memory_path)
     memory["updated_at_utc"] = _iso_now()
     updates = strategy_plan.get("memory_updates") or {}
-    if updates.get("stable_candidates"):
+    if updates.get("stable_candidates") is not None:
         memory["stable_candidates"] = updates.get("stable_candidates")
+    if updates.get("suppressed_candidates") is not None:
+        memory["suppressed_candidates"] = updates.get("suppressed_candidates")
     if updates.get("high_value_open_questions"):
         memory["high_value_open_questions"] = updates.get("high_value_open_questions")
     convergence_policy = (updates.get("convergence_policy") or strategy_plan.get("convergence_policy") or {
@@ -744,7 +947,11 @@ def apply_strategy_plan(
         current["updated_at_utc"] = _iso_now()
         current["history"] = history[-20:]
         candidate_lifecycle[name] = current
-    memory["candidate_lifecycle"] = candidate_lifecycle
+    memory["candidate_lifecycle"] = _reconcile_candidate_lifecycle(
+        candidate_lifecycle,
+        preferred_candidates=set(memory.get("stable_candidates") or []),
+        suppressed_candidates=set(memory.get("suppressed_candidates") or []),
+    )
     branch_lifecycle = dict(memory.get("branch_lifecycle") or {})
     for branch_id, branch_update in (updates.get("branch_lifecycle_updates") or {}).items():
         current = dict(branch_lifecycle.get(branch_id, {}))
@@ -779,7 +986,11 @@ def apply_strategy_plan(
         patterns = list(memory.get("repeated_failure_patterns") or [])
         for action in strategy_plan.get("branch_actions") or []:
             patterns.append(action)
-        memory["repeated_failure_patterns"] = patterns[-50:]
+        memory["repeated_failure_patterns"] = _compact_branch_action_rows(
+            patterns[-80:],
+            key_fields=("branch_id", "action", "next_state", "reason"),
+        )[-50:]
+    memory = _compact_memory_state(memory)
     _write_json(Path(memory_path), memory)
 
     payload = {

@@ -17,6 +17,7 @@ from factor_lab.db_views import ensure_views
 from factor_lab.ops import latest_task_states, trigger_script
 from factor_lab.storage import ExperimentStore
 from factor_lab.opportunity_diagnostics import build_opportunity_metrics, build_opportunity_review, build_opportunity_archive_diagnostics
+from factor_lab.promotion_scorecard import build_promotion_scorecard
 
 
 def pretty_json_text(value: Any, empty_text: str = "暂无数据。") -> str:
@@ -496,6 +497,7 @@ def dashboard():
     planner_injected = json.loads(planner_injected_path.read_text(encoding='utf-8')) if planner_injected_path.exists() else {}
     research_flow_state = json.loads(research_flow_state_path.read_text(encoding='utf-8')) if research_flow_state_path.exists() else {}
     research_learning = json.loads(research_learning_path.read_text(encoding='utf-8')) if research_learning_path.exists() else {}
+    promotion_scorecard = build_promotion_scorecard(DB_PATH, limit=6)
     stable_names = [row['factor_name'] for row in stable_candidates[:4]]
     latest_summary_lines = []
     if latest_run:
@@ -513,6 +515,13 @@ def dashboard():
     if candidate_leaderboard:
         latest_summary_lines.append(
             f"当前候选榜单第一名是 {candidate_leaderboard[0]['name']}，状态 {candidate_leaderboard[0]['status']}，最新分 {candidate_leaderboard[0]['latest_final_score']}。"
+        )
+    promotion_rows = (promotion_scorecard.get('summary') or {}).get('priority_rows') or []
+    if promotion_rows:
+        latest_summary_lines.append(
+            "当前晋级赛优先处理：" + "；".join(
+                f"{row['factor_name']}({row['decision_label']})" for row in promotion_rows[:3]
+            ) + "。"
         )
     latest_summary = '\n'.join(latest_summary_lines) if latest_summary_lines else '暂无摘要。'
 
@@ -668,19 +677,27 @@ def cockpit_page():
 
 @app.get("/exposure", response_class=HTMLResponse)
 def exposure_page():
-    # Latest finished run exposure factors
+    promotion_scorecard = build_promotion_scorecard(DB_PATH, limit=12)
     exposure_rows = fetch_all(
         """
-        SELECT factor_name, exposure_type, exposure_label, strength_score,
-               raw_rank_ic_mean, raw_rank_ic_ir, neutralized_rank_ic_mean,
-               split_fail_count, crowding_peers, recommended_max_weight, status, updated_at_utc
+        SELECT factor_name, exposure_type, exposure_label, effective_bucket_label,
+               strength_score, total_score, raw_rank_ic_mean, raw_rank_ic_ir,
+               neutralized_rank_ic_mean, retention_industry, split_fail_count,
+               crowding_peers, recommended_max_weight, turnover_daily,
+               net_metric, status, updated_at_utc
         FROM exposure_factors
         WHERE run_id = (SELECT run_id FROM workflow_runs WHERE status='finished' ORDER BY created_at_utc DESC LIMIT 1)
-        ORDER BY COALESCE(strength_score, -999) DESC, COALESCE(raw_rank_ic_mean, -999) DESC
+        ORDER BY COALESCE(total_score, -999) DESC, COALESCE(strength_score, -999) DESC, COALESCE(raw_rank_ic_mean, -999) DESC
         LIMIT 200
         """
     )
-    return render("exposure.html", title="Exposure Track", exposure_rows=exposure_rows)
+    return render(
+        "exposure.html",
+        title="Exposure Track",
+        exposure_rows=exposure_rows,
+        promotion_scorecard=promotion_scorecard,
+        promotion_rows=promotion_scorecard.get('rows') or [],
+    )
 
 
 @app.get("/runs", response_class=HTMLResponse)
@@ -981,6 +998,8 @@ def ops_run(target: str):
         "llm-plan-run": "scripts/run_generated_batch_from_llm.py",
         "llm-retrospective": "scripts/build_llm_retrospective.py",
         "llm-memory": "scripts/build_recommendation_memory.py",
+        "robustness-batch-build": "scripts/build_robustness_batch.py",
+        "robustness-batch-run": "scripts/run_robustness_batch.py",
     }
     if target not in mapping:
         raise HTTPException(status_code=404, detail="未知操作目标")

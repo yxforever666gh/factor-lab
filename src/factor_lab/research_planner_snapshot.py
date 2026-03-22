@@ -9,6 +9,8 @@ from factor_lab.candidate_graph import build_graph_artifacts
 from factor_lab.analyst_signal_bridge import load_analyst_signals
 from factor_lab.analyst_feedback_context import build_analyst_feedback_context
 from factor_lab.research_runtime_state import queue_budget_snapshot, recent_failure_stats, exploration_health
+from factor_lab.frontier_policy import build_frontier_focus
+from factor_lab.promotion_scorecard import build_promotion_scorecard
 
 
 def _read_json(path: Path, default: Any) -> Any:
@@ -93,6 +95,8 @@ def build_research_planner_snapshot(db_path: str | Path, output_path: str | Path
         recommendation_history = _read_json(root / "llm_recommendation_history.json", [])
         llm_status = _read_json(root / "llm_status.json", {})
         candidate_graph_context = _read_json(root / "candidate_graph_context.json", {})
+        promotion_scorecard = build_promotion_scorecard(db_path=db_path, limit=20)
+        frontier_focus = build_frontier_focus(promotion_scorecard)
         candidate_risk_profiles = _read_json(root / "candidate_risk_profiles.json", [])
         risk_by_name = {row.get("candidate_name"): row for row in candidate_risk_profiles if row.get("candidate_name")}
         family_summary = candidate_graph_context.get("families") or _read_json(root / "family_summary.json", [])
@@ -187,6 +191,8 @@ def build_research_planner_snapshot(db_path: str | Path, output_path: str | Path
             "analyst_feedback_context": analyst_feedback_context,
             "research_flow_state": research_flow_state,
             "research_learning": research_learning,
+            "promotion_scorecard": promotion_scorecard,
+            "frontier_focus": frontier_focus,
             "recent_research_tasks": [
                 {
                     **{k: v for k, v in task.items() if k != "payload_json"},
