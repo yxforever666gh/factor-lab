@@ -1,0 +1,74 @@
+[
+  {
+    "factor_name": "mom_20",
+    "expression": "momentum_20",
+    "observations": 1642,
+    "rank_ic_mean": 0.038036,
+    "rank_ic_std": 0.296121,
+    "rank_ic_ir": 0.128446,
+    "top_bottom_spread_mean": 0.006279,
+    "pass_gate": true,
+    "fail_reason": "",
+    "variant": "neutralized"
+  },
+  {
+    "factor_name": "value_ep",
+    "expression": "earnings_yield",
+    "observations": 1642,
+    "rank_ic_mean": 0.013721,
+    "rank_ic_std": 0.324199,
+    "rank_ic_ir": 0.042323,
+    "top_bottom_spread_mean": -0.002829,
+    "pass_gate": false,
+    "fail_reason": "rank_ic_mean<0.02; top_bottom_spread<0.0005",
+    "variant": "neutralized"
+  },
+  {
+    "factor_name": "value_bp",
+    "expression": "book_yield",
+    "observations": 1642,
+    "rank_ic_mean": -0.014132,
+    "rank_ic_std": 0.341519,
+    "rank_ic_ir": -0.041379,
+    "top_bottom_spread_mean": -0.005718,
+    "pass_gate": false,
+    "fail_reason": "rank_ic_mean<0.02; top_bottom_spread<0.0005",
+    "variant": "neutralized"
+  },
+  {
+    "factor_name": "size_small",
+    "expression": "size_inv",
+    "observations": 1642,
+    "rank_ic_mean": -0.036911,
+    "rank_ic_std": 0.271596,
+    "rank_ic_ir": -0.135904,
+    "top_bottom_spread_mean": -0.000926,
+    "pass_gate": false,
+    "fail_reason": "rank_ic_mean<0.02; top_bottom_spread<0.0005",
+    "variant": "neutralized"
+  },
+  {
+    "factor_name": "liquidity_turnover_shock",
+    "expression": "turnover_shock_5_20",
+    "observations": 1642,
+    "rank_ic_mean": 0.031407,
+    "rank_ic_std": 0.300267,
+    "rank_ic_ir": 0.104596,
+    "top_bottom_spread_mean": 0.006933,
+    "pass_gate": true,
+    "fail_reason": "",
+    "variant": "neutralized"
+  },
+  {
+    "factor_name": "mom_plus_value",
+    "expression": "momentum_20 + earnings_yield",
+    "observations": 1642,
+    "rank_ic_mean": 0.020179,
+    "rank_ic_std": 0.306877,
+    "rank_ic_ir": 0.065756,
+    "top_bottom_spread_mean": 0.004817,
+    "pass_gate": true,
+    "fail_reason": "",
+    "variant": "neutralized"
+  }
+]

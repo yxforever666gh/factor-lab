@@ -1,0 +1,18 @@
+{
+  "data_source": "tushare",
+  "cache_dir": "artifacts/tushare_cache",
+  "output_dir": "artifacts/robustness_validation_batch/hybrid_size_small_value_bp__recent_45d",
+  "start_date": "2026-02-01",
+  "end_date": "2026-03-18",
+  "universe_limit": 20,
+  "factors": [
+    {
+      "name": "hybrid_size_small_value_bp",
+      "expression": "(size_inv) + (book_yield)"
+    }
+  ],
+  "thresholds": {
+    "min_rank_ic": 0.02,
+    "min_top_bottom_spread": 0.0005
+  }
+}

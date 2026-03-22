@@ -1,0 +1,78 @@
+[
+  {
+    "factor_name": "mom_20",
+    "expression": "momentum_20",
+    "raw_pass": false,
+    "raw_rank_ic_mean": 0.003663,
+    "raw_rank_ic_ir": 0.010291,
+    "neutralized_pass": true,
+    "neutralized_rank_ic_mean": 0.025657,
+    "split_fail_count": 2,
+    "high_corr_peers": [
+      "mom_plus_value"
+    ],
+    "graveyard_reason": "raw_fail:rank_ic_mean<0.02; split_fail_count:2"
+  },
+  {
+    "factor_name": "value_ep",
+    "expression": "earnings_yield",
+    "raw_pass": false,
+    "raw_rank_ic_mean": 0.024332,
+    "raw_rank_ic_ir": 0.09074,
+    "neutralized_pass": false,
+    "neutralized_rank_ic_mean": 0.026034,
+    "split_fail_count": 1,
+    "high_corr_peers": [],
+    "graveyard_reason": "raw_fail:top_bottom_spread<0.0005; neutral_fail:top_bottom_spread<0.0005; split_fail_count:1"
+  },
+  {
+    "factor_name": "value_bp",
+    "expression": "book_yield",
+    "raw_pass": false,
+    "raw_rank_ic_mean": -0.044728,
+    "raw_rank_ic_ir": -0.148965,
+    "neutralized_pass": false,
+    "neutralized_rank_ic_mean": 0.028003,
+    "split_fail_count": 2,
+    "high_corr_peers": [],
+    "graveyard_reason": "raw_fail:rank_ic_mean<0.02; top_bottom_spread<0.0005; neutral_fail:top_bottom_spread<0.0005; split_fail_count:2"
+  },
+  {
+    "factor_name": "size_small",
+    "expression": "size_inv",
+    "raw_pass": true,
+    "raw_rank_ic_mean": 0.066698,
+    "raw_rank_ic_ir": 0.213928,
+    "neutralized_pass": false,
+    "neutralized_rank_ic_mean": -0.038838,
+    "split_fail_count": 0,
+    "high_corr_peers": [],
+    "graveyard_reason": "neutral_fail:rank_ic_mean<0.02"
+  },
+  {
+    "factor_name": "liquidity_turnover_shock",
+    "expression": "turnover_shock_5_20",
+    "raw_pass": false,
+    "raw_rank_ic_mean": -0.057901,
+    "raw_rank_ic_ir": -0.173077,
+    "neutralized_pass": true,
+    "neutralized_rank_ic_mean": 0.046559,
+    "split_fail_count": 2,
+    "high_corr_peers": [],
+    "graveyard_reason": "raw_fail:rank_ic_mean<0.02; top_bottom_spread<0.0005; split_fail_count:2"
+  },
+  {
+    "factor_name": "mom_plus_value",
+    "expression": "momentum_20 + earnings_yield",
+    "raw_pass": false,
+    "raw_rank_ic_mean": -0.022773,
+    "raw_rank_ic_ir": -0.068737,
+    "neutralized_pass": false,
+    "neutralized_rank_ic_mean": 0.013834,
+    "split_fail_count": 2,
+    "high_corr_peers": [
+      "mom_20"
+    ],
+    "graveyard_reason": "raw_fail:rank_ic_mean<0.02; top_bottom_spread<0.0005; neutral_fail:rank_ic_mean<0.02; split_fail_count:2"
+  }
+]

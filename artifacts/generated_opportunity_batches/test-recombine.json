@@ -1,0 +1,12 @@
+{
+  "source": "research_opportunity",
+  "opportunity_id": "test-recombine",
+  "opportunity_type": "recombine",
+  "summary": "q",
+  "jobs": [
+    {
+      "name": "recent_hybrid",
+      "config_path": "artifacts/generated_opportunity_configs/test-recombine__recent_hybrid.json"
+    }
+  ]
+}

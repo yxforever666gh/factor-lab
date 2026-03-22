@@ -1,0 +1,12 @@
+{
+  "source": "research_opportunity",
+  "opportunity_id": "opp-child-expand-from-opp-pattern-native-confirm-stable_candidate_validation-child-multi_target-stable_candidate_confirmed-partial_support-uncertainty_reduced",
+  "opportunity_type": "expand",
+  "summary": "opp-pattern-native-confirm-stable_candidate_validation-child-multi_target-stable_candidate_confirmed-partial_support-uncertainty_reduced 已确认，下一步应扩展哪种验证维度？",
+  "jobs": [
+    {
+      "name": "recent_45d",
+      "config_path": "artifacts/generated_opportunity_configs/opp-child-expand-from-opp-pattern-native-confirm-stable_candidate_validation-child-multi_target-stable_candidate_confirmed-partial_support-uncertainty_reduced__recent_45d.json"
+    }
+  ]
+}

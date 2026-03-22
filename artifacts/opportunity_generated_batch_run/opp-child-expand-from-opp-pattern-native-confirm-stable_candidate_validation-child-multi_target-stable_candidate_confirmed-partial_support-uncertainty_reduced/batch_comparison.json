@@ -1,0 +1,27 @@
+{
+  "jobs": [
+    {
+      "job_name": "recent_45d",
+      "total_factors": 2,
+      "candidate_count": 2,
+      "graveyard_count": 0
+    }
+  ],
+  "candidate_presence": {
+    "mom_20": [
+      "recent_45d"
+    ],
+    "liquidity_turnover_shock": [
+      "recent_45d"
+    ]
+  },
+  "graveyard_presence": {},
+  "representative_presence": {
+    "liquidity_turnover_shock": [
+      "recent_45d"
+    ],
+    "mom_20": [
+      "recent_45d"
+    ]
+  }
+}

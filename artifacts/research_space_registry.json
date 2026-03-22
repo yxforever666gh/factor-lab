@@ -1,126 +1,162 @@
 {
   "windows_covered": {
-    "window_recent_270d": {
-      "task_id": "ecbbefa3-ea8f-4316-b6ee-7495d24b462b",
-      "config_path": "artifacts/generated_configs/rolling_recent_270d.json",
-      "status": "finished",
-      "finished_at_utc": "2026-03-19T20:22:03.826228+00:00"
-    },
-    "window_recent_240d": {
-      "task_id": "adacd16c-54ea-44ea-9c77-72b58bd5f8bd",
-      "config_path": "artifacts/generated_configs/rolling_recent_240d.json",
-      "status": "finished",
-      "finished_at_utc": "2026-03-19T20:14:02.839279+00:00"
-    },
-    "window_recent_210d": {
-      "task_id": "3640b1ea-ae79-49c1-bb18-3dea40639a76",
-      "config_path": "artifacts/generated_configs/rolling_recent_210d.json",
-      "status": "finished",
-      "finished_at_utc": "2026-03-19T20:05:56.704077+00:00"
-    },
-    "window_recent_180d": {
-      "task_id": "7acc9178-d768-4a75-940a-58f1be5814d4",
-      "config_path": "artifacts/generated_configs/rolling_recent_180d.json",
-      "status": "finished",
-      "finished_at_utc": "2026-03-19T19:44:28.022048+00:00"
-    },
-    "window_expanding_2025_10_01": {
-      "task_id": "3daab80e-b560-42dd-8043-d7daa59e1c9b",
-      "config_path": "artifacts/generated_configs/expanding_from_2025_10_01.json",
-      "status": "finished",
-      "finished_at_utc": "2026-03-19T08:06:28.889991+00:00"
-    },
-    "window_recent_120d": {
-      "task_id": "290c55d6-9720-4fcd-9515-568cddbfbd6c",
-      "config_path": "artifacts/generated_configs/rolling_recent_120d.json",
-      "status": "finished",
-      "finished_at_utc": "2026-03-19T08:02:11.085202+00:00"
-    },
-    "window_rolling_60d_back": {
-      "task_id": "5d0099c1-882e-4658-a4da-cb7d54866b82",
-      "config_path": "artifacts/generated_configs/rolling_60d_back.json",
-      "status": "failed",
-      "finished_at_utc": "2026-03-19T07:41:10.916012+00:00"
-    },
-    "window_rolling_180d_back": {
-      "task_id": "85645d80-eb9b-40d2-a8a6-6acb3e5729ce",
-      "config_path": "artifacts/generated_configs/rolling_180d_back.json",
-      "status": "finished",
-      "finished_at_utc": "2026-03-19T07:46:22.792022+00:00"
-    },
-    "window_expanding_2025_07_01": {
-      "task_id": "48e2dc16-2097-4c3e-b37c-cc0eddcd11d5",
-      "config_path": "artifacts/generated_configs/expanding_from_2025_07_01.json",
-      "status": "finished",
-      "finished_at_utc": "2026-03-19T07:45:56.803709+00:00"
-    },
-    "window_recent_150d": {
-      "task_id": "a750d58c-fb5d-4f7a-bd3b-fb97f5a83234",
-      "config_path": "artifacts/generated_configs/rolling_recent_150d.json",
-      "status": "finished",
-      "finished_at_utc": "2026-03-19T07:52:54.629790+00:00"
-    },
-    "window_rolling_120d_back": {
-      "task_id": "60107083-eed0-40bb-afd7-eba4ca880c5f",
-      "config_path": "artifacts/generated_configs/rolling_120d_back.json",
-      "status": "finished",
-      "finished_at_utc": "2026-03-18T22:57:36.340462+00:00"
-    },
-    "window_recent_90d": {
-      "task_id": "9422c937-b35d-4838-af1b-e4dd8041fe42",
-      "config_path": "artifacts/generated_configs/rolling_recent_90d.json",
-      "status": "finished",
-      "finished_at_utc": "2026-03-18T22:47:01.629405+00:00"
-    },
     "window_recent_45d": {
-      "task_id": "0e86827b-e956-4a4e-8047-2523ce259730",
+      "task_id": "35ac9d74-c3f2-4f3f-99cd-d33994dae8ed",
       "config_path": "artifacts/generated_configs/rolling_recent_45d.json",
       "status": "finished",
-      "finished_at_utc": "2026-03-18T22:43:50.353954+00:00"
+      "finished_at_utc": "2026-03-22T15:39:17.467605+00:00"
+    },
+    "window_rolling_120d_back": {
+      "task_id": "f4d0717e-c72b-49ba-bfca-68e87302caa6",
+      "config_path": "artifacts/generated_configs/rolling_120d_back.json",
+      "status": "finished",
+      "finished_at_utc": "2026-03-22T15:39:11.081964+00:00"
+    },
+    "window_rolling_60d_back": {
+      "task_id": "53812daa-6068-4397-8192-6d682702c775",
+      "config_path": "artifacts/generated_configs/rolling_60d_back.json",
+      "status": "finished",
+      "finished_at_utc": "2026-03-22T15:38:50.249719+00:00"
     },
     "window_rolling_30d_back": {
-      "task_id": "fbc52fde-af1c-4a3c-9665-61c5c8ce70c7",
+      "task_id": "09174a1c-6a30-4d92-8540-ddc7fc07b8fc",
       "config_path": "artifacts/generated_configs/rolling_30d_back.json",
       "status": "finished",
-      "finished_at_utc": "2026-03-18T22:42:24.639313+00:00"
+      "finished_at_utc": "2026-03-22T15:38:35.906711+00:00"
+    },
+    "window_expanding_2025_10_01": {
+      "task_id": "bec362fd-f67c-4fb8-9a7d-4edd0c6f89a5",
+      "config_path": "artifacts/generated_configs/expanding_from_2025_10_01.json",
+      "status": "finished",
+      "finished_at_utc": "2026-03-22T15:37:33.074998+00:00"
+    },
+    "window_recent_120d": {
+      "task_id": "cc61be20-a89e-481a-872c-8625b13e3622",
+      "config_path": "artifacts/generated_configs/rolling_recent_120d.json",
+      "status": "finished",
+      "finished_at_utc": "2026-03-22T15:37:09.095744+00:00"
+    },
+    "window_recent_90d": {
+      "task_id": "a916b9b4-23f8-4a7f-aea4-34b1cc4d45b1",
+      "config_path": "artifacts/generated_configs/rolling_recent_90d.json",
+      "status": "finished",
+      "finished_at_utc": "2026-03-22T15:36:56.596358+00:00"
     }
   },
   "validation_depth": {
-    "mom_20,mom_plus_value,quality_minus_value,quality_roe,value_ep": 1,
-    "mom_20,mom_plus_value,value_bp,value_ep": 6
+    "hybrid_mom_20_liquidity_turnover_shock": 1,
+    "hybrid_mom_20_liquidity_turnover_shock,liquidity_turnover_shock": 5,
+    "liquidity_turnover_shock,mom_20": 1,
+    "hybrid_mom_20_liquidity_turnover_shock,liquidity_turnover_shock,mom_20": 1,
+    "hybrid_liquidity_turnover_shock_mom_20,liquidity_turnover_shock": 1,
+    "hybrid_liquidity_turnover_shock_mom_20,liquidity_turnover_shock,mom_20": 1,
+    "hybrid_mom_20_value_ep,liquidity_turnover_shock": 1,
+    "liquidity_turnover_shock,mom_plus_value": 1,
+    "liquidity_turnover_shock,mom_20,mom_plus_value": 1
   },
   "graveyard_diagnostics": {
+    "size_small,value_bp,value_ep": 3,
+    "size_small": 1,
+    "hybrid_size_small_value_bp,size_small,value_bp": 1,
+    "liquidity_turnover_shock,mom_20": 1,
+    "liquidity_turnover_shock,mom_20,mom_plus_value": 1,
+    "hybrid_mom_20_value_ep,liquidity_turnover_shock,mom_20,mom_plus_value": 1,
+    "mapped_from:diagnose,opportunity_selected": 1,
+    "liquidity_turnover_shock,mom_20,mom_plus_value,size_small": 1,
     "liquidity_turnover_shock": 1,
-    "liquidity_turnover_shock,size_small,value_bp,value_ep": 6,
-    "consistent_graveyard:liquidity_turnover_shock, size_small, value_bp, value_ep,stable_candidates:mom_20, mom_plus_value": 1,
-    "liquidity_turnover_shock,mom_20,mom_plus_value,size_small,value_bp": 6,
-    "liquidity_turnover_shock,size_small": 6
+    "liquidity_turnover_shock,mom_20,mom_plus_value,size_small,value_bp,value_ep": 2,
+    "consistent_graveyard:liquidity_turnover_shock, mom_20, size_small, value_bp, value_ep": 1,
+    "value_ep": 6,
+    "mom_20,value_ep": 1,
+    "hybrid_size_small_value_bp": 5,
+    "hybrid_liquidity_turnover_shock_mom_20": 4
   },
   "exploration_lines": {
-    "artifacts/generated_batch_from_llm.json": {
-      "task_id": "e598609f-1773-47af-8f50-fe2fe9abfba8",
+    "/home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-critic-meta-diversity-probe.json": {
+      "task_id": "fad2a288-0eb2-4526-8766-03616fd414c4",
       "status": "finished",
-      "finished_at_utc": "2026-03-18T21:34:21.439760+00:00",
-      "worker_note": "generated batch finished: artifacts/generated_batch_from_llm.json | knowledge_gain=exploration_candidate_survived,exploration_graveyard_identified"
+      "finished_at_utc": "2026-03-22T16:19:04.894063+00:00",
+      "worker_note": "generated batch finished: /home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-critic-meta-diversity-probe.json | knowledge_gain=exploration_graveyard_identified"
+    },
+    "/home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-pattern-native-recombine-graveyard_diagnosis-child-pair_target-exploration_candidate_survived-new_branch_opened-recombination_productive-search_space_expanded.json": {
+      "task_id": "ed13d465-83a8-4d9c-aa72-af9604de2853",
+      "status": "finished",
+      "finished_at_utc": "2026-03-22T16:08:22.421792+00:00",
+      "worker_note": "generated batch finished: /home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-pattern-native-recombine-graveyard_diagnosis-child-pair_target-exploration_candidate_survived-new_branch_opened-recombination_productive-search_space_expanded.json | knowledge_gain=exploration_candidate_survived,exploration_graveyard_identified"
+    },
+    "/home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-child-expand-from-opp-q-stable-boundary.json": {
+      "task_id": "0e6ff183-41ef-487a-907d-76b6ae32425b",
+      "status": "finished",
+      "finished_at_utc": "2026-03-22T16:05:59.788743+00:00",
+      "worker_note": "generated batch finished: /home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-child-expand-from-opp-q-stable-boundary.json | knowledge_gain=exploration_candidate_survived"
+    },
+    "/home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-critic-frontier-positive-probe.json": {
+      "task_id": "c256a7fa-7c6a-481f-a6ac-dbea7458418c",
+      "status": "finished",
+      "finished_at_utc": "2026-03-22T15:47:03.199709+00:00",
+      "worker_note": "generated batch finished: /home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-critic-frontier-positive-probe.json | knowledge_gain=exploration_graveyard_identified"
+    },
+    "/home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-child-expand-from-opp-full-run-followup-opp-q-stable-boundary.json": {
+      "task_id": "ce70b3e5-ed9e-43fc-9c91-3dd2d0cad38f",
+      "status": "finished",
+      "finished_at_utc": "2026-03-22T16:51:59.245656+00:00",
+      "worker_note": "generated batch finished: /home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-child-expand-from-opp-full-run-followup-opp-q-stable-boundary.json | knowledge_gain=exploration_candidate_survived"
+    },
+    "/home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-pattern-native-recombine-exploration-root-pair_target-exploration_candidate_survived-new_branch_opened-recombination_productive-search_space_expanded.json": {
+      "task_id": "1f832ea8-044b-4797-a858-642ae289d7e5",
+      "status": "finished",
+      "finished_at_utc": "2026-03-22T16:51:40.522048+00:00",
+      "worker_note": "generated batch finished: /home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-pattern-native-recombine-exploration-root-pair_target-exploration_candidate_survived-new_branch_opened-recombination_productive-search_space_expanded.json | knowledge_gain=exploration_candidate_survived"
+    },
+    "/home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-q-new-branch-topscore-probe.json": {
+      "task_id": "8dcf798a-0b2d-4cf7-bf89-49f29bf9b52b",
+      "status": "finished",
+      "finished_at_utc": "2026-03-22T16:35:31.081276+00:00",
+      "worker_note": "generated batch finished: /home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-q-new-branch-topscore-probe.json | knowledge_gain=exploration_graveyard_identified"
+    },
+    "/home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-pattern-native-recombine-graveyard_diagnosis-root-no_targets-exploration_candidate_survived-new_branch_opened-recombination_productive-search_space_expanded.json": {
+      "task_id": "97740314-833c-41e9-b214-5adc7d511330",
+      "status": "finished",
+      "finished_at_utc": "2026-03-22T16:09:10.411324+00:00",
+      "worker_note": "generated batch finished: /home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-pattern-native-recombine-graveyard_diagnosis-root-no_targets-exploration_candidate_survived-new_branch_opened-recombination_productive-search_space_expanded.json | knowledge_gain=exploration_candidate_survived,exploration_graveyard_identified"
+    },
+    "/home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-child-expand-from-opp-pattern-native-confirm-stable_candidate_validation-child-multi_target-stable_candidate_confirmed-partial_support-uncertainty_reduced.json": {
+      "task_id": "c6c86748-33ff-4f10-978e-083564312702",
+      "status": "finished",
+      "finished_at_utc": "2026-03-22T16:35:15.668110+00:00",
+      "worker_note": "generated batch finished: /home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-child-expand-from-opp-pattern-native-confirm-stable_candidate_validation-child-multi_target-stable_candidate_confirmed-partial_support-uncertainty_reduced.json | knowledge_gain=exploration_candidate_survived"
+    },
+    "artifacts/generated_batch_from_llm.json": {
+      "task_id": "dfe69397-d36a-4484-af14-98f38a243db4",
+      "status": "finished",
+      "finished_at_utc": "2026-03-22T16:34:13.810625+00:00",
+      "worker_note": "generated batch finished: artifacts/generated_batch_from_llm.json | knowledge_gain=exploration_graveyard_identified"
+    },
+    "/home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-child-probe-from-opp-q-recovery-to-opportunity-graveyard.json": {
+      "task_id": "5b86ed5a-80fd-41f8-a826-cbfc8a447eca",
+      "status": "finished",
+      "finished_at_utc": "2026-03-22T16:32:09.005701+00:00",
+      "worker_note": "generated batch finished: /home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-child-probe-from-opp-q-recovery-to-opportunity-graveyard.json | knowledge_gain=exploration_graveyard_identified"
+    },
+    "/home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-q-recovery-to-opportunity-stable.json": {
+      "task_id": "6609fe38-5416-4224-996f-814bfd143881",
+      "status": "finished",
+      "finished_at_utc": "2026-03-22T16:32:00.569881+00:00",
+      "worker_note": "generated batch finished: /home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-q-recovery-to-opportunity-stable.json | knowledge_gain=exploration_candidate_survived,exploration_graveyard_identified"
     }
   },
   "knowledge_gain_counter": {
-    "graveyard_diagnosis_level_7_requested": 4,
-    "stable_candidate_validation_v7_requested": 2,
-    "neutralization_diagnosis_requested": 37,
-    "stable_candidate_confirmed": 40,
-    "repeated_graveyard_confirmed": 40,
-    "exploration_candidate_survived": 39,
-    "exploration_graveyard_identified": 39,
-    "graveyard_regime_shift_requested": 3,
-    "graveyard_cross_window_requested": 3,
-    "graveyard_construction_requested": 3,
-    "graveyard_raw_vs_neutral_requested": 3,
-    "graveyard_window_sensitivity_requested": 2,
-    "stable_candidate_validation_v5_requested": 1,
+    "exploration_graveyard_identified": 21,
+    "exploration_candidate_survived": 16,
+    "neutralization_diagnosis_requested": 8,
+    "stable_candidate_validation_v6_requested": 10,
+    "stable_candidate_confirmed": 2,
+    "repeated_graveyard_confirmed": 1,
+    "graveyard_regime_shift_requested": 1,
+    "graveyard_cross_window_requested": 1,
+    "graveyard_construction_requested": 1,
+    "graveyard_raw_vs_neutral_requested": 1,
     "stable_candidate_validation_v4_requested": 1,
-    "stable_candidate_validation_v3_requested": 1,
-    "stable_candidate_validation_v2_requested": 1,
-    "stable_candidate_validation_requested": 1
+    "stable_candidate_validation_v2_requested": 1
   }
 }

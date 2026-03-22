@@ -1,0 +1,29 @@
+{
+  "jobs": [
+    {
+      "job_name": "recent_hybrid",
+      "total_factors": 1,
+      "candidate_count": 0,
+      "graveyard_count": 1
+    },
+    {
+      "job_name": "expanding_hybrid",
+      "total_factors": 1,
+      "candidate_count": 0,
+      "graveyard_count": 1
+    }
+  ],
+  "candidate_presence": {},
+  "graveyard_presence": {
+    "liquidity_turnover_shock": [
+      "recent_hybrid",
+      "expanding_hybrid"
+    ]
+  },
+  "representative_presence": {
+    "liquidity_turnover_shock": [
+      "recent_hybrid",
+      "expanding_hybrid"
+    ]
+  }
+}

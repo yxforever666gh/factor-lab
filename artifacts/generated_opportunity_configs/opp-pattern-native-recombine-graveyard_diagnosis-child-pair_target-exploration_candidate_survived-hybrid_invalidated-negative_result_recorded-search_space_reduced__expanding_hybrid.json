@@ -1,0 +1,27 @@
+{
+  "data_source": "tushare",
+  "cache_dir": "artifacts/tushare_cache",
+  "output_dir": "artifacts/opportunity_runs/opp-pattern-native-recombine-graveyard_diagnosis-child-pair_target-exploration_candidate_survived-hybrid_invalidated-negative_result_recorded-search_space_reduced/expanding_hybrid",
+  "start_date": "2025-09-03",
+  "end_date": "2026-03-18",
+  "universe_limit": 20,
+  "factors": [
+    {
+      "name": "liquidity_turnover_shock",
+      "expression": "turnover_shock_5_20"
+    }
+  ],
+  "thresholds": {
+    "min_rank_ic": 0.02,
+    "min_top_bottom_spread": 0.0005
+  },
+  "opportunity_context": {
+    "opportunity_id": "opp-pattern-native-recombine-graveyard_diagnosis-child-pair_target-exploration_candidate_survived-hybrid_invalidated-negative_result_recorded-search_space_reduced",
+    "opportunity_type": "recombine",
+    "target_family": "graveyard_diagnosis",
+    "target_candidates": [
+      "liquidity_turnover_shock"
+    ],
+    "question": "模式 recombine / graveyard_diagnosis / hybrid_invalidated+negative_result_recorded+search_space_reduced 是否值得继续作为研究主线？"
+  }
+}

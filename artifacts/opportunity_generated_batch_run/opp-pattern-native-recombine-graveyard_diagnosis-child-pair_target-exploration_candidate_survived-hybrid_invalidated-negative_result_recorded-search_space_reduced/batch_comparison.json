@@ -1,0 +1,31 @@
+{
+  "jobs": [
+    {
+      "job_name": "recent_hybrid",
+      "total_factors": 3,
+      "candidate_count": 2,
+      "graveyard_count": 1
+    }
+  ],
+  "candidate_presence": {
+    "mom_20": [
+      "recent_hybrid"
+    ],
+    "hybrid_mom_20_value_ep": [
+      "recent_hybrid"
+    ]
+  },
+  "graveyard_presence": {
+    "value_ep": [
+      "recent_hybrid"
+    ]
+  },
+  "representative_presence": {
+    "mom_20": [
+      "recent_hybrid"
+    ],
+    "value_ep": [
+      "recent_hybrid"
+    ]
+  }
+}

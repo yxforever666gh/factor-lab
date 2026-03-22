@@ -1,0 +1,9 @@
+{
+  "task_id": "3ba8e1a6-4fed-4b68-9070-147b90111714",
+  "config_path": "artifacts/generated_opportunity_configs/opp-critic-frontier-positive-probe__probe_recent_30d.json",
+  "output_dir": "artifacts/opportunity_generated_batch_run/opp-critic-frontier-positive-probe/probe_recent_30d",
+  "status": "finished",
+  "started_at_utc": "2026-03-22T17:07:45.643504+00:00",
+  "finished_at_utc": "2026-03-22T17:07:46.901616+00:00",
+  "error": null
+}

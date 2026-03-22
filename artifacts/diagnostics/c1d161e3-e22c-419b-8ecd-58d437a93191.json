@@ -1,0 +1,10 @@
+{
+  "generated_at_utc": "2026-03-21T01:46:23.115188+00:00",
+  "diagnostic_type": "fallback_graveyard_review",
+  "source_output_dir": "artifacts/tushare_batch",
+  "reasons": [
+    "research_generation_exhausted",
+    "graveyard_review_required",
+    "recovery_step"
+  ]
+}

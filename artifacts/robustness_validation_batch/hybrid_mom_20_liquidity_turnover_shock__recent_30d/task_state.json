@@ -1,0 +1,9 @@
+{
+  "task_id": "22e67fe4-ed10-47c0-a912-c187465989a2",
+  "config_path": "artifacts/generated_robustness_configs/hybrid_mom_20_liquidity_turnover_shock__recent_30d.json",
+  "output_dir": "artifacts/robustness_validation_batch/hybrid_mom_20_liquidity_turnover_shock__recent_30d",
+  "status": "finished",
+  "started_at_utc": "2026-03-22T16:07:11.368532+00:00",
+  "finished_at_utc": "2026-03-22T16:07:15.571041+00:00",
+  "error": null
+}

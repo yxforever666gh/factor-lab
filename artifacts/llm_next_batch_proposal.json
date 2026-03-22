@@ -1,24 +1,22 @@
 {
-  "focus_factors": [
-    "mom_20",
-    "mom_plus_value",
-    "liquidity_turnover_shock",
-    "size_small"
-  ],
-  "keep_as_core_candidates": [
-    "mom_20",
-    "mom_plus_value"
-  ],
-  "review_graveyard": [
-    "liquidity_turnover_shock",
-    "size_small",
-    "value_ep",
-    "value_bp"
-  ],
-  "portfolio_checks": [
-    "compare_all_factors_vs_candidates_only",
-    "compare_cluster_representatives_vs_all_factors",
-    "diagnose_neutralized_underperformance"
-  ],
-  "rationale": "基于当前快照，下一轮应继续围绕稳定动量主线，并解释高分非候选因子与中性化策略显著走弱的原因。"
+  "provider": "mock",
+  "summary": "优先围绕当前稳定候选池继续做小步扩展，不自动执行。",
+  "recommended_jobs": [
+    {
+      "name": "candidate_focus_followup",
+      "reason": "围绕稳定候选池做进一步验证，避免一次扩太多。",
+      "based_on_candidates": [
+        "liquidity_turnover_shock",
+        "mom_20"
+      ],
+      "window": {
+        "start_date": "2026-02-01",
+        "end_date": "2026-03-18"
+      },
+      "notes": [
+        "优先测试候选池相关的轻量组合变化",
+        "继续比较候选组合与中性化候选组合"
+      ]
+    }
+  ]
 }

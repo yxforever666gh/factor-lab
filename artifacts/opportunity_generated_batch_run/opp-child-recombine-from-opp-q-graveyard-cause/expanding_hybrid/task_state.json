@@ -1,0 +1,9 @@
+{
+  "task_id": "4a63f24c-d72b-46d6-98fa-ebd27012b8a8",
+  "config_path": "artifacts/generated_opportunity_configs/opp-child-recombine-from-opp-q-graveyard-cause__expanding_hybrid.json",
+  "output_dir": "artifacts/opportunity_generated_batch_run/opp-child-recombine-from-opp-q-graveyard-cause/expanding_hybrid",
+  "status": "finished",
+  "started_at_utc": "2026-03-21T01:36:05.653708+00:00",
+  "finished_at_utc": "2026-03-21T01:36:13.485659+00:00",
+  "error": null
+}

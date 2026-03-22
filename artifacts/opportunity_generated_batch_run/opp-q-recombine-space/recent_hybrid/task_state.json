@@ -1,0 +1,9 @@
+{
+  "task_id": "5719c951-4847-4211-aee5-1e08d81782c2",
+  "config_path": "artifacts/generated_opportunity_configs/opp-q-recombine-space__recent_hybrid.json",
+  "output_dir": "artifacts/opportunity_generated_batch_run/opp-q-recombine-space/recent_hybrid",
+  "status": "finished",
+  "started_at_utc": "2026-03-21T21:11:55.776866+00:00",
+  "finished_at_utc": "2026-03-21T21:11:57.930306+00:00",
+  "error": null
+}

@@ -1,0 +1,9 @@
+{
+  "task_id": "6ec2d1bc-c2d6-4d7d-aee4-858fe90d4cc6",
+  "config_path": "artifacts/generated_configs/rolling_recent_240d.json",
+  "output_dir": "artifacts/generated_recent_240d",
+  "status": "finished",
+  "started_at_utc": "2026-03-19T20:06:00.768329+00:00",
+  "finished_at_utc": "2026-03-19T20:14:02.823282+00:00",
+  "error": null
+}

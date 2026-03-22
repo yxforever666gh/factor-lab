@@ -1,15 +1,15 @@
 {
   "counts": {
-    "total": 9,
-    "promoted": 0,
-    "evaluated": 1,
-    "rejected": 0,
-    "archived": 2,
-    "child_count": 2
+    "total": 25,
+    "promoted": 13,
+    "evaluated": 10,
+    "rejected": 1,
+    "archived": 0,
+    "child_count": 7
   },
   "rates": {
-    "success_rate": 0.0,
-    "knowledge_gain_rate": 0.5,
-    "branch_growth_rate": 0.222
+    "success_rate": 0.52,
+    "knowledge_gain_rate": 0.091,
+    "branch_growth_rate": 0.28
   }
 }

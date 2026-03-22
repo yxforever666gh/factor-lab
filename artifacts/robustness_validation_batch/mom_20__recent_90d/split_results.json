@@ -1,0 +1,26 @@
+[
+  {
+    "factor_name": "mom_20",
+    "expression": "momentum_20",
+    "observations": 286,
+    "rank_ic_mean": -0.246046,
+    "rank_ic_std": 0.284179,
+    "rank_ic_ir": -0.865815,
+    "top_bottom_spread_mean": -0.024239,
+    "pass_gate": false,
+    "fail_reason": "rank_ic_mean<0.02; top_bottom_spread<0.0005",
+    "split": "first_half"
+  },
+  {
+    "factor_name": "mom_20",
+    "expression": "momentum_20",
+    "observations": 297,
+    "rank_ic_mean": 0.200709,
+    "rank_ic_std": 0.392096,
+    "rank_ic_ir": 0.511887,
+    "top_bottom_spread_mean": 0.020728,
+    "pass_gate": true,
+    "fail_reason": "",
+    "split": "second_half"
+  }
+]

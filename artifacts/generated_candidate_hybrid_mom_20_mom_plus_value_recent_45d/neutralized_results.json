@@ -1,0 +1,14 @@
+[
+  {
+    "factor_name": "hybrid_mom_20_mom_plus_value",
+    "expression": "(momentum_20) + (momentum_20 + earnings_yield)",
+    "observations": 253,
+    "rank_ic_mean": 0.093651,
+    "rank_ic_std": 0.224255,
+    "rank_ic_ir": 0.417609,
+    "top_bottom_spread_mean": 0.007218,
+    "pass_gate": true,
+    "fail_reason": "",
+    "variant": "neutralized"
+  }
+]

@@ -1,0 +1,9 @@
+{
+  "task_id": "204b95ee-9c66-4734-bd84-5e6ff33e6cbf",
+  "config_path": "artifacts/generated_configs/candidate_hybrid_liquidity_turnover_shock_mom_20_recent_90d.json",
+  "output_dir": "artifacts/generated_candidate_hybrid_liquidity_turnover_shock_mom_20_recent_90d",
+  "status": "finished",
+  "started_at_utc": "2026-03-21T20:56:36.603218+00:00",
+  "finished_at_utc": "2026-03-21T20:56:38.670468+00:00",
+  "error": null
+}

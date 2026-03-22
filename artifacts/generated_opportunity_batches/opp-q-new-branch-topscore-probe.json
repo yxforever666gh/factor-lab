@@ -1,0 +1,12 @@
+{
+  "source": "research_opportunity",
+  "opportunity_id": "opp-q-new-branch-topscore-probe",
+  "opportunity_type": "probe",
+  "summary": "评分靠前但未被充分验证的因子组合里，是否藏着新方向？",
+  "jobs": [
+    {
+      "name": "probe_recent_30d",
+      "config_path": "artifacts/generated_opportunity_configs/opp-q-new-branch-topscore-probe__probe_recent_30d.json"
+    }
+  ]
+}

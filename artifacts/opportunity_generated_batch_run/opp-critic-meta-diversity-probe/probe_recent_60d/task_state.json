@@ -1,0 +1,9 @@
+{
+  "task_id": "228d7183-a42a-44e0-a9e8-c7d837642e5a",
+  "config_path": "artifacts/generated_opportunity_configs/opp-critic-meta-diversity-probe__probe_recent_60d.json",
+  "output_dir": "artifacts/opportunity_generated_batch_run/opp-critic-meta-diversity-probe/probe_recent_60d",
+  "status": "finished",
+  "started_at_utc": "2026-03-21T01:32:54.308382+00:00",
+  "finished_at_utc": "2026-03-21T01:32:57.517512+00:00",
+  "error": null
+}

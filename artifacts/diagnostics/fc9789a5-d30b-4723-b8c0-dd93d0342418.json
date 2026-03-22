@@ -1,0 +1,8 @@
+{
+  "generated_at_utc": "2026-03-20T19:40:51.219625+00:00",
+  "diagnostic_type": "graveyard_diagnosis_level_7",
+  "source_output_dir": "artifacts/tushare_batch",
+  "reasons": [
+    "recent_graveyard_needs_deeper_review"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "task_id": "9f8c145a-da77-4dab-8c2e-e9a94abf4d35",
+  "config_path": "artifacts/generated_robustness_configs/value_ep__recent_45d.json",
+  "output_dir": "artifacts/robustness_validation_batch/value_ep__recent_45d",
+  "status": "finished",
+  "started_at_utc": "2026-03-22T16:18:08.854447+00:00",
+  "finished_at_utc": "2026-03-22T16:18:12.043068+00:00",
+  "error": null
+}

@@ -1,0 +1,61 @@
+[
+  {
+    "factor_name": "liquidity_turnover_shock",
+    "expression": "turnover_shock_5_20",
+    "score": -0.56321,
+    "raw_rank_ic_mean": 0.009888,
+    "raw_rank_ic_ir": 0.08047,
+    "neutralized_rank_ic_mean": null,
+    "neutralized_pass": null,
+    "split_fail_count": 2,
+    "high_corr_peers": [],
+    "cluster_members": [
+      "liquidity_turnover_shock"
+    ]
+  },
+  {
+    "factor_name": "mom_20",
+    "expression": "momentum_20",
+    "score": 12.001675,
+    "raw_rank_ic_mean": 0.981143,
+    "raw_rank_ic_ir": 64.992119,
+    "neutralized_rank_ic_mean": null,
+    "neutralized_pass": null,
+    "split_fail_count": 0,
+    "high_corr_peers": [],
+    "cluster_members": [
+      "mom_20"
+    ]
+  },
+  {
+    "factor_name": "quality_minus_value",
+    "expression": "roe - pb",
+    "score": 3.606423,
+    "raw_rank_ic_mean": 0.643788,
+    "raw_rank_ic_ir": 15.313021,
+    "neutralized_rank_ic_mean": null,
+    "neutralized_pass": null,
+    "split_fail_count": 0,
+    "high_corr_peers": [
+      "value_ep"
+    ],
+    "cluster_members": [
+      "quality_minus_value",
+      "value_ep"
+    ]
+  },
+  {
+    "factor_name": "quality_roe",
+    "expression": "roe",
+    "score": 4.512202,
+    "raw_rank_ic_mean": 0.736473,
+    "raw_rank_ic_ir": 19.14013,
+    "neutralized_rank_ic_mean": null,
+    "neutralized_pass": null,
+    "split_fail_count": 0,
+    "high_corr_peers": [],
+    "cluster_members": [
+      "quality_roe"
+    ]
+  }
+]

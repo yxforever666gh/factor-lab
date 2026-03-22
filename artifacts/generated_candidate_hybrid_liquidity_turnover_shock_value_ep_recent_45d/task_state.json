@@ -1,0 +1,9 @@
+{
+  "task_id": "fb7bb158-0104-44d8-add0-5c670024ebef",
+  "config_path": "artifacts/generated_configs/candidate_hybrid_liquidity_turnover_shock_value_ep_recent_45d.json",
+  "output_dir": "artifacts/generated_candidate_hybrid_liquidity_turnover_shock_value_ep_recent_45d",
+  "status": "finished",
+  "started_at_utc": "2026-03-21T21:53:09.682822+00:00",
+  "finished_at_utc": "2026-03-21T21:53:10.935076+00:00",
+  "error": null
+}

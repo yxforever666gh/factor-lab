@@ -1,0 +1,30 @@
+{
+  "data_source": "tushare",
+  "cache_dir": "artifacts/tushare_cache",
+  "output_dir": "artifacts/opportunity_runs/opp-q-new-branch-topscore-probe/probe_recent_30d",
+  "start_date": "2026-02-16",
+  "end_date": "2026-03-18",
+  "universe_limit": 20,
+  "factors": [
+    {
+      "name": "liquidity_turnover_shock",
+      "expression": "turnover_shock_5_20"
+    }
+  ],
+  "thresholds": {
+    "min_rank_ic": 0.02,
+    "min_top_bottom_spread": 0.0005
+  },
+  "opportunity_context": {
+    "opportunity_id": "opp-q-new-branch-topscore-probe",
+    "opportunity_type": "probe",
+    "target_family": null,
+    "target_candidates": [
+      "hybrid_mom_20_value_ep",
+      "hybrid_liquidity_turnover_shock_value_ep",
+      "hybrid_size_small_value_bp",
+      "liquidity_turnover_shock"
+    ],
+    "question": "评分靠前但未被充分验证的因子组合里，是否藏着新方向？"
+  }
+}

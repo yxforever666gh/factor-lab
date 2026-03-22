@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from factor_lab.storage import ExperimentStore
+from factor_lab.exposure_scorecard import ExposurePolicy, build_exposure_scorecard
 
 
 @dataclass
@@ -22,19 +23,7 @@ class ExposureConfig:
     min_max_weight: float = 0.05
 
 
-def classify_exposure_type(factor_name: str) -> tuple[str, str]:
-    name = (factor_name or "").lower()
-    if "mom" in name or "momentum" in name:
-        return "momentum", "Momentum"
-    if "value" in name or name.endswith("_ep") or name.endswith("_bp") or "earnings" in name or "book" in name:
-        return "value", "Value"
-    if "size" in name:
-        return "size", "Size"
-    if "liq" in name or "turnover" in name:
-        return "liquidity", "Liquidity/Turnover"
-    if "quality" in name or "roe" in name:
-        return "quality", "Quality"
-    return "other", "Other"
+# classify_exposure_type moved to exposure_scorecard (keep single source of truth)
 
 
 def build_exposure_rows(store: ExperimentStore, run_id: str, cfg: ExposureConfig | None = None) -> list[dict[str, Any]]:
@@ -66,7 +55,7 @@ def build_exposure_rows(store: ExperimentStore, run_id: str, cfg: ExposureConfig
     out: list[dict[str, Any]] = []
     for r in rows:
         factor_name = r["factor_name"]
-        exposure_type, exposure_label = classify_exposure_type(factor_name)
+        expression = r.get("expression")
         strength_score = r.get("score")
         raw_ic = r.get("rank_ic_mean")
         raw_ir = r.get("rank_ic_ir")
@@ -82,51 +71,68 @@ def build_exposure_rows(store: ExperimentStore, run_id: str, cfg: ExposureConfig
         neutral_ic = neutral.get("rank_ic_mean")
         neutral_pass = neutral.get("pass_gate")
 
-        # Strength-first status
-        strong = False
-        if strength_score is not None and strength_score >= cfg.min_strength_score:
-            strong = True
-        if raw_ic is not None and raw_ic >= cfg.min_raw_ic:
-            strong = True
-
-        # Risk-based sizing suggestion
-        max_w = cfg.base_max_weight
-        max_w -= cfg.crowding_penalty_per_peer * crowding
-        max_w -= cfg.split_fail_penalty * split_fail
-        max_w = max(cfg.min_max_weight, round(max_w, 4))
-
-        status = "watch"
-        if strong:
-            status = "usable" if split_fail == 0 else "usable_limited"
+        scorecard = build_exposure_scorecard(
+            factor_name=factor_name,
+            expression=expression,
+            strength_score=strength_score,
+            raw_rank_ic_mean=raw_ic,
+            raw_rank_ic_ir=raw_ir,
+            neutralized_rank_ic_mean=neutral_ic,
+            neutralized_pass_gate=neutral_pass,
+            split_fail_count=split_fail,
+            crowding_peers=crowding,
+            policy=ExposurePolicy(),
+        )
 
         notes = {
             "high_corr_peers": peers[:12],
             "heuristics": {
-                "strong": strong,
+                "strong": bool((strength_score is not None and strength_score >= cfg.min_strength_score) or (raw_ic is not None and raw_ic >= cfg.min_raw_ic)),
                 "split_fail_count": split_fail,
                 "crowding_peers": crowding,
             },
             "interpretation": {
                 "exposure_track": True,
                 "neutralized_is_label_only": True,
+                "all_a_daily_policy": True,
             },
+            "scorecard": scorecard,
         }
 
         out.append(
             {
                 "run_id": run_id,
                 "factor_name": factor_name,
-                "exposure_type": exposure_type,
-                "exposure_label": exposure_label,
+                "exposure_type": scorecard["exposure_type"],
+                "exposure_label": scorecard["exposure_label"],
+                "bucket_key": scorecard["bucket_key"],
+                "bucket_label": scorecard["bucket_label"],
+                "effective_bucket_key": scorecard["effective_bucket_key"],
+                "effective_bucket_label": scorecard["effective_bucket_label"],
                 "strength_score": strength_score,
                 "raw_rank_ic_mean": raw_ic,
                 "raw_rank_ic_ir": raw_ir,
                 "neutralized_rank_ic_mean": neutral_ic,
                 "neutralized_pass_gate": neutral_pass,
+                "retention_industry": scorecard["retention_industry"],
+                "retention_industry_size": scorecard["retention_industry_size"],
+                "retention_full": scorecard["retention_full"],
+                "industry_top1_weight": scorecard["industry_top1_weight"],
+                "industry_hhi": scorecard["industry_hhi"],
+                "turnover_daily": scorecard["turnover_daily"],
+                "net_metric": scorecard["net_metric"],
+                "liquidity_bottom20_retention": scorecard["liquidity_bottom20_retention"],
+                "strength_subscore": scorecard["strength_subscore"],
+                "robustness_subscore": scorecard["robustness_subscore"],
+                "controllability_subscore": scorecard["controllability_subscore"],
+                "implementability_subscore": scorecard["implementability_subscore"],
+                "novelty_subscore": scorecard["novelty_subscore"],
+                "total_score": scorecard["total_score"],
                 "split_fail_count": split_fail,
                 "crowding_peers": crowding,
-                "recommended_max_weight": max_w,
-                "status": status,
+                "recommended_max_weight": scorecard["recommended_max_weight"],
+                "status": scorecard["status"],
+                "hard_flags": scorecard["hard_flags"],
                 "notes": notes,
                 "created_at_utc": now,
                 "updated_at_utc": now,

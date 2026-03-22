@@ -1,0 +1,74 @@
+[
+  {
+    "factor_name": "mom_20",
+    "expression": "momentum_20",
+    "observations": 645,
+    "rank_ic_mean": -0.03391,
+    "rank_ic_std": 0.350307,
+    "rank_ic_ir": -0.096801,
+    "top_bottom_spread_mean": -0.005508,
+    "pass_gate": false,
+    "fail_reason": "rank_ic_mean<0.02; top_bottom_spread<0.0005",
+    "split": "first_half"
+  },
+  {
+    "factor_name": "mom_20",
+    "expression": "momentum_20",
+    "observations": 682,
+    "rank_ic_mean": -0.009995,
+    "rank_ic_std": 0.387643,
+    "rank_ic_ir": -0.025783,
+    "top_bottom_spread_mean": 0.003619,
+    "pass_gate": false,
+    "fail_reason": "rank_ic_mean<0.02",
+    "split": "second_half"
+  },
+  {
+    "factor_name": "mom_plus_value",
+    "expression": "momentum_20 + earnings_yield",
+    "observations": 645,
+    "rank_ic_mean": -0.050884,
+    "rank_ic_std": 0.311985,
+    "rank_ic_ir": -0.163098,
+    "top_bottom_spread_mean": -0.008321,
+    "pass_gate": false,
+    "fail_reason": "rank_ic_mean<0.02; top_bottom_spread<0.0005",
+    "split": "first_half"
+  },
+  {
+    "factor_name": "mom_plus_value",
+    "expression": "momentum_20 + earnings_yield",
+    "observations": 682,
+    "rank_ic_mean": -0.019316,
+    "rank_ic_std": 0.369875,
+    "rank_ic_ir": -0.052223,
+    "top_bottom_spread_mean": -0.005361,
+    "pass_gate": false,
+    "fail_reason": "rank_ic_mean<0.02; top_bottom_spread<0.0005",
+    "split": "second_half"
+  },
+  {
+    "factor_name": "hybrid_mom_20_mom_plus_value",
+    "expression": "(momentum_20) + (momentum_20 + earnings_yield)",
+    "observations": 645,
+    "rank_ic_mean": -0.032898,
+    "rank_ic_std": 0.330651,
+    "rank_ic_ir": -0.099496,
+    "top_bottom_spread_mean": -0.005408,
+    "pass_gate": false,
+    "fail_reason": "rank_ic_mean<0.02; top_bottom_spread<0.0005",
+    "split": "first_half"
+  },
+  {
+    "factor_name": "hybrid_mom_20_mom_plus_value",
+    "expression": "(momentum_20) + (momentum_20 + earnings_yield)",
+    "observations": 682,
+    "rank_ic_mean": -0.021155,
+    "rank_ic_std": 0.392222,
+    "rank_ic_ir": -0.053936,
+    "top_bottom_spread_mean": -0.001341,
+    "pass_gate": false,
+    "fail_reason": "rank_ic_mean<0.02; top_bottom_spread<0.0005",
+    "split": "second_half"
+  }
+]

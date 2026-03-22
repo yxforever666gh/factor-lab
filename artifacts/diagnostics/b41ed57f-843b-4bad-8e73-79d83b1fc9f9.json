@@ -1,0 +1,18 @@
+{
+  "generated_at_utc": "2026-03-22T03:43:05.075774+00:00",
+  "diagnostic_type": "opportunity_confirm",
+  "source_output_dir": "artifacts",
+  "reasons": [
+    "opportunity_selected",
+    "mapped_from:confirm"
+  ],
+  "goal": "当前稳定候选的有效性边界在哪里？",
+  "hypothesis": "稳定候选并非只在局部窗口有效，而是存在可继续扩展验证的稳健边界。",
+  "branch_id": "opp-q-stable-boundary",
+  "expected_information_gain": [
+    "stable_candidate_confirmed"
+  ],
+  "stop_if": [],
+  "promote_if": [],
+  "disconfirm_if": []
+}

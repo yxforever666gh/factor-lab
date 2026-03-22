@@ -1,0 +1,8 @@
+{
+  "generated_at_utc": "2026-03-21T17:35:16.855068+00:00",
+  "diagnostic_type": "stable_candidate_validation_review_v7",
+  "source_output_dir": "artifacts/tushare_batch",
+  "reasons": [
+    "stable_candidates_need_deeper_validation"
+  ]
+}

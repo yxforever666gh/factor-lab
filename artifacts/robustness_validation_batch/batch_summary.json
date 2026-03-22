@@ -1,0 +1,182 @@
+[
+  {
+    "job_name": "hybrid_mom_20_value_ep__recent_30d",
+    "total_factors": 1,
+    "candidate_count": 1,
+    "graveyard_count": 0
+  },
+  {
+    "job_name": "hybrid_mom_20_value_ep__recent_45d",
+    "total_factors": 1,
+    "candidate_count": 1,
+    "graveyard_count": 0
+  },
+  {
+    "job_name": "hybrid_mom_20_value_ep__recent_60d",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  },
+  {
+    "job_name": "hybrid_mom_20_value_ep__recent_90d",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  },
+  {
+    "job_name": "hybrid_mom_20_value_ep__recent_120d",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  },
+  {
+    "job_name": "hybrid_mom_20_value_ep__expanding_2025_09_01",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  },
+  {
+    "job_name": "value_ep__recent_30d",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  },
+  {
+    "job_name": "value_ep__recent_45d",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  },
+  {
+    "job_name": "value_ep__recent_60d",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  },
+  {
+    "job_name": "value_ep__recent_90d",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  },
+  {
+    "job_name": "value_ep__recent_120d",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  },
+  {
+    "job_name": "value_ep__expanding_2025_09_01",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  },
+  {
+    "job_name": "mom_plus_value__recent_30d",
+    "total_factors": 1,
+    "candidate_count": 1,
+    "graveyard_count": 0
+  },
+  {
+    "job_name": "mom_plus_value__recent_45d",
+    "total_factors": 1,
+    "candidate_count": 1,
+    "graveyard_count": 0
+  },
+  {
+    "job_name": "mom_plus_value__recent_60d",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  },
+  {
+    "job_name": "mom_plus_value__recent_90d",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  },
+  {
+    "job_name": "mom_plus_value__recent_120d",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  },
+  {
+    "job_name": "mom_plus_value__expanding_2025_09_01",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  },
+  {
+    "job_name": "mom_20__recent_30d",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  },
+  {
+    "job_name": "mom_20__recent_45d",
+    "total_factors": 1,
+    "candidate_count": 1,
+    "graveyard_count": 0
+  },
+  {
+    "job_name": "mom_20__recent_60d",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  },
+  {
+    "job_name": "mom_20__recent_90d",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  },
+  {
+    "job_name": "mom_20__recent_120d",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  },
+  {
+    "job_name": "mom_20__expanding_2025_09_01",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  },
+  {
+    "job_name": "liquidity_turnover_shock__recent_30d",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  },
+  {
+    "job_name": "liquidity_turnover_shock__recent_45d",
+    "total_factors": 1,
+    "candidate_count": 1,
+    "graveyard_count": 0
+  },
+  {
+    "job_name": "liquidity_turnover_shock__recent_60d",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  },
+  {
+    "job_name": "liquidity_turnover_shock__recent_90d",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  },
+  {
+    "job_name": "liquidity_turnover_shock__recent_120d",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  },
+  {
+    "job_name": "liquidity_turnover_shock__expanding_2025_09_01",
+    "total_factors": 1,
+    "candidate_count": 0,
+    "graveyard_count": 1
+  }
+]

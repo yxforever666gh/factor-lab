@@ -1,5 +1,5 @@
-最新一次完成的研究任务来自 configs/first_workflow.json。
-运行时间：2026-03-20T00:06:38.052490+00:00。
-当前长期平均表现最好的策略是 long_short_top_bottom_all_factors，平均夏普 10.08。
-目前最稳定的候选因子：mom_20、mom_plus_value、value_ep、quality_minus_value、quality_roe。
-当前候选榜单前列：mom_20(promising, 4.865683)；quality_roe(testing, 4.41182)；quality_minus_value(testing, 4.197889)；value_ep(testing, 4.071135)；size_small(testing, 3.025676)。
+最新一次完成的研究任务来自 artifacts/generated_configs/rolling_recent_45d.json。
+运行时间：2026-03-22T18:00:33.019869+00:00。
+当前长期平均表现最好的策略是 long_short_top_bottom_candidates_only，平均夏普 7.10。
+目前最稳定的候选因子：mom_20、liquidity_turnover_shock、mom_plus_value、hybrid_mom_20_value_ep、hybrid_mom_20_liquidity_turnover_shock。
+当前候选榜单前列：hybrid_mom_20_liquidity_turnover_shock(fragile, 10.072773)；hybrid_liquidity_turnover_shock_mom_20(fragile, 10.072773)；mom_20(fragile, 9.793076)；liquidity_turnover_shock(fragile, 9.723041)；mom_plus_value(fragile, 9.601585)。

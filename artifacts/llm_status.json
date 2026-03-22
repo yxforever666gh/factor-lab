@@ -1,16 +1,16 @@
 {
   "mode": "openclaw_agent_bridge",
   "status": "plan_executed",
-  "updated_at_utc": "2026-03-20T23:53:16.027514+00:00",
-  "generated_batch_path": "/home/admin/.openclaw/workspace/artifacts/generated_batch_from_llm.json",
-  "generated_batch_output_dir": "artifacts/opportunity_generated_batch_run",
+  "updated_at_utc": "2026-03-22T17:57:05.011104+00:00",
+  "generated_batch_path": "/home/admin/.openclaw/workspace/artifacts/generated_opportunity_batches/opp-critic-meta-diversity-probe.json",
+  "generated_batch_output_dir": "artifacts/opportunity_generated_batch_run/opp-critic-meta-diversity-probe",
   "feedback_path": "artifacts/llm_plan_feedback.json",
   "feedback_summary": [
     {
-      "job_name": "llm_focus_batch",
-      "total_factors": 4,
+      "job_name": "probe_recent_30d",
+      "total_factors": 2,
       "candidate_count": 0,
-      "graveyard_count": 4
+      "graveyard_count": 2
     }
   ],
   "knowledge_gain": [

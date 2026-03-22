@@ -1,0 +1,147 @@
+{
+  "run_id": "6a74f10c-db55-454e-98a3-1f374df4f593",
+  "generated_at_utc": "2026-03-21T20:54:34.900101+00:00",
+  "config": {
+    "data_source": "tushare",
+    "cache_dir": "artifacts/tushare_cache",
+    "output_dir": "artifacts/opportunity_runs/opp-child-recombine-from-opp-q-graveyard-cause/recent_hybrid",
+    "start_date": "2026-02-01",
+    "end_date": "2026-03-18",
+    "universe_limit": 20,
+    "factors": [
+      {
+        "name": "liquidity_turnover_shock",
+        "expression": "turnover_shock_5_20"
+      },
+      {
+        "name": "mom_20",
+        "expression": "momentum_20"
+      },
+      {
+        "name": "hybrid_liquidity_turnover_shock_mom_20",
+        "expression": "(turnover_shock_5_20) + (momentum_20)"
+      }
+    ],
+    "thresholds": {
+      "min_rank_ic": 0.02,
+      "min_top_bottom_spread": 0.0005
+    },
+    "opportunity_context": {
+      "opportunity_id": "opp-child-recombine-from-opp-q-graveyard-cause",
+      "opportunity_type": "recombine",
+      "target_family": "graveyard_diagnosis",
+      "target_candidates": [
+        "liquidity_turnover_shock",
+        "mom_20"
+      ],
+      "question": "opp-q-graveyard-cause 已提供失败解释，是否可据此构造新的重组型机会？"
+    }
+  },
+  "dataset_rows": 253,
+  "factor_count": 3,
+  "candidate_pool": [
+    "liquidity_turnover_shock",
+    "mom_20",
+    "hybrid_liquidity_turnover_shock_mom_20"
+  ],
+  "graveyard": [],
+  "cluster_representatives": [
+    "hybrid_liquidity_turnover_shock_mom_20",
+    "mom_20"
+  ],
+  "top_scores": [
+    {
+      "factor_name": "hybrid_liquidity_turnover_shock_mom_20",
+      "expression": "(turnover_shock_5_20) + (momentum_20)",
+      "score": 1.420146,
+      "raw_rank_ic_mean": 0.309486,
+      "raw_rank_ic_ir": 1.34473,
+      "neutralized_rank_ic_mean": 0.081574,
+      "neutralized_pass": true,
+      "split_fail_count": 0,
+      "high_corr_peers": [
+        "liquidity_turnover_shock"
+      ]
+    },
+    {
+      "factor_name": "mom_20",
+      "expression": "momentum_20",
+      "score": 1.37731,
+      "raw_rank_ic_mean": 0.326877,
+      "raw_rank_ic_ir": 1.239817,
+      "neutralized_rank_ic_mean": 0.024715,
+      "neutralized_pass": true,
+      "split_fail_count": 0,
+      "high_corr_peers": []
+    },
+    {
+      "factor_name": "liquidity_turnover_shock",
+      "expression": "turnover_shock_5_20",
+      "score": 1.199535,
+      "raw_rank_ic_mean": 0.25336,
+      "raw_rank_ic_ir": 0.996098,
+      "neutralized_rank_ic_mean": 0.07224,
+      "neutralized_pass": true,
+      "split_fail_count": 0,
+      "high_corr_peers": [
+        "hybrid_liquidity_turnover_shock_mom_20"
+      ]
+    }
+  ],
+  "portfolio_results": [
+    {
+      "strategy_name": "long_short_top_bottom_all_factors",
+      "annual_return": 1.221359,
+      "annual_volatility": 0.155844,
+      "sharpe": 7.837043,
+      "max_drawdown": -0.010113,
+      "avg_turnover": 0.393939,
+      "observations": 23
+    },
+    {
+      "strategy_name": "long_short_top_bottom_candidates_only",
+      "annual_return": 1.221359,
+      "annual_volatility": 0.155844,
+      "sharpe": 7.837043,
+      "max_drawdown": -0.010113,
+      "avg_turnover": 0.393939,
+      "observations": 23
+    },
+    {
+      "strategy_name": "long_short_top_bottom_candidates_only_neutralized",
+      "annual_return": 0.603942,
+      "annual_volatility": 0.192799,
+      "sharpe": 3.132486,
+      "max_drawdown": -0.063111,
+      "avg_turnover": 1.272727,
+      "observations": 23
+    },
+    {
+      "strategy_name": "long_short_top_bottom_cluster_representatives",
+      "annual_return": 1.372347,
+      "annual_volatility": 0.1975,
+      "sharpe": 6.9486,
+      "max_drawdown": -0.019324,
+      "avg_turnover": 0.348485,
+      "observations": 23
+    },
+    {
+      "strategy_name": "long_short_top_bottom_cluster_representatives_neutralized",
+      "annual_return": 0.258712,
+      "annual_volatility": 0.2059,
+      "sharpe": 1.256494,
+      "max_drawdown": -0.093241,
+      "avg_turnover": 1.382576,
+      "observations": 23
+    },
+    {
+      "strategy_name": "long_short_top_bottom_neutralized",
+      "annual_return": 0.603942,
+      "annual_volatility": 0.192799,
+      "sharpe": 3.132486,
+      "max_drawdown": -0.063111,
+      "avg_turnover": 1.272727,
+      "observations": 23
+    }
+  ]
+}

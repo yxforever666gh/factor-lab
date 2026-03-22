@@ -1,0 +1,13 @@
+[
+  {
+    "factor_name": "mom_20",
+    "expression": "momentum_20",
+    "raw_pass": true,
+    "raw_rank_ic_mean": 0.326877,
+    "raw_rank_ic_ir": 1.239817,
+    "neutralized_pass": true,
+    "neutralized_rank_ic_mean": 0.024715,
+    "split_fail_count": 0,
+    "high_corr_peers": []
+  }
+]

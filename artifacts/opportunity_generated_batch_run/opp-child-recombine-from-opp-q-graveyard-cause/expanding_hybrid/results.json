@@ -1,0 +1,35 @@
+[
+  {
+    "factor_name": "mom_20",
+    "expression": "momentum_20",
+    "observations": 1327,
+    "rank_ic_mean": -0.021855,
+    "rank_ic_std": 0.369792,
+    "rank_ic_ir": -0.059101,
+    "top_bottom_spread_mean": -0.000907,
+    "pass_gate": false,
+    "fail_reason": "rank_ic_mean<0.02; top_bottom_spread<0.0005"
+  },
+  {
+    "factor_name": "mom_plus_value",
+    "expression": "momentum_20 + earnings_yield",
+    "observations": 1327,
+    "rank_ic_mean": -0.034972,
+    "rank_ic_std": 0.342754,
+    "rank_ic_ir": -0.102032,
+    "top_bottom_spread_mean": -0.006829,
+    "pass_gate": false,
+    "fail_reason": "rank_ic_mean<0.02; top_bottom_spread<0.0005"
+  },
+  {
+    "factor_name": "hybrid_mom_20_mom_plus_value",
+    "expression": "(momentum_20) + (momentum_20 + earnings_yield)",
+    "observations": 1327,
+    "rank_ic_mean": -0.026979,
+    "rank_ic_std": 0.363042,
+    "rank_ic_ir": -0.074313,
+    "top_bottom_spread_mean": -0.003358,
+    "pass_gate": false,
+    "fail_reason": "rank_ic_mean<0.02; top_bottom_spread<0.0005"
+  }
+]

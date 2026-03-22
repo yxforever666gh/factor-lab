@@ -1,0 +1,13 @@
+[
+  {
+    "factor_name": "hybrid_liquidity_turnover_shock_mom_20",
+    "expression": "(turnover_shock_5_20) + (momentum_20)",
+    "observations": 253,
+    "rank_ic_mean": 0.309486,
+    "rank_ic_std": 0.230147,
+    "rank_ic_ir": 1.34473,
+    "top_bottom_spread_mean": 0.034256,
+    "pass_gate": true,
+    "fail_reason": ""
+  }
+]

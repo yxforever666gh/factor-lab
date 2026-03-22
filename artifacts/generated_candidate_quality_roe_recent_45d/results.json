@@ -1,0 +1,13 @@
+[
+  {
+    "factor_name": "quality_roe",
+    "expression": "roe",
+    "observations": 253,
+    "rank_ic_mean": 0.192885,
+    "rank_ic_std": 0.160576,
+    "rank_ic_ir": 1.201206,
+    "top_bottom_spread_mean": 0.023122,
+    "pass_gate": true,
+    "fail_reason": ""
+  }
+]

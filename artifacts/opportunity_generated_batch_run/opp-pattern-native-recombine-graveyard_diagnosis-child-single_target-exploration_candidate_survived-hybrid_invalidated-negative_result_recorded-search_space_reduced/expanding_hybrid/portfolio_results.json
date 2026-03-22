@@ -1,0 +1,38 @@
+[
+  {
+    "strategy_name": "long_short_top_bottom_all_factors",
+    "annual_return": -0.624202,
+    "annual_volatility": 0.346946,
+    "sharpe": -1.799134,
+    "max_drawdown": -0.9001,
+    "avg_turnover": 0.407713,
+    "observations": 122
+  },
+  {
+    "strategy_name": "long_short_top_bottom_cluster_representatives",
+    "annual_return": -0.624202,
+    "annual_volatility": 0.346946,
+    "sharpe": -1.799134,
+    "max_drawdown": -0.9001,
+    "avg_turnover": 0.407713,
+    "observations": 122
+  },
+  {
+    "strategy_name": "long_short_top_bottom_cluster_representatives_neutralized",
+    "annual_return": 0.155529,
+    "annual_volatility": 0.344217,
+    "sharpe": 0.451833,
+    "max_drawdown": -0.632507,
+    "avg_turnover": 1.279063,
+    "observations": 122
+  },
+  {
+    "strategy_name": "long_short_top_bottom_neutralized",
+    "annual_return": 0.155529,
+    "annual_volatility": 0.344217,
+    "sharpe": 0.451833,
+    "max_drawdown": -0.632507,
+    "avg_turnover": 1.279063,
+    "observations": 122
+  }
+]

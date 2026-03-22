@@ -1,0 +1,114 @@
+{
+  "run_id": "228d7183-a42a-44e0-a9e8-c7d837642e5a",
+  "generated_at_utc": "2026-03-21T01:32:57.509515+00:00",
+  "config": {
+    "data_source": "tushare",
+    "cache_dir": "artifacts/tushare_cache",
+    "output_dir": "artifacts/opportunity_runs/opp-critic-meta-diversity-probe/probe_recent_60d",
+    "start_date": "2026-01-17",
+    "end_date": "2026-03-18",
+    "universe_limit": 20,
+    "factors": [
+      {
+        "name": "mom_20",
+        "expression": "momentum_20"
+      },
+      {
+        "name": "mom_plus_value",
+        "expression": "momentum_20 + earnings_yield"
+      }
+    ],
+    "thresholds": {
+      "min_rank_ic": 0.02,
+      "min_top_bottom_spread": 0.0005
+    },
+    "opportunity_context": {
+      "opportunity_id": "opp-critic-meta-diversity-probe",
+      "opportunity_type": "probe",
+      "target_family": null,
+      "target_candidates": [
+        "mom_20",
+        "mom_plus_value",
+        "value_ep",
+        "quality_minus_value"
+      ],
+      "question": "当前研究问题空间是否过窄，遗漏了尚未表达的新方向？"
+    }
+  },
+  "dataset_rows": 363,
+  "factor_count": 2,
+  "candidate_pool": [],
+  "graveyard": [
+    "mom_20",
+    "mom_plus_value"
+  ],
+  "cluster_representatives": [
+    "mom_plus_value"
+  ],
+  "top_scores": [
+    {
+      "factor_name": "mom_plus_value",
+      "expression": "momentum_20 + earnings_yield",
+      "score": 0.577485,
+      "raw_rank_ic_mean": 0.171479,
+      "raw_rank_ic_ir": 0.514258,
+      "neutralized_rank_ic_mean": 0.023883,
+      "neutralized_pass": true,
+      "split_fail_count": 1,
+      "high_corr_peers": [
+        "mom_20"
+      ]
+    },
+    {
+      "factor_name": "mom_20",
+      "expression": "momentum_20",
+      "score": -0.035651,
+      "raw_rank_ic_mean": 0.154574,
+      "raw_rank_ic_ir": 0.408926,
+      "neutralized_rank_ic_mean": 0.005525,
+      "neutralized_pass": false,
+      "split_fail_count": 1,
+      "high_corr_peers": [
+        "mom_plus_value"
+      ]
+    }
+  ],
+  "portfolio_results": [
+    {
+      "strategy_name": "long_short_top_bottom_all_factors",
+      "annual_return": 0.820677,
+      "annual_volatility": 0.263293,
+      "sharpe": 3.116969,
+      "max_drawdown": -0.175923,
+      "avg_turnover": 0.40625,
+      "observations": 33
+    },
+    {
+      "strategy_name": "long_short_top_bottom_cluster_representatives",
+      "annual_return": 0.762081,
+      "annual_volatility": 0.22164,
+      "sharpe": 3.438374,
+      "max_drawdown": -0.144102,
+      "avg_turnover": 0.375,
+      "observations": 33
+    },
+    {
+      "strategy_name": "long_short_top_bottom_cluster_representatives_neutralized",
+      "annual_return": -0.003567,
+      "annual_volatility": 0.129084,
+      "sharpe": -0.027633,
+      "max_drawdown": -0.104982,
+      "avg_turnover": 1.351562,
+      "observations": 33
+    },
+    {
+      "strategy_name": "long_short_top_bottom_neutralized",
+      "annual_return": 0.220994,
+      "annual_volatility": 0.154966,
+      "sharpe": 1.426082,
+      "max_drawdown": -0.10123,
+      "avg_turnover": 1.380208,
+      "observations": 33
+    }
+  ]
+}

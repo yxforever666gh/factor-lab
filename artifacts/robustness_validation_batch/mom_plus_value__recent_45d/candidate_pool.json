@@ -1,0 +1,13 @@
+[
+  {
+    "factor_name": "mom_plus_value",
+    "expression": "momentum_20 + earnings_yield",
+    "raw_pass": true,
+    "raw_rank_ic_mean": 0.281028,
+    "raw_rank_ic_ir": 1.103186,
+    "neutralized_pass": true,
+    "neutralized_rank_ic_mean": 0.036979,
+    "split_fail_count": 0,
+    "high_corr_peers": []
+  }
+]

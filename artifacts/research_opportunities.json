@@ -1,5 +1,5 @@
 {
-  "generated_at_utc": "2026-03-21T02:07:56.501313+00:00",
+  "generated_at_utc": "2026-03-22T18:00:43.821334+00:00",
   "schema_version": "factor_lab.research_opportunity.v1",
   "flow_state": {
     "state": "recovering",
@@ -8,22 +8,22 @@
     ],
     "candidate_count": 1,
     "recovery_used": false,
-    "recovery_active_branch_count": 2,
-    "recent_recovery_event_count": 1,
+    "recovery_active_branch_count": 1,
+    "recent_recovery_event_count": 5,
     "recent_recovery_success": true,
-    "injected_count": 1,
+    "injected_count": 0,
     "queue_counts": {
       "pending": 0,
       "running": 0,
-      "finished": 99,
-      "failed": 1
+      "finished": 100,
+      "failed": 0
     }
   },
   "summary": {
-    "count": 9,
-    "question_count": 10,
+    "count": 12,
+    "question_count": 22,
     "suppressed_question_count": 0,
-    "child_question_count": 2,
+    "child_question_count": 9,
     "top_types": [
       "confirm",
       "diagnose",
@@ -33,11 +33,11 @@
     ],
     "opportunity_budget": {
       "budget": {
-        "confirm": 3,
-        "diagnose": 3,
-        "expand": 1,
+        "confirm": 4,
+        "diagnose": 4,
+        "expand": 2,
         "recombine": 2,
-        "probe": 1
+        "probe": 2
       },
       "child_budget": {
         "expand": 1,
@@ -46,7 +46,11 @@
       },
       "reasons": [
         "recovering_bias",
+        "learning_upweight:confirm",
+        "learning_upweight:diagnose",
         "learning_upweight:recombine",
+        "learning_upweight:expand",
+        "learning_upweight:probe",
         "child_budget_reserved"
       ]
     },
@@ -54,15 +58,15 @@
       "types": {
         "confirm": {
           "opportunity_type": "confirm",
-          "count": 1,
+          "count": 4,
           "promoted": 0,
-          "evaluated": 0,
+          "evaluated": 4,
           "rejected": 0,
-          "archived": 1,
+          "archived": 0,
           "success_rate": 0.0,
-          "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
-          "uncertainty_reduction_count": 0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 1.0,
+          "uncertainty_reduction_count": 4,
           "repeat_signal_count": 0,
           "negative_informative_count": 0,
           "new_branch_count": 0,
@@ -70,47 +74,47 @@
         },
         "diagnose": {
           "opportunity_type": "diagnose",
-          "count": 2,
-          "promoted": 0,
-          "evaluated": 0,
-          "rejected": 0,
+          "count": 4,
+          "promoted": 2,
+          "evaluated": 1,
+          "rejected": 1,
           "archived": 0,
-          "success_rate": null,
-          "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
-          "uncertainty_reduction_count": 0,
-          "repeat_signal_count": 0,
+          "success_rate": 0.5,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 0.325,
+          "uncertainty_reduction_count": 2,
+          "repeat_signal_count": 1,
           "negative_informative_count": 0,
           "new_branch_count": 0,
           "inconclusive_count": 0
         },
         "recombine": {
           "opportunity_type": "recombine",
-          "count": 5,
-          "promoted": 0,
-          "evaluated": 1,
+          "count": 8,
+          "promoted": 7,
+          "evaluated": 0,
           "rejected": 0,
           "archived": 0,
-          "success_rate": 0.0,
+          "success_rate": 1.0,
           "recommended_action": "upweight",
-          "epistemic_value_score": 0.6,
-          "uncertainty_reduction_count": 0,
-          "repeat_signal_count": 0,
-          "negative_informative_count": 1,
-          "new_branch_count": 0,
+          "epistemic_value_score": 1.086,
+          "uncertainty_reduction_count": 5,
+          "repeat_signal_count": 2,
+          "negative_informative_count": 0,
+          "new_branch_count": 5,
           "inconclusive_count": 0
         },
         "expand": {
           "opportunity_type": "expand",
-          "count": 1,
-          "promoted": 0,
+          "count": 4,
+          "promoted": 4,
           "evaluated": 0,
           "rejected": 0,
-          "archived": 1,
-          "success_rate": 0.0,
-          "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
-          "uncertainty_reduction_count": 0,
+          "archived": 0,
+          "success_rate": 1.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 1.0,
+          "uncertainty_reduction_count": 4,
           "repeat_signal_count": 0,
           "negative_informative_count": 0,
           "new_branch_count": 0,
@@ -118,17 +122,17 @@
         },
         "probe": {
           "opportunity_type": "probe",
-          "count": 3,
+          "count": 4,
           "promoted": 0,
-          "evaluated": 0,
+          "evaluated": 4,
           "rejected": 0,
           "archived": 0,
-          "success_rate": null,
-          "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
+          "success_rate": 0.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 0.6,
           "uncertainty_reduction_count": 0,
           "repeat_signal_count": 0,
-          "negative_informative_count": 0,
+          "negative_informative_count": 4,
           "new_branch_count": 0,
           "inconclusive_count": 0
         },
@@ -152,15 +156,15 @@
       "families": {
         "stable_candidate_validation": {
           "family": "stable_candidate_validation",
-          "count": 2,
-          "promoted": 0,
-          "evaluated": 0,
+          "count": 8,
+          "promoted": 4,
+          "evaluated": 4,
           "rejected": 0,
-          "archived": 2,
-          "success_rate": 0.0,
-          "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
-          "uncertainty_reduction_count": 0,
+          "archived": 0,
+          "success_rate": 0.5,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 1.0,
+          "uncertainty_reduction_count": 8,
           "repeat_signal_count": 0,
           "negative_informative_count": 0,
           "new_branch_count": 0,
@@ -168,49 +172,49 @@
         },
         "graveyard_diagnosis": {
           "family": "graveyard_diagnosis",
-          "count": 5,
-          "promoted": 0,
-          "evaluated": 1,
-          "rejected": 0,
+          "count": 10,
+          "promoted": 7,
+          "evaluated": 2,
+          "rejected": 1,
           "archived": 0,
-          "success_rate": 0.0,
+          "success_rate": 0.7,
           "recommended_action": "upweight",
-          "epistemic_value_score": 0.6,
-          "uncertainty_reduction_count": 0,
-          "repeat_signal_count": 0,
+          "epistemic_value_score": 0.59,
+          "uncertainty_reduction_count": 5,
+          "repeat_signal_count": 3,
           "negative_informative_count": 1,
-          "new_branch_count": 0,
+          "new_branch_count": 3,
           "inconclusive_count": 0
         },
         "exploration": {
           "family": "exploration",
-          "count": 3,
-          "promoted": 0,
-          "evaluated": 0,
+          "count": 4,
+          "promoted": 2,
+          "evaluated": 1,
           "rejected": 0,
           "archived": 0,
-          "success_rate": null,
-          "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
-          "uncertainty_reduction_count": 0,
+          "success_rate": 0.667,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 1.4,
+          "uncertainty_reduction_count": 2,
           "repeat_signal_count": 0,
-          "negative_informative_count": 0,
-          "new_branch_count": 0,
+          "negative_informative_count": 1,
+          "new_branch_count": 2,
           "inconclusive_count": 0
         },
         "none": {
           "family": "none",
           "count": 3,
           "promoted": 0,
-          "evaluated": 1,
+          "evaluated": 3,
           "rejected": 0,
           "archived": 0,
           "success_rate": 0.0,
           "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
+          "epistemic_value_score": 0.4,
           "uncertainty_reduction_count": 0,
           "repeat_signal_count": 0,
-          "negative_informative_count": 0,
+          "negative_informative_count": 2,
           "new_branch_count": 0,
           "inconclusive_count": 0
         }
@@ -218,15 +222,15 @@
       "templates": {
         "confirm::stable_candidate_validation::root": {
           "template": "confirm::stable_candidate_validation::root",
-          "count": 1,
+          "count": 3,
           "promoted": 0,
-          "evaluated": 0,
+          "evaluated": 3,
           "rejected": 0,
-          "archived": 1,
+          "archived": 0,
           "success_rate": 0.0,
-          "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
-          "uncertainty_reduction_count": 0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 1.0,
+          "uncertainty_reduction_count": 3,
           "repeat_signal_count": 0,
           "negative_informative_count": 0,
           "new_branch_count": 0,
@@ -234,16 +238,16 @@
         },
         "diagnose::graveyard_diagnosis::root": {
           "template": "diagnose::graveyard_diagnosis::root",
-          "count": 2,
-          "promoted": 0,
-          "evaluated": 0,
-          "rejected": 0,
+          "count": 3,
+          "promoted": 1,
+          "evaluated": 1,
+          "rejected": 1,
           "archived": 0,
-          "success_rate": null,
+          "success_rate": 0.333,
           "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
-          "uncertainty_reduction_count": 0,
-          "repeat_signal_count": 0,
+          "epistemic_value_score": 0.1,
+          "uncertainty_reduction_count": 1,
+          "repeat_signal_count": 1,
           "negative_informative_count": 0,
           "new_branch_count": 0,
           "inconclusive_count": 0
@@ -251,30 +255,30 @@
         "recombine::graveyard_diagnosis::child": {
           "template": "recombine::graveyard_diagnosis::child",
           "count": 1,
-          "promoted": 0,
-          "evaluated": 1,
+          "promoted": 1,
+          "evaluated": 0,
           "rejected": 0,
           "archived": 0,
-          "success_rate": 0.0,
+          "success_rate": 1.0,
           "recommended_action": "upweight",
-          "epistemic_value_score": 0.6,
-          "uncertainty_reduction_count": 0,
+          "epistemic_value_score": 1.8,
+          "uncertainty_reduction_count": 1,
           "repeat_signal_count": 0,
-          "negative_informative_count": 1,
-          "new_branch_count": 0,
+          "negative_informative_count": 0,
+          "new_branch_count": 1,
           "inconclusive_count": 0
         },
         "expand::stable_candidate_validation::child": {
           "template": "expand::stable_candidate_validation::child",
-          "count": 1,
-          "promoted": 0,
+          "count": 3,
+          "promoted": 3,
           "evaluated": 0,
           "rejected": 0,
-          "archived": 1,
-          "success_rate": 0.0,
-          "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
-          "uncertainty_reduction_count": 0,
+          "archived": 0,
+          "success_rate": 1.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 1.0,
+          "uncertainty_reduction_count": 3,
           "repeat_signal_count": 0,
           "negative_informative_count": 0,
           "new_branch_count": 0,
@@ -282,33 +286,33 @@
         },
         "recombine::exploration::root": {
           "template": "recombine::exploration::root",
-          "count": 2,
-          "promoted": 0,
+          "count": 3,
+          "promoted": 2,
           "evaluated": 0,
           "rejected": 0,
           "archived": 0,
-          "success_rate": null,
-          "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
-          "uncertainty_reduction_count": 0,
+          "success_rate": 1.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 1.8,
+          "uncertainty_reduction_count": 2,
           "repeat_signal_count": 0,
           "negative_informative_count": 0,
-          "new_branch_count": 0,
+          "new_branch_count": 2,
           "inconclusive_count": 0
         },
         "probe::none::root": {
           "template": "probe::none::root",
           "count": 2,
           "promoted": 0,
-          "evaluated": 0,
+          "evaluated": 2,
           "rejected": 0,
           "archived": 0,
-          "success_rate": null,
-          "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
+          "success_rate": 0.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 0.6,
           "uncertainty_reduction_count": 0,
           "repeat_signal_count": 0,
-          "negative_informative_count": 0,
+          "negative_informative_count": 2,
           "new_branch_count": 0,
           "inconclusive_count": 0
         },
@@ -330,15 +334,47 @@
         },
         "recombine::graveyard_diagnosis::root": {
           "template": "recombine::graveyard_diagnosis::root",
-          "count": 2,
-          "promoted": 0,
+          "count": 4,
+          "promoted": 4,
           "evaluated": 0,
           "rejected": 0,
           "archived": 0,
-          "success_rate": null,
-          "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
-          "uncertainty_reduction_count": 0,
+          "success_rate": 1.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 0.55,
+          "uncertainty_reduction_count": 2,
+          "repeat_signal_count": 2,
+          "negative_informative_count": 0,
+          "new_branch_count": 2,
+          "inconclusive_count": 0
+        },
+        "diagnose::graveyard_diagnosis::child": {
+          "template": "diagnose::graveyard_diagnosis::child",
+          "count": 1,
+          "promoted": 1,
+          "evaluated": 0,
+          "rejected": 0,
+          "archived": 0,
+          "success_rate": 1.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 1.0,
+          "uncertainty_reduction_count": 1,
+          "repeat_signal_count": 0,
+          "negative_informative_count": 0,
+          "new_branch_count": 0,
+          "inconclusive_count": 0
+        },
+        "confirm::stable_candidate_validation::child": {
+          "template": "confirm::stable_candidate_validation::child",
+          "count": 1,
+          "promoted": 0,
+          "evaluated": 1,
+          "rejected": 0,
+          "archived": 0,
+          "success_rate": 0.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 1.0,
+          "uncertainty_reduction_count": 1,
           "repeat_signal_count": 0,
           "negative_informative_count": 0,
           "new_branch_count": 0,
@@ -346,72 +382,6 @@
         },
         "probe::exploration::root": {
           "template": "probe::exploration::root",
-          "count": 1,
-          "promoted": 0,
-          "evaluated": 0,
-          "rejected": 0,
-          "archived": 0,
-          "success_rate": null,
-          "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
-          "uncertainty_reduction_count": 0,
-          "repeat_signal_count": 0,
-          "negative_informative_count": 0,
-          "new_branch_count": 0,
-          "inconclusive_count": 0
-        }
-      },
-      "patterns": {
-        "confirm::stable_candidate_validation::root::multi_target::stable_candidate_confirmed::pre_eval": {
-          "pattern": "confirm::stable_candidate_validation::root::multi_target::stable_candidate_confirmed::pre_eval",
-          "count": 1,
-          "promoted": 0,
-          "evaluated": 0,
-          "rejected": 0,
-          "archived": 1,
-          "success_rate": 0.0,
-          "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
-          "uncertainty_reduction_count": 0,
-          "repeat_signal_count": 0,
-          "negative_informative_count": 0,
-          "new_branch_count": 0,
-          "inconclusive_count": 0
-        },
-        "diagnose::graveyard_diagnosis::root::multi_target::neutralization_diagnosis_requested+repeated_graveyard_confirmed::pre_eval": {
-          "pattern": "diagnose::graveyard_diagnosis::root::multi_target::neutralization_diagnosis_requested+repeated_graveyard_confirmed::pre_eval",
-          "count": 1,
-          "promoted": 0,
-          "evaluated": 0,
-          "rejected": 0,
-          "archived": 0,
-          "success_rate": null,
-          "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
-          "uncertainty_reduction_count": 0,
-          "repeat_signal_count": 0,
-          "negative_informative_count": 0,
-          "new_branch_count": 0,
-          "inconclusive_count": 0
-        },
-        "diagnose::graveyard_diagnosis::root::no_targets::no_expected_gain::pre_eval": {
-          "pattern": "diagnose::graveyard_diagnosis::root::no_targets::no_expected_gain::pre_eval",
-          "count": 1,
-          "promoted": 0,
-          "evaluated": 0,
-          "rejected": 0,
-          "archived": 0,
-          "success_rate": null,
-          "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
-          "uncertainty_reduction_count": 0,
-          "repeat_signal_count": 0,
-          "negative_informative_count": 0,
-          "new_branch_count": 0,
-          "inconclusive_count": 0
-        },
-        "recombine::graveyard_diagnosis::child::pair_target::exploration_candidate_survived::hybrid_invalidated+negative_result_recorded+search_space_reduced": {
-          "pattern": "recombine::graveyard_diagnosis::child::pair_target::exploration_candidate_survived::hybrid_invalidated+negative_result_recorded+search_space_reduced",
           "count": 1,
           "promoted": 0,
           "evaluated": 1,
@@ -426,17 +396,115 @@
           "new_branch_count": 0,
           "inconclusive_count": 0
         },
-        "expand::stable_candidate_validation::child::pair_target::window_stability_check::pre_eval": {
-          "pattern": "expand::stable_candidate_validation::child::pair_target::window_stability_check::pre_eval",
+        "probe::graveyard_diagnosis::child": {
+          "template": "probe::graveyard_diagnosis::child",
           "count": 1,
           "promoted": 0,
+          "evaluated": 1,
+          "rejected": 0,
+          "archived": 0,
+          "success_rate": 0.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 0.6,
+          "uncertainty_reduction_count": 0,
+          "repeat_signal_count": 0,
+          "negative_informative_count": 1,
+          "new_branch_count": 0,
+          "inconclusive_count": 0
+        },
+        "expand::stable_candidate_validation::root": {
+          "template": "expand::stable_candidate_validation::root",
+          "count": 1,
+          "promoted": 1,
           "evaluated": 0,
           "rejected": 0,
-          "archived": 1,
+          "archived": 0,
+          "success_rate": 1.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 1.0,
+          "uncertainty_reduction_count": 1,
+          "repeat_signal_count": 0,
+          "negative_informative_count": 0,
+          "new_branch_count": 0,
+          "inconclusive_count": 0
+        }
+      },
+      "patterns": {
+        "confirm::stable_candidate_validation::root::multi_target::stable_candidate_confirmed::partial_support+uncertainty_reduced": {
+          "pattern": "confirm::stable_candidate_validation::root::multi_target::stable_candidate_confirmed::partial_support+uncertainty_reduced",
+          "count": 3,
+          "promoted": 0,
+          "evaluated": 3,
+          "rejected": 0,
+          "archived": 0,
           "success_rate": 0.0,
-          "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 1.0,
+          "uncertainty_reduction_count": 3,
+          "repeat_signal_count": 0,
+          "negative_informative_count": 0,
+          "new_branch_count": 0,
+          "inconclusive_count": 0
+        },
+        "diagnose::graveyard_diagnosis::root::multi_target::neutralization_diagnosis_requested+repeated_graveyard_confirmed::hypothesis_supported+uncertainty_reduced": {
+          "pattern": "diagnose::graveyard_diagnosis::root::multi_target::neutralization_diagnosis_requested+repeated_graveyard_confirmed::hypothesis_supported+uncertainty_reduced",
+          "count": 1,
+          "promoted": 1,
+          "evaluated": 0,
+          "rejected": 0,
+          "archived": 0,
+          "success_rate": 1.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 1.0,
+          "uncertainty_reduction_count": 1,
+          "repeat_signal_count": 0,
+          "negative_informative_count": 0,
+          "new_branch_count": 0,
+          "inconclusive_count": 0
+        },
+        "diagnose::graveyard_diagnosis::root::no_targets::no_expected_gain::repeat_without_new_information": {
+          "pattern": "diagnose::graveyard_diagnosis::root::no_targets::no_expected_gain::repeat_without_new_information",
+          "count": 1,
+          "promoted": 0,
+          "evaluated": 1,
+          "rejected": 0,
+          "archived": 0,
+          "success_rate": 0.0,
+          "recommended_action": "downweight",
+          "epistemic_value_score": -0.7,
           "uncertainty_reduction_count": 0,
+          "repeat_signal_count": 1,
+          "negative_informative_count": 0,
+          "new_branch_count": 0,
+          "inconclusive_count": 0
+        },
+        "recombine::graveyard_diagnosis::child::pair_target::exploration_candidate_survived::new_branch_opened+recombination_productive+search_space_expanded": {
+          "pattern": "recombine::graveyard_diagnosis::child::pair_target::exploration_candidate_survived::new_branch_opened+recombination_productive+search_space_expanded",
+          "count": 1,
+          "promoted": 1,
+          "evaluated": 0,
+          "rejected": 0,
+          "archived": 0,
+          "success_rate": 1.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 1.8,
+          "uncertainty_reduction_count": 1,
+          "repeat_signal_count": 0,
+          "negative_informative_count": 0,
+          "new_branch_count": 1,
+          "inconclusive_count": 0
+        },
+        "expand::stable_candidate_validation::child::pair_target::window_stability_check::boundary_confirmed+uncertainty_reduced+validation_scope_expanded": {
+          "pattern": "expand::stable_candidate_validation::child::pair_target::window_stability_check::boundary_confirmed+uncertainty_reduced+validation_scope_expanded",
+          "count": 3,
+          "promoted": 3,
+          "evaluated": 0,
+          "rejected": 0,
+          "archived": 0,
+          "success_rate": 1.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 1.0,
+          "uncertainty_reduction_count": 3,
           "repeat_signal_count": 0,
           "negative_informative_count": 0,
           "new_branch_count": 0,
@@ -458,35 +526,35 @@
           "new_branch_count": 0,
           "inconclusive_count": 0
         },
-        "recombine::exploration::root::pair_target::exploration_candidate_survived::pre_eval": {
-          "pattern": "recombine::exploration::root::pair_target::exploration_candidate_survived::pre_eval",
-          "count": 1,
-          "promoted": 0,
+        "recombine::exploration::root::pair_target::exploration_candidate_survived::new_branch_opened+recombination_productive+search_space_expanded": {
+          "pattern": "recombine::exploration::root::pair_target::exploration_candidate_survived::new_branch_opened+recombination_productive+search_space_expanded",
+          "count": 2,
+          "promoted": 2,
           "evaluated": 0,
           "rejected": 0,
           "archived": 0,
-          "success_rate": null,
-          "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
-          "uncertainty_reduction_count": 0,
+          "success_rate": 1.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 1.8,
+          "uncertainty_reduction_count": 2,
           "repeat_signal_count": 0,
           "negative_informative_count": 0,
-          "new_branch_count": 0,
+          "new_branch_count": 2,
           "inconclusive_count": 0
         },
-        "probe::none::root::multi_target::no_expected_gain::pre_eval": {
-          "pattern": "probe::none::root::multi_target::no_expected_gain::pre_eval",
+        "probe::none::root::multi_target::no_expected_gain::negative_result_recorded+probe_negative_but_informative+search_space_reduced": {
+          "pattern": "probe::none::root::multi_target::no_expected_gain::negative_result_recorded+probe_negative_but_informative+search_space_reduced",
           "count": 1,
           "promoted": 0,
-          "evaluated": 0,
+          "evaluated": 1,
           "rejected": 0,
           "archived": 0,
-          "success_rate": null,
-          "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
+          "success_rate": 0.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 0.6,
           "uncertainty_reduction_count": 0,
           "repeat_signal_count": 0,
-          "negative_informative_count": 0,
+          "negative_informative_count": 1,
           "new_branch_count": 0,
           "inconclusive_count": 0
         },
@@ -506,125 +574,56 @@
           "new_branch_count": 0,
           "inconclusive_count": 0
         },
-        "recombine::graveyard_diagnosis::root::pair_target::exploration_candidate_survived::pre_eval": {
-          "pattern": "recombine::graveyard_diagnosis::root::pair_target::exploration_candidate_survived::pre_eval",
-          "count": 1,
-          "promoted": 0,
+        "recombine::graveyard_diagnosis::root::no_targets::exploration_candidate_survived::new_branch_opened+recombination_productive+search_space_expanded": {
+          "pattern": "recombine::graveyard_diagnosis::root::no_targets::exploration_candidate_survived::new_branch_opened+recombination_productive+search_space_expanded",
+          "count": 2,
+          "promoted": 2,
           "evaluated": 0,
           "rejected": 0,
           "archived": 0,
-          "success_rate": null,
-          "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
-          "uncertainty_reduction_count": 0,
-          "repeat_signal_count": 0,
-          "negative_informative_count": 0,
-          "new_branch_count": 0,
-          "inconclusive_count": 0
-        },
-        "recombine::graveyard_diagnosis::root::single_target::exploration_candidate_survived::pre_eval": {
-          "pattern": "recombine::graveyard_diagnosis::root::single_target::exploration_candidate_survived::pre_eval",
-          "count": 1,
-          "promoted": 0,
-          "evaluated": 0,
-          "rejected": 0,
-          "archived": 0,
-          "success_rate": null,
-          "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
-          "uncertainty_reduction_count": 0,
-          "repeat_signal_count": 0,
-          "negative_informative_count": 0,
-          "new_branch_count": 0,
-          "inconclusive_count": 0
-        },
-        "probe::exploration::root::pair_target::exploration_candidate_survived::pre_eval": {
-          "pattern": "probe::exploration::root::pair_target::exploration_candidate_survived::pre_eval",
-          "count": 1,
-          "promoted": 0,
-          "evaluated": 0,
-          "rejected": 0,
-          "archived": 0,
-          "success_rate": null,
-          "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
-          "uncertainty_reduction_count": 0,
-          "repeat_signal_count": 0,
-          "negative_informative_count": 0,
-          "new_branch_count": 0,
-          "inconclusive_count": 0
-        },
-        "probe::none::root::multi_target::exploration_candidate_survived::pre_eval": {
-          "pattern": "probe::none::root::multi_target::exploration_candidate_survived::pre_eval",
-          "count": 1,
-          "promoted": 0,
-          "evaluated": 0,
-          "rejected": 0,
-          "archived": 0,
-          "success_rate": null,
-          "recommended_action": "keep",
-          "epistemic_value_score": 0.0,
-          "uncertainty_reduction_count": 0,
-          "repeat_signal_count": 0,
-          "negative_informative_count": 0,
-          "new_branch_count": 0,
-          "inconclusive_count": 0
-        }
-      }
-    },
-    "research_portfolio": {
-      "generated_at_utc": "2026-03-21T02:07:56.478288+00:00",
-      "flow_state": {
-        "state": "recovering",
-        "reasons": [
-          "recovery_branch_still_active"
-        ],
-        "candidate_count": 1,
-        "recovery_used": false,
-        "recovery_active_branch_count": 2,
-        "recent_recovery_event_count": 1,
-        "recent_recovery_success": true,
-        "injected_count": 1,
-        "queue_counts": {
-          "pending": 0,
-          "running": 0,
-          "finished": 99,
-          "failed": 1
-        }
-      },
-      "family_allocations": [
-        {
-          "family": "graveyard_diagnosis",
-          "epistemic_value_score": 0.6,
+          "success_rate": 1.0,
           "recommended_action": "upweight",
-          "negative_informative_count": 1,
-          "uncertainty_reduction_count": 0
-        },
-        {
-          "family": "exploration",
-          "epistemic_value_score": 0.0,
-          "recommended_action": "keep",
+          "epistemic_value_score": 1.8,
+          "uncertainty_reduction_count": 2,
+          "repeat_signal_count": 0,
           "negative_informative_count": 0,
-          "uncertainty_reduction_count": 0
+          "new_branch_count": 2,
+          "inconclusive_count": 0
         },
-        {
-          "family": "none",
-          "epistemic_value_score": 0.0,
-          "recommended_action": "keep",
+        "diagnose::graveyard_diagnosis::child::pair_target::neutralization_diagnosis_requested+repeated_graveyard_confirmed::hypothesis_supported+uncertainty_reduced": {
+          "pattern": "diagnose::graveyard_diagnosis::child::pair_target::neutralization_diagnosis_requested+repeated_graveyard_confirmed::hypothesis_supported+uncertainty_reduced",
+          "count": 1,
+          "promoted": 1,
+          "evaluated": 0,
+          "rejected": 0,
+          "archived": 0,
+          "success_rate": 1.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 1.0,
+          "uncertainty_reduction_count": 1,
+          "repeat_signal_count": 0,
           "negative_informative_count": 0,
-          "uncertainty_reduction_count": 0
+          "new_branch_count": 0,
+          "inconclusive_count": 0
         },
-        {
-          "family": "stable_candidate_validation",
-          "epistemic_value_score": 0.0,
-          "recommended_action": "keep",
+        "confirm::stable_candidate_validation::child::multi_target::stable_candidate_confirmed::partial_support+uncertainty_reduced": {
+          "pattern": "confirm::stable_candidate_validation::child::multi_target::stable_candidate_confirmed::partial_support+uncertainty_reduced",
+          "count": 1,
+          "promoted": 0,
+          "evaluated": 1,
+          "rejected": 0,
+          "archived": 0,
+          "success_rate": 0.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 1.0,
+          "uncertainty_reduction_count": 1,
+          "repeat_signal_count": 0,
           "negative_informative_count": 0,
-          "uncertainty_reduction_count": 0
-        }
-      ],
-      "top_patterns": [
-        {
-          "pattern": "recombine::graveyard_diagnosis::child::pair_target::exploration_candidate_survived::hybrid_invalidated+negative_result_recorded+search_space_reduced",
+          "new_branch_count": 0,
+          "inconclusive_count": 0
+        },
+        "probe::exploration::root::pair_target::exploration_candidate_survived::negative_result_recorded+probe_negative_but_informative+search_space_reduced": {
+          "pattern": "probe::exploration::root::pair_target::exploration_candidate_survived::negative_result_recorded+probe_negative_but_informative+search_space_reduced",
           "count": 1,
           "promoted": 0,
           "evaluated": 1,
@@ -636,6 +635,219 @@
           "uncertainty_reduction_count": 0,
           "repeat_signal_count": 0,
           "negative_informative_count": 1,
+          "new_branch_count": 0,
+          "inconclusive_count": 0
+        },
+        "diagnose::graveyard_diagnosis::root::multi_target::neutralization_diagnosis_requested+repeated_graveyard_confirmed::pre_eval": {
+          "pattern": "diagnose::graveyard_diagnosis::root::multi_target::neutralization_diagnosis_requested+repeated_graveyard_confirmed::pre_eval",
+          "count": 1,
+          "promoted": 0,
+          "evaluated": 0,
+          "rejected": 1,
+          "archived": 0,
+          "success_rate": 0.0,
+          "recommended_action": "keep",
+          "epistemic_value_score": 0.0,
+          "uncertainty_reduction_count": 0,
+          "repeat_signal_count": 0,
+          "negative_informative_count": 0,
+          "new_branch_count": 0,
+          "inconclusive_count": 0
+        },
+        "probe::none::root::multi_target::exploration_candidate_survived::negative_result_recorded+probe_negative_but_informative+search_space_reduced": {
+          "pattern": "probe::none::root::multi_target::exploration_candidate_survived::negative_result_recorded+probe_negative_but_informative+search_space_reduced",
+          "count": 1,
+          "promoted": 0,
+          "evaluated": 1,
+          "rejected": 0,
+          "archived": 0,
+          "success_rate": 0.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 0.6,
+          "uncertainty_reduction_count": 0,
+          "repeat_signal_count": 0,
+          "negative_informative_count": 1,
+          "new_branch_count": 0,
+          "inconclusive_count": 0
+        },
+        "recombine::graveyard_diagnosis::root::pair_target::exploration_candidate_survived::low_novelty_realized+repeat_without_new_information": {
+          "pattern": "recombine::graveyard_diagnosis::root::pair_target::exploration_candidate_survived::low_novelty_realized+repeat_without_new_information",
+          "count": 2,
+          "promoted": 2,
+          "evaluated": 0,
+          "rejected": 0,
+          "archived": 0,
+          "success_rate": 1.0,
+          "recommended_action": "downweight",
+          "epistemic_value_score": -0.7,
+          "uncertainty_reduction_count": 0,
+          "repeat_signal_count": 2,
+          "negative_informative_count": 0,
+          "new_branch_count": 0,
+          "inconclusive_count": 0
+        },
+        "probe::graveyard_diagnosis::child::no_targets::exploration_candidate_survived::negative_result_recorded+probe_negative_but_informative+search_space_reduced": {
+          "pattern": "probe::graveyard_diagnosis::child::no_targets::exploration_candidate_survived::negative_result_recorded+probe_negative_but_informative+search_space_reduced",
+          "count": 1,
+          "promoted": 0,
+          "evaluated": 1,
+          "rejected": 0,
+          "archived": 0,
+          "success_rate": 0.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 0.6,
+          "uncertainty_reduction_count": 0,
+          "repeat_signal_count": 0,
+          "negative_informative_count": 1,
+          "new_branch_count": 0,
+          "inconclusive_count": 0
+        },
+        "expand::stable_candidate_validation::root::no_targets::no_expected_gain::boundary_confirmed+uncertainty_reduced+validation_scope_expanded": {
+          "pattern": "expand::stable_candidate_validation::root::no_targets::no_expected_gain::boundary_confirmed+uncertainty_reduced+validation_scope_expanded",
+          "count": 1,
+          "promoted": 1,
+          "evaluated": 0,
+          "rejected": 0,
+          "archived": 0,
+          "success_rate": 1.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 1.0,
+          "uncertainty_reduction_count": 1,
+          "repeat_signal_count": 0,
+          "negative_informative_count": 0,
+          "new_branch_count": 0,
+          "inconclusive_count": 0
+        }
+      }
+    },
+    "research_portfolio": {
+      "generated_at_utc": "2026-03-22T18:00:43.590438+00:00",
+      "flow_state": {
+        "state": "recovering",
+        "reasons": [
+          "recovery_branch_still_active"
+        ],
+        "candidate_count": 1,
+        "recovery_used": false,
+        "recovery_active_branch_count": 1,
+        "recent_recovery_event_count": 5,
+        "recent_recovery_success": true,
+        "injected_count": 0,
+        "queue_counts": {
+          "pending": 0,
+          "running": 0,
+          "finished": 100,
+          "failed": 0
+        }
+      },
+      "family_allocations": [
+        {
+          "family": "exploration",
+          "epistemic_value_score": 1.4,
+          "recommended_action": "upweight",
+          "negative_informative_count": 1,
+          "uncertainty_reduction_count": 2
+        },
+        {
+          "family": "stable_candidate_validation",
+          "epistemic_value_score": 1.0,
+          "recommended_action": "upweight",
+          "negative_informative_count": 0,
+          "uncertainty_reduction_count": 8
+        },
+        {
+          "family": "graveyard_diagnosis",
+          "epistemic_value_score": 0.59,
+          "recommended_action": "upweight",
+          "negative_informative_count": 1,
+          "uncertainty_reduction_count": 5
+        },
+        {
+          "family": "none",
+          "epistemic_value_score": 0.4,
+          "recommended_action": "keep",
+          "negative_informative_count": 2,
+          "uncertainty_reduction_count": 0
+        }
+      ],
+      "top_patterns": [
+        {
+          "pattern": "recombine::exploration::root::pair_target::exploration_candidate_survived::new_branch_opened+recombination_productive+search_space_expanded",
+          "count": 2,
+          "promoted": 2,
+          "evaluated": 0,
+          "rejected": 0,
+          "archived": 0,
+          "success_rate": 1.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 1.8,
+          "uncertainty_reduction_count": 2,
+          "repeat_signal_count": 0,
+          "negative_informative_count": 0,
+          "new_branch_count": 2,
+          "inconclusive_count": 0
+        },
+        {
+          "pattern": "recombine::graveyard_diagnosis::child::pair_target::exploration_candidate_survived::new_branch_opened+recombination_productive+search_space_expanded",
+          "count": 1,
+          "promoted": 1,
+          "evaluated": 0,
+          "rejected": 0,
+          "archived": 0,
+          "success_rate": 1.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 1.8,
+          "uncertainty_reduction_count": 1,
+          "repeat_signal_count": 0,
+          "negative_informative_count": 0,
+          "new_branch_count": 1,
+          "inconclusive_count": 0
+        },
+        {
+          "pattern": "recombine::graveyard_diagnosis::root::no_targets::exploration_candidate_survived::new_branch_opened+recombination_productive+search_space_expanded",
+          "count": 2,
+          "promoted": 2,
+          "evaluated": 0,
+          "rejected": 0,
+          "archived": 0,
+          "success_rate": 1.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 1.8,
+          "uncertainty_reduction_count": 2,
+          "repeat_signal_count": 0,
+          "negative_informative_count": 0,
+          "new_branch_count": 2,
+          "inconclusive_count": 0
+        },
+        {
+          "pattern": "confirm::stable_candidate_validation::child::multi_target::stable_candidate_confirmed::partial_support+uncertainty_reduced",
+          "count": 1,
+          "promoted": 0,
+          "evaluated": 1,
+          "rejected": 0,
+          "archived": 0,
+          "success_rate": 0.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 1.0,
+          "uncertainty_reduction_count": 1,
+          "repeat_signal_count": 0,
+          "negative_informative_count": 0,
+          "new_branch_count": 0,
+          "inconclusive_count": 0
+        },
+        {
+          "pattern": "confirm::stable_candidate_validation::root::multi_target::stable_candidate_confirmed::partial_support+uncertainty_reduced",
+          "count": 3,
+          "promoted": 0,
+          "evaluated": 3,
+          "rejected": 0,
+          "archived": 0,
+          "success_rate": 0.0,
+          "recommended_action": "upweight",
+          "epistemic_value_score": 1.0,
+          "uncertainty_reduction_count": 3,
+          "repeat_signal_count": 0,
+          "negative_informative_count": 0,
           "new_branch_count": 0,
           "inconclusive_count": 0
         }
@@ -651,8 +863,8 @@
             "invalidation": 0.2
           },
           "families": [
-            "graveyard_diagnosis",
-            "exploration"
+            "exploration",
+            "stable_candidate_validation"
           ]
         },
         {
@@ -665,7 +877,8 @@
             "invalidation": 0.3
           },
           "patterns": [
-            "recombine::graveyard_diagnosis::child::pair_target::exploration_candidate_survived::hybrid_invalidated+negative_result_recorded+search_space_reduced"
+            "recombine::exploration::root::pair_target::exploration_candidate_survived::new_branch_opened+recombination_productive+search_space_expanded",
+            "recombine::graveyard_diagnosis::child::pair_target::exploration_candidate_survived::new_branch_opened+recombination_productive+search_space_expanded"
           ]
         },
         {
@@ -677,12 +890,15 @@
             "exploration": 0.5,
             "invalidation": 0.3
           },
-          "patterns": []
+          "patterns": [
+            "recombine::graveyard_diagnosis::root::no_targets::exploration_candidate_survived::new_branch_opened+recombination_productive+search_space_expanded",
+            "confirm::stable_candidate_validation::child::multi_target::stable_candidate_confirmed::partial_support+uncertainty_reduced"
+          ]
         }
       ]
     },
     "meta_research_critique": {
-      "generated_at_utc": "2026-03-21T02:07:56.478721+00:00",
+      "generated_at_utc": "2026-03-22T18:00:43.590805+00:00",
       "summary": {
         "finding_count": 3,
         "corrective_action_count": 3
@@ -691,22 +907,31 @@
         {
           "kind": "portfolio_concentration_risk",
           "severity": "medium",
-          "message": "当前研究资本明显集中在 family=graveyard_diagnosis。",
+          "message": "当前研究资本明显集中在 family=exploration。",
           "evidence": {
-            "family": "graveyard_diagnosis",
-            "count": 5,
-            "promoted": 0,
+            "family": "exploration",
+            "count": 4,
+            "promoted": 2,
             "evaluated": 1,
             "rejected": 0,
             "archived": 0,
-            "success_rate": 0.0,
+            "success_rate": 0.667,
             "recommended_action": "upweight",
-            "epistemic_value_score": 0.6,
-            "uncertainty_reduction_count": 0,
+            "epistemic_value_score": 1.4,
+            "uncertainty_reduction_count": 2,
             "repeat_signal_count": 0,
             "negative_informative_count": 1,
-            "new_branch_count": 0,
+            "new_branch_count": 2,
             "inconclusive_count": 0
+          }
+        },
+        {
+          "kind": "negative_result_loop_warning",
+          "severity": "high",
+          "message": "系统当前较擅长记录高价值负结果，但仍缺少把负结果转化为新候选存活的能力。",
+          "evidence": {
+            "pattern_count": 4,
+            "exploration_candidate_survived": 0
           }
         },
         {
@@ -716,37 +941,22 @@
           "evidence": {
             "open_question_count": 0
           }
-        },
-        {
-          "kind": "frontier_starvation_warning",
-          "severity": "medium",
-          "message": "portfolio 已规划 frontier_probe，但当前没有足够 frontier pattern 支撑。",
-          "evidence": {
-            "slot": 3,
-            "focus": "frontier_probe",
-            "goal": "保留一部分预算给边缘高分/高新颖度方向，避免研究空间塌缩。",
-            "budget_mix": {
-              "validation": 0.2,
-              "exploration": 0.5,
-              "invalidation": 0.3
-            },
-            "patterns": []
-          }
         }
       ],
       "corrective_actions": [
         {
           "action": "diversify_family_allocation",
           "reason": "avoid_single_family_lock_in",
-          "suggested_family": "graveyard_diagnosis"
+          "suggested_family": "exploration"
+        },
+        {
+          "action": "force_positive_frontier_probe",
+          "reason": "counterbalance_negative_loop",
+          "minimum_probe_budget": 1
         },
         {
           "action": "inject_meta_probe_question",
           "reason": "restore_question_diversity"
-        },
-        {
-          "action": "seed_frontier_patterns",
-          "reason": "maintain_frontier_diversity"
         }
       ]
     },
@@ -767,20 +977,19 @@
       "hypothesis": "至少部分 graveyard 因子并非随机失败，而是共享可解释的结构性原因。 在 cheap screen 显示出足够信号，值得升级 full run。",
       "target_family": "graveyard_diagnosis",
       "target_candidates": [
-        "liquidity_turnover_shock",
-        "mom_20",
-        "mom_plus_value",
-        "size_small"
+        "size_small",
+        "value_bp",
+        "value_ep"
       ],
       "expected_knowledge_gain": [
         "neutralization_diagnosis_requested",
         "repeated_graveyard_confirmed"
       ],
       "evidence_gap": "cheap screen 已显示正向信号，但尚未执行 full validation。",
-      "priority": 0.94,
+      "priority": 0.84,
       "novelty_score": 0.51,
-      "confidence": 0.63,
-      "rationale": "base_type=diagnose; recovering_prefers_confirm_diagnose; analyst_focus_overlap; analyst_graveyard_overlap",
+      "confidence": 0.6,
+      "rationale": "base_type=diagnose; recovering_prefers_confirm_diagnose",
       "sources": [
         "cheap_screen_promotion",
         "opp-q-graveyard-cause"
@@ -796,78 +1005,22 @@
       "hypothesis": "至少部分 graveyard 因子并非随机失败，而是共享可解释的结构性原因。",
       "target_family": "graveyard_diagnosis",
       "target_candidates": [
-        "liquidity_turnover_shock",
-        "mom_20",
-        "mom_plus_value",
-        "size_small"
+        "size_small",
+        "value_bp",
+        "value_ep"
       ],
       "expected_knowledge_gain": [
         "neutralization_diagnosis_requested",
         "repeated_graveyard_confirmed"
       ],
       "evidence_gap": "墓地诊断频繁出现，但失败解释尚未系统转化成新研究机会。",
-      "priority": 0.94,
+      "priority": 0.84,
       "novelty_score": 0.51,
-      "confidence": 0.63,
-      "rationale": "base_type=diagnose; recovering_prefers_confirm_diagnose; analyst_focus_overlap; analyst_graveyard_overlap",
+      "confidence": 0.6,
+      "rationale": "base_type=diagnose; recovering_prefers_confirm_diagnose",
       "sources": [
         "latest_graveyard",
         "analyst_signals",
-        "analyst_feedback_context",
-        "exploration_budget",
-        "pattern_learning"
-      ]
-    },
-    {
-      "opportunity_id": "opp-full-run-followup-opp-q-stable-boundary",
-      "schema_version": "factor_lab.research_opportunity.v1",
-      "opportunity_type": "confirm",
-      "title": "当前稳定候选的有效性边界在哪里？（cheap screen 已显示信号，是否升级完整验证？）",
-      "question": "当前稳定候选的有效性边界在哪里？（cheap screen 已显示信号，是否升级完整验证？）",
-      "hypothesis": "稳定候选并非只在局部窗口有效，而是存在可继续扩展验证的稳健边界。 在 cheap screen 显示出足够信号，值得升级 full run。",
-      "target_family": "stable_candidate_validation",
-      "target_candidates": [
-        "mom_20",
-        "mom_plus_value",
-        "value_ep"
-      ],
-      "expected_knowledge_gain": [
-        "stable_candidate_confirmed"
-      ],
-      "evidence_gap": "cheap screen 已显示正向信号，但尚未执行 full validation。",
-      "priority": 0.92,
-      "novelty_score": 0.45,
-      "confidence": 0.63,
-      "rationale": "base_type=confirm; recovering_prefers_confirm_diagnose; analyst_focus_overlap; analyst_graveyard_overlap",
-      "sources": [
-        "cheap_screen_promotion",
-        "opp-q-stable-boundary"
-      ],
-      "parent_opportunity_id": "opp-q-stable-boundary"
-    },
-    {
-      "opportunity_id": "opp-q-stable-boundary",
-      "schema_version": "factor_lab.research_opportunity.v1",
-      "opportunity_type": "confirm",
-      "title": "当前稳定候选的有效性边界在哪里？",
-      "question": "当前稳定候选的有效性边界在哪里？",
-      "hypothesis": "稳定候选并非只在局部窗口有效，而是存在可继续扩展验证的稳健边界。",
-      "target_family": "stable_candidate_validation",
-      "target_candidates": [
-        "mom_20",
-        "mom_plus_value",
-        "value_ep"
-      ],
-      "expected_knowledge_gain": [
-        "stable_candidate_confirmed"
-      ],
-      "evidence_gap": "稳定候选已多次被恢复动作确认，但缺少更主动的边界验证。",
-      "priority": 0.92,
-      "novelty_score": 0.45,
-      "confidence": 0.63,
-      "rationale": "base_type=confirm; recovering_prefers_confirm_diagnose; analyst_focus_overlap; analyst_graveyard_overlap",
-      "sources": [
-        "stable_candidates",
         "analyst_feedback_context",
         "exploration_budget",
         "pattern_learning"
@@ -894,54 +1047,85 @@
       ]
     },
     {
-      "opportunity_id": "opp-child-recombine-from-opp-q-graveyard-cause",
+      "opportunity_id": "opp-full-run-followup-opp-q-stable-boundary",
       "schema_version": "factor_lab.research_opportunity.v1",
-      "opportunity_type": "recombine",
-      "title": "opp-q-graveyard-cause 已提供失败解释，是否可据此构造新的重组型机会？",
-      "question": "opp-q-graveyard-cause 已提供失败解释，是否可据此构造新的重组型机会？",
-      "hypothesis": "diagnose 类型机会在给出失败解释后，应该派生出更高层的重组或替代方向。",
-      "target_family": "graveyard_diagnosis",
+      "opportunity_type": "confirm",
+      "title": "当前稳定候选的有效性边界在哪里？（cheap screen 已显示信号，是否升级完整验证？）",
+      "question": "当前稳定候选的有效性边界在哪里？（cheap screen 已显示信号，是否升级完整验证？）",
+      "hypothesis": "稳定候选并非只在局部窗口有效，而是存在可继续扩展验证的稳健边界。 在 cheap screen 显示出足够信号，值得升级 full run。",
+      "target_family": "stable_candidate_validation",
       "target_candidates": [
+        "mom_20",
         "liquidity_turnover_shock",
-        "mom_20"
+        "mom_plus_value"
       ],
       "expected_knowledge_gain": [
-        "exploration_candidate_survived"
+        "stable_candidate_confirmed"
       ],
-      "evidence_gap": "已有失败解释，但尚未把它转成新方向。",
-      "priority": 0.74,
-      "novelty_score": 0.63,
-      "confidence": 0.63,
-      "rationale": "base_type=recombine; analyst_focus_overlap; analyst_graveyard_overlap",
+      "evidence_gap": "cheap screen 已显示正向信号，但尚未执行 full validation。",
+      "priority": 0.82,
+      "novelty_score": 0.45,
+      "confidence": 0.6,
+      "rationale": "base_type=confirm; recovering_prefers_confirm_diagnose",
       "sources": [
-        "opportunity_brancher",
-        "opp-q-graveyard-cause"
+        "cheap_screen_promotion",
+        "opp-q-stable-boundary"
       ],
-      "parent_opportunity_id": "opp-q-graveyard-cause"
+      "parent_opportunity_id": "opp-q-stable-boundary"
     },
     {
-      "opportunity_id": "opp-pattern-native-recombine-graveyard_diagnosis-child-pair_target-exploration_candidate_survived-hybrid_invalidated-negative_result_recorded-search_space_reduced",
+      "opportunity_id": "opp-pattern-native-confirm-stable_candidate_validation-child-multi_target-stable_candidate_confirmed-partial_support-uncertainty_reduced",
       "schema_version": "factor_lab.research_opportunity.v1",
-      "opportunity_type": "recombine",
-      "title": "模式 recombine / graveyard_diagnosis / hybrid_invalidated+negative_result_recorded+search_space_reduced 是否值得继续作为研究主线？",
-      "question": "模式 recombine / graveyard_diagnosis / hybrid_invalidated+negative_result_recorded+search_space_reduced 是否值得继续作为研究主线？",
-      "hypothesis": "历史上呈现 hybrid_invalidated+negative_result_recorded+search_space_reduced 的 recombine 模式，对 graveyard_diagnosis family 具有持续的认知价值。",
-      "target_family": "graveyard_diagnosis",
+      "opportunity_type": "confirm",
+      "title": "模式 confirm / stable_candidate_validation / partial_support+uncertainty_reduced 是否值得继续作为研究主线？",
+      "question": "模式 confirm / stable_candidate_validation / partial_support+uncertainty_reduced 是否值得继续作为研究主线？",
+      "hypothesis": "历史上呈现 partial_support+uncertainty_reduced 的 confirm 模式，对 stable_candidate_validation family 具有持续的认知价值。",
+      "target_family": "stable_candidate_validation",
       "target_candidates": [
+        "mom_20",
         "liquidity_turnover_shock",
-        "mom_20"
+        "mom_plus_value",
+        "hybrid_mom_20_value_ep"
       ],
       "expected_knowledge_gain": [
-        "exploration_candidate_survived"
+        "stable_candidate_confirmed"
       ],
-      "evidence_gap": "pattern learning 已将该模式标为高价值（score=0.6），但当前问题空间尚未显式把它作为一等研究入口。",
-      "priority": 0.74,
-      "novelty_score": 0.63,
-      "confidence": 0.63,
-      "rationale": "base_type=recombine; analyst_focus_overlap; analyst_graveyard_overlap",
+      "evidence_gap": "pattern learning 已将该模式标为高价值（score=1.0），但当前问题空间尚未显式把它作为一等研究入口。",
+      "priority": 0.82,
+      "novelty_score": 0.45,
+      "confidence": 0.6,
+      "rationale": "base_type=confirm; recovering_prefers_confirm_diagnose",
       "sources": [
         "pattern_learning",
-        "recombine::graveyard_diagnosis::child::pair_target::exploration_candidate_survived::hybrid_invalidated+negative_result_recorded+search_space_reduced"
+        "confirm::stable_candidate_validation::child::multi_target::stable_candidate_confirmed::partial_support+uncertainty_reduced"
+      ]
+    },
+    {
+      "opportunity_id": "opp-q-stable-boundary",
+      "schema_version": "factor_lab.research_opportunity.v1",
+      "opportunity_type": "confirm",
+      "title": "当前稳定候选的有效性边界在哪里？",
+      "question": "当前稳定候选的有效性边界在哪里？",
+      "hypothesis": "稳定候选并非只在局部窗口有效，而是存在可继续扩展验证的稳健边界。",
+      "target_family": "stable_candidate_validation",
+      "target_candidates": [
+        "mom_20",
+        "liquidity_turnover_shock",
+        "mom_plus_value"
+      ],
+      "expected_knowledge_gain": [
+        "stable_candidate_confirmed"
+      ],
+      "evidence_gap": "稳定候选已多次被恢复动作确认，但缺少更主动的边界验证。",
+      "priority": 0.82,
+      "novelty_score": 0.45,
+      "confidence": 0.6,
+      "rationale": "base_type=confirm; recovering_prefers_confirm_diagnose",
+      "sources": [
+        "stable_candidates",
+        "analyst_feedback_context",
+        "exploration_budget",
+        "pattern_learning"
       ]
     },
     {
@@ -954,21 +1138,116 @@
       "target_family": "stable_candidate_validation",
       "target_candidates": [
         "mom_20",
-        "mom_plus_value"
+        "liquidity_turnover_shock"
       ],
       "expected_knowledge_gain": [
         "window_stability_check"
       ],
       "evidence_gap": "已确认信号存在，但缺少顺势扩展动作。",
-      "priority": 0.73,
+      "priority": 0.68,
       "novelty_score": 0.55,
-      "confidence": 0.63,
-      "rationale": "base_type=expand; analyst_focus_overlap",
+      "confidence": 0.6,
+      "rationale": "base_type=expand",
       "sources": [
         "opportunity_brancher",
         "opp-q-stable-boundary"
       ],
       "parent_opportunity_id": "opp-q-stable-boundary"
+    },
+    {
+      "opportunity_id": "opp-q-recovery-to-opportunity-stable",
+      "schema_version": "factor_lab.research_opportunity.v1",
+      "opportunity_type": "expand",
+      "title": "recovery 已确认稳定候选，接下来最值得扩展的验证维度是什么？",
+      "question": "recovery 已确认稳定候选，接下来最值得扩展的验证维度是什么？",
+      "hypothesis": "稳定候选 recovery 的成功应直接转化为新的扩展型研究机会。",
+      "target_family": "stable_candidate_validation",
+      "target_candidates": [],
+      "expected_knowledge_gain": [],
+      "evidence_gap": "恢复动作已经成功，但当前缺少 recovery 成果到新机会的显式转化。",
+      "priority": 0.68,
+      "novelty_score": 0.55,
+      "confidence": 0.6,
+      "rationale": "base_type=expand",
+      "sources": [
+        "recovery_history",
+        "research_flow_state"
+      ]
+    },
+    {
+      "opportunity_id": "opp-pattern-native-recombine-exploration-root-pair_target-exploration_candidate_survived-new_branch_opened-recombination_productive-search_space_expanded",
+      "schema_version": "factor_lab.research_opportunity.v1",
+      "opportunity_type": "recombine",
+      "title": "模式 recombine / exploration / new_branch_opened+recombination_productive+search_space_expanded 是否值得继续作为研究主线？",
+      "question": "模式 recombine / exploration / new_branch_opened+recombination_productive+search_space_expanded 是否值得继续作为研究主线？",
+      "hypothesis": "历史上呈现 new_branch_opened+recombination_productive+search_space_expanded 的 recombine 模式，对 exploration family 具有持续的认知价值。",
+      "target_family": "exploration",
+      "target_candidates": [
+        "mom_20",
+        "liquidity_turnover_shock"
+      ],
+      "expected_knowledge_gain": [
+        "exploration_candidate_survived"
+      ],
+      "evidence_gap": "pattern learning 已将该模式标为高价值（score=1.8），但当前问题空间尚未显式把它作为一等研究入口。",
+      "priority": 0.64,
+      "novelty_score": 0.63,
+      "confidence": 0.6,
+      "rationale": "base_type=recombine",
+      "sources": [
+        "pattern_learning",
+        "recombine::exploration::root::pair_target::exploration_candidate_survived::new_branch_opened+recombination_productive+search_space_expanded"
+      ]
+    },
+    {
+      "opportunity_id": "opp-pattern-native-recombine-graveyard_diagnosis-child-pair_target-exploration_candidate_survived-new_branch_opened-recombination_productive-search_space_expanded",
+      "schema_version": "factor_lab.research_opportunity.v1",
+      "opportunity_type": "recombine",
+      "title": "模式 recombine / graveyard_diagnosis / new_branch_opened+recombination_productive+search_space_expanded 是否值得继续作为研究主线？",
+      "question": "模式 recombine / graveyard_diagnosis / new_branch_opened+recombination_productive+search_space_expanded 是否值得继续作为研究主线？",
+      "hypothesis": "历史上呈现 new_branch_opened+recombination_productive+search_space_expanded 的 recombine 模式，对 graveyard_diagnosis family 具有持续的认知价值。",
+      "target_family": "graveyard_diagnosis",
+      "target_candidates": [
+        "size_small",
+        "value_bp"
+      ],
+      "expected_knowledge_gain": [
+        "exploration_candidate_survived"
+      ],
+      "evidence_gap": "pattern learning 已将该模式标为高价值（score=1.8），但当前问题空间尚未显式把它作为一等研究入口。",
+      "priority": 0.64,
+      "novelty_score": 0.63,
+      "confidence": 0.6,
+      "rationale": "base_type=recombine",
+      "sources": [
+        "pattern_learning",
+        "recombine::graveyard_diagnosis::child::pair_target::exploration_candidate_survived::new_branch_opened+recombination_productive+search_space_expanded"
+      ]
+    },
+    {
+      "opportunity_id": "opp-critic-frontier-positive-probe",
+      "schema_version": "factor_lab.research_opportunity.v1",
+      "opportunity_type": "probe",
+      "title": "当前是否存在一个能对冲负结果循环的正向 frontier probe？",
+      "question": "当前是否存在一个能对冲负结果循环的正向 frontier probe？",
+      "hypothesis": "系统需要主动寻找能长出 survived candidate 的新试探方向，而不只是高价值负结果。",
+      "target_family": "exploration",
+      "target_candidates": [
+        "mom_20",
+        "liquidity_turnover_shock"
+      ],
+      "expected_knowledge_gain": [
+        "exploration_candidate_survived"
+      ],
+      "evidence_gap": "critic 发现系统陷入高价值负结果循环，需要强制注入正向 frontier probe。",
+      "priority": 0.58,
+      "novelty_score": 0.63,
+      "confidence": 0.6,
+      "rationale": "base_type=probe",
+      "sources": [
+        "meta_research_critique",
+        "critic_action:force_positive_frontier_probe"
+      ]
     },
     {
       "opportunity_id": "opp-critic-meta-diversity-probe",
@@ -980,18 +1259,18 @@
       "target_family": null,
       "target_candidates": [
         "mom_20",
+        "liquidity_turnover_shock",
         "mom_plus_value",
-        "value_ep",
-        "quality_minus_value"
+        "hybrid_mom_20_value_ep"
       ],
       "expected_knowledge_gain": [
         "exploration_candidate_survived"
       ],
       "evidence_gap": "critic 发现 question diversity 不足，需要补一个 meta-level frontier probe。",
-      "priority": 0.68,
+      "priority": 0.58,
       "novelty_score": 0.63,
-      "confidence": 0.63,
-      "rationale": "base_type=probe; analyst_focus_overlap; analyst_graveyard_overlap",
+      "confidence": 0.6,
+      "rationale": "base_type=probe",
       "sources": [
         "meta_research_critique",
         "critic_action:inject_meta_probe_question"

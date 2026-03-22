@@ -2,46 +2,55 @@
   {
     "factor_name": "liquidity_turnover_shock",
     "expression": "turnover_shock_5_20",
-    "score": 0.5172,
-    "raw_rank_ic_mean": 0.254545,
-    "raw_rank_ic_ir": 0.978997,
-    "neutralized_rank_ic_mean": -0.022004,
-    "neutralized_pass": false,
-    "split_fail_count": 0,
+    "score": 0.468569,
+    "raw_rank_ic_mean": 0.069642,
+    "raw_rank_ic_ir": 0.217067,
+    "neutralized_rank_ic_mean": 0.053968,
+    "neutralized_pass": true,
+    "split_fail_count": 1,
     "high_corr_peers": [],
     "cluster_members": [
       "liquidity_turnover_shock"
-    ]
+    ],
+    "cluster_rep_rank": 1,
+    "cluster_rep_count": 1,
+    "is_primary_representative": true
   },
   {
     "factor_name": "mom_20",
     "expression": "momentum_20",
-    "score": 1.398116,
-    "raw_rank_ic_mean": 0.327686,
-    "raw_rank_ic_ir": 1.21569,
-    "neutralized_rank_ic_mean": 0.065516,
-    "neutralized_pass": true,
-    "split_fail_count": 0,
+    "score": -0.307168,
+    "raw_rank_ic_mean": 0.05647,
+    "raw_rank_ic_ir": 0.144243,
+    "neutralized_rank_ic_mean": 0.010007,
+    "neutralized_pass": false,
+    "split_fail_count": 1,
     "high_corr_peers": [
       "mom_plus_value"
     ],
     "cluster_members": [
       "mom_20",
       "mom_plus_value"
-    ]
+    ],
+    "cluster_rep_rank": 1,
+    "cluster_rep_count": 1,
+    "is_primary_representative": true
   },
   {
     "factor_name": "size_small",
     "expression": "size_inv",
-    "score": 0.513371,
-    "raw_rank_ic_mean": 0.233884,
-    "raw_rank_ic_ir": 1.198217,
-    "neutralized_rank_ic_mean": -0.017024,
+    "score": 0.357404,
+    "raw_rank_ic_mean": 0.20636,
+    "raw_rank_ic_ir": 0.787172,
+    "neutralized_rank_ic_mean": -0.025524,
     "neutralized_pass": false,
     "split_fail_count": 0,
     "high_corr_peers": [],
     "cluster_members": [
       "size_small"
-    ]
+    ],
+    "cluster_rep_rank": 1,
+    "cluster_rep_count": 1,
+    "is_primary_representative": true
   }
 ]

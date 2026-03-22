@@ -1,0 +1,12 @@
+{
+  "source": "research_opportunity",
+  "opportunity_id": "opp-child-expand-from-opp-full-run-followup-opp-q-stable-boundary",
+  "opportunity_type": "expand",
+  "summary": "opp-full-run-followup-opp-q-stable-boundary 已确认，下一步应扩展哪种验证维度？",
+  "jobs": [
+    {
+      "name": "recent_45d",
+      "config_path": "artifacts/generated_opportunity_configs/opp-child-expand-from-opp-full-run-followup-opp-q-stable-boundary__recent_45d.json"
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+[
+  {
+    "factor_name": "value_ep",
+    "expression": "earnings_yield",
+    "observations": 121,
+    "rank_ic_mean": 0.216529,
+    "rank_ic_std": 0.159772,
+    "rank_ic_ir": 1.355241,
+    "top_bottom_spread_mean": 0.016736,
+    "pass_gate": true,
+    "fail_reason": "",
+    "split": "first_half"
+  },
+  {
+    "factor_name": "value_ep",
+    "expression": "earnings_yield",
+    "observations": 132,
+    "rank_ic_mean": 0.171212,
+    "rank_ic_std": 0.158237,
+    "rank_ic_ir": 1.081996,
+    "top_bottom_spread_mean": 0.028975,
+    "pass_gate": true,
+    "fail_reason": "",
+    "split": "second_half"
+  }
+]

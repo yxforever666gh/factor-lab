@@ -1,0 +1,28 @@
+[
+  {
+    "factor_name": "mom_20",
+    "expression": "momentum_20",
+    "score": 1.27731,
+    "raw_rank_ic_mean": 0.326877,
+    "raw_rank_ic_ir": 1.239817,
+    "neutralized_rank_ic_mean": 0.024715,
+    "neutralized_pass": true,
+    "split_fail_count": 0,
+    "high_corr_peers": [
+      "mom_plus_value"
+    ]
+  },
+  {
+    "factor_name": "mom_plus_value",
+    "expression": "momentum_20 + earnings_yield",
+    "score": 1.178985,
+    "raw_rank_ic_mean": 0.281028,
+    "raw_rank_ic_ir": 1.103186,
+    "neutralized_rank_ic_mean": 0.036979,
+    "neutralized_pass": true,
+    "split_fail_count": 0,
+    "high_corr_peers": [
+      "mom_20"
+    ]
+  }
+]

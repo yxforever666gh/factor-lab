@@ -1,0 +1,27 @@
+{
+  "jobs": [
+    {
+      "job_name": "probe_recent_30d",
+      "total_factors": 2,
+      "candidate_count": 0,
+      "graveyard_count": 2
+    }
+  ],
+  "candidate_presence": {},
+  "graveyard_presence": {
+    "mom_20": [
+      "probe_recent_30d"
+    ],
+    "value_ep": [
+      "probe_recent_30d"
+    ]
+  },
+  "representative_presence": {
+    "mom_20": [
+      "probe_recent_30d"
+    ],
+    "value_ep": [
+      "probe_recent_30d"
+    ]
+  }
+}

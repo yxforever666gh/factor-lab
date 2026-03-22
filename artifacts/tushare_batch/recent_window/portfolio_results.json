@@ -1,56 +1,38 @@
 [
   {
     "strategy_name": "long_short_top_bottom_all_factors",
-    "annual_return": 1.670311,
-    "annual_volatility": 0.154128,
-    "sharpe": 10.837132,
-    "max_drawdown": -0.009419,
-    "avg_turnover": 0.15873,
-    "observations": 22
-  },
-  {
-    "strategy_name": "long_short_top_bottom_candidates_only",
-    "annual_return": 1.213329,
-    "annual_volatility": 0.222964,
-    "sharpe": 5.441824,
-    "max_drawdown": -0.034234,
-    "avg_turnover": 0.428571,
-    "observations": 22
-  },
-  {
-    "strategy_name": "long_short_top_bottom_candidates_only_neutralized",
-    "annual_return": 0.155334,
-    "annual_volatility": 0.17455,
-    "sharpe": 0.889911,
-    "max_drawdown": -0.074308,
-    "avg_turnover": 1.460317,
-    "observations": 22
+    "annual_return": 0.303097,
+    "annual_volatility": 0.299114,
+    "sharpe": 1.013319,
+    "max_drawdown": -0.401967,
+    "avg_turnover": 0.198413,
+    "observations": 43
   },
   {
     "strategy_name": "long_short_top_bottom_cluster_representatives",
-    "annual_return": 1.556436,
-    "annual_volatility": 0.152651,
-    "sharpe": 10.196009,
-    "max_drawdown": -0.009419,
-    "avg_turnover": 0.126984,
-    "observations": 22
+    "annual_return": 0.156428,
+    "annual_volatility": 0.273089,
+    "sharpe": 0.57281,
+    "max_drawdown": -0.443068,
+    "avg_turnover": 0.214286,
+    "observations": 43
   },
   {
     "strategy_name": "long_short_top_bottom_cluster_representatives_neutralized",
-    "annual_return": 0.199767,
-    "annual_volatility": 0.136579,
-    "sharpe": 1.462645,
-    "max_drawdown": -0.046688,
-    "avg_turnover": 1.380952,
-    "observations": 22
+    "annual_return": 0.087521,
+    "annual_volatility": 0.181813,
+    "sharpe": 0.481376,
+    "max_drawdown": -0.204052,
+    "avg_turnover": 1.230159,
+    "observations": 43
   },
   {
     "strategy_name": "long_short_top_bottom_neutralized",
-    "annual_return": 0.050627,
-    "annual_volatility": 0.123753,
-    "sharpe": 0.4091,
-    "max_drawdown": -0.094694,
-    "avg_turnover": 1.380952,
-    "observations": 22
+    "annual_return": 0.098638,
+    "annual_volatility": 0.179979,
+    "sharpe": 0.548054,
+    "max_drawdown": -0.149252,
+    "avg_turnover": 1.230159,
+    "observations": 43
   }
 ]

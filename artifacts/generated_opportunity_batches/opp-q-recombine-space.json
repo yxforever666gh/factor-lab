@@ -1,0 +1,12 @@
+{
+  "source": "research_opportunity",
+  "opportunity_id": "opp-q-recombine-space",
+  "opportunity_type": "recombine",
+  "summary": "现有候选图里的 hybrid / refinement 关系能否扩展出新的研究方向？",
+  "jobs": [
+    {
+      "name": "recent_hybrid",
+      "config_path": "artifacts/generated_opportunity_configs/opp-q-recombine-space__recent_hybrid.json"
+    }
+  ]
+}

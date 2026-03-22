@@ -1,0 +1,18 @@
+{
+  "data_source": "tushare",
+  "cache_dir": "artifacts/tushare_cache",
+  "output_dir": "artifacts/robustness_validation_batch/mom_20__expanding_2025_09_01",
+  "start_date": "2025-09-01",
+  "end_date": "2026-03-18",
+  "universe_limit": 20,
+  "factors": [
+    {
+      "name": "mom_20",
+      "expression": "momentum_20"
+    }
+  ],
+  "thresholds": {
+    "min_rank_ic": 0.02,
+    "min_top_bottom_spread": 0.0005
+  }
+}

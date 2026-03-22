@@ -1,0 +1,9 @@
+{
+  "task_id": "f39f8e36-56de-43e2-a7ed-08541b578d4b",
+  "config_path": "artifacts/generated_robustness_configs/liquidity_turnover_shock__recent_120d.json",
+  "output_dir": "artifacts/robustness_validation_batch/liquidity_turnover_shock__recent_120d",
+  "status": "finished",
+  "started_at_utc": "2026-03-22T16:19:02.246621+00:00",
+  "finished_at_utc": "2026-03-22T16:19:07.798192+00:00",
+  "error": null
+}

@@ -1,0 +1,90 @@
+[
+  {
+    "factor_name": "liquidity_turnover_shock",
+    "expression": "turnover_shock_5_20",
+    "score": 0.061109,
+    "raw_rank_ic_mean": -0.04986,
+    "raw_rank_ic_ir": -0.150833,
+    "neutralized_rank_ic_mean": 0.036128,
+    "neutralized_pass": true,
+    "split_fail_count": 1,
+    "high_corr_peers": [],
+    "cluster_members": [
+      "liquidity_turnover_shock"
+    ],
+    "cluster_rep_rank": 1,
+    "cluster_rep_count": 1,
+    "is_primary_representative": true
+  },
+  {
+    "factor_name": "mom_20",
+    "expression": "momentum_20",
+    "score": -0.816234,
+    "raw_rank_ic_mean": -0.021855,
+    "raw_rank_ic_ir": -0.059101,
+    "neutralized_rank_ic_mean": -0.017577,
+    "neutralized_pass": false,
+    "split_fail_count": 2,
+    "high_corr_peers": [
+      "mom_plus_value"
+    ],
+    "cluster_members": [
+      "mom_20",
+      "mom_plus_value"
+    ],
+    "cluster_rep_rank": 1,
+    "cluster_rep_count": 1,
+    "is_primary_representative": true
+  },
+  {
+    "factor_name": "size_small",
+    "expression": "size_inv",
+    "score": -0.059667,
+    "raw_rank_ic_mean": 0.09862,
+    "raw_rank_ic_ir": 0.336968,
+    "neutralized_rank_ic_mean": -0.052254,
+    "neutralized_pass": false,
+    "split_fail_count": 0,
+    "high_corr_peers": [],
+    "cluster_members": [
+      "size_small"
+    ],
+    "cluster_rep_rank": 1,
+    "cluster_rep_count": 1,
+    "is_primary_representative": true
+  },
+  {
+    "factor_name": "value_bp",
+    "expression": "book_yield",
+    "score": -0.460458,
+    "raw_rank_ic_mean": -0.044702,
+    "raw_rank_ic_ir": -0.14346,
+    "neutralized_rank_ic_mean": 0.024272,
+    "neutralized_pass": false,
+    "split_fail_count": 1,
+    "high_corr_peers": [],
+    "cluster_members": [
+      "value_bp"
+    ],
+    "cluster_rep_rank": 1,
+    "cluster_rep_count": 1,
+    "is_primary_representative": true
+  },
+  {
+    "factor_name": "value_ep",
+    "expression": "earnings_yield",
+    "score": -0.157465,
+    "raw_rank_ic_mean": 0.053537,
+    "raw_rank_ic_ir": 0.200914,
+    "neutralized_rank_ic_mean": 0.026185,
+    "neutralized_pass": false,
+    "split_fail_count": 1,
+    "high_corr_peers": [],
+    "cluster_members": [
+      "value_ep"
+    ],
+    "cluster_rep_rank": 1,
+    "cluster_rep_count": 1,
+    "is_primary_representative": true
+  }
+]

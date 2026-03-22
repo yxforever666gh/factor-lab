@@ -1,0 +1,12 @@
+{
+  "source": "research_opportunity",
+  "opportunity_id": "test-probe",
+  "opportunity_type": "probe",
+  "summary": "q",
+  "jobs": [
+    {
+      "name": "probe_recent_30d",
+      "config_path": "artifacts/generated_opportunity_configs/test-probe__probe_recent_30d.json"
+    }
+  ]
+}

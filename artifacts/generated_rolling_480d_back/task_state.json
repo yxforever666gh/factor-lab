@@ -1,0 +1,9 @@
+{
+  "task_id": "27f14364-50e1-4522-a65e-7f9faeb4ee9f",
+  "config_path": "artifacts/generated_configs/rolling_480d_back.json",
+  "output_dir": "artifacts/generated_rolling_480d_back",
+  "status": "finished",
+  "started_at_utc": "2026-03-21T15:25:04.912925+00:00",
+  "finished_at_utc": "2026-03-21T15:25:49.443125+00:00",
+  "error": null
+}

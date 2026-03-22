@@ -1,0 +1,14 @@
+{
+  "load_config_ms": 0.085,
+  "load_dataset_ms": 43.376,
+  "factor_eval_ms": 319.666,
+  "persist_intermediate_ms": 0.565,
+  "correlation_ms": 1.997,
+  "portfolio_ms": 655.498,
+  "cache_hit_type": "request_exact",
+  "coverage_fetch_segments": 1,
+  "coverage_segment_1": "2026-02-10:2026-03-23",
+  "factor_count": 1,
+  "dataset_rows": 253,
+  "total_ms": 2949.556
+}

@@ -1,0 +1,36 @@
+{
+  "data_source": "tushare",
+  "cache_dir": "artifacts/tushare_cache",
+  "output_dir": "artifacts/opportunity_runs/opp-pattern-native-recombine-exploration-root-pair_target-exploration_candidate_survived-new_branch_opened-recombination_productive-search_space_expanded/recent_hybrid",
+  "start_date": "2026-02-01",
+  "end_date": "2026-03-18",
+  "universe_limit": 20,
+  "factors": [
+    {
+      "name": "mom_20",
+      "expression": "momentum_20"
+    },
+    {
+      "name": "liquidity_turnover_shock",
+      "expression": "turnover_shock_5_20"
+    },
+    {
+      "name": "hybrid_mom_20_liquidity_turnover_shock",
+      "expression": "(momentum_20) + (turnover_shock_5_20)"
+    }
+  ],
+  "thresholds": {
+    "min_rank_ic": 0.02,
+    "min_top_bottom_spread": 0.0005
+  },
+  "opportunity_context": {
+    "opportunity_id": "opp-pattern-native-recombine-exploration-root-pair_target-exploration_candidate_survived-new_branch_opened-recombination_productive-search_space_expanded",
+    "opportunity_type": "recombine",
+    "target_family": "exploration",
+    "target_candidates": [
+      "mom_20",
+      "liquidity_turnover_shock"
+    ],
+    "question": "模式 recombine / exploration / new_branch_opened+recombination_productive+search_space_expanded 是否值得继续作为研究主线？"
+  }
+}

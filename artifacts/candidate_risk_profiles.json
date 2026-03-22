@@ -1,18 +1,18 @@
 [
   {
-    "candidate_id": "06229569-0a76-4cce-8fc3-1face8be1d58",
-    "candidate_name": "value_ep",
-    "family": "value",
+    "candidate_id": "f0356652-fafa-4f95-b588-cdcb661382f3",
+    "candidate_name": "liquidity_turnover_shock",
+    "family": "liquidity",
     "run_id": null,
     "risk_level": "high",
-    "risk_score": 70.6625,
-    "robustness_score": 0.893375,
-    "family_context_score": 0.939334,
-    "graph_context_score": 0.543375,
-    "evaluation_count": 147,
+    "risk_score": 96.9596,
+    "robustness_score": 0.690404,
+    "family_context_score": 0.389584,
+    "graph_context_score": 0.340404,
+    "evaluation_count": 200,
     "passing_check_count": 2,
-    "failing_check_count": 1,
-    "summary": "value_ep risk=high (70.7) with robustness=0.89 across 6 checks.",
+    "failing_check_count": 2,
+    "summary": "liquidity_turnover_shock risk=high (97.0) with robustness=0.69 across 6 checks.",
     "key_risks": [
       "score_consistency: Candidates that repeatedly pass with decent scores are less brittle.",
       "window_robustness: Repeated split failures are an early sign of unstable alpha.",
@@ -22,7 +22,8 @@
     "mitigations": [
       "Run more independent windows before promoting the candidate.",
       "Prefer cluster representative variants and suppress near-duplicates.",
-      "Inspect split failures and neutralization sensitivity before expansion."
+      "Inspect split failures and neutralization sensitivity before expansion.",
+      "De-prioritize the family until a stronger branch leader emerges."
     ],
     "checks": [
       {
@@ -32,7 +33,7 @@
         "score": 1.0,
         "weight": 1.25,
         "evidence": {
-          "evaluation_count": 147
+          "evaluation_count": 200
         },
         "rationale": "More windows and reruns reduce single-run illusion risk."
       },
@@ -40,25 +41,25 @@
         "check_name": "score_consistency",
         "status": "warn",
         "severity": "medium",
-        "score": 1.0,
+        "score": 0.480799,
         "weight": 1.5,
         "evidence": {
-          "pass_rate": 0.0,
-          "avg_final_score": 7.491671,
-          "latest_final_score": 4.071135
+          "pass_rate": 0.255,
+          "avg_final_score": 2.119795,
+          "latest_final_score": 9.723041
         },
         "rationale": "Candidates that repeatedly pass with decent scores are less brittle."
       },
       {
         "check_name": "window_robustness",
         "status": "warn",
-        "severity": "high",
-        "score": 0.64,
+        "severity": "medium",
+        "score": 0.82,
         "weight": 1.7,
         "evidence": {
           "robust_pass_count": 2,
           "robust_total_count": 2,
-          "split_fail_count": 2
+          "split_fail_count": 1
         },
         "rationale": "Repeated split failures are an early sign of unstable alpha."
       },
@@ -66,26 +67,26 @@
         "check_name": "graph_crowding",
         "status": "fail",
         "severity": "medium",
-        "score": 0.875,
+        "score": 0.375,
         "weight": 1.15,
         "evidence": {
           "high_corr_peer_count": 1,
-          "cluster_size": 6,
-          "lineage_count": 1,
-          "relationship_count": 3
+          "cluster_size": 11,
+          "lineage_count": 3,
+          "relationship_count": 6
         },
         "rationale": "Crowded graph neighborhoods increase redundancy and false confidence risk."
       },
       {
         "check_name": "family_context",
-        "status": "warn",
-        "severity": "low",
-        "score": 0.939334,
+        "status": "fail",
+        "severity": "medium",
+        "score": 0.389584,
         "weight": 0.9,
         "evidence": {
-          "family_score": 93.933432,
-          "recommended_action": "refine",
-          "family": "value"
+          "family_score": 38.95836,
+          "recommended_action": "explore_new_branch",
+          "family": "liquidity"
         },
         "rationale": "Healthy families with viable representatives make a candidate easier to trust and extend."
       },
@@ -98,7 +99,7 @@
         "evidence": {
           "trial_pressure": 0.0,
           "false_positive_pressure": 0.0,
-          "family": "value"
+          "family": "liquidity"
         },
         "rationale": "Families with many low-information retries should be treated as higher false-positive risk."
       }
@@ -108,13 +109,13 @@
       "is_fragile": true,
       "risk_score": 100.0,
       "trigger_bits": [
-        "split_fail_max=2",
-        "neutralization_breaks=130"
+        "split_fail_max=1",
+        "neutralization_breaks=775"
       ],
       "robustness_ratio": 1.0,
-      "split_fail_max": 2,
-      "high_corr_peer_max": 0,
-      "neutralization_break_count": 130
+      "split_fail_max": 1,
+      "high_corr_peer_max": 1,
+      "neutralization_break_count": 775
     },
     "acceptance_gate": {
       "version": "2.0",
@@ -141,18 +142,18 @@
         }
       },
       "metrics": {
-        "official_eval_count": 145,
-        "official_window_count": 8,
-        "avg_score": 7.491671,
-        "pass_rate": 0.0,
+        "official_eval_count": 1688,
+        "official_window_count": 6,
+        "avg_score": 2.277055,
+        "pass_rate": 0.2613,
         "fragility_risk_score": 100.0
       },
       "fragility_gate": {
         "allowed_but_blocked_from_refinement": true,
         "risk_score": 100.0,
         "triggers": [
-          "split_fail_max=2",
-          "neutralization_breaks=130"
+          "split_fail_max=1",
+          "neutralization_breaks=775"
         ]
       }
     },
@@ -160,20 +161,182 @@
     "candidate_status": "fragile"
   },
   {
-    "candidate_id": "35ea6eda-67c4-403d-8e74-acf91eb2b9a7",
-    "candidate_name": "value_bp",
-    "family": "value",
+    "candidate_id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
+    "candidate_name": "size_small",
+    "family": "other",
     "run_id": null,
-    "risk_level": "medium",
-    "risk_score": 61.8022,
-    "robustness_score": 0.775228,
-    "family_context_score": 0.939334,
-    "graph_context_score": 0.425228,
-    "evaluation_count": 145,
-    "passing_check_count": 3,
-    "failing_check_count": 1,
-    "summary": "value_bp risk=medium (61.8) with robustness=0.78 across 6 checks.",
+    "risk_level": "high",
+    "risk_score": 92.3966,
+    "robustness_score": 0.736034,
+    "family_context_score": 0.428019,
+    "graph_context_score": 0.386034,
+    "evaluation_count": 200,
+    "passing_check_count": 2,
+    "failing_check_count": 2,
+    "summary": "size_small risk=high (92.4) with robustness=0.74 across 6 checks.",
     "key_risks": [
+      "score_consistency: Candidates that repeatedly pass with decent scores are less brittle.",
+      "window_robustness: Repeated split failures are an early sign of unstable alpha.",
+      "graph_crowding: Crowded graph neighborhoods increase redundancy and false confidence risk.",
+      "family_context: Healthy families with viable representatives make a candidate easier to trust and extend."
+    ],
+    "mitigations": [
+      "Run more independent windows before promoting the candidate.",
+      "Prefer cluster representative variants and suppress near-duplicates.",
+      "Inspect split failures and neutralization sensitivity before expansion.",
+      "De-prioritize the family until a stronger branch leader emerges."
+    ],
+    "checks": [
+      {
+        "check_name": "evaluation_depth",
+        "status": "pass",
+        "severity": "medium",
+        "score": 1.0,
+        "weight": 1.25,
+        "evidence": {
+          "evaluation_count": 200
+        },
+        "rationale": "More windows and reruns reduce single-run illusion risk."
+      },
+      {
+        "check_name": "score_consistency",
+        "status": "warn",
+        "severity": "medium",
+        "score": 0.433374,
+        "weight": 1.5,
+        "evidence": {
+          "pass_rate": 0.0,
+          "avg_final_score": 2.600241,
+          "latest_final_score": 9.015223
+        },
+        "rationale": "Candidates that repeatedly pass with decent scores are less brittle."
+      },
+      {
+        "check_name": "window_robustness",
+        "status": "warn",
+        "severity": "medium",
+        "score": 0.82,
+        "weight": 1.7,
+        "evidence": {
+          "robust_pass_count": 2,
+          "robust_total_count": 2,
+          "split_fail_count": 1
+        },
+        "rationale": "Repeated split failures are an early sign of unstable alpha."
+      },
+      {
+        "check_name": "graph_crowding",
+        "status": "fail",
+        "severity": "medium",
+        "score": 0.708333,
+        "weight": 1.15,
+        "evidence": {
+          "high_corr_peer_count": 1,
+          "cluster_size": 11,
+          "lineage_count": 1,
+          "relationship_count": 1
+        },
+        "rationale": "Crowded graph neighborhoods increase redundancy and false confidence risk."
+      },
+      {
+        "check_name": "family_context",
+        "status": "fail",
+        "severity": "medium",
+        "score": 0.428019,
+        "weight": 0.9,
+        "evidence": {
+          "family_score": 42.801928,
+          "recommended_action": "explore_new_branch",
+          "family": "other"
+        },
+        "rationale": "Healthy families with viable representatives make a candidate easier to trust and extend."
+      },
+      {
+        "check_name": "trial_accounting",
+        "status": "pass",
+        "severity": "medium",
+        "score": 1.0,
+        "weight": 1.1,
+        "evidence": {
+          "trial_pressure": 0.0,
+          "false_positive_pressure": 0.0,
+          "family": "other"
+        },
+        "rationale": "Families with many low-information retries should be treated as higher false-positive risk."
+      }
+    ],
+    "fragile": true,
+    "fragility": {
+      "is_fragile": true,
+      "risk_score": 100.0,
+      "trigger_bits": [
+        "split_fail_max=1",
+        "neutralization_breaks=1627"
+      ],
+      "robustness_ratio": 1.0,
+      "split_fail_max": 1,
+      "high_corr_peer_max": 1,
+      "neutralization_break_count": 1627
+    },
+    "acceptance_gate": {
+      "version": "2.0",
+      "status": "blocked",
+      "promotion": "route_to_robustness_validation",
+      "explanation": "Acceptance Gate 2.0 blocked refinement: the candidate shows some alpha, but fragility/risk checks failed and robustness validation must come first.",
+      "thresholds": {
+        "promising": {
+          "min_official_eval_count": 5,
+          "min_official_window_count": 3,
+          "min_pass_rate": 0.6,
+          "min_avg_score": 1.0,
+          "max_risk_score": 44.0
+        },
+        "testing": {
+          "min_official_eval_count": 2,
+          "min_official_window_count": 1,
+          "min_pass_rate": 0.2,
+          "min_avg_score": 0.5,
+          "max_risk_score": 64.0
+        },
+        "fragile": {
+          "max_risk_score": 84.0
+        }
+      },
+      "metrics": {
+        "official_eval_count": 1627,
+        "official_window_count": 6,
+        "avg_score": 2.606844,
+        "pass_rate": 0.0,
+        "fragility_risk_score": 100.0
+      },
+      "fragility_gate": {
+        "allowed_but_blocked_from_refinement": true,
+        "risk_score": 100.0,
+        "triggers": [
+          "split_fail_max=1",
+          "neutralization_breaks=1627"
+        ]
+      }
+    },
+    "acceptance_gate_explanation": "Acceptance Gate 2.0 blocked refinement: the candidate shows some alpha, but fragility/risk checks failed and robustness validation must come first.",
+    "candidate_status": "fragile"
+  },
+  {
+    "candidate_id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
+    "candidate_name": "mom_plus_value",
+    "family": "momentum",
+    "run_id": null,
+    "risk_level": "high",
+    "risk_score": 90.2706,
+    "robustness_score": 0.697294,
+    "family_context_score": 0.837051,
+    "graph_context_score": 0.347294,
+    "evaluation_count": 200,
+    "passing_check_count": 2,
+    "failing_check_count": 1,
+    "summary": "mom_plus_value risk=high (90.3) with robustness=0.70 across 6 checks.",
+    "key_risks": [
+      "score_consistency: Candidates that repeatedly pass with decent scores are less brittle.",
       "window_robustness: Repeated split failures are an early sign of unstable alpha.",
       "graph_crowding: Crowded graph neighborhoods increase redundancy and false confidence risk.",
       "family_context: Healthy families with viable representatives make a candidate easier to trust and extend."
@@ -191,20 +354,20 @@
         "score": 1.0,
         "weight": 1.25,
         "evidence": {
-          "evaluation_count": 145
+          "evaluation_count": 200
         },
         "rationale": "More windows and reruns reduce single-run illusion risk."
       },
       {
         "check_name": "score_consistency",
-        "status": "pass",
+        "status": "warn",
         "severity": "medium",
-        "score": 1.0,
+        "score": 0.323446,
         "weight": 1.5,
         "evidence": {
-          "pass_rate": 0.8897,
-          "avg_final_score": 5.910476,
-          "latest_final_score": 1.311582
+          "pass_rate": 0.25,
+          "avg_final_score": 1.190673,
+          "latest_final_score": 9.601585
         },
         "rationale": "Candidates that repeatedly pass with decent scores are less brittle."
       },
@@ -212,10 +375,330 @@
         "check_name": "window_robustness",
         "status": "warn",
         "severity": "high",
-        "score": 0.14,
+        "score": 0.64,
         "weight": 1.7,
         "evidence": {
-          "robust_pass_count": 1,
+          "robust_pass_count": 2,
+          "robust_total_count": 2,
+          "split_fail_count": 2
+        },
+        "rationale": "Repeated split failures are an early sign of unstable alpha."
+      },
+      {
+        "check_name": "graph_crowding",
+        "status": "fail",
+        "severity": "medium",
+        "score": 0.541667,
+        "weight": 1.15,
+        "evidence": {
+          "high_corr_peer_count": 1,
+          "cluster_size": 11,
+          "lineage_count": 3,
+          "relationship_count": 5
+        },
+        "rationale": "Crowded graph neighborhoods increase redundancy and false confidence risk."
+      },
+      {
+        "check_name": "family_context",
+        "status": "warn",
+        "severity": "low",
+        "score": 0.837051,
+        "weight": 0.9,
+        "evidence": {
+          "family_score": 83.705056,
+          "recommended_action": "refine",
+          "family": "momentum"
+        },
+        "rationale": "Healthy families with viable representatives make a candidate easier to trust and extend."
+      },
+      {
+        "check_name": "trial_accounting",
+        "status": "pass",
+        "severity": "medium",
+        "score": 1.0,
+        "weight": 1.1,
+        "evidence": {
+          "trial_pressure": 0.0,
+          "false_positive_pressure": 0.0,
+          "family": "momentum"
+        },
+        "rationale": "Families with many low-information retries should be treated as higher false-positive risk."
+      }
+    ],
+    "fragile": true,
+    "fragility": {
+      "is_fragile": true,
+      "risk_score": 100.0,
+      "trigger_bits": [
+        "split_fail_max=2",
+        "neutralization_breaks=382"
+      ],
+      "robustness_ratio": 1.0,
+      "split_fail_max": 2,
+      "high_corr_peer_max": 1,
+      "neutralization_break_count": 382
+    },
+    "acceptance_gate": {
+      "version": "2.0",
+      "status": "blocked",
+      "promotion": "route_to_robustness_validation",
+      "explanation": "Acceptance Gate 2.0 blocked refinement: the candidate shows some alpha, but fragility/risk checks failed and robustness validation must come first.",
+      "thresholds": {
+        "promising": {
+          "min_official_eval_count": 5,
+          "min_official_window_count": 3,
+          "min_pass_rate": 0.6,
+          "min_avg_score": 1.0,
+          "max_risk_score": 44.0
+        },
+        "testing": {
+          "min_official_eval_count": 2,
+          "min_official_window_count": 1,
+          "min_pass_rate": 0.2,
+          "min_avg_score": 0.5,
+          "max_risk_score": 64.0
+        },
+        "fragile": {
+          "max_risk_score": 84.0
+        }
+      },
+      "metrics": {
+        "official_eval_count": 1606,
+        "official_window_count": 6,
+        "avg_score": 1.148664,
+        "pass_rate": 0.2391,
+        "fragility_risk_score": 100.0
+      },
+      "fragility_gate": {
+        "allowed_but_blocked_from_refinement": true,
+        "risk_score": 100.0,
+        "triggers": [
+          "split_fail_max=2",
+          "neutralization_breaks=382"
+        ]
+      }
+    },
+    "acceptance_gate_explanation": "Acceptance Gate 2.0 blocked refinement: the candidate shows some alpha, but fragility/risk checks failed and robustness validation must come first.",
+    "candidate_status": "fragile"
+  },
+  {
+    "candidate_id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
+    "candidate_name": "mom_20",
+    "family": "momentum",
+    "run_id": null,
+    "risk_level": "high",
+    "risk_score": 83.4153,
+    "robustness_score": 0.765847,
+    "family_context_score": 0.837051,
+    "graph_context_score": 0.415847,
+    "evaluation_count": 200,
+    "passing_check_count": 2,
+    "failing_check_count": 1,
+    "summary": "mom_20 risk=high (83.4) with robustness=0.77 across 6 checks.",
+    "key_risks": [
+      "score_consistency: Candidates that repeatedly pass with decent scores are less brittle.",
+      "window_robustness: Repeated split failures are an early sign of unstable alpha.",
+      "graph_crowding: Crowded graph neighborhoods increase redundancy and false confidence risk.",
+      "family_context: Healthy families with viable representatives make a candidate easier to trust and extend."
+    ],
+    "mitigations": [
+      "Run more independent windows before promoting the candidate.",
+      "Prefer cluster representative variants and suppress near-duplicates.",
+      "Inspect split failures and neutralization sensitivity before expansion."
+    ],
+    "checks": [
+      {
+        "check_name": "evaluation_depth",
+        "status": "pass",
+        "severity": "medium",
+        "score": 1.0,
+        "weight": 1.25,
+        "evidence": {
+          "evaluation_count": 200
+        },
+        "rationale": "More windows and reruns reduce single-run illusion risk."
+      },
+      {
+        "check_name": "score_consistency",
+        "status": "warn",
+        "severity": "medium",
+        "score": 0.415228,
+        "weight": 1.5,
+        "evidence": {
+          "pass_rate": 0.255,
+          "avg_final_score": 1.726368,
+          "latest_final_score": 9.793076
+        },
+        "rationale": "Candidates that repeatedly pass with decent scores are less brittle."
+      },
+      {
+        "check_name": "window_robustness",
+        "status": "warn",
+        "severity": "high",
+        "score": 0.64,
+        "weight": 1.7,
+        "evidence": {
+          "robust_pass_count": 2,
+          "robust_total_count": 2,
+          "split_fail_count": 2
+        },
+        "rationale": "Repeated split failures are an early sign of unstable alpha."
+      },
+      {
+        "check_name": "graph_crowding",
+        "status": "fail",
+        "severity": "medium",
+        "score": 0.875,
+        "weight": 1.15,
+        "evidence": {
+          "high_corr_peer_count": 1,
+          "cluster_size": 11,
+          "lineage_count": 0,
+          "relationship_count": 6
+        },
+        "rationale": "Crowded graph neighborhoods increase redundancy and false confidence risk."
+      },
+      {
+        "check_name": "family_context",
+        "status": "warn",
+        "severity": "low",
+        "score": 0.837051,
+        "weight": 0.9,
+        "evidence": {
+          "family_score": 83.705056,
+          "recommended_action": "refine",
+          "family": "momentum"
+        },
+        "rationale": "Healthy families with viable representatives make a candidate easier to trust and extend."
+      },
+      {
+        "check_name": "trial_accounting",
+        "status": "pass",
+        "severity": "medium",
+        "score": 1.0,
+        "weight": 1.1,
+        "evidence": {
+          "trial_pressure": 0.0,
+          "false_positive_pressure": 0.0,
+          "family": "momentum"
+        },
+        "rationale": "Families with many low-information retries should be treated as higher false-positive risk."
+      }
+    ],
+    "fragile": true,
+    "fragility": {
+      "is_fragile": true,
+      "risk_score": 100.0,
+      "trigger_bits": [
+        "split_fail_max=2",
+        "neutralization_breaks=412"
+      ],
+      "robustness_ratio": 1.0,
+      "split_fail_max": 2,
+      "high_corr_peer_max": 1,
+      "neutralization_break_count": 412
+    },
+    "acceptance_gate": {
+      "version": "2.0",
+      "status": "blocked",
+      "promotion": "route_to_robustness_validation",
+      "explanation": "Acceptance Gate 2.0 blocked refinement: the candidate shows some alpha, but fragility/risk checks failed and robustness validation must come first.",
+      "thresholds": {
+        "promising": {
+          "min_official_eval_count": 5,
+          "min_official_window_count": 3,
+          "min_pass_rate": 0.6,
+          "min_avg_score": 1.0,
+          "max_risk_score": 44.0
+        },
+        "testing": {
+          "min_official_eval_count": 2,
+          "min_official_window_count": 1,
+          "min_pass_rate": 0.2,
+          "min_avg_score": 0.5,
+          "max_risk_score": 64.0
+        },
+        "fragile": {
+          "max_risk_score": 84.0
+        }
+      },
+      "metrics": {
+        "official_eval_count": 1724,
+        "official_window_count": 6,
+        "avg_score": 2.078719,
+        "pass_rate": 0.2744,
+        "fragility_risk_score": 100.0
+      },
+      "fragility_gate": {
+        "allowed_but_blocked_from_refinement": true,
+        "risk_score": 100.0,
+        "triggers": [
+          "split_fail_max=2",
+          "neutralization_breaks=412"
+        ]
+      }
+    },
+    "acceptance_gate_explanation": "Acceptance Gate 2.0 blocked refinement: the candidate shows some alpha, but fragility/risk checks failed and robustness validation must come first.",
+    "candidate_status": "fragile"
+  },
+  {
+    "candidate_id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
+    "candidate_name": "value_bp",
+    "family": "value",
+    "run_id": null,
+    "risk_level": "high",
+    "risk_score": 74.2837,
+    "robustness_score": 0.724163,
+    "family_context_score": 0.724097,
+    "graph_context_score": 0.374163,
+    "evaluation_count": 200,
+    "passing_check_count": 2,
+    "failing_check_count": 1,
+    "summary": "value_bp risk=high (74.3) with robustness=0.72 across 6 checks.",
+    "key_risks": [
+      "score_consistency: Candidates that repeatedly pass with decent scores are less brittle.",
+      "window_robustness: Repeated split failures are an early sign of unstable alpha.",
+      "graph_crowding: Crowded graph neighborhoods increase redundancy and false confidence risk.",
+      "family_context: Healthy families with viable representatives make a candidate easier to trust and extend."
+    ],
+    "mitigations": [
+      "Run more independent windows before promoting the candidate.",
+      "Prefer cluster representative variants and suppress near-duplicates.",
+      "Inspect split failures and neutralization sensitivity before expansion."
+    ],
+    "checks": [
+      {
+        "check_name": "evaluation_depth",
+        "status": "pass",
+        "severity": "medium",
+        "score": 1.0,
+        "weight": 1.25,
+        "evidence": {
+          "evaluation_count": 200
+        },
+        "rationale": "More windows and reruns reduce single-run illusion risk."
+      },
+      {
+        "check_name": "score_consistency",
+        "status": "warn",
+        "severity": "medium",
+        "score": 0.303747,
+        "weight": 1.5,
+        "evidence": {
+          "pass_rate": 0.245,
+          "avg_final_score": 1.087484,
+          "latest_final_score": 7.432826
+        },
+        "rationale": "Candidates that repeatedly pass with decent scores are less brittle."
+      },
+      {
+        "check_name": "window_robustness",
+        "status": "warn",
+        "severity": "high",
+        "score": 0.64,
+        "weight": 1.7,
+        "evidence": {
+          "robust_pass_count": 2,
           "robust_total_count": 2,
           "split_fail_count": 2
         },
@@ -229,9 +712,9 @@
         "weight": 1.15,
         "evidence": {
           "high_corr_peer_count": 0,
-          "cluster_size": 6,
+          "cluster_size": 11,
           "lineage_count": 1,
-          "relationship_count": 3
+          "relationship_count": 1
         },
         "rationale": "Crowded graph neighborhoods increase redundancy and false confidence risk."
       },
@@ -239,10 +722,10 @@
         "check_name": "family_context",
         "status": "warn",
         "severity": "low",
-        "score": 0.939334,
+        "score": 0.724097,
         "weight": 0.9,
         "evidence": {
-          "family_score": 93.933432,
+          "family_score": 72.409736,
           "recommended_action": "refine",
           "family": "value"
         },
@@ -265,12 +748,11 @@
     "fragile": true,
     "fragility": {
       "is_fragile": true,
-      "risk_score": 49.5,
+      "risk_score": 62.0,
       "trigger_bits": [
-        "split_fail_max=2",
-        "robustness_ratio=0.50"
+        "split_fail_max=2"
       ],
-      "robustness_ratio": 0.5,
+      "robustness_ratio": 1.0,
       "split_fail_max": 2,
       "high_corr_peer_max": 0,
       "neutralization_break_count": 0
@@ -300,18 +782,17 @@
         }
       },
       "metrics": {
-        "official_eval_count": 145,
-        "official_window_count": 8,
-        "avg_score": 5.910476,
-        "pass_rate": 0.8897,
-        "fragility_risk_score": 49.5
+        "official_eval_count": 1602,
+        "official_window_count": 6,
+        "avg_score": 1.103782,
+        "pass_rate": 0.2385,
+        "fragility_risk_score": 62.0
       },
       "fragility_gate": {
         "allowed_but_blocked_from_refinement": true,
-        "risk_score": 49.5,
+        "risk_score": 62.0,
         "triggers": [
-          "split_fail_max=2",
-          "robustness_ratio=0.50"
+          "split_fail_max=2"
         ]
       }
     },
@@ -319,22 +800,24 @@
     "candidate_status": "fragile"
   },
   {
-    "candidate_id": "7adf7ff3-658f-40c5-b228-9e06aa2426f3",
-    "candidate_name": "mom_plus_value",
-    "family": "momentum",
+    "candidate_id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
+    "candidate_name": "hybrid_size_small_value_bp",
+    "family": "value",
     "run_id": null,
-    "risk_level": "medium",
-    "risk_score": 56.5941,
-    "robustness_score": 0.900559,
-    "family_context_score": 1.175464,
-    "graph_context_score": 0.550559,
-    "evaluation_count": 185,
-    "passing_check_count": 4,
+    "risk_level": "high",
+    "risk_score": 74.2289,
+    "robustness_score": 0.857711,
+    "family_context_score": 0.724097,
+    "graph_context_score": 0.507711,
+    "evaluation_count": 35,
+    "passing_check_count": 2,
     "failing_check_count": 1,
-    "summary": "mom_plus_value risk=medium (56.6) with robustness=0.90 across 6 checks.",
+    "summary": "hybrid_size_small_value_bp risk=high (74.2) with robustness=0.86 across 6 checks.",
     "key_risks": [
+      "score_consistency: Candidates that repeatedly pass with decent scores are less brittle.",
       "window_robustness: Repeated split failures are an early sign of unstable alpha.",
-      "graph_crowding: Crowded graph neighborhoods increase redundancy and false confidence risk."
+      "graph_crowding: Crowded graph neighborhoods increase redundancy and false confidence risk.",
+      "family_context: Healthy families with viable representatives make a candidate easier to trust and extend."
     ],
     "mitigations": [
       "Run more independent windows before promoting the candidate.",
@@ -349,164 +832,7 @@
         "score": 1.0,
         "weight": 1.25,
         "evidence": {
-          "evaluation_count": 185
-        },
-        "rationale": "More windows and reruns reduce single-run illusion risk."
-      },
-      {
-        "check_name": "score_consistency",
-        "status": "pass",
-        "severity": "medium",
-        "score": 1.0,
-        "weight": 1.5,
-        "evidence": {
-          "pass_rate": 0.9135,
-          "avg_final_score": 8.11212,
-          "latest_final_score": 1.144852
-        },
-        "rationale": "Candidates that repeatedly pass with decent scores are less brittle."
-      },
-      {
-        "check_name": "window_robustness",
-        "status": "warn",
-        "severity": "high",
-        "score": 0.64,
-        "weight": 1.7,
-        "evidence": {
-          "robust_pass_count": 2,
-          "robust_total_count": 2,
-          "split_fail_count": 2
-        },
-        "rationale": "Repeated split failures are an early sign of unstable alpha."
-      },
-      {
-        "check_name": "graph_crowding",
-        "status": "fail",
-        "severity": "medium",
-        "score": 0.875,
-        "weight": 1.15,
-        "evidence": {
-          "high_corr_peer_count": 1,
-          "cluster_size": 6,
-          "lineage_count": 1,
-          "relationship_count": 2
-        },
-        "rationale": "Crowded graph neighborhoods increase redundancy and false confidence risk."
-      },
-      {
-        "check_name": "family_context",
-        "status": "pass",
-        "severity": "low",
-        "score": 1.0,
-        "weight": 0.9,
-        "evidence": {
-          "family_score": 117.546424,
-          "recommended_action": "continue",
-          "family": "momentum"
-        },
-        "rationale": "Healthy families with viable representatives make a candidate easier to trust and extend."
-      },
-      {
-        "check_name": "trial_accounting",
-        "status": "pass",
-        "severity": "medium",
-        "score": 1.0,
-        "weight": 1.1,
-        "evidence": {
-          "trial_pressure": 0.0,
-          "false_positive_pressure": 0.0,
-          "family": "momentum"
-        },
-        "rationale": "Families with many low-information retries should be treated as higher false-positive risk."
-      }
-    ],
-    "fragile": true,
-    "fragility": {
-      "is_fragile": true,
-      "risk_score": 79.0,
-      "trigger_bits": [
-        "split_fail_max=2",
-        "neutralization_breaks=2"
-      ],
-      "robustness_ratio": 1.0,
-      "split_fail_max": 2,
-      "high_corr_peer_max": 1,
-      "neutralization_break_count": 2
-    },
-    "acceptance_gate": {
-      "version": "2.0",
-      "status": "blocked",
-      "promotion": "route_to_robustness_validation",
-      "explanation": "Acceptance Gate 2.0 blocked refinement: the candidate shows some alpha, but fragility/risk checks failed and robustness validation must come first.",
-      "thresholds": {
-        "promising": {
-          "min_official_eval_count": 5,
-          "min_official_window_count": 3,
-          "min_pass_rate": 0.6,
-          "min_avg_score": 1.0,
-          "max_risk_score": 44.0
-        },
-        "testing": {
-          "min_official_eval_count": 2,
-          "min_official_window_count": 1,
-          "min_pass_rate": 0.2,
-          "min_avg_score": 0.5,
-          "max_risk_score": 64.0
-        },
-        "fragile": {
-          "max_risk_score": 84.0
-        }
-      },
-      "metrics": {
-        "official_eval_count": 185,
-        "official_window_count": 8,
-        "avg_score": 8.11212,
-        "pass_rate": 0.9135,
-        "fragility_risk_score": 79.0
-      },
-      "fragility_gate": {
-        "allowed_but_blocked_from_refinement": true,
-        "risk_score": 79.0,
-        "triggers": [
-          "split_fail_max=2",
-          "neutralization_breaks=2"
-        ]
-      }
-    },
-    "acceptance_gate_explanation": "Acceptance Gate 2.0 blocked refinement: the candidate shows some alpha, but fragility/risk checks failed and robustness validation must come first.",
-    "candidate_status": "fragile"
-  },
-  {
-    "candidate_id": "c75fb8df-b227-4cb1-93c8-a6e65ec95dfc",
-    "candidate_name": "liquidity_turnover_shock",
-    "family": "liquidity",
-    "run_id": null,
-    "risk_level": "medium",
-    "risk_score": 50.739,
-    "robustness_score": 0.90261,
-    "family_context_score": 0.857595,
-    "graph_context_score": 0.90261,
-    "evaluation_count": 187,
-    "passing_check_count": 4,
-    "failing_check_count": 0,
-    "summary": "liquidity_turnover_shock risk=medium (50.7) with robustness=0.90 across 6 checks.",
-    "key_risks": [
-      "score_consistency: Candidates that repeatedly pass with decent scores are less brittle.",
-      "window_robustness: Repeated split failures are an early sign of unstable alpha."
-    ],
-    "mitigations": [
-      "Run more independent windows before promoting the candidate.",
-      "Inspect split failures and neutralization sensitivity before expansion."
-    ],
-    "checks": [
-      {
-        "check_name": "evaluation_depth",
-        "status": "pass",
-        "severity": "medium",
-        "score": 1.0,
-        "weight": 1.25,
-        "evidence": {
-          "evaluation_count": 187
+          "evaluation_count": 35
         },
         "rationale": "More windows and reruns reduce single-run illusion risk."
       },
@@ -518,48 +844,48 @@
         "weight": 1.5,
         "evidence": {
           "pass_rate": 0.0,
-          "avg_final_score": 7.969937,
-          "latest_final_score": 2.364005
+          "avg_final_score": 8.186928,
+          "latest_final_score": 8.689527
         },
         "rationale": "Candidates that repeatedly pass with decent scores are less brittle."
       },
       {
         "check_name": "window_robustness",
         "status": "warn",
-        "severity": "high",
-        "score": 0.64,
+        "severity": "medium",
+        "score": 0.82,
         "weight": 1.7,
         "evidence": {
           "robust_pass_count": 2,
           "robust_total_count": 2,
-          "split_fail_count": 2
+          "split_fail_count": 1
         },
         "rationale": "Repeated split failures are an early sign of unstable alpha."
       },
       {
         "check_name": "graph_crowding",
-        "status": "pass",
+        "status": "fail",
         "severity": "medium",
-        "score": 1.0,
+        "score": 0.541667,
         "weight": 1.15,
         "evidence": {
-          "high_corr_peer_count": 0,
-          "cluster_size": 1,
-          "lineage_count": 0,
-          "relationship_count": 0
+          "high_corr_peer_count": 1,
+          "cluster_size": 11,
+          "lineage_count": 6,
+          "relationship_count": 6
         },
         "rationale": "Crowded graph neighborhoods increase redundancy and false confidence risk."
       },
       {
         "check_name": "family_context",
-        "status": "pass",
+        "status": "warn",
         "severity": "low",
-        "score": 0.857595,
+        "score": 0.724097,
         "weight": 0.9,
         "evidence": {
-          "family_score": 85.759496,
-          "recommended_action": "continue",
-          "family": "liquidity"
+          "family_score": 72.409736,
+          "recommended_action": "refine",
+          "family": "value"
         },
         "rationale": "Healthy families with viable representatives make a candidate easier to trust and extend."
       },
@@ -572,7 +898,7 @@
         "evidence": {
           "trial_pressure": 0.0,
           "false_positive_pressure": 0.0,
-          "family": "liquidity"
+          "family": "value"
         },
         "rationale": "Families with many low-information retries should be treated as higher false-positive risk."
       }
@@ -582,13 +908,13 @@
       "is_fragile": true,
       "risk_score": 100.0,
       "trigger_bits": [
-        "split_fail_max=2",
-        "neutralization_breaks=172"
+        "split_fail_max=1",
+        "neutralization_breaks=17"
       ],
       "robustness_ratio": 1.0,
-      "split_fail_max": 2,
-      "high_corr_peer_max": 0,
-      "neutralization_break_count": 172
+      "split_fail_max": 1,
+      "high_corr_peer_max": 1,
+      "neutralization_break_count": 17
     },
     "acceptance_gate": {
       "version": "2.0",
@@ -615,9 +941,9 @@
         }
       },
       "metrics": {
-        "official_eval_count": 185,
-        "official_window_count": 8,
-        "avg_score": 7.969937,
+        "official_eval_count": 18,
+        "official_window_count": 2,
+        "avg_score": 7.712251,
         "pass_rate": 0.0,
         "fragility_risk_score": 100.0
       },
@@ -625,8 +951,8 @@
         "allowed_but_blocked_from_refinement": true,
         "risk_score": 100.0,
         "triggers": [
-          "split_fail_max=2",
-          "neutralization_breaks=172"
+          "split_fail_max=1",
+          "neutralization_breaks=17"
         ]
       }
     },
@@ -634,22 +960,173 @@
     "candidate_status": "fragile"
   },
   {
-    "candidate_id": "5032916e-07f4-45e2-9618-3cfc8e700940",
-    "candidate_name": "mom_20",
-    "family": "momentum",
+    "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
+    "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
+    "family": "value",
     "run_id": null,
     "risk_level": "medium",
-    "risk_score": 46.7941,
-    "robustness_score": 0.900559,
-    "family_context_score": 1.175464,
-    "graph_context_score": 0.550559,
-    "evaluation_count": 187,
-    "passing_check_count": 4,
-    "failing_check_count": 1,
-    "summary": "mom_20 risk=medium (46.8) with robustness=0.90 across 6 checks.",
+    "risk_score": 69.4252,
+    "robustness_score": 0.585748,
+    "family_context_score": 0.724097,
+    "graph_context_score": 0.235748,
+    "evaluation_count": 3,
+    "passing_check_count": 3,
+    "failing_check_count": 2,
+    "summary": "hybrid_liquidity_turnover_shock_value_ep risk=medium (69.4) with robustness=0.59 across 6 checks.",
     "key_risks": [
       "window_robustness: Repeated split failures are an early sign of unstable alpha.",
-      "graph_crowding: Crowded graph neighborhoods increase redundancy and false confidence risk."
+      "graph_crowding: Crowded graph neighborhoods increase redundancy and false confidence risk.",
+      "family_context: Healthy families with viable representatives make a candidate easier to trust and extend."
+    ],
+    "mitigations": [
+      "Run more independent windows before promoting the candidate.",
+      "Prefer cluster representative variants and suppress near-duplicates.",
+      "Inspect split failures and neutralization sensitivity before expansion."
+    ],
+    "checks": [
+      {
+        "check_name": "evaluation_depth",
+        "status": "pass",
+        "severity": "medium",
+        "score": 0.5,
+        "weight": 1.25,
+        "evidence": {
+          "evaluation_count": 3
+        },
+        "rationale": "More windows and reruns reduce single-run illusion risk."
+      },
+      {
+        "check_name": "score_consistency",
+        "status": "pass",
+        "severity": "medium",
+        "score": 1.0,
+        "weight": 1.5,
+        "evidence": {
+          "pass_rate": 0.6667,
+          "avg_final_score": 6.552922,
+          "latest_final_score": 1.362693
+        },
+        "rationale": "Candidates that repeatedly pass with decent scores are less brittle."
+      },
+      {
+        "check_name": "window_robustness",
+        "status": "fail",
+        "severity": "medium",
+        "score": 0.0,
+        "weight": 1.7,
+        "evidence": {
+          "robust_pass_count": 0,
+          "robust_total_count": 0,
+          "split_fail_count": 0
+        },
+        "rationale": "Repeated split failures are an early sign of unstable alpha."
+      },
+      {
+        "check_name": "graph_crowding",
+        "status": "fail",
+        "severity": "medium",
+        "score": 0.5,
+        "weight": 1.15,
+        "evidence": {
+          "high_corr_peer_count": 0,
+          "cluster_size": 11,
+          "lineage_count": 7,
+          "relationship_count": 8
+        },
+        "rationale": "Crowded graph neighborhoods increase redundancy and false confidence risk."
+      },
+      {
+        "check_name": "family_context",
+        "status": "warn",
+        "severity": "low",
+        "score": 0.724097,
+        "weight": 0.9,
+        "evidence": {
+          "family_score": 72.409736,
+          "recommended_action": "refine",
+          "family": "value"
+        },
+        "rationale": "Healthy families with viable representatives make a candidate easier to trust and extend."
+      },
+      {
+        "check_name": "trial_accounting",
+        "status": "pass",
+        "severity": "medium",
+        "score": 1.0,
+        "weight": 1.1,
+        "evidence": {
+          "trial_pressure": 0.0,
+          "false_positive_pressure": 0.0,
+          "family": "value"
+        },
+        "rationale": "Families with many low-information retries should be treated as higher false-positive risk."
+      }
+    ],
+    "fragile": false,
+    "fragility": {
+      "is_fragile": false,
+      "risk_score": 0.0,
+      "trigger_bits": []
+    },
+    "acceptance_gate": {
+      "version": "2.0",
+      "status": "fail",
+      "promotion": "do_not_refine",
+      "explanation": "Acceptance Gate 2.0 failed: evidence quality or repeatability is insufficient.",
+      "thresholds": {
+        "promising": {
+          "min_official_eval_count": 5,
+          "min_official_window_count": 3,
+          "min_pass_rate": 0.6,
+          "min_avg_score": 1.0,
+          "max_risk_score": 44.0
+        },
+        "testing": {
+          "min_official_eval_count": 2,
+          "min_official_window_count": 1,
+          "min_pass_rate": 0.2,
+          "min_avg_score": 0.5,
+          "max_risk_score": 64.0
+        },
+        "fragile": {
+          "max_risk_score": 84.0
+        }
+      },
+      "metrics": {
+        "official_eval_count": 0,
+        "official_window_count": 0,
+        "avg_score": 0.0,
+        "pass_rate": 0.0,
+        "fragility_risk_score": 0.0
+      },
+      "fragility_gate": {
+        "allowed_but_blocked_from_refinement": false,
+        "risk_score": 0.0,
+        "triggers": []
+      }
+    },
+    "acceptance_gate_explanation": "Acceptance Gate 2.0 failed: evidence quality or repeatability is insufficient.",
+    "candidate_status": "new"
+  },
+  {
+    "candidate_id": "842ba988-63d3-4815-81ca-ced125ae7146",
+    "candidate_name": "value_ep",
+    "family": "value",
+    "run_id": null,
+    "risk_level": "medium",
+    "risk_score": 60.7863,
+    "robustness_score": 0.782137,
+    "family_context_score": 0.724097,
+    "graph_context_score": 0.432137,
+    "evaluation_count": 200,
+    "passing_check_count": 2,
+    "failing_check_count": 1,
+    "summary": "value_ep risk=medium (60.8) with robustness=0.78 across 6 checks.",
+    "key_risks": [
+      "score_consistency: Candidates that repeatedly pass with decent scores are less brittle.",
+      "window_robustness: Repeated split failures are an early sign of unstable alpha.",
+      "graph_crowding: Crowded graph neighborhoods increase redundancy and false confidence risk.",
+      "family_context: Healthy families with viable representatives make a candidate easier to trust and extend."
     ],
     "mitigations": [
       "Run more independent windows before promoting the candidate.",
@@ -664,7 +1141,164 @@
         "score": 1.0,
         "weight": 1.25,
         "evidence": {
-          "evaluation_count": 187
+          "evaluation_count": 200
+        },
+        "rationale": "More windows and reruns reduce single-run illusion risk."
+      },
+      {
+        "check_name": "score_consistency",
+        "status": "warn",
+        "severity": "medium",
+        "score": 0.521256,
+        "weight": 1.5,
+        "evidence": {
+          "pass_rate": 0.25,
+          "avg_final_score": 2.377536,
+          "latest_final_score": 9.099535
+        },
+        "rationale": "Candidates that repeatedly pass with decent scores are less brittle."
+      },
+      {
+        "check_name": "window_robustness",
+        "status": "warn",
+        "severity": "medium",
+        "score": 0.82,
+        "weight": 1.7,
+        "evidence": {
+          "robust_pass_count": 2,
+          "robust_total_count": 2,
+          "split_fail_count": 1
+        },
+        "rationale": "Repeated split failures are an early sign of unstable alpha."
+      },
+      {
+        "check_name": "graph_crowding",
+        "status": "fail",
+        "severity": "medium",
+        "score": 0.666667,
+        "weight": 1.15,
+        "evidence": {
+          "high_corr_peer_count": 0,
+          "cluster_size": 11,
+          "lineage_count": 3,
+          "relationship_count": 3
+        },
+        "rationale": "Crowded graph neighborhoods increase redundancy and false confidence risk."
+      },
+      {
+        "check_name": "family_context",
+        "status": "warn",
+        "severity": "low",
+        "score": 0.724097,
+        "weight": 0.9,
+        "evidence": {
+          "family_score": 72.409736,
+          "recommended_action": "refine",
+          "family": "value"
+        },
+        "rationale": "Healthy families with viable representatives make a candidate easier to trust and extend."
+      },
+      {
+        "check_name": "trial_accounting",
+        "status": "pass",
+        "severity": "medium",
+        "score": 1.0,
+        "weight": 1.1,
+        "evidence": {
+          "trial_pressure": 0.0,
+          "false_positive_pressure": 0.0,
+          "family": "value"
+        },
+        "rationale": "Families with many low-information retries should be treated as higher false-positive risk."
+      }
+    ],
+    "fragile": true,
+    "fragility": {
+      "is_fragile": true,
+      "risk_score": 40.0,
+      "trigger_bits": [
+        "split_fail_max=1"
+      ],
+      "robustness_ratio": 1.0,
+      "split_fail_max": 1,
+      "high_corr_peer_max": 0,
+      "neutralization_break_count": 0
+    },
+    "acceptance_gate": {
+      "version": "2.0",
+      "status": "blocked",
+      "promotion": "route_to_robustness_validation",
+      "explanation": "Acceptance Gate 2.0 blocked refinement: the candidate shows some alpha, but fragility/risk checks failed and robustness validation must come first.",
+      "thresholds": {
+        "promising": {
+          "min_official_eval_count": 5,
+          "min_official_window_count": 3,
+          "min_pass_rate": 0.6,
+          "min_avg_score": 1.0,
+          "max_risk_score": 44.0
+        },
+        "testing": {
+          "min_official_eval_count": 2,
+          "min_official_window_count": 1,
+          "min_pass_rate": 0.2,
+          "min_avg_score": 0.5,
+          "max_risk_score": 64.0
+        },
+        "fragile": {
+          "max_risk_score": 84.0
+        }
+      },
+      "metrics": {
+        "official_eval_count": 1651,
+        "official_window_count": 6,
+        "avg_score": 2.536979,
+        "pass_rate": 0.2532,
+        "fragility_risk_score": 40.0
+      },
+      "fragility_gate": {
+        "allowed_but_blocked_from_refinement": true,
+        "risk_score": 40.0,
+        "triggers": [
+          "split_fail_max=1"
+        ]
+      }
+    },
+    "acceptance_gate_explanation": "Acceptance Gate 2.0 blocked refinement: the candidate shows some alpha, but fragility/risk checks failed and robustness validation must come first.",
+    "candidate_status": "fragile"
+  },
+  {
+    "candidate_id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
+    "candidate_name": "hybrid_mom_20_value_ep",
+    "family": "momentum",
+    "run_id": null,
+    "risk_level": "medium",
+    "risk_score": 59.2895,
+    "robustness_score": 0.805605,
+    "family_context_score": 0.837051,
+    "graph_context_score": 0.455605,
+    "evaluation_count": 98,
+    "passing_check_count": 3,
+    "failing_check_count": 1,
+    "summary": "hybrid_mom_20_value_ep risk=medium (59.3) with robustness=0.81 across 6 checks.",
+    "key_risks": [
+      "window_robustness: Repeated split failures are an early sign of unstable alpha.",
+      "graph_crowding: Crowded graph neighborhoods increase redundancy and false confidence risk.",
+      "family_context: Healthy families with viable representatives make a candidate easier to trust and extend."
+    ],
+    "mitigations": [
+      "Run more independent windows before promoting the candidate.",
+      "Prefer cluster representative variants and suppress near-duplicates.",
+      "Inspect split failures and neutralization sensitivity before expansion."
+    ],
+    "checks": [
+      {
+        "check_name": "evaluation_depth",
+        "status": "pass",
+        "severity": "medium",
+        "score": 1.0,
+        "weight": 1.25,
+        "evidence": {
+          "evaluation_count": 98
         },
         "rationale": "More windows and reruns reduce single-run illusion risk."
       },
@@ -675,9 +1309,9 @@
         "score": 1.0,
         "weight": 1.5,
         "evidence": {
-          "pass_rate": 0.9135,
-          "avg_final_score": 8.524486,
-          "latest_final_score": 4.865683
+          "pass_rate": 0.9082,
+          "avg_final_score": 8.516041,
+          "latest_final_score": 9.400734
         },
         "rationale": "Candidates that repeatedly pass with decent scores are less brittle."
       },
@@ -698,25 +1332,25 @@
         "check_name": "graph_crowding",
         "status": "fail",
         "severity": "medium",
-        "score": 0.875,
+        "score": 0.375,
         "weight": 1.15,
         "evidence": {
           "high_corr_peer_count": 1,
-          "cluster_size": 6,
-          "lineage_count": 0,
-          "relationship_count": 1
+          "cluster_size": 11,
+          "lineage_count": 6,
+          "relationship_count": 8
         },
         "rationale": "Crowded graph neighborhoods increase redundancy and false confidence risk."
       },
       {
         "check_name": "family_context",
-        "status": "pass",
+        "status": "warn",
         "severity": "low",
-        "score": 1.0,
+        "score": 0.837051,
         "weight": 0.9,
         "evidence": {
-          "family_score": 117.546424,
-          "recommended_action": "continue",
+          "family_score": 83.705056,
+          "recommended_action": "refine",
           "family": "momentum"
         },
         "rationale": "Healthy families with viable representatives make a candidate easier to trust and extend."
@@ -772,10 +1406,10 @@
         }
       },
       "metrics": {
-        "official_eval_count": 185,
-        "official_window_count": 8,
-        "avg_score": 8.524486,
-        "pass_rate": 0.9135,
+        "official_eval_count": 39,
+        "official_window_count": 2,
+        "avg_score": 7.460136,
+        "pass_rate": 0.7949,
         "fragility_risk_score": 51.0
       },
       "fragility_gate": {
@@ -790,25 +1424,27 @@
     "candidate_status": "fragile"
   },
   {
-    "candidate_id": "d7e14ed9-6251-425d-a28a-fc75cbf5bbf0",
-    "candidate_name": "size_small",
-    "family": "other",
+    "candidate_id": "82f8128b-7227-494a-9382-77d288a4bfa4",
+    "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
+    "family": "momentum",
     "run_id": null,
     "risk_level": "medium",
-    "risk_score": 46.6943,
-    "robustness_score": 0.943057,
-    "family_context_score": 0.859147,
-    "graph_context_score": 0.943057,
-    "evaluation_count": 185,
-    "passing_check_count": 4,
-    "failing_check_count": 0,
-    "summary": "size_small risk=medium (46.7) with robustness=0.94 across 6 checks.",
+    "risk_score": 47.5632,
+    "robustness_score": 0.845868,
+    "family_context_score": 0.837051,
+    "graph_context_score": 0.495868,
+    "evaluation_count": 39,
+    "passing_check_count": 3,
+    "failing_check_count": 1,
+    "summary": "hybrid_liquidity_turnover_shock_mom_20 risk=medium (47.6) with robustness=0.85 across 6 checks.",
     "key_risks": [
-      "score_consistency: Candidates that repeatedly pass with decent scores are less brittle.",
-      "window_robustness: Repeated split failures are an early sign of unstable alpha."
+      "window_robustness: Repeated split failures are an early sign of unstable alpha.",
+      "graph_crowding: Crowded graph neighborhoods increase redundancy and false confidence risk.",
+      "family_context: Healthy families with viable representatives make a candidate easier to trust and extend."
     ],
     "mitigations": [
       "Run more independent windows before promoting the candidate.",
+      "Prefer cluster representative variants and suppress near-duplicates.",
       "Inspect split failures and neutralization sensitivity before expansion."
     ],
     "checks": [
@@ -819,20 +1455,20 @@
         "score": 1.0,
         "weight": 1.25,
         "evidence": {
-          "evaluation_count": 185
+          "evaluation_count": 39
         },
         "rationale": "More windows and reruns reduce single-run illusion risk."
       },
       {
         "check_name": "score_consistency",
-        "status": "warn",
+        "status": "pass",
         "severity": "medium",
         "score": 1.0,
         "weight": 1.5,
         "evidence": {
-          "pass_rate": 0.0,
-          "avg_final_score": 7.989338,
-          "latest_final_score": 3.025676
+          "pass_rate": 0.8718,
+          "avg_final_score": 8.892481,
+          "latest_final_score": 10.072773
         },
         "rationale": "Candidates that repeatedly pass with decent scores are less brittle."
       },
@@ -851,28 +1487,28 @@
       },
       {
         "check_name": "graph_crowding",
-        "status": "pass",
+        "status": "fail",
         "severity": "medium",
-        "score": 1.0,
+        "score": 0.375,
         "weight": 1.15,
         "evidence": {
-          "high_corr_peer_count": 0,
-          "cluster_size": 1,
-          "lineage_count": 0,
-          "relationship_count": 0
+          "high_corr_peer_count": 1,
+          "cluster_size": 11,
+          "lineage_count": 5,
+          "relationship_count": 7
         },
         "rationale": "Crowded graph neighborhoods increase redundancy and false confidence risk."
       },
       {
         "check_name": "family_context",
-        "status": "pass",
+        "status": "warn",
         "severity": "low",
-        "score": 0.859147,
+        "score": 0.837051,
         "weight": 0.9,
         "evidence": {
-          "family_score": 85.914704,
-          "recommended_action": "continue",
-          "family": "other"
+          "family_score": 83.705056,
+          "recommended_action": "refine",
+          "family": "momentum"
         },
         "rationale": "Healthy families with viable representatives make a candidate easier to trust and extend."
       },
@@ -885,7 +1521,7 @@
         "evidence": {
           "trial_pressure": 0.0,
           "false_positive_pressure": 0.0,
-          "family": "other"
+          "family": "momentum"
         },
         "rationale": "Families with many low-information retries should be treated as higher false-positive risk."
       }
@@ -893,15 +1529,14 @@
     "fragile": true,
     "fragility": {
       "is_fragile": true,
-      "risk_score": 100.0,
+      "risk_score": 29.0,
       "trigger_bits": [
-        "split_fail_max=1",
-        "neutralization_breaks=185"
+        "split_fail_max=1"
       ],
       "robustness_ratio": 1.0,
       "split_fail_max": 1,
-      "high_corr_peer_max": 0,
-      "neutralization_break_count": 185
+      "high_corr_peer_max": 1,
+      "neutralization_break_count": 0
     },
     "acceptance_gate": {
       "version": "2.0",
@@ -928,18 +1563,17 @@
         }
       },
       "metrics": {
-        "official_eval_count": 185,
-        "official_window_count": 8,
-        "avg_score": 7.989338,
-        "pass_rate": 0.0,
-        "fragility_risk_score": 100.0
+        "official_eval_count": 17,
+        "official_window_count": 2,
+        "avg_score": 7.882073,
+        "pass_rate": 0.7647,
+        "fragility_risk_score": 29.0
       },
       "fragility_gate": {
         "allowed_but_blocked_from_refinement": true,
-        "risk_score": 100.0,
+        "risk_score": 29.0,
         "triggers": [
-          "split_fail_max=1",
-          "neutralization_breaks=185"
+          "split_fail_max=1"
         ]
       }
     },
@@ -947,37 +1581,38 @@
     "candidate_status": "fragile"
   },
   {
-    "candidate_id": "821208b3-6f47-41ed-9a77-e63f2ab52638",
-    "candidate_name": "quality_minus_value",
-    "family": "value",
+    "candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
+    "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
+    "family": "momentum",
     "run_id": null,
     "risk_level": "medium",
-    "risk_score": 43.0686,
-    "robustness_score": 0.813814,
-    "family_context_score": 0.939334,
-    "graph_context_score": 0.463814,
-    "evaluation_count": 2,
+    "risk_score": 47.5632,
+    "robustness_score": 0.845868,
+    "family_context_score": 0.837051,
+    "graph_context_score": 0.495868,
+    "evaluation_count": 79,
     "passing_check_count": 3,
     "failing_check_count": 1,
-    "summary": "quality_minus_value risk=medium (43.1) with robustness=0.81 across 6 checks.",
+    "summary": "hybrid_mom_20_liquidity_turnover_shock risk=medium (47.6) with robustness=0.85 across 6 checks.",
     "key_risks": [
-      "evaluation_depth: More windows and reruns reduce single-run illusion risk.",
+      "window_robustness: Repeated split failures are an early sign of unstable alpha.",
       "graph_crowding: Crowded graph neighborhoods increase redundancy and false confidence risk.",
       "family_context: Healthy families with viable representatives make a candidate easier to trust and extend."
     ],
     "mitigations": [
       "Run more independent windows before promoting the candidate.",
-      "Prefer cluster representative variants and suppress near-duplicates."
+      "Prefer cluster representative variants and suppress near-duplicates.",
+      "Inspect split failures and neutralization sensitivity before expansion."
     ],
     "checks": [
       {
         "check_name": "evaluation_depth",
-        "status": "warn",
+        "status": "pass",
         "severity": "medium",
-        "score": 0.333333,
+        "score": 1.0,
         "weight": 1.25,
         "evidence": {
-          "evaluation_count": 2
+          "evaluation_count": 79
         },
         "rationale": "More windows and reruns reduce single-run illusion risk."
       },
@@ -988,22 +1623,22 @@
         "score": 1.0,
         "weight": 1.5,
         "evidence": {
-          "pass_rate": 1.0,
-          "avg_final_score": 4.197889,
-          "latest_final_score": 4.197889
+          "pass_rate": 0.9367,
+          "avg_final_score": 9.490097,
+          "latest_final_score": 10.072773
         },
         "rationale": "Candidates that repeatedly pass with decent scores are less brittle."
       },
       {
         "check_name": "window_robustness",
-        "status": "pass",
+        "status": "warn",
         "severity": "medium",
-        "score": 1.0,
+        "score": 0.82,
         "weight": 1.7,
         "evidence": {
           "robust_pass_count": 2,
           "robust_total_count": 2,
-          "split_fail_count": 0
+          "split_fail_count": 1
         },
         "rationale": "Repeated split failures are an early sign of unstable alpha."
       },
@@ -1011,13 +1646,13 @@
         "check_name": "graph_crowding",
         "status": "fail",
         "severity": "medium",
-        "score": 0.541667,
+        "score": 0.375,
         "weight": 1.15,
         "evidence": {
           "high_corr_peer_count": 1,
-          "cluster_size": 6,
-          "lineage_count": 2,
-          "relationship_count": 4
+          "cluster_size": 11,
+          "lineage_count": 5,
+          "relationship_count": 7
         },
         "rationale": "Crowded graph neighborhoods increase redundancy and false confidence risk."
       },
@@ -1025,12 +1660,12 @@
         "check_name": "family_context",
         "status": "warn",
         "severity": "low",
-        "score": 0.939334,
+        "score": 0.837051,
         "weight": 0.9,
         "evidence": {
-          "family_score": 93.933432,
+          "family_score": 83.705056,
           "recommended_action": "refine",
-          "family": "value"
+          "family": "momentum"
         },
         "rationale": "Healthy families with viable representatives make a candidate easier to trust and extend."
       },
@@ -1043,26 +1678,28 @@
         "evidence": {
           "trial_pressure": 0.0,
           "false_positive_pressure": 0.0,
-          "family": "value"
+          "family": "momentum"
         },
         "rationale": "Families with many low-information retries should be treated as higher false-positive risk."
       }
     ],
-    "fragile": false,
+    "fragile": true,
     "fragility": {
-      "is_fragile": false,
-      "risk_score": 7.0,
-      "trigger_bits": [],
+      "is_fragile": true,
+      "risk_score": 29.0,
+      "trigger_bits": [
+        "split_fail_max=1"
+      ],
       "robustness_ratio": 1.0,
-      "split_fail_max": 0,
+      "split_fail_max": 1,
       "high_corr_peer_max": 1,
       "neutralization_break_count": 0
     },
     "acceptance_gate": {
       "version": "2.0",
-      "status": "monitor",
-      "promotion": "needs_more_validation",
-      "explanation": "Acceptance Gate 2.0 monitor: candidate is usable for validation, but evidence is not deep enough for refinement.",
+      "status": "blocked",
+      "promotion": "route_to_robustness_validation",
+      "explanation": "Acceptance Gate 2.0 blocked refinement: the candidate shows some alpha, but fragility/risk checks failed and robustness validation must come first.",
       "thresholds": {
         "promising": {
           "min_official_eval_count": 5,
@@ -1083,171 +1720,21 @@
         }
       },
       "metrics": {
-        "official_eval_count": 2,
-        "official_window_count": 1,
-        "avg_score": 4.197889,
-        "pass_rate": 1.0,
-        "fragility_risk_score": 7.0
+        "official_eval_count": 28,
+        "official_window_count": 2,
+        "avg_score": 8.742705,
+        "pass_rate": 0.8571,
+        "fragility_risk_score": 29.0
       },
       "fragility_gate": {
-        "allowed_but_blocked_from_refinement": false,
-        "risk_score": 7.0,
-        "triggers": []
+        "allowed_but_blocked_from_refinement": true,
+        "risk_score": 29.0,
+        "triggers": [
+          "split_fail_max=1"
+        ]
       }
     },
-    "acceptance_gate_explanation": "Acceptance Gate 2.0 monitor: candidate is usable for validation, but evidence is not deep enough for refinement.",
-    "candidate_status": "testing"
-  },
-  {
-    "candidate_id": "4cadc3c9-a2f7-47f1-a130-b53479e5ba8e",
-    "candidate_name": "quality_roe",
-    "family": "quality",
-    "run_id": null,
-    "risk_level": "medium",
-    "risk_score": 41.9651,
-    "robustness_score": 0.800349,
-    "family_context_score": 0.452946,
-    "graph_context_score": 0.450349,
-    "evaluation_count": 2,
-    "passing_check_count": 3,
-    "failing_check_count": 1,
-    "summary": "quality_roe risk=medium (42.0) with robustness=0.80 across 6 checks.",
-    "key_risks": [
-      "evaluation_depth: More windows and reruns reduce single-run illusion risk.",
-      "graph_crowding: Crowded graph neighborhoods increase redundancy and false confidence risk.",
-      "family_context: Healthy families with viable representatives make a candidate easier to trust and extend."
-    ],
-    "mitigations": [
-      "Run more independent windows before promoting the candidate.",
-      "Prefer cluster representative variants and suppress near-duplicates."
-    ],
-    "checks": [
-      {
-        "check_name": "evaluation_depth",
-        "status": "warn",
-        "severity": "medium",
-        "score": 0.333333,
-        "weight": 1.25,
-        "evidence": {
-          "evaluation_count": 2
-        },
-        "rationale": "More windows and reruns reduce single-run illusion risk."
-      },
-      {
-        "check_name": "score_consistency",
-        "status": "pass",
-        "severity": "medium",
-        "score": 1.0,
-        "weight": 1.5,
-        "evidence": {
-          "pass_rate": 1.0,
-          "avg_final_score": 4.41182,
-          "latest_final_score": 4.41182
-        },
-        "rationale": "Candidates that repeatedly pass with decent scores are less brittle."
-      },
-      {
-        "check_name": "window_robustness",
-        "status": "pass",
-        "severity": "medium",
-        "score": 1.0,
-        "weight": 1.7,
-        "evidence": {
-          "robust_pass_count": 2,
-          "robust_total_count": 2,
-          "split_fail_count": 0
-        },
-        "rationale": "Repeated split failures are an early sign of unstable alpha."
-      },
-      {
-        "check_name": "graph_crowding",
-        "status": "fail",
-        "severity": "medium",
-        "score": 0.833333,
-        "weight": 1.15,
-        "evidence": {
-          "high_corr_peer_count": 0,
-          "cluster_size": 6,
-          "lineage_count": 1,
-          "relationship_count": 1
-        },
-        "rationale": "Crowded graph neighborhoods increase redundancy and false confidence risk."
-      },
-      {
-        "check_name": "family_context",
-        "status": "warn",
-        "severity": "low",
-        "score": 0.452946,
-        "weight": 0.9,
-        "evidence": {
-          "family_score": 45.29456,
-          "recommended_action": "explore_new_branch",
-          "family": "quality"
-        },
-        "rationale": "Healthy families with viable representatives make a candidate easier to trust and extend."
-      },
-      {
-        "check_name": "trial_accounting",
-        "status": "pass",
-        "severity": "medium",
-        "score": 1.0,
-        "weight": 1.1,
-        "evidence": {
-          "trial_pressure": 0.0,
-          "false_positive_pressure": 0.0,
-          "family": "quality"
-        },
-        "rationale": "Families with many low-information retries should be treated as higher false-positive risk."
-      }
-    ],
-    "fragile": false,
-    "fragility": {
-      "is_fragile": false,
-      "risk_score": 0.0,
-      "trigger_bits": [],
-      "robustness_ratio": 1.0,
-      "split_fail_max": 0,
-      "high_corr_peer_max": 0,
-      "neutralization_break_count": 0
-    },
-    "acceptance_gate": {
-      "version": "2.0",
-      "status": "monitor",
-      "promotion": "needs_more_validation",
-      "explanation": "Acceptance Gate 2.0 monitor: candidate is usable for validation, but evidence is not deep enough for refinement.",
-      "thresholds": {
-        "promising": {
-          "min_official_eval_count": 5,
-          "min_official_window_count": 3,
-          "min_pass_rate": 0.6,
-          "min_avg_score": 1.0,
-          "max_risk_score": 44.0
-        },
-        "testing": {
-          "min_official_eval_count": 2,
-          "min_official_window_count": 1,
-          "min_pass_rate": 0.2,
-          "min_avg_score": 0.5,
-          "max_risk_score": 64.0
-        },
-        "fragile": {
-          "max_risk_score": 84.0
-        }
-      },
-      "metrics": {
-        "official_eval_count": 2,
-        "official_window_count": 1,
-        "avg_score": 4.41182,
-        "pass_rate": 1.0,
-        "fragility_risk_score": 0.0
-      },
-      "fragility_gate": {
-        "allowed_but_blocked_from_refinement": false,
-        "risk_score": 0.0,
-        "triggers": []
-      }
-    },
-    "acceptance_gate_explanation": "Acceptance Gate 2.0 monitor: candidate is usable for validation, but evidence is not deep enough for refinement.",
-    "candidate_status": "testing"
+    "acceptance_gate_explanation": "Acceptance Gate 2.0 blocked refinement: the candidate shows some alpha, but fragility/risk checks failed and robustness validation must come first.",
+    "candidate_status": "fragile"
   }
 ]

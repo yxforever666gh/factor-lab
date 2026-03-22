@@ -1,0 +1,12 @@
+{
+  "source": "research_opportunity",
+  "opportunity_id": "opp-pattern-native-recombine-graveyard_diagnosis-root-pair_target-exploration_candidate_survived-new_branch_opened-recombination_productive-search_space_expanded",
+  "opportunity_type": "recombine",
+  "summary": "模式 recombine / graveyard_diagnosis / new_branch_opened+recombination_productive+search_space_expanded 是否值得继续作为研究主线？",
+  "jobs": [
+    {
+      "name": "recent_hybrid",
+      "config_path": "artifacts/generated_opportunity_configs/opp-pattern-native-recombine-graveyard_diagnosis-root-pair_target-exploration_candidate_survived-new_branch_opened-recombination_productive-search_space_expanded__recent_hybrid.json"
+    }
+  ]
+}

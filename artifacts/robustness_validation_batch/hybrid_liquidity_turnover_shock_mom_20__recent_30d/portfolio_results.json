@@ -1,0 +1,56 @@
+[
+  {
+    "strategy_name": "long_short_top_bottom_all_factors",
+    "annual_return": 1.25801,
+    "annual_volatility": 0.194761,
+    "sharpe": 6.45926,
+    "max_drawdown": -0.017451,
+    "avg_turnover": 0.388889,
+    "observations": 13
+  },
+  {
+    "strategy_name": "long_short_top_bottom_candidates_only",
+    "annual_return": 1.25801,
+    "annual_volatility": 0.194761,
+    "sharpe": 6.45926,
+    "max_drawdown": -0.017451,
+    "avg_turnover": 0.388889,
+    "observations": 13
+  },
+  {
+    "strategy_name": "long_short_top_bottom_candidates_only_neutralized",
+    "annual_return": 0.334905,
+    "annual_volatility": 0.190075,
+    "sharpe": 1.761967,
+    "max_drawdown": -0.046801,
+    "avg_turnover": 1.270833,
+    "observations": 13
+  },
+  {
+    "strategy_name": "long_short_top_bottom_cluster_representatives",
+    "annual_return": 1.25801,
+    "annual_volatility": 0.194761,
+    "sharpe": 6.45926,
+    "max_drawdown": -0.017451,
+    "avg_turnover": 0.388889,
+    "observations": 13
+  },
+  {
+    "strategy_name": "long_short_top_bottom_cluster_representatives_neutralized",
+    "annual_return": 0.334905,
+    "annual_volatility": 0.190075,
+    "sharpe": 1.761967,
+    "max_drawdown": -0.046801,
+    "avg_turnover": 1.270833,
+    "observations": 13
+  },
+  {
+    "strategy_name": "long_short_top_bottom_neutralized",
+    "annual_return": 0.334905,
+    "annual_volatility": 0.190075,
+    "sharpe": 1.761967,
+    "max_drawdown": -0.046801,
+    "avg_turnover": 1.270833,
+    "observations": 13
+  }
+]

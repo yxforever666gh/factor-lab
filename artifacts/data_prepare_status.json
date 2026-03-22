@@ -1,0 +1,81 @@
+{
+  "prepared": [
+    {
+      "start_date": "2026-02-06",
+      "end_date": "2026-03-23",
+      "kind": "window_45d"
+    },
+    {
+      "start_date": "2025-12-23",
+      "end_date": "2026-03-23",
+      "kind": "window_90d"
+    },
+    {
+      "start_date": "2025-11-23",
+      "end_date": "2026-03-23",
+      "kind": "window_120d"
+    },
+    {
+      "start_date": "2025-09-24",
+      "end_date": "2026-03-23",
+      "kind": "window_180d"
+    },
+    {
+      "start_date": "2025-07-26",
+      "end_date": "2026-03-23",
+      "kind": "window_240d"
+    },
+    {
+      "start_date": "2024-11-28",
+      "end_date": "2026-03-23",
+      "kind": "window_480d"
+    }
+  ],
+  "universe_name": "tushare_top_20",
+  "universe_limit": 20,
+  "cache_dir": "artifacts/tushare_cache",
+  "feature_meta": {
+    "universe_name": "tushare_top_20",
+    "min_date": "2024-08-30",
+    "max_date": "2026-03-12",
+    "row_count": 4212,
+    "columns": [
+      "date",
+      "ticker",
+      "industry",
+      "close",
+      "return_1d",
+      "forward_return_5d",
+      "turnover",
+      "momentum_20",
+      "turnover_shock_5_20",
+      "earnings_yield",
+      "book_yield",
+      "size_inv",
+      "pe_ttm",
+      "pb",
+      "total_mv"
+    ],
+    "updated_at_utc": "2026-03-22T17:04:18.257391Z"
+  },
+  "timing": {
+    "stock_basic_ms": 1908.737,
+    "daily_fetch_ms": 37965.105,
+    "daily_basic_fetch_ms": 37965.105,
+    "merge_clean_ms": 40.606,
+    "feature_build_ms": 40.606,
+    "cache_write_ms": 0.5,
+    "prepare_window_45d_ms": 39972.052,
+    "prepare_window_90d_ms": 54.038,
+    "prepare_window_120d_ms": 26.922,
+    "prepare_window_180d_ms": 26.031,
+    "prepare_window_240d_ms": 25.005,
+    "prepare_window_480d_ms": 24.877,
+    "cache_hit_type": "request_exact",
+    "coverage_fetch_segments": 1,
+    "api_call_count": 41,
+    "coverage_segment_1": "2026-02-10:2026-03-28",
+    "total_ms": 40129.369
+  },
+  "updated_at_utc": "2026-03-22T17:04:18.257818Z"
+}

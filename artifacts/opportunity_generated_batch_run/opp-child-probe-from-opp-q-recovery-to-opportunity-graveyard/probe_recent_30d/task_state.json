@@ -1,0 +1,9 @@
+{
+  "task_id": "fe32923b-97d4-42a1-b0a9-38bc8c1d6277",
+  "config_path": "artifacts/generated_opportunity_configs/opp-child-probe-from-opp-q-recovery-to-opportunity-graveyard__probe_recent_30d.json",
+  "output_dir": "artifacts/opportunity_generated_batch_run/opp-child-probe-from-opp-q-recovery-to-opportunity-graveyard/probe_recent_30d",
+  "status": "finished",
+  "started_at_utc": "2026-03-22T16:32:05.348530+00:00",
+  "finished_at_utc": "2026-03-22T16:32:06.604908+00:00",
+  "error": null
+}

@@ -1,0 +1,9 @@
+{
+  "task_id": "e85e2bf2-d773-4c61-a081-6dc3aa6e8ba0",
+  "config_path": "artifacts/generated_opportunity_configs/opp-q-new-branch-topscore-probe__probe_recent_30d.json",
+  "output_dir": "artifacts/opportunity_generated_batch_run/opp-q-new-branch-topscore-probe/probe_recent_30d",
+  "status": "finished",
+  "started_at_utc": "2026-03-22T16:35:27.769420+00:00",
+  "finished_at_utc": "2026-03-22T16:35:28.675760+00:00",
+  "error": null
+}

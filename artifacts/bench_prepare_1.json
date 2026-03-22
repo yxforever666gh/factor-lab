@@ -1,0 +1,58 @@
+{
+  "prepared": [
+    {
+      "start_date": "2026-02-03",
+      "end_date": "2026-03-20",
+      "kind": "window_45d"
+    },
+    {
+      "start_date": "2025-12-20",
+      "end_date": "2026-03-20",
+      "kind": "window_90d"
+    }
+  ],
+  "universe_name": "tushare_top_20",
+  "universe_limit": 20,
+  "cache_dir": "artifacts/tushare_cache",
+  "feature_meta": {
+    "universe_name": "tushare_top_20",
+    "min_date": "2025-12-16",
+    "max_date": "2026-03-12",
+    "row_count": 605,
+    "columns": [
+      "date",
+      "ticker",
+      "industry",
+      "close",
+      "return_1d",
+      "forward_return_5d",
+      "turnover",
+      "momentum_20",
+      "turnover_shock_5_20",
+      "earnings_yield",
+      "book_yield",
+      "size_inv",
+      "pe_ttm",
+      "pb",
+      "total_mv"
+    ],
+    "updated_at_utc": "2026-03-20T00:17:04.690557Z"
+  },
+  "timing": {
+    "stock_basic_ms": 2853.365,
+    "daily_fetch_ms": 106583.058,
+    "daily_basic_fetch_ms": 106583.058,
+    "merge_clean_ms": 31.993,
+    "feature_build_ms": 31.993,
+    "cache_write_ms": 0.556,
+    "prepare_window_45d_ms": 109511.288,
+    "prepare_window_90d_ms": 17.665,
+    "cache_hit_type": "request_exact",
+    "coverage_fetch_segments": 2,
+    "api_call_count": 41,
+    "coverage_segment_1": "2025-11-20:2026-01-04",
+    "coverage_segment_2": "2026-02-10:2026-03-25",
+    "total_ms": 109529.158
+  },
+  "updated_at_utc": "2026-03-20T00:17:04.690893Z"
+}

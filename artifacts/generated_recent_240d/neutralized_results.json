@@ -1,0 +1,74 @@
+[
+  {
+    "factor_name": "mom_20",
+    "expression": "momentum_20",
+    "observations": 1474,
+    "rank_ic_mean": 0.032995,
+    "rank_ic_std": 0.317974,
+    "rank_ic_ir": 0.103766,
+    "top_bottom_spread_mean": 0.001723,
+    "pass_gate": true,
+    "fail_reason": "",
+    "variant": "neutralized"
+  },
+  {
+    "factor_name": "value_ep",
+    "expression": "earnings_yield",
+    "observations": 1474,
+    "rank_ic_mean": 0.00667,
+    "rank_ic_std": 0.339756,
+    "rank_ic_ir": 0.019632,
+    "top_bottom_spread_mean": -0.004868,
+    "pass_gate": false,
+    "fail_reason": "rank_ic_mean<0.02; top_bottom_spread<0.0005",
+    "variant": "neutralized"
+  },
+  {
+    "factor_name": "value_bp",
+    "expression": "book_yield",
+    "observations": 1474,
+    "rank_ic_mean": 0.006484,
+    "rank_ic_std": 0.335028,
+    "rank_ic_ir": 0.019353,
+    "top_bottom_spread_mean": -0.006201,
+    "pass_gate": false,
+    "fail_reason": "rank_ic_mean<0.02; top_bottom_spread<0.0005",
+    "variant": "neutralized"
+  },
+  {
+    "factor_name": "size_small",
+    "expression": "size_inv",
+    "observations": 1474,
+    "rank_ic_mean": -0.028774,
+    "rank_ic_std": 0.290189,
+    "rank_ic_ir": -0.099155,
+    "top_bottom_spread_mean": -0.00077,
+    "pass_gate": false,
+    "fail_reason": "rank_ic_mean<0.02; top_bottom_spread<0.0005",
+    "variant": "neutralized"
+  },
+  {
+    "factor_name": "liquidity_turnover_shock",
+    "expression": "turnover_shock_5_20",
+    "observations": 1474,
+    "rank_ic_mean": 0.052725,
+    "rank_ic_std": 0.341005,
+    "rank_ic_ir": 0.154618,
+    "top_bottom_spread_mean": 0.005736,
+    "pass_gate": true,
+    "fail_reason": "",
+    "variant": "neutralized"
+  },
+  {
+    "factor_name": "mom_plus_value",
+    "expression": "momentum_20 + earnings_yield",
+    "observations": 1474,
+    "rank_ic_mean": -0.003259,
+    "rank_ic_std": 0.288477,
+    "rank_ic_ir": -0.011296,
+    "top_bottom_spread_mean": 0.000511,
+    "pass_gate": false,
+    "fail_reason": "rank_ic_mean<0.02",
+    "variant": "neutralized"
+  }
+]

@@ -1,28 +1,28 @@
 {
-  "generated_at_utc": "2026-03-21T01:17:41.665817+00:00",
+  "generated_at_utc": "2026-03-22T18:00:43.590805+00:00",
   "summary": {
-    "finding_count": 4,
-    "corrective_action_count": 4
+    "finding_count": 3,
+    "corrective_action_count": 3
   },
   "findings": [
     {
       "kind": "portfolio_concentration_risk",
       "severity": "medium",
-      "message": "当前研究资本明显集中在 family=graveyard_diagnosis。",
+      "message": "当前研究资本明显集中在 family=exploration。",
       "evidence": {
-        "family": "graveyard_diagnosis",
-        "count": 5,
-        "promoted": 0,
+        "family": "exploration",
+        "count": 4,
+        "promoted": 2,
         "evaluated": 1,
         "rejected": 0,
         "archived": 0,
-        "success_rate": 0.0,
+        "success_rate": 0.667,
         "recommended_action": "upweight",
-        "epistemic_value_score": 0.6,
-        "uncertainty_reduction_count": 0,
+        "epistemic_value_score": 1.4,
+        "uncertainty_reduction_count": 2,
         "repeat_signal_count": 0,
         "negative_informative_count": 1,
-        "new_branch_count": 0,
+        "new_branch_count": 2,
         "inconclusive_count": 0
       }
     },
@@ -31,7 +31,7 @@
       "severity": "high",
       "message": "系统当前较擅长记录高价值负结果，但仍缺少把负结果转化为新候选存活的能力。",
       "evidence": {
-        "pattern_count": 1,
+        "pattern_count": 4,
         "exploration_candidate_survived": 0
       }
     },
@@ -42,29 +42,13 @@
       "evidence": {
         "open_question_count": 0
       }
-    },
-    {
-      "kind": "frontier_starvation_warning",
-      "severity": "medium",
-      "message": "portfolio 已规划 frontier_probe，但当前没有足够 frontier pattern 支撑。",
-      "evidence": {
-        "slot": 3,
-        "focus": "frontier_probe",
-        "goal": "保留一部分预算给边缘高分/高新颖度方向，避免研究空间塌缩。",
-        "budget_mix": {
-          "validation": 0.2,
-          "exploration": 0.5,
-          "invalidation": 0.3
-        },
-        "patterns": []
-      }
     }
   ],
   "corrective_actions": [
     {
       "action": "diversify_family_allocation",
       "reason": "avoid_single_family_lock_in",
-      "suggested_family": "graveyard_diagnosis"
+      "suggested_family": "exploration"
     },
     {
       "action": "force_positive_frontier_probe",
@@ -74,10 +58,6 @@
     {
       "action": "inject_meta_probe_question",
       "reason": "restore_question_diversity"
-    },
-    {
-      "action": "seed_frontier_patterns",
-      "reason": "maintain_frontier_diversity"
     }
   ]
 }

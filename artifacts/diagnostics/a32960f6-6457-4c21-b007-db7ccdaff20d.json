@@ -1,0 +1,73 @@
+{
+  "generated_at_utc": "2026-03-21T07:53:47.541957+00:00",
+  "diagnostic_type": "batch_consistency_review",
+  "source_output_dir": "artifacts/tushare_batch",
+  "reasons": [
+    "consistent_graveyard:liquidity_turnover_shock, mom_20, size_small, value_bp, value_ep"
+  ],
+  "candidate_presence": {},
+  "graveyard_presence": {
+    "mom_20": [
+      "recent_window",
+      "longer_window"
+    ],
+    "value_ep": [
+      "recent_window",
+      "longer_window"
+    ],
+    "value_bp": [
+      "recent_window",
+      "longer_window"
+    ],
+    "size_small": [
+      "recent_window",
+      "longer_window"
+    ],
+    "liquidity_turnover_shock": [
+      "recent_window",
+      "longer_window"
+    ],
+    "mom_plus_value": [
+      "recent_window",
+      "longer_window"
+    ]
+  },
+  "representative_presence": {
+    "liquidity_turnover_shock": [
+      "recent_window",
+      "longer_window"
+    ],
+    "mom_20": [
+      "recent_window",
+      "longer_window"
+    ],
+    "size_small": [
+      "recent_window",
+      "longer_window"
+    ],
+    "value_bp": [
+      "recent_window",
+      "longer_window"
+    ],
+    "value_ep": [
+      "recent_window",
+      "longer_window"
+    ]
+  },
+  "summary": {
+    "stable_candidates": [],
+    "repeated_graveyard": [
+      "liquidity_turnover_shock",
+      "mom_20",
+      "mom_plus_value",
+      "size_small",
+      "value_bp",
+      "value_ep"
+    ],
+    "hypothesis": "若某些因子跨窗口稳定落入 graveyard，应优先诊断 neutralization 或 split robustness，而不是继续盲目扩展。",
+    "knowledge_gain": [
+      null,
+      "repeated_graveyard_confirmed"
+    ]
+  }
+}

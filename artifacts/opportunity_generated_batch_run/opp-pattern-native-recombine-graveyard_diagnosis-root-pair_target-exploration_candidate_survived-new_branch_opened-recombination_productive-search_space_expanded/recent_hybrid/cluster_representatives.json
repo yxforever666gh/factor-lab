@@ -1,0 +1,19 @@
+[
+  {
+    "factor_name": "size_small",
+    "expression": "size_inv",
+    "score": 0.354488,
+    "raw_rank_ic_mean": 0.228458,
+    "raw_rank_ic_ir": 1.186231,
+    "neutralized_rank_ic_mean": -0.064864,
+    "neutralized_pass": false,
+    "split_fail_count": 0,
+    "high_corr_peers": [],
+    "cluster_members": [
+      "size_small"
+    ],
+    "cluster_rep_rank": 1,
+    "cluster_rep_count": 1,
+    "is_primary_representative": true
+  }
+]

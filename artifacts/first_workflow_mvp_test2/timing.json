@@ -1,0 +1,11 @@
+{
+  "load_config_ms": 0.092,
+  "load_dataset_ms": 690.198,
+  "factor_eval_ms": 7406.557,
+  "persist_intermediate_ms": 0.605,
+  "correlation_ms": 10.181,
+  "portfolio_ms": 4141.223,
+  "factor_count": 5,
+  "dataset_rows": 12900,
+  "total_ms": 12435.426
+}

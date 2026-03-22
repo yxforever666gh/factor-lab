@@ -2,155 +2,140 @@
 
 - Data source: tushare
 - Total factors: 6
-- Passed: 6
-- Failed: 0
-- Candidate pool size: 2
-- Graveyard size: 4
+- Passed: 4
+- Failed: 2
+- Candidate pool size: 0
+- Graveyard size: 6
 - Cluster representative count: 5
 
 ## Main Results
 
-### mom_20 [PASS]
-- Expression: `momentum_20`
-- RankIC mean: 0.327686
-- RankIC IR: 1.21569
-- Top-bottom spread mean: 0.032816
-- Fail reason: n/a
-
-### mom_plus_value [PASS]
-- Expression: `momentum_20 + earnings_yield`
-- RankIC mean: 0.281405
-- RankIC IR: 1.080412
-- Top-bottom spread mean: 0.019764
-- Fail reason: n/a
-
-### liquidity_turnover_shock [PASS]
-- Expression: `turnover_shock_5_20`
-- RankIC mean: 0.254545
-- RankIC IR: 0.978997
-- Top-bottom spread mean: 0.02472
-- Fail reason: n/a
-
 ### size_small [PASS]
 - Expression: `size_inv`
-- RankIC mean: 0.233884
-- RankIC IR: 1.198217
-- Top-bottom spread mean: 0.020628
+- RankIC mean: 0.20636
+- RankIC IR: 0.787172
+- Top-bottom spread mean: 0.014848
 - Fail reason: n/a
 
 ### value_ep [PASS]
 - Expression: `earnings_yield`
-- RankIC mean: 0.193388
-- RankIC IR: 1.177993
-- Top-bottom spread mean: 0.023535
+- RankIC mean: 0.10212
+- RankIC IR: 0.422366
+- Top-bottom spread mean: 0.010085
 - Fail reason: n/a
 
-### value_bp [PASS]
-- Expression: `book_yield`
-- RankIC mean: 0.027273
-- RankIC IR: 0.08189
-- Top-bottom spread mean: 0.007854
+### liquidity_turnover_shock [PASS]
+- Expression: `turnover_shock_5_20`
+- RankIC mean: 0.069642
+- RankIC IR: 0.217067
+- Top-bottom spread mean: 0.004898
 - Fail reason: n/a
+
+### mom_20 [PASS]
+- Expression: `momentum_20`
+- RankIC mean: 0.05647
+- RankIC IR: 0.144243
+- Top-bottom spread mean: 0.003979
+- Fail reason: n/a
+
+### mom_plus_value [FAIL]
+- Expression: `momentum_20 + earnings_yield`
+- RankIC mean: 0.032023
+- RankIC IR: 0.08133
+- Top-bottom spread mean: -0.004654
+- Fail reason: top_bottom_spread<0.0005
+
+### value_bp [FAIL]
+- Expression: `book_yield`
+- RankIC mean: 0.019462
+- RankIC IR: 0.061247
+- Top-bottom spread mean: 0.009014
+- Fail reason: rank_ic_mean<0.02
 
 ## Neutralized Results (industry + size)
 
-- mom_20 [PASS] | RankIC=0.065516 | IR=0.280807 | Spread=0.006955 | Reason=n/a
-- value_bp [FAIL] | RankIC=0.026398 | IR=0.082663 | Spread=-6.6e-05 | Reason=top_bottom_spread<0.0005
-- mom_plus_value [PASS] | RankIC=0.024927 | IR=0.110529 | Spread=0.006892 | Reason=n/a
-- size_small [FAIL] | RankIC=-0.017024 | IR=-0.069919 | Spread=-0.009697 | Reason=rank_ic_mean<0.02; top_bottom_spread<0.0005
-- liquidity_turnover_shock [FAIL] | RankIC=-0.022004 | IR=-0.078614 | Spread=-0.000168 | Reason=rank_ic_mean<0.02; top_bottom_spread<0.0005
-- value_ep [FAIL] | RankIC=-0.022959 | IR=-0.082217 | Spread=-0.002173 | Reason=rank_ic_mean<0.02; top_bottom_spread<0.0005
+- liquidity_turnover_shock [PASS] | RankIC=0.053968 | IR=0.193837 | Spread=0.007453 | Reason=n/a
+- value_bp [PASS] | RankIC=0.040301 | IR=0.137833 | Spread=0.00286 | Reason=n/a
+- mom_plus_value [FAIL] | RankIC=0.013324 | IR=0.060168 | Spread=0.000187 | Reason=rank_ic_mean<0.02; top_bottom_spread<0.0005
+- value_ep [FAIL] | RankIC=0.011664 | IR=0.041078 | Spread=0.000433 | Reason=rank_ic_mean<0.02; top_bottom_spread<0.0005
+- mom_20 [FAIL] | RankIC=0.010007 | IR=0.035956 | Spread=0.001051 | Reason=rank_ic_mean<0.02
+- size_small [FAIL] | RankIC=-0.025524 | IR=-0.095899 | Spread=-0.008465 | Reason=rank_ic_mean<0.02; top_bottom_spread<0.0005
 
 ## Time Split Robustness
 
-- mom_20 / first_half [PASS] | RankIC=0.315702 | Spread=0.023691 | Reason=n/a
-- mom_20 / second_half [PASS] | RankIC=0.339669 | Spread=0.041942 | Reason=n/a
-- value_ep / first_half [PASS] | RankIC=0.216529 | Spread=0.016736 | Reason=n/a
-- value_ep / second_half [PASS] | RankIC=0.170248 | Spread=0.030334 | Reason=n/a
-- value_bp / first_half [FAIL] | RankIC=-0.202479 | Spread=-0.010568 | Reason=rank_ic_mean<0.02; top_bottom_spread<0.0005
-- value_bp / second_half [PASS] | RankIC=0.257025 | Spread=0.026275 | Reason=n/a
-- size_small / first_half [PASS] | RankIC=0.209091 | Spread=0.025039 | Reason=n/a
-- size_small / second_half [PASS] | RankIC=0.258678 | Spread=0.016217 | Reason=n/a
-- liquidity_turnover_shock / first_half [PASS] | RankIC=0.254545 | Spread=0.035469 | Reason=n/a
-- liquidity_turnover_shock / second_half [PASS] | RankIC=0.254545 | Spread=0.013971 | Reason=n/a
-- mom_plus_value / first_half [PASS] | RankIC=0.245455 | Spread=0.013469 | Reason=n/a
-- mom_plus_value / second_half [PASS] | RankIC=0.317355 | Spread=0.026058 | Reason=n/a
+- mom_20 / first_half [FAIL] | RankIC=-0.249738 | Spread=-0.029192 | Reason=rank_ic_mean<0.02; top_bottom_spread<0.0005
+- mom_20 / second_half [PASS] | RankIC=0.34876 | Spread=0.035642 | Reason=n/a
+- value_ep / first_half [FAIL] | RankIC=0.020791 | Spread=-0.003593 | Reason=top_bottom_spread<0.0005
+- value_ep / second_half [PASS] | RankIC=0.179752 | Spread=0.023142 | Reason=n/a
+- value_bp / first_half [FAIL] | RankIC=0.014742 | Spread=0.010499 | Reason=rank_ic_mean<0.02
+- value_bp / second_half [PASS] | RankIC=0.023967 | Spread=0.007598 | Reason=n/a
+- size_small / first_half [PASS] | RankIC=0.19614 | Spread=0.012202 | Reason=n/a
+- size_small / second_half [PASS] | RankIC=0.216116 | Spread=0.017374 | Reason=n/a
+- liquidity_turnover_shock / first_half [FAIL] | RankIC=-0.127962 | Spread=-0.018104 | Reason=rank_ic_mean<0.02; top_bottom_spread<0.0005
+- liquidity_turnover_shock / second_half [PASS] | RankIC=0.258264 | Spread=0.026854 | Reason=n/a
+- mom_plus_value / first_half [FAIL] | RankIC=-0.249148 | Spread=-0.032689 | Reason=rank_ic_mean<0.02; top_bottom_spread<0.0005
+- mom_plus_value / second_half [PASS] | RankIC=0.300413 | Spread=0.022107 | Reason=n/a
 
 ## Factor Scores
 
-- mom_20 | score=1.398116 | rawIC=0.327686 | neutralIC=0.065516 | peers=mom_plus_value
-- mom_plus_value | score=1.140355 | rawIC=0.281405 | neutralIC=0.024927 | peers=mom_20
-- liquidity_turnover_shock | score=0.5172 | rawIC=0.254545 | neutralIC=-0.022004 | peers=none
-- size_small | score=0.513371 | rawIC=0.233884 | neutralIC=-0.017024 | peers=none
-- value_ep | score=0.391292 | rawIC=0.193388 | neutralIC=-0.022959 | peers=none
-- value_bp | score=-0.24034 | rawIC=0.027273 | neutralIC=0.026398 | peers=none
+- liquidity_turnover_shock | score=0.468569 | rawIC=0.069642 | neutralIC=0.053968 | peers=none
+- size_small | score=0.357404 | rawIC=0.20636 | neutralIC=-0.025524 | peers=none
+- value_bp | score=0.278745 | rawIC=0.019462 | neutralIC=0.040301 | peers=none
+- value_ep | score=-0.046353 | rawIC=0.10212 | neutralIC=0.011664 | peers=none
+- mom_20 | score=-0.307168 | rawIC=0.05647 | neutralIC=0.010007 | peers=mom_plus_value
+- mom_plus_value | score=-0.367771 | rawIC=0.032023 | neutralIC=0.013324 | peers=mom_20
 
 ## Candidate Pool
 
-- mom_20 | rawIC=0.327686 | neutralIC=0.065516 | peers=mom_plus_value
-- mom_plus_value | rawIC=0.281405 | neutralIC=0.024927 | peers=mom_20
+- none
 
 ## Cluster Representatives
 
-- liquidity_turnover_shock | score=0.5172 | cluster=liquidity_turnover_shock
-- mom_20 | score=1.398116 | cluster=mom_20, mom_plus_value
-- size_small | score=0.513371 | cluster=size_small
-- value_bp | score=-0.24034 | cluster=value_bp
-- value_ep | score=0.391292 | cluster=value_ep
+- liquidity_turnover_shock | score=0.468569 | cluster=liquidity_turnover_shock
+- mom_20 | score=-0.307168 | cluster=mom_20, mom_plus_value
+- size_small | score=0.357404 | cluster=size_small
+- value_bp | score=0.278745 | cluster=value_bp
+- value_ep | score=-0.046353 | cluster=value_ep
 
 ## Graveyard
 
-- value_ep | reason=neutral_fail:rank_ic_mean<0.02; top_bottom_spread<0.0005
-- value_bp | reason=neutral_fail:top_bottom_spread<0.0005; split_fail_count:1
+- mom_20 | reason=neutral_fail:rank_ic_mean<0.02; split_fail_count:1
+- value_ep | reason=neutral_fail:rank_ic_mean<0.02; top_bottom_spread<0.0005; split_fail_count:1
+- value_bp | reason=raw_fail:rank_ic_mean<0.02; split_fail_count:1
 - size_small | reason=neutral_fail:rank_ic_mean<0.02; top_bottom_spread<0.0005
-- liquidity_turnover_shock | reason=neutral_fail:rank_ic_mean<0.02; top_bottom_spread<0.0005
+- liquidity_turnover_shock | reason=split_fail_count:1
+- mom_plus_value | reason=raw_fail:top_bottom_spread<0.0005; neutral_fail:rank_ic_mean<0.02; top_bottom_spread<0.0005; split_fail_count:1
 
 ## Portfolio Results
 
 ### long_short_top_bottom_all_factors
-- Annual return: 1.670311
-- Annual volatility: 0.154128
-- Sharpe: 10.837132
-- Max drawdown: -0.009419
-- Avg turnover: 0.15873
-- Observations: 22
-
-### long_short_top_bottom_candidates_only
-- Annual return: 1.213329
-- Annual volatility: 0.222964
-- Sharpe: 5.441824
-- Max drawdown: -0.034234
-- Avg turnover: 0.428571
-- Observations: 22
-
-### long_short_top_bottom_candidates_only_neutralized
-- Annual return: 0.155334
-- Annual volatility: 0.17455
-- Sharpe: 0.889911
-- Max drawdown: -0.074308
-- Avg turnover: 1.460317
-- Observations: 22
+- Annual return: 0.303097
+- Annual volatility: 0.299114
+- Sharpe: 1.013319
+- Max drawdown: -0.401967
+- Avg turnover: 0.198413
+- Observations: 43
 
 ### long_short_top_bottom_cluster_representatives
-- Annual return: 1.556436
-- Annual volatility: 0.152651
-- Sharpe: 10.196009
-- Max drawdown: -0.009419
-- Avg turnover: 0.126984
-- Observations: 22
+- Annual return: 0.156428
+- Annual volatility: 0.273089
+- Sharpe: 0.57281
+- Max drawdown: -0.443068
+- Avg turnover: 0.214286
+- Observations: 43
 
 ### long_short_top_bottom_cluster_representatives_neutralized
-- Annual return: 0.199767
-- Annual volatility: 0.136579
-- Sharpe: 1.462645
-- Max drawdown: -0.046688
-- Avg turnover: 1.380952
-- Observations: 22
+- Annual return: 0.087521
+- Annual volatility: 0.181813
+- Sharpe: 0.481376
+- Max drawdown: -0.204052
+- Avg turnover: 1.230159
+- Observations: 43
 
 ### long_short_top_bottom_neutralized
-- Annual return: 0.050627
-- Annual volatility: 0.123753
-- Sharpe: 0.4091
-- Max drawdown: -0.094694
-- Avg turnover: 1.380952
-- Observations: 22
+- Annual return: 0.098638
+- Annual volatility: 0.179979
+- Sharpe: 0.548054
+- Max drawdown: -0.149252
+- Avg turnover: 1.230159
+- Observations: 43

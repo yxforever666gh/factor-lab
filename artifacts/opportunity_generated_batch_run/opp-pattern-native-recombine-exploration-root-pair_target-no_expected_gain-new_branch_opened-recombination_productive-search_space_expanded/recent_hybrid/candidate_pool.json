@@ -1,0 +1,44 @@
+[
+  {
+    "factor_name": "mom_20",
+    "expression": "momentum_20",
+    "raw_pass": true,
+    "raw_rank_ic_mean": 0.326877,
+    "raw_rank_ic_ir": 1.239817,
+    "neutralized_pass": true,
+    "neutralized_rank_ic_mean": 0.024715,
+    "split_fail_count": 0,
+    "high_corr_peers": [
+      "hybrid_mom_20_mom_plus_value",
+      "mom_plus_value"
+    ]
+  },
+  {
+    "factor_name": "mom_plus_value",
+    "expression": "momentum_20 + earnings_yield",
+    "raw_pass": true,
+    "raw_rank_ic_mean": 0.281028,
+    "raw_rank_ic_ir": 1.103186,
+    "neutralized_pass": true,
+    "neutralized_rank_ic_mean": 0.036979,
+    "split_fail_count": 0,
+    "high_corr_peers": [
+      "hybrid_mom_20_mom_plus_value",
+      "mom_20"
+    ]
+  },
+  {
+    "factor_name": "hybrid_mom_20_mom_plus_value",
+    "expression": "(momentum_20) + (momentum_20 + earnings_yield)",
+    "raw_pass": true,
+    "raw_rank_ic_mean": 0.312648,
+    "raw_rank_ic_ir": 1.138553,
+    "neutralized_pass": true,
+    "neutralized_rank_ic_mean": 0.093651,
+    "split_fail_count": 0,
+    "high_corr_peers": [
+      "mom_20",
+      "mom_plus_value"
+    ]
+  }
+]

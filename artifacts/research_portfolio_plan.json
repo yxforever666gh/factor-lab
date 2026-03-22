@@ -1,56 +1,104 @@
 {
-  "generated_at_utc": "2026-03-21T00:47:26.178168+00:00",
+  "generated_at_utc": "2026-03-22T18:00:43.590438+00:00",
   "flow_state": {
     "state": "recovering",
     "reasons": [
       "recovery_branch_still_active"
     ],
-    "candidate_count": 2,
+    "candidate_count": 1,
     "recovery_used": false,
-    "recovery_active_branch_count": 2,
-    "recent_recovery_event_count": 1,
+    "recovery_active_branch_count": 1,
+    "recent_recovery_event_count": 5,
     "recent_recovery_success": true,
-    "injected_count": 1,
+    "injected_count": 0,
     "queue_counts": {
       "pending": 0,
-      "running": 1,
-      "finished": 98,
-      "failed": 1
+      "running": 0,
+      "finished": 100,
+      "failed": 0
     }
   },
   "family_allocations": [
     {
-      "family": "graveyard_diagnosis",
-      "epistemic_value_score": 0.6,
+      "family": "exploration",
+      "epistemic_value_score": 1.4,
       "recommended_action": "upweight",
       "negative_informative_count": 1,
-      "uncertainty_reduction_count": 0
-    },
-    {
-      "family": "exploration",
-      "epistemic_value_score": 0.0,
-      "recommended_action": "keep",
-      "negative_informative_count": 0,
-      "uncertainty_reduction_count": 0
-    },
-    {
-      "family": "none",
-      "epistemic_value_score": 0.0,
-      "recommended_action": "keep",
-      "negative_informative_count": 0,
-      "uncertainty_reduction_count": 0
+      "uncertainty_reduction_count": 2
     },
     {
       "family": "stable_candidate_validation",
-      "epistemic_value_score": 0.0,
-      "recommended_action": "keep",
+      "epistemic_value_score": 1.0,
+      "recommended_action": "upweight",
       "negative_informative_count": 0,
+      "uncertainty_reduction_count": 8
+    },
+    {
+      "family": "graveyard_diagnosis",
+      "epistemic_value_score": 0.59,
+      "recommended_action": "upweight",
+      "negative_informative_count": 1,
+      "uncertainty_reduction_count": 5
+    },
+    {
+      "family": "none",
+      "epistemic_value_score": 0.4,
+      "recommended_action": "keep",
+      "negative_informative_count": 2,
       "uncertainty_reduction_count": 0
     }
   ],
   "top_patterns": [
     {
-      "pattern": "recombine::graveyard_diagnosis::child::pair_target::exploration_candidate_survived::hybrid_invalidated+negative_result_recorded+search_space_reduced",
+      "pattern": "recombine::exploration::root::pair_target::exploration_candidate_survived::new_branch_opened+recombination_productive+search_space_expanded",
+      "count": 2,
+      "promoted": 2,
+      "evaluated": 0,
+      "rejected": 0,
+      "archived": 0,
+      "success_rate": 1.0,
+      "recommended_action": "upweight",
+      "epistemic_value_score": 1.8,
+      "uncertainty_reduction_count": 2,
+      "repeat_signal_count": 0,
+      "negative_informative_count": 0,
+      "new_branch_count": 2,
+      "inconclusive_count": 0
+    },
+    {
+      "pattern": "recombine::graveyard_diagnosis::child::pair_target::exploration_candidate_survived::new_branch_opened+recombination_productive+search_space_expanded",
+      "count": 1,
+      "promoted": 1,
+      "evaluated": 0,
+      "rejected": 0,
+      "archived": 0,
+      "success_rate": 1.0,
+      "recommended_action": "upweight",
+      "epistemic_value_score": 1.8,
+      "uncertainty_reduction_count": 1,
+      "repeat_signal_count": 0,
+      "negative_informative_count": 0,
+      "new_branch_count": 1,
+      "inconclusive_count": 0
+    },
+    {
+      "pattern": "recombine::graveyard_diagnosis::root::no_targets::exploration_candidate_survived::new_branch_opened+recombination_productive+search_space_expanded",
+      "count": 2,
+      "promoted": 2,
+      "evaluated": 0,
+      "rejected": 0,
+      "archived": 0,
+      "success_rate": 1.0,
+      "recommended_action": "upweight",
+      "epistemic_value_score": 1.8,
+      "uncertainty_reduction_count": 2,
+      "repeat_signal_count": 0,
+      "negative_informative_count": 0,
+      "new_branch_count": 2,
+      "inconclusive_count": 0
+    },
+    {
+      "pattern": "confirm::stable_candidate_validation::child::multi_target::stable_candidate_confirmed::partial_support+uncertainty_reduced",
       "count": 1,
       "promoted": 0,
       "evaluated": 1,
@@ -58,10 +106,26 @@
       "archived": 0,
       "success_rate": 0.0,
       "recommended_action": "upweight",
-      "epistemic_value_score": 0.6,
-      "uncertainty_reduction_count": 0,
+      "epistemic_value_score": 1.0,
+      "uncertainty_reduction_count": 1,
       "repeat_signal_count": 0,
-      "negative_informative_count": 1,
+      "negative_informative_count": 0,
+      "new_branch_count": 0,
+      "inconclusive_count": 0
+    },
+    {
+      "pattern": "confirm::stable_candidate_validation::root::multi_target::stable_candidate_confirmed::partial_support+uncertainty_reduced",
+      "count": 3,
+      "promoted": 0,
+      "evaluated": 3,
+      "rejected": 0,
+      "archived": 0,
+      "success_rate": 0.0,
+      "recommended_action": "upweight",
+      "epistemic_value_score": 1.0,
+      "uncertainty_reduction_count": 3,
+      "repeat_signal_count": 0,
+      "negative_informative_count": 0,
       "new_branch_count": 0,
       "inconclusive_count": 0
     }
@@ -77,8 +141,8 @@
         "invalidation": 0.2
       },
       "families": [
-        "graveyard_diagnosis",
-        "exploration"
+        "exploration",
+        "stable_candidate_validation"
       ]
     },
     {
@@ -91,7 +155,8 @@
         "invalidation": 0.3
       },
       "patterns": [
-        "recombine::graveyard_diagnosis::child::pair_target::exploration_candidate_survived::hybrid_invalidated+negative_result_recorded+search_space_reduced"
+        "recombine::exploration::root::pair_target::exploration_candidate_survived::new_branch_opened+recombination_productive+search_space_expanded",
+        "recombine::graveyard_diagnosis::child::pair_target::exploration_candidate_survived::new_branch_opened+recombination_productive+search_space_expanded"
       ]
     },
     {
@@ -103,7 +168,10 @@
         "exploration": 0.5,
         "invalidation": 0.3
       },
-      "patterns": []
+      "patterns": [
+        "recombine::graveyard_diagnosis::root::no_targets::exploration_candidate_survived::new_branch_opened+recombination_productive+search_space_expanded",
+        "confirm::stable_candidate_validation::child::multi_target::stable_candidate_confirmed::partial_support+uncertainty_reduced"
+      ]
     }
   ]
 }

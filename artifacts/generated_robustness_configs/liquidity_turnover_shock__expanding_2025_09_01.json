@@ -1,0 +1,18 @@
+{
+  "data_source": "tushare",
+  "cache_dir": "artifacts/tushare_cache",
+  "output_dir": "artifacts/robustness_validation_batch/liquidity_turnover_shock__expanding_2025_09_01",
+  "start_date": "2025-09-01",
+  "end_date": "2026-03-18",
+  "universe_limit": 20,
+  "factors": [
+    {
+      "name": "liquidity_turnover_shock",
+      "expression": "turnover_shock_5_20"
+    }
+  ],
+  "thresholds": {
+    "min_rank_ic": 0.02,
+    "min_top_bottom_spread": 0.0005
+  }
+}

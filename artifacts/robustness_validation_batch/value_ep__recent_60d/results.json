@@ -1,0 +1,13 @@
+[
+  {
+    "factor_name": "value_ep",
+    "expression": "earnings_yield",
+    "observations": 363,
+    "rank_ic_mean": 0.19863,
+    "rank_ic_std": 0.155536,
+    "rank_ic_ir": 1.277065,
+    "top_bottom_spread_mean": 0.023033,
+    "pass_gate": true,
+    "fail_reason": ""
+  }
+]

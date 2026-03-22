@@ -7,14 +7,6 @@
     {
       "name": "recent_45d",
       "config_path": "artifacts/generated_opportunity_configs/opp-child-expand-from-opp-q-stable-boundary__recent_45d.json"
-    },
-    {
-      "name": "recent_90d",
-      "config_path": "artifacts/generated_opportunity_configs/opp-child-expand-from-opp-q-stable-boundary__recent_90d.json"
-    },
-    {
-      "name": "expanding_back_180d",
-      "config_path": "artifacts/generated_opportunity_configs/opp-child-expand-from-opp-q-stable-boundary__expanding_back_180d.json"
     }
   ]
 }

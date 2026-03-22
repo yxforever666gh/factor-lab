@@ -1,0 +1,26 @@
+[
+  {
+    "factor_name": "liquidity_turnover_shock",
+    "expression": "turnover_shock_5_20",
+    "observations": 176,
+    "rank_ic_mean": -0.000337,
+    "rank_ic_std": 0.285801,
+    "rank_ic_ir": -0.001178,
+    "top_bottom_spread_mean": -0.001158,
+    "pass_gate": false,
+    "fail_reason": "rank_ic_mean<0.02; top_bottom_spread<0.0005",
+    "split": "first_half"
+  },
+  {
+    "factor_name": "liquidity_turnover_shock",
+    "expression": "turnover_shock_5_20",
+    "observations": 187,
+    "rank_ic_mean": 0.27861,
+    "rank_ic_std": 0.238288,
+    "rank_ic_ir": 1.169214,
+    "top_bottom_spread_mean": 0.023365,
+    "pass_gate": true,
+    "fail_reason": "",
+    "split": "second_half"
+  }
+]

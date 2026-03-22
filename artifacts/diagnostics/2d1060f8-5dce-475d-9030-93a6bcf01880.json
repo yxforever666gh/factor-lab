@@ -1,0 +1,8 @@
+{
+  "generated_at_utc": "2026-03-20T20:18:30.915482+00:00",
+  "diagnostic_type": "fallback_stable_candidate_validation",
+  "source_output_dir": "artifacts/tushare_batch",
+  "reasons": [
+    "planner_zero_candidates_fallback"
+  ]
+}

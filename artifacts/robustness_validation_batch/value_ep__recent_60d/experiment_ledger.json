@@ -1,0 +1,82 @@
+{
+  "run_id": "9e36574f-18b3-4e5c-83a6-905244263b1e",
+  "generated_at_utc": "2026-03-22T16:18:11.807222+00:00",
+  "config": {
+    "data_source": "tushare",
+    "cache_dir": "artifacts/tushare_cache",
+    "output_dir": "artifacts/robustness_validation_batch/value_ep__recent_60d",
+    "start_date": "2026-01-17",
+    "end_date": "2026-03-18",
+    "universe_limit": 20,
+    "factors": [
+      {
+        "name": "value_ep",
+        "expression": "earnings_yield"
+      }
+    ],
+    "thresholds": {
+      "min_rank_ic": 0.02,
+      "min_top_bottom_spread": 0.0005
+    }
+  },
+  "dataset_rows": 363,
+  "factor_count": 1,
+  "candidate_pool": [],
+  "graveyard": [
+    "value_ep"
+  ],
+  "cluster_representatives": [
+    "value_ep"
+  ],
+  "top_scores": [
+    {
+      "factor_name": "value_ep",
+      "expression": "earnings_yield",
+      "score": 0.512687,
+      "raw_rank_ic_mean": 0.19863,
+      "raw_rank_ic_ir": 1.277065,
+      "neutralized_rank_ic_mean": 0.008184,
+      "neutralized_pass": false,
+      "split_fail_count": 0,
+      "high_corr_peers": []
+    }
+  ],
+  "portfolio_results": [
+    {
+      "strategy_name": "long_short_top_bottom_all_factors",
+      "annual_return": 0.68818,
+      "annual_volatility": 0.092103,
+      "sharpe": 7.471886,
+      "max_drawdown": -0.01328,
+      "avg_turnover": 0.0,
+      "observations": 33
+    },
+    {
+      "strategy_name": "long_short_top_bottom_cluster_representatives",
+      "annual_return": 0.68818,
+      "annual_volatility": 0.092103,
+      "sharpe": 7.471886,
+      "max_drawdown": -0.01328,
+      "avg_turnover": 0.0,
+      "observations": 33
+    },
+    {
+      "strategy_name": "long_short_top_bottom_cluster_representatives_neutralized",
+      "annual_return": -0.118396,
+      "annual_volatility": 0.221047,
+      "sharpe": -0.535612,
+      "max_drawdown": -0.197736,
+      "avg_turnover": 1.367188,
+      "observations": 33
+    },
+    {
+      "strategy_name": "long_short_top_bottom_neutralized",
+      "annual_return": -0.118396,
+      "annual_volatility": 0.221047,
+      "sharpe": -0.535612,
+      "max_drawdown": -0.197736,
+      "avg_turnover": 1.367188,
+      "observations": 33
+    }
+  ]
+}

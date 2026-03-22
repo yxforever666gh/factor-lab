@@ -1,8 +1,8 @@
-最新一次完成运行：configs/first_workflow.json（2026-03-20T00:06:38.052490+00:00）。
-上一轮完成运行：configs/tushare_workflow.json（2026-03-20T00:00:27.678208+00:00）。
+最新一次完成运行：artifacts/generated_configs/rolling_recent_45d.json（2026-03-22T18:00:33.019869+00:00）。
+上一轮完成运行：artifacts/generated_configs/rolling_120d_back.json（2026-03-22T18:00:11.684032+00:00）。
 
 候选池变化：
-- 新进入候选：mom_20、quality_minus_value、quality_roe、value_ep
+- 新进入候选：liquidity_turnover_shock、mom_20、mom_plus_value
 
 墓地变化：
-- 离开墓地：mom_20、mom_plus_value、size_small、value_bp、value_ep
+- 离开墓地：liquidity_turnover_shock、mom_20、mom_plus_value

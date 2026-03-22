@@ -1,0 +1,12 @@
+{
+  "source": "research_opportunity",
+  "opportunity_id": "opp-q-new-branch-hybrid-expansion",
+  "opportunity_type": "recombine",
+  "summary": "现有 hybrid 关系是否值得长出新的跨 family 分支？",
+  "jobs": [
+    {
+      "name": "recent_hybrid",
+      "config_path": "artifacts/generated_opportunity_configs/opp-q-new-branch-hybrid-expansion__recent_hybrid.json"
+    }
+  ]
+}

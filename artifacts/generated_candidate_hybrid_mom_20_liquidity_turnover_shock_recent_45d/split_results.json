@@ -1,0 +1,26 @@
+[
+  {
+    "factor_name": "hybrid_mom_20_liquidity_turnover_shock",
+    "expression": "(momentum_20) + (turnover_shock_5_20)",
+    "observations": 121,
+    "rank_ic_mean": 0.268595,
+    "rank_ic_std": 0.187128,
+    "rank_ic_ir": 1.435358,
+    "top_bottom_spread_mean": 0.039271,
+    "pass_gate": true,
+    "fail_reason": "",
+    "split": "first_half"
+  },
+  {
+    "factor_name": "hybrid_mom_20_liquidity_turnover_shock",
+    "expression": "(momentum_20) + (turnover_shock_5_20)",
+    "observations": 132,
+    "rank_ic_mean": 0.34697,
+    "rank_ic_std": 0.257847,
+    "rank_ic_ir": 1.345639,
+    "top_bottom_spread_mean": 0.02966,
+    "pass_gate": true,
+    "fail_reason": "",
+    "split": "second_half"
+  }
+]

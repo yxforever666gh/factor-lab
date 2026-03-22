@@ -1,0 +1,13 @@
+[
+  {
+    "factor_name": "hybrid_mom_20_mom_plus_value",
+    "expression": "(momentum_20) + (momentum_20 + earnings_yield)",
+    "score": 1.533356,
+    "raw_rank_ic_mean": 0.312648,
+    "raw_rank_ic_ir": 1.138553,
+    "neutralized_rank_ic_mean": 0.093651,
+    "neutralized_pass": true,
+    "split_fail_count": 0,
+    "high_corr_peers": []
+  }
+]

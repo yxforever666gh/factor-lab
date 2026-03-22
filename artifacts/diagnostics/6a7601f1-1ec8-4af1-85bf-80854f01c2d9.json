@@ -1,0 +1,19 @@
+{
+  "generated_at_utc": "2026-03-22T04:16:30.767491+00:00",
+  "diagnostic_type": "opportunity_diagnose",
+  "source_output_dir": "artifacts",
+  "reasons": [
+    "opportunity_selected",
+    "mapped_from:diagnose"
+  ],
+  "goal": "当前 graveyard 因子的失败是否共享共同原因？",
+  "hypothesis": "至少部分 graveyard 因子并非随机失败，而是共享可解释的结构性原因。",
+  "branch_id": "opp-q-graveyard-cause",
+  "expected_information_gain": [
+    "neutralization_diagnosis_requested",
+    "repeated_graveyard_confirmed"
+  ],
+  "stop_if": [],
+  "promote_if": [],
+  "disconfirm_if": []
+}

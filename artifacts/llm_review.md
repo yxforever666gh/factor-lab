@@ -1,26 +1,20 @@
+# LLM 研究评审（Mock）
+
 ## 本轮核心结论
-- 本轮样本覆盖 2026-01-01 至 2026-03-18，242 行数据、6 个因子，结果已完成。
-- 因子层面仍由动量主导：`mom_20` 平均分 1.398116 居首，`mom_plus_value` 以 1.140355 紧随，且两者均在 10 次中保持稳定候选。
-- 组合层面，未中性化的全因子多空策略表现最强，平均 Sharpe 10.837132、平均收益 1.670311；中性化后各策略指标明显回落。
+- 最新运行：33be80ce-922a-4baa-b346-a94d99e8f47e，配置 artifacts/generated_opportunity_configs/opp-child-expand-from-opp-q-stable-boundary__recent_45d.json。
+- 当前候选池：liquidity_turnover_shock, mom_20。
+- 当前墓地：无。
 
-## 候选池解读
-- 当前候选池仅有 `mom_20` 与 `mom_plus_value`，说明稳定性高度集中在动量及动量+估值复合方向。
-- 两个候选因子都完成 10/10 次候选命中，稳定性强于其余因子。
-- 候选池本轮无进出变化，延续上轮结构，说明当前有效信号没有新增扩散。
+## 评分最高因子
+- hybrid_mom_20_liquidity_turnover_shock：平均分 1.40651，出现 72 次。
+- hybrid_liquidity_turnover_shock_mom_20：平均分 1.388474，出现 31 次。
+- hybrid_mom_20_value_ep：平均分 1.159616，出现 79 次。
 
-## 墓地解读
-- 墓地包含 `liquidity_turnover_shock`、`size_small`、`value_bp`、`value_ep`。
-- 其中 `liquidity_turnover_shock` 与 `size_small` 虽然平均分分别为 0.5172 和 0.513371，但仍未进入稳定候选，说明得分尚可但稳定性或一致性不足。
-- `value_ep` 仅 0.391292，`value_bp` 为 -0.24034，纯估值方向当前相对弱势。
-- 墓地本轮同样无变化，表示弱势因子暂未出现修复迹象。
+## 组合观察
+- 当前平均表现最好的策略是 long_short_top_bottom_candidates_only，平均夏普 7.100569。
 
-## 组合层观察
-- 全因子组合优于候选池组合：`all_factors` 平均 Sharpe 10.837132，显著高于 `candidates_only` 的 5.441824，说明非候选因子仍可能提供分散化或补充收益。
-- `cluster_representatives` 也维持较高水平（平均 Sharpe 10.196009），表明压缩到代表性因子后，效果仍接近全因子。
-- 所有中性化策略表现均明显弱于未中性化版本，暗示本轮收益较大程度依赖未被中性化掉的方向性暴露。
+## 风险提示
+- 该评审由 mock provider 生成，内容基于结构化结果模板化总结，不代表真实外部大模型判断。
 
 ## 下一轮建议
-- 继续将 `mom_20` 与 `mom_plus_value` 作为核心跟踪对象，不建议在当前快照下下调其优先级。
-- 对 `liquidity_turnover_shock`、`size_small` 进行观察性复核，重点判断其为何得分不低但未转化为稳定候选。
-- 下一轮优先比较候选池组合、聚类代表组合与全因子组合的收益来源差异，确认是否需要保留部分非候选因子作为增强项。
-- 对中性化版本单独复盘，评估当前流程是否过度削弱有效暴露。
+- 继续跟踪稳定候选因子，并优先观察中性化后仍能存活的组合。

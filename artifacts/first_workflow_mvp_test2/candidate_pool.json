@@ -1,0 +1,50 @@
+[
+  {
+    "factor_name": "mom_20",
+    "expression": "momentum_20",
+    "raw_pass": true,
+    "raw_rank_ic_mean": 0.981143,
+    "raw_rank_ic_ir": 64.992119,
+    "neutralized_pass": null,
+    "neutralized_rank_ic_mean": null,
+    "split_fail_count": 0,
+    "high_corr_peers": []
+  },
+  {
+    "factor_name": "value_ep",
+    "expression": "earnings_yield",
+    "raw_pass": true,
+    "raw_rank_ic_mean": 0.575457,
+    "raw_rank_ic_ir": 12.79664,
+    "neutralized_pass": null,
+    "neutralized_rank_ic_mean": null,
+    "split_fail_count": 0,
+    "high_corr_peers": [
+      "quality_minus_value"
+    ]
+  },
+  {
+    "factor_name": "quality_roe",
+    "expression": "roe",
+    "raw_pass": true,
+    "raw_rank_ic_mean": 0.736473,
+    "raw_rank_ic_ir": 19.14013,
+    "neutralized_pass": null,
+    "neutralized_rank_ic_mean": null,
+    "split_fail_count": 0,
+    "high_corr_peers": []
+  },
+  {
+    "factor_name": "quality_minus_value",
+    "expression": "roe - pb",
+    "raw_pass": true,
+    "raw_rank_ic_mean": 0.643788,
+    "raw_rank_ic_ir": 15.313021,
+    "neutralized_pass": null,
+    "neutralized_rank_ic_mean": null,
+    "split_fail_count": 0,
+    "high_corr_peers": [
+      "value_ep"
+    ]
+  }
+]

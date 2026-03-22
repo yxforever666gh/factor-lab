@@ -1,30 +1,33 @@
 {
   "source": "/home/admin/.openclaw/workspace/artifacts/research_opportunities.json",
-  "considered": 3,
+  "considered": 0,
   "channel_limits": {
     "validation": 1,
-    "exploration": 1
+    "exploration": 4
   },
-  "injected_count": 2,
-  "injected": [
+  "injected_count": 0,
+  "injected": [],
+  "skipped": [
     {
-      "opportunity_id": "opp-q-graveyard-cause",
-      "task_id": "fe06f393-4bd2-4ce8-84ba-2a19d306a310",
-      "task_type": "diagnostic",
-      "priority": 6,
-      "channel": "validation",
-      "dedupe_bypass": true
+      "opportunity_id": "opp-full-run-followup-opp-q-graveyard-cause",
+      "reason": "recently_finished_same_fingerprint"
     },
     {
-      "opportunity_id": "opp-child-recombine-from-opp-q-graveyard-cause",
-      "task_id": "c4bd314b-20c1-4e82-9373-9098e8bedaeb",
-      "task_type": "generated_batch",
-      "priority": 40,
-      "channel": "exploration",
-      "dedupe_bypass": false
-    }
-  ],
-  "skipped": [
+      "opportunity_id": "opp-q-graveyard-cause",
+      "reason": "recently_finished_same_fingerprint"
+    },
+    {
+      "opportunity_id": "opp-q-recovery-to-opportunity-graveyard",
+      "reason": "recently_finished_same_fingerprint"
+    },
+    {
+      "opportunity_id": "opp-full-run-followup-opp-q-stable-boundary",
+      "reason": "recently_finished_same_fingerprint"
+    },
+    {
+      "opportunity_id": "opp-pattern-native-confirm-stable_candidate_validation-child-multi_target-stable_candidate_confirmed-partial_support-uncertainty_reduced",
+      "reason": "recently_finished_same_fingerprint"
+    },
     {
       "opportunity_id": "opp-q-stable-boundary",
       "reason": "recently_finished_same_fingerprint"
@@ -34,8 +37,24 @@
       "reason": "recently_finished_same_fingerprint"
     },
     {
-      "opportunity_id": "opp-q-recovery-to-opportunity-graveyard",
-      "reason": "channel_deferred:validation"
+      "opportunity_id": "opp-q-recovery-to-opportunity-stable",
+      "reason": "recently_finished_same_fingerprint"
+    },
+    {
+      "opportunity_id": "opp-pattern-native-recombine-exploration-root-pair_target-exploration_candidate_survived-new_branch_opened-recombination_productive-search_space_expanded",
+      "reason": "recently_finished_same_fingerprint"
+    },
+    {
+      "opportunity_id": "opp-pattern-native-recombine-graveyard_diagnosis-child-pair_target-exploration_candidate_survived-new_branch_opened-recombination_productive-search_space_expanded",
+      "reason": "recently_finished_same_fingerprint"
+    },
+    {
+      "opportunity_id": "opp-critic-frontier-positive-probe",
+      "reason": "recently_finished_same_fingerprint"
+    },
+    {
+      "opportunity_id": "opp-critic-meta-diversity-probe",
+      "reason": "recently_finished_same_fingerprint"
     }
   ]
 }

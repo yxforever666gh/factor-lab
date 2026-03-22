@@ -1,0 +1,19 @@
+[
+  {
+    "factor_name": "value_ep",
+    "expression": "earnings_yield",
+    "score": 0.55051,
+    "raw_rank_ic_mean": 0.18951,
+    "raw_rank_ic_ir": 1.150538,
+    "neutralized_rank_ic_mean": 0.034718,
+    "neutralized_pass": false,
+    "split_fail_count": 0,
+    "high_corr_peers": [],
+    "cluster_members": [
+      "value_ep"
+    ],
+    "cluster_rep_rank": 1,
+    "cluster_rep_count": 1,
+    "is_primary_representative": true
+  }
+]

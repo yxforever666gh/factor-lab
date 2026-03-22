@@ -1,0 +1,82 @@
+{
+  "run_id": "8672b930-2ba5-4629-9cd9-adf6a1b97688",
+  "generated_at_utc": "2026-03-22T16:18:39.136965+00:00",
+  "config": {
+    "data_source": "tushare",
+    "cache_dir": "artifacts/tushare_cache",
+    "output_dir": "artifacts/robustness_validation_batch/mom_plus_value__expanding_2025_09_01",
+    "start_date": "2025-09-01",
+    "end_date": "2026-03-18",
+    "universe_limit": 20,
+    "factors": [
+      {
+        "name": "mom_plus_value",
+        "expression": "momentum_20 + earnings_yield"
+      }
+    ],
+    "thresholds": {
+      "min_rank_ic": 0.02,
+      "min_top_bottom_spread": 0.0005
+    }
+  },
+  "dataset_rows": 1349,
+  "factor_count": 1,
+  "candidate_pool": [],
+  "graveyard": [
+    "mom_plus_value"
+  ],
+  "cluster_representatives": [
+    "mom_plus_value"
+  ],
+  "top_scores": [
+    {
+      "factor_name": "mom_plus_value",
+      "expression": "momentum_20 + earnings_yield",
+      "score": -0.812523,
+      "raw_rank_ic_mean": -0.036958,
+      "raw_rank_ic_ir": -0.107631,
+      "neutralized_rank_ic_mean": -0.034661,
+      "neutralized_pass": false,
+      "split_fail_count": 2,
+      "high_corr_peers": []
+    }
+  ],
+  "portfolio_results": [
+    {
+      "strategy_name": "long_short_top_bottom_all_factors",
+      "annual_return": -0.193875,
+      "annual_volatility": 0.351461,
+      "sharpe": -0.551626,
+      "max_drawdown": -0.769614,
+      "avg_turnover": 0.388889,
+      "observations": 124
+    },
+    {
+      "strategy_name": "long_short_top_bottom_cluster_representatives",
+      "annual_return": -0.193875,
+      "annual_volatility": 0.351461,
+      "sharpe": -0.551626,
+      "max_drawdown": -0.769614,
+      "avg_turnover": 0.388889,
+      "observations": 124
+    },
+    {
+      "strategy_name": "long_short_top_bottom_cluster_representatives_neutralized",
+      "annual_return": -0.230845,
+      "annual_volatility": 0.275783,
+      "sharpe": -0.837052,
+      "max_drawdown": -0.738812,
+      "avg_turnover": 1.195122,
+      "observations": 124
+    },
+    {
+      "strategy_name": "long_short_top_bottom_neutralized",
+      "annual_return": -0.230845,
+      "annual_volatility": 0.275783,
+      "sharpe": -0.837052,
+      "max_drawdown": -0.738812,
+      "avg_turnover": 1.195122,
+      "observations": 124
+    }
+  ]
+}

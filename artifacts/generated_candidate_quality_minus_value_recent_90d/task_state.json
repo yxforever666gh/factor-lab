@@ -1,0 +1,9 @@
+{
+  "task_id": "e3e54d1f-af22-429e-8885-e19bfbc46377",
+  "config_path": "artifacts/generated_configs/candidate_quality_minus_value_recent_90d.json",
+  "output_dir": "artifacts/generated_candidate_quality_minus_value_recent_90d",
+  "status": "finished",
+  "started_at_utc": "2026-03-21T19:39:06.994316+00:00",
+  "finished_at_utc": "2026-03-21T19:39:08.937546+00:00",
+  "error": null
+}

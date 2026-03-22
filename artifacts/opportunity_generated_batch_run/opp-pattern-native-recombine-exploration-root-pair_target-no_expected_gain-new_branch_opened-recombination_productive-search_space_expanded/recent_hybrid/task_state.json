@@ -1,0 +1,9 @@
+{
+  "task_id": "a2e68ed8-ab50-43f4-bd1c-0cba0b0f4a0d",
+  "config_path": "artifacts/generated_opportunity_configs/opp-pattern-native-recombine-exploration-root-pair_target-no_expected_gain-new_branch_opened-recombination_productive-search_space_expanded__recent_hybrid.json",
+  "output_dir": "artifacts/opportunity_generated_batch_run/opp-pattern-native-recombine-exploration-root-pair_target-no_expected_gain-new_branch_opened-recombination_productive-search_space_expanded/recent_hybrid",
+  "status": "finished",
+  "started_at_utc": "2026-03-21T19:42:20.230055+00:00",
+  "finished_at_utc": "2026-03-21T19:42:22.357344+00:00",
+  "error": null
+}

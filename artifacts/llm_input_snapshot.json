@@ -1,114 +1,150 @@
 {
   "latest_run": {
-    "run_id": "2b7acad1-9ae0-4fd5-af53-e5e6cc993c2d",
-    "created_at_utc": "2026-03-18T19:30:02.223513+00:00",
-    "config_path": "configs/tushare_workflow_longer.json",
+    "run_id": "33be80ce-922a-4baa-b346-a94d99e8f47e",
+    "created_at_utc": "2026-03-22T16:05:54.035490+00:00",
+    "config_path": "artifacts/generated_opportunity_configs/opp-child-expand-from-opp-q-stable-boundary__recent_45d.json",
     "data_source": "tushare",
-    "start_date": "2026-01-01",
+    "start_date": "2026-02-01",
     "end_date": "2026-03-18",
     "status": "finished",
-    "dataset_rows": 242,
-    "factor_count": 6
+    "dataset_rows": 253,
+    "factor_count": 2
   },
   "top_scores": [
     {
-      "factor_name": "mom_20",
-      "avg_score": 1.398116,
-      "runs": 13
+      "factor_name": "hybrid_mom_20_liquidity_turnover_shock",
+      "avg_score": 1.40651,
+      "runs": 72
     },
     {
-      "factor_name": "mom_plus_value",
-      "avg_score": 1.140355,
-      "runs": 13
+      "factor_name": "hybrid_liquidity_turnover_shock_mom_20",
+      "avg_score": 1.388474,
+      "runs": 31
+    },
+    {
+      "factor_name": "hybrid_mom_20_value_ep",
+      "avg_score": 1.159616,
+      "runs": 79
+    },
+    {
+      "factor_name": "hybrid_liquidity_turnover_shock_value_ep",
+      "avg_score": 0.985774,
+      "runs": 3
+    },
+    {
+      "factor_name": "hybrid_size_small_value_bp",
+      "avg_score": 0.552088,
+      "runs": 27
     },
     {
       "factor_name": "liquidity_turnover_shock",
-      "avg_score": 0.5172,
-      "runs": 13
-    },
-    {
-      "factor_name": "size_small",
-      "avg_score": 0.513371,
-      "runs": 13
+      "avg_score": 0.260334,
+      "runs": 3322
     },
     {
       "factor_name": "value_ep",
-      "avg_score": 0.391292,
-      "runs": 12
+      "avg_score": 0.231991,
+      "runs": 3242
+    },
+    {
+      "factor_name": "size_small",
+      "avg_score": 0.077525,
+      "runs": 3173
+    },
+    {
+      "factor_name": "mom_20",
+      "avg_score": 0.002739,
+      "runs": 3435
     },
     {
       "factor_name": "value_bp",
-      "avg_score": -0.24034,
-      "runs": 12
+      "avg_score": -0.227749,
+      "runs": 3111
     }
   ],
   "stable_candidates": [
     {
       "factor_name": "mom_20",
-      "candidate_runs": 13
+      "candidate_runs": 990
+    },
+    {
+      "factor_name": "liquidity_turnover_shock",
+      "candidate_runs": 890
     },
     {
       "factor_name": "mom_plus_value",
-      "candidate_runs": 13
+      "candidate_runs": 735
+    },
+    {
+      "factor_name": "hybrid_mom_20_value_ep",
+      "candidate_runs": 78
+    },
+    {
+      "factor_name": "hybrid_mom_20_liquidity_turnover_shock",
+      "candidate_runs": 71
+    },
+    {
+      "factor_name": "hybrid_liquidity_turnover_shock_mom_20",
+      "candidate_runs": 30
+    },
+    {
+      "factor_name": "value_bp",
+      "candidate_runs": 22
+    },
+    {
+      "factor_name": "hybrid_liquidity_turnover_shock_value_ep",
+      "candidate_runs": 2
     }
   ],
   "portfolio_averages": [
     {
+      "strategy_name": "long_short_top_bottom_candidates_only",
+      "avg_sharpe": 7.100569,
+      "avg_return": 1.363744,
+      "runs": 1026
+    },
+    {
       "strategy_name": "long_short_top_bottom_all_factors",
-      "avg_sharpe": 10.765975,
-      "avg_return": 1.663704,
-      "runs": 13
+      "avg_sharpe": 3.346685,
+      "avg_return": 0.561191,
+      "runs": 3564
     },
     {
       "strategy_name": "long_short_top_bottom_cluster_representatives",
-      "avg_sharpe": 10.19247,
-      "avg_return": 1.542962,
-      "runs": 13
-    },
-    {
-      "strategy_name": "long_short_top_bottom_candidates_only",
-      "avg_sharpe": 5.441824,
-      "avg_return": 1.213329,
-      "runs": 13
-    },
-    {
-      "strategy_name": "long_short_top_bottom_cluster_representatives_neutralized",
-      "avg_sharpe": 1.428187,
-      "avg_return": 0.195342,
-      "runs": 13
+      "avg_sharpe": 2.782197,
+      "avg_return": 0.414816,
+      "runs": 3564
     },
     {
       "strategy_name": "long_short_top_bottom_candidates_only_neutralized",
-      "avg_sharpe": 0.889911,
-      "avg_return": 0.155334,
-      "runs": 13
+      "avg_sharpe": 2.182252,
+      "avg_return": 0.34492,
+      "runs": 1026
     },
     {
       "strategy_name": "long_short_top_bottom_neutralized",
-      "avg_sharpe": 0.353085,
-      "avg_return": 0.042117,
-      "runs": 13
+      "avg_sharpe": -0.116239,
+      "avg_return": -0.034062,
+      "runs": 3564
+    },
+    {
+      "strategy_name": "long_short_top_bottom_cluster_representatives_neutralized",
+      "avg_sharpe": -0.505313,
+      "avg_return": -0.125707,
+      "runs": 3564
     }
   ],
   "latest_candidates": [
-    "mom_20",
-    "mom_plus_value"
-  ],
-  "latest_graveyard": [
     "liquidity_turnover_shock",
-    "size_small",
-    "value_bp",
-    "value_ep"
+    "mom_20"
   ],
+  "latest_graveyard": [],
   "latest_top_ranked_factors": [
     "mom_20",
-    "mom_plus_value",
-    "liquidity_turnover_shock",
-    "size_small",
-    "value_ep"
+    "liquidity_turnover_shock"
   ],
-  "latest_summary": "Latest run: 2b7acad1-9ae0-4fd5-af53-e5e6cc993c2d (2026-03-18T19:30:02.223513+00:00) from configs/tushare_workflow_longer.json\nBest average strategy: long_short_top_bottom_all_factors (avg_sharpe=10.765975)\nStable candidates: mom_20, mom_plus_value",
-  "change_report": "# Change Detection\n\nLatest run: 2b7acad1-9ae0-4fd5-af53-e5e6cc993c2d | 2026-03-18T19:30:02.223513+00:00 | configs/tushare_workflow_longer.json\nPrevious run: cd132a3d-d188-4941-837e-c7ce41d25213 | 2026-03-18T19:29:57.556862+00:00 | configs/tushare_workflow.json\n\n## Candidate Pool Changes\n- Entered: none\n- Left: none\n\n## Graveyard Changes\n- Entered: none\n- Left: none",
+  "latest_summary": "最新一次完成的研究任务来自 artifacts/generated_opportunity_configs/opp-child-expand-from-opp-q-stable-boundary__recent_45d.json。\n运行时间：2026-03-22T16:05:54.035490+00:00。\n当前长期平均表现最好的策略是 long_short_top_bottom_candidates_only，平均夏普 7.10。\n目前最稳定的候选因子：mom_20、liquidity_turnover_shock、mom_plus_value、hybrid_mom_20_value_ep、hybrid_mom_20_liquidity_turnover_shock。\n当前候选榜单前列：mom_20(fragile, 10.128923)；hybrid_mom_20_liquidity_turnover_shock(fragile, 10.072773)；hybrid_liquidity_turnover_shock_mom_20(fragile, 10.072773)；liquidity_turnover_shock(fragile, 9.938888)；mom_plus_value(fragile, 9.601585)。",
+  "change_report": "最新一次完成运行：artifacts/generated_opportunity_configs/opp-child-expand-from-opp-q-stable-boundary__recent_45d.json（2026-03-22T16:05:54.035490+00:00）。\n上一轮完成运行：artifacts/generated_configs/rolling_recent_45d.json（2026-03-22T16:05:37.778857+00:00）。\n\n候选池变化：\n- 退出候选：mom_plus_value\n\n墓地变化：\n- 离开墓地：size_small、value_bp、value_ep",
   "recommendation_weights": {
     "templates": {
       "neutralization_diagnosis": {

@@ -1,0 +1,9 @@
+{
+  "task_id": "92b035db-6365-4c60-a954-f6bbe6ec3756",
+  "config_path": "artifacts/generated_opportunity_configs/opp-child-expand-from-opp-pattern-native-confirm-stable_candidate_validation-root-multi_target-stable_candidate_confirmed-partial_support-uncertainty_reduced__recent_45d.json",
+  "output_dir": "artifacts/opportunity_generated_batch_run/opp-child-expand-from-opp-pattern-native-confirm-stable_candidate_validation-root-multi_target-stable_candidate_confirmed-partial_support-uncertainty_reduced/recent_45d",
+  "status": "finished",
+  "started_at_utc": "2026-03-21T19:31:03.543676+00:00",
+  "finished_at_utc": "2026-03-21T19:31:05.175557+00:00",
+  "error": null
+}

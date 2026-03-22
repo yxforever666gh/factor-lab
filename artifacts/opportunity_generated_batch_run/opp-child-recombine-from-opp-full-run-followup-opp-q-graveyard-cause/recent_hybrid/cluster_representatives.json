@@ -1,0 +1,39 @@
+[
+  {
+    "factor_name": "hybrid_liquidity_turnover_shock_mom_20",
+    "expression": "(turnover_shock_5_20) + (momentum_20)",
+    "score": 1.420146,
+    "raw_rank_ic_mean": 0.309486,
+    "raw_rank_ic_ir": 1.34473,
+    "neutralized_rank_ic_mean": 0.081574,
+    "neutralized_pass": true,
+    "split_fail_count": 0,
+    "high_corr_peers": [
+      "liquidity_turnover_shock"
+    ],
+    "cluster_members": [
+      "hybrid_liquidity_turnover_shock_mom_20",
+      "liquidity_turnover_shock"
+    ],
+    "cluster_rep_rank": 1,
+    "cluster_rep_count": 1,
+    "is_primary_representative": true
+  },
+  {
+    "factor_name": "mom_20",
+    "expression": "momentum_20",
+    "score": 1.37731,
+    "raw_rank_ic_mean": 0.326877,
+    "raw_rank_ic_ir": 1.239817,
+    "neutralized_rank_ic_mean": 0.024715,
+    "neutralized_pass": true,
+    "split_fail_count": 0,
+    "high_corr_peers": [],
+    "cluster_members": [
+      "mom_20"
+    ],
+    "cluster_rep_rank": 1,
+    "cluster_rep_count": 1,
+    "is_primary_representative": true
+  }
+]

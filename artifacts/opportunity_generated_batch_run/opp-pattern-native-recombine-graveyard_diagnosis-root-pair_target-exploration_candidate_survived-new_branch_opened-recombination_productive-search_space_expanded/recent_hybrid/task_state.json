@@ -1,0 +1,9 @@
+{
+  "task_id": "755b3fed-08e1-4cf2-bda2-fc4c7f41119b",
+  "config_path": "artifacts/generated_opportunity_configs/opp-pattern-native-recombine-graveyard_diagnosis-root-pair_target-exploration_candidate_survived-new_branch_opened-recombination_productive-search_space_expanded__recent_hybrid.json",
+  "output_dir": "artifacts/opportunity_generated_batch_run/opp-pattern-native-recombine-graveyard_diagnosis-root-pair_target-exploration_candidate_survived-new_branch_opened-recombination_productive-search_space_expanded/recent_hybrid",
+  "status": "finished",
+  "started_at_utc": "2026-03-21T20:59:51.964186+00:00",
+  "finished_at_utc": "2026-03-21T20:59:52.871276+00:00",
+  "error": null
+}

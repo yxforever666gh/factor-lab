@@ -1,0 +1,18 @@
+{
+  "state": "recovering",
+  "reasons": [
+    "recovery_branch_still_active"
+  ],
+  "candidate_count": 1,
+  "recovery_used": false,
+  "recovery_active_branch_count": 1,
+  "recent_recovery_event_count": 5,
+  "recent_recovery_success": true,
+  "injected_count": 0,
+  "queue_counts": {
+    "pending": 0,
+    "running": 0,
+    "finished": 100,
+    "failed": 0
+  }
+}

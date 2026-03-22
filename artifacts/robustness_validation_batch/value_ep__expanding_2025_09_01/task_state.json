@@ -1,0 +1,9 @@
+{
+  "task_id": "4c6c3935-a247-4619-bac2-4cfd907e5abc",
+  "config_path": "artifacts/generated_robustness_configs/value_ep__expanding_2025_09_01.json",
+  "output_dir": "artifacts/robustness_validation_batch/value_ep__expanding_2025_09_01",
+  "status": "finished",
+  "started_at_utc": "2026-03-22T16:18:18.062872+00:00",
+  "finished_at_utc": "2026-03-22T16:18:24.874616+00:00",
+  "error": null
+}

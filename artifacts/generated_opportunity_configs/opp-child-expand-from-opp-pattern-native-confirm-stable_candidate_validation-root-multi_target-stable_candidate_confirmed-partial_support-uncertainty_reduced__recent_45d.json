@@ -1,0 +1,32 @@
+{
+  "data_source": "tushare",
+  "cache_dir": "artifacts/tushare_cache",
+  "output_dir": "artifacts/opportunity_runs/opp-child-expand-from-opp-pattern-native-confirm-stable_candidate_validation-root-multi_target-stable_candidate_confirmed-partial_support-uncertainty_reduced/recent_45d",
+  "start_date": "2026-02-01",
+  "end_date": "2026-03-18",
+  "universe_limit": 20,
+  "factors": [
+    {
+      "name": "mom_20",
+      "expression": "momentum_20"
+    },
+    {
+      "name": "mom_plus_value",
+      "expression": "momentum_20 + earnings_yield"
+    }
+  ],
+  "thresholds": {
+    "min_rank_ic": 0.02,
+    "min_top_bottom_spread": 0.0005
+  },
+  "opportunity_context": {
+    "opportunity_id": "opp-child-expand-from-opp-pattern-native-confirm-stable_candidate_validation-root-multi_target-stable_candidate_confirmed-partial_support-uncertainty_reduced",
+    "opportunity_type": "expand",
+    "target_family": "stable_candidate_validation",
+    "target_candidates": [
+      "mom_20",
+      "mom_plus_value"
+    ],
+    "question": "opp-pattern-native-confirm-stable_candidate_validation-root-multi_target-stable_candidate_confirmed-partial_support-uncertainty_reduced 已确认，下一步应扩展哪种验证维度？"
+  }
+}

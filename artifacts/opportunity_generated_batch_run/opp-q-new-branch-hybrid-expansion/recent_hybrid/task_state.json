@@ -1,0 +1,9 @@
+{
+  "task_id": "fd5426b6-c186-4fc1-ba3f-350fee5260df",
+  "config_path": "artifacts/generated_opportunity_configs/opp-q-new-branch-hybrid-expansion__recent_hybrid.json",
+  "output_dir": "artifacts/opportunity_generated_batch_run/opp-q-new-branch-hybrid-expansion/recent_hybrid",
+  "status": "failed",
+  "started_at_utc": "2026-03-21T20:34:58.579327+00:00",
+  "finished_at_utc": "2026-03-21T20:34:58.580530+00:00",
+  "error": "malformed database schema (sqlite_autoindex_research_trial_log_1) - orphan index"
+}

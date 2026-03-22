@@ -1,0 +1,9 @@
+{
+  "task_id": "c35c0ec6-b396-420a-aabc-10a1bb70bcb1",
+  "config_path": "artifacts/generated_opportunity_configs/opp-pattern-native-probe-none-root-multi_target-no_expected_gain-new_branch_opened-probe_promising-uncertainty_reduced__probe_recent_30d.json",
+  "output_dir": "artifacts/opportunity_generated_batch_run/opp-pattern-native-probe-none-root-multi_target-no_expected_gain-new_branch_opened-probe_promising-uncertainty_reduced/probe_recent_30d",
+  "status": "finished",
+  "started_at_utc": "2026-03-21T20:34:21.958974+00:00",
+  "finished_at_utc": "2026-03-21T20:34:23.099816+00:00",
+  "error": null
+}

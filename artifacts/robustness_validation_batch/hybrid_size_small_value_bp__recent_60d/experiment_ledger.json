@@ -1,0 +1,82 @@
+{
+  "run_id": "6a392a0c-ff86-4f33-a7e9-c12e6ef71879",
+  "generated_at_utc": "2026-03-22T16:08:18.743298+00:00",
+  "config": {
+    "data_source": "tushare",
+    "cache_dir": "artifacts/tushare_cache",
+    "output_dir": "artifacts/robustness_validation_batch/hybrid_size_small_value_bp__recent_60d",
+    "start_date": "2026-01-17",
+    "end_date": "2026-03-18",
+    "universe_limit": 20,
+    "factors": [
+      {
+        "name": "hybrid_size_small_value_bp",
+        "expression": "(size_inv) + (book_yield)"
+      }
+    ],
+    "thresholds": {
+      "min_rank_ic": 0.02,
+      "min_top_bottom_spread": 0.0005
+    }
+  },
+  "dataset_rows": 363,
+  "factor_count": 1,
+  "candidate_pool": [],
+  "graveyard": [
+    "hybrid_size_small_value_bp"
+  ],
+  "cluster_representatives": [
+    "hybrid_size_small_value_bp"
+  ],
+  "top_scores": [
+    {
+      "factor_name": "hybrid_size_small_value_bp",
+      "expression": "(size_inv) + (book_yield)",
+      "score": 0.560857,
+      "raw_rank_ic_mean": 0.310635,
+      "raw_rank_ic_ir": 1.288631,
+      "neutralized_rank_ic_mean": -0.069675,
+      "neutralized_pass": false,
+      "split_fail_count": 0,
+      "high_corr_peers": []
+    }
+  ],
+  "portfolio_results": [
+    {
+      "strategy_name": "long_short_top_bottom_all_factors",
+      "annual_return": 0.94622,
+      "annual_volatility": 0.24675,
+      "sharpe": 3.834723,
+      "max_drawdown": -0.115124,
+      "avg_turnover": 0.010417,
+      "observations": 33
+    },
+    {
+      "strategy_name": "long_short_top_bottom_cluster_representatives",
+      "annual_return": 0.94622,
+      "annual_volatility": 0.24675,
+      "sharpe": 3.834723,
+      "max_drawdown": -0.115124,
+      "avg_turnover": 0.010417,
+      "observations": 33
+    },
+    {
+      "strategy_name": "long_short_top_bottom_cluster_representatives_neutralized",
+      "annual_return": -0.191197,
+      "annual_volatility": 0.182485,
+      "sharpe": -1.047741,
+      "max_drawdown": -0.242665,
+      "avg_turnover": 1.164521,
+      "observations": 33
+    },
+    {
+      "strategy_name": "long_short_top_bottom_neutralized",
+      "annual_return": -0.191197,
+      "annual_volatility": 0.182485,
+      "sharpe": -1.047741,
+      "max_drawdown": -0.242665,
+      "avg_turnover": 1.164521,
+      "observations": 33
+    }
+  ]
+}

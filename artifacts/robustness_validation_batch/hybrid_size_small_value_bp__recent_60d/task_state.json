@@ -1,0 +1,9 @@
+{
+  "task_id": "6a392a0c-ff86-4f33-a7e9-c12e6ef71879",
+  "config_path": "artifacts/generated_robustness_configs/hybrid_size_small_value_bp__recent_60d.json",
+  "output_dir": "artifacts/robustness_validation_batch/hybrid_size_small_value_bp__recent_60d",
+  "status": "finished",
+  "started_at_utc": "2026-03-22T16:08:17.411168+00:00",
+  "finished_at_utc": "2026-03-22T16:08:20.121413+00:00",
+  "error": null
+}

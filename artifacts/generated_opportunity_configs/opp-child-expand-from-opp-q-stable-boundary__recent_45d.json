@@ -11,8 +11,8 @@
       "expression": "momentum_20"
     },
     {
-      "name": "mom_plus_value",
-      "expression": "momentum_20 + earnings_yield"
+      "name": "liquidity_turnover_shock",
+      "expression": "turnover_shock_5_20"
     }
   ],
   "thresholds": {
@@ -25,7 +25,7 @@
     "target_family": "stable_candidate_validation",
     "target_candidates": [
       "mom_20",
-      "mom_plus_value"
+      "liquidity_turnover_shock"
     ],
     "question": "opp-q-stable-boundary 已确认，下一步应扩展哪种验证维度？"
   }

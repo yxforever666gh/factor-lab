@@ -1,0 +1,13 @@
+[
+  {
+    "factor_name": "value_ep",
+    "expression": "earnings_yield",
+    "score": 0.512687,
+    "raw_rank_ic_mean": 0.19863,
+    "raw_rank_ic_ir": 1.277065,
+    "neutralized_rank_ic_mean": 0.008184,
+    "neutralized_pass": false,
+    "split_fail_count": 0,
+    "high_corr_peers": []
+  }
+]

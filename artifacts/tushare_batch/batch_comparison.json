@@ -3,27 +3,22 @@
     {
       "job_name": "recent_window",
       "total_factors": 6,
-      "candidate_count": 2,
-      "graveyard_count": 4
+      "candidate_count": 0,
+      "graveyard_count": 6
     },
     {
       "job_name": "longer_window",
       "total_factors": 6,
-      "candidate_count": 2,
-      "graveyard_count": 4
+      "candidate_count": 0,
+      "graveyard_count": 6
     }
   ],
-  "candidate_presence": {
+  "candidate_presence": {},
+  "graveyard_presence": {
     "mom_20": [
       "recent_window",
       "longer_window"
     ],
-    "mom_plus_value": [
-      "recent_window",
-      "longer_window"
-    ]
-  },
-  "graveyard_presence": {
     "value_ep": [
       "recent_window",
       "longer_window"
@@ -37,6 +32,10 @@
       "longer_window"
     ],
     "liquidity_turnover_shock": [
+      "recent_window",
+      "longer_window"
+    ],
+    "mom_plus_value": [
       "recent_window",
       "longer_window"
     ]

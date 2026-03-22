@@ -1,0 +1,9 @@
+{
+  "task_id": "c99f0590-f707-4f84-8fe5-7a021a81db87",
+  "config_path": "artifacts/generated_configs/candidate_mom_20_recent_45d.json",
+  "output_dir": "artifacts/generated_candidate_mom_20_recent_45d",
+  "status": "finished",
+  "started_at_utc": "2026-03-20T22:37:35.784532+00:00",
+  "finished_at_utc": "2026-03-20T22:37:37.567903+00:00",
+  "error": null
+}

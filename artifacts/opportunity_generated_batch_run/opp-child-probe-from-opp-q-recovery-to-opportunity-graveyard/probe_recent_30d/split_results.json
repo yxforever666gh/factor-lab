@@ -1,0 +1,50 @@
+[
+  {
+    "factor_name": "mom_20",
+    "expression": "momentum_20",
+    "observations": 66,
+    "rank_ic_mean": 0.427273,
+    "rank_ic_std": 0.257825,
+    "rank_ic_ir": 1.657219,
+    "top_bottom_spread_mean": 0.048109,
+    "pass_gate": true,
+    "fail_reason": "",
+    "split": "first_half"
+  },
+  {
+    "factor_name": "mom_20",
+    "expression": "momentum_20",
+    "observations": 77,
+    "rank_ic_mean": 0.327273,
+    "rank_ic_std": 0.120702,
+    "rank_ic_ir": 2.711402,
+    "top_bottom_spread_mean": 0.038991,
+    "pass_gate": true,
+    "fail_reason": "",
+    "split": "second_half"
+  },
+  {
+    "factor_name": "value_ep",
+    "expression": "earnings_yield",
+    "observations": 66,
+    "rank_ic_mean": 0.227273,
+    "rank_ic_std": 0.204831,
+    "rank_ic_ir": 1.10956,
+    "top_bottom_spread_mean": 0.036792,
+    "pass_gate": true,
+    "fail_reason": "",
+    "split": "first_half"
+  },
+  {
+    "factor_name": "value_ep",
+    "expression": "earnings_yield",
+    "observations": 77,
+    "rank_ic_mean": 0.157143,
+    "rank_ic_std": 0.110244,
+    "rank_ic_ir": 1.425405,
+    "top_bottom_spread_mean": 0.026732,
+    "pass_gate": true,
+    "fail_reason": "",
+    "split": "second_half"
+  }
+]

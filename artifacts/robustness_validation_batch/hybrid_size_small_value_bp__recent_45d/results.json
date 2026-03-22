@@ -1,0 +1,13 @@
+[
+  {
+    "factor_name": "hybrid_size_small_value_bp",
+    "expression": "(size_inv) + (book_yield)",
+    "observations": 253,
+    "rank_ic_mean": 0.314625,
+    "rank_ic_std": 0.239876,
+    "rank_ic_ir": 1.311615,
+    "top_bottom_spread_mean": 0.013115,
+    "pass_gate": true,
+    "fail_reason": ""
+  }
+]

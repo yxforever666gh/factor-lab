@@ -1,0 +1,23 @@
+{
+  "generated_at_utc": "2026-03-22T01:26:35.548507+00:00",
+  "diagnostic_type": "graveyard_raw_vs_neutral_review",
+  "source_output_dir": "artifacts/tushare_batch",
+  "reasons": [
+    "recent_graveyard_needs_deeper_review"
+  ],
+  "goal": "diagnose_graveyard_failures",
+  "hypothesis": "graveyard 中的失败因子包含可解释的结构性失败模式，而不是随机噪声。",
+  "branch_id": "graveyard_diagnosis_level_3",
+  "expected_information_gain": [
+    "graveyard_raw_vs_neutral_requested"
+  ],
+  "stop_if": [
+    "graveyard_diagnosis_finds_no_new_failure_pattern_twice"
+  ],
+  "promote_if": [
+    "graveyard_diagnosis_identifies_actionable_failure_pattern"
+  ],
+  "disconfirm_if": [
+    "graveyard_members_behave_inconsistently_without_shared_pattern"
+  ]
+}

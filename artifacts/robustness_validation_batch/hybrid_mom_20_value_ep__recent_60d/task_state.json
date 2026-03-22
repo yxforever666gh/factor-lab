@@ -1,0 +1,9 @@
+{
+  "task_id": "18fc9247-e03d-4680-a9e9-8501550988de",
+  "config_path": "artifacts/generated_robustness_configs/hybrid_mom_20_value_ep__recent_60d.json",
+  "output_dir": "artifacts/robustness_validation_batch/hybrid_mom_20_value_ep__recent_60d",
+  "status": "finished",
+  "started_at_utc": "2026-03-22T16:17:47.884103+00:00",
+  "finished_at_utc": "2026-03-22T16:17:54.425121+00:00",
+  "error": null
+}

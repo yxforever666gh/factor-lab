@@ -1,0 +1,8 @@
+[
+  {
+    "job_name": "probe_recent_30d",
+    "total_factors": 2,
+    "candidate_count": 1,
+    "graveyard_count": 1
+  }
+]

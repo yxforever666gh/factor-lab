@@ -1,0 +1,9 @@
+{
+  "task_id": "bba3cdbf-8f02-47b0-9f48-a80ecef20b02",
+  "config_path": "artifacts/generated_opportunity_configs/opp-full-run-followup-opp-child-expand-from-opp-q-stable-boundary__recent_45d.json",
+  "output_dir": "artifacts/opportunity_generated_batch_run/opp-full-run-followup-opp-child-expand-from-opp-q-stable-boundary/recent_45d",
+  "status": "finished",
+  "started_at_utc": "2026-03-21T19:28:43.267988+00:00",
+  "finished_at_utc": "2026-03-21T19:28:44.893265+00:00",
+  "error": null
+}

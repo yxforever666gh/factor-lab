@@ -104,15 +104,34 @@ CREATE TABLE IF NOT EXISTS exposure_factors (
     factor_name TEXT NOT NULL,
     exposure_type TEXT NOT NULL,
     exposure_label TEXT,
+    bucket_key TEXT,
+    bucket_label TEXT,
+    effective_bucket_key TEXT,
+    effective_bucket_label TEXT,
     strength_score REAL,
     raw_rank_ic_mean REAL,
     raw_rank_ic_ir REAL,
     neutralized_rank_ic_mean REAL,
     neutralized_pass_gate INTEGER,
+    retention_industry REAL,
+    retention_industry_size REAL,
+    retention_full REAL,
+    industry_top1_weight REAL,
+    industry_hhi REAL,
+    turnover_daily REAL,
+    net_metric REAL,
+    liquidity_bottom20_retention REAL,
+    strength_subscore REAL,
+    robustness_subscore REAL,
+    controllability_subscore REAL,
+    implementability_subscore REAL,
+    novelty_subscore REAL,
+    total_score REAL,
     split_fail_count INTEGER,
     crowding_peers INTEGER,
     recommended_max_weight REAL,
     status TEXT NOT NULL,
+    hard_flags_json TEXT,
     notes_json TEXT,
     created_at_utc TEXT NOT NULL,
     updated_at_utc TEXT NOT NULL,
@@ -280,6 +299,32 @@ class ExperimentStore:
         if risk_cols and "profile_json" not in risk_cols:
             self.conn.execute("ALTER TABLE candidate_risk_profile ADD COLUMN profile_json TEXT")
 
+        exposure_cols = {row[1] for row in self.conn.execute("PRAGMA table_info(exposure_factors)").fetchall()}
+        exposure_additions = {
+            "bucket_key": "TEXT",
+            "bucket_label": "TEXT",
+            "effective_bucket_key": "TEXT",
+            "effective_bucket_label": "TEXT",
+            "retention_industry": "REAL",
+            "retention_industry_size": "REAL",
+            "retention_full": "REAL",
+            "industry_top1_weight": "REAL",
+            "industry_hhi": "REAL",
+            "turnover_daily": "REAL",
+            "net_metric": "REAL",
+            "liquidity_bottom20_retention": "REAL",
+            "strength_subscore": "REAL",
+            "robustness_subscore": "REAL",
+            "controllability_subscore": "REAL",
+            "implementability_subscore": "REAL",
+            "novelty_subscore": "REAL",
+            "total_score": "REAL",
+            "hard_flags_json": "TEXT",
+        }
+        for col_name, col_type in exposure_additions.items():
+            if exposure_cols and col_name not in exposure_cols:
+                self.conn.execute(f"ALTER TABLE exposure_factors ADD COLUMN {col_name} {col_type}")
+
         trial_cols = {row[1] for row in self.conn.execute("PRAGMA table_info(research_trial_log)").fetchall()}
         if trial_cols and "details_json" not in trial_cols:
             self.conn.execute("ALTER TABLE research_trial_log ADD COLUMN details_json TEXT")
@@ -362,15 +407,34 @@ class ExperimentStore:
                     row["factor_name"],
                     row["exposure_type"],
                     row.get("exposure_label"),
+                    row.get("bucket_key"),
+                    row.get("bucket_label"),
+                    row.get("effective_bucket_key"),
+                    row.get("effective_bucket_label"),
                     row.get("strength_score"),
                     row.get("raw_rank_ic_mean"),
                     row.get("raw_rank_ic_ir"),
                     row.get("neutralized_rank_ic_mean"),
                     (int(bool(row.get("neutralized_pass_gate"))) if row.get("neutralized_pass_gate") is not None else None),
+                    row.get("retention_industry"),
+                    row.get("retention_industry_size"),
+                    row.get("retention_full"),
+                    row.get("industry_top1_weight"),
+                    row.get("industry_hhi"),
+                    row.get("turnover_daily"),
+                    row.get("net_metric"),
+                    row.get("liquidity_bottom20_retention"),
+                    row.get("strength_subscore"),
+                    row.get("robustness_subscore"),
+                    row.get("controllability_subscore"),
+                    row.get("implementability_subscore"),
+                    row.get("novelty_subscore"),
+                    row.get("total_score"),
                     row.get("split_fail_count"),
                     row.get("crowding_peers"),
                     row.get("recommended_max_weight"),
                     row.get("status") or "watch",
+                    json.dumps(row.get("hard_flags") or [], ensure_ascii=False),
                     json.dumps(row.get("notes") or {}, ensure_ascii=False),
                     row.get("created_at_utc") or now,
                     row.get("updated_at_utc") or now,
@@ -380,11 +444,16 @@ class ExperimentStore:
         self.conn.executemany(
             """
             INSERT OR REPLACE INTO exposure_factors (
-                run_id, factor_name, exposure_type, exposure_label, strength_score,
-                raw_rank_ic_mean, raw_rank_ic_ir, neutralized_rank_ic_mean, neutralized_pass_gate,
-                split_fail_count, crowding_peers, recommended_max_weight, status, notes_json,
+                run_id, factor_name, exposure_type, exposure_label,
+                bucket_key, bucket_label, effective_bucket_key, effective_bucket_label,
+                strength_score, raw_rank_ic_mean, raw_rank_ic_ir, neutralized_rank_ic_mean, neutralized_pass_gate,
+                retention_industry, retention_industry_size, retention_full,
+                industry_top1_weight, industry_hhi, turnover_daily, net_metric, liquidity_bottom20_retention,
+                strength_subscore, robustness_subscore, controllability_subscore, implementability_subscore, novelty_subscore,
+                total_score,
+                split_fail_count, crowding_peers, recommended_max_weight, status, hard_flags_json, notes_json,
                 created_at_utc, updated_at_utc
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             payload_rows,
         )

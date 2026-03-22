@@ -1,0 +1,14 @@
+[
+  {
+    "factor_name": "quality_minus_value",
+    "expression": "roe - pb",
+    "observations": 253,
+    "rank_ic_mean": -0.006735,
+    "rank_ic_std": 0.207064,
+    "rank_ic_ir": -0.032528,
+    "top_bottom_spread_mean": 0.002178,
+    "pass_gate": false,
+    "fail_reason": "rank_ic_mean<0.02",
+    "variant": "neutralized"
+  }
+]

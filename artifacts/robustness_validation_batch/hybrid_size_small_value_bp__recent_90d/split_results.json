@@ -1,0 +1,26 @@
+[
+  {
+    "factor_name": "hybrid_size_small_value_bp",
+    "expression": "(size_inv) + (book_yield)",
+    "observations": 286,
+    "rank_ic_mean": -0.006637,
+    "rank_ic_std": 0.330835,
+    "rank_ic_ir": -0.020061,
+    "top_bottom_spread_mean": -0.00572,
+    "pass_gate": false,
+    "fail_reason": "rank_ic_mean<0.02; top_bottom_spread<0.0005",
+    "split": "first_half"
+  },
+  {
+    "factor_name": "hybrid_size_small_value_bp",
+    "expression": "(size_inv) + (book_yield)",
+    "observations": 297,
+    "rank_ic_mean": 0.346332,
+    "rank_ic_std": 0.235259,
+    "rank_ic_ir": 1.47213,
+    "top_bottom_spread_mean": 0.015941,
+    "pass_gate": true,
+    "fail_reason": "",
+    "split": "second_half"
+  }
+]

@@ -1,0 +1,135 @@
+{
+  "run_id": "6c5171cc-fde9-4705-9db4-eab77160cddf",
+  "generated_at_utc": "2026-03-19T07:52:54.614846+00:00",
+  "config": {
+    "data_source": "tushare",
+    "cache_dir": "artifacts/tushare_cache",
+    "output_dir": "artifacts/generated_recent_150d",
+    "start_date": "2025-10-20",
+    "end_date": "2026-03-18",
+    "universe_limit": 20,
+    "factors": [
+      {
+        "name": "mom_20",
+        "expression": "momentum_20"
+      },
+      {
+        "name": "value_ep",
+        "expression": "earnings_yield"
+      },
+      {
+        "name": "value_bp",
+        "expression": "book_yield"
+      },
+      {
+        "name": "size_small",
+        "expression": "size_inv"
+      },
+      {
+        "name": "liquidity_turnover_shock",
+        "expression": "turnover_shock_5_20"
+      },
+      {
+        "name": "mom_plus_value",
+        "expression": "momentum_20 + earnings_yield"
+      }
+    ],
+    "thresholds": {
+      "min_rank_ic": 0.02,
+      "min_top_bottom_spread": 0.0005
+    }
+  },
+  "dataset_rows": 815,
+  "factor_count": 6,
+  "candidate_pool": [],
+  "graveyard": [
+    "mom_20",
+    "value_ep",
+    "value_bp",
+    "size_small",
+    "liquidity_turnover_shock",
+    "mom_plus_value"
+  ],
+  "cluster_representatives": [
+    "liquidity_turnover_shock",
+    "mom_20",
+    "size_small",
+    "value_bp",
+    "value_ep"
+  ],
+  "top_scores": [
+    {
+      "factor_name": "value_ep",
+      "expression": "earnings_yield",
+      "score": 0.398238,
+      "raw_rank_ic_mean": 0.066242,
+      "raw_rank_ic_ir": 0.270241,
+      "neutralized_rank_ic_mean": 0.030699,
+      "neutralized_pass": true,
+      "split_fail_count": 1,
+      "high_corr_peers": []
+    },
+    {
+      "factor_name": "value_bp",
+      "expression": "book_yield",
+      "score": 0.112709,
+      "raw_rank_ic_mean": -0.018821,
+      "raw_rank_ic_ir": -0.059187,
+      "neutralized_rank_ic_mean": 0.02288,
+      "neutralized_pass": true,
+      "split_fail_count": 1,
+      "high_corr_peers": []
+    },
+    {
+      "factor_name": "mom_20",
+      "expression": "momentum_20",
+      "score": 0.083056,
+      "raw_rank_ic_mean": -0.016723,
+      "raw_rank_ic_ir": -0.043097,
+      "neutralized_rank_ic_mean": 0.043776,
+      "neutralized_pass": true,
+      "split_fail_count": 1,
+      "high_corr_peers": [
+        "mom_plus_value"
+      ]
+    }
+  ],
+  "portfolio_results": [
+    {
+      "strategy_name": "long_short_top_bottom_all_factors",
+      "annual_return": 0.134831,
+      "annual_volatility": 0.291707,
+      "sharpe": 0.462212,
+      "max_drawdown": -0.534953,
+      "avg_turnover": 0.276256,
+      "observations": 74
+    },
+    {
+      "strategy_name": "long_short_top_bottom_cluster_representatives",
+      "annual_return": -0.043361,
+      "annual_volatility": 0.293904,
+      "sharpe": -0.147536,
+      "max_drawdown": -0.566806,
+      "avg_turnover": 0.260274,
+      "observations": 74
+    },
+    {
+      "strategy_name": "long_short_top_bottom_cluster_representatives_neutralized",
+      "annual_return": 0.115365,
+      "annual_volatility": 0.226906,
+      "sharpe": 0.508428,
+      "max_drawdown": -0.156254,
+      "avg_turnover": 1.363014,
+      "observations": 74
+    },
+    {
+      "strategy_name": "long_short_top_bottom_neutralized",
+      "annual_return": 0.071152,
+      "annual_volatility": 0.222655,
+      "sharpe": 0.319559,
+      "max_drawdown": -0.136232,
+      "avg_turnover": 1.349315,
+      "observations": 74
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+{
+  "generated_at_utc": "2026-03-19T13:42:27.987798+00:00",
+  "diagnostic_type": "graveyard_regime_shift_review",
+  "source_output_dir": "artifacts/tushare_batch",
+  "reasons": [
+    "recent_graveyard_needs_deeper_review"
+  ]
+}

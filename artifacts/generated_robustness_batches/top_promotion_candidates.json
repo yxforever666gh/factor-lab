@@ -1,0 +1,124 @@
+{
+  "jobs": [
+    {
+      "name": "hybrid_mom_20_value_ep__recent_30d",
+      "config_path": "artifacts/generated_robustness_configs/hybrid_mom_20_value_ep__recent_30d.json"
+    },
+    {
+      "name": "hybrid_mom_20_value_ep__recent_45d",
+      "config_path": "artifacts/generated_robustness_configs/hybrid_mom_20_value_ep__recent_45d.json"
+    },
+    {
+      "name": "hybrid_mom_20_value_ep__recent_60d",
+      "config_path": "artifacts/generated_robustness_configs/hybrid_mom_20_value_ep__recent_60d.json"
+    },
+    {
+      "name": "hybrid_mom_20_value_ep__recent_90d",
+      "config_path": "artifacts/generated_robustness_configs/hybrid_mom_20_value_ep__recent_90d.json"
+    },
+    {
+      "name": "hybrid_mom_20_value_ep__recent_120d",
+      "config_path": "artifacts/generated_robustness_configs/hybrid_mom_20_value_ep__recent_120d.json"
+    },
+    {
+      "name": "hybrid_mom_20_value_ep__expanding_2025_09_01",
+      "config_path": "artifacts/generated_robustness_configs/hybrid_mom_20_value_ep__expanding_2025_09_01.json"
+    },
+    {
+      "name": "value_ep__recent_30d",
+      "config_path": "artifacts/generated_robustness_configs/value_ep__recent_30d.json"
+    },
+    {
+      "name": "value_ep__recent_45d",
+      "config_path": "artifacts/generated_robustness_configs/value_ep__recent_45d.json"
+    },
+    {
+      "name": "value_ep__recent_60d",
+      "config_path": "artifacts/generated_robustness_configs/value_ep__recent_60d.json"
+    },
+    {
+      "name": "value_ep__recent_90d",
+      "config_path": "artifacts/generated_robustness_configs/value_ep__recent_90d.json"
+    },
+    {
+      "name": "value_ep__recent_120d",
+      "config_path": "artifacts/generated_robustness_configs/value_ep__recent_120d.json"
+    },
+    {
+      "name": "value_ep__expanding_2025_09_01",
+      "config_path": "artifacts/generated_robustness_configs/value_ep__expanding_2025_09_01.json"
+    },
+    {
+      "name": "mom_plus_value__recent_30d",
+      "config_path": "artifacts/generated_robustness_configs/mom_plus_value__recent_30d.json"
+    },
+    {
+      "name": "mom_plus_value__recent_45d",
+      "config_path": "artifacts/generated_robustness_configs/mom_plus_value__recent_45d.json"
+    },
+    {
+      "name": "mom_plus_value__recent_60d",
+      "config_path": "artifacts/generated_robustness_configs/mom_plus_value__recent_60d.json"
+    },
+    {
+      "name": "mom_plus_value__recent_90d",
+      "config_path": "artifacts/generated_robustness_configs/mom_plus_value__recent_90d.json"
+    },
+    {
+      "name": "mom_plus_value__recent_120d",
+      "config_path": "artifacts/generated_robustness_configs/mom_plus_value__recent_120d.json"
+    },
+    {
+      "name": "mom_plus_value__expanding_2025_09_01",
+      "config_path": "artifacts/generated_robustness_configs/mom_plus_value__expanding_2025_09_01.json"
+    },
+    {
+      "name": "mom_20__recent_30d",
+      "config_path": "artifacts/generated_robustness_configs/mom_20__recent_30d.json"
+    },
+    {
+      "name": "mom_20__recent_45d",
+      "config_path": "artifacts/generated_robustness_configs/mom_20__recent_45d.json"
+    },
+    {
+      "name": "mom_20__recent_60d",
+      "config_path": "artifacts/generated_robustness_configs/mom_20__recent_60d.json"
+    },
+    {
+      "name": "mom_20__recent_90d",
+      "config_path": "artifacts/generated_robustness_configs/mom_20__recent_90d.json"
+    },
+    {
+      "name": "mom_20__recent_120d",
+      "config_path": "artifacts/generated_robustness_configs/mom_20__recent_120d.json"
+    },
+    {
+      "name": "mom_20__expanding_2025_09_01",
+      "config_path": "artifacts/generated_robustness_configs/mom_20__expanding_2025_09_01.json"
+    },
+    {
+      "name": "liquidity_turnover_shock__recent_30d",
+      "config_path": "artifacts/generated_robustness_configs/liquidity_turnover_shock__recent_30d.json"
+    },
+    {
+      "name": "liquidity_turnover_shock__recent_45d",
+      "config_path": "artifacts/generated_robustness_configs/liquidity_turnover_shock__recent_45d.json"
+    },
+    {
+      "name": "liquidity_turnover_shock__recent_60d",
+      "config_path": "artifacts/generated_robustness_configs/liquidity_turnover_shock__recent_60d.json"
+    },
+    {
+      "name": "liquidity_turnover_shock__recent_90d",
+      "config_path": "artifacts/generated_robustness_configs/liquidity_turnover_shock__recent_90d.json"
+    },
+    {
+      "name": "liquidity_turnover_shock__recent_120d",
+      "config_path": "artifacts/generated_robustness_configs/liquidity_turnover_shock__recent_120d.json"
+    },
+    {
+      "name": "liquidity_turnover_shock__expanding_2025_09_01",
+      "config_path": "artifacts/generated_robustness_configs/liquidity_turnover_shock__expanding_2025_09_01.json"
+    }
+  ]
+}

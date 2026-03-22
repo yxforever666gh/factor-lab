@@ -1,0 +1,13 @@
+[
+  {
+    "factor_name": "hybrid_liquidity_turnover_shock_value_ep",
+    "expression": "(turnover_shock_5_20) + (earnings_yield)",
+    "observations": 253,
+    "rank_ic_mean": 0.264822,
+    "rank_ic_std": 0.237808,
+    "rank_ic_ir": 1.113596,
+    "top_bottom_spread_mean": 0.025738,
+    "pass_gate": true,
+    "fail_reason": ""
+  }
+]

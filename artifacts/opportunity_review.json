@@ -1,15 +1,20 @@
 {
   "challenger": [
     "opp-q-stable-boundary: 新颖度偏低，可能仍在重复旧研究问题。",
-    "opp-state-machine-test: 新颖度偏低，可能仍在重复旧研究问题。"
+    "opp-state-machine-test: 新颖度偏低，可能仍在重复旧研究问题。",
+    "opp-full-run-followup-opp-q-stable-boundary: 新颖度偏低，可能仍在重复旧研究问题。",
+    "opp-pattern-native-confirm-stable_candidate_validation-child-multi_target-stable_candidate_confirmed-partial_support-uncertainty_reduced: 新颖度偏低，可能仍在重复旧研究问题。",
+    "opp-pattern-native-confirm-stable_candidate_validation-root-multi_target-stable_candidate_confirmed-partial_support-uncertainty_reduced: 新颖度偏低，可能仍在重复旧研究问题。"
   ],
   "auditor": [
-    "opp-q-stable-boundary: 已被归档，需检查是否被去重规则过度压制。",
-    "opp-child-expand-from-opp-q-stable-boundary: 已被归档，需检查是否被去重规则过度压制。",
-    "opp-state-machine-test: 置信度偏低，进入执行前应谨慎。"
+    "opp-state-machine-test: 置信度偏低，进入执行前应谨慎。",
+    "opp-pattern-native-diagnose-graveyard_diagnosis-child-multi_target-neutralization_diagnosis_requested-repeated_graveyard_confirmed-hypothesis_supported-uncertainty_reduced: 置信度偏低，进入执行前应谨慎。"
   ],
   "blocks": {
     "opp-state-machine-test": {
+      "reason": "low_confidence"
+    },
+    "opp-pattern-native-diagnose-graveyard_diagnosis-child-multi_target-neutralization_diagnosis_requested-repeated_graveyard_confirmed-hypothesis_supported-uncertainty_reduced": {
       "reason": "low_confidence"
     }
   },
@@ -19,6 +24,18 @@
       "delta": 0.08
     },
     "opp-state-machine-test": {
+      "reason": "low_novelty",
+      "delta": 0.08
+    },
+    "opp-full-run-followup-opp-q-stable-boundary": {
+      "reason": "low_novelty",
+      "delta": 0.08
+    },
+    "opp-pattern-native-confirm-stable_candidate_validation-child-multi_target-stable_candidate_confirmed-partial_support-uncertainty_reduced": {
+      "reason": "low_novelty",
+      "delta": 0.08
+    },
+    "opp-pattern-native-confirm-stable_candidate_validation-root-multi_target-stable_candidate_confirmed-partial_support-uncertainty_reduced": {
       "reason": "low_novelty",
       "delta": 0.08
     }
