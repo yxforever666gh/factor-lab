@@ -9,10 +9,10 @@
       "testing_count": 5,
       "rejected_count": 0,
       "top_status": "fragile",
-      "avg_candidate_score": 5.963132,
-      "avg_latest_score": 9.788188,
+      "avg_candidate_score": 5.952596,
+      "avg_latest_score": 5.759734,
       "avg_best_score": 10.082293,
-      "family_score": 83.705056,
+      "family_score": 83.620768,
       "duplicate_pressure": 2,
       "cluster_pressure": 11.0,
       "representative_count": 1,
@@ -50,10 +50,10 @@
       "testing_count": 4,
       "rejected_count": 0,
       "top_status": "fragile",
-      "avg_candidate_score": 4.551217,
-      "avg_latest_score": 6.646145,
-      "avg_best_score": 8.654874,
-      "family_score": 72.409736,
+      "avg_candidate_score": 4.542117,
+      "avg_latest_score": 2.764675,
+      "avg_best_score": 8.654873,
+      "family_score": 72.336936,
       "duplicate_pressure": 0,
       "cluster_pressure": 11.0,
       "representative_count": 0,
@@ -89,10 +89,10 @@
       "testing_count": 1,
       "rejected_count": 0,
       "top_status": "fragile",
-      "avg_candidate_score": 2.600241,
-      "avg_latest_score": 9.015223,
+      "avg_candidate_score": 2.57859,
+      "avg_latest_score": 1.821213,
       "avg_best_score": 9.015223,
-      "family_score": 42.801928,
+      "family_score": 42.62872,
       "duplicate_pressure": 0,
       "cluster_pressure": 11.0,
       "representative_count": 0,
@@ -100,21 +100,21 @@
       "representative_candidates": [],
       "recommended_action": "validate_risk",
       "family_risk_profile": {
-        "trial_count": 904,
+        "trial_count": 901,
         "informative_trial_count": 28,
-        "no_gain_trial_count": 876,
+        "no_gain_trial_count": 873,
         "failed_trial_count": 0,
-        "knowledge_gain_per_trial": 0.030973,
+        "knowledge_gain_per_trial": 0.031077,
         "trial_pressure": 100.0,
         "false_positive_pressure": 100.0,
         "risk_score": 100.0,
         "recommended_action": "validate_risk"
       },
-      "trial_count": 904,
+      "trial_count": 901,
       "informative_trial_count": 28,
-      "no_gain_trial_count": 876,
+      "no_gain_trial_count": 873,
       "failed_trial_count": 0,
-      "knowledge_gain_per_trial": 0.030973,
+      "knowledge_gain_per_trial": 0.031077,
       "trial_pressure": 100.0,
       "false_positive_pressure": 100.0,
       "family_risk_score": 100.0
@@ -129,7 +129,7 @@
       "rejected_count": 0,
       "top_status": "fragile",
       "avg_candidate_score": 2.119795,
-      "avg_latest_score": 9.723041,
+      "avg_latest_score": 0.384066,
       "avg_best_score": 9.938888,
       "family_score": 38.95836,
       "duplicate_pressure": 0,
@@ -187,8 +187,8 @@
       "representative_candidates": [
         "hybrid_mom_20_liquidity_turnover_shock",
         "hybrid_liquidity_turnover_shock_mom_20",
-        "liquidity_turnover_shock",
-        "value_ep"
+        "hybrid_size_small_value_bp",
+        "size_small"
       ],
       "suppressed_member_count": 7,
       "members": [
@@ -215,39 +215,6 @@
           "is_representative": true
         },
         {
-          "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
-          "name": "mom_20",
-          "family": "momentum",
-          "status": "fragile",
-          "latest_final_score": 9.793076,
-          "avg_final_score": 1.726368,
-          "evaluation_count": 200,
-          "is_primary": false,
-          "is_representative": false
-        },
-        {
-          "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
-          "name": "liquidity_turnover_shock",
-          "family": "liquidity",
-          "status": "fragile",
-          "latest_final_score": 9.723041,
-          "avg_final_score": 2.119795,
-          "evaluation_count": 200,
-          "is_primary": false,
-          "is_representative": true
-        },
-        {
-          "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
-          "name": "mom_plus_value",
-          "family": "momentum",
-          "status": "fragile",
-          "latest_final_score": 9.601585,
-          "avg_final_score": 1.190673,
-          "evaluation_count": 200,
-          "is_primary": false,
-          "is_representative": false
-        },
-        {
           "id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
           "name": "hybrid_mom_20_value_ep",
           "family": "momentum",
@@ -255,28 +222,6 @@
           "latest_final_score": 9.400734,
           "avg_final_score": 8.516041,
           "evaluation_count": 98,
-          "is_primary": false,
-          "is_representative": false
-        },
-        {
-          "id": "842ba988-63d3-4815-81ca-ced125ae7146",
-          "name": "value_ep",
-          "family": "value",
-          "status": "fragile",
-          "latest_final_score": 9.099535,
-          "avg_final_score": 2.377536,
-          "evaluation_count": 200,
-          "is_primary": false,
-          "is_representative": true
-        },
-        {
-          "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
-          "name": "size_small",
-          "family": "other",
-          "status": "fragile",
-          "latest_final_score": 9.015223,
-          "avg_final_score": 2.600241,
-          "evaluation_count": 200,
           "is_primary": false,
           "is_representative": false
         },
@@ -289,15 +234,26 @@
           "avg_final_score": 8.186928,
           "evaluation_count": 35,
           "is_primary": false,
-          "is_representative": false
+          "is_representative": true
         },
         {
-          "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
-          "name": "value_bp",
+          "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
+          "name": "size_small",
+          "family": "other",
+          "status": "fragile",
+          "latest_final_score": 1.821213,
+          "avg_final_score": 2.57859,
+          "evaluation_count": 200,
+          "is_primary": false,
+          "is_representative": true
+        },
+        {
+          "id": "842ba988-63d3-4815-81ca-ced125ae7146",
+          "name": "value_ep",
           "family": "value",
           "status": "fragile",
-          "latest_final_score": 7.432826,
-          "avg_final_score": 1.087484,
+          "latest_final_score": 1.818988,
+          "avg_final_score": 2.341134,
           "evaluation_count": 200,
           "is_primary": false,
           "is_representative": false
@@ -310,6 +266,50 @@
           "latest_final_score": 1.362693,
           "avg_final_score": 6.552922,
           "evaluation_count": 3,
+          "is_primary": false,
+          "is_representative": false
+        },
+        {
+          "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
+          "name": "liquidity_turnover_shock",
+          "family": "liquidity",
+          "status": "fragile",
+          "latest_final_score": 0.384066,
+          "avg_final_score": 2.119795,
+          "evaluation_count": 200,
+          "is_primary": false,
+          "is_representative": false
+        },
+        {
+          "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
+          "name": "mom_20",
+          "family": "momentum",
+          "status": "fragile",
+          "latest_final_score": 0.186667,
+          "avg_final_score": 1.726368,
+          "evaluation_count": 200,
+          "is_primary": false,
+          "is_representative": false
+        },
+        {
+          "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
+          "name": "value_bp",
+          "family": "value",
+          "status": "fragile",
+          "latest_final_score": -0.812508,
+          "avg_final_score": 1.087484,
+          "evaluation_count": 200,
+          "is_primary": false,
+          "is_representative": false
+        },
+        {
+          "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
+          "name": "mom_plus_value",
+          "family": "momentum",
+          "status": "fragile",
+          "latest_final_score": -0.934275,
+          "avg_final_score": 1.137994,
+          "evaluation_count": 200,
           "is_primary": false,
           "is_representative": false
         }
@@ -329,13 +329,13 @@
       "representative_count": 4,
       "is_primary_representative": true,
       "suppressed_candidates": [
-        "mom_20",
-        "mom_plus_value",
         "hybrid_mom_20_value_ep",
-        "size_small",
-        "hybrid_size_small_value_bp",
+        "value_ep",
+        "hybrid_liquidity_turnover_shock_value_ep",
+        "liquidity_turnover_shock",
+        "mom_20",
         "value_bp",
-        "hybrid_liquidity_turnover_shock_value_ep"
+        "mom_plus_value"
       ],
       "relationship_mix": {
         "duplicate_of": 1,
@@ -357,13 +357,13 @@
       "representative_count": 4,
       "is_primary_representative": false,
       "suppressed_candidates": [
-        "mom_20",
-        "mom_plus_value",
         "hybrid_mom_20_value_ep",
-        "size_small",
-        "hybrid_size_small_value_bp",
+        "value_ep",
+        "hybrid_liquidity_turnover_shock_value_ep",
+        "liquidity_turnover_shock",
+        "mom_20",
         "value_bp",
-        "hybrid_liquidity_turnover_shock_value_ep"
+        "mom_plus_value"
       ],
       "relationship_mix": {
         "duplicate_of": 1,
@@ -377,21 +377,21 @@
       "cluster_id": 1,
       "primary_candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
       "primary_candidate": "hybrid_mom_20_liquidity_turnover_shock",
-      "representative_candidate_id": "f0356652-fafa-4f95-b588-cdcb661382f3",
-      "representative_candidate": "liquidity_turnover_shock",
-      "family": "liquidity",
+      "representative_candidate_id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
+      "representative_candidate": "hybrid_size_small_value_bp",
+      "family": "value",
       "cluster_size": 11,
       "representative_rank": 3,
       "representative_count": 4,
       "is_primary_representative": false,
       "suppressed_candidates": [
-        "mom_20",
-        "mom_plus_value",
         "hybrid_mom_20_value_ep",
-        "size_small",
-        "hybrid_size_small_value_bp",
+        "value_ep",
+        "hybrid_liquidity_turnover_shock_value_ep",
+        "liquidity_turnover_shock",
+        "mom_20",
         "value_bp",
-        "hybrid_liquidity_turnover_shock_value_ep"
+        "mom_plus_value"
       ],
       "relationship_mix": {
         "duplicate_of": 1,
@@ -405,21 +405,21 @@
       "cluster_id": 1,
       "primary_candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
       "primary_candidate": "hybrid_mom_20_liquidity_turnover_shock",
-      "representative_candidate_id": "842ba988-63d3-4815-81ca-ced125ae7146",
-      "representative_candidate": "value_ep",
-      "family": "value",
+      "representative_candidate_id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
+      "representative_candidate": "size_small",
+      "family": "other",
       "cluster_size": 11,
       "representative_rank": 4,
       "representative_count": 4,
       "is_primary_representative": false,
       "suppressed_candidates": [
-        "mom_20",
-        "mom_plus_value",
         "hybrid_mom_20_value_ep",
-        "size_small",
-        "hybrid_size_small_value_bp",
+        "value_ep",
+        "hybrid_liquidity_turnover_shock_value_ep",
+        "liquidity_turnover_shock",
+        "mom_20",
         "value_bp",
-        "hybrid_liquidity_turnover_shock_value_ep"
+        "mom_plus_value"
       ],
       "relationship_mix": {
         "duplicate_of": 1,
@@ -443,7 +443,7 @@
       "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
       "family": "momentum",
       "status": "fragile",
-      "family_score": 83.705056,
+      "family_score": 83.620768,
       "family_recommended_action": "refine",
       "relationship_count": 7,
       "lineage_count": 5,
@@ -483,39 +483,6 @@
             "is_representative": true
           },
           {
-            "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
-            "name": "mom_20",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.793076,
-            "avg_final_score": 1.726368,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
-            "name": "liquidity_turnover_shock",
-            "family": "liquidity",
-            "status": "fragile",
-            "latest_final_score": 9.723041,
-            "avg_final_score": 2.119795,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
-            "name": "mom_plus_value",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.601585,
-            "avg_final_score": 1.190673,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
             "id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
             "name": "hybrid_mom_20_value_ep",
             "family": "momentum",
@@ -523,28 +490,6 @@
             "latest_final_score": 9.400734,
             "avg_final_score": 8.516041,
             "evaluation_count": 98,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "842ba988-63d3-4815-81ca-ced125ae7146",
-            "name": "value_ep",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 9.099535,
-            "avg_final_score": 2.377536,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
-            "name": "size_small",
-            "family": "other",
-            "status": "fragile",
-            "latest_final_score": 9.015223,
-            "avg_final_score": 2.600241,
-            "evaluation_count": 200,
             "is_primary": false,
             "is_representative": false
           },
@@ -557,15 +502,26 @@
             "avg_final_score": 8.186928,
             "evaluation_count": 35,
             "is_primary": false,
-            "is_representative": false
+            "is_representative": true
           },
           {
-            "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
-            "name": "value_bp",
+            "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
+            "name": "size_small",
+            "family": "other",
+            "status": "fragile",
+            "latest_final_score": 1.821213,
+            "avg_final_score": 2.57859,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": true
+          },
+          {
+            "id": "842ba988-63d3-4815-81ca-ced125ae7146",
+            "name": "value_ep",
             "family": "value",
             "status": "fragile",
-            "latest_final_score": 7.432826,
-            "avg_final_score": 1.087484,
+            "latest_final_score": 1.818988,
+            "avg_final_score": 2.341134,
             "evaluation_count": 200,
             "is_primary": false,
             "is_representative": false
@@ -580,6 +536,50 @@
             "evaluation_count": 3,
             "is_primary": false,
             "is_representative": false
+          },
+          {
+            "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
+            "name": "liquidity_turnover_shock",
+            "family": "liquidity",
+            "status": "fragile",
+            "latest_final_score": 0.384066,
+            "avg_final_score": 2.119795,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
+            "name": "mom_20",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 0.186667,
+            "avg_final_score": 1.726368,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
+            "name": "value_bp",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": -0.812508,
+            "avg_final_score": 1.087484,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
+            "name": "mom_plus_value",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": -0.934275,
+            "avg_final_score": 1.137994,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
           }
         ],
         "primary_candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
@@ -588,8 +588,8 @@
         "representative_candidates": [
           "hybrid_mom_20_liquidity_turnover_shock",
           "hybrid_liquidity_turnover_shock_mom_20",
-          "liquidity_turnover_shock",
-          "value_ep"
+          "hybrid_size_small_value_bp",
+          "size_small"
         ],
         "is_representative": true,
         "suppressed_member_count": 7
@@ -814,7 +814,7 @@
       "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
       "family": "momentum",
       "status": "fragile",
-      "family_score": 83.705056,
+      "family_score": 83.620768,
       "family_recommended_action": "refine",
       "relationship_count": 7,
       "lineage_count": 5,
@@ -854,39 +854,6 @@
             "is_representative": true
           },
           {
-            "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
-            "name": "mom_20",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.793076,
-            "avg_final_score": 1.726368,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
-            "name": "liquidity_turnover_shock",
-            "family": "liquidity",
-            "status": "fragile",
-            "latest_final_score": 9.723041,
-            "avg_final_score": 2.119795,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
-            "name": "mom_plus_value",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.601585,
-            "avg_final_score": 1.190673,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
             "id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
             "name": "hybrid_mom_20_value_ep",
             "family": "momentum",
@@ -894,28 +861,6 @@
             "latest_final_score": 9.400734,
             "avg_final_score": 8.516041,
             "evaluation_count": 98,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "842ba988-63d3-4815-81ca-ced125ae7146",
-            "name": "value_ep",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 9.099535,
-            "avg_final_score": 2.377536,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
-            "name": "size_small",
-            "family": "other",
-            "status": "fragile",
-            "latest_final_score": 9.015223,
-            "avg_final_score": 2.600241,
-            "evaluation_count": 200,
             "is_primary": false,
             "is_representative": false
           },
@@ -928,15 +873,26 @@
             "avg_final_score": 8.186928,
             "evaluation_count": 35,
             "is_primary": false,
-            "is_representative": false
+            "is_representative": true
           },
           {
-            "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
-            "name": "value_bp",
+            "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
+            "name": "size_small",
+            "family": "other",
+            "status": "fragile",
+            "latest_final_score": 1.821213,
+            "avg_final_score": 2.57859,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": true
+          },
+          {
+            "id": "842ba988-63d3-4815-81ca-ced125ae7146",
+            "name": "value_ep",
             "family": "value",
             "status": "fragile",
-            "latest_final_score": 7.432826,
-            "avg_final_score": 1.087484,
+            "latest_final_score": 1.818988,
+            "avg_final_score": 2.341134,
             "evaluation_count": 200,
             "is_primary": false,
             "is_representative": false
@@ -951,6 +907,50 @@
             "evaluation_count": 3,
             "is_primary": false,
             "is_representative": false
+          },
+          {
+            "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
+            "name": "liquidity_turnover_shock",
+            "family": "liquidity",
+            "status": "fragile",
+            "latest_final_score": 0.384066,
+            "avg_final_score": 2.119795,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
+            "name": "mom_20",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 0.186667,
+            "avg_final_score": 1.726368,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
+            "name": "value_bp",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": -0.812508,
+            "avg_final_score": 1.087484,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
+            "name": "mom_plus_value",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": -0.934275,
+            "avg_final_score": 1.137994,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
           }
         ],
         "primary_candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
@@ -959,8 +959,8 @@
         "representative_candidates": [
           "hybrid_mom_20_liquidity_turnover_shock",
           "hybrid_liquidity_turnover_shock_mom_20",
-          "liquidity_turnover_shock",
-          "value_ep"
+          "hybrid_size_small_value_bp",
+          "size_small"
         ],
         "is_representative": true,
         "suppressed_member_count": 7
@@ -1181,11 +1181,2080 @@
       ]
     },
     {
+      "candidate_id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
+      "candidate_name": "hybrid_mom_20_value_ep",
+      "family": "momentum",
+      "status": "fragile",
+      "family_score": 83.620768,
+      "family_recommended_action": "refine",
+      "relationship_count": 8,
+      "lineage_count": 6,
+      "cluster": {
+        "cluster_id": 1,
+        "cluster_size": 11,
+        "leader": "hybrid_mom_20_liquidity_turnover_shock",
+        "dominant_family": "momentum",
+        "relationship_mix": {
+          "duplicate_of": 1,
+          "same_family": 4,
+          "high_corr": 5,
+          "refinement_of": 12,
+          "hybrid_of": 7
+        },
+        "members": [
+          {
+            "id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
+            "name": "hybrid_mom_20_liquidity_turnover_shock",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 10.072773,
+            "avg_final_score": 9.490097,
+            "evaluation_count": 79,
+            "is_primary": true,
+            "is_representative": true
+          },
+          {
+            "id": "82f8128b-7227-494a-9382-77d288a4bfa4",
+            "name": "hybrid_liquidity_turnover_shock_mom_20",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 10.072773,
+            "avg_final_score": 8.892481,
+            "evaluation_count": 39,
+            "is_primary": false,
+            "is_representative": true
+          },
+          {
+            "id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
+            "name": "hybrid_mom_20_value_ep",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 9.400734,
+            "avg_final_score": 8.516041,
+            "evaluation_count": 98,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
+            "name": "hybrid_size_small_value_bp",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": 8.689527,
+            "avg_final_score": 8.186928,
+            "evaluation_count": 35,
+            "is_primary": false,
+            "is_representative": true
+          },
+          {
+            "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
+            "name": "size_small",
+            "family": "other",
+            "status": "fragile",
+            "latest_final_score": 1.821213,
+            "avg_final_score": 2.57859,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": true
+          },
+          {
+            "id": "842ba988-63d3-4815-81ca-ced125ae7146",
+            "name": "value_ep",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": 1.818988,
+            "avg_final_score": 2.341134,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
+            "name": "hybrid_liquidity_turnover_shock_value_ep",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": 1.362693,
+            "avg_final_score": 6.552922,
+            "evaluation_count": 3,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
+            "name": "liquidity_turnover_shock",
+            "family": "liquidity",
+            "status": "fragile",
+            "latest_final_score": 0.384066,
+            "avg_final_score": 2.119795,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
+            "name": "mom_20",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 0.186667,
+            "avg_final_score": 1.726368,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
+            "name": "value_bp",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": -0.812508,
+            "avg_final_score": 1.087484,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
+            "name": "mom_plus_value",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": -0.934275,
+            "avg_final_score": 1.137994,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          }
+        ],
+        "primary_candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
+        "primary_candidate": "hybrid_mom_20_liquidity_turnover_shock",
+        "representative_count": 4,
+        "representative_candidates": [
+          "hybrid_mom_20_liquidity_turnover_shock",
+          "hybrid_liquidity_turnover_shock_mom_20",
+          "hybrid_size_small_value_bp",
+          "size_small"
+        ],
+        "is_representative": false,
+        "suppressed_member_count": 7
+      },
+      "is_primary_candidate": false,
+      "related_candidates": [
+        {
+          "candidate_id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
+          "candidate_name": "mom_20",
+          "relationship_type": "high_corr",
+          "strength": 1.0,
+          "details": {
+            "peer_count": 1
+          }
+        },
+        {
+          "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
+          "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
+          "relationship_type": "refinement_of",
+          "strength": 0.8200000000000001,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
+            "extra_atoms": [
+              "shock",
+              "turnover_shock"
+            ],
+            "parent_candidate": "hybrid_mom_20_value_ep",
+            "shared_atoms": [
+              "earnings_yield",
+              "hybrid"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "842ba988-63d3-4815-81ca-ced125ae7146",
+          "candidate_name": "value_ep",
+          "relationship_type": "refinement_of",
+          "strength": 0.72,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_mom_20_value_ep",
+            "extra_atoms": [
+              "hybrid"
+            ],
+            "parent_candidate": "value_ep",
+            "shared_atoms": [
+              "earnings_yield"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
+          "candidate_name": "mom_plus_value",
+          "relationship_type": "refinement_of",
+          "strength": 0.72,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_mom_20_value_ep",
+            "extra_atoms": [
+              "hybrid"
+            ],
+            "parent_candidate": "mom_plus_value",
+            "shared_atoms": [
+              "earnings_yield"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
+          "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
+          "relationship_type": "hybrid_of",
+          "strength": 0.63,
+          "details": {
+            "basis": "hybrid_component_overlap",
+            "component_candidate": "hybrid_mom_20_value_ep",
+            "hybrid_atoms": [
+              "hybrid",
+              "shock",
+              "turnover_shock"
+            ],
+            "hybrid_candidate": "hybrid_mom_20_liquidity_turnover_shock",
+            "shared_atoms": [
+              "hybrid"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
+          "candidate_name": "hybrid_size_small_value_bp",
+          "relationship_type": "hybrid_of",
+          "strength": 0.63,
+          "details": {
+            "basis": "hybrid_component_overlap",
+            "component_candidate": "hybrid_mom_20_value_ep",
+            "hybrid_atoms": [
+              "book_yield",
+              "hybrid",
+              "inv",
+              "size_inv",
+              "small"
+            ],
+            "hybrid_candidate": "hybrid_size_small_value_bp",
+            "shared_atoms": [
+              "hybrid"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "82f8128b-7227-494a-9382-77d288a4bfa4",
+          "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
+          "relationship_type": "hybrid_of",
+          "strength": 0.63,
+          "details": {
+            "basis": "hybrid_component_overlap",
+            "component_candidate": "hybrid_mom_20_value_ep",
+            "hybrid_atoms": [
+              "hybrid",
+              "shock",
+              "turnover_shock"
+            ],
+            "hybrid_candidate": "hybrid_liquidity_turnover_shock_mom_20",
+            "shared_atoms": [
+              "hybrid"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
+          "candidate_name": "mom_20",
+          "relationship_type": "same_family",
+          "strength": 0.4,
+          "details": {
+            "family": "momentum",
+            "family_size": 2
+          }
+        }
+      ],
+      "lineage": [
+        {
+          "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
+          "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
+          "relationship_type": "refinement_of",
+          "strength": 0.8200000000000001,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
+            "extra_atoms": [
+              "shock",
+              "turnover_shock"
+            ],
+            "parent_candidate": "hybrid_mom_20_value_ep",
+            "shared_atoms": [
+              "earnings_yield",
+              "hybrid"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "842ba988-63d3-4815-81ca-ced125ae7146",
+          "candidate_name": "value_ep",
+          "relationship_type": "refinement_of",
+          "strength": 0.72,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_mom_20_value_ep",
+            "extra_atoms": [
+              "hybrid"
+            ],
+            "parent_candidate": "value_ep",
+            "shared_atoms": [
+              "earnings_yield"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
+          "candidate_name": "mom_plus_value",
+          "relationship_type": "refinement_of",
+          "strength": 0.72,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_mom_20_value_ep",
+            "extra_atoms": [
+              "hybrid"
+            ],
+            "parent_candidate": "mom_plus_value",
+            "shared_atoms": [
+              "earnings_yield"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
+          "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
+          "relationship_type": "hybrid_of",
+          "strength": 0.63,
+          "details": {
+            "basis": "hybrid_component_overlap",
+            "component_candidate": "hybrid_mom_20_value_ep",
+            "hybrid_atoms": [
+              "hybrid",
+              "shock",
+              "turnover_shock"
+            ],
+            "hybrid_candidate": "hybrid_mom_20_liquidity_turnover_shock",
+            "shared_atoms": [
+              "hybrid"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
+          "candidate_name": "hybrid_size_small_value_bp",
+          "relationship_type": "hybrid_of",
+          "strength": 0.63,
+          "details": {
+            "basis": "hybrid_component_overlap",
+            "component_candidate": "hybrid_mom_20_value_ep",
+            "hybrid_atoms": [
+              "book_yield",
+              "hybrid",
+              "inv",
+              "size_inv",
+              "small"
+            ],
+            "hybrid_candidate": "hybrid_size_small_value_bp",
+            "shared_atoms": [
+              "hybrid"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "82f8128b-7227-494a-9382-77d288a4bfa4",
+          "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
+          "relationship_type": "hybrid_of",
+          "strength": 0.63,
+          "details": {
+            "basis": "hybrid_component_overlap",
+            "component_candidate": "hybrid_mom_20_value_ep",
+            "hybrid_atoms": [
+              "hybrid",
+              "shock",
+              "turnover_shock"
+            ],
+            "hybrid_candidate": "hybrid_liquidity_turnover_shock_mom_20",
+            "shared_atoms": [
+              "hybrid"
+            ],
+            "source": "backfill"
+          }
+        }
+      ]
+    },
+    {
+      "candidate_id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
+      "candidate_name": "hybrid_size_small_value_bp",
+      "family": "value",
+      "status": "fragile",
+      "family_score": 72.336936,
+      "family_recommended_action": "refine",
+      "relationship_count": 6,
+      "lineage_count": 6,
+      "cluster": {
+        "cluster_id": 1,
+        "cluster_size": 11,
+        "leader": "hybrid_mom_20_liquidity_turnover_shock",
+        "dominant_family": "momentum",
+        "relationship_mix": {
+          "duplicate_of": 1,
+          "same_family": 4,
+          "high_corr": 5,
+          "refinement_of": 12,
+          "hybrid_of": 7
+        },
+        "members": [
+          {
+            "id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
+            "name": "hybrid_mom_20_liquidity_turnover_shock",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 10.072773,
+            "avg_final_score": 9.490097,
+            "evaluation_count": 79,
+            "is_primary": true,
+            "is_representative": true
+          },
+          {
+            "id": "82f8128b-7227-494a-9382-77d288a4bfa4",
+            "name": "hybrid_liquidity_turnover_shock_mom_20",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 10.072773,
+            "avg_final_score": 8.892481,
+            "evaluation_count": 39,
+            "is_primary": false,
+            "is_representative": true
+          },
+          {
+            "id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
+            "name": "hybrid_mom_20_value_ep",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 9.400734,
+            "avg_final_score": 8.516041,
+            "evaluation_count": 98,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
+            "name": "hybrid_size_small_value_bp",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": 8.689527,
+            "avg_final_score": 8.186928,
+            "evaluation_count": 35,
+            "is_primary": false,
+            "is_representative": true
+          },
+          {
+            "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
+            "name": "size_small",
+            "family": "other",
+            "status": "fragile",
+            "latest_final_score": 1.821213,
+            "avg_final_score": 2.57859,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": true
+          },
+          {
+            "id": "842ba988-63d3-4815-81ca-ced125ae7146",
+            "name": "value_ep",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": 1.818988,
+            "avg_final_score": 2.341134,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
+            "name": "hybrid_liquidity_turnover_shock_value_ep",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": 1.362693,
+            "avg_final_score": 6.552922,
+            "evaluation_count": 3,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
+            "name": "liquidity_turnover_shock",
+            "family": "liquidity",
+            "status": "fragile",
+            "latest_final_score": 0.384066,
+            "avg_final_score": 2.119795,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
+            "name": "mom_20",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 0.186667,
+            "avg_final_score": 1.726368,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
+            "name": "value_bp",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": -0.812508,
+            "avg_final_score": 1.087484,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
+            "name": "mom_plus_value",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": -0.934275,
+            "avg_final_score": 1.137994,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          }
+        ],
+        "primary_candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
+        "primary_candidate": "hybrid_mom_20_liquidity_turnover_shock",
+        "representative_count": 4,
+        "representative_candidates": [
+          "hybrid_mom_20_liquidity_turnover_shock",
+          "hybrid_liquidity_turnover_shock_mom_20",
+          "hybrid_size_small_value_bp",
+          "size_small"
+        ],
+        "is_representative": true,
+        "suppressed_member_count": 7
+      },
+      "is_primary_candidate": false,
+      "related_candidates": [
+        {
+          "candidate_id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
+          "candidate_name": "size_small",
+          "relationship_type": "refinement_of",
+          "strength": 0.92,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_size_small_value_bp",
+            "extra_atoms": [
+              "book_yield",
+              "hybrid"
+            ],
+            "parent_candidate": "size_small",
+            "shared_atoms": [
+              "inv",
+              "size_inv",
+              "small"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
+          "candidate_name": "value_bp",
+          "relationship_type": "refinement_of",
+          "strength": 0.72,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_size_small_value_bp",
+            "extra_atoms": [
+              "hybrid",
+              "inv",
+              "size_inv",
+              "small"
+            ],
+            "parent_candidate": "value_bp",
+            "shared_atoms": [
+              "book_yield"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
+          "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
+          "relationship_type": "hybrid_of",
+          "strength": 0.63,
+          "details": {
+            "basis": "hybrid_component_overlap",
+            "component_candidate": "hybrid_liquidity_turnover_shock_value_ep",
+            "hybrid_atoms": [
+              "book_yield",
+              "hybrid",
+              "inv",
+              "size_inv",
+              "small"
+            ],
+            "hybrid_candidate": "hybrid_size_small_value_bp",
+            "shared_atoms": [
+              "hybrid"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
+          "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
+          "relationship_type": "hybrid_of",
+          "strength": 0.63,
+          "details": {
+            "basis": "hybrid_component_overlap",
+            "component_candidate": "hybrid_mom_20_liquidity_turnover_shock",
+            "hybrid_atoms": [
+              "book_yield",
+              "hybrid",
+              "inv",
+              "size_inv",
+              "small"
+            ],
+            "hybrid_candidate": "hybrid_size_small_value_bp",
+            "shared_atoms": [
+              "hybrid"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
+          "candidate_name": "hybrid_mom_20_value_ep",
+          "relationship_type": "hybrid_of",
+          "strength": 0.63,
+          "details": {
+            "basis": "hybrid_component_overlap",
+            "component_candidate": "hybrid_mom_20_value_ep",
+            "hybrid_atoms": [
+              "book_yield",
+              "hybrid",
+              "inv",
+              "size_inv",
+              "small"
+            ],
+            "hybrid_candidate": "hybrid_size_small_value_bp",
+            "shared_atoms": [
+              "hybrid"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "82f8128b-7227-494a-9382-77d288a4bfa4",
+          "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
+          "relationship_type": "hybrid_of",
+          "strength": 0.63,
+          "details": {
+            "basis": "hybrid_component_overlap",
+            "component_candidate": "hybrid_liquidity_turnover_shock_mom_20",
+            "hybrid_atoms": [
+              "book_yield",
+              "hybrid",
+              "inv",
+              "size_inv",
+              "small"
+            ],
+            "hybrid_candidate": "hybrid_size_small_value_bp",
+            "shared_atoms": [
+              "hybrid"
+            ],
+            "source": "backfill"
+          }
+        }
+      ],
+      "lineage": [
+        {
+          "candidate_id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
+          "candidate_name": "size_small",
+          "relationship_type": "refinement_of",
+          "strength": 0.92,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_size_small_value_bp",
+            "extra_atoms": [
+              "book_yield",
+              "hybrid"
+            ],
+            "parent_candidate": "size_small",
+            "shared_atoms": [
+              "inv",
+              "size_inv",
+              "small"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
+          "candidate_name": "value_bp",
+          "relationship_type": "refinement_of",
+          "strength": 0.72,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_size_small_value_bp",
+            "extra_atoms": [
+              "hybrid",
+              "inv",
+              "size_inv",
+              "small"
+            ],
+            "parent_candidate": "value_bp",
+            "shared_atoms": [
+              "book_yield"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
+          "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
+          "relationship_type": "hybrid_of",
+          "strength": 0.63,
+          "details": {
+            "basis": "hybrid_component_overlap",
+            "component_candidate": "hybrid_liquidity_turnover_shock_value_ep",
+            "hybrid_atoms": [
+              "book_yield",
+              "hybrid",
+              "inv",
+              "size_inv",
+              "small"
+            ],
+            "hybrid_candidate": "hybrid_size_small_value_bp",
+            "shared_atoms": [
+              "hybrid"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
+          "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
+          "relationship_type": "hybrid_of",
+          "strength": 0.63,
+          "details": {
+            "basis": "hybrid_component_overlap",
+            "component_candidate": "hybrid_mom_20_liquidity_turnover_shock",
+            "hybrid_atoms": [
+              "book_yield",
+              "hybrid",
+              "inv",
+              "size_inv",
+              "small"
+            ],
+            "hybrid_candidate": "hybrid_size_small_value_bp",
+            "shared_atoms": [
+              "hybrid"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
+          "candidate_name": "hybrid_mom_20_value_ep",
+          "relationship_type": "hybrid_of",
+          "strength": 0.63,
+          "details": {
+            "basis": "hybrid_component_overlap",
+            "component_candidate": "hybrid_mom_20_value_ep",
+            "hybrid_atoms": [
+              "book_yield",
+              "hybrid",
+              "inv",
+              "size_inv",
+              "small"
+            ],
+            "hybrid_candidate": "hybrid_size_small_value_bp",
+            "shared_atoms": [
+              "hybrid"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "82f8128b-7227-494a-9382-77d288a4bfa4",
+          "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
+          "relationship_type": "hybrid_of",
+          "strength": 0.63,
+          "details": {
+            "basis": "hybrid_component_overlap",
+            "component_candidate": "hybrid_liquidity_turnover_shock_mom_20",
+            "hybrid_atoms": [
+              "book_yield",
+              "hybrid",
+              "inv",
+              "size_inv",
+              "small"
+            ],
+            "hybrid_candidate": "hybrid_size_small_value_bp",
+            "shared_atoms": [
+              "hybrid"
+            ],
+            "source": "backfill"
+          }
+        }
+      ]
+    },
+    {
+      "candidate_id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
+      "candidate_name": "size_small",
+      "family": "other",
+      "status": "fragile",
+      "family_score": 42.62872,
+      "family_recommended_action": "explore_new_branch",
+      "relationship_count": 1,
+      "lineage_count": 1,
+      "cluster": {
+        "cluster_id": 1,
+        "cluster_size": 11,
+        "leader": "hybrid_mom_20_liquidity_turnover_shock",
+        "dominant_family": "momentum",
+        "relationship_mix": {
+          "duplicate_of": 1,
+          "same_family": 4,
+          "high_corr": 5,
+          "refinement_of": 12,
+          "hybrid_of": 7
+        },
+        "members": [
+          {
+            "id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
+            "name": "hybrid_mom_20_liquidity_turnover_shock",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 10.072773,
+            "avg_final_score": 9.490097,
+            "evaluation_count": 79,
+            "is_primary": true,
+            "is_representative": true
+          },
+          {
+            "id": "82f8128b-7227-494a-9382-77d288a4bfa4",
+            "name": "hybrid_liquidity_turnover_shock_mom_20",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 10.072773,
+            "avg_final_score": 8.892481,
+            "evaluation_count": 39,
+            "is_primary": false,
+            "is_representative": true
+          },
+          {
+            "id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
+            "name": "hybrid_mom_20_value_ep",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 9.400734,
+            "avg_final_score": 8.516041,
+            "evaluation_count": 98,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
+            "name": "hybrid_size_small_value_bp",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": 8.689527,
+            "avg_final_score": 8.186928,
+            "evaluation_count": 35,
+            "is_primary": false,
+            "is_representative": true
+          },
+          {
+            "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
+            "name": "size_small",
+            "family": "other",
+            "status": "fragile",
+            "latest_final_score": 1.821213,
+            "avg_final_score": 2.57859,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": true
+          },
+          {
+            "id": "842ba988-63d3-4815-81ca-ced125ae7146",
+            "name": "value_ep",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": 1.818988,
+            "avg_final_score": 2.341134,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
+            "name": "hybrid_liquidity_turnover_shock_value_ep",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": 1.362693,
+            "avg_final_score": 6.552922,
+            "evaluation_count": 3,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
+            "name": "liquidity_turnover_shock",
+            "family": "liquidity",
+            "status": "fragile",
+            "latest_final_score": 0.384066,
+            "avg_final_score": 2.119795,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
+            "name": "mom_20",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 0.186667,
+            "avg_final_score": 1.726368,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
+            "name": "value_bp",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": -0.812508,
+            "avg_final_score": 1.087484,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
+            "name": "mom_plus_value",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": -0.934275,
+            "avg_final_score": 1.137994,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          }
+        ],
+        "primary_candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
+        "primary_candidate": "hybrid_mom_20_liquidity_turnover_shock",
+        "representative_count": 4,
+        "representative_candidates": [
+          "hybrid_mom_20_liquidity_turnover_shock",
+          "hybrid_liquidity_turnover_shock_mom_20",
+          "hybrid_size_small_value_bp",
+          "size_small"
+        ],
+        "is_representative": true,
+        "suppressed_member_count": 7
+      },
+      "is_primary_candidate": false,
+      "related_candidates": [
+        {
+          "candidate_id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
+          "candidate_name": "hybrid_size_small_value_bp",
+          "relationship_type": "refinement_of",
+          "strength": 0.92,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_size_small_value_bp",
+            "extra_atoms": [
+              "book_yield",
+              "hybrid"
+            ],
+            "parent_candidate": "size_small",
+            "shared_atoms": [
+              "inv",
+              "size_inv",
+              "small"
+            ],
+            "source": "backfill"
+          }
+        }
+      ],
+      "lineage": [
+        {
+          "candidate_id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
+          "candidate_name": "hybrid_size_small_value_bp",
+          "relationship_type": "refinement_of",
+          "strength": 0.92,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_size_small_value_bp",
+            "extra_atoms": [
+              "book_yield",
+              "hybrid"
+            ],
+            "parent_candidate": "size_small",
+            "shared_atoms": [
+              "inv",
+              "size_inv",
+              "small"
+            ],
+            "source": "backfill"
+          }
+        }
+      ]
+    },
+    {
+      "candidate_id": "842ba988-63d3-4815-81ca-ced125ae7146",
+      "candidate_name": "value_ep",
+      "family": "value",
+      "status": "fragile",
+      "family_score": 72.336936,
+      "family_recommended_action": "refine",
+      "relationship_count": 3,
+      "lineage_count": 3,
+      "cluster": {
+        "cluster_id": 1,
+        "cluster_size": 11,
+        "leader": "hybrid_mom_20_liquidity_turnover_shock",
+        "dominant_family": "momentum",
+        "relationship_mix": {
+          "duplicate_of": 1,
+          "same_family": 4,
+          "high_corr": 5,
+          "refinement_of": 12,
+          "hybrid_of": 7
+        },
+        "members": [
+          {
+            "id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
+            "name": "hybrid_mom_20_liquidity_turnover_shock",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 10.072773,
+            "avg_final_score": 9.490097,
+            "evaluation_count": 79,
+            "is_primary": true,
+            "is_representative": true
+          },
+          {
+            "id": "82f8128b-7227-494a-9382-77d288a4bfa4",
+            "name": "hybrid_liquidity_turnover_shock_mom_20",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 10.072773,
+            "avg_final_score": 8.892481,
+            "evaluation_count": 39,
+            "is_primary": false,
+            "is_representative": true
+          },
+          {
+            "id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
+            "name": "hybrid_mom_20_value_ep",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 9.400734,
+            "avg_final_score": 8.516041,
+            "evaluation_count": 98,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
+            "name": "hybrid_size_small_value_bp",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": 8.689527,
+            "avg_final_score": 8.186928,
+            "evaluation_count": 35,
+            "is_primary": false,
+            "is_representative": true
+          },
+          {
+            "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
+            "name": "size_small",
+            "family": "other",
+            "status": "fragile",
+            "latest_final_score": 1.821213,
+            "avg_final_score": 2.57859,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": true
+          },
+          {
+            "id": "842ba988-63d3-4815-81ca-ced125ae7146",
+            "name": "value_ep",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": 1.818988,
+            "avg_final_score": 2.341134,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
+            "name": "hybrid_liquidity_turnover_shock_value_ep",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": 1.362693,
+            "avg_final_score": 6.552922,
+            "evaluation_count": 3,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
+            "name": "liquidity_turnover_shock",
+            "family": "liquidity",
+            "status": "fragile",
+            "latest_final_score": 0.384066,
+            "avg_final_score": 2.119795,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
+            "name": "mom_20",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 0.186667,
+            "avg_final_score": 1.726368,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
+            "name": "value_bp",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": -0.812508,
+            "avg_final_score": 1.087484,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
+            "name": "mom_plus_value",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": -0.934275,
+            "avg_final_score": 1.137994,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          }
+        ],
+        "primary_candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
+        "primary_candidate": "hybrid_mom_20_liquidity_turnover_shock",
+        "representative_count": 4,
+        "representative_candidates": [
+          "hybrid_mom_20_liquidity_turnover_shock",
+          "hybrid_liquidity_turnover_shock_mom_20",
+          "hybrid_size_small_value_bp",
+          "size_small"
+        ],
+        "is_representative": false,
+        "suppressed_member_count": 7
+      },
+      "is_primary_candidate": false,
+      "related_candidates": [
+        {
+          "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
+          "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
+          "relationship_type": "refinement_of",
+          "strength": 0.72,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
+            "extra_atoms": [
+              "hybrid",
+              "shock",
+              "turnover_shock"
+            ],
+            "parent_candidate": "value_ep",
+            "shared_atoms": [
+              "earnings_yield"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
+          "candidate_name": "hybrid_mom_20_value_ep",
+          "relationship_type": "refinement_of",
+          "strength": 0.72,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_mom_20_value_ep",
+            "extra_atoms": [
+              "hybrid"
+            ],
+            "parent_candidate": "value_ep",
+            "shared_atoms": [
+              "earnings_yield"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
+          "candidate_name": "mom_plus_value",
+          "relationship_type": "hybrid_of",
+          "strength": 0.63,
+          "details": {
+            "basis": "hybrid_component_overlap",
+            "component_candidate": "value_ep",
+            "hybrid_atoms": [
+              "earnings_yield"
+            ],
+            "hybrid_candidate": "mom_plus_value",
+            "shared_atoms": [
+              "earnings_yield"
+            ],
+            "source": "backfill"
+          }
+        }
+      ],
+      "lineage": [
+        {
+          "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
+          "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
+          "relationship_type": "refinement_of",
+          "strength": 0.72,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
+            "extra_atoms": [
+              "hybrid",
+              "shock",
+              "turnover_shock"
+            ],
+            "parent_candidate": "value_ep",
+            "shared_atoms": [
+              "earnings_yield"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
+          "candidate_name": "hybrid_mom_20_value_ep",
+          "relationship_type": "refinement_of",
+          "strength": 0.72,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_mom_20_value_ep",
+            "extra_atoms": [
+              "hybrid"
+            ],
+            "parent_candidate": "value_ep",
+            "shared_atoms": [
+              "earnings_yield"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
+          "candidate_name": "mom_plus_value",
+          "relationship_type": "hybrid_of",
+          "strength": 0.63,
+          "details": {
+            "basis": "hybrid_component_overlap",
+            "component_candidate": "value_ep",
+            "hybrid_atoms": [
+              "earnings_yield"
+            ],
+            "hybrid_candidate": "mom_plus_value",
+            "shared_atoms": [
+              "earnings_yield"
+            ],
+            "source": "backfill"
+          }
+        }
+      ]
+    },
+    {
+      "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
+      "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
+      "family": "value",
+      "status": "fragile",
+      "family_score": 72.336936,
+      "family_recommended_action": "refine",
+      "relationship_count": 8,
+      "lineage_count": 7,
+      "cluster": {
+        "cluster_id": 1,
+        "cluster_size": 11,
+        "leader": "hybrid_mom_20_liquidity_turnover_shock",
+        "dominant_family": "momentum",
+        "relationship_mix": {
+          "duplicate_of": 1,
+          "same_family": 4,
+          "high_corr": 5,
+          "refinement_of": 12,
+          "hybrid_of": 7
+        },
+        "members": [
+          {
+            "id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
+            "name": "hybrid_mom_20_liquidity_turnover_shock",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 10.072773,
+            "avg_final_score": 9.490097,
+            "evaluation_count": 79,
+            "is_primary": true,
+            "is_representative": true
+          },
+          {
+            "id": "82f8128b-7227-494a-9382-77d288a4bfa4",
+            "name": "hybrid_liquidity_turnover_shock_mom_20",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 10.072773,
+            "avg_final_score": 8.892481,
+            "evaluation_count": 39,
+            "is_primary": false,
+            "is_representative": true
+          },
+          {
+            "id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
+            "name": "hybrid_mom_20_value_ep",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 9.400734,
+            "avg_final_score": 8.516041,
+            "evaluation_count": 98,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
+            "name": "hybrid_size_small_value_bp",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": 8.689527,
+            "avg_final_score": 8.186928,
+            "evaluation_count": 35,
+            "is_primary": false,
+            "is_representative": true
+          },
+          {
+            "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
+            "name": "size_small",
+            "family": "other",
+            "status": "fragile",
+            "latest_final_score": 1.821213,
+            "avg_final_score": 2.57859,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": true
+          },
+          {
+            "id": "842ba988-63d3-4815-81ca-ced125ae7146",
+            "name": "value_ep",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": 1.818988,
+            "avg_final_score": 2.341134,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
+            "name": "hybrid_liquidity_turnover_shock_value_ep",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": 1.362693,
+            "avg_final_score": 6.552922,
+            "evaluation_count": 3,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
+            "name": "liquidity_turnover_shock",
+            "family": "liquidity",
+            "status": "fragile",
+            "latest_final_score": 0.384066,
+            "avg_final_score": 2.119795,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
+            "name": "mom_20",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 0.186667,
+            "avg_final_score": 1.726368,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
+            "name": "value_bp",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": -0.812508,
+            "avg_final_score": 1.087484,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
+            "name": "mom_plus_value",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": -0.934275,
+            "avg_final_score": 1.137994,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          }
+        ],
+        "primary_candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
+        "primary_candidate": "hybrid_mom_20_liquidity_turnover_shock",
+        "representative_count": 4,
+        "representative_candidates": [
+          "hybrid_mom_20_liquidity_turnover_shock",
+          "hybrid_liquidity_turnover_shock_mom_20",
+          "hybrid_size_small_value_bp",
+          "size_small"
+        ],
+        "is_representative": false,
+        "suppressed_member_count": 7
+      },
+      "is_primary_candidate": false,
+      "related_candidates": [
+        {
+          "candidate_id": "f0356652-fafa-4f95-b588-cdcb661382f3",
+          "candidate_name": "liquidity_turnover_shock",
+          "relationship_type": "high_corr",
+          "strength": 1.0,
+          "details": {
+            "peer_count": 1
+          }
+        },
+        {
+          "candidate_id": "82f8128b-7227-494a-9382-77d288a4bfa4",
+          "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
+          "relationship_type": "refinement_of",
+          "strength": 0.92,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
+            "extra_atoms": [
+              "earnings_yield"
+            ],
+            "parent_candidate": "hybrid_liquidity_turnover_shock_mom_20",
+            "shared_atoms": [
+              "hybrid",
+              "shock",
+              "turnover_shock"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
+          "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
+          "relationship_type": "refinement_of",
+          "strength": 0.92,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
+            "extra_atoms": [
+              "earnings_yield"
+            ],
+            "parent_candidate": "hybrid_mom_20_liquidity_turnover_shock",
+            "shared_atoms": [
+              "hybrid",
+              "shock",
+              "turnover_shock"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
+          "candidate_name": "hybrid_mom_20_value_ep",
+          "relationship_type": "refinement_of",
+          "strength": 0.8200000000000001,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
+            "extra_atoms": [
+              "shock",
+              "turnover_shock"
+            ],
+            "parent_candidate": "hybrid_mom_20_value_ep",
+            "shared_atoms": [
+              "earnings_yield",
+              "hybrid"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "f0356652-fafa-4f95-b588-cdcb661382f3",
+          "candidate_name": "liquidity_turnover_shock",
+          "relationship_type": "refinement_of",
+          "strength": 0.82,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
+            "extra_atoms": [
+              "earnings_yield",
+              "hybrid"
+            ],
+            "parent_candidate": "liquidity_turnover_shock",
+            "shared_atoms": [
+              "shock",
+              "turnover_shock"
+            ]
+          }
+        },
+        {
+          "candidate_id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
+          "candidate_name": "mom_plus_value",
+          "relationship_type": "refinement_of",
+          "strength": 0.72,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
+            "extra_atoms": [
+              "hybrid",
+              "shock",
+              "turnover_shock"
+            ],
+            "parent_candidate": "mom_plus_value",
+            "shared_atoms": [
+              "earnings_yield"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "842ba988-63d3-4815-81ca-ced125ae7146",
+          "candidate_name": "value_ep",
+          "relationship_type": "refinement_of",
+          "strength": 0.72,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
+            "extra_atoms": [
+              "hybrid",
+              "shock",
+              "turnover_shock"
+            ],
+            "parent_candidate": "value_ep",
+            "shared_atoms": [
+              "earnings_yield"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
+          "candidate_name": "hybrid_size_small_value_bp",
+          "relationship_type": "hybrid_of",
+          "strength": 0.63,
+          "details": {
+            "basis": "hybrid_component_overlap",
+            "component_candidate": "hybrid_liquidity_turnover_shock_value_ep",
+            "hybrid_atoms": [
+              "book_yield",
+              "hybrid",
+              "inv",
+              "size_inv",
+              "small"
+            ],
+            "hybrid_candidate": "hybrid_size_small_value_bp",
+            "shared_atoms": [
+              "hybrid"
+            ],
+            "source": "backfill"
+          }
+        }
+      ],
+      "lineage": [
+        {
+          "candidate_id": "82f8128b-7227-494a-9382-77d288a4bfa4",
+          "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
+          "relationship_type": "refinement_of",
+          "strength": 0.92,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
+            "extra_atoms": [
+              "earnings_yield"
+            ],
+            "parent_candidate": "hybrid_liquidity_turnover_shock_mom_20",
+            "shared_atoms": [
+              "hybrid",
+              "shock",
+              "turnover_shock"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
+          "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
+          "relationship_type": "refinement_of",
+          "strength": 0.92,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
+            "extra_atoms": [
+              "earnings_yield"
+            ],
+            "parent_candidate": "hybrid_mom_20_liquidity_turnover_shock",
+            "shared_atoms": [
+              "hybrid",
+              "shock",
+              "turnover_shock"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
+          "candidate_name": "hybrid_mom_20_value_ep",
+          "relationship_type": "refinement_of",
+          "strength": 0.8200000000000001,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
+            "extra_atoms": [
+              "shock",
+              "turnover_shock"
+            ],
+            "parent_candidate": "hybrid_mom_20_value_ep",
+            "shared_atoms": [
+              "earnings_yield",
+              "hybrid"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "f0356652-fafa-4f95-b588-cdcb661382f3",
+          "candidate_name": "liquidity_turnover_shock",
+          "relationship_type": "refinement_of",
+          "strength": 0.82,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
+            "extra_atoms": [
+              "earnings_yield",
+              "hybrid"
+            ],
+            "parent_candidate": "liquidity_turnover_shock",
+            "shared_atoms": [
+              "shock",
+              "turnover_shock"
+            ]
+          }
+        },
+        {
+          "candidate_id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
+          "candidate_name": "mom_plus_value",
+          "relationship_type": "refinement_of",
+          "strength": 0.72,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
+            "extra_atoms": [
+              "hybrid",
+              "shock",
+              "turnover_shock"
+            ],
+            "parent_candidate": "mom_plus_value",
+            "shared_atoms": [
+              "earnings_yield"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "842ba988-63d3-4815-81ca-ced125ae7146",
+          "candidate_name": "value_ep",
+          "relationship_type": "refinement_of",
+          "strength": 0.72,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
+            "extra_atoms": [
+              "hybrid",
+              "shock",
+              "turnover_shock"
+            ],
+            "parent_candidate": "value_ep",
+            "shared_atoms": [
+              "earnings_yield"
+            ],
+            "source": "backfill"
+          }
+        },
+        {
+          "candidate_id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
+          "candidate_name": "hybrid_size_small_value_bp",
+          "relationship_type": "hybrid_of",
+          "strength": 0.63,
+          "details": {
+            "basis": "hybrid_component_overlap",
+            "component_candidate": "hybrid_liquidity_turnover_shock_value_ep",
+            "hybrid_atoms": [
+              "book_yield",
+              "hybrid",
+              "inv",
+              "size_inv",
+              "small"
+            ],
+            "hybrid_candidate": "hybrid_size_small_value_bp",
+            "shared_atoms": [
+              "hybrid"
+            ],
+            "source": "backfill"
+          }
+        }
+      ]
+    },
+    {
+      "candidate_id": "f0356652-fafa-4f95-b588-cdcb661382f3",
+      "candidate_name": "liquidity_turnover_shock",
+      "family": "liquidity",
+      "status": "fragile",
+      "family_score": 38.95836,
+      "family_recommended_action": "explore_new_branch",
+      "relationship_count": 6,
+      "lineage_count": 3,
+      "cluster": {
+        "cluster_id": 1,
+        "cluster_size": 11,
+        "leader": "hybrid_mom_20_liquidity_turnover_shock",
+        "dominant_family": "momentum",
+        "relationship_mix": {
+          "duplicate_of": 1,
+          "same_family": 4,
+          "high_corr": 5,
+          "refinement_of": 12,
+          "hybrid_of": 7
+        },
+        "members": [
+          {
+            "id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
+            "name": "hybrid_mom_20_liquidity_turnover_shock",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 10.072773,
+            "avg_final_score": 9.490097,
+            "evaluation_count": 79,
+            "is_primary": true,
+            "is_representative": true
+          },
+          {
+            "id": "82f8128b-7227-494a-9382-77d288a4bfa4",
+            "name": "hybrid_liquidity_turnover_shock_mom_20",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 10.072773,
+            "avg_final_score": 8.892481,
+            "evaluation_count": 39,
+            "is_primary": false,
+            "is_representative": true
+          },
+          {
+            "id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
+            "name": "hybrid_mom_20_value_ep",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 9.400734,
+            "avg_final_score": 8.516041,
+            "evaluation_count": 98,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
+            "name": "hybrid_size_small_value_bp",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": 8.689527,
+            "avg_final_score": 8.186928,
+            "evaluation_count": 35,
+            "is_primary": false,
+            "is_representative": true
+          },
+          {
+            "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
+            "name": "size_small",
+            "family": "other",
+            "status": "fragile",
+            "latest_final_score": 1.821213,
+            "avg_final_score": 2.57859,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": true
+          },
+          {
+            "id": "842ba988-63d3-4815-81ca-ced125ae7146",
+            "name": "value_ep",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": 1.818988,
+            "avg_final_score": 2.341134,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
+            "name": "hybrid_liquidity_turnover_shock_value_ep",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": 1.362693,
+            "avg_final_score": 6.552922,
+            "evaluation_count": 3,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
+            "name": "liquidity_turnover_shock",
+            "family": "liquidity",
+            "status": "fragile",
+            "latest_final_score": 0.384066,
+            "avg_final_score": 2.119795,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
+            "name": "mom_20",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 0.186667,
+            "avg_final_score": 1.726368,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
+            "name": "value_bp",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": -0.812508,
+            "avg_final_score": 1.087484,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
+            "name": "mom_plus_value",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": -0.934275,
+            "avg_final_score": 1.137994,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          }
+        ],
+        "primary_candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
+        "primary_candidate": "hybrid_mom_20_liquidity_turnover_shock",
+        "representative_count": 4,
+        "representative_candidates": [
+          "hybrid_mom_20_liquidity_turnover_shock",
+          "hybrid_liquidity_turnover_shock_mom_20",
+          "hybrid_size_small_value_bp",
+          "size_small"
+        ],
+        "is_representative": false,
+        "suppressed_member_count": 7
+      },
+      "is_primary_candidate": false,
+      "related_candidates": [
+        {
+          "candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
+          "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
+          "relationship_type": "high_corr",
+          "strength": 1.0,
+          "details": {
+            "peer_count": 1
+          }
+        },
+        {
+          "candidate_id": "82f8128b-7227-494a-9382-77d288a4bfa4",
+          "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
+          "relationship_type": "high_corr",
+          "strength": 1.0,
+          "details": {
+            "peer_count": 1
+          }
+        },
+        {
+          "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
+          "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
+          "relationship_type": "high_corr",
+          "strength": 1.0,
+          "details": {
+            "peer_count": 1
+          }
+        },
+        {
+          "candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
+          "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
+          "relationship_type": "refinement_of",
+          "strength": 0.82,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_mom_20_liquidity_turnover_shock",
+            "extra_atoms": [
+              "hybrid"
+            ],
+            "parent_candidate": "liquidity_turnover_shock",
+            "shared_atoms": [
+              "shock",
+              "turnover_shock"
+            ]
+          }
+        },
+        {
+          "candidate_id": "82f8128b-7227-494a-9382-77d288a4bfa4",
+          "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
+          "relationship_type": "refinement_of",
+          "strength": 0.82,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_liquidity_turnover_shock_mom_20",
+            "extra_atoms": [
+              "hybrid"
+            ],
+            "parent_candidate": "liquidity_turnover_shock",
+            "shared_atoms": [
+              "shock",
+              "turnover_shock"
+            ]
+          }
+        },
+        {
+          "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
+          "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
+          "relationship_type": "refinement_of",
+          "strength": 0.82,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
+            "extra_atoms": [
+              "earnings_yield",
+              "hybrid"
+            ],
+            "parent_candidate": "liquidity_turnover_shock",
+            "shared_atoms": [
+              "shock",
+              "turnover_shock"
+            ]
+          }
+        }
+      ],
+      "lineage": [
+        {
+          "candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
+          "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
+          "relationship_type": "refinement_of",
+          "strength": 0.82,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_mom_20_liquidity_turnover_shock",
+            "extra_atoms": [
+              "hybrid"
+            ],
+            "parent_candidate": "liquidity_turnover_shock",
+            "shared_atoms": [
+              "shock",
+              "turnover_shock"
+            ]
+          }
+        },
+        {
+          "candidate_id": "82f8128b-7227-494a-9382-77d288a4bfa4",
+          "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
+          "relationship_type": "refinement_of",
+          "strength": 0.82,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_liquidity_turnover_shock_mom_20",
+            "extra_atoms": [
+              "hybrid"
+            ],
+            "parent_candidate": "liquidity_turnover_shock",
+            "shared_atoms": [
+              "shock",
+              "turnover_shock"
+            ]
+          }
+        },
+        {
+          "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
+          "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
+          "relationship_type": "refinement_of",
+          "strength": 0.82,
+          "details": {
+            "basis": "atom_superset",
+            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
+            "extra_atoms": [
+              "earnings_yield",
+              "hybrid"
+            ],
+            "parent_candidate": "liquidity_turnover_shock",
+            "shared_atoms": [
+              "shock",
+              "turnover_shock"
+            ]
+          }
+        }
+      ]
+    },
+    {
       "candidate_id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
       "candidate_name": "mom_20",
       "family": "momentum",
       "status": "fragile",
-      "family_score": 83.705056,
+      "family_score": 83.620768,
       "family_recommended_action": "refine",
       "relationship_count": 6,
       "lineage_count": 0,
@@ -1225,39 +3294,6 @@
             "is_representative": true
           },
           {
-            "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
-            "name": "mom_20",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.793076,
-            "avg_final_score": 1.726368,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
-            "name": "liquidity_turnover_shock",
-            "family": "liquidity",
-            "status": "fragile",
-            "latest_final_score": 9.723041,
-            "avg_final_score": 2.119795,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
-            "name": "mom_plus_value",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.601585,
-            "avg_final_score": 1.190673,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
             "id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
             "name": "hybrid_mom_20_value_ep",
             "family": "momentum",
@@ -1265,28 +3301,6 @@
             "latest_final_score": 9.400734,
             "avg_final_score": 8.516041,
             "evaluation_count": 98,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "842ba988-63d3-4815-81ca-ced125ae7146",
-            "name": "value_ep",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 9.099535,
-            "avg_final_score": 2.377536,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
-            "name": "size_small",
-            "family": "other",
-            "status": "fragile",
-            "latest_final_score": 9.015223,
-            "avg_final_score": 2.600241,
-            "evaluation_count": 200,
             "is_primary": false,
             "is_representative": false
           },
@@ -1299,15 +3313,26 @@
             "avg_final_score": 8.186928,
             "evaluation_count": 35,
             "is_primary": false,
-            "is_representative": false
+            "is_representative": true
           },
           {
-            "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
-            "name": "value_bp",
+            "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
+            "name": "size_small",
+            "family": "other",
+            "status": "fragile",
+            "latest_final_score": 1.821213,
+            "avg_final_score": 2.57859,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": true
+          },
+          {
+            "id": "842ba988-63d3-4815-81ca-ced125ae7146",
+            "name": "value_ep",
             "family": "value",
             "status": "fragile",
-            "latest_final_score": 7.432826,
-            "avg_final_score": 1.087484,
+            "latest_final_score": 1.818988,
+            "avg_final_score": 2.341134,
             "evaluation_count": 200,
             "is_primary": false,
             "is_representative": false
@@ -1322,6 +3347,50 @@
             "evaluation_count": 3,
             "is_primary": false,
             "is_representative": false
+          },
+          {
+            "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
+            "name": "liquidity_turnover_shock",
+            "family": "liquidity",
+            "status": "fragile",
+            "latest_final_score": 0.384066,
+            "avg_final_score": 2.119795,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
+            "name": "mom_20",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 0.186667,
+            "avg_final_score": 1.726368,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
+            "name": "value_bp",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": -0.812508,
+            "avg_final_score": 1.087484,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
+            "name": "mom_plus_value",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": -0.934275,
+            "avg_final_score": 1.137994,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
           }
         ],
         "primary_candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
@@ -1330,8 +3399,8 @@
         "representative_candidates": [
           "hybrid_mom_20_liquidity_turnover_shock",
           "hybrid_liquidity_turnover_shock_mom_20",
-          "liquidity_turnover_shock",
-          "value_ep"
+          "hybrid_size_small_value_bp",
+          "size_small"
         ],
         "is_representative": false,
         "suppressed_member_count": 7
@@ -1400,14 +3469,14 @@
       "lineage": []
     },
     {
-      "candidate_id": "f0356652-fafa-4f95-b588-cdcb661382f3",
-      "candidate_name": "liquidity_turnover_shock",
-      "family": "liquidity",
+      "candidate_id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
+      "candidate_name": "value_bp",
+      "family": "value",
       "status": "fragile",
-      "family_score": 38.95836,
-      "family_recommended_action": "explore_new_branch",
-      "relationship_count": 6,
-      "lineage_count": 3,
+      "family_score": 72.336936,
+      "family_recommended_action": "refine",
+      "relationship_count": 1,
+      "lineage_count": 1,
       "cluster": {
         "cluster_id": 1,
         "cluster_size": 11,
@@ -1444,39 +3513,6 @@
             "is_representative": true
           },
           {
-            "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
-            "name": "mom_20",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.793076,
-            "avg_final_score": 1.726368,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
-            "name": "liquidity_turnover_shock",
-            "family": "liquidity",
-            "status": "fragile",
-            "latest_final_score": 9.723041,
-            "avg_final_score": 2.119795,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
-            "name": "mom_plus_value",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.601585,
-            "avg_final_score": 1.190673,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
             "id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
             "name": "hybrid_mom_20_value_ep",
             "family": "momentum",
@@ -1484,28 +3520,6 @@
             "latest_final_score": 9.400734,
             "avg_final_score": 8.516041,
             "evaluation_count": 98,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "842ba988-63d3-4815-81ca-ced125ae7146",
-            "name": "value_ep",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 9.099535,
-            "avg_final_score": 2.377536,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
-            "name": "size_small",
-            "family": "other",
-            "status": "fragile",
-            "latest_final_score": 9.015223,
-            "avg_final_score": 2.600241,
-            "evaluation_count": 200,
             "is_primary": false,
             "is_representative": false
           },
@@ -1518,15 +3532,26 @@
             "avg_final_score": 8.186928,
             "evaluation_count": 35,
             "is_primary": false,
-            "is_representative": false
+            "is_representative": true
           },
           {
-            "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
-            "name": "value_bp",
+            "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
+            "name": "size_small",
+            "family": "other",
+            "status": "fragile",
+            "latest_final_score": 1.821213,
+            "avg_final_score": 2.57859,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": true
+          },
+          {
+            "id": "842ba988-63d3-4815-81ca-ced125ae7146",
+            "name": "value_ep",
             "family": "value",
             "status": "fragile",
-            "latest_final_score": 7.432826,
-            "avg_final_score": 1.087484,
+            "latest_final_score": 1.818988,
+            "avg_final_score": 2.341134,
             "evaluation_count": 200,
             "is_primary": false,
             "is_representative": false
@@ -1541,6 +3566,50 @@
             "evaluation_count": 3,
             "is_primary": false,
             "is_representative": false
+          },
+          {
+            "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
+            "name": "liquidity_turnover_shock",
+            "family": "liquidity",
+            "status": "fragile",
+            "latest_final_score": 0.384066,
+            "avg_final_score": 2.119795,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
+            "name": "mom_20",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 0.186667,
+            "avg_final_score": 1.726368,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
+            "name": "value_bp",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": -0.812508,
+            "avg_final_score": 1.087484,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
+            "name": "mom_plus_value",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": -0.934275,
+            "avg_final_score": 1.137994,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
           }
         ],
         "primary_candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
@@ -1549,151 +3618,56 @@
         "representative_candidates": [
           "hybrid_mom_20_liquidity_turnover_shock",
           "hybrid_liquidity_turnover_shock_mom_20",
-          "liquidity_turnover_shock",
-          "value_ep"
+          "hybrid_size_small_value_bp",
+          "size_small"
         ],
-        "is_representative": true,
+        "is_representative": false,
         "suppressed_member_count": 7
       },
       "is_primary_candidate": false,
       "related_candidates": [
         {
-          "candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-          "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
-          "relationship_type": "high_corr",
-          "strength": 1.0,
-          "details": {
-            "peer_count": 1
-          }
-        },
-        {
-          "candidate_id": "82f8128b-7227-494a-9382-77d288a4bfa4",
-          "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
-          "relationship_type": "high_corr",
-          "strength": 1.0,
-          "details": {
-            "peer_count": 1
-          }
-        },
-        {
-          "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
-          "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
-          "relationship_type": "high_corr",
-          "strength": 1.0,
-          "details": {
-            "peer_count": 1
-          }
-        },
-        {
-          "candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-          "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
+          "candidate_id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
+          "candidate_name": "hybrid_size_small_value_bp",
           "relationship_type": "refinement_of",
-          "strength": 0.82,
+          "strength": 0.72,
           "details": {
             "basis": "atom_superset",
-            "child_candidate": "hybrid_mom_20_liquidity_turnover_shock",
+            "child_candidate": "hybrid_size_small_value_bp",
             "extra_atoms": [
-              "hybrid"
+              "hybrid",
+              "inv",
+              "size_inv",
+              "small"
             ],
-            "parent_candidate": "liquidity_turnover_shock",
+            "parent_candidate": "value_bp",
             "shared_atoms": [
-              "shock",
-              "turnover_shock"
-            ]
-          }
-        },
-        {
-          "candidate_id": "82f8128b-7227-494a-9382-77d288a4bfa4",
-          "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
-          "relationship_type": "refinement_of",
-          "strength": 0.82,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_liquidity_turnover_shock_mom_20",
-            "extra_atoms": [
-              "hybrid"
+              "book_yield"
             ],
-            "parent_candidate": "liquidity_turnover_shock",
-            "shared_atoms": [
-              "shock",
-              "turnover_shock"
-            ]
-          }
-        },
-        {
-          "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
-          "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
-          "relationship_type": "refinement_of",
-          "strength": 0.82,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
-            "extra_atoms": [
-              "earnings_yield",
-              "hybrid"
-            ],
-            "parent_candidate": "liquidity_turnover_shock",
-            "shared_atoms": [
-              "shock",
-              "turnover_shock"
-            ]
+            "source": "backfill"
           }
         }
       ],
       "lineage": [
         {
-          "candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-          "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
+          "candidate_id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
+          "candidate_name": "hybrid_size_small_value_bp",
           "relationship_type": "refinement_of",
-          "strength": 0.82,
+          "strength": 0.72,
           "details": {
             "basis": "atom_superset",
-            "child_candidate": "hybrid_mom_20_liquidity_turnover_shock",
+            "child_candidate": "hybrid_size_small_value_bp",
             "extra_atoms": [
-              "hybrid"
+              "hybrid",
+              "inv",
+              "size_inv",
+              "small"
             ],
-            "parent_candidate": "liquidity_turnover_shock",
+            "parent_candidate": "value_bp",
             "shared_atoms": [
-              "shock",
-              "turnover_shock"
-            ]
-          }
-        },
-        {
-          "candidate_id": "82f8128b-7227-494a-9382-77d288a4bfa4",
-          "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
-          "relationship_type": "refinement_of",
-          "strength": 0.82,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_liquidity_turnover_shock_mom_20",
-            "extra_atoms": [
-              "hybrid"
+              "book_yield"
             ],
-            "parent_candidate": "liquidity_turnover_shock",
-            "shared_atoms": [
-              "shock",
-              "turnover_shock"
-            ]
-          }
-        },
-        {
-          "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
-          "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
-          "relationship_type": "refinement_of",
-          "strength": 0.82,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
-            "extra_atoms": [
-              "earnings_yield",
-              "hybrid"
-            ],
-            "parent_candidate": "liquidity_turnover_shock",
-            "shared_atoms": [
-              "shock",
-              "turnover_shock"
-            ]
+            "source": "backfill"
           }
         }
       ]
@@ -1703,7 +3677,7 @@
       "candidate_name": "mom_plus_value",
       "family": "momentum",
       "status": "fragile",
-      "family_score": 83.705056,
+      "family_score": 83.620768,
       "family_recommended_action": "refine",
       "relationship_count": 5,
       "lineage_count": 3,
@@ -1743,39 +3717,6 @@
             "is_representative": true
           },
           {
-            "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
-            "name": "mom_20",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.793076,
-            "avg_final_score": 1.726368,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
-            "name": "liquidity_turnover_shock",
-            "family": "liquidity",
-            "status": "fragile",
-            "latest_final_score": 9.723041,
-            "avg_final_score": 2.119795,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
-            "name": "mom_plus_value",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.601585,
-            "avg_final_score": 1.190673,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
             "id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
             "name": "hybrid_mom_20_value_ep",
             "family": "momentum",
@@ -1783,28 +3724,6 @@
             "latest_final_score": 9.400734,
             "avg_final_score": 8.516041,
             "evaluation_count": 98,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "842ba988-63d3-4815-81ca-ced125ae7146",
-            "name": "value_ep",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 9.099535,
-            "avg_final_score": 2.377536,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
-            "name": "size_small",
-            "family": "other",
-            "status": "fragile",
-            "latest_final_score": 9.015223,
-            "avg_final_score": 2.600241,
-            "evaluation_count": 200,
             "is_primary": false,
             "is_representative": false
           },
@@ -1817,15 +3736,26 @@
             "avg_final_score": 8.186928,
             "evaluation_count": 35,
             "is_primary": false,
-            "is_representative": false
+            "is_representative": true
           },
           {
-            "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
-            "name": "value_bp",
+            "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
+            "name": "size_small",
+            "family": "other",
+            "status": "fragile",
+            "latest_final_score": 1.821213,
+            "avg_final_score": 2.57859,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": true
+          },
+          {
+            "id": "842ba988-63d3-4815-81ca-ced125ae7146",
+            "name": "value_ep",
             "family": "value",
             "status": "fragile",
-            "latest_final_score": 7.432826,
-            "avg_final_score": 1.087484,
+            "latest_final_score": 1.818988,
+            "avg_final_score": 2.341134,
             "evaluation_count": 200,
             "is_primary": false,
             "is_representative": false
@@ -1840,6 +3770,50 @@
             "evaluation_count": 3,
             "is_primary": false,
             "is_representative": false
+          },
+          {
+            "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
+            "name": "liquidity_turnover_shock",
+            "family": "liquidity",
+            "status": "fragile",
+            "latest_final_score": 0.384066,
+            "avg_final_score": 2.119795,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
+            "name": "mom_20",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": 0.186667,
+            "avg_final_score": 1.726368,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
+            "name": "value_bp",
+            "family": "value",
+            "status": "fragile",
+            "latest_final_score": -0.812508,
+            "avg_final_score": 1.087484,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
+          },
+          {
+            "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
+            "name": "mom_plus_value",
+            "family": "momentum",
+            "status": "fragile",
+            "latest_final_score": -0.934275,
+            "avg_final_score": 1.137994,
+            "evaluation_count": 200,
+            "is_primary": false,
+            "is_representative": false
           }
         ],
         "primary_candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
@@ -1848,8 +3822,8 @@
         "representative_candidates": [
           "hybrid_mom_20_liquidity_turnover_shock",
           "hybrid_liquidity_turnover_shock_mom_20",
-          "liquidity_turnover_shock",
-          "value_ep"
+          "hybrid_size_small_value_bp",
+          "size_small"
         ],
         "is_representative": false,
         "suppressed_member_count": 7
@@ -1985,1980 +3959,6 @@
             "hybrid_candidate": "mom_plus_value",
             "shared_atoms": [
               "earnings_yield"
-            ],
-            "source": "backfill"
-          }
-        }
-      ]
-    },
-    {
-      "candidate_id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
-      "candidate_name": "hybrid_mom_20_value_ep",
-      "family": "momentum",
-      "status": "fragile",
-      "family_score": 83.705056,
-      "family_recommended_action": "refine",
-      "relationship_count": 8,
-      "lineage_count": 6,
-      "cluster": {
-        "cluster_id": 1,
-        "cluster_size": 11,
-        "leader": "hybrid_mom_20_liquidity_turnover_shock",
-        "dominant_family": "momentum",
-        "relationship_mix": {
-          "duplicate_of": 1,
-          "same_family": 4,
-          "high_corr": 5,
-          "refinement_of": 12,
-          "hybrid_of": 7
-        },
-        "members": [
-          {
-            "id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-            "name": "hybrid_mom_20_liquidity_turnover_shock",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 10.072773,
-            "avg_final_score": 9.490097,
-            "evaluation_count": 79,
-            "is_primary": true,
-            "is_representative": true
-          },
-          {
-            "id": "82f8128b-7227-494a-9382-77d288a4bfa4",
-            "name": "hybrid_liquidity_turnover_shock_mom_20",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 10.072773,
-            "avg_final_score": 8.892481,
-            "evaluation_count": 39,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
-            "name": "mom_20",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.793076,
-            "avg_final_score": 1.726368,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
-            "name": "liquidity_turnover_shock",
-            "family": "liquidity",
-            "status": "fragile",
-            "latest_final_score": 9.723041,
-            "avg_final_score": 2.119795,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
-            "name": "mom_plus_value",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.601585,
-            "avg_final_score": 1.190673,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
-            "name": "hybrid_mom_20_value_ep",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.400734,
-            "avg_final_score": 8.516041,
-            "evaluation_count": 98,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "842ba988-63d3-4815-81ca-ced125ae7146",
-            "name": "value_ep",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 9.099535,
-            "avg_final_score": 2.377536,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
-            "name": "size_small",
-            "family": "other",
-            "status": "fragile",
-            "latest_final_score": 9.015223,
-            "avg_final_score": 2.600241,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
-            "name": "hybrid_size_small_value_bp",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 8.689527,
-            "avg_final_score": 8.186928,
-            "evaluation_count": 35,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
-            "name": "value_bp",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 7.432826,
-            "avg_final_score": 1.087484,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
-            "name": "hybrid_liquidity_turnover_shock_value_ep",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 1.362693,
-            "avg_final_score": 6.552922,
-            "evaluation_count": 3,
-            "is_primary": false,
-            "is_representative": false
-          }
-        ],
-        "primary_candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-        "primary_candidate": "hybrid_mom_20_liquidity_turnover_shock",
-        "representative_count": 4,
-        "representative_candidates": [
-          "hybrid_mom_20_liquidity_turnover_shock",
-          "hybrid_liquidity_turnover_shock_mom_20",
-          "liquidity_turnover_shock",
-          "value_ep"
-        ],
-        "is_representative": false,
-        "suppressed_member_count": 7
-      },
-      "is_primary_candidate": false,
-      "related_candidates": [
-        {
-          "candidate_id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
-          "candidate_name": "mom_20",
-          "relationship_type": "high_corr",
-          "strength": 1.0,
-          "details": {
-            "peer_count": 1
-          }
-        },
-        {
-          "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
-          "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
-          "relationship_type": "refinement_of",
-          "strength": 0.8200000000000001,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
-            "extra_atoms": [
-              "shock",
-              "turnover_shock"
-            ],
-            "parent_candidate": "hybrid_mom_20_value_ep",
-            "shared_atoms": [
-              "earnings_yield",
-              "hybrid"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "842ba988-63d3-4815-81ca-ced125ae7146",
-          "candidate_name": "value_ep",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_mom_20_value_ep",
-            "extra_atoms": [
-              "hybrid"
-            ],
-            "parent_candidate": "value_ep",
-            "shared_atoms": [
-              "earnings_yield"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
-          "candidate_name": "mom_plus_value",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_mom_20_value_ep",
-            "extra_atoms": [
-              "hybrid"
-            ],
-            "parent_candidate": "mom_plus_value",
-            "shared_atoms": [
-              "earnings_yield"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-          "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
-          "relationship_type": "hybrid_of",
-          "strength": 0.63,
-          "details": {
-            "basis": "hybrid_component_overlap",
-            "component_candidate": "hybrid_mom_20_value_ep",
-            "hybrid_atoms": [
-              "hybrid",
-              "shock",
-              "turnover_shock"
-            ],
-            "hybrid_candidate": "hybrid_mom_20_liquidity_turnover_shock",
-            "shared_atoms": [
-              "hybrid"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
-          "candidate_name": "hybrid_size_small_value_bp",
-          "relationship_type": "hybrid_of",
-          "strength": 0.63,
-          "details": {
-            "basis": "hybrid_component_overlap",
-            "component_candidate": "hybrid_mom_20_value_ep",
-            "hybrid_atoms": [
-              "book_yield",
-              "hybrid",
-              "inv",
-              "size_inv",
-              "small"
-            ],
-            "hybrid_candidate": "hybrid_size_small_value_bp",
-            "shared_atoms": [
-              "hybrid"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "82f8128b-7227-494a-9382-77d288a4bfa4",
-          "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
-          "relationship_type": "hybrid_of",
-          "strength": 0.63,
-          "details": {
-            "basis": "hybrid_component_overlap",
-            "component_candidate": "hybrid_mom_20_value_ep",
-            "hybrid_atoms": [
-              "hybrid",
-              "shock",
-              "turnover_shock"
-            ],
-            "hybrid_candidate": "hybrid_liquidity_turnover_shock_mom_20",
-            "shared_atoms": [
-              "hybrid"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
-          "candidate_name": "mom_20",
-          "relationship_type": "same_family",
-          "strength": 0.4,
-          "details": {
-            "family": "momentum",
-            "family_size": 2
-          }
-        }
-      ],
-      "lineage": [
-        {
-          "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
-          "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
-          "relationship_type": "refinement_of",
-          "strength": 0.8200000000000001,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
-            "extra_atoms": [
-              "shock",
-              "turnover_shock"
-            ],
-            "parent_candidate": "hybrid_mom_20_value_ep",
-            "shared_atoms": [
-              "earnings_yield",
-              "hybrid"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "842ba988-63d3-4815-81ca-ced125ae7146",
-          "candidate_name": "value_ep",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_mom_20_value_ep",
-            "extra_atoms": [
-              "hybrid"
-            ],
-            "parent_candidate": "value_ep",
-            "shared_atoms": [
-              "earnings_yield"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
-          "candidate_name": "mom_plus_value",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_mom_20_value_ep",
-            "extra_atoms": [
-              "hybrid"
-            ],
-            "parent_candidate": "mom_plus_value",
-            "shared_atoms": [
-              "earnings_yield"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-          "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
-          "relationship_type": "hybrid_of",
-          "strength": 0.63,
-          "details": {
-            "basis": "hybrid_component_overlap",
-            "component_candidate": "hybrid_mom_20_value_ep",
-            "hybrid_atoms": [
-              "hybrid",
-              "shock",
-              "turnover_shock"
-            ],
-            "hybrid_candidate": "hybrid_mom_20_liquidity_turnover_shock",
-            "shared_atoms": [
-              "hybrid"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
-          "candidate_name": "hybrid_size_small_value_bp",
-          "relationship_type": "hybrid_of",
-          "strength": 0.63,
-          "details": {
-            "basis": "hybrid_component_overlap",
-            "component_candidate": "hybrid_mom_20_value_ep",
-            "hybrid_atoms": [
-              "book_yield",
-              "hybrid",
-              "inv",
-              "size_inv",
-              "small"
-            ],
-            "hybrid_candidate": "hybrid_size_small_value_bp",
-            "shared_atoms": [
-              "hybrid"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "82f8128b-7227-494a-9382-77d288a4bfa4",
-          "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
-          "relationship_type": "hybrid_of",
-          "strength": 0.63,
-          "details": {
-            "basis": "hybrid_component_overlap",
-            "component_candidate": "hybrid_mom_20_value_ep",
-            "hybrid_atoms": [
-              "hybrid",
-              "shock",
-              "turnover_shock"
-            ],
-            "hybrid_candidate": "hybrid_liquidity_turnover_shock_mom_20",
-            "shared_atoms": [
-              "hybrid"
-            ],
-            "source": "backfill"
-          }
-        }
-      ]
-    },
-    {
-      "candidate_id": "842ba988-63d3-4815-81ca-ced125ae7146",
-      "candidate_name": "value_ep",
-      "family": "value",
-      "status": "fragile",
-      "family_score": 72.409736,
-      "family_recommended_action": "refine",
-      "relationship_count": 3,
-      "lineage_count": 3,
-      "cluster": {
-        "cluster_id": 1,
-        "cluster_size": 11,
-        "leader": "hybrid_mom_20_liquidity_turnover_shock",
-        "dominant_family": "momentum",
-        "relationship_mix": {
-          "duplicate_of": 1,
-          "same_family": 4,
-          "high_corr": 5,
-          "refinement_of": 12,
-          "hybrid_of": 7
-        },
-        "members": [
-          {
-            "id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-            "name": "hybrid_mom_20_liquidity_turnover_shock",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 10.072773,
-            "avg_final_score": 9.490097,
-            "evaluation_count": 79,
-            "is_primary": true,
-            "is_representative": true
-          },
-          {
-            "id": "82f8128b-7227-494a-9382-77d288a4bfa4",
-            "name": "hybrid_liquidity_turnover_shock_mom_20",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 10.072773,
-            "avg_final_score": 8.892481,
-            "evaluation_count": 39,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
-            "name": "mom_20",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.793076,
-            "avg_final_score": 1.726368,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
-            "name": "liquidity_turnover_shock",
-            "family": "liquidity",
-            "status": "fragile",
-            "latest_final_score": 9.723041,
-            "avg_final_score": 2.119795,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
-            "name": "mom_plus_value",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.601585,
-            "avg_final_score": 1.190673,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
-            "name": "hybrid_mom_20_value_ep",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.400734,
-            "avg_final_score": 8.516041,
-            "evaluation_count": 98,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "842ba988-63d3-4815-81ca-ced125ae7146",
-            "name": "value_ep",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 9.099535,
-            "avg_final_score": 2.377536,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
-            "name": "size_small",
-            "family": "other",
-            "status": "fragile",
-            "latest_final_score": 9.015223,
-            "avg_final_score": 2.600241,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
-            "name": "hybrid_size_small_value_bp",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 8.689527,
-            "avg_final_score": 8.186928,
-            "evaluation_count": 35,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
-            "name": "value_bp",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 7.432826,
-            "avg_final_score": 1.087484,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
-            "name": "hybrid_liquidity_turnover_shock_value_ep",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 1.362693,
-            "avg_final_score": 6.552922,
-            "evaluation_count": 3,
-            "is_primary": false,
-            "is_representative": false
-          }
-        ],
-        "primary_candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-        "primary_candidate": "hybrid_mom_20_liquidity_turnover_shock",
-        "representative_count": 4,
-        "representative_candidates": [
-          "hybrid_mom_20_liquidity_turnover_shock",
-          "hybrid_liquidity_turnover_shock_mom_20",
-          "liquidity_turnover_shock",
-          "value_ep"
-        ],
-        "is_representative": true,
-        "suppressed_member_count": 7
-      },
-      "is_primary_candidate": false,
-      "related_candidates": [
-        {
-          "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
-          "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
-            "extra_atoms": [
-              "hybrid",
-              "shock",
-              "turnover_shock"
-            ],
-            "parent_candidate": "value_ep",
-            "shared_atoms": [
-              "earnings_yield"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
-          "candidate_name": "hybrid_mom_20_value_ep",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_mom_20_value_ep",
-            "extra_atoms": [
-              "hybrid"
-            ],
-            "parent_candidate": "value_ep",
-            "shared_atoms": [
-              "earnings_yield"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
-          "candidate_name": "mom_plus_value",
-          "relationship_type": "hybrid_of",
-          "strength": 0.63,
-          "details": {
-            "basis": "hybrid_component_overlap",
-            "component_candidate": "value_ep",
-            "hybrid_atoms": [
-              "earnings_yield"
-            ],
-            "hybrid_candidate": "mom_plus_value",
-            "shared_atoms": [
-              "earnings_yield"
-            ],
-            "source": "backfill"
-          }
-        }
-      ],
-      "lineage": [
-        {
-          "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
-          "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
-            "extra_atoms": [
-              "hybrid",
-              "shock",
-              "turnover_shock"
-            ],
-            "parent_candidate": "value_ep",
-            "shared_atoms": [
-              "earnings_yield"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
-          "candidate_name": "hybrid_mom_20_value_ep",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_mom_20_value_ep",
-            "extra_atoms": [
-              "hybrid"
-            ],
-            "parent_candidate": "value_ep",
-            "shared_atoms": [
-              "earnings_yield"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
-          "candidate_name": "mom_plus_value",
-          "relationship_type": "hybrid_of",
-          "strength": 0.63,
-          "details": {
-            "basis": "hybrid_component_overlap",
-            "component_candidate": "value_ep",
-            "hybrid_atoms": [
-              "earnings_yield"
-            ],
-            "hybrid_candidate": "mom_plus_value",
-            "shared_atoms": [
-              "earnings_yield"
-            ],
-            "source": "backfill"
-          }
-        }
-      ]
-    },
-    {
-      "candidate_id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
-      "candidate_name": "size_small",
-      "family": "other",
-      "status": "fragile",
-      "family_score": 42.801928,
-      "family_recommended_action": "explore_new_branch",
-      "relationship_count": 1,
-      "lineage_count": 1,
-      "cluster": {
-        "cluster_id": 1,
-        "cluster_size": 11,
-        "leader": "hybrid_mom_20_liquidity_turnover_shock",
-        "dominant_family": "momentum",
-        "relationship_mix": {
-          "duplicate_of": 1,
-          "same_family": 4,
-          "high_corr": 5,
-          "refinement_of": 12,
-          "hybrid_of": 7
-        },
-        "members": [
-          {
-            "id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-            "name": "hybrid_mom_20_liquidity_turnover_shock",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 10.072773,
-            "avg_final_score": 9.490097,
-            "evaluation_count": 79,
-            "is_primary": true,
-            "is_representative": true
-          },
-          {
-            "id": "82f8128b-7227-494a-9382-77d288a4bfa4",
-            "name": "hybrid_liquidity_turnover_shock_mom_20",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 10.072773,
-            "avg_final_score": 8.892481,
-            "evaluation_count": 39,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
-            "name": "mom_20",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.793076,
-            "avg_final_score": 1.726368,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
-            "name": "liquidity_turnover_shock",
-            "family": "liquidity",
-            "status": "fragile",
-            "latest_final_score": 9.723041,
-            "avg_final_score": 2.119795,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
-            "name": "mom_plus_value",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.601585,
-            "avg_final_score": 1.190673,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
-            "name": "hybrid_mom_20_value_ep",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.400734,
-            "avg_final_score": 8.516041,
-            "evaluation_count": 98,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "842ba988-63d3-4815-81ca-ced125ae7146",
-            "name": "value_ep",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 9.099535,
-            "avg_final_score": 2.377536,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
-            "name": "size_small",
-            "family": "other",
-            "status": "fragile",
-            "latest_final_score": 9.015223,
-            "avg_final_score": 2.600241,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
-            "name": "hybrid_size_small_value_bp",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 8.689527,
-            "avg_final_score": 8.186928,
-            "evaluation_count": 35,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
-            "name": "value_bp",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 7.432826,
-            "avg_final_score": 1.087484,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
-            "name": "hybrid_liquidity_turnover_shock_value_ep",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 1.362693,
-            "avg_final_score": 6.552922,
-            "evaluation_count": 3,
-            "is_primary": false,
-            "is_representative": false
-          }
-        ],
-        "primary_candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-        "primary_candidate": "hybrid_mom_20_liquidity_turnover_shock",
-        "representative_count": 4,
-        "representative_candidates": [
-          "hybrid_mom_20_liquidity_turnover_shock",
-          "hybrid_liquidity_turnover_shock_mom_20",
-          "liquidity_turnover_shock",
-          "value_ep"
-        ],
-        "is_representative": false,
-        "suppressed_member_count": 7
-      },
-      "is_primary_candidate": false,
-      "related_candidates": [
-        {
-          "candidate_id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
-          "candidate_name": "hybrid_size_small_value_bp",
-          "relationship_type": "refinement_of",
-          "strength": 0.92,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_size_small_value_bp",
-            "extra_atoms": [
-              "book_yield",
-              "hybrid"
-            ],
-            "parent_candidate": "size_small",
-            "shared_atoms": [
-              "inv",
-              "size_inv",
-              "small"
-            ],
-            "source": "backfill"
-          }
-        }
-      ],
-      "lineage": [
-        {
-          "candidate_id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
-          "candidate_name": "hybrid_size_small_value_bp",
-          "relationship_type": "refinement_of",
-          "strength": 0.92,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_size_small_value_bp",
-            "extra_atoms": [
-              "book_yield",
-              "hybrid"
-            ],
-            "parent_candidate": "size_small",
-            "shared_atoms": [
-              "inv",
-              "size_inv",
-              "small"
-            ],
-            "source": "backfill"
-          }
-        }
-      ]
-    },
-    {
-      "candidate_id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
-      "candidate_name": "hybrid_size_small_value_bp",
-      "family": "value",
-      "status": "fragile",
-      "family_score": 72.409736,
-      "family_recommended_action": "refine",
-      "relationship_count": 6,
-      "lineage_count": 6,
-      "cluster": {
-        "cluster_id": 1,
-        "cluster_size": 11,
-        "leader": "hybrid_mom_20_liquidity_turnover_shock",
-        "dominant_family": "momentum",
-        "relationship_mix": {
-          "duplicate_of": 1,
-          "same_family": 4,
-          "high_corr": 5,
-          "refinement_of": 12,
-          "hybrid_of": 7
-        },
-        "members": [
-          {
-            "id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-            "name": "hybrid_mom_20_liquidity_turnover_shock",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 10.072773,
-            "avg_final_score": 9.490097,
-            "evaluation_count": 79,
-            "is_primary": true,
-            "is_representative": true
-          },
-          {
-            "id": "82f8128b-7227-494a-9382-77d288a4bfa4",
-            "name": "hybrid_liquidity_turnover_shock_mom_20",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 10.072773,
-            "avg_final_score": 8.892481,
-            "evaluation_count": 39,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
-            "name": "mom_20",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.793076,
-            "avg_final_score": 1.726368,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
-            "name": "liquidity_turnover_shock",
-            "family": "liquidity",
-            "status": "fragile",
-            "latest_final_score": 9.723041,
-            "avg_final_score": 2.119795,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
-            "name": "mom_plus_value",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.601585,
-            "avg_final_score": 1.190673,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
-            "name": "hybrid_mom_20_value_ep",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.400734,
-            "avg_final_score": 8.516041,
-            "evaluation_count": 98,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "842ba988-63d3-4815-81ca-ced125ae7146",
-            "name": "value_ep",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 9.099535,
-            "avg_final_score": 2.377536,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
-            "name": "size_small",
-            "family": "other",
-            "status": "fragile",
-            "latest_final_score": 9.015223,
-            "avg_final_score": 2.600241,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
-            "name": "hybrid_size_small_value_bp",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 8.689527,
-            "avg_final_score": 8.186928,
-            "evaluation_count": 35,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
-            "name": "value_bp",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 7.432826,
-            "avg_final_score": 1.087484,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
-            "name": "hybrid_liquidity_turnover_shock_value_ep",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 1.362693,
-            "avg_final_score": 6.552922,
-            "evaluation_count": 3,
-            "is_primary": false,
-            "is_representative": false
-          }
-        ],
-        "primary_candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-        "primary_candidate": "hybrid_mom_20_liquidity_turnover_shock",
-        "representative_count": 4,
-        "representative_candidates": [
-          "hybrid_mom_20_liquidity_turnover_shock",
-          "hybrid_liquidity_turnover_shock_mom_20",
-          "liquidity_turnover_shock",
-          "value_ep"
-        ],
-        "is_representative": false,
-        "suppressed_member_count": 7
-      },
-      "is_primary_candidate": false,
-      "related_candidates": [
-        {
-          "candidate_id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
-          "candidate_name": "size_small",
-          "relationship_type": "refinement_of",
-          "strength": 0.92,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_size_small_value_bp",
-            "extra_atoms": [
-              "book_yield",
-              "hybrid"
-            ],
-            "parent_candidate": "size_small",
-            "shared_atoms": [
-              "inv",
-              "size_inv",
-              "small"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
-          "candidate_name": "value_bp",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_size_small_value_bp",
-            "extra_atoms": [
-              "hybrid",
-              "inv",
-              "size_inv",
-              "small"
-            ],
-            "parent_candidate": "value_bp",
-            "shared_atoms": [
-              "book_yield"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
-          "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
-          "relationship_type": "hybrid_of",
-          "strength": 0.63,
-          "details": {
-            "basis": "hybrid_component_overlap",
-            "component_candidate": "hybrid_liquidity_turnover_shock_value_ep",
-            "hybrid_atoms": [
-              "book_yield",
-              "hybrid",
-              "inv",
-              "size_inv",
-              "small"
-            ],
-            "hybrid_candidate": "hybrid_size_small_value_bp",
-            "shared_atoms": [
-              "hybrid"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-          "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
-          "relationship_type": "hybrid_of",
-          "strength": 0.63,
-          "details": {
-            "basis": "hybrid_component_overlap",
-            "component_candidate": "hybrid_mom_20_liquidity_turnover_shock",
-            "hybrid_atoms": [
-              "book_yield",
-              "hybrid",
-              "inv",
-              "size_inv",
-              "small"
-            ],
-            "hybrid_candidate": "hybrid_size_small_value_bp",
-            "shared_atoms": [
-              "hybrid"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
-          "candidate_name": "hybrid_mom_20_value_ep",
-          "relationship_type": "hybrid_of",
-          "strength": 0.63,
-          "details": {
-            "basis": "hybrid_component_overlap",
-            "component_candidate": "hybrid_mom_20_value_ep",
-            "hybrid_atoms": [
-              "book_yield",
-              "hybrid",
-              "inv",
-              "size_inv",
-              "small"
-            ],
-            "hybrid_candidate": "hybrid_size_small_value_bp",
-            "shared_atoms": [
-              "hybrid"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "82f8128b-7227-494a-9382-77d288a4bfa4",
-          "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
-          "relationship_type": "hybrid_of",
-          "strength": 0.63,
-          "details": {
-            "basis": "hybrid_component_overlap",
-            "component_candidate": "hybrid_liquidity_turnover_shock_mom_20",
-            "hybrid_atoms": [
-              "book_yield",
-              "hybrid",
-              "inv",
-              "size_inv",
-              "small"
-            ],
-            "hybrid_candidate": "hybrid_size_small_value_bp",
-            "shared_atoms": [
-              "hybrid"
-            ],
-            "source": "backfill"
-          }
-        }
-      ],
-      "lineage": [
-        {
-          "candidate_id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
-          "candidate_name": "size_small",
-          "relationship_type": "refinement_of",
-          "strength": 0.92,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_size_small_value_bp",
-            "extra_atoms": [
-              "book_yield",
-              "hybrid"
-            ],
-            "parent_candidate": "size_small",
-            "shared_atoms": [
-              "inv",
-              "size_inv",
-              "small"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
-          "candidate_name": "value_bp",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_size_small_value_bp",
-            "extra_atoms": [
-              "hybrid",
-              "inv",
-              "size_inv",
-              "small"
-            ],
-            "parent_candidate": "value_bp",
-            "shared_atoms": [
-              "book_yield"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
-          "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
-          "relationship_type": "hybrid_of",
-          "strength": 0.63,
-          "details": {
-            "basis": "hybrid_component_overlap",
-            "component_candidate": "hybrid_liquidity_turnover_shock_value_ep",
-            "hybrid_atoms": [
-              "book_yield",
-              "hybrid",
-              "inv",
-              "size_inv",
-              "small"
-            ],
-            "hybrid_candidate": "hybrid_size_small_value_bp",
-            "shared_atoms": [
-              "hybrid"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-          "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
-          "relationship_type": "hybrid_of",
-          "strength": 0.63,
-          "details": {
-            "basis": "hybrid_component_overlap",
-            "component_candidate": "hybrid_mom_20_liquidity_turnover_shock",
-            "hybrid_atoms": [
-              "book_yield",
-              "hybrid",
-              "inv",
-              "size_inv",
-              "small"
-            ],
-            "hybrid_candidate": "hybrid_size_small_value_bp",
-            "shared_atoms": [
-              "hybrid"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
-          "candidate_name": "hybrid_mom_20_value_ep",
-          "relationship_type": "hybrid_of",
-          "strength": 0.63,
-          "details": {
-            "basis": "hybrid_component_overlap",
-            "component_candidate": "hybrid_mom_20_value_ep",
-            "hybrid_atoms": [
-              "book_yield",
-              "hybrid",
-              "inv",
-              "size_inv",
-              "small"
-            ],
-            "hybrid_candidate": "hybrid_size_small_value_bp",
-            "shared_atoms": [
-              "hybrid"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "82f8128b-7227-494a-9382-77d288a4bfa4",
-          "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
-          "relationship_type": "hybrid_of",
-          "strength": 0.63,
-          "details": {
-            "basis": "hybrid_component_overlap",
-            "component_candidate": "hybrid_liquidity_turnover_shock_mom_20",
-            "hybrid_atoms": [
-              "book_yield",
-              "hybrid",
-              "inv",
-              "size_inv",
-              "small"
-            ],
-            "hybrid_candidate": "hybrid_size_small_value_bp",
-            "shared_atoms": [
-              "hybrid"
-            ],
-            "source": "backfill"
-          }
-        }
-      ]
-    },
-    {
-      "candidate_id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
-      "candidate_name": "value_bp",
-      "family": "value",
-      "status": "fragile",
-      "family_score": 72.409736,
-      "family_recommended_action": "refine",
-      "relationship_count": 1,
-      "lineage_count": 1,
-      "cluster": {
-        "cluster_id": 1,
-        "cluster_size": 11,
-        "leader": "hybrid_mom_20_liquidity_turnover_shock",
-        "dominant_family": "momentum",
-        "relationship_mix": {
-          "duplicate_of": 1,
-          "same_family": 4,
-          "high_corr": 5,
-          "refinement_of": 12,
-          "hybrid_of": 7
-        },
-        "members": [
-          {
-            "id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-            "name": "hybrid_mom_20_liquidity_turnover_shock",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 10.072773,
-            "avg_final_score": 9.490097,
-            "evaluation_count": 79,
-            "is_primary": true,
-            "is_representative": true
-          },
-          {
-            "id": "82f8128b-7227-494a-9382-77d288a4bfa4",
-            "name": "hybrid_liquidity_turnover_shock_mom_20",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 10.072773,
-            "avg_final_score": 8.892481,
-            "evaluation_count": 39,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
-            "name": "mom_20",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.793076,
-            "avg_final_score": 1.726368,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
-            "name": "liquidity_turnover_shock",
-            "family": "liquidity",
-            "status": "fragile",
-            "latest_final_score": 9.723041,
-            "avg_final_score": 2.119795,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
-            "name": "mom_plus_value",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.601585,
-            "avg_final_score": 1.190673,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
-            "name": "hybrid_mom_20_value_ep",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.400734,
-            "avg_final_score": 8.516041,
-            "evaluation_count": 98,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "842ba988-63d3-4815-81ca-ced125ae7146",
-            "name": "value_ep",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 9.099535,
-            "avg_final_score": 2.377536,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
-            "name": "size_small",
-            "family": "other",
-            "status": "fragile",
-            "latest_final_score": 9.015223,
-            "avg_final_score": 2.600241,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
-            "name": "hybrid_size_small_value_bp",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 8.689527,
-            "avg_final_score": 8.186928,
-            "evaluation_count": 35,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
-            "name": "value_bp",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 7.432826,
-            "avg_final_score": 1.087484,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
-            "name": "hybrid_liquidity_turnover_shock_value_ep",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 1.362693,
-            "avg_final_score": 6.552922,
-            "evaluation_count": 3,
-            "is_primary": false,
-            "is_representative": false
-          }
-        ],
-        "primary_candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-        "primary_candidate": "hybrid_mom_20_liquidity_turnover_shock",
-        "representative_count": 4,
-        "representative_candidates": [
-          "hybrid_mom_20_liquidity_turnover_shock",
-          "hybrid_liquidity_turnover_shock_mom_20",
-          "liquidity_turnover_shock",
-          "value_ep"
-        ],
-        "is_representative": false,
-        "suppressed_member_count": 7
-      },
-      "is_primary_candidate": false,
-      "related_candidates": [
-        {
-          "candidate_id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
-          "candidate_name": "hybrid_size_small_value_bp",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_size_small_value_bp",
-            "extra_atoms": [
-              "hybrid",
-              "inv",
-              "size_inv",
-              "small"
-            ],
-            "parent_candidate": "value_bp",
-            "shared_atoms": [
-              "book_yield"
-            ],
-            "source": "backfill"
-          }
-        }
-      ],
-      "lineage": [
-        {
-          "candidate_id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
-          "candidate_name": "hybrid_size_small_value_bp",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_size_small_value_bp",
-            "extra_atoms": [
-              "hybrid",
-              "inv",
-              "size_inv",
-              "small"
-            ],
-            "parent_candidate": "value_bp",
-            "shared_atoms": [
-              "book_yield"
-            ],
-            "source": "backfill"
-          }
-        }
-      ]
-    },
-    {
-      "candidate_id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
-      "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
-      "family": "value",
-      "status": "fragile",
-      "family_score": 72.409736,
-      "family_recommended_action": "refine",
-      "relationship_count": 8,
-      "lineage_count": 7,
-      "cluster": {
-        "cluster_id": 1,
-        "cluster_size": 11,
-        "leader": "hybrid_mom_20_liquidity_turnover_shock",
-        "dominant_family": "momentum",
-        "relationship_mix": {
-          "duplicate_of": 1,
-          "same_family": 4,
-          "high_corr": 5,
-          "refinement_of": 12,
-          "hybrid_of": 7
-        },
-        "members": [
-          {
-            "id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-            "name": "hybrid_mom_20_liquidity_turnover_shock",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 10.072773,
-            "avg_final_score": 9.490097,
-            "evaluation_count": 79,
-            "is_primary": true,
-            "is_representative": true
-          },
-          {
-            "id": "82f8128b-7227-494a-9382-77d288a4bfa4",
-            "name": "hybrid_liquidity_turnover_shock_mom_20",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 10.072773,
-            "avg_final_score": 8.892481,
-            "evaluation_count": 39,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "ec958b39-285e-4e9a-b0ee-c608dae5b45c",
-            "name": "mom_20",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.793076,
-            "avg_final_score": 1.726368,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "f0356652-fafa-4f95-b588-cdcb661382f3",
-            "name": "liquidity_turnover_shock",
-            "family": "liquidity",
-            "status": "fragile",
-            "latest_final_score": 9.723041,
-            "avg_final_score": 2.119795,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
-            "name": "mom_plus_value",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.601585,
-            "avg_final_score": 1.190673,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
-            "name": "hybrid_mom_20_value_ep",
-            "family": "momentum",
-            "status": "fragile",
-            "latest_final_score": 9.400734,
-            "avg_final_score": 8.516041,
-            "evaluation_count": 98,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "842ba988-63d3-4815-81ca-ced125ae7146",
-            "name": "value_ep",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 9.099535,
-            "avg_final_score": 2.377536,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": true
-          },
-          {
-            "id": "9f20e0fa-bf65-4b50-9bde-d843562578d6",
-            "name": "size_small",
-            "family": "other",
-            "status": "fragile",
-            "latest_final_score": 9.015223,
-            "avg_final_score": 2.600241,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
-            "name": "hybrid_size_small_value_bp",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 8.689527,
-            "avg_final_score": 8.186928,
-            "evaluation_count": 35,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "cd9e407b-3e60-4b43-9cbf-c576f3898bfe",
-            "name": "value_bp",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 7.432826,
-            "avg_final_score": 1.087484,
-            "evaluation_count": 200,
-            "is_primary": false,
-            "is_representative": false
-          },
-          {
-            "id": "07ca5b31-27bd-4924-ad17-184aa8214f64",
-            "name": "hybrid_liquidity_turnover_shock_value_ep",
-            "family": "value",
-            "status": "fragile",
-            "latest_final_score": 1.362693,
-            "avg_final_score": 6.552922,
-            "evaluation_count": 3,
-            "is_primary": false,
-            "is_representative": false
-          }
-        ],
-        "primary_candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-        "primary_candidate": "hybrid_mom_20_liquidity_turnover_shock",
-        "representative_count": 4,
-        "representative_candidates": [
-          "hybrid_mom_20_liquidity_turnover_shock",
-          "hybrid_liquidity_turnover_shock_mom_20",
-          "liquidity_turnover_shock",
-          "value_ep"
-        ],
-        "is_representative": false,
-        "suppressed_member_count": 7
-      },
-      "is_primary_candidate": false,
-      "related_candidates": [
-        {
-          "candidate_id": "f0356652-fafa-4f95-b588-cdcb661382f3",
-          "candidate_name": "liquidity_turnover_shock",
-          "relationship_type": "high_corr",
-          "strength": 1.0,
-          "details": {
-            "peer_count": 1
-          }
-        },
-        {
-          "candidate_id": "82f8128b-7227-494a-9382-77d288a4bfa4",
-          "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
-          "relationship_type": "refinement_of",
-          "strength": 0.92,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
-            "extra_atoms": [
-              "earnings_yield"
-            ],
-            "parent_candidate": "hybrid_liquidity_turnover_shock_mom_20",
-            "shared_atoms": [
-              "hybrid",
-              "shock",
-              "turnover_shock"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-          "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
-          "relationship_type": "refinement_of",
-          "strength": 0.92,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
-            "extra_atoms": [
-              "earnings_yield"
-            ],
-            "parent_candidate": "hybrid_mom_20_liquidity_turnover_shock",
-            "shared_atoms": [
-              "hybrid",
-              "shock",
-              "turnover_shock"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
-          "candidate_name": "hybrid_mom_20_value_ep",
-          "relationship_type": "refinement_of",
-          "strength": 0.8200000000000001,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
-            "extra_atoms": [
-              "shock",
-              "turnover_shock"
-            ],
-            "parent_candidate": "hybrid_mom_20_value_ep",
-            "shared_atoms": [
-              "earnings_yield",
-              "hybrid"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "f0356652-fafa-4f95-b588-cdcb661382f3",
-          "candidate_name": "liquidity_turnover_shock",
-          "relationship_type": "refinement_of",
-          "strength": 0.82,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
-            "extra_atoms": [
-              "earnings_yield",
-              "hybrid"
-            ],
-            "parent_candidate": "liquidity_turnover_shock",
-            "shared_atoms": [
-              "shock",
-              "turnover_shock"
-            ]
-          }
-        },
-        {
-          "candidate_id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
-          "candidate_name": "mom_plus_value",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
-            "extra_atoms": [
-              "hybrid",
-              "shock",
-              "turnover_shock"
-            ],
-            "parent_candidate": "mom_plus_value",
-            "shared_atoms": [
-              "earnings_yield"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "842ba988-63d3-4815-81ca-ced125ae7146",
-          "candidate_name": "value_ep",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
-            "extra_atoms": [
-              "hybrid",
-              "shock",
-              "turnover_shock"
-            ],
-            "parent_candidate": "value_ep",
-            "shared_atoms": [
-              "earnings_yield"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
-          "candidate_name": "hybrid_size_small_value_bp",
-          "relationship_type": "hybrid_of",
-          "strength": 0.63,
-          "details": {
-            "basis": "hybrid_component_overlap",
-            "component_candidate": "hybrid_liquidity_turnover_shock_value_ep",
-            "hybrid_atoms": [
-              "book_yield",
-              "hybrid",
-              "inv",
-              "size_inv",
-              "small"
-            ],
-            "hybrid_candidate": "hybrid_size_small_value_bp",
-            "shared_atoms": [
-              "hybrid"
-            ],
-            "source": "backfill"
-          }
-        }
-      ],
-      "lineage": [
-        {
-          "candidate_id": "82f8128b-7227-494a-9382-77d288a4bfa4",
-          "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
-          "relationship_type": "refinement_of",
-          "strength": 0.92,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
-            "extra_atoms": [
-              "earnings_yield"
-            ],
-            "parent_candidate": "hybrid_liquidity_turnover_shock_mom_20",
-            "shared_atoms": [
-              "hybrid",
-              "shock",
-              "turnover_shock"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "57ec5255-5aaa-4b30-88a9-5ad3bf030b17",
-          "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
-          "relationship_type": "refinement_of",
-          "strength": 0.92,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
-            "extra_atoms": [
-              "earnings_yield"
-            ],
-            "parent_candidate": "hybrid_mom_20_liquidity_turnover_shock",
-            "shared_atoms": [
-              "hybrid",
-              "shock",
-              "turnover_shock"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "01585c01-d3ea-47d5-ac18-4eef2de475be",
-          "candidate_name": "hybrid_mom_20_value_ep",
-          "relationship_type": "refinement_of",
-          "strength": 0.8200000000000001,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
-            "extra_atoms": [
-              "shock",
-              "turnover_shock"
-            ],
-            "parent_candidate": "hybrid_mom_20_value_ep",
-            "shared_atoms": [
-              "earnings_yield",
-              "hybrid"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "f0356652-fafa-4f95-b588-cdcb661382f3",
-          "candidate_name": "liquidity_turnover_shock",
-          "relationship_type": "refinement_of",
-          "strength": 0.82,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
-            "extra_atoms": [
-              "earnings_yield",
-              "hybrid"
-            ],
-            "parent_candidate": "liquidity_turnover_shock",
-            "shared_atoms": [
-              "shock",
-              "turnover_shock"
-            ]
-          }
-        },
-        {
-          "candidate_id": "6f3a726f-a899-4839-ba47-2ac5a7572693",
-          "candidate_name": "mom_plus_value",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
-            "extra_atoms": [
-              "hybrid",
-              "shock",
-              "turnover_shock"
-            ],
-            "parent_candidate": "mom_plus_value",
-            "shared_atoms": [
-              "earnings_yield"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "842ba988-63d3-4815-81ca-ced125ae7146",
-          "candidate_name": "value_ep",
-          "relationship_type": "refinement_of",
-          "strength": 0.72,
-          "details": {
-            "basis": "atom_superset",
-            "child_candidate": "hybrid_liquidity_turnover_shock_value_ep",
-            "extra_atoms": [
-              "hybrid",
-              "shock",
-              "turnover_shock"
-            ],
-            "parent_candidate": "value_ep",
-            "shared_atoms": [
-              "earnings_yield"
-            ],
-            "source": "backfill"
-          }
-        },
-        {
-          "candidate_id": "7a7f7d34-69eb-400e-9d9f-b0dee3900b3e",
-          "candidate_name": "hybrid_size_small_value_bp",
-          "relationship_type": "hybrid_of",
-          "strength": 0.63,
-          "details": {
-            "basis": "hybrid_component_overlap",
-            "component_candidate": "hybrid_liquidity_turnover_shock_value_ep",
-            "hybrid_atoms": [
-              "book_yield",
-              "hybrid",
-              "inv",
-              "size_inv",
-              "small"
-            ],
-            "hybrid_candidate": "hybrid_size_small_value_bp",
-            "shared_atoms": [
-              "hybrid"
             ],
             "source": "backfill"
           }

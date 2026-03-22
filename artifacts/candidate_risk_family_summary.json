@@ -9,10 +9,10 @@
       {
         "candidate_name": "liquidity_turnover_shock",
         "risk_level": "high",
-        "risk_score": 96.9596
+        "risk_score": 100.0
       }
     ],
-    "avg_risk_score": 96.9596
+    "avg_risk_score": 100.0
   },
   {
     "family": "other",
@@ -24,10 +24,10 @@
       {
         "candidate_name": "size_small",
         "risk_level": "high",
-        "risk_score": 92.3966
+        "risk_score": 92.4883
       }
     ],
-    "avg_risk_score": 92.3966
+    "avg_risk_score": 92.4883
   },
   {
     "family": "value",
@@ -39,25 +39,25 @@
       {
         "candidate_name": "value_bp",
         "risk_level": "high",
-        "risk_score": 74.2837
+        "risk_score": 80.2923
       },
       {
         "candidate_name": "hybrid_size_small_value_bp",
         "risk_level": "high",
-        "risk_score": 74.2289
+        "risk_score": 74.2375
       },
       {
         "candidate_name": "hybrid_liquidity_turnover_shock_value_ep",
         "risk_level": "medium",
-        "risk_score": 69.4252
+        "risk_score": 69.4338
       },
       {
         "candidate_name": "value_ep",
         "risk_level": "medium",
-        "risk_score": 60.7863
+        "risk_score": 60.964
       }
     ],
-    "avg_risk_score": 69.681025
+    "avg_risk_score": 71.2319
   },
   {
     "family": "momentum",
@@ -69,29 +69,29 @@
       {
         "candidate_name": "mom_plus_value",
         "risk_level": "high",
-        "risk_score": 90.2706
+        "risk_score": 96.5032
       },
       {
         "candidate_name": "mom_20",
         "risk_level": "high",
-        "risk_score": 83.4153
+        "risk_score": 89.4253
       },
       {
         "candidate_name": "hybrid_mom_20_value_ep",
         "risk_level": "medium",
-        "risk_score": 59.2895
+        "risk_score": 59.2995
       },
       {
         "candidate_name": "hybrid_liquidity_turnover_shock_mom_20",
         "risk_level": "medium",
-        "risk_score": 47.5632
+        "risk_score": 47.5732
       },
       {
         "candidate_name": "hybrid_mom_20_liquidity_turnover_shock",
         "risk_level": "medium",
-        "risk_score": 47.5632
+        "risk_score": 47.5732
       }
     ],
-    "avg_risk_score": 65.62036
+    "avg_risk_score": 68.07488
   }
 ]

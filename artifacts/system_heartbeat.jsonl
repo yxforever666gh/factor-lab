@@ -24586,3 +24586,6 @@
 {"recorded_at_utc": "2026-03-22T18:01:28.955250+00:00", "scope": "research_orchestrator", "status": "info", "summary": "queue empty; reseed noop; stagnation=3"}
 {"recorded_at_utc": "2026-03-22T18:01:29.074355+00:00", "scope": "research_orchestrator", "status": "stagnation_break", "summary": "stagnation reached 3, forced expansion injected 4 tasks"}
 {"recorded_at_utc": "2026-03-22T18:01:29.100904+00:00", "scope": "research_orchestrator", "status": "started", "summary": "orchestrator awakened (max_tasks=2)"}
+{"recorded_at_utc": "2026-03-22T18:01:43.653644+00:00", "scope": "research_orchestrator", "status": "finished", "summary": "workflow finished: artifacts/generated_configs/rolling_30d_back.json", "task_id": "4a22ac03-0626-4e6b-96a9-08420b257966", "task_type": "workflow"}
+{"recorded_at_utc": "2026-03-22T18:02:00.459360+00:00", "scope": "research_orchestrator", "status": "finished", "summary": "workflow finished: artifacts/generated_configs/rolling_60d_back.json", "task_id": "7930a6ea-4054-43e7-a2ac-a73ac14cd79f", "task_type": "workflow"}
+{"recorded_at_utc": "2026-03-22T18:02:02.612298+00:00", "scope": "research_orchestrator", "status": "started", "summary": "orchestrator awakened (max_tasks=2)"}

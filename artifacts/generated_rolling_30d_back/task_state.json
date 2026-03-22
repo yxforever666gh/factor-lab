@@ -2,8 +2,8 @@
   "task_id": "987c3a90-25f2-4569-9885-284b7e548e48",
   "config_path": "artifacts/generated_configs/rolling_30d_back.json",
   "output_dir": "artifacts/generated_rolling_30d_back",
-  "status": "running",
+  "status": "finished",
   "started_at_utc": "2026-03-22T18:01:29.107290+00:00",
-  "finished_at_utc": null,
+  "finished_at_utc": "2026-03-22T18:01:40.454164+00:00",
   "error": null
 }

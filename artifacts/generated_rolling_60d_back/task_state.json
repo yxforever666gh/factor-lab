@@ -1,9 +1,9 @@
 {
-  "task_id": "508c00be-0ad0-4c14-96eb-4fe082c5f25d",
+  "task_id": "3ca957e2-739b-4b84-b087-2ca0e0fff94c",
   "config_path": "artifacts/generated_configs/rolling_60d_back.json",
   "output_dir": "artifacts/generated_rolling_60d_back",
   "status": "finished",
-  "started_at_utc": "2026-03-22T17:59:52.768171+00:00",
-  "finished_at_utc": "2026-03-22T18:00:06.454977+00:00",
+  "started_at_utc": "2026-03-22T18:01:43.663421+00:00",
+  "finished_at_utc": "2026-03-22T18:01:57.453455+00:00",
   "error": null
 }

@@ -1,5 +1,5 @@
 {
-  "updated_at_utc": "2026-03-22T18:00:43.570034+00:00",
+  "updated_at_utc": "2026-03-22T18:02:00.447249+00:00",
   "stable_candidates": [
     "hybrid_liquidity_turnover_shock_mom_20",
     "hybrid_liquidity_turnover_shock_value_ep",
@@ -5183,15 +5183,21 @@
           "state": "archived",
           "last_action": "hold",
           "reason": "no_significant_information_gain"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:01:43.640160+00:00",
+          "state": "archived",
+          "last_action": "hold",
+          "reason": "no_significant_information_gain"
         }
       ],
-      "updated_at_utc": "2026-03-22T17:59:52.751506+00:00",
+      "updated_at_utc": "2026-03-22T18:01:43.640150+00:00",
       "last_task_type": "workflow",
       "last_status": "finished",
       "goal": null,
       "hypothesis": null,
       "validation_runs": 0,
-      "no_gain_runs": 7,
+      "no_gain_runs": 8,
       "last_action": "archive",
       "state": "archived",
       "reason": "no_significant_information_gain"
@@ -5239,15 +5245,21 @@
           "state": "archived",
           "last_action": "hold",
           "reason": "no_significant_information_gain"
+        },
+        {
+          "updated_at_utc": "2026-03-22T18:02:00.447292+00:00",
+          "state": "archived",
+          "last_action": "hold",
+          "reason": "no_significant_information_gain"
         }
       ],
-      "updated_at_utc": "2026-03-22T18:00:09.469432+00:00",
+      "updated_at_utc": "2026-03-22T18:02:00.447278+00:00",
       "last_task_type": "workflow",
       "last_status": "finished",
       "goal": null,
       "hypothesis": null,
       "validation_runs": 0,
-      "no_gain_runs": 7,
+      "no_gain_runs": 8,
       "last_action": "archive",
       "state": "archived",
       "reason": "no_significant_information_gain"
@@ -6253,32 +6265,6 @@
   },
   "execution_feedback": [
     {
-      "updated_at_utc": "2026-03-22T17:43:41.017431+00:00",
-      "branch_id": "workflow::2d0cb3c1564581274c03388ad177e943b554916b9351274c8935f9133b7d9769::artifacts/generated_recent_45d",
-      "task_type": "workflow",
-      "status": "finished",
-      "has_gain": false,
-      "summary": "workflow finished: artifacts/generated_configs/rolling_recent_45d.json",
-      "error_text": null,
-      "focus_candidates": [],
-      "knowledge_gain": [],
-      "goal": null,
-      "hypothesis": null
-    },
-    {
-      "updated_at_utc": "2026-03-22T17:44:40.633726+00:00",
-      "branch_id": "workflow::aec26a80ff4107763e4df70188bf97914ae44edf1add208b560b47ca0ca45b56::artifacts/generated_rolling_30d_back",
-      "task_type": "workflow",
-      "status": "finished",
-      "has_gain": false,
-      "summary": "workflow finished: artifacts/generated_configs/rolling_30d_back.json",
-      "error_text": null,
-      "focus_candidates": [],
-      "knowledge_gain": [],
-      "goal": null,
-      "hypothesis": null
-    },
-    {
       "updated_at_utc": "2026-03-22T17:44:55.430209+00:00",
       "branch_id": "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back",
       "task_type": "workflow",
@@ -6959,6 +6945,32 @@
       "status": "finished",
       "has_gain": false,
       "summary": "workflow finished: artifacts/generated_configs/rolling_recent_45d.json",
+      "error_text": null,
+      "focus_candidates": [],
+      "knowledge_gain": [],
+      "goal": null,
+      "hypothesis": null
+    },
+    {
+      "updated_at_utc": "2026-03-22T18:01:43.640164+00:00",
+      "branch_id": "workflow::aec26a80ff4107763e4df70188bf97914ae44edf1add208b560b47ca0ca45b56::artifacts/generated_rolling_30d_back",
+      "task_type": "workflow",
+      "status": "finished",
+      "has_gain": false,
+      "summary": "workflow finished: artifacts/generated_configs/rolling_30d_back.json",
+      "error_text": null,
+      "focus_candidates": [],
+      "knowledge_gain": [],
+      "goal": null,
+      "hypothesis": null
+    },
+    {
+      "updated_at_utc": "2026-03-22T18:02:00.447298+00:00",
+      "branch_id": "workflow::bf45ca1a8c399b52ed3d7fe171f74c41c8853915f5d629c119c6ed0ff1fdc349::artifacts/generated_rolling_60d_back",
+      "task_type": "workflow",
+      "status": "finished",
+      "has_gain": false,
+      "summary": "workflow finished: artifacts/generated_configs/rolling_60d_back.json",
       "error_text": null,
       "focus_candidates": [],
       "knowledge_gain": [],
