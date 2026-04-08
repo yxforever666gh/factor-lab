@@ -1,0 +1,28 @@
+{
+  "template_name": "candidate_generator_template",
+  "purpose": "Template for autonomous candidate proposal generation.",
+  "required_structure": [
+    "load candidate_generation_policy before proposing candidates",
+    "read research memory and learning state before selecting operators",
+    "generate proposals from stable candidates, graveyard seeds, or high-value failures",
+    "attach expected_information_gain to every proposal",
+    "attach cheap_screen result to every proposal before compilation"
+  ],
+  "preferred_patterns": [
+    "proposal objects remain structured before compiling to workflow configs",
+    "operator ordering uses static policy plus learned operator feedback",
+    "failure-derived seeds constrain future proposal generation",
+    "proposal stage dedupe runs before workflow compilation"
+  ],
+  "discouraged_patterns": [
+    "raw string expression generation without proposal metadata",
+    "skipping cheap_screen for generated candidates",
+    "repeating the same base-factor pair with too many operators",
+    "ignoring generated_candidate_outcomes during proposal generation"
+  ],
+  "acceptance_questions": [
+    "Does every proposal include expected_information_gain?",
+    "Does the generator consult learning and memory before choosing operators?",
+    "Does proposal-stage dedupe suppress obvious repeats?"
+  ]
+}

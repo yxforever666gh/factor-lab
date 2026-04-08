@@ -28,12 +28,26 @@ TASK_FAMILIES: dict[str, TaskFamilySpec] = {
         max_level=12,
         base_priority=24,
     ),
+    "medium_horizon_validation": TaskFamilySpec(
+        family="medium_horizon_validation",
+        category="validation",
+        min_level=1,
+        max_level=6,
+        base_priority=26,
+    ),
     "stable_candidate_validation": TaskFamilySpec(
         family="stable_candidate_validation",
         category="validation",
         min_level=1,
         max_level=8,
         base_priority=28,
+    ),
+    "watchlist_candidate_validation": TaskFamilySpec(
+        family="watchlist_candidate_validation",
+        category="validation",
+        min_level=1,
+        max_level=4,
+        base_priority=27,
     ),
     "graveyard_diagnosis": TaskFamilySpec(
         family="graveyard_diagnosis",

@@ -30,6 +30,22 @@ class TushareDataProvider:
         ts.set_token(self.token)
         self.pro = ts.pro_api(self.token)
 
+    def _quarantine_cache_file(self, path: Path) -> None:
+        quarantine = path.with_suffix(path.suffix + f".invalid.{int(time.time())}")
+        try:
+            path.rename(quarantine)
+        except Exception:
+            pass
+
+    def _read_cached_frame(self, path: Path) -> pd.DataFrame | None:
+        try:
+            return pd.read_csv(path)
+        except FileNotFoundError:
+            return None
+        except Exception:
+            self._quarantine_cache_file(path)
+            return None
+
     def _query_with_retry(self, api_name: str, retries: int = 4, sleep_seconds: float = 1.5, timing: WorkflowTiming | None = None, **kwargs):
         last_error = None
         if timing:
@@ -145,11 +161,19 @@ class TushareDataProvider:
         frame["return_1d"] = frame.groupby("ts_code")["close"].pct_change().fillna(0.0)
         frame["forward_return_5d"] = frame.groupby("ts_code")["close"].transform(lambda s: s.shift(-5) / s.shift(-1) - 1.0)
         frame["momentum_20"] = frame.groupby("ts_code")["close"].transform(lambda s: s / s.shift(20) - 1.0)
+        frame["momentum_60"] = frame.groupby("ts_code")["close"].transform(lambda s: s / s.shift(60) - 1.0)
+        frame["momentum_120"] = frame.groupby("ts_code")["close"].transform(lambda s: s / s.shift(120) - 1.0)
+        frame["momentum_60_skip_5"] = frame.groupby("ts_code")["close"].transform(lambda s: s.shift(5) / s.shift(60) - 1.0)
         frame["turnover_ma5"] = frame.groupby("ts_code")["turnover_rate"].transform(lambda s: s.rolling(5).mean())
         frame["turnover_ma20"] = frame.groupby("ts_code")["turnover_rate"].transform(lambda s: s.rolling(20).mean())
         frame["turnover_shock_5_20"] = frame["turnover_ma5"] / frame["turnover_ma20"] - 1.0
         frame["earnings_yield"] = 1.0 / frame["pe_ttm"]
         frame["book_yield"] = 1.0 / frame["pb"]
+        # Approximate profitability / ROE-like signal from valuation identity:
+        #   ROE ~= (E/P) / (B/P) = PB / PE
+        # This is materially better than aliasing `roe` to earnings_yield, which collapses
+        # quality into value and pollutes quality-family research.
+        frame["roe"] = frame["earnings_yield"] / frame["book_yield"]
         frame["size_inv"] = -np.log(frame["total_mv"])
 
         frame = frame.rename(columns={"trade_date": "date", "ts_code": "ticker", "turnover_rate": "turnover"})
@@ -163,9 +187,13 @@ class TushareDataProvider:
                 "forward_return_5d",
                 "turnover",
                 "momentum_20",
+                "momentum_60",
+                "momentum_120",
+                "momentum_60_skip_5",
                 "turnover_shock_5_20",
                 "earnings_yield",
                 "book_yield",
+                "roe",
                 "size_inv",
                 "pe_ttm",
                 "pb",
@@ -184,24 +212,33 @@ class TushareDataProvider:
         cache_path = cache_dir / cache_key
 
         if request.use_request_cache and cache_path.exists():
-            frame = pd.read_csv(cache_path)
-            frame["date"] = pd.to_datetime(frame["date"])
-            if timing:
-                timing.set_counter("cache_hit_type", "request_exact")
-            return SampleDataset(frame=frame)
+            frame = self._read_cached_frame(cache_path)
+            if frame is not None:
+                if frame.empty:
+                    self._quarantine_cache_file(cache_path)
+                else:
+                    frame["date"] = pd.to_datetime(frame["date"])
+                    if timing:
+                        timing.set_counter("cache_hit_type", "request_exact")
+                    return SampleDataset(frame=frame)
 
         if request.use_request_cache:
             covering_cache = self._find_covering_cache(cache_dir, request)
             if covering_cache is not None:
-                frame = pd.read_csv(covering_cache)
-                frame["date"] = pd.to_datetime(frame["date"])
-                req_start = pd.Timestamp(request.start_date)
-                req_end = pd.Timestamp(request.end_date)
-                frame = frame[(frame["date"] >= req_start) & (frame["date"] <= req_end)].copy().reset_index(drop=True)
-                frame.to_csv(cache_path, index=False)
-                if timing:
-                    timing.set_counter("cache_hit_type", "request_covering")
-                return SampleDataset(frame=frame)
+                frame = self._read_cached_frame(covering_cache)
+                if frame is not None:
+                    if frame.empty:
+                        self._quarantine_cache_file(covering_cache)
+                    else:
+                        frame["date"] = pd.to_datetime(frame["date"])
+                        req_start = pd.Timestamp(request.start_date)
+                        req_end = pd.Timestamp(request.end_date)
+                        frame = frame[(frame["date"] >= req_start) & (frame["date"] <= req_end)].copy().reset_index(drop=True)
+                        if not frame.empty:
+                            frame.to_csv(cache_path, index=False)
+                            if timing:
+                                timing.set_counter("cache_hit_type", "request_covering")
+                            return SampleDataset(frame=frame)
 
         if request.universe_codes:
             stock_basic = self.fetch_stock_basic(timing=timing)
@@ -220,7 +257,7 @@ class TushareDataProvider:
         )
         frame = self._build_feature_frame(daily, daily_basic, universe_meta, request, timing=timing)
 
-        if request.use_request_cache:
+        if request.use_request_cache and not frame.empty:
             cache_write_started_at = time.perf_counter()
             frame.to_csv(cache_path, index=False)
             if timing:

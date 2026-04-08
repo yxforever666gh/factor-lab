@@ -8,10 +8,13 @@ from typing import Any
 
 from factor_lab.research_runtime_state import recently_finished_same_fingerprint
 from factor_lab.storage import ExperimentStore
+from factor_lab.exploration_budget import exploration_floor_context
 
 ROOT = Path(__file__).resolve().parents[2]
 DB_PATH = ROOT / "artifacts" / "factor_lab.db"
 ARTIFACTS = ROOT / "artifacts"
+AUTONOMY_POLICY_PATH = ROOT / "configs" / "research_autonomy_policy.json"
+CODING_POLICY_PATH = ROOT / "configs" / "research_coding_policy.json"
 
 
 def _read_json(path: Path, default: Any) -> Any:
@@ -44,7 +47,13 @@ def _task_payload(task: dict[str, Any]) -> dict[str, Any]:
 
 def _frontier_preferred_candidates(source: dict[str, Any]) -> set[str]:
     frontier = source.get("frontier_focus") or {}
-    preferred = frontier.get("preferred_candidates") or []
+    robust = frontier.get("robust_candidates") or []
+    if robust:
+        return {name for name in robust if name}
+    soft_robust = frontier.get("soft_robust_candidates") or []
+    if soft_robust:
+        return {name for name in soft_robust if name}
+    preferred = frontier.get("short_window_candidates") or frontier.get("preferred_candidates") or []
     if preferred:
         return {name for name in preferred if name}
     return {name for name in ((source.get("candidates") or {}).get("stable") or []) if name}
@@ -230,6 +239,22 @@ def load_or_initialize_research_memory(memory_path: str | Path) -> dict[str, Any
         "archived_branches": [],
         "execution_feedback": [],
         "fallback_history": [],
+        "generated_candidate_outcomes": [],
+        "candidate_generation_history": [],
+        "representative_candidate_reviews": [],
+        "autonomy_profile": {
+            "policy_name": None,
+            "unit_of_research": None,
+            "preferred_objectives": [],
+            "budget_policy": {},
+            "learning_bias": {
+                "reward_high_value_failure": False,
+                "discourage_low_information_repetition": False,
+                "treat_boundary_discovery_as_progress": False
+            },
+            "observed_outcome_mix": {},
+            "last_research_style_refresh_at_utc": None
+        },
     }
     _write_json(path, memory)
     return memory
@@ -248,6 +273,8 @@ def build_research_state_snapshot(
     candidate_pool = _read_json(Path(candidate_pool_path), {})
     proposal = _read_json(Path(proposal_path), {})
     memory = load_or_initialize_research_memory(memory_path)
+    autonomy_policy = _read_json(AUTONOMY_POLICY_PATH, {})
+    coding_policy = _read_json(CODING_POLICY_PATH, {})
 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
@@ -359,6 +386,8 @@ def build_research_state_snapshot(
         ],
         "branch_signals": branch_signals[:40],
         "memory": memory,
+        "autonomy_policy": autonomy_policy,
+        "coding_policy": coding_policy,
         "open_questions": list(memory.get("high_value_open_questions") or []),
         "repeated_failure_patterns": [
             {"task_type": key, "count": count} for key, count in sorted(repeated_failures.items(), key=lambda item: (-item[1], item[0]))
@@ -378,6 +407,48 @@ def build_research_state_snapshot(
 class StrategyBrain:
     DEFAULT_BUDGETS = {"validation": 2, "baseline": 1, "exploration": 1}
 
+    @staticmethod
+    def _budget_bucket(task: dict[str, Any]) -> str:
+        category = task.get("category") or "validation"
+        goal = str(task.get("goal") or (task.get("payload") or {}).get("goal") or "")
+        branch_id = str(task.get("branch_id") or (task.get("payload") or {}).get("branch_id") or "")
+        worker_note = str(task.get("worker_note") or "")
+        text = " ".join([goal, branch_id, worker_note]).lower()
+        if category == "validation" and ("medium_horizon" in text or "中窗" in text):
+            return "validation_medium_horizon"
+        if category == "validation" and ("stable_candidate" in text or "稳定候选" in text):
+            return "validation_stable"
+        return category
+
+    @staticmethod
+    def _apply_autonomy_budget_policy(budgets: dict[str, int], autonomy_policy: dict[str, Any], *, exploration_state: dict[str, Any], stable_gain_count: int, repeated_diagnostic_failures: int) -> dict[str, int]:
+        policy = (autonomy_policy or {}).get("budget_policy") or {}
+        exploitation = float(policy.get("exploitation") or 0.45)
+        adjacent = float(policy.get("adjacent_exploration") or 0.35)
+        novelty = float(policy.get("novelty_search") or 0.2)
+        total = max(exploitation + adjacent + novelty, 0.01)
+        base_slots = max(sum(StrategyBrain.DEFAULT_BUDGETS.values()), 4)
+        new_budgets = dict(budgets)
+        new_budgets["validation"] = max(1, round(base_slots * exploitation / total))
+        new_budgets["baseline"] = max(1, round(base_slots * adjacent / total))
+        new_budgets["exploration"] = max(1, round(base_slots * novelty / total))
+        floor = exploration_floor_context({
+            "failure_state": {"cooldown_active": exploration_state.get("cooldown_active")},
+            "research_flow_state": {"state": exploration_state.get("runtime_state")},
+        })
+        if exploration_state.get("should_throttle") and not floor["true_fault_recovery"]:
+            new_budgets["exploration"] = max(new_budgets["exploration"], floor["exploration_floor_slots"])
+            new_budgets["validation"] = max(new_budgets["validation"], 3)
+        elif floor["true_fault_recovery"]:
+            new_budgets["exploration"] = 0
+            new_budgets["validation"] = max(new_budgets["validation"], 3)
+        if stable_gain_count > 0:
+            new_budgets["validation"] += 1
+            new_budgets["validation_stable"] = max(int(new_budgets.get("validation_stable") or 1), 1) + 1
+        if repeated_diagnostic_failures >= 2:
+            new_budgets["validation"] += 1
+        return new_budgets
+
     def build_plan(self, state_snapshot: dict[str, Any], proposal: dict[str, Any], branch_plan: dict[str, Any] | None = None) -> dict[str, Any]:
         tasks = list(proposal.get("selected_tasks") or [])
         if not tasks:
@@ -390,6 +461,8 @@ class StrategyBrain:
             }
             return {
                 "summary": "proposal 无可执行任务，strategy 仅记录当前状态。",
+                "autonomy_policy": state_snapshot.get("autonomy_policy") or {},
+                "coding_policy": state_snapshot.get("coding_policy") or {},
                 "budget": dict(self.DEFAULT_BUDGETS),
                 "approved_tasks": [],
                 "rejected_tasks": [],
@@ -399,6 +472,7 @@ class StrategyBrain:
             }
 
         memory = state_snapshot.get("memory") or {}
+        floor = exploration_floor_context(state_snapshot)
         stable_candidates = _frontier_preferred_candidates(state_snapshot)
         suppressed_candidates = _frontier_suppressed_candidates(state_snapshot)
         graveyard_candidates = set((state_snapshot.get("candidates") or {}).get("graveyard") or [])
@@ -415,15 +489,45 @@ class StrategyBrain:
         analyst_focus = set(analyst_signals.get("focus_factors") or [])
         analyst_core = set(analyst_signals.get("keep_as_core_candidates") or [])
         analyst_graveyard = set(analyst_signals.get("review_graveyard") or [])
+        agent_signals = analyst_signals or {}
+        agent_mode = str(agent_signals.get("planner_mode") or "").strip()
+        agent_task_mix = agent_signals.get("planner_task_mix") or {}
+        agent_priority_families = set(agent_signals.get("focus_factors") or [])
+        failure_probe_targets = set(agent_signals.get("failure_should_probe") or [])
+        agent_suppress_families = set((agent_signals.get("risk_flags") or []))
+        agent_suppress_families = {
+            flag.split(":", 1)[1]
+            for flag in agent_suppress_families
+            if isinstance(flag, str) and flag.startswith("stop:")
+        }
 
+        autonomy_policy = state_snapshot.get("autonomy_policy") or {}
+        coding_policy = state_snapshot.get("coding_policy") or {}
         budgets = dict(self.DEFAULT_BUDGETS)
-        if exploration_state.get("should_throttle"):
-            budgets["exploration"] = 0
-            budgets["validation"] = 3
-        if knowledge_gain_counter.get("stable_candidate_confirmed", 0) > 0:
-            budgets["validation"] += 1
-        if repeated_failures.get("diagnostic", 0) >= 2:
-            budgets["validation"] += 1
+        budgets["validation_stable"] = 1
+        budgets["validation_medium_horizon"] = 1
+        budgets = self._apply_autonomy_budget_policy(
+            budgets,
+            autonomy_policy,
+            exploration_state=exploration_state,
+            stable_gain_count=int(knowledge_gain_counter.get("stable_candidate_confirmed", 0) or 0),
+            repeated_diagnostic_failures=int(repeated_failures.get("diagnostic", 0) or 0),
+        )
+        if agent_task_mix:
+            for key in ["baseline", "validation", "exploration"]:
+                if key in agent_task_mix:
+                    try:
+                        budgets[key] = max(0, int(agent_task_mix[key]))
+                    except Exception:
+                        pass
+        if agent_mode == "recover":
+            budgets["exploration"] = 0 if floor["true_fault_recovery"] else max(int(budgets.get("exploration", 0) or 0), floor["exploration_floor_slots"])
+            budgets["validation"] = max(budgets.get("validation", 0), 2)
+        elif agent_mode == "converge":
+            budgets["exploration"] = max(min(budgets.get("exploration", 0), 1), floor["exploration_floor_slots"])
+            budgets["validation"] = max(budgets.get("validation", 0), 3)
+
+        budgets["exploration"] = 0 if floor["true_fault_recovery"] else max(int(budgets.get("exploration", 0) or 0), floor["exploration_floor_slots"])
 
         ranked: list[dict[str, Any]] = []
         branch_actions: list[dict[str, Any]] = []
@@ -469,6 +573,12 @@ class StrategyBrain:
                 reason_bits.append("analyst 当前要求先验证再扩张。")
             if selected_families and task.get("family_focus") in selected_families:
                 score += 4
+            if task.get("family_focus") in agent_priority_families:
+                score += 10
+                reason_bits.append("命中 Agent priority family。")
+            if task.get("family_focus") in failure_probe_targets and category == "validation":
+                score += 8
+                reason_bits.append("命中 failure analyst probe target。")
             for failed_type, count in repeated_failures.items():
                 if failed_type == task.get("task_type") and count >= 2:
                     score -= 6
@@ -477,6 +587,29 @@ class StrategyBrain:
                 score += 3
             if task.get("worker_note", "").find("graveyard") >= 0 and category == "validation":
                 score += 2
+
+            quality_gates = autonomy_policy.get("quality_gates") or {}
+            avoid = set(quality_gates.get("avoid") or [])
+            prefer = set(quality_gates.get("prefer") or [])
+            if "high_corr_duplicate_variants" in avoid and relationship_signal.get("duplicate_count") and category != "validation":
+                score -= min(int(relationship_signal.get("duplicate_count") or 0) * 3, 12)
+                reason_bits.append("autonomy_policy: 避免高相关重复变体。")
+            if "single_window_luck" in avoid and category == "exploration" and not expected_gain:
+                score -= 6
+                reason_bits.append("autonomy_policy: 低信息探索降权，避免单窗口运气型任务。")
+            if "repeated_no_gain_retests" in avoid and int((memory.get("branch_lifecycle") or {}).get(task.get("branch_id") or '', {}).get("no_gain_runs") or 0) >= 1:
+                score -= 8
+                reason_bits.append("autonomy_policy: 连续无增益重试降权。")
+            if "epistemic_gain" in set(((autonomy_policy.get("principles") or {}).get("objective") or [])):
+                if any(tag in expected_gain for tag in {"search_space_reduced", "boundary_confirmed", "new_branch_opened", "stable_candidate_confirmed", "repeated_graveyard_confirmed"}):
+                    score += 6
+                    reason_bits.append("autonomy_policy: 奖励高信息增益任务。")
+            if "cross_window_survival" in prefer and category == "validation" and ("window" in str(task.get("goal") or '').lower() or "window" in str(task.get("branch_id") or '').lower()):
+                score += 4
+                reason_bits.append("autonomy_policy: 偏好跨窗口存活验证。")
+            if "portfolio_contribution" in set(((autonomy_policy.get("principles") or {}).get("objective") or [])) and category == "validation" and any('portfolio' in str(x).lower() for x in (expected_gain or [])):
+                score += 3
+                reason_bits.append("autonomy_policy: 偏好组合层有贡献的验证。")
 
             branch_action = _branch_lifecycle_decision(task, memory, exploration_state)
             branch_action["policy"] = convergence_policy
@@ -511,12 +644,22 @@ class StrategyBrain:
         approved_branch_actions: list[dict[str, Any]] = []
         for task in ranked:
             category = task.get("category") or "validation"
-            limit = budgets.get(category, 1)
-            if counts.get(category, 0) >= limit:
+            bucket = self._budget_bucket(task)
+            family_focus = task.get("family_focus")
+            if family_focus and family_focus in agent_suppress_families:
+                rejected.append({**task, "strategy_rejection_reason": f"agent_suppressed_family:{family_focus}"})
+                continue
+            category_limit = budgets.get(category, 1)
+            bucket_limit = budgets.get(bucket, category_limit)
+            if counts.get(category, 0) >= category_limit:
                 rejected.append({**task, "strategy_rejection_reason": f"budget_exhausted:{category}"})
+                continue
+            if counts.get(bucket, 0) >= bucket_limit:
+                rejected.append({**task, "strategy_rejection_reason": f"budget_exhausted:{bucket}"})
                 continue
             approved.append(task)
             counts[category] = counts.get(category, 0) + 1
+            counts[bucket] = counts.get(bucket, 0) + 1
             if task.get("branch_action"):
                 approved_branch_actions.append(task["branch_action"])
 
@@ -558,7 +701,9 @@ class StrategyBrain:
             "convergence_policy": convergence_policy,
         }
         return {
-            "summary": "strategy brain 对 proposal 进行了预算约束、显式打分与分支动作标注。",
+            "summary": "strategy brain 对 proposal 进行了预算约束、显式打分与分支动作标注，并携带自主研究 / coding policy 上下文。",
+            "autonomy_policy": autonomy_policy,
+            "coding_policy": coding_policy,
             "budget": budgets,
             "budget_usage": counts,
             "approved_tasks": approved,
@@ -609,6 +754,7 @@ def _count_recent_candidate_transitions(memory: dict[str, Any], candidate_name: 
 
 def _branch_lifecycle_decision(task: dict[str, Any], memory: dict[str, Any], exploration_state: dict[str, Any]) -> dict[str, Any]:
     relationship_signal = task.get("relationship_signal") or {}
+    payload = task.get("payload") or {}
     branch_id = task.get("branch_id") or task.get("dedupe_signature") or task.get("fingerprint")
     branch_memory = (memory.get("branch_lifecycle") or {}).get(branch_id, {})
     previous_state = branch_memory.get("state", "exploring")
@@ -620,12 +766,17 @@ def _branch_lifecycle_decision(task: dict[str, Any], memory: dict[str, Any], exp
     validation_runs = int(branch_memory.get("validation_runs") or 0)
     recent_holds = _count_recent_branch_actions(memory, branch_id, "hold")
     recent_demotes = _count_recent_branch_actions(memory, branch_id, "demote")
+    is_generated_candidate = payload.get("source") == "candidate_generation"
 
     action = "hold"
     next_state = previous_state
     reason = "maintain_current_branch_state"
 
-    if category == "exploration" and exploration_state.get("should_throttle"):
+    if is_generated_candidate:
+        action = "hold"
+        next_state = "validating"
+        reason = "generated_candidate_needs_execution_feedback"
+    elif category == "exploration" and exploration_state.get("should_throttle"):
         action = "archive"
         next_state = "archived"
         reason = "exploration_throttled"
@@ -695,21 +846,128 @@ def build_strategy_plan(
     proposal_path: str | Path,
     output_path: str | Path,
     branch_plan_path: str | Path | None = None,
+    agent_responses_path: str | Path | None = None,
 ) -> dict[str, Any]:
     state_snapshot = _read_json(Path(state_snapshot_path), {})
     proposal = _read_json(Path(proposal_path), {})
     branch_plan = _read_json(Path(branch_plan_path), {}) if branch_plan_path and Path(branch_plan_path).exists() else None
+    agent_responses = _read_json(Path(agent_responses_path), {}) if agent_responses_path and Path(agent_responses_path).exists() else {}
+    planner_agent = agent_responses.get("planner") or {}
+    failure_analyst = agent_responses.get("failure_analyst") or {}
     brain = StrategyBrain()
     result = brain.build_plan(state_snapshot, proposal, branch_plan)
+    if planner_agent.get("task_mix"):
+        result["agent_task_mix"] = planner_agent.get("task_mix")
+    if planner_agent.get("recommended_actions"):
+        result["agent_recommended_actions"] = planner_agent.get("recommended_actions")
+    if planner_agent.get("priority_families"):
+        result.setdefault("memory_updates", {})["agent_priority_families"] = planner_agent.get("priority_families")
+    if planner_agent.get("suppress_families"):
+        result.setdefault("memory_updates", {})["agent_suppress_families"] = planner_agent.get("suppress_families")
+    if planner_agent.get("hypothesis_cards"):
+        result.setdefault("memory_updates", {})["agent_hypothesis_cards"] = planner_agent.get("hypothesis_cards")
+    if planner_agent.get("challenger_queue"):
+        result.setdefault("memory_updates", {})["agent_challenger_queue"] = planner_agent.get("challenger_queue")
+    if failure_analyst.get("failure_patterns"):
+        result.setdefault("memory_updates", {})["agent_failure_patterns"] = failure_analyst.get("failure_patterns")
+    if failure_analyst.get("should_stop"):
+        result.setdefault("memory_updates", {})["agent_should_stop"] = failure_analyst.get("should_stop")
+    if failure_analyst.get("should_reroute"):
+        result.setdefault("memory_updates", {})["agent_should_reroute"] = failure_analyst.get("should_reroute")
     payload = {
         "updated_at_utc": _iso_now(),
         "generated_from_state_snapshot": str(state_snapshot_path),
         "generated_from_proposal": str(proposal_path),
         "generated_from_branch_plan": str(branch_plan_path) if branch_plan_path else None,
+        "generated_from_agent_responses": str(agent_responses_path) if agent_responses_path else None,
         **result,
     }
     _write_json(Path(output_path), payload)
     return payload
+
+
+def _candidate_generation_observed_gain(payload: dict[str, Any]) -> tuple[bool, list[str]]:
+    output_dir = Path(str(payload.get("output_dir") or ""))
+    observed: list[str] = []
+    if not output_dir.exists():
+        return False, observed
+    candidate_pool_path = output_dir / "candidate_pool.json"
+    graveyard_path = output_dir / "factor_graveyard.json"
+    try:
+        if candidate_pool_path.exists():
+            candidate_rows = json.loads(candidate_pool_path.read_text(encoding="utf-8"))
+            if candidate_rows:
+                observed.append("candidate_survival_check")
+        if graveyard_path.exists():
+            graveyard_rows = json.loads(graveyard_path.read_text(encoding="utf-8"))
+            if graveyard_rows:
+                observed.append("search_space_reduced")
+    except Exception:
+        return False, []
+    return ("candidate_survival_check" in observed), observed
+
+
+def _candidate_generation_increment_check(payload: dict[str, Any]) -> dict[str, Any]:
+    output_dir = Path(str(payload.get("output_dir") or ""))
+    context = payload.get("candidate_generation_context") or {}
+    candidate_id = context.get("candidate_id") or payload.get("branch_id")
+    base_factors = list(context.get("base_factors") or [])
+    result = {
+        "candidate_id": candidate_id,
+        "base_factors": base_factors,
+        "generated_score": None,
+        "best_parent_score": None,
+        "incremental_delta": None,
+        "improved_vs_parent": False,
+    }
+    if not output_dir.exists() or not candidate_id:
+        return result
+    scores_path = output_dir / "factor_scores.json"
+    if not scores_path.exists():
+        return result
+    try:
+        rows = json.loads(scores_path.read_text(encoding="utf-8"))
+    except Exception:
+        return result
+    score_map = {row.get("factor_name"): row for row in rows if row.get("factor_name")}
+    generated_score = float((score_map.get(candidate_id) or {}).get("score") or 0.0)
+    parent_scores = [float((score_map.get(name) or {}).get("score") or 0.0) for name in base_factors if name in score_map]
+    best_parent_score = max(parent_scores) if parent_scores else None
+    result["generated_score"] = generated_score
+    result["best_parent_score"] = best_parent_score
+    if best_parent_score is not None:
+        delta = generated_score - best_parent_score
+        result["incremental_delta"] = round(delta, 6)
+        result["improved_vs_parent"] = delta > 0.05
+    return result
+
+
+def _classify_research_outcome(*, status: str, has_gain: bool, knowledge_gain: list[str], summary_text: str, autonomy_policy: dict[str, Any]) -> dict[str, Any]:
+    gains = {g for g in knowledge_gain if g}
+    text = (summary_text or '').lower()
+    failure_policy = ((autonomy_policy or {}).get('principles') or {}).get('failure_policy') or {}
+    reward_high_value_failure = bool(failure_policy.get('reward_high_value_failure'))
+    discourage_low_information_repetition = bool(failure_policy.get('discourage_low_information_repetition'))
+    treat_boundary_discovery_as_progress = bool(failure_policy.get('treat_boundary_discovery_as_progress'))
+
+    high_value_failure_tags = {
+        'search_space_reduced', 'negative_result_recorded', 'boundary_confirmed', 'boundary_broken',
+        'repeated_graveyard_confirmed', 'neutralization_diagnosis_requested', 'graveyard_diagnosis_requested',
+    }
+    repeated_low_info_tags = {'no_significant_information_gain', 'repeat_without_new_information', 'low_novelty_realized'}
+    exploratory_progress_tags = {'new_branch_opened', 'probe_promising', 'uncertainty_reduced', 'partial_support', 'hypothesis_supported'}
+
+    if status != 'finished':
+        return {'outcome_class': 'execution_failure', 'epistemic_value': 'low', 'should_downweight': True}
+    if has_gain:
+        if gains & exploratory_progress_tags:
+            return {'outcome_class': 'high_value_success', 'epistemic_value': 'high', 'should_downweight': False}
+        return {'outcome_class': 'useful_success', 'epistemic_value': 'medium', 'should_downweight': False}
+    if reward_high_value_failure and (gains & high_value_failure_tags):
+        return {'outcome_class': 'high_value_failure', 'epistemic_value': 'high' if treat_boundary_discovery_as_progress else 'medium', 'should_downweight': False}
+    if discourage_low_information_repetition and ((gains & repeated_low_info_tags) or ('no_significant_information_gain' in text)):
+        return {'outcome_class': 'low_value_repeat', 'epistemic_value': 'low', 'should_downweight': True}
+    return {'outcome_class': 'ordinary_failure', 'epistemic_value': 'medium', 'should_downweight': False}
 
 
 def update_research_memory_from_task_result(
@@ -721,16 +979,25 @@ def update_research_memory_from_task_result(
     error_text: str | None = None,
 ) -> dict[str, Any]:
     memory = load_or_initialize_research_memory(memory_path)
+    autonomy_policy = _read_json(AUTONOMY_POLICY_PATH, {})
     memory["updated_at_utc"] = _iso_now()
     payload = task.get("payload") or {}
     strategy = payload.get("strategy") or {}
     branch_id = payload.get("branch_id") or strategy.get("branch_id") or task.get("fingerprint") or task.get("task_id")
     focus_candidates = payload.get("focus_factors") or strategy.get("focus_candidates") or []
+    candidate_generation_context = payload.get("candidate_generation_context") or {}
     if isinstance(focus_candidates, str):
         focus_candidates = [focus_candidates]
     knowledge_gain = [g for g in (payload.get("knowledge_gain") or payload.get("expected_information_gain") or []) if g]
     summary_text = (summary or "") + " " + (error_text or "")
     has_gain = any(g and g != "no_significant_information_gain" for g in knowledge_gain) or ("knowledge_gain=" in summary_text and "no_significant_information_gain" not in summary_text)
+    if payload.get("source") == "candidate_generation":
+        has_gain, observed_gain = _candidate_generation_observed_gain(payload)
+        if observed_gain:
+            knowledge_gain = observed_gain
+        elif not has_gain:
+            knowledge_gain = []
+    outcome_meta = _classify_research_outcome(status=status, has_gain=has_gain, knowledge_gain=knowledge_gain, summary_text=summary_text, autonomy_policy=autonomy_policy)
     branch_lifecycle = dict(memory.get("branch_lifecycle") or {})
     branch_state = dict(branch_lifecycle.get(branch_id, {}))
     branch_state.setdefault("history", [])
@@ -755,6 +1022,8 @@ def update_research_memory_from_task_result(
             "summary": summary,
             "error_text": error_text,
             "focus_candidates": focus_candidates,
+            "outcome_class": outcome_meta.get("outcome_class"),
+            "epistemic_value": outcome_meta.get("epistemic_value"),
         })
     else:
         if has_gain:
@@ -783,7 +1052,11 @@ def update_research_memory_from_task_result(
             "knowledge_gain": knowledge_gain,
             "goal": payload.get("goal") or strategy.get("goal"),
             "hypothesis": payload.get("hypothesis") or strategy.get("hypothesis"),
+            "outcome_class": outcome_meta.get("outcome_class"),
+            "epistemic_value": outcome_meta.get("epistemic_value"),
         })
+    branch_state["outcome_class"] = outcome_meta.get("outcome_class")
+    branch_state["epistemic_value"] = outcome_meta.get("epistemic_value")
     branch_state["history"] = branch_state["history"][-20:]
     branch_lifecycle[branch_id] = branch_state
     memory["branch_lifecycle"] = branch_lifecycle
@@ -804,6 +1077,39 @@ def update_research_memory_from_task_result(
             "goal": payload.get("goal") or strategy.get("goal"),
         })
     memory["fallback_history"] = fallback_history[-30:]
+
+    generated_candidate_outcomes = list(memory.get("generated_candidate_outcomes") or [])
+    if (payload.get("source") == "candidate_generation") or candidate_generation_context:
+        increment_check = _candidate_generation_increment_check(payload)
+        generated_candidate_outcomes.append({
+            "updated_at_utc": _iso_now(),
+            "candidate_id": candidate_generation_context.get("candidate_id") or branch_id,
+            "operator": candidate_generation_context.get("operator"),
+            "base_factors": list(candidate_generation_context.get("base_factors") or []),
+            "source": candidate_generation_context.get("source") or payload.get("source"),
+            "target_family": candidate_generation_context.get("target_family"),
+            "expected_information_gain": list(candidate_generation_context.get("expected_information_gain") or payload.get("expected_information_gain") or []),
+            "outcome_class": outcome_meta.get("outcome_class"),
+            "epistemic_value": outcome_meta.get("epistemic_value"),
+            "has_gain": has_gain,
+            "task_type": task.get("task_type"),
+            "increment_check": increment_check,
+        })
+    memory["generated_candidate_outcomes"] = generated_candidate_outcomes[-100:]
+
+    representative_candidate_reviews = list(memory.get("representative_candidate_reviews") or [])
+    if payload.get("diagnostic_type") == "representative_candidate_competition_review":
+        representative_candidate_reviews.append({
+            "updated_at_utc": _iso_now(),
+            "branch_id": branch_id,
+            "focus_candidates": list(payload.get("focus_factors") or []),
+            "outcome_class": outcome_meta.get("outcome_class"),
+            "epistemic_value": outcome_meta.get("epistemic_value"),
+            "has_gain": has_gain,
+            "summary": summary,
+            "error_text": error_text,
+        })
+    memory["representative_candidate_reviews"] = representative_candidate_reviews[-60:]
 
     candidate_lifecycle = dict(memory.get("candidate_lifecycle") or {})
     stable_candidates = set(memory.get("stable_candidates") or [])
@@ -883,6 +1189,8 @@ def apply_strategy_plan(
     store = ExperimentStore(db_path)
     injected = []
     skipped = []
+    memory = load_or_initialize_research_memory(memory_path)
+    candidate_generation_history = list(memory.get("candidate_generation_history") or [])
     for task in approved_tasks:
         fingerprint = task.get("fingerprint")
         validated_task = validated_by_fingerprint.get(fingerprint, task)
@@ -915,16 +1223,42 @@ def apply_strategy_plan(
             "category": task.get("category"),
             "strategy_score": task.get("strategy_score"),
         })
+        if payload.get("source") == "candidate_generation":
+            candidate_generation_history.append({
+                "updated_at_utc": _iso_now(),
+                "candidate_id": ((payload.get("candidate_generation_context") or {}).get("candidate_id") or payload.get("branch_id")),
+                "operator": ((payload.get("candidate_generation_context") or {}).get("operator")),
+                "base_factors": list(((payload.get("candidate_generation_context") or {}).get("base_factors") or [])),
+                "source": ((payload.get("candidate_generation_context") or {}).get("source") or payload.get("source")),
+                "target_family": ((payload.get("candidate_generation_context") or {}).get("target_family")),
+                "cheap_screen": dict(((payload.get("candidate_generation_context") or {}).get("cheap_screen") or {})),
+                "injected": True,
+                "task_id": task_id,
+            })
 
-    memory = load_or_initialize_research_memory(memory_path)
     memory["updated_at_utc"] = _iso_now()
     updates = strategy_plan.get("memory_updates") or {}
+    autonomy_policy = strategy_plan.get("autonomy_policy") or _read_json(AUTONOMY_POLICY_PATH, {})
+    coding_policy = strategy_plan.get("coding_policy") or _read_json(CODING_POLICY_PATH, {})
     if updates.get("stable_candidates") is not None:
         memory["stable_candidates"] = updates.get("stable_candidates")
     if updates.get("suppressed_candidates") is not None:
         memory["suppressed_candidates"] = updates.get("suppressed_candidates")
     if updates.get("high_value_open_questions"):
         memory["high_value_open_questions"] = updates.get("high_value_open_questions")
+    memory["agent_control"] = {
+        "updated_at_utc": _iso_now(),
+        "planner_mode": strategy_plan.get("agent_task_mix") and ((strategy_plan.get("generated_from_agent_responses") and (_read_json(Path(strategy_plan.get("generated_from_agent_responses")), {}).get("planner") or {}).get("mode")) or None),
+        "task_mix": strategy_plan.get("agent_task_mix") or {},
+        "recommended_actions": strategy_plan.get("agent_recommended_actions") or [],
+        "priority_families": updates.get("agent_priority_families") or [],
+        "suppress_families": updates.get("agent_suppress_families") or [],
+        "hypothesis_cards": updates.get("agent_hypothesis_cards") or [],
+        "challenger_queue": updates.get("agent_challenger_queue") or [],
+        "failure_patterns": updates.get("agent_failure_patterns") or [],
+        "should_stop": updates.get("agent_should_stop") or [],
+        "should_reroute": updates.get("agent_should_reroute") or [],
+    }
     convergence_policy = (updates.get("convergence_policy") or strategy_plan.get("convergence_policy") or {
         "archive_after_no_gain_runs": 2,
         "terminate_after_duplicate_pressure": 4,
@@ -974,6 +1308,7 @@ def apply_strategy_plan(
     branch_history = list(memory.get("branch_history") or [])
     branch_history.extend(updates.get("branch_history_append") or [])
     memory["branch_history"] = branch_history[-100:]
+    memory["candidate_generation_history"] = candidate_generation_history[-120:]
     strategy_runs = list(memory.get("strategy_runs") or [])
     strategy_runs.append({
         "updated_at_utc": _iso_now(),
@@ -982,6 +1317,36 @@ def apply_strategy_plan(
         "branch_actions": strategy_plan.get("branch_actions") or [],
     })
     memory["strategy_runs"] = strategy_runs[-50:]
+    execution_feedback = list(memory.get("execution_feedback") or [])[-60:]
+    outcome_mix = {}
+    for row in execution_feedback:
+        key = row.get("outcome_class") or "unknown"
+        outcome_mix[key] = int(outcome_mix.get(key) or 0) + 1
+    principles = (autonomy_policy.get("principles") or {})
+    failure_policy = principles.get("failure_policy") or {}
+    memory["autonomy_profile"] = {
+        "policy_name": autonomy_policy.get("name"),
+        "unit_of_research": principles.get("unit_of_research"),
+        "preferred_objectives": list(principles.get("objective") or []),
+        "budget_policy": dict(autonomy_policy.get("budget_policy") or {}),
+        "learning_bias": {
+            "reward_high_value_failure": bool(failure_policy.get("reward_high_value_failure")),
+            "discourage_low_information_repetition": bool(failure_policy.get("discourage_low_information_repetition")),
+            "treat_boundary_discovery_as_progress": bool(failure_policy.get("treat_boundary_discovery_as_progress")),
+        },
+        "observed_outcome_mix": outcome_mix,
+        "last_research_style_refresh_at_utc": _iso_now(),
+    }
+    memory["coding_profile"] = {
+        "policy_name": coding_policy.get("name"),
+        "shared_intermediates_first": bool((coding_policy.get("principles") or {}).get("shared_intermediates_first")),
+        "avoid_recomputing_factor_values": bool((coding_policy.get("principles") or {}).get("avoid_recomputing_factor_values")),
+        "prefer_factor_matrix_or_cache": bool((coding_policy.get("principles") or {}).get("prefer_factor_matrix_or_cache")),
+        "performance_rules": dict(coding_policy.get("performance_rules") or {}),
+        "engineering_rules": dict(coding_policy.get("engineering_rules") or {}),
+        "last_coding_style_refresh_at_utc": _iso_now(),
+    }
+
     if strategy_plan.get("branch_actions"):
         patterns = list(memory.get("repeated_failure_patterns") or [])
         for action in strategy_plan.get("branch_actions") or []:

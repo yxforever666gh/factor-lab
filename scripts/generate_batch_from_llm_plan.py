@@ -8,10 +8,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from factor_lab.plan_validator import validate_plan_file
 from factor_lab.proposal_to_batch import generate_batch_from_plan
 from factor_lab.llm_bridge import write_bridge_status
+from factor_lab.factors import resolve_factor_definitions
 
 
 if __name__ == "__main__":
-    allowed = {item["name"] for item in json.loads(Path("configs/tushare_workflow.json").read_text(encoding="utf-8"))["factors"]}
+    base_config_path = Path("configs/tushare_workflow.json")
+    base_config = json.loads(base_config_path.read_text(encoding="utf-8"))
+    factor_defs = resolve_factor_definitions(base_config, config_dir=base_config_path.resolve().parent)
+    allowed = {item["name"] for item in factor_defs}
     weights_path = Path("artifacts/llm_recommendation_weights.json")
     context_path = Path("artifacts/llm_recommendation_context.json")
     stability_path = Path("artifacts/paper_portfolio/portfolio_stability_score.json")

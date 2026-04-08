@@ -6,6 +6,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
+from factor_lab.factors import resolve_factor_definitions
+
 ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS = ROOT / "artifacts"
 GENERATED_CONFIG_DIR = ARTIFACTS / "generated_opportunity_configs"
@@ -40,7 +42,12 @@ def _write_json(path: Path, payload: dict[str, Any]) -> Path:
 
 
 def _base_workflow_config() -> dict[str, Any]:
-    return _load_json(BASE_WORKFLOW_PATH)
+    config = _load_json(BASE_WORKFLOW_PATH)
+    factor_defs = resolve_factor_definitions(config, config_dir=BASE_WORKFLOW_PATH.resolve().parent)
+    if factor_defs:
+        config["factors"] = factor_defs
+        config.pop("factor_family_config", None)
+    return config
 
 
 def _select_factor_defs(target_candidates: list[str]) -> list[dict[str, Any]]:
@@ -69,6 +76,14 @@ def _make_workflow_config(opportunity: dict[str, Any], *, suffix: str, start_dat
     }
     path = GENERATED_CONFIG_DIR / f"{oid}__{suffix}.json"
     return _write_json(path, config)
+
+
+def _is_budget_risky_probe(opportunity: dict[str, Any]) -> bool:
+    return (
+        (opportunity.get("opportunity_type") == "probe")
+        and ((opportunity.get("execution_mode") or "cheap_screen").strip() == "cheap_screen")
+        and not list(opportunity.get("target_candidates") or [])
+    )
 
 
 def _build_opportunity_batch(opportunity: dict[str, Any]) -> Path | None:
@@ -158,6 +173,25 @@ def map_opportunity_to_task(opportunity: dict[str, Any]) -> dict[str, Any] | Non
         }
 
     if otype in {"expand", "recombine", "probe"}:
+        if _is_budget_risky_probe(opportunity):
+            diagnostic_type = "opportunity_probe_budget_guard"
+            return {
+                "task_type": "diagnostic",
+                "priority": max(priority_hint, 35),
+                "fingerprint": _fingerprint_for_opportunity(opportunity) + "::budget_guard",
+                "worker_note": f"validation｜opportunity:{opportunity.get('opportunity_id')}｜budget_guard",
+                "payload": {
+                    **payload_base,
+                    "diagnostic_type": diagnostic_type,
+                    "focus_factors": target_candidates,
+                    "reasons": ["opportunity_selected", "mapped_from:probe", "budget_guard:no_target_candidates"],
+                    "goal": opportunity.get("question") or diagnostic_type,
+                    "branch_id": opportunity.get("opportunity_id"),
+                    "stop_if": [],
+                    "promote_if": [],
+                    "disconfirm_if": [],
+                },
+            }
         batch_path = _build_opportunity_batch(opportunity)
         if batch_path is not None:
             return {

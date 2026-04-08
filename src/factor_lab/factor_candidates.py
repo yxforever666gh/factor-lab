@@ -33,17 +33,27 @@ ACCEPTANCE_GATE_20_THRESHOLDS = {
 
 def infer_factor_family(name: str, expression: str | None = None) -> str:
     haystack = f"{name} {expression or ''}".lower()
-    if "mom" in haystack or "momentum" in haystack:
+    quality_hit = any(token in haystack for token in ["quality", "profit", "roe", "margin"])
+    value_hit = any(token in haystack for token in ["value", "yield", "ep", "bp", "pb"])
+    liquidity_hit = any(token in haystack for token in ["liq", "turnover", "volume"])
+    momentum_hit = "mom" in haystack or "momentum" in haystack
+    volatility_hit = any(token in haystack for token in ["vol", "variance", "std", "atr"])
+    combo_hit = any(token in haystack for token in ["+", "-", "*", "/", "combo", "hybrid"])
+
+    family_hits = sum([quality_hit, value_hit, liquidity_hit, momentum_hit, volatility_hit])
+    if combo_hit and family_hits >= 2:
+        return "hybrid"
+    if momentum_hit:
         return "momentum"
-    if any(token in haystack for token in ["value", "yield", "ep", "bp"]):
-        return "value"
-    if any(token in haystack for token in ["vol", "variance", "std", "atr"]):
-        return "volatility"
-    if any(token in haystack for token in ["liq", "turnover", "volume"]):
-        return "liquidity"
-    if any(token in haystack for token in ["quality", "profit", "roe", "margin"]):
+    if quality_hit:
         return "quality"
-    if "+" in haystack or "combo" in haystack or "hybrid" in haystack:
+    if value_hit:
+        return "value"
+    if volatility_hit:
+        return "volatility"
+    if liquidity_hit:
+        return "liquidity"
+    if combo_hit:
         return "hybrid"
     return "other"
 
@@ -256,6 +266,44 @@ def score_candidate_evaluation(metrics: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _is_recent_evaluation(row: dict[str, Any]) -> bool:
+    label = str(row.get("window_label") or "").lower()
+    notes = row.get("notes") or {}
+    config_path = str(notes.get("config_path") or "").lower()
+    haystack = " ".join([label, config_path])
+    recent_tokens = (
+        "recent_30d",
+        "recent_45d",
+        "rolling_recent_30d",
+        "rolling_recent_45d",
+        "rolling_30d_back",
+        "rolling_45d_back",
+        "probe_recent_30d",
+    )
+    return any(token in haystack for token in recent_tokens) or label == "recent"
+
+
+
+def _derive_research_stage(
+    *,
+    status: str,
+    avg_score: float,
+    best_score: float,
+    pass_rate: float,
+    official_window_count: int,
+    fragility: dict[str, Any],
+) -> str:
+    if status in {"rejected", "archived"} and best_score < 1.0:
+        return "graveyard"
+    if status == "promising" and official_window_count >= 3 and pass_rate >= 0.6 and not fragility.get("is_fragile"):
+        return "candidate"
+    if status in {"promising", "testing", "fragile"} and (pass_rate >= 0.2 or avg_score >= 0.5 or best_score >= 1.0):
+        return "watchlist"
+    if best_score > 0 or avg_score > 0:
+        return "explore"
+    return "graveyard"
+
+
 def summarize_candidate_status(evaluations: list[dict[str, Any]]) -> dict[str, Any]:
     if not evaluations:
         gate = _build_acceptance_gate_20(
@@ -268,11 +316,13 @@ def summarize_candidate_status(evaluations: list[dict[str, Any]]) -> dict[str, A
         )
         return {
             "status": "new",
+            "research_stage": "explore",
             "evaluation_count": 0,
             "window_count": 0,
             "avg_final_score": None,
             "best_final_score": None,
             "latest_final_score": None,
+            "latest_recent_final_score": None,
             "pass_rate": None,
             "summary": "No evaluations yet.",
             "next_action": "seed_validation",
@@ -292,6 +342,7 @@ def summarize_candidate_status(evaluations: list[dict[str, Any]]) -> dict[str, A
         row for row in evaluations
         if (row.get("notes") or {}).get("run_scope") in OFFICIAL_RUN_SCOPES
     ]
+    recent_official_evaluations = [row for row in official_evaluations if _is_recent_evaluation(row)]
     status_pool = official_evaluations or evaluations
     pass_flags = [int(row.get("pass_flag") or 0) for row in status_pool]
     statuses = [row.get("status") or "testing" for row in status_pool]
@@ -302,6 +353,9 @@ def summarize_candidate_status(evaluations: list[dict[str, Any]]) -> dict[str, A
     pass_rate = round(sum(pass_flags) / len(status_pool), 4)
     official_eval_count = len(status_pool)
     official_window_count = len(official_windows)
+    latest_recent_score = None
+    if recent_official_evaluations:
+        latest_recent_score = round(float(recent_official_evaluations[-1].get("final_score") or 0.0), 6)
     fragility = _evaluate_fragility(status_pool, avg_score, best_score, pass_rate)
 
     if official_eval_count >= 5 and official_window_count >= 3 and pass_rate >= 0.6 and avg_score >= 1.0 and not fragility["is_fragile"]:
@@ -325,6 +379,14 @@ def summarize_candidate_status(evaluations: list[dict[str, Any]]) -> dict[str, A
 
     rejection_reasons = [row.get("rejection_reason") for row in status_pool if row.get("rejection_reason")]
     rejection_reason = rejection_reasons[-1] if rejection_reasons else None
+    research_stage = _derive_research_stage(
+        status=status,
+        avg_score=avg_score,
+        best_score=best_score,
+        pass_rate=pass_rate,
+        official_window_count=official_window_count,
+        fragility=fragility,
+    )
     gate = _build_acceptance_gate_20(
         status,
         official_eval_count=official_eval_count,
@@ -335,17 +397,21 @@ def summarize_candidate_status(evaluations: list[dict[str, Any]]) -> dict[str, A
     )
     summary = (
         f"{len(evaluations)} evals ({official_eval_count} official) across {len(windows)} windows "
-        f"({official_window_count} official); avg_score={avg_score}, latest={scores[-1]:.3f}, pass_rate={pass_rate:.2f}."
+        f"({official_window_count} official); stage={research_stage}; avg_score={avg_score}, latest={scores[-1]:.3f}"
+        + (f", latest_recent={latest_recent_score:.3f}" if latest_recent_score is not None else "")
+        + f", pass_rate={pass_rate:.2f}."
     )
     if fragility["is_fragile"]:
         summary += f" Fragile triggers: {', '.join(fragility['trigger_bits'])}."
     return {
         "status": status,
+        "research_stage": research_stage,
         "evaluation_count": len(evaluations),
         "window_count": len(windows),
         "avg_final_score": avg_score,
         "best_final_score": best_score,
         "latest_final_score": latest_score,
+        "latest_recent_final_score": latest_recent_score,
         "pass_rate": pass_rate,
         "summary": summary,
         "next_action": next_action,
@@ -361,20 +427,23 @@ def build_hypothesis_summary(candidate: dict[str, Any], evaluations: list[dict[s
     promising_windows = [row.get("window_label") for row in evaluations if row.get("status") == "promising"]
     rejected_windows = [row.get("window_label") for row in evaluations if row.get("status") in BAD_STATUSES]
     fragile_windows = [row.get("window_label") for row in evaluations if row.get("status") == "fragile"]
+    positive_scores = [float(row.get("final_score") or 0.0) for row in evaluations if float(row.get("final_score") or 0.0) > 0]
+    candidate_name = candidate.get("name") or "candidate"
     evidence_for = []
     evidence_against = []
     if promising_windows:
-        evidence_for.append(f"promising windows: {', '.join(promising_windows[:4])}")
-    high_scores = [row for row in evaluations if float(row.get("final_score") or 0.0) >= 2.0]
-    if high_scores:
-        evidence_for.append(f"high score count: {len(high_scores)}")
+        evidence_for.append(f"支持窗口: {', '.join(promising_windows[:4])}")
+    if positive_scores:
+        evidence_for.append(f"正分评估数: {len(positive_scores)} / {len(evaluations)}")
+    if promising_windows and rejected_windows:
+        evidence_for.append("存在条件性支持，值得做窗口/阶段边界验证")
     if fragile_windows:
-        evidence_against.append(f"fragile windows: {', '.join(fragile_windows[:4])}")
+        evidence_against.append(f"脆弱窗口: {', '.join(fragile_windows[:4])}")
     if rejected_windows:
-        evidence_against.append(f"weak windows: {', '.join(rejected_windows[:4])}")
+        evidence_against.append(f"弱势窗口: {', '.join(rejected_windows[:4])}")
     recent_reason = next((row.get("rejection_reason") for row in reversed(evaluations) if row.get("rejection_reason")), None)
     if recent_reason:
-        evidence_against.append(recent_reason)
+        evidence_against.append(f"最近失效信号: {recent_reason}")
 
     candidate_status = candidate.get("status") or "testing"
     if candidate_status == "promising":
@@ -388,10 +457,27 @@ def build_hypothesis_summary(candidate: dict[str, Any], evaluations: list[dict[s
     else:
         next_action = "collect more validation windows"
 
-    title = f"{family} hypothesis: {candidate.get('name')}"
-    hypothesis_text = (
-        f"Factor {candidate.get('name')} from family {family} is being tested for stable alpha across rolling and expanding windows."
-    )
+    if promising_windows and not rejected_windows:
+        target_window = "medium_horizon"
+    elif promising_windows:
+        target_window = "recent_extension"
+    else:
+        target_window = "short_window_recheck"
+    mechanism_note = f"{candidate_name} 代表 {family} family 的一个条件性 alpha 假设，需要确认它是否真的提供独立增量，而不是复制现有风格暴露。"
+    invalidation_bits = []
+    if fragile_windows:
+        invalidation_bits.append("更多窗口出现 split/rolling fragility")
+    if rejected_windows:
+        invalidation_bits.append("在更长窗口里持续掉出 watchlist/candidate")
+    if recent_reason and recent_reason not in invalidation_bits:
+        invalidation_bits.append(recent_reason)
+    if invalidation_bits:
+        evidence_against.append(f"证伪条件: {'；'.join(invalidation_bits[:3])}")
+    evidence_for.append(f"目标窗口: {target_window}")
+    evidence_for.append("增量价值主张: 若成立，应比现有 frontier 多提供一层 family/窗口上的可解释差异")
+
+    title = f"{family} hypothesis: {candidate_name}"
+    hypothesis_text = mechanism_note
     return {
         "title": title,
         "family": family,

@@ -11,6 +11,22 @@ from factor_lab.factors import FactorDefinition
 from factor_lab.portfolio import build_composite_factor
 
 
+def _empty_portfolio_payload(
+    strategy_name: str,
+    latest_date: pd.Timestamp | None,
+    reason: str,
+) -> dict[str, Any]:
+    payload = {
+        "generated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "strategy_name": strategy_name,
+        "as_of_date": str(latest_date.date()) if latest_date is not None and not pd.isna(latest_date) else None,
+        "position_count": 0,
+        "positions": [],
+        "reason": reason,
+    }
+    return payload
+
+
 def build_paper_portfolio(
     dataset_path: str | Path,
     factor_definitions: list[dict[str, Any]],
@@ -23,8 +39,18 @@ def build_paper_portfolio(
 
     frame = pd.read_csv(dataset_path)
     frame["date"] = pd.to_datetime(frame["date"])
+    if frame.empty:
+        payload = _empty_portfolio_payload(strategy_name, None, "dataset_empty")
+        (output / "current_portfolio.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        return payload
+
     latest_date = frame["date"].max()
     latest = frame[frame["date"] == latest_date].copy()
+
+    if not factor_definitions:
+        payload = _empty_portfolio_payload(strategy_name, latest_date, "candidate_pool_empty")
+        (output / "current_portfolio.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        return payload
 
     defs = [FactorDefinition(name=item["name"], expression=item["expression"]) for item in factor_definitions]
     full_signal = build_composite_factor(frame, defs, neutralize=False)
@@ -33,12 +59,7 @@ def build_paper_portfolio(
     cut = latest["signal"].quantile(1 - long_q)
     target = latest[latest["signal"] >= cut].copy().sort_values("signal", ascending=False)
     if target.empty:
-        payload = {
-            "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-            "strategy_name": strategy_name,
-            "as_of_date": str(latest_date.date()),
-            "positions": [],
-        }
+        payload = _empty_portfolio_payload(strategy_name, latest_date, "no_positions_selected")
         (output / "current_portfolio.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         return payload
 

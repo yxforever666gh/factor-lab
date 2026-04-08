@@ -1,4 +1,9 @@
 __pycache__/
 *.pyc
+.pytest_cache/
 .env
-artifacts/tushare_cache/
+
+# Runtime outputs live under artifacts/. This keeps new generated files out of git;
+# already tracked artifacts still need a separate cleanup commit if you want them removed.
+artifacts/*
+!artifacts/.gitkeep

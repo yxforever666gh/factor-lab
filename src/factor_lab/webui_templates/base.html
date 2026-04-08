@@ -51,6 +51,11 @@
     .pill.good { color: var(--good); }
     .pill.bad { color: var(--bad); }
     .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .segmented { display: inline-flex; gap: 8px; padding: 6px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 14px; }
+    .segmented button { border: 0; background: transparent; color: var(--muted); padding: 8px 14px; border-radius: 10px; cursor: pointer; font-weight: 600; }
+    .segmented button.active { background: var(--link); color: #08101f; }
+    .segment-pane { display: none; }
+    .segment-pane.active { display: block; }
   </style>
 </head>
 <body>

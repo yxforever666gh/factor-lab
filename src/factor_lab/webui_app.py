@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import json
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -98,6 +98,125 @@ def sparkline_svg(values: list[float | int], width: int = 240, height: int = 64,
     )
 
 
+def score_timeline_svg(series: list[dict[str, Any]], width: int = 960, height: int = 320, target_lines: list[dict[str, Any]] | None = None, point_label_step: int | None = None) -> str:
+    if not series:
+        return ""
+    all_points = [point for item in series for point in item.get('points', []) if point.get('ts') and point.get('score') is not None]
+    if not all_points:
+        return ""
+    parsed = []
+    for point in all_points:
+        try:
+            parsed.append((datetime.fromisoformat(point['ts']), float(point['score'])))
+        except Exception:
+            continue
+    if not parsed:
+        return ""
+    min_ts = min(ts for ts, _ in parsed)
+    max_ts = max(ts for ts, _ in parsed)
+    if min_ts == max_ts:
+        max_ts = min_ts + timedelta(minutes=1)
+
+    pad_left, pad_right, pad_top, pad_bottom = 56, 18, 18, 36
+    inner_w = width - pad_left - pad_right
+    inner_h = height - pad_top - pad_bottom
+    total_seconds = max((max_ts - min_ts).total_seconds(), 1)
+
+    def x_pos(ts: datetime) -> float:
+        return pad_left + ((ts - min_ts).total_seconds() / total_seconds) * inner_w
+
+    def y_pos(score: float) -> float:
+        bounded = max(0.0, min(100.0, float(score)))
+        return pad_top + ((100.0 - bounded) / 100.0) * inner_h
+
+    bands = [
+        (70, 100, '#163a2d', '强'),
+        (40, 70, '#40351a', '中'),
+        (0, 40, '#3d1f28', '弱'),
+    ]
+    band_svg = []
+    for low, high, fill, label in bands:
+        y1 = y_pos(high)
+        y2 = y_pos(low)
+        band_svg.append(f'<rect x="{pad_left}" y="{y1:.1f}" width="{inner_w:.1f}" height="{(y2-y1):.1f}" fill="{fill}" opacity="0.45" />')
+        band_svg.append(f'<text x="12" y="{((y1+y2)/2)+4:.1f}" fill="#9aa7d1" font-size="12">{label}</text>')
+
+    grid_svg = []
+    for score in [0, 20, 40, 60, 80, 100]:
+        y = y_pos(score)
+        grid_svg.append(f'<line x1="{pad_left}" y1="{y:.1f}" x2="{width-pad_right}" y2="{y:.1f}" stroke="#2b3765" stroke-width="1" opacity="0.9" />')
+        grid_svg.append(f'<text x="{pad_left-8}" y="{y+4:.1f}" text-anchor="end" fill="#9aa7d1" font-size="11">{score}</text>')
+
+    target_svg = []
+    for idx, target in enumerate(target_lines or []):
+        try:
+            score = float(target.get('score'))
+        except Exception:
+            continue
+        y = y_pos(score)
+        color = target.get('color', '#9aa7d1')
+        label = target.get('label', f'target-{idx+1}')
+        target_svg.append(f'<line x1="{pad_left}" y1="{y:.1f}" x2="{width-pad_right}" y2="{y:.1f}" stroke="{color}" stroke-width="1.5" stroke-dasharray="6 6" opacity="0.95" />')
+        target_svg.append(f'<text x="{width-pad_right-4}" y="{y-6:.1f}" text-anchor="end" fill="{color}" font-size="11">{label}</text>')
+
+    tick_times = [min_ts, min_ts + (max_ts - min_ts) / 2, max_ts]
+    tick_svg = []
+    for ts in tick_times:
+        x = x_pos(ts)
+        label = ts.astimezone(ZoneInfo('Asia/Shanghai')).strftime('%m-%d %H:%M')
+        tick_svg.append(f'<line x1="{x:.1f}" y1="{pad_top}" x2="{x:.1f}" y2="{height-pad_bottom}" stroke="#2b3765" stroke-width="1" opacity="0.9" />')
+        tick_svg.append(f'<text x="{x:.1f}" y="{height-10}" text-anchor="middle" fill="#9aa7d1" font-size="11">{label}</text>')
+
+    legend_svg = []
+    for idx, item in enumerate(series):
+        x = pad_left + idx * 160
+        color = item.get('color', '#84a8ff')
+        name = item.get('name', f'series-{idx+1}')
+        legend_svg.append(f'<line x1="{x}" y1="10" x2="{x+18}" y2="10" stroke="{color}" stroke-width="3" />')
+        legend_svg.append(f'<text x="{x+24}" y="14" fill="#ebf0ff" font-size="12">{name}</text>')
+
+    series_svg = []
+    for item in series:
+        color = item.get('color', '#84a8ff')
+        points = []
+        for point in item.get('points', []):
+            try:
+                ts = datetime.fromisoformat(point['ts'])
+                score = float(point['score'])
+            except Exception:
+                continue
+            points.append((x_pos(ts), y_pos(score), score))
+        if not points:
+            continue
+        if len(points) == 1:
+            x, y, score = points[0]
+            series_svg.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="4" fill="{color}" />')
+            series_svg.append(f'<text x="{x+6:.1f}" y="{y-6:.1f}" fill="{color}" font-size="11">{score:.1f}</text>')
+            continue
+        polyline = ' '.join(f'{x:.1f},{y:.1f}' for x, y, _ in points)
+        series_svg.append(f'<polyline fill="none" stroke="{color}" stroke-width="3" points="{polyline}" />')
+        for idx, (x, y, score) in enumerate(points):
+            if idx >= len(points) - 4:
+                series_svg.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="3.5" fill="{color}" />')
+            if point_label_step and (idx % max(point_label_step, 1) == 0 or idx == len(points) - 1):
+                series_svg.append(f'<text x="{x+6:.1f}" y="{y-6:.1f}" fill="{color}" font-size="11">{score:.1f}</text>')
+        if not point_label_step:
+            x, y, score = points[-1]
+            series_svg.append(f'<text x="{x+6:.1f}" y="{y-6:.1f}" fill="{color}" font-size="11">{score:.1f}</text>')
+
+    return (
+        f'<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">'
+        f'<rect x="0" y="0" width="{width}" height="{height}" rx="14" fill="#1b2444" />'
+        + ''.join(band_svg)
+        + ''.join(grid_svg)
+        + ''.join(target_svg)
+        + ''.join(tick_svg)
+        + ''.join(series_svg)
+        + ''.join(legend_svg)
+        + '</svg>'
+    )
+
+
 def compute_weekly_report(health: dict[str, Any] | None = None) -> dict[str, Any]:
     health = health or compute_health_metrics()
     conn = get_conn()
@@ -170,6 +289,297 @@ def compute_weekly_report(health: dict[str, Any] | None = None) -> dict[str, Any
         conn.close()
 
 
+def _read_json_file(path: Path, default: Any) -> Any:
+    if not path.exists():
+        return default
+    try:
+        return json.loads(path.read_text(encoding='utf-8'))
+    except Exception:
+        return default
+
+
+def _load_health_paper_stability(base: Path, snapshot: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    live_path = base / 'paper_portfolio' / 'portfolio_stability_score.json'
+    live_payload = _read_json_file(live_path, {})
+    if live_payload:
+        return live_payload, 'live_portfolio_stability'
+    snapshot_payload = (snapshot or {}).get('paper_portfolio_stability', {}) or {}
+    if snapshot_payload:
+        return snapshot_payload, 'snapshot_fallback'
+    return {}, 'missing'
+
+
+def _build_research_progress_display(snapshot_score: float, timeline_score: float, *, timeline_candidate_run_count: int, timeline_candidate_factor_count: int, timeline_point_count: int) -> dict[str, Any]:
+    sparse_timeline = timeline_point_count > 0 and (timeline_candidate_run_count == 0 or timeline_candidate_factor_count == 0)
+    if sparse_timeline:
+        return {
+            'score': round(snapshot_score, 1),
+            'basis': 'snapshot',
+            'warning': '24h 时间线里没有有效 candidate 轨迹，主卡片已回退到当前快照分。',
+            'timeline_sparse': True,
+        }
+    return {
+        'score': round(timeline_score, 1),
+        'basis': 'timeline',
+        'warning': None,
+        'timeline_sparse': False,
+    }
+
+
+_PROGRESS_OUTCOME_WEIGHTS = {
+    'high_value_success': 100.0,
+    'useful_success': 85.0,
+    'high_value_failure': 70.0,
+    'ordinary_failure': 28.0,
+    'low_value_repeat': 8.0,
+    'execution_failure': 0.0,
+}
+
+
+_PROGRESS_FEEDBACK_WEIGHTS = {
+    'high_value_success': 100.0,
+    'useful_success': 88.0,
+    'high_value_failure': 72.0,
+    'ordinary_failure': 30.0,
+    'low_value_repeat': 10.0,
+    'execution_failure': 0.0,
+}
+
+
+def _parse_iso_utc(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except Exception:
+        return None
+
+
+def _project_bucket_start(dt: datetime, mode: str) -> datetime:
+    local = dt.astimezone(ZoneInfo('Asia/Shanghai'))
+    if mode == '24h':
+        return local.replace(minute=0, second=0, microsecond=0)
+    return local.replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _progress_time_buckets(now: datetime, mode: str) -> list[datetime]:
+    current = _project_bucket_start(now, mode)
+    if mode == '24h':
+        return [current - timedelta(hours=offset) for offset in range(23, -1, -1)]
+    return [current - timedelta(days=offset) for offset in range(6, -1, -1)]
+
+
+def _average_weighted_score(rows: list[dict[str, Any]], weights: dict[str, float]) -> float:
+    if not rows:
+        return 0.0
+    values = [float(weights.get(str(row.get('outcome_class') or ''), 20.0)) for row in rows]
+    return round(sum(values) / len(values), 1)
+
+
+def _normalize_best_raw_score(best_raw_score: float | None) -> float:
+    if best_raw_score is None:
+        return 0.0
+    return round(min(max(float(best_raw_score), 0.0) / 1.5, 1.0) * 100.0, 1)
+
+
+def _portfolio_edge_score(candidate_sharpe: float | None, candidate_return: float | None, all_return: float | None) -> float:
+    score = 0.0
+    if candidate_sharpe is not None:
+        score += min(max(float(candidate_sharpe), 0.0) * 8.0, 55.0)
+    if candidate_return is not None and all_return is not None:
+        edge = float(candidate_return) - float(all_return)
+        score += min(max(edge, 0.0) * 80.0, 25.0)
+        if float(candidate_return) >= 0.6 * float(all_return):
+            score += 20.0
+    return round(min(score, 100.0), 1)
+
+
+def _build_project_progress_observation(
+    *,
+    conn: sqlite3.Connection,
+    base: Path,
+    research_tasks: list[dict[str, Any]],
+    candidates_only_recent_sharpe: float | None,
+    candidates_only_recent_return: float | None,
+    all_factors_recent_return: float | None,
+) -> dict[str, Any]:
+    memory = _read_json_file(base / 'research_memory.json', {})
+    generated_tasks = [
+        row for row in research_tasks
+        if ((row.get('payload') or {}).get('source') == 'candidate_generation')
+    ]
+    generated_outcomes = list(memory.get('generated_candidate_outcomes') or [])
+    execution_feedback = list(memory.get('execution_feedback') or [])
+
+    run_quality_rows = [dict(row) for row in conn.execute(
+        """
+        SELECT wr.run_id, wr.created_at_utc,
+               MAX(CASE WHEN fr.variant = 'raw_scored' THEN fr.score END) AS best_raw_score
+        FROM workflow_runs wr
+        LEFT JOIN factor_results fr ON fr.run_id = wr.run_id
+        WHERE wr.created_at_utc >= datetime('now', '-7 day')
+        GROUP BY wr.run_id, wr.created_at_utc
+        ORDER BY wr.created_at_utc ASC
+        """
+    ).fetchall()]
+    portfolio_rows = [dict(row) for row in conn.execute(
+        """
+        SELECT wr.created_at_utc, pr.strategy_name,
+               AVG(pr.sharpe) AS avg_sharpe,
+               AVG(pr.annual_return) AS avg_return
+        FROM workflow_runs wr
+        JOIN portfolio_results pr ON pr.run_id = wr.run_id
+        WHERE wr.created_at_utc >= datetime('now', '-7 day')
+          AND pr.strategy_name IN ('long_short_top_bottom_candidates_only', 'long_short_top_bottom_all_factors')
+        GROUP BY wr.created_at_utc, pr.strategy_name
+        ORDER BY wr.created_at_utc ASC
+        """
+    ).fetchall()]
+
+    now = datetime.now(timezone.utc)
+    windows: dict[str, Any] = {}
+    for mode in ('24h', '7d'):
+        bucket_starts = _progress_time_buckets(now, mode)
+        bucket_index = {bucket.isoformat(): idx for idx, bucket in enumerate(bucket_starts)}
+        bucket_rows = [
+            {
+                'bucket': bucket,
+                'label': bucket.astimezone(ZoneInfo('Asia/Shanghai')).strftime('%m-%d %H:%M' if mode == '24h' else '%m-%d'),
+                'generated_tasks': [],
+                'generated_outcomes': [],
+                'execution_feedback': [],
+                'best_raw_scores': [],
+                'candidate_sharpes': [],
+                'candidate_returns': [],
+                'all_returns': [],
+            }
+            for bucket in bucket_starts
+        ]
+
+        for row in generated_tasks:
+            dt = _parse_iso_utc(row.get('created_at_utc'))
+            if not dt:
+                continue
+            key = _project_bucket_start(dt, mode).isoformat()
+            idx = bucket_index.get(key)
+            if idx is not None:
+                bucket_rows[idx]['generated_tasks'].append(row)
+
+        for row in generated_outcomes:
+            dt = _parse_iso_utc(row.get('updated_at_utc'))
+            if not dt:
+                continue
+            key = _project_bucket_start(dt, mode).isoformat()
+            idx = bucket_index.get(key)
+            if idx is not None:
+                bucket_rows[idx]['generated_outcomes'].append(row)
+
+        for row in execution_feedback:
+            dt = _parse_iso_utc(row.get('updated_at_utc'))
+            if not dt:
+                continue
+            key = _project_bucket_start(dt, mode).isoformat()
+            idx = bucket_index.get(key)
+            if idx is not None:
+                bucket_rows[idx]['execution_feedback'].append(row)
+
+        for row in run_quality_rows:
+            dt = _parse_iso_utc(row.get('created_at_utc'))
+            if not dt:
+                continue
+            key = _project_bucket_start(dt, mode).isoformat()
+            idx = bucket_index.get(key)
+            if idx is not None and row.get('best_raw_score') is not None:
+                bucket_rows[idx]['best_raw_scores'].append(float(row.get('best_raw_score') or 0.0))
+
+        for row in portfolio_rows:
+            dt = _parse_iso_utc(row.get('created_at_utc'))
+            if not dt:
+                continue
+            key = _project_bucket_start(dt, mode).isoformat()
+            idx = bucket_index.get(key)
+            if idx is None:
+                continue
+            if row.get('strategy_name') == 'long_short_top_bottom_candidates_only':
+                if row.get('avg_sharpe') is not None:
+                    bucket_rows[idx]['candidate_sharpes'].append(float(row.get('avg_sharpe') or 0.0))
+                if row.get('avg_return') is not None:
+                    bucket_rows[idx]['candidate_returns'].append(float(row.get('avg_return') or 0.0))
+            elif row.get('strategy_name') == 'long_short_top_bottom_all_factors' and row.get('avg_return') is not None:
+                bucket_rows[idx]['all_returns'].append(float(row.get('avg_return') or 0.0))
+
+        points = []
+        for row in bucket_rows:
+            outcome_score = _average_weighted_score(row['generated_outcomes'], _PROGRESS_OUTCOME_WEIGHTS)
+            feedback_score = _average_weighted_score(row['execution_feedback'], _PROGRESS_FEEDBACK_WEIGHTS)
+            best_raw_avg = round(sum(row['best_raw_scores']) / len(row['best_raw_scores']), 6) if row['best_raw_scores'] else None
+            factor_discovery_score = round(
+                min(100.0, outcome_score * 0.7 + _normalize_best_raw_score(best_raw_avg) * 0.3),
+                1,
+            ) if row['generated_outcomes'] or best_raw_avg is not None else 0.0
+            candidate_sharpe_avg = round(sum(row['candidate_sharpes']) / len(row['candidate_sharpes']), 6) if row['candidate_sharpes'] else None
+            candidate_return_avg = round(sum(row['candidate_returns']) / len(row['candidate_returns']), 6) if row['candidate_returns'] else None
+            all_return_avg = round(sum(row['all_returns']) / len(row['all_returns']), 6) if row['all_returns'] else None
+            portfolio_score = _portfolio_edge_score(candidate_sharpe_avg, candidate_return_avg, all_return_avg)
+            total_score = round(factor_discovery_score * 0.4 + feedback_score * 0.35 + portfolio_score * 0.25, 1)
+            row['factor_discovery_score'] = factor_discovery_score
+            row['research_gain_score'] = feedback_score
+            row['portfolio_edge_score'] = portfolio_score
+            row['total_score'] = total_score
+            row['best_raw_avg'] = best_raw_avg
+            row['candidate_sharpe_avg'] = candidate_sharpe_avg
+            row['candidate_return_avg'] = candidate_return_avg
+            row['all_return_avg'] = all_return_avg
+            points.append({'ts': row['bucket'].isoformat(), 'score': total_score})
+
+        chart_svg = score_timeline_svg(
+            [{'name': '项目进步总分', 'color': '#ffd166', 'points': points}],
+            width=1100,
+            height=320,
+            point_label_step=3 if mode == '24h' else 1,
+        )
+        windows[mode] = {
+            'mode': mode,
+            'aggregation_label': '按小时均值' if mode == '24h' else '按天均值',
+            'chart_svg': chart_svg,
+            'rows': bucket_rows,
+            'point_count': len(points),
+        }
+
+    cutoff_24h = now - timedelta(hours=24)
+    outcomes_24h = [row for row in generated_outcomes if (_parse_iso_utc(row.get('updated_at_utc')) or now) >= cutoff_24h]
+    feedback_24h = [row for row in execution_feedback if (_parse_iso_utc(row.get('updated_at_utc')) or now) >= cutoff_24h]
+    tasks_24h = [row for row in generated_tasks if (_parse_iso_utc(row.get('created_at_utc')) or now) >= cutoff_24h]
+    positive_outcomes_24h = [row for row in outcomes_24h if row.get('outcome_class') in {'high_value_success', 'useful_success'}]
+    informative_outcomes_24h = [row for row in outcomes_24h if row.get('outcome_class') == 'high_value_failure']
+    low_value_outcomes_24h = [row for row in outcomes_24h if row.get('outcome_class') == 'low_value_repeat']
+    high_info_ratio_24h = round((len(positive_outcomes_24h) + len(informative_outcomes_24h)) / len(outcomes_24h), 4) if outcomes_24h else None
+
+    return {
+        'windows': windows,
+        'current_24h': {
+            'generated_task_count': len(tasks_24h),
+            'generated_outcome_count': len(outcomes_24h),
+            'positive_outcome_count': len(positive_outcomes_24h),
+            'informative_outcome_count': len(informative_outcomes_24h),
+            'low_value_repeat_count': len(low_value_outcomes_24h),
+            'high_info_ratio': high_info_ratio_24h,
+            'feedback_count': len(feedback_24h),
+            'candidate_sharpe': candidates_only_recent_sharpe,
+            'return_edge': round((float(candidates_only_recent_return or 0.0) - float(all_factors_recent_return or 0.0)), 6) if candidates_only_recent_return is not None and all_factors_recent_return is not None else None,
+        },
+        'current_scores': {
+            'factor_discovery': windows['24h']['rows'][-1]['factor_discovery_score'] if windows['24h']['rows'] else 0.0,
+            'research_gain': windows['24h']['rows'][-1]['research_gain_score'] if windows['24h']['rows'] else 0.0,
+            'portfolio_edge': windows['24h']['rows'][-1]['portfolio_edge_score'] if windows['24h']['rows'] else 0.0,
+            'overall': windows['24h']['rows'][-1]['total_score'] if windows['24h']['rows'] else 0.0,
+        },
+    }
+
+
 def compute_health_metrics() -> dict[str, Any]:
     conn = get_conn()
     try:
@@ -228,19 +638,37 @@ def compute_health_metrics() -> dict[str, Any]:
 
         strategy_rows = [dict(row) for row in conn.execute(
             """
-            SELECT w.created_at_utc, p.run_id, p.strategy_name, p.sharpe, p.annual_return, p.max_drawdown, p.avg_turnover
-            FROM portfolio_results p
-            JOIN workflow_runs w ON w.run_id = p.run_id
-            ORDER BY w.created_at_utc DESC
-            LIMIT 200
+            WITH ranked_portfolio AS (
+                SELECT
+                    w.created_at_utc,
+                    p.run_id,
+                    p.strategy_name,
+                    p.sharpe,
+                    p.annual_return,
+                    p.max_drawdown,
+                    p.avg_turnover,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY p.strategy_name
+                        ORDER BY w.created_at_utc DESC
+                    ) AS rn
+                FROM portfolio_results p
+                JOIN workflow_runs w ON w.run_id = p.run_id
+            )
+            SELECT created_at_utc, run_id, strategy_name, sharpe, annual_return, max_drawdown, avg_turnover
+            FROM ranked_portfolio
+            WHERE rn <= 12
+            ORDER BY created_at_utc DESC
             """
         ).fetchall()]
         strategy_map: dict[str, list[dict[str, Any]]] = {}
         for row in strategy_rows:
             strategy_map.setdefault(row['strategy_name'], []).append(row)
 
-        def avg_metric(strategy_name: str, field: str, limit: int = 5):
-            rows = strategy_map.get(strategy_name, [])[:limit]
+        def avg_metric(strategy_name: str, field: str, limit: int = 5, as_of: str | None = None):
+            rows = strategy_map.get(strategy_name, [])
+            if as_of is not None:
+                rows = [row for row in rows if (row.get('created_at_utc') or '') <= as_of]
+            rows = rows[:limit]
             values = [row[field] for row in rows if row.get(field) is not None]
             return round(sum(values) / len(values), 6) if values else None
 
@@ -265,10 +693,22 @@ def compute_health_metrics() -> dict[str, Any]:
         llm_status_path = base / 'llm_status.json'
         snapshot_path = base / 'llm_input_snapshot.json'
         daemon_status_path = base / 'research_daemon_status.json'
-        llm_status = json.loads(llm_status_path.read_text(encoding='utf-8')) if llm_status_path.exists() else {}
-        snapshot = json.loads(snapshot_path.read_text(encoding='utf-8')) if snapshot_path.exists() else {}
-        daemon_status = json.loads(daemon_status_path.read_text(encoding='utf-8')) if daemon_status_path.exists() else {}
-        paper_stability = snapshot.get('paper_portfolio_stability', {}) or {}
+        research_metrics_path = base / 'research_metrics.json'
+        llm_status = _read_json_file(llm_status_path, {})
+        snapshot = _read_json_file(snapshot_path, {})
+        daemon_status = _read_json_file(daemon_status_path, {})
+        research_metrics = _read_json_file(research_metrics_path, {})
+        mode_labels = {
+            'cpu_push': '冲 CPU',
+            'target_zone': '目标区',
+            'balanced': '平衡',
+            'cpu_saturated': 'CPU 偏满',
+            'memory_brake': '内存刹车',
+            'memory_guard': '内存保护',
+        }
+        if daemon_status.get('mode'):
+            daemon_status['mode_label'] = mode_labels.get(daemon_status.get('mode'), daemon_status.get('mode'))
+        paper_stability, paper_stability_source = _load_health_paper_stability(base, snapshot)
         recommendation_history_tail = snapshot.get('recommendation_history_tail', []) or []
         positive_count = len([row for row in recommendation_history_tail if row.get('effectiveness') == 'positive'])
         recommendation_hit_rate = round(positive_count / len(recommendation_history_tail), 4) if recommendation_history_tail else None
@@ -281,11 +721,157 @@ def compute_health_metrics() -> dict[str, Any]:
             row.get('sharpe') for row in strategy_map.get('long_short_top_bottom_candidates_only', [])[:12][::-1]
         ]
 
+        timeline_runs = [dict(row) for row in conn.execute(
+            """
+            SELECT run_id, created_at_utc, status, dataset_rows
+            FROM workflow_runs
+            WHERE created_at_utc >= datetime('now', '-1 day')
+            ORDER BY created_at_utc ASC
+            """
+        ).fetchall()]
+        timeline_candidate_rows = [dict(row) for row in conn.execute(
+            """
+            SELECT fr.run_id, fr.factor_name, wr.created_at_utc
+            FROM factor_results fr
+            JOIN workflow_runs wr ON wr.run_id = fr.run_id
+            WHERE fr.variant = 'candidate' AND wr.created_at_utc >= datetime('now', '-7 day')
+            ORDER BY wr.created_at_utc ASC, fr.factor_name ASC
+            """
+        ).fetchall()]
+        candidate_counts_by_ts: dict[str, dict[str, int]] = {}
+        run_candidates_timeline: dict[str, list[str]] = {}
+        for row in timeline_candidate_rows:
+            ts = row['created_at_utc']
+            factor_name = row['factor_name']
+            candidate_counts_by_ts.setdefault(ts, {})
+            candidate_counts_by_ts[ts][factor_name] = candidate_counts_by_ts[ts].get(factor_name, 0) + 1
+            run_candidates_timeline.setdefault(row['run_id'], []).append(factor_name)
+
+        stable_counter: dict[str, int] = {}
+        stable_candidate_count_by_ts: dict[str, int] = {}
+        for row in timeline_candidate_rows:
+            ts = row['created_at_utc']
+            factor_name = row['factor_name']
+            stable_counter[factor_name] = stable_counter.get(factor_name, 0) + 1
+            stable_candidate_count_by_ts[ts] = len([name for name, count in stable_counter.items() if count >= 2])
+
+        timeline_series = {
+            'run': [],
+            'research': [],
+            'portfolio': [],
+        }
+        timeline_candidate_run_count = 0
+        timeline_candidate_factor_count = 0
+        finished_seen = 0
+        total_seen = 0
+        prev_candidates_for_timeline: list[str] = []
+        paper_stability_score = round(float(paper_stability.get('stability_score', 0) or 0) * 40, 1) if paper_stability else 0
+        for row in timeline_runs:
+            total_seen += 1
+            if row.get('status') == 'finished':
+                finished_seen += 1
+            run_score = 0.0
+            if total_seen:
+                run_score += 60 * (finished_seen / total_seen)
+            if row.get('status') == 'finished':
+                run_score += 20
+            if row.get('dataset_rows'):
+                run_score += 20
+            run_score = round(min(run_score, 100), 1)
+
+            current_candidates = run_candidates_timeline.get(row['run_id'], [])
+            current_stable = stable_candidate_count_by_ts.get(row['created_at_utc'], 0)
+            if current_candidates:
+                timeline_candidate_run_count += 1
+                timeline_candidate_factor_count += len(current_candidates)
+            candidate_churn_timeline = len(set(current_candidates).symmetric_difference(set(prev_candidates_for_timeline))) if (current_candidates or prev_candidates_for_timeline) else 0
+            current_candidate_population = max(len(set(current_candidates)), len(set(prev_candidates_for_timeline)), 1)
+            candidate_churn_ratio_timeline = min(candidate_churn_timeline / current_candidate_population, 1.0)
+            research_score = 0.0
+            research_score += min(current_stable * 7.0, 35.0)
+            research_score += (1.0 - candidate_churn_ratio_timeline) * 20.0
+            research_score += min(len(set(current_candidates)) / 5.0, 1.0) * 20.0
+            research_score = round(min(research_score, 100), 1)
+            if current_candidates:
+                prev_candidates_for_timeline = current_candidates
+
+            candidates_only_sharpe_at_ts = avg_metric('long_short_top_bottom_candidates_only', 'sharpe', as_of=row['created_at_utc'])
+            candidates_only_return_at_ts = avg_metric('long_short_top_bottom_candidates_only', 'annual_return', as_of=row['created_at_utc'])
+            all_factors_return_at_ts = avg_metric('long_short_top_bottom_all_factors', 'annual_return', as_of=row['created_at_utc'])
+            portfolio_score = 0.0
+            if candidates_only_sharpe_at_ts is not None:
+                portfolio_score += min(max(candidates_only_sharpe_at_ts, 0) * 5, 40)
+            portfolio_score += paper_stability_score
+            if candidates_only_return_at_ts is not None and all_factors_return_at_ts is not None and candidates_only_return_at_ts >= 0.6 * all_factors_return_at_ts:
+                portfolio_score += 20
+            portfolio_score = round(min(portfolio_score, 100), 1)
+
+            timeline_series['run'].append({'ts': row['created_at_utc'], 'score': run_score})
+            timeline_series['research'].append({'ts': row['created_at_utc'], 'score': research_score})
+            timeline_series['portfolio'].append({'ts': row['created_at_utc'], 'score': portfolio_score})
+
+        timeline_chart = score_timeline_svg([
+            {'name': '运行健康', 'color': '#3ddc97', 'points': timeline_series['run']},
+            {'name': '研究进步', 'color': '#ffd166', 'points': timeline_series['research']},
+            {'name': '组合进步', 'color': '#84a8ff', 'points': timeline_series['portfolio']},
+        ])
+
+        timeline_summary = {
+            'window_label': '最近 24 小时',
+            'point_count': len(timeline_runs),
+            'run_delta': round((timeline_series['run'][-1]['score'] - timeline_series['run'][0]['score']), 1) if len(timeline_series['run']) >= 2 else 0,
+            'research_delta': round((timeline_series['research'][-1]['score'] - timeline_series['research'][0]['score']), 1) if len(timeline_series['research']) >= 2 else 0,
+            'portfolio_delta': round((timeline_series['portfolio'][-1]['score'] - timeline_series['portfolio'][0]['score']), 1) if len(timeline_series['portfolio']) >= 2 else 0,
+            'run_current': timeline_series['run'][-1]['score'] if timeline_series['run'] else 0,
+            'research_current': timeline_series['research'][-1]['score'] if timeline_series['research'] else 0,
+            'portfolio_current': timeline_series['portfolio'][-1]['score'] if timeline_series['portfolio'] else 0,
+        }
+
         heartbeat_rows = read_jsonl(DB_PATH.parent / 'system_heartbeat.jsonl')
         recent_heartbeat_rows = heartbeat_rows[-12:]
+
+        daemon_status_history = read_jsonl(DB_PATH.parent / 'research_daemon_status_history.jsonl')
+        recent_daemon_points = [row for row in daemon_status_history if row.get('updated_at_utc')][-240:]
+        resource_timeline_series = {
+            'cpu': [{'ts': row['updated_at_utc'], 'score': round(float(row.get('cpu_usage_ratio') or 0) * 100, 1)} for row in recent_daemon_points if row.get('cpu_usage_ratio') is not None],
+            'memory': [],
+            'throttle': [],
+        }
+        for row in recent_daemon_points:
+            ts = row.get('updated_at_utc')
+            mem_total = row.get('mem_total_mb') or 0
+            mem_available = row.get('mem_available_mb') or 0
+            if ts and mem_total:
+                mem_used_ratio = max(0.0, min(1.0, 1.0 - (float(mem_available) / float(mem_total))))
+                resource_timeline_series['memory'].append({'ts': ts, 'score': round(mem_used_ratio * 100, 1)})
+            if ts and row.get('max_tasks_per_loop') is not None:
+                throttle_score = min(float(row.get('max_tasks_per_loop') or 0) * 20.0 + float(row.get('batch_max_workers') or 0) * 10.0, 100.0)
+                resource_timeline_series['throttle'].append({'ts': ts, 'score': round(throttle_score, 1)})
+
+        resource_timeline_chart = score_timeline_svg([
+            {'name': 'CPU 占用%', 'color': '#84a8ff', 'points': resource_timeline_series['cpu']},
+            {'name': '内存占用%', 'color': '#ff6b6b', 'points': resource_timeline_series['memory']},
+            {'name': '调度强度', 'color': '#3ddc97', 'points': resource_timeline_series['throttle']},
+        ], target_lines=[{'score': 80, 'label': 'CPU 目标 80%', 'color': '#84a8ff'}])
         research_tasks = ExperimentStore(DB_PATH).list_research_tasks(limit=100)
         recent_finished_tasks = [t for t in research_tasks if t['status'] == 'finished']
         recent_failed_tasks = [t for t in research_tasks if t['status'] == 'failed']
+        budget_guard_tasks = [
+            t for t in research_tasks
+            if 'generated_batch_budget_guard' in ((t.get('worker_note') or '') + ' ' + (t.get('last_error') or ''))
+        ]
+        blocked_family_heartbeats = [
+            row for row in recent_heartbeat_rows
+            if row.get('status') in {'circuit_open', 'circuit_open_family', 'idle_family_blocked'}
+        ]
+        project_progress = _build_project_progress_observation(
+            conn=conn,
+            base=base,
+            research_tasks=research_tasks,
+            candidates_only_recent_sharpe=candidates_only_recent_sharpe,
+            candidates_only_recent_return=candidates_only_recent_return,
+            all_factors_recent_return=all_factors_recent_return,
+        )
         knowledge_gain_counter = {
             'stable_candidate_confirmed': 0,
             'repeated_graveyard_confirmed': 0,
@@ -309,6 +895,8 @@ def compute_health_metrics() -> dict[str, Any]:
             'queue_running': len([t for t in research_tasks if t['status'] == 'running']),
             'recent_finished_tasks': len(recent_finished_tasks[:10]),
             'recent_failed_tasks': len(recent_failed_tasks[:10]),
+            'budget_guarded_tasks': len(budget_guard_tasks),
+            'blocked_family_events': len(blocked_family_heartbeats),
             'stalled': len(recent_finished_tasks[:6]) == 0 and len([t for t in research_tasks if t['status'] == 'pending']) == 0,
             'warning': len(recent_failed_tasks[:3]) >= 3,
         }
@@ -322,27 +910,31 @@ def compute_health_metrics() -> dict[str, Any]:
             run_health_score += 20
         run_health_score = round(run_health_score, 1)
 
-        research_progress_score = 0
-        if stable_candidate_count:
-            research_progress_score += min(stable_candidate_count * 10, 35)
-        if candidate_churn == 0:
-            research_progress_score += 20
-        elif candidate_churn <= 2:
-            research_progress_score += 10
-        if recommendation_hit_rate is not None:
-            research_progress_score += round(recommendation_hit_rate * 25, 1)
-        if latest_candidates:
-            research_progress_score += 20
-        research_progress_score = round(min(research_progress_score, 100), 1)
+        stable_candidate_component = min(stable_candidate_count * 7.0, 35.0)
+        candidate_population = max(len(set(latest_candidates)), len(set(previous_candidates)), 1)
+        candidate_churn_ratio = min(candidate_churn / candidate_population, 1.0)
+        convergence_component = round((1.0 - candidate_churn_ratio) * 20.0, 1)
+        recommendation_component = round((recommendation_hit_rate or 0.0) * 25.0, 1) if recommendation_hit_rate is not None else 0.0
+        candidate_activity_component = round(min(len(set(latest_candidates)) / 5.0, 1.0) * 20.0, 1)
+        research_progress_snapshot_score = round(min(
+            stable_candidate_component + convergence_component + recommendation_component + candidate_activity_component,
+            100,
+        ), 1)
+        research_progress_timeline_score = round(float(timeline_summary['research_current']), 1)
+        research_display = _build_research_progress_display(
+            research_progress_snapshot_score,
+            research_progress_timeline_score,
+            timeline_candidate_run_count=timeline_candidate_run_count,
+            timeline_candidate_factor_count=timeline_candidate_factor_count,
+            timeline_point_count=len(timeline_runs),
+        )
 
-        portfolio_progress_score = 0
-        if candidates_only_recent_sharpe is not None:
-            portfolio_progress_score += min(max(candidates_only_recent_sharpe, 0) * 5, 40)
-        if paper_stability.get('stability_score') is not None:
-            portfolio_progress_score += round(float(paper_stability['stability_score']) * 40, 1)
-        if candidates_only_recent_return is not None and all_factors_recent_return is not None and candidates_only_recent_return >= 0.6 * all_factors_recent_return:
-            portfolio_progress_score += 20
-        portfolio_progress_score = round(min(portfolio_progress_score, 100), 1)
+        portfolio_sharpe_component = min(max(candidates_only_recent_sharpe or 0.0, 0.0) * 5, 40) if candidates_only_recent_sharpe is not None else 0.0
+        portfolio_stability_component = round(float(paper_stability.get('stability_score') or 0.0) * 40, 1) if paper_stability.get('stability_score') is not None else 0.0
+        portfolio_return_component = 20.0 if candidates_only_recent_return is not None and all_factors_recent_return is not None and candidates_only_recent_return >= 0.6 * all_factors_recent_return else 0.0
+        portfolio_progress_snapshot_score = round(min(portfolio_sharpe_component + portfolio_stability_component + portfolio_return_component, 100), 1)
+        portfolio_progress_timeline_score = round(float(timeline_summary['portfolio_current']), 1)
+        portfolio_progress_score = portfolio_progress_snapshot_score
 
         return {
             'latest_run': latest_run,
@@ -363,8 +955,13 @@ def compute_health_metrics() -> dict[str, Any]:
                 'run_success_sparkline': sparkline_svg(run_success_trend, color='#3ddc97'),
                 'daemon_status': daemon_status,
             },
+            'autonomy_metrics': research_metrics.get('metrics') or {},
             'research_progress': {
-                'score': research_progress_score,
+                'score': research_display['score'],
+                'snapshot_score': research_progress_snapshot_score,
+                'timeline_score': research_progress_timeline_score,
+                'score_basis': research_display['basis'],
+                'score_warning': research_display['warning'],
                 'stable_candidate_count': stable_candidate_count,
                 'latest_candidates': latest_candidates,
                 'previous_candidates': previous_candidates,
@@ -374,21 +971,49 @@ def compute_health_metrics() -> dict[str, Any]:
                 'candidate_count_sparkline': sparkline_svg(candidate_count_trend, color='#ffd166'),
                 'factor_score_trend': factor_score_trend,
                 'llm_status': llm_status.get('status'),
+                'breakdown': {
+                    'stable_candidate_component': round(stable_candidate_component, 1),
+                    'convergence_component': round(convergence_component, 1),
+                    'recommendation_component': round(recommendation_component, 1),
+                    'candidate_activity_component': round(candidate_activity_component, 1),
+                },
+                'timeline_candidate_run_count': timeline_candidate_run_count,
+                'timeline_candidate_factor_count': timeline_candidate_factor_count,
                 'recommendation_hit_rate': recommendation_hit_rate,
                 'recommendation_tail_size': len(recommendation_history_tail),
                 'knowledge_gain_counter': knowledge_gain_counter,
                 'stall_state': stall_state,
+                'budget_guard_tasks': budget_guard_tasks[:12],
+                'blocked_family_heartbeats': blocked_family_heartbeats[:12],
             },
             'portfolio_progress': {
                 'score': portfolio_progress_score,
+                'snapshot_score': portfolio_progress_snapshot_score,
+                'timeline_score': portfolio_progress_timeline_score,
                 'candidates_only_recent_sharpe': candidates_only_recent_sharpe,
                 'all_factors_recent_sharpe': all_factors_recent_sharpe,
                 'candidates_only_recent_return': candidates_only_recent_return,
                 'all_factors_recent_return': all_factors_recent_return,
                 'paper_stability': paper_stability,
+                'paper_stability_source': paper_stability_source,
+                'breakdown': {
+                    'sharpe_component': round(portfolio_sharpe_component, 1),
+                    'stability_component': round(portfolio_stability_component, 1),
+                    'return_component': round(portfolio_return_component, 1),
+                },
                 'strategy_sharpe_trend': strategy_sharpe_trend,
                 'strategy_sharpe_sparkline': sparkline_svg(strategy_sharpe_trend, color='#84a8ff'),
             },
+            'score_timeline': {
+                'chart_svg': timeline_chart,
+                'summary': timeline_summary,
+                'series': timeline_series,
+            },
+            'resource_timeline': {
+                'chart_svg': resource_timeline_chart,
+                'series': resource_timeline_series,
+            },
+            'project_progress_observation': project_progress,
         }
     finally:
         conn.close()
@@ -473,13 +1098,13 @@ def dashboard():
         "SELECT factor_name, ROUND(avg_score, 6) AS avg_score, runs FROM v_factor_score_avg ORDER BY avg_score DESC LIMIT 8"
     )
     candidate_leaderboard = fetch_all(
-        "SELECT id, name, family, status, ROUND(latest_final_score, 6) AS latest_final_score, ROUND(avg_final_score, 6) AS avg_final_score, evaluation_count, window_count FROM v_factor_candidate_leaderboard ORDER BY COALESCE(avg_final_score, -999) DESC, evaluation_count DESC LIMIT 8"
+        "SELECT id, name, family, status, ROUND(latest_final_score, 6) AS latest_final_score, ROUND(latest_recent_final_score, 6) AS latest_recent_final_score, ROUND(avg_final_score, 6) AS avg_final_score, evaluation_count, window_count FROM v_factor_candidate_leaderboard ORDER BY COALESCE(latest_recent_final_score, latest_final_score, -999) DESC, evaluation_count DESC LIMIT 8"
     )
     top_strategies = fetch_all(
         "SELECT strategy_name, ROUND(avg_sharpe, 6) AS avg_sharpe, ROUND(avg_return, 6) AS avg_return, runs FROM v_portfolio_strategy_avg ORDER BY avg_sharpe DESC LIMIT 8"
     )
     latest_run = fetch_one(
-        "SELECT run_id, created_at_utc, config_path, status FROM workflow_runs WHERE status='finished' ORDER BY created_at_utc DESC LIMIT 1"
+        "SELECT run_id, created_at_utc, config_path, status, output_dir FROM workflow_runs WHERE status='finished' ORDER BY created_at_utc DESC LIMIT 1"
     )
     previous_finished = fetch_one(
         "SELECT run_id, created_at_utc, config_path FROM workflow_runs WHERE status='finished' ORDER BY created_at_utc DESC LIMIT 1 OFFSET 1"
@@ -488,6 +1113,14 @@ def dashboard():
     planner_active = [
         t for t in planner_tasks
         if t['status'] in {'pending', 'running'} and 'planner_selected' in (t.get('worker_note') or '')
+    ][:6]
+    generated_candidate_active = [
+        t for t in planner_tasks
+        if t['status'] in {'pending', 'running'} and ((t.get('payload') or {}).get('source') == 'candidate_generation')
+    ][:6]
+    representative_active = [
+        t for t in planner_tasks
+        if t['status'] in {'pending', 'running'} and '代表因子专项验证' in (t.get('worker_note') or '')
     ][:6]
     planner_validated_path = DB_PATH.parent / 'research_planner_validated.json'
     planner_injected_path = DB_PATH.parent / 'research_planner_injected.json'
@@ -499,6 +1132,32 @@ def dashboard():
     research_learning = json.loads(research_learning_path.read_text(encoding='utf-8')) if research_learning_path.exists() else {}
     promotion_scorecard = build_promotion_scorecard(DB_PATH, limit=6)
     stable_names = [row['factor_name'] for row in stable_candidates[:4]]
+    latest_output_dir = Path(latest_run['output_dir']) if latest_run and latest_run.get('output_dir') else None
+    candidate_status_snapshot = []
+    rolling_summary_rows = []
+    if latest_output_dir and (latest_output_dir / 'candidate_status_snapshot.json').exists():
+        candidate_status_snapshot = json.loads((latest_output_dir / 'candidate_status_snapshot.json').read_text(encoding='utf-8'))
+    if latest_output_dir and (latest_output_dir / 'rolling_summary.json').exists():
+        rolling_summary_rows = json.loads((latest_output_dir / 'rolling_summary.json').read_text(encoding='utf-8'))
+    stage_summary = {'explore': [], 'watchlist': [], 'candidate': [], 'graveyard': []}
+    for row in candidate_status_snapshot:
+        stage = row.get('research_stage')
+        if stage in stage_summary:
+            stage_summary[stage].append(row)
+    family_rollup = {}
+    for row in candidate_status_snapshot:
+        factor_name = row.get('factor_name')
+        family = 'other'
+        for cand in candidate_leaderboard:
+            if cand.get('name') == factor_name:
+                family = cand.get('family') or 'other'
+                break
+        bucket = family_rollup.setdefault(family, {'family': family, 'count': 0, 'top_factor': factor_name, 'note': row.get('promotion_reason') or '-'})
+        bucket['count'] += 1
+        if bucket['count'] == 1:
+            bucket['top_factor'] = factor_name
+            bucket['note'] = row.get('promotion_reason') or '-'
+    family_summary_rows = sorted(family_rollup.values(), key=lambda item: (-item['count'], item['family']))[:8]
     latest_summary_lines = []
     if latest_run:
         latest_summary_lines.append(f"最新一次任务：{latest_run['config_path']}（{format_bj_time(latest_run['created_at_utc'])}）。")
@@ -512,17 +1171,42 @@ def dashboard():
         latest_summary_lines.append(
             f"当前队列里有 {len(planner_active)} 个由 planner 选出的任务正在等待或执行。"
         )
-    if candidate_leaderboard:
+    if generated_candidate_active:
         latest_summary_lines.append(
-            f"当前候选榜单第一名是 {candidate_leaderboard[0]['name']}，状态 {candidate_leaderboard[0]['status']}，最新分 {candidate_leaderboard[0]['latest_final_score']}。"
+            f"当前有 {len(generated_candidate_active)} 个 generated candidate 任务处于活跃状态。"
+        )
+    if representative_active:
+        latest_summary_lines.append(
+            f"当前有 {len(representative_active)} 个代表因子专项验证任务处于活跃状态。"
+        )
+    if candidate_leaderboard:
+        latest_display_score = candidate_leaderboard[0].get('latest_recent_final_score')
+        if latest_display_score is None:
+            latest_display_score = candidate_leaderboard[0].get('latest_final_score')
+        latest_summary_lines.append(
+            f"当前候选榜单第一名是 {candidate_leaderboard[0]['name']}，状态 {candidate_leaderboard[0]['status']}，最近短窗分 {latest_display_score}。"
         )
     promotion_rows = (promotion_scorecard.get('summary') or {}).get('priority_rows') or []
+    promotion_summary = promotion_scorecard.get('summary') or {}
     if promotion_rows:
         latest_summary_lines.append(
             "当前晋级赛优先处理：" + "；".join(
                 f"{row['factor_name']}({row['decision_label']})" for row in promotion_rows[:3]
             ) + "。"
         )
+        latest_summary_lines.append(
+            "当前质量分层重点：" + "；".join(
+                f"{row['factor_name']}({row.get('quality_classification_label') or row.get('quality_classification')})" for row in promotion_rows[:3]
+            ) + "。"
+        )
+    latest_summary_lines.append(
+        "质量分层统计："
+        f"稳定 alpha 候选 {int(promotion_summary.get('stable_alpha_candidate_count') or 0)} 个，"
+        f"继续验证 {int(promotion_summary.get('needs_validation_count') or 0)} 个，"
+        f"Exposure Track {int(promotion_summary.get('exposure_track_count') or 0)} 个，"
+        f"Regime-sensitive {int(promotion_summary.get('quality_regime_sensitive_count') or 0)} 个，"
+        f"重复候选压制 {int(promotion_summary.get('duplicate_suppress_count') or 0)} 个。"
+    )
     latest_summary = '\n'.join(latest_summary_lines) if latest_summary_lines else '暂无摘要。'
 
     change_lines = []
@@ -548,10 +1232,16 @@ def dashboard():
         latest_summary=latest_summary,
         change_report=change_report,
         planner_active=planner_active,
+        generated_candidate_active=generated_candidate_active,
+        representative_active=representative_active,
         planner_validated=planner_validated,
         planner_injected=planner_injected,
         research_flow_state=research_flow_state,
         research_learning=research_learning,
+        promotion_scorecard=promotion_scorecard,
+        stage_summary=stage_summary,
+        rolling_summary_rows=rolling_summary_rows[:8],
+        family_summary_rows=family_summary_rows,
     )
 
 
@@ -633,7 +1323,7 @@ def weekly_page():
 def cockpit_page():
     base = DB_PATH.parent
     latest_run = fetch_one(
-        "SELECT run_id, created_at_utc, config_path, status FROM workflow_runs WHERE status='finished' ORDER BY created_at_utc DESC LIMIT 1"
+        "SELECT run_id, created_at_utc, config_path, status, output_dir FROM workflow_runs WHERE status='finished' ORDER BY created_at_utc DESC LIMIT 1"
     )
     stable_candidates = fetch_all(
         "SELECT factor_name, candidate_runs FROM v_stable_candidates ORDER BY candidate_runs DESC, factor_name ASC LIMIT 10"

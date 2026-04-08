@@ -84,12 +84,15 @@ CREATE TABLE IF NOT EXISTS factor_candidates (
     expression TEXT,
     origin_task_id TEXT,
     origin_run_id TEXT,
+    factor_role TEXT,
     status TEXT NOT NULL DEFAULT 'new',
+    research_stage TEXT NOT NULL DEFAULT 'explore',
     evaluation_count INTEGER NOT NULL DEFAULT 0,
     window_count INTEGER NOT NULL DEFAULT 0,
     avg_final_score REAL,
     best_final_score REAL,
     latest_final_score REAL,
+    latest_recent_final_score REAL,
     pass_rate REAL,
     summary TEXT,
     next_action TEXT,
@@ -290,6 +293,14 @@ class ExperimentStore:
             self.conn.execute("ALTER TABLE workflow_runs ADD COLUMN config_fingerprint TEXT")
         if "rerun_of_run_id" not in cols:
             self.conn.execute("ALTER TABLE workflow_runs ADD COLUMN rerun_of_run_id TEXT")
+
+        candidate_cols = {row[1] for row in self.conn.execute("PRAGMA table_info(factor_candidates)").fetchall()}
+        if candidate_cols and "latest_recent_final_score" not in candidate_cols:
+            self.conn.execute("ALTER TABLE factor_candidates ADD COLUMN latest_recent_final_score REAL")
+        if candidate_cols and "factor_role" not in candidate_cols:
+            self.conn.execute("ALTER TABLE factor_candidates ADD COLUMN factor_role TEXT")
+        if candidate_cols and "research_stage" not in candidate_cols:
+            self.conn.execute("ALTER TABLE factor_candidates ADD COLUMN research_stage TEXT DEFAULT 'explore'")
 
         task_cols = {row[1] for row in self.conn.execute("PRAGMA table_info(research_tasks)").fetchall()}
         if task_cols and "worker_note" not in task_cols:
@@ -535,18 +546,22 @@ class ExperimentStore:
         self.conn.commit()
         return task_id
 
-    def claim_next_research_task(self) -> dict[str, Any] | None:
-        row = self.conn.execute(
-            """
+    def claim_next_research_task(self, blocked_task_types: list[str] | tuple[str, ...] | None = None) -> dict[str, Any] | None:
+        blocked_task_types = tuple(task_type for task_type in (blocked_task_types or []) if task_type)
+        query = """
             SELECT task_id, task_type, status, priority, fingerprint, payload_json,
                    parent_task_id, attempt_count, last_error, created_at_utc,
                    started_at_utc, finished_at_utc, worker_note
             FROM research_tasks
             WHERE status = 'pending'
-            ORDER BY priority ASC, created_at_utc ASC
-            LIMIT 1
-            """
-        ).fetchone()
+        """
+        params: list[Any] = []
+        if blocked_task_types:
+            placeholders = ", ".join("?" for _ in blocked_task_types)
+            query += f" AND task_type NOT IN ({placeholders})"
+            params.extend(blocked_task_types)
+        query += " ORDER BY priority ASC, created_at_utc ASC LIMIT 1"
+        row = self.conn.execute(query, params).fetchone()
         if not row:
             return None
         now = datetime.now(timezone.utc).isoformat()
@@ -614,6 +629,7 @@ class ExperimentStore:
         expression: str | None = None,
         origin_task_id: str | None = None,
         origin_run_id: str | None = None,
+        factor_role: str | None = None,
     ) -> str:
         now = datetime.now(timezone.utc).isoformat()
         row = self.conn.execute("SELECT id FROM factor_candidates WHERE name = ?", (name,)).fetchone()
@@ -627,6 +643,7 @@ class ExperimentStore:
                     expression = COALESCE(?, expression),
                     origin_task_id = COALESCE(?, origin_task_id),
                     origin_run_id = COALESCE(?, origin_run_id),
+                    factor_role = COALESCE(?, factor_role),
                     updated_at_utc = ?
                 WHERE id = ?
                 """,
@@ -636,6 +653,7 @@ class ExperimentStore:
                     expression,
                     origin_task_id,
                     origin_run_id,
+                    factor_role,
                     now,
                     candidate_id,
                 ),
@@ -646,8 +664,8 @@ class ExperimentStore:
                 """
                 INSERT INTO factor_candidates (
                     id, name, family, definition_json, expression, origin_task_id, origin_run_id,
-                    status, created_at_utc, updated_at_utc
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'new', ?, ?)
+                    factor_role, status, research_stage, created_at_utc, updated_at_utc
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new', 'explore', ?, ?)
                 """,
                 (
                     candidate_id,
@@ -657,6 +675,7 @@ class ExperimentStore:
                     expression,
                     origin_task_id,
                     origin_run_id,
+                    factor_role,
                     now,
                     now,
                 ),
@@ -754,20 +773,20 @@ class ExperimentStore:
         params.append(limit)
         rows = self.conn.execute(
             f"""
-            SELECT id, name, family, definition_json, expression, origin_task_id, origin_run_id, status,
+            SELECT id, name, family, definition_json, expression, origin_task_id, origin_run_id, factor_role, status, research_stage,
                    evaluation_count, window_count, avg_final_score, best_final_score, latest_final_score,
-                   pass_rate, summary, next_action, rejection_reason, duplicate_of, created_at_utc, updated_at_utc
+                   latest_recent_final_score, pass_rate, summary, next_action, rejection_reason, duplicate_of, created_at_utc, updated_at_utc
             FROM factor_candidates
             {where}
-            ORDER BY COALESCE(latest_final_score, -999) DESC, updated_at_utc DESC
+            ORDER BY COALESCE(latest_recent_final_score, latest_final_score, -999) DESC, updated_at_utc DESC
             LIMIT ?
             """,
             tuple(params),
         ).fetchall()
         columns = [
-            "id", "name", "family", "definition_json", "expression", "origin_task_id", "origin_run_id", "status",
+            "id", "name", "family", "definition_json", "expression", "origin_task_id", "origin_run_id", "factor_role", "status", "research_stage",
             "evaluation_count", "window_count", "avg_final_score", "best_final_score", "latest_final_score",
-            "pass_rate", "summary", "next_action", "rejection_reason", "duplicate_of", "created_at_utc", "updated_at_utc",
+            "latest_recent_final_score", "pass_rate", "summary", "next_action", "rejection_reason", "duplicate_of", "created_at_utc", "updated_at_utc",
         ]
         items = []
         for row in rows:
@@ -788,17 +807,19 @@ class ExperimentStore:
         self.conn.execute(
             """
             UPDATE factor_candidates
-            SET status = ?, evaluation_count = ?, window_count = ?, avg_final_score = ?, best_final_score = ?,
-                latest_final_score = ?, pass_rate = ?, summary = ?, next_action = ?, rejection_reason = ?, updated_at_utc = ?
+            SET status = ?, research_stage = ?, evaluation_count = ?, window_count = ?, avg_final_score = ?, best_final_score = ?,
+                latest_final_score = ?, latest_recent_final_score = ?, pass_rate = ?, summary = ?, next_action = ?, rejection_reason = ?, updated_at_utc = ?
             WHERE id = ?
             """,
             (
                 summary.get("status") or "new",
+                summary.get("research_stage") or "explore",
                 summary.get("evaluation_count") or 0,
                 summary.get("window_count") or 0,
                 summary.get("avg_final_score"),
                 summary.get("best_final_score"),
                 summary.get("latest_final_score"),
+                summary.get("latest_recent_final_score"),
                 summary.get("pass_rate"),
                 summary.get("summary"),
                 summary.get("next_action"),

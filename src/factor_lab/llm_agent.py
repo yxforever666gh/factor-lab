@@ -45,26 +45,45 @@ class SingleLLMAgent:
 
     def generate_plan(self, snapshot: dict[str, Any]) -> dict[str, Any]:
         if self.provider == "mock":
-            candidates = snapshot.get("latest_candidates", [])
-            latest_run = snapshot.get("latest_run") or {}
+            def _plain_factor(name: Any) -> bool:
+                return isinstance(name, str) and bool(name) and not name.startswith("hybrid_")
+
+            candidates = [item for item in (snapshot.get("latest_candidates") or []) if _plain_factor(item)]
+            graveyard = [item for item in (snapshot.get("latest_graveyard") or []) if _plain_factor(item)]
+            stable_candidates = [
+                row.get("factor_name")
+                for row in (snapshot.get("stable_candidates") or [])
+                if _plain_factor(row.get("factor_name"))
+            ]
+            top_scores = [
+                row.get("factor_name")
+                for row in (snapshot.get("top_scores") or [])
+                if _plain_factor(row.get("factor_name"))
+            ]
+            latest_top_ranked = [item for item in (snapshot.get("latest_top_ranked_factors") or []) if _plain_factor(item)]
+            portfolio_checks = ["compare_all_factors_vs_candidates_only"]
+            if graveyard:
+                portfolio_checks.append("diagnose_neutralized_underperformance")
+            focus_source = candidates or latest_top_ranked or stable_candidates or top_scores or graveyard
+            focus = focus_source[: min(3, len(focus_source))]
+            core = focus[:1]
+            review_graveyard = graveyard[:2]
+            rationale_parts = ["优先围绕当前稳定候选池继续做小步扩展，不自动执行。"]
+            if focus:
+                rationale_parts.append(f"重点验证候选: {', '.join(focus)}。")
+            if review_graveyard:
+                rationale_parts.append(f"同时复核墓地因子: {', '.join(review_graveyard)}。")
             return {
-                "provider": "mock",
-                "summary": "优先围绕当前稳定候选池继续做小步扩展，不自动执行。",
-                "recommended_jobs": [
-                    {
-                        "name": "candidate_focus_followup",
-                        "reason": "围绕稳定候选池做进一步验证，避免一次扩太多。",
-                        "based_on_candidates": candidates,
-                        "window": {
-                            "start_date": latest_run.get("start_date"),
-                            "end_date": latest_run.get("end_date"),
-                        },
-                        "notes": [
-                            "优先测试候选池相关的轻量组合变化",
-                            "继续比较候选组合与中性化候选组合",
-                        ],
-                    }
-                ],
+                "focus_factors": focus,
+                "keep_as_core_candidates": core,
+                "review_graveyard": review_graveyard,
+                "portfolio_checks": portfolio_checks,
+                "rationale": " ".join(rationale_parts),
+                "novelty_reason": "mock provider switched to validator-compatible structured output.",
+                "risk_flags": ["mock_provider"],
+                "suggested_families": ["stable_candidate_validation"] + (["graveyard_diagnosis"] if review_graveyard else []),
+                "confidence_score": 0.35,
+                "must_validate_before_expand": True,
             }
         raise RuntimeError(f"Unsupported LLM provider for now: {self.provider}")
 

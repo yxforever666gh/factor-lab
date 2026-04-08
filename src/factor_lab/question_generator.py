@@ -6,10 +6,27 @@ from factor_lab.exploration_budget import build_exploration_budget
 from factor_lab.new_branch_generator import build_new_branch_questions
 from factor_lab.pattern_question_generator import build_pattern_native_questions
 from factor_lab.recovery_opportunity_bridge import build_recovery_bridge_questions
+import json
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+AUTONOMY_POLICY_PATH = ROOT / "configs" / "research_autonomy_policy.json"
 
 
 def _pattern_entries(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return (snapshot.get("research_learning") or {}).get("patterns") or {}
+
+def _autonomy_policy() -> dict[str, Any]:
+    if not AUTONOMY_POLICY_PATH.exists():
+        return {}
+    return json.loads(AUTONOMY_POLICY_PATH.read_text(encoding="utf-8"))
+
+
+def _epistemic_priority_gain(expected_gain: list[str], policy: dict[str, Any]) -> bool:
+    objectives = set(((policy.get("principles") or {}).get("objective") or []))
+    if "epistemic_gain" not in objectives:
+        return False
+    return bool(set(expected_gain or []) & {"search_space_reduced", "boundary_confirmed", "new_branch_opened", "repeated_graveyard_confirmed", "stable_candidate_confirmed"})
 
 
 def _pattern_action_for(question_type: str, family: str | None, parent_kind: str, target_count: int, expected_gain: list[str], snapshot: dict[str, Any]) -> str | None:
@@ -52,6 +69,7 @@ def build_research_questions(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
     question_budget = budget_payload.get("budget") or {}
 
     questions: list[dict[str, Any]] = []
+    autonomy_policy = _autonomy_policy()
 
     # Pattern-native questions come first; rules now act as fallback/coverage.
     questions.extend(build_pattern_native_questions(snapshot))
@@ -59,7 +77,7 @@ def build_research_questions(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
     if stable_candidates and int(question_budget.get("confirm", 0)) > 0:
         expected_gain = ["stable_candidate_confirmed"]
         pattern_action = _pattern_action_for("confirm", "stable_candidate_validation", "root", len(stable_candidates[:3]), expected_gain, snapshot)
-        if pattern_action != "downweight":
+        if pattern_action != "downweight" or _epistemic_priority_gain(expected_gain, autonomy_policy):
             questions.append({
                 "question_id": "q-stable-boundary",
                 "question_type": "confirm",
@@ -75,7 +93,7 @@ def build_research_questions(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
     if latest_graveyard and int(question_budget.get("diagnose", 0)) > 0:
         expected_gain = ["neutralization_diagnosis_requested", "repeated_graveyard_confirmed"]
         pattern_action = _pattern_action_for("diagnose", "graveyard_diagnosis", "root", len(latest_graveyard[:4]), expected_gain, snapshot)
-        if pattern_action != "downweight":
+        if pattern_action != "downweight" or _epistemic_priority_gain(expected_gain, autonomy_policy):
             questions.append({
                 "question_id": "q-graveyard-cause",
                 "question_type": "diagnose",
@@ -91,7 +109,7 @@ def build_research_questions(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
     if (relationship_summary.get("hybrid_of") or relationship_summary.get("refinement_of") or stable_candidates) and int(question_budget.get("recombine", 0)) > 0:
         expected_gain = ["exploration_candidate_survived"]
         pattern_action = _pattern_action_for("recombine", "exploration", "root", len(stable_candidates[:2]), expected_gain, snapshot)
-        if pattern_action != "downweight":
+        if pattern_action != "downweight" or _epistemic_priority_gain(expected_gain, autonomy_policy):
             questions.append({
                 "question_id": "q-recombine-space",
                 "question_type": "recombine",
@@ -129,7 +147,7 @@ def build_research_questions(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
     if llm_feedback.get("core_candidates_lost") and int(question_budget.get("diagnose", 0)) > 0:
         expected_gain = ["neutralization_diagnosis_requested"]
         pattern_action = _pattern_action_for("diagnose", None, "root", len(list(llm_feedback.get("core_candidates_lost") or [])[:4]), expected_gain, snapshot)
-        if pattern_action != "downweight":
+        if pattern_action != "downweight" or _epistemic_priority_gain(expected_gain, autonomy_policy):
             questions.append({
                 "question_id": "q-llm-plan-mismatch",
                 "question_type": "diagnose",

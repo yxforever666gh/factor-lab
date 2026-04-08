@@ -1,0 +1,62 @@
+{
+  "families": [
+    {
+      "family": "momentum",
+      "variants": [
+        {
+          "name": "mom_20",
+          "expression": "momentum_20",
+          "role": "alpha_seed",
+          "allow_in_portfolio": true
+        },
+        {
+          "name": "mom_60",
+          "expression": "momentum_60",
+          "role": "alpha_seed",
+          "allow_in_portfolio": true
+        },
+        {
+          "name": "mom_120",
+          "expression": "momentum_120",
+          "role": "family_probe",
+          "allow_in_portfolio": true
+        },
+        {
+          "name": "mom_60_skip_5",
+          "expression": "momentum_60_skip_5",
+          "role": "family_probe",
+          "allow_in_portfolio": true
+        }
+      ]
+    },
+    {
+      "family": "value",
+      "variants": [
+        {
+          "name": "book_yield",
+          "expression": "book_yield",
+          "role": "alpha_seed",
+          "allow_in_portfolio": true
+        },
+        {
+          "name": "earnings_yield",
+          "expression": "earnings_yield",
+          "role": "exposure_probe",
+          "allow_in_portfolio": false
+        },
+        {
+          "name": "book_yield_plus_earnings_yield",
+          "expression": "book_yield + earnings_yield",
+          "role": "family_probe",
+          "allow_in_portfolio": true
+        },
+        {
+          "name": "earnings_yield_over_pb",
+          "expression": "earnings_yield / pb",
+          "role": "family_probe",
+          "allow_in_portfolio": true
+        }
+      ]
+    }
+  ]
+}

@@ -98,7 +98,7 @@ def _candidate_profile(candidate: dict[str, Any]) -> dict[str, Any]:
 def _candidate_rank_key(candidate: dict[str, Any]) -> tuple[float, float, float, str]:
     status = candidate.get("status") or "new"
     status_rank = {"promising": 3.0, "testing": 2.0, "fragile": 1.5, "new": 1.0, "rejected": 0.0, "archived": -1.0}.get(status, 0.0)
-    latest = float(candidate.get("latest_final_score") or -999.0)
+    latest = float(candidate.get("latest_recent_final_score") or candidate.get("latest_final_score") or -999.0)
     avg_score = float(candidate.get("avg_final_score") or -999.0)
     evals = float(candidate.get("evaluation_count") or 0)
     return (status_rank, latest, avg_score + evals / 1000.0, candidate.get("name") or "")
@@ -117,14 +117,14 @@ def _select_cluster_representatives(members_sorted: list[dict[str, Any]]) -> lis
     families_seen: set[str] = set()
     kept: list[dict[str, Any]] = []
     primary_key = _candidate_rank_key(members_sorted[0])
-    primary_latest = float(members_sorted[0].get("latest_final_score") or -999.0)
+    primary_latest = float(members_sorted[0].get("latest_recent_final_score") or members_sorted[0].get("latest_final_score") or -999.0)
     margin = 0.18
 
     for row in members_sorted:
         if len(kept) >= rep_limit:
             break
         family = row.get("family") or "other"
-        latest = float(row.get("latest_final_score") or -999.0)
+        latest = float(row.get("latest_recent_final_score") or row.get("latest_final_score") or -999.0)
         near_frontier = latest >= primary_latest - margin
         introduces_family = family not in families_seen
         if not kept or near_frontier or introduces_family:
@@ -384,8 +384,11 @@ def family_rollup(candidates: list[dict[str, Any]], evaluations: list[dict[str, 
             bucket["rejected_count"] += 1
         if candidate.get("avg_final_score") is not None:
             bucket["avg_scores"].append(float(candidate["avg_final_score"]))
-        if candidate.get("latest_final_score") is not None:
-            bucket["latest_scores"].append(float(candidate["latest_final_score"]))
+        latest_score = candidate.get("latest_recent_final_score")
+        if latest_score is None:
+            latest_score = candidate.get("latest_final_score")
+        if latest_score is not None:
+            bucket["latest_scores"].append(float(latest_score))
         if candidate.get("best_final_score") is not None:
             bucket["best_scores"].append(float(candidate["best_final_score"]))
         bucket["duplicate_pressure"] += int(duplicate_pressure_by_candidate.get(candidate["id"], 0))
@@ -519,6 +522,7 @@ def candidate_clusters(candidates: list[dict[str, Any]], relationships: list[dic
                         "family": row.get("family") or "other",
                         "status": row.get("status"),
                         "latest_final_score": row.get("latest_final_score"),
+                        "latest_recent_final_score": row.get("latest_recent_final_score"),
                         "avg_final_score": row.get("avg_final_score"),
                         "evaluation_count": row.get("evaluation_count"),
                         "is_primary": bool(primary and row["id"] == primary.get("id")),

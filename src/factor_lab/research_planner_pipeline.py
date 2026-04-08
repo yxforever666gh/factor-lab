@@ -20,6 +20,10 @@ from factor_lab.research_flow_state import derive_research_flow_state
 from factor_lab.research_opportunity_engine import build_research_opportunities
 from factor_lab.llm_diagnostics import build_llm_diagnostics
 from factor_lab.opportunity_executor import enqueue_opportunities
+from factor_lab.research_metrics import build_research_metrics
+from factor_lab.agent_briefs import build_planner_agent_brief, build_failure_analyst_brief
+import subprocess
+import sys
 from factor_lab.research_strategy import (
     build_research_state_snapshot,
     build_strategy_plan,
@@ -96,6 +100,23 @@ def _write_fingerprint_state(fingerprint: str, injected_count: int) -> None:
     )
 
 
+
+def _active_sticky_medium_horizon_candidates(memory_path: Path) -> list[str]:
+    if not memory_path.exists():
+        return []
+    try:
+        memory = json.loads(memory_path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+    active = []
+    for row in (memory.get("sticky_medium_horizon_candidates") or []):
+        name = row.get("candidate_name")
+        rounds_remaining = int(row.get("rounds_remaining") or 0)
+        if name and rounds_remaining > 0:
+            active.append(name)
+    return active
+
+
 def run_research_planner_pipeline() -> dict[str, Any]:
     registry_path = ROOT / "artifacts" / "research_space_registry.json"
     space_map_path = ROOT / "artifacts" / "research_space_map.json"
@@ -108,6 +129,9 @@ def run_research_planner_pipeline() -> dict[str, Any]:
     memory_path = ROOT / "artifacts" / "research_memory.json"
     validated_path = ROOT / "artifacts" / "research_planner_validated.json"
     injected_path = ROOT / "artifacts" / "research_planner_injected.json"
+    planner_agent_brief_path = ROOT / "artifacts" / "planner_agent_brief.json"
+    failure_analyst_brief_path = ROOT / "artifacts" / "failure_analyst_brief.json"
+    agent_responses_path = ROOT / "artifacts" / "agent_responses.json"
 
     with ThreadPoolExecutor(max_workers=3) as executor:
         registry_future = executor.submit(build_research_space_registry, DB_PATH, registry_path)
@@ -127,6 +151,11 @@ def run_research_planner_pipeline() -> dict[str, Any]:
         return skip
 
     recovery_used = False
+    active_sticky_medium_horizon = _active_sticky_medium_horizon_candidates(memory_path)
+    if not (candidate_pool.get("tasks") or []) and active_sticky_medium_horizon:
+        # If sticky medium-horizon candidates are still alive, do one unconstrained rebuild
+        # before allowing recovery to take over the whole planner turn.
+        candidate_pool = build_research_candidate_pool(snapshot_path, candidate_pool_path)
     if not (candidate_pool.get("tasks") or []):
         candidate_pool = build_recovery_tasks(snapshot_path, candidate_pool_path, branch_plan_path)
         recovery_used = True
@@ -139,7 +168,21 @@ def run_research_planner_pipeline() -> dict[str, Any]:
         state_snapshot_path,
         memory_path,
     )
-    strategy_plan = build_strategy_plan(state_snapshot_path, proposal_path, strategy_plan_path, branch_plan_path)
+    # Optional structured agent responses can be dropped into artifacts/planner_agent_response.json
+    # and artifacts/failure_analyst_response.json; we merge them here when present.
+    if os.getenv("FACTOR_LAB_ENABLE_BRIEF_RUNNER", "1").strip().lower() in {"1", "true", "yes", "on"}:
+        subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "run_agent_briefs.py")],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+    agent_responses_payload = {
+        "planner": json.loads((ROOT / "artifacts" / "planner_agent_response.json").read_text(encoding="utf-8")) if (ROOT / "artifacts" / "planner_agent_response.json").exists() else {},
+        "failure_analyst": json.loads((ROOT / "artifacts" / "failure_analyst_response.json").read_text(encoding="utf-8")) if (ROOT / "artifacts" / "failure_analyst_response.json").exists() else {},
+    }
+    agent_responses_path.write_text(json.dumps(agent_responses_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    strategy_plan = build_strategy_plan(state_snapshot_path, proposal_path, strategy_plan_path, branch_plan_path, agent_responses_path)
     validated = validate_research_planner_proposal(proposal_path, validated_path)
     injected = apply_strategy_plan(validated_path, strategy_plan_path, injected_path, memory_path, DB_PATH)
     research_flow_state = derive_research_flow_state(
@@ -165,6 +208,27 @@ def run_research_planner_pipeline() -> dict[str, Any]:
         queue_aware=True,
     )
     llm_diagnostics = build_llm_diagnostics(snapshot_path, ROOT / "artifacts" / "research_opportunities.json", ROOT / "artifacts" / "llm_diagnostics.json")
+    planner_agent_brief = build_planner_agent_brief(
+        snapshot=snapshot,
+        candidate_pool=candidate_pool,
+        branch_plan=branch_plan,
+        state_snapshot=state_snapshot,
+        strategy_plan=strategy_plan,
+        output_path=planner_agent_brief_path,
+    )
+    failure_analyst_brief = build_failure_analyst_brief(
+        snapshot=snapshot,
+        state_snapshot=state_snapshot,
+        llm_diagnostics=llm_diagnostics,
+        output_path=failure_analyst_brief_path,
+    )
+    research_metrics = build_research_metrics(
+        db_path=DB_PATH,
+        memory_path=memory_path,
+        learning_path=ROOT / "artifacts" / "research_learning.json",
+        candidate_pool_path=candidate_pool_path,
+        output_path=ROOT / "artifacts" / "research_metrics.json",
+    )
 
     result = {
         "registry_windows_count": len((registry.get("windows_covered") or {})),
@@ -184,6 +248,23 @@ def run_research_planner_pipeline() -> dict[str, Any]:
         "research_opportunity_count": len(research_opportunities.get("opportunities", [])),
         "opportunity_execution": opportunity_execution,
         "llm_diagnostics": llm_diagnostics,
+        "planner_agent_brief": {
+            "path": str(planner_agent_brief_path),
+            "schema_version": planner_agent_brief.get("schema_version"),
+            "input_open_question_count": len((planner_agent_brief.get("inputs") or {}).get("open_questions") or []),
+            "candidate_task_count": len((planner_agent_brief.get("inputs") or {}).get("candidate_pool_tasks") or []),
+        },
+        "agent_responses": {
+            "path": str(agent_responses_path),
+            "planner_present": bool(agent_responses_payload.get("planner")),
+            "failure_analyst_present": bool(agent_responses_payload.get("failure_analyst")),
+        },
+        "failure_analyst_brief": {
+            "path": str(failure_analyst_brief_path),
+            "schema_version": failure_analyst_brief.get("schema_version"),
+            "recent_failed_or_risky_task_count": len((failure_analyst_brief.get("inputs") or {}).get("recent_failed_or_risky_tasks") or []),
+        },
+        "research_metrics": research_metrics,
         "state_snapshot_open_questions": len(state_snapshot.get("open_questions", [])),
     }
     _write_fingerprint_state(fingerprint, injected.get("injected_count", 0))

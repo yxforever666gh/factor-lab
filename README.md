@@ -36,7 +36,19 @@ A reproducible factor research platform, now packaged as v1.0.
 - `scripts/run_first_workflow.py` — synthetic workflow entrypoint
 - `scripts/run_tushare_workflow.py` — Tushare workflow entrypoint
 - `scripts/run_tushare_batch.py` — batch runner entrypoint
-- `artifacts/` — generated outputs
+- `artifacts/` — generated outputs (runtime-only, not intended for source control)
+
+## Install
+
+```bash
+python3 -m pip install -e .
+```
+
+For tests:
+
+```bash
+python3 -m pip install -e '.[dev]'
+```
 
 ## Local secrets
 
@@ -127,6 +139,7 @@ Outputs:
 - `momentum_20`
 - `earnings_yield`
 - `book_yield`
+- `roe` (derived ROE-like profitability = `(E/P)/(B/P)`)
 - `size_inv`
 - `turnover_shock_5_20`
 - `momentum_20 + earnings_yield`

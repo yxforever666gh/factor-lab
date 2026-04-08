@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import List
@@ -9,9 +11,24 @@ from factor_lab.batch_report import build_batch_comparison
 from factor_lab.workflow import run_workflow
 
 
+DEFAULT_BATCH_MAX_WORKERS = 1
+
+
+def batch_max_workers() -> int:
+    raw = os.getenv("FACTOR_LAB_BATCH_MAX_WORKERS", str(DEFAULT_BATCH_MAX_WORKERS)).strip()
+    try:
+        value = int(raw)
+    except Exception:
+        value = DEFAULT_BATCH_MAX_WORKERS
+    return max(1, min(4, value))
+
+
 def _run_batch_job(root: Path, job: dict) -> dict:
     job_name = job["name"]
     job_output = root / job_name
+    if job_output.exists():
+        # Each batch job must start clean; otherwise failed reruns can silently read stale artifacts.
+        shutil.rmtree(job_output)
     run_workflow(
         config_path=job["config_path"],
         output_dir=str(job_output),
@@ -41,8 +58,9 @@ def run_batch(config_path: str, output_dir: str) -> None:
 
     jobs = list(config.get("jobs") or [])
     summary: List[dict] = []
-    if len(jobs) > 1:
-        with ThreadPoolExecutor(max_workers=2) as executor:
+    workers = batch_max_workers()
+    if len(jobs) > 1 and workers > 1:
+        with ThreadPoolExecutor(max_workers=workers) as executor:
             summary = list(executor.map(lambda job: _run_batch_job(root, job), jobs))
     else:
         for job in jobs:

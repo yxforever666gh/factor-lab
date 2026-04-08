@@ -44,6 +44,9 @@ class SampleDataGenerator:
             turnover = np.exp(0.6 + base_liquidity * 0.35 + self.rng.normal(0.0, 0.2, num_stocks))
 
             momentum_20 = []
+            momentum_60 = []
+            momentum_120 = []
+            momentum_60_skip_5 = []
             turnover_shock = []
             daily_returns = []
             closes = []
@@ -52,6 +55,10 @@ class SampleDataGenerator:
                 past_rets = trailing_returns[ticker]
                 past_turnovers = trailing_turnover[ticker]
                 mom = float(np.sum(past_rets[-20:])) if past_rets else 0.0
+                mom60 = float(np.sum(past_rets[-60:])) if past_rets else 0.0
+                mom120 = float(np.sum(past_rets[-120:])) if past_rets else 0.0
+                skip_tail = past_rets[:-5] if len(past_rets) > 5 else []
+                mom60_skip_5 = float(np.sum(skip_tail[-60:])) if skip_tail else 0.0
                 t5 = float(np.mean(past_turnovers[-5:])) if len(past_turnovers) >= 5 else float(turnover[i])
                 t20 = float(np.mean(past_turnovers[-20:])) if len(past_turnovers) >= 20 else float(turnover[i])
                 shock = (t5 / t20) - 1.0 if t20 else 0.0
@@ -66,6 +73,9 @@ class SampleDataGenerator:
                 close = max(float(prev_close[i] * (1.0 + ret)), 1.0)
 
                 momentum_20.append(mom)
+                momentum_60.append(mom60)
+                momentum_120.append(mom120)
+                momentum_60_skip_5.append(mom60_skip_5)
                 turnover_shock.append(shock)
                 daily_returns.append(ret)
                 closes.append(close)
@@ -81,6 +91,9 @@ class SampleDataGenerator:
                     "earnings_yield": earnings_yield,
                     "turnover": turnover,
                     "momentum_20": momentum_20,
+                    "momentum_60": momentum_60,
+                    "momentum_120": momentum_120,
+                    "momentum_60_skip_5": momentum_60_skip_5,
                     "turnover_shock_5_20": turnover_shock,
                 }
             )

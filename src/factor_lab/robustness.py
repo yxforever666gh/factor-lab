@@ -22,7 +22,7 @@ def aggregate_candidate_checks(
     candidate_context = candidate_context or {}
     latest_eval = sorted(evaluations, key=lambda row: row.get("created_at_utc") or "")[-1] if evaluations else {}
     avg_score = float(candidate.get("avg_final_score") or 0.0)
-    latest_score = float(candidate.get("latest_final_score") or 0.0)
+    latest_score = float(candidate.get("latest_recent_final_score") or candidate.get("latest_final_score") or 0.0)
     pass_rate = float(candidate.get("pass_rate") or 0.0)
     evaluation_count = int(candidate.get("evaluation_count") or len(evaluations) or 0)
     split_fail_count = max(int(row.get("split_fail_count") or 0) for row in evaluations) if evaluations else 0

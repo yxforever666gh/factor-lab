@@ -1,5 +1,6 @@
 from pathlib import Path
 import sys
+import json
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -11,10 +12,57 @@ from factor_lab.index_page import build_index_page
 from factor_lab.summary import build_run_summary
 from factor_lab.paper_portfolio import build_paper_portfolio, append_portfolio_history, build_portfolio_change_log
 from factor_lab.heartbeat import append_heartbeat
-import json
 
 
-if __name__ == "__main__":
+CANDIDATE_POOL_PATH = Path("artifacts/tushare_workflow/candidate_pool.json")
+DATASET_PATH = Path("artifacts/tushare_workflow/dataset.csv")
+PAPER_PORTFOLIO_DIR = Path("artifacts/paper_portfolio")
+
+
+def load_candidate_factor_definitions(candidate_pool_path: str | Path) -> list[dict[str, str]]:
+    path = Path(candidate_pool_path)
+    if not path.exists():
+        return []
+
+    candidates = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(candidates, list):
+        raise ValueError(f"candidate pool must be a list: {path}")
+
+    definitions = []
+    for row in candidates:
+        factor_name = row.get("factor_name")
+        expression = row.get("expression")
+        if not factor_name or not expression:
+            continue
+        definitions.append({"name": factor_name, "expression": expression})
+    return definitions
+
+
+def update_paper_portfolio(
+    candidate_pool_path: str | Path = CANDIDATE_POOL_PATH,
+    dataset_path: str | Path = DATASET_PATH,
+    output_dir: str | Path = PAPER_PORTFOLIO_DIR,
+) -> dict:
+    factor_definitions = load_candidate_factor_definitions(candidate_pool_path)
+    current = build_paper_portfolio(
+        dataset_path=dataset_path,
+        factor_definitions=factor_definitions,
+        output_dir=output_dir,
+        strategy_name="paper_candidates_only",
+    )
+    append_portfolio_history(
+        current_path=Path(output_dir) / "current_portfolio.json",
+        history_path=Path(output_dir) / "portfolio_history.json",
+    )
+    build_portfolio_change_log(
+        current_path=Path(output_dir) / "current_portfolio.json",
+        history_path=Path(output_dir) / "portfolio_history.json",
+        output_path=Path(output_dir) / "portfolio_change_log.md",
+    )
+    return current
+
+
+def run_scheduled_cycle() -> None:
     try:
         append_heartbeat("scheduled_cycle", "started", message="完整周期开始执行。")
         run_batch(
@@ -42,24 +90,10 @@ if __name__ == "__main__":
             output_path="artifacts/change_report.md",
         )
 
-        candidates = json.loads(Path("artifacts/tushare_workflow/candidate_pool.json").read_text(encoding="utf-8"))
-        build_paper_portfolio(
-            dataset_path="artifacts/tushare_workflow/dataset.csv",
-            factor_definitions=[{"name": row["factor_name"], "expression": row["expression"]} for row in candidates],
-            output_dir="artifacts/paper_portfolio",
-            strategy_name="paper_candidates_only",
-        )
-        append_portfolio_history(
-            current_path="artifacts/paper_portfolio/current_portfolio.json",
-            history_path="artifacts/paper_portfolio/portfolio_history.json",
-        )
-        build_portfolio_change_log(
-            current_path="artifacts/paper_portfolio/current_portfolio.json",
-            history_path="artifacts/paper_portfolio/portfolio_history.json",
-            output_path="artifacts/paper_portfolio/portfolio_change_log.md",
-        )
+        update_paper_portfolio()
 
         from factor_lab.paper_portfolio_retrospective import build_portfolio_retrospective, build_portfolio_stability_score
+
         build_portfolio_retrospective(
             history_path="artifacts/paper_portfolio/portfolio_history.json",
             output_path="artifacts/paper_portfolio/portfolio_retrospective.json",
@@ -72,3 +106,7 @@ if __name__ == "__main__":
     except Exception as exc:
         append_heartbeat("scheduled_cycle", "failed", message=str(exc))
         raise
+
+
+if __name__ == "__main__":
+    run_scheduled_cycle()

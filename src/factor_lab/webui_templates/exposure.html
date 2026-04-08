@@ -1,10 +1,9 @@
 {% extends 'base.html' %}
 {% block content %}
 <section class="card">
-  <h2>晋级赛（先验真，再扩张）</h2>
+  <h2>晋级赛 + 质量评分（先验真，再扩张）</h2>
   <div class="muted" style="margin-bottom:12px;">
-    这张表专门回答“谁现在该继续追、谁该先去重、谁只是最近市场刚好喜欢”。
-    决策基于最新强度、窗口覆盖、通过率、风险画像、中性化残留和拥挤度。
+    现在这张表同时显示旧的 promotion 决策和新的质量分层：谁该先去重、谁只是短窗机会、谁连晋升都不该谈。
   </div>
   <div class="table-wrap">
     <table>
@@ -15,10 +14,11 @@
           <th>最新分</th>
           <th>窗口</th>
           <th>通过率</th>
-          <th>稳健性</th>
-          <th>风险</th>
-          <th>决策</th>
-          <th>原因</th>
+          <th>旧决策</th>
+          <th>质量总分</th>
+          <th>质量分类</th>
+          <th>晋升决策</th>
+          <th>质量摘要</th>
         </tr>
       </thead>
       <tbody>
@@ -26,17 +26,22 @@
         <tr>
           <td>{{ row.factor_name }}</td>
           <td>{{ row.family }}</td>
-          <td>{{ row.latest_final_score }}</td>
+          <td>{{ row.latest_recent_final_score if row.latest_recent_final_score is not none else row.latest_final_score }}</td>
           <td>{{ row.window_count }}</td>
           <td>{{ row.pass_rate }}</td>
-          <td>{{ row.robustness_score }}</td>
-          <td>{{ row.risk_level }}{% if row.risk_score is not none %} / {{ row.risk_score }}{% endif %}</td>
           <td>
             <span class="pill {{ 'good' if row.decision_key == 'core_candidate' else '' }}">
               {{ row.decision_label }}
             </span>
           </td>
-          <td>{{ row.decision_summary }}</td>
+          <td>{{ row.quality_total_score }}</td>
+          <td>
+            <span class="pill {{ 'good' if row.quality_classification == 'stable-alpha-candidate' else 'warn' if row.quality_classification in ['needs-validation','exposure-track'] else 'bad' if row.quality_classification in ['duplicate-suppress','drop'] else '' }}">
+              {{ row.quality_classification_label or row.quality_classification }}
+            </span>
+          </td>
+          <td>{{ row.quality_promotion_decision_label or row.quality_promotion_decision }}</td>
+          <td>{{ row.quality_summary or row.decision_summary }}</td>
         </tr>
         {% endfor %}
       </tbody>

@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from factor_lab.dedup import config_fingerprint
+from factor_lab.factors import resolve_factor_definitions
 from factor_lab.research_families import (
     level_priority,
     stable_candidate_task_name,
@@ -14,6 +15,7 @@ from factor_lab.research_families import (
     graveyard_gain_name,
     graveyard_worker_note,
 )
+from factor_lab.storage import ExperimentStore
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -29,10 +31,39 @@ RECENT_WINDOW_LEVEL_SPECS = {
     8: ('rolling_recent_270d', '2025-06-20', 'artifacts/generated_recent_270d', 'validation｜近期 270 天窗口验证'),
 }
 
+WATCHLIST_WINDOW_LEVEL_SPECS = {
+    1: ('watchlist_recent_45d', '2026-02-01', 'artifacts/watchlist_validation', 'validation｜watchlist 45 天晋级赛'),
+    2: ('watchlist_recent_90d', '2025-12-18', 'artifacts/watchlist_validation', 'validation｜watchlist 90 天晋级赛'),
+    3: ('watchlist_recent_120d', '2025-11-18', 'artifacts/watchlist_validation', 'validation｜watchlist 120 天晋级赛'),
+}
+
+MEDIUM_HORIZON_LEVEL_SPECS = {
+    1: ('rolling_60d_back', '2025-11-02', 'artifacts/generated_rolling_60d_back', 'validation｜中窗 60 天晋级赛'),
+    2: ('rolling_90d_back', '2025-10-03', 'artifacts/generated_rolling_90d_back', 'validation｜中窗 90 天晋级赛'),
+    3: ('rolling_120d_back', '2025-09-03', 'artifacts/generated_rolling_120d_back', 'validation｜中窗 120 天晋级赛'),
+}
+
 
 def read_json(path: str | Path) -> dict[str, Any]:
     import json
-    return json.loads(Path(path).read_text(encoding='utf-8'))
+    text = Path(path).read_text(encoding='utf-8')
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        try:
+            obj, _ = json.JSONDecoder().raw_decode(text)
+            return obj
+        except Exception:
+            return {}
+
+
+def _materialize_factor_config(config: dict[str, Any]) -> dict[str, Any]:
+    normalized = deepcopy(config)
+    factor_defs = resolve_factor_definitions(normalized, config_dir=ROOT / 'configs')
+    if factor_defs:
+        normalized['factors'] = factor_defs
+    normalized.pop('factor_family_config', None)
+    return normalized
 
 
 def write_generated_config(config: dict[str, Any], name: str) -> str:
@@ -40,8 +71,32 @@ def write_generated_config(config: dict[str, Any], name: str) -> str:
     out_dir = ROOT / 'artifacts' / 'generated_configs'
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f'{name}.json'
-    path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding='utf-8')
+    materialized = _materialize_factor_config(config)
+    path.write_text(json.dumps(materialized, ensure_ascii=False, indent=2), encoding='utf-8')
     return str(path.relative_to(ROOT))
+
+
+def _append_focus_candidate_definitions(config: dict[str, Any], focus_candidates: list[str]) -> dict[str, Any]:
+    if not focus_candidates:
+        return config
+    store = ExperimentStore(ROOT / 'artifacts' / 'factor_lab.db')
+    candidate_rows = {row.get('name'): row for row in store.list_factor_candidates(limit=5000) if row.get('name')}
+    merged_factors = list(config.get('factors') or [])
+    existing_names = {row.get('name') for row in merged_factors if row.get('name')}
+    for name in focus_candidates:
+        if not name or name in existing_names:
+            continue
+        row = candidate_rows.get(name) or {}
+        definition = dict(row.get('definition') or {})
+        expression = definition.get('expression') or row.get('expression')
+        if not expression:
+            continue
+        definition.setdefault('name', name)
+        definition['expression'] = expression
+        merged_factors.append(definition)
+        existing_names.add(name)
+    config['factors'] = merged_factors
+    return config
 
 
 def make_task(
@@ -149,6 +204,82 @@ def build_recent_validation_task(level: int, latest_run: dict[str, Any], end_dat
         stop_if=['recent_window_validation_fails_twice'],
         promote_if=['recent_window_confirms_candidate_survival'],
         disconfirm_if=['recent_window_eliminates_current_candidates'],
+    )
+    return [] if task['fingerprint'] in existing_fingerprints else [task]
+
+
+def build_medium_horizon_task(level: int, focus_candidates: list[str], latest_run: dict[str, Any], end_date: str, base_config: dict[str, Any], existing_fingerprints: set[str], generated_configs: set[str]) -> list[dict[str, Any]]:
+    if not focus_candidates:
+        return []
+    spec = MEDIUM_HORIZON_LEVEL_SPECS.get(level)
+    if not spec:
+        return []
+    name, start_date, output_dir, worker_note = spec
+    focus_slug = '_'.join(sorted(focus_candidates)[:3]).replace('-', '_')
+    config_name = f"medium_horizon__{name}__{focus_slug}".strip('_')
+    scoped_output_dir = f"artifacts/medium_horizon_validation/{config_name}"
+    config = deepcopy(base_config)
+    config['start_date'] = start_date
+    config['end_date'] = end_date
+    config['output_dir'] = scoped_output_dir
+    config = _append_focus_candidate_definitions(config, focus_candidates)
+    config_path = write_generated_config(config, config_name)
+    task = make_task(
+        'workflow',
+        'validation',
+        level_priority('medium_horizon_validation', level),
+        f"soft robust 候选需要在更长的中窗 {start_date} → {end_date} 里跑晋级赛，确认它们不只是 30d/45d 幻觉。",
+        ['medium_horizon_promotion_check'],
+        {
+            'config_path': config_path,
+            'output_dir': scoped_output_dir,
+            'focus_factors': focus_candidates,
+        },
+        worker_note,
+        goal='validate_medium_horizon_stability',
+        hypothesis=f'当前 soft robust 候选在 {start_date} → {end_date} 中窗里仍能保持候选资格，而不是只在更短窗口有效。',
+        branch_id=f'medium_horizon_validation_level_{level}',
+        stop_if=['medium_horizon_window_eliminates_soft_robust_candidates_twice'],
+        promote_if=['medium_horizon_window_confirms_soft_robust_candidate_survival'],
+        disconfirm_if=['soft_robust_candidates_fail_entire_medium_horizon_window'],
+    )
+    return [] if task['fingerprint'] in existing_fingerprints else [task]
+
+
+def build_watchlist_candidate_task(level: int, watchlist_candidates: list[str], latest_run: dict[str, Any], end_date: str, base_config: dict[str, Any], existing_fingerprints: set[str], generated_configs: set[str]) -> list[dict[str, Any]]:
+    if not watchlist_candidates:
+        return []
+    spec = WATCHLIST_WINDOW_LEVEL_SPECS.get(level)
+    if not spec:
+        return []
+    name, start_date, output_root, worker_note = spec
+    focus_slug = '_'.join(sorted(watchlist_candidates)[:3]).replace('-', '_')
+    config_name = f"{name}__{focus_slug}".strip('_')
+    scoped_output_dir = f"{output_root}/{config_name}"
+    config = deepcopy(base_config)
+    config['start_date'] = start_date
+    config['end_date'] = end_date
+    config['output_dir'] = scoped_output_dir
+    config = _append_focus_candidate_definitions(config, watchlist_candidates)
+    config_path = write_generated_config(config, config_name)
+    task = make_task(
+        'workflow',
+        'validation',
+        level_priority('watchlist_candidate_validation', level),
+        f"watchlist 候选需要在 {start_date} → {end_date} 的递进窗口里跑晋级赛，确认它们能否从观察名单升到 candidate。",
+        ['watchlist_candidate_promoted', 'candidate_survival_check'],
+        {
+            'config_path': config_path,
+            'output_dir': scoped_output_dir,
+            'focus_factors': watchlist_candidates,
+        },
+        worker_note,
+        goal='promote_watchlist_candidates',
+        hypothesis=f"当前 watchlist 候选在 {start_date} → {end_date} 里仍能保持正向质量，而不是只停留在短窗观察名单。",
+        branch_id=f'watchlist_candidate_validation_level_{level}',
+        stop_if=['watchlist_candidates_fail_progressive_validation_twice'],
+        promote_if=['watchlist_candidates_survive_progressive_validation'],
+        disconfirm_if=['watchlist_candidates_collapse_outside_short_window'],
     )
     return [] if task['fingerprint'] in existing_fingerprints else [task]
 

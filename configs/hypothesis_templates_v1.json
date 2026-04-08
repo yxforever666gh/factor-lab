@@ -1,0 +1,105 @@
+{
+  "version": 1,
+  "name": "openclaw_hypothesis_templates_v1",
+  "templates": [
+    {
+      "template_id": "liquidity_shock_reversal",
+      "label": "流动性冲击后的反转假设",
+      "source": "hypothesis_template",
+      "anchor_candidates": ["mom_20"],
+      "context_candidates": ["liquidity_turnover_shock"],
+      "target_family": "momentum",
+      "require_anchor_stable": true,
+      "expected_information_gain": ["new_branch_opened", "candidate_survival_check"],
+      "rationale_template": "hypothesis_template/liquidity_shock_reversal: 检验 {anchor} 在 {context} 冲击背景下是否形成更稳健的反转型排序信号。"
+    },
+    {
+      "template_id": "small_cap_quality_activation",
+      "label": "盈利因子在小盘环境下的条件激活",
+      "source": "hypothesis_template",
+      "anchor_candidates": ["quality_roe"],
+      "context_candidates": ["size_small"],
+      "target_family": "quality",
+      "require_anchor_stable": false,
+      "expected_information_gain": ["new_branch_opened", "candidate_survival_check"],
+      "rationale_template": "hypothesis_template/small_cap_quality_activation: 检验 {anchor} 在 {context} 条件下是否被激活，而不是仅仅复制原有价值暴露。"
+    },
+    {
+      "template_id": "regime_sensitive_value_activation",
+      "label": "中窗有效、长窗失效的 regime-sensitive 假设",
+      "source": "hypothesis_template",
+      "anchor_candidates": ["earnings_yield_over_pb", "book_yield_plus_earnings_yield"],
+      "context_candidates": ["mom_60_skip_5", "mom_60"],
+      "target_family": "value",
+      "require_anchor_stable": false,
+      "expected_information_gain": ["boundary_confirmed", "new_branch_opened"],
+      "rationale_template": "hypothesis_template/regime_sensitive_value_activation: 检验 {anchor} 是否在 {context} 所代表的阶段切换下呈现出 regime-sensitive 的中窗优势。"
+    },
+    {
+      "template_id": "style_residual_survival",
+      "label": "去风格暴露后仍保留 alpha 的残差假设",
+      "source": "hypothesis_template",
+      "anchor_candidates": ["quality_roe", "earnings_yield_over_pb"],
+      "context_candidates": ["value_ep", "liquidity_turnover_shock"],
+      "target_family": "quality",
+      "require_anchor_stable": false,
+      "expected_information_gain": ["boundary_confirmed", "candidate_survival_check"],
+      "rationale_template": "hypothesis_template/style_residual_survival: 检验 {anchor} 在扣除 {context} 所代表的常见风格暴露后，是否仍保留可持续 alpha。"
+    },
+    {
+      "template_id": "quality_value_spread_escape",
+      "label": "质量与估值错位后的逃逸假设",
+      "source": "hypothesis_template",
+      "anchor_candidates": ["quality_roe"],
+      "context_candidates": ["book_yield_plus_earnings_yield", "earnings_yield_over_pb"],
+      "target_family": "quality",
+      "require_anchor_stable": false,
+      "expected_information_gain": ["new_branch_opened", "boundary_confirmed"],
+      "rationale_template": "hypothesis_template/quality_value_spread_escape: 检验 {anchor} 在与 {context} 形成风格错位时，是否能摆脱单纯估值线并保留独立 alpha。"
+    },
+    {
+      "template_id": "small_cap_value_confirmation",
+      "label": "小盘价值确认假设",
+      "source": "hypothesis_template",
+      "anchor_candidates": ["book_yield", "earnings_yield_over_pb"],
+      "context_candidates": ["size_small"],
+      "target_family": "value",
+      "require_anchor_stable": false,
+      "expected_information_gain": ["candidate_survival_check", "new_branch_opened"],
+      "rationale_template": "hypothesis_template/small_cap_value_confirmation: 检验 {anchor} 在 {context} 约束下是否形成更清晰的小盘价值排序，而不是大盘风格混入。"
+    },
+    {
+      "template_id": "liquidity_filtered_value",
+      "label": "流动性过滤后的价值存活假设",
+      "source": "hypothesis_template",
+      "anchor_candidates": ["book_yield_plus_earnings_yield", "earnings_yield_over_pb"],
+      "context_candidates": ["liquidity_turnover_shock"],
+      "target_family": "value",
+      "require_anchor_stable": false,
+      "expected_information_gain": ["boundary_confirmed", "candidate_survival_check"],
+      "rationale_template": "hypothesis_template/liquidity_filtered_value: 检验 {anchor} 在 {context} 过滤后，是否能去掉交易性噪声并留下更稳健的价值信号。"
+    },
+    {
+      "template_id": "momentum_quality_regime_switch",
+      "label": "动量-质量阶段切换假设",
+      "source": "hypothesis_template",
+      "anchor_candidates": ["mom_20", "mom_plus_value"],
+      "context_candidates": ["quality_roe", "mom_60_skip_5"],
+      "target_family": "hybrid",
+      "require_anchor_stable": false,
+      "expected_information_gain": ["new_branch_opened", "candidate_survival_check"],
+      "rationale_template": "hypothesis_template/momentum_quality_regime_switch: 检验 {anchor} 是否在 {context} 指示的阶段切换下获得更可持续的中短窗优势。"
+    },
+    {
+      "template_id": "crowding_escape_residual",
+      "label": "拥挤主线的残差逃逸假设",
+      "source": "hypothesis_template",
+      "anchor_candidates": ["mom_plus_value", "mom_20"],
+      "context_candidates": ["book_yield", "liquidity_turnover_shock"],
+      "target_family": "hybrid",
+      "require_anchor_stable": false,
+      "expected_information_gain": ["search_space_reduced", "new_branch_opened"],
+      "rationale_template": "hypothesis_template/crowding_escape_residual: 检验 {anchor} 在剔除 {context} 所代表的拥挤主线后，是否还保留独立且可验证的增量收益。"
+    }
+  ]
+}

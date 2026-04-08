@@ -1,0 +1,25 @@
+{
+  "template_name": "candidate_compiler_template",
+  "purpose": "Template for compiling structured candidate proposals into executable workflow tasks.",
+  "required_structure": [
+    "compile only proposals that passed cheap_screen",
+    "preserve candidate_generation_context inside compiled payload",
+    "emit executable workflow config with explicit base factors and generated factor",
+    "attach source=candidate_generation and expected_information_gain to workflow payload"
+  ],
+  "preferred_patterns": [
+    "operator-specific compilation stays isolated in a dedicated compile function",
+    "compiled configs remain deterministic and reproducible",
+    "fingerprints derive from final config payload rather than ad hoc strings"
+  ],
+  "discouraged_patterns": [
+    "compiling failed cheap_screen proposals",
+    "losing operator/base factor metadata during compilation",
+    "embedding candidate logic directly into planner without compiled config artifacts"
+  ],
+  "acceptance_questions": [
+    "Can this compiled candidate be traced back to its proposal?",
+    "Does the workflow payload preserve operator and base factor context?",
+    "Would a failed candidate still be auditable from generated artifacts?"
+  ]
+}

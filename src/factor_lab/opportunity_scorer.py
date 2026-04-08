@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from factor_lab.regime_awareness import build_regime_context
+
 
 TYPE_BASE = {
     "confirm": 0.76,
@@ -17,6 +19,7 @@ def score_opportunity(question: dict[str, Any], snapshot: dict[str, Any]) -> dic
     analyst = snapshot.get("analyst_signals") or {}
     learning = snapshot.get("research_learning") or {}
     flow_state = snapshot.get("research_flow_state") or {}
+    regime_context = build_regime_context(snapshot)
 
     qtype = question.get("question_type") or "probe"
     family = question.get("target_family")
@@ -123,6 +126,18 @@ def score_opportunity(question: dict[str, Any], snapshot: dict[str, Any]) -> dic
     elif qtype == "diagnose":
         novelty += 0.06
 
+    regime = regime_context.get("regime") or "neutral"
+    regime_weight = float(((regime_context.get("weights") or {}).get(qtype) or 1.0))
+    regime_confidence = float(regime_context.get("confidence") or 0.0)
+    priority *= regime_weight
+    if regime_weight > 1.0:
+        novelty += min(0.08, (regime_weight - 1.0) * 0.15)
+    else:
+        novelty -= min(0.06, (1.0 - regime_weight) * 0.12)
+    confidence += (regime_confidence - 0.5) * 0.12
+    rationale_bits.append(f"regime={regime}")
+    rationale_bits.append(f"regime_weight={regime_weight:.2f}")
+
     priority = min(max(priority, 0.05), 0.99)
     novelty = min(max(novelty, 0.05), 0.99)
     confidence = min(max(confidence, 0.05), 0.99)
@@ -131,4 +146,6 @@ def score_opportunity(question: dict[str, Any], snapshot: dict[str, Any]) -> dic
         "novelty_score": round(novelty, 3),
         "confidence": round(confidence, 3),
         "score_rationale": "; ".join(rationale_bits),
+        "regime": regime,
+        "regime_confidence": round(regime_confidence, 3),
     }

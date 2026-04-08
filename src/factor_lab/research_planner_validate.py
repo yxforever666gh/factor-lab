@@ -6,6 +6,7 @@ from typing import Any
 
 from factor_lab.research_runtime_state import recently_finished_same_fingerprint
 from factor_lab.storage import ExperimentStore
+from factor_lab.exploration_budget import exploration_floor_context
 
 
 RECOVERY_REPEAT_COOLDOWN_MINUTES = 30
@@ -28,20 +29,38 @@ CATEGORY_LIMITS_DEFAULT = {"baseline": 2, "validation": 2, "exploration": 1}
 DB_PATH = Path("artifacts") / "factor_lab.db"
 
 
+def _budget_bucket(task: dict[str, Any]) -> str:
+    category = task.get("category", "validation")
+    goal = str(task.get("goal") or (task.get("payload") or {}).get("goal") or "")
+    branch_id = str(task.get("branch_id") or (task.get("payload") or {}).get("branch_id") or "")
+    worker_note = str(task.get("worker_note") or "")
+    text = " ".join([goal, branch_id, worker_note]).lower()
+    if category == "validation" and ("medium_horizon" in text or "中窗" in text):
+        return "validation_medium_horizon"
+    if category == "validation" and ("stable_candidate" in text or "稳定候选" in text):
+        return "validation_stable"
+    return category
+
+
 def validate_research_planner_proposal(proposal_path: str | Path, output_path: str | Path) -> dict[str, Any]:
     proposal = json.loads(Path(proposal_path).read_text(encoding="utf-8"))
     selected_tasks = proposal.get("selected_tasks", []) or []
     store = ExperimentStore(DB_PATH)
 
-    category_limits = (proposal.get("selection_policy") or {}).get("category_limits") or CATEGORY_LIMITS_DEFAULT
-    counts = {"baseline": 0, "validation": 0, "exploration": 0}
+    selection_policy = proposal.get("selection_policy") or {}
+    category_limits = selection_policy.get("category_limits") or CATEGORY_LIMITS_DEFAULT
+    floor = selection_policy.get("exploration_floor") or exploration_floor_context({})
+    bucket_limits = {**category_limits, "validation_stable": 1, "validation_medium_horizon": 1}
+    counts = {"baseline": 0, "validation": 0, "exploration": 0, "exploration_generated": 0, "validation_stable": 0, "validation_medium_horizon": 0}
     accepted = []
     rejected = []
+    selected_exploration = 0
 
     required_payload_fields = {"goal", "hypothesis", "expected_information_gain", "branch_id", "stop_if", "promote_if", "disconfirm_if"}
 
     for task in selected_tasks:
         category = task.get("category", "validation")
+        bucket = _budget_bucket(task)
         fingerprint = task.get("fingerprint")
         reason = []
         ok = True
@@ -50,6 +69,9 @@ def validate_research_planner_proposal(proposal_path: str | Path, output_path: s
         if category in counts and counts[category] >= category_limits.get(category, 99):
             ok = False
             reason.append(f"category_limit_exceeded:{category}")
+        if bucket in counts and counts[bucket] >= bucket_limits.get(bucket, category_limits.get(category, 99)):
+            ok = False
+            reason.append(f"category_limit_exceeded:{bucket}")
 
         if _task_repeat_blocked(store, task, fingerprint):
             ok = False
@@ -68,6 +90,10 @@ def validate_research_planner_proposal(proposal_path: str | Path, output_path: s
             accepted.append(task)
             if category in counts:
                 counts[category] += 1
+            if bucket in counts:
+                counts[bucket] += 1
+            if category == "exploration":
+                selected_exploration += 1
         else:
             rejected.append({**task, "validation_reasons": reason})
 
@@ -77,6 +103,8 @@ def validate_research_planner_proposal(proposal_path: str | Path, output_path: s
             "accepted_count": len(accepted),
             "rejected_count": len(rejected),
             "category_counts": counts,
+            "exploration_floor": floor,
+            "selected_exploration": selected_exploration,
         },
         "accepted_tasks": accepted,
         "rejected_tasks": rejected,

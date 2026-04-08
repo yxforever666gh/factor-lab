@@ -5,9 +5,17 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+from factor_lab.factors import resolve_factor_definitions
+
 
 def load_base_config(config_path: str | Path) -> dict[str, Any]:
-    return json.loads(Path(config_path).read_text(encoding="utf-8"))
+    path = Path(config_path)
+    config = json.loads(path.read_text(encoding="utf-8"))
+    factor_defs = resolve_factor_definitions(config, config_dir=path.resolve().parent)
+    if factor_defs:
+        config["factors"] = factor_defs
+        config.pop("factor_family_config", None)
+    return config
 
 
 def generate_batch_from_plan(

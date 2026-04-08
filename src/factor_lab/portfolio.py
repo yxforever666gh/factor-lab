@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from typing import Iterable, List
+from math import ceil
+from typing import Iterable, List, Mapping
 
 import pandas as pd
 
@@ -17,6 +18,8 @@ class PortfolioEvaluation:
     sharpe: float
     max_drawdown: float
     avg_turnover: float
+    turnover_cost_estimate: float
+    cost_adjusted_annual_return: float
     observations: int
 
     def to_dict(self):
@@ -27,18 +30,25 @@ def build_composite_factor(
     frame: pd.DataFrame,
     definitions: Iterable[FactorDefinition],
     neutralize: bool = False,
+    *,
+    factor_value_cache: Mapping[str, pd.Series] | None = None,
 ) -> pd.Series:
     signals: List[pd.Series] = []
     for definition in definitions:
-        values = apply_factor(frame, definition)
+        if factor_value_cache is not None and definition.name in factor_value_cache:
+            values = factor_value_cache[definition.name]
+        else:
+            values = apply_factor(frame, definition)
         if neutralize and {"industry", "total_mv"}.issubset(frame.columns):
-            tmp = frame.copy()
+            tmp = frame[["date", "ticker", "industry", "total_mv"]].copy()
             tmp["raw_factor"] = values
             values = neutralize_by_date(tmp, factor_col="raw_factor")
         zscored = values.groupby(frame["date"]).transform(
             lambda s: (s - s.mean()) / s.std(ddof=0) if s.std(ddof=0) not in (0, 0.0) else 0.0
         )
         signals.append(zscored.fillna(0.0))
+    if not signals:
+        raise ValueError("build_composite_factor requires at least one factor definition")
     return sum(signals) / len(signals)
 
 
@@ -47,42 +57,49 @@ def evaluate_long_short_portfolio(
     composite_signal: pd.Series,
     top_q: float = 0.2,
     bottom_q: float = 0.2,
+    cost_bps_per_turnover: float = 10.0,
 ) -> PortfolioEvaluation:
     work = frame[["date", "ticker", "forward_return_5d"]].copy()
     work["signal"] = composite_signal.values
+    work = work.dropna(subset=["signal", "forward_return_5d"]).copy()
+    if work.empty:
+        return PortfolioEvaluation("long_short", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0)
 
-    daily_rets = []
-    prev_weights = None
+    group_sizes = work.groupby("date")["signal"].transform("size")
+    work = work[group_sizes >= 10].copy()
+    if work.empty:
+        return PortfolioEvaluation("long_short", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0)
+
+    group_sizes = work.groupby("date")["signal"].transform("size")
+    long_n = group_sizes.apply(lambda n: max(1, int(ceil(n * top_q))))
+    short_n = group_sizes.apply(lambda n: max(1, int(ceil(n * bottom_q))))
+    long_rank = work.groupby("date")["signal"].rank(method="first", ascending=False)
+    short_rank = work.groupby("date")["signal"].rank(method="first", ascending=True)
+
+    long_mask = long_rank <= long_n
+    short_mask = short_rank <= short_n
+    if not long_mask.any() or not short_mask.any():
+        return PortfolioEvaluation("long_short", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0)
+
+    long_counts = long_mask.groupby(work["date"]).transform("sum")
+    short_counts = short_mask.groupby(work["date"]).transform("sum")
+    work["weight"] = 0.0
+    work.loc[long_mask, "weight"] = 1.0 / long_counts[long_mask]
+    work.loc[short_mask, "weight"] = -1.0 / short_counts[short_mask]
+
+    series = (work["weight"] * work["forward_return_5d"]).groupby(work["date"]).sum().sort_index()
+    if series.empty:
+        return PortfolioEvaluation("long_short", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0)
+
     turnovers = []
-
-    for date, group in work.groupby("date", sort=True):
-        group = group.dropna(subset=["signal", "forward_return_5d"]).copy()
-        if len(group) < 10:
-            continue
-        long_cut = group["signal"].quantile(1 - top_q)
-        short_cut = group["signal"].quantile(bottom_q)
-
-        group["weight"] = 0.0
-        long_mask = group["signal"] >= long_cut
-        short_mask = group["signal"] <= short_cut
-        if long_mask.sum() == 0 or short_mask.sum() == 0:
-            continue
-        group.loc[long_mask, "weight"] = 1.0 / long_mask.sum()
-        group.loc[short_mask, "weight"] = -1.0 / short_mask.sum()
-
-        ret = float((group["weight"] * group["forward_return_5d"]).sum())
-        daily_rets.append((date, ret))
-
+    prev_weights = None
+    for date, group in work.loc[work["weight"] != 0.0].groupby("date", sort=True):
         weights = group.set_index("ticker")["weight"]
         if prev_weights is not None:
             all_idx = weights.index.union(prev_weights.index)
             turnover = (weights.reindex(all_idx, fill_value=0.0) - prev_weights.reindex(all_idx, fill_value=0.0)).abs().sum() / 2.0
             turnovers.append(float(turnover))
         prev_weights = weights
-
-    series = pd.Series(dict(daily_rets)).sort_index()
-    if series.empty:
-        return PortfolioEvaluation("long_short", 0.0, 0.0, 0.0, 0.0, 0.0, 0)
 
     nav = (1.0 + series).cumprod()
     peak = nav.cummax()
@@ -92,6 +109,8 @@ def evaluate_long_short_portfolio(
     sharpe = annual_return / annual_vol if annual_vol > 0 else 0.0
     max_dd = float(drawdown.min())
     avg_turnover = float(pd.Series(turnovers).mean()) if turnovers else 0.0
+    turnover_cost_estimate = avg_turnover * (cost_bps_per_turnover / 10000.0) * 48
+    cost_adjusted_annual_return = annual_return - turnover_cost_estimate
 
     return PortfolioEvaluation(
         strategy_name="long_short_top_bottom",
@@ -100,5 +119,7 @@ def evaluate_long_short_portfolio(
         sharpe=round(sharpe, 6),
         max_drawdown=round(max_dd, 6),
         avg_turnover=round(avg_turnover, 6),
+        turnover_cost_estimate=round(turnover_cost_estimate, 6),
+        cost_adjusted_annual_return=round(cost_adjusted_annual_return, 6),
         observations=int(len(series)),
     )

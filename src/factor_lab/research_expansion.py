@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from copy import deepcopy
 from datetime import datetime, timedelta
 import time
@@ -8,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from factor_lab.dedup import config_fingerprint
+from factor_lab.factors import resolve_factor_definitions
 from factor_lab.storage import ExperimentStore
 from factor_lab.feature_schema import TUSHARE_FEATURE_COLUMNS
 from factor_lab.expression_validation import validate_expression
@@ -32,12 +34,97 @@ def _make_window_config(base_config: dict[str, Any], start_date: str, end_date: 
     return config
 
 
+def _materialize_factor_config(config: dict[str, Any]) -> dict[str, Any]:
+    normalized = deepcopy(config)
+    factor_defs = resolve_factor_definitions(normalized, config_dir=ROOT / 'configs')
+    if factor_defs:
+        normalized['factors'] = factor_defs
+    normalized.pop('factor_family_config', None)
+    return normalized
+
+
+def _light_recent_validation_config(config: dict[str, Any]) -> dict[str, Any]:
+    tuned = deepcopy(config)
+    tuned['universe_limit'] = min(int(tuned.get('universe_limit') or 100), int(os.getenv('RESEARCH_LIGHT_VALIDATION_UNIVERSE_LIMIT', '20')))
+    rolling = dict(tuned.get('rolling_validation') or {})
+    if rolling:
+        rolling['window_size'] = min(int(rolling.get('window_size') or 63), int(os.getenv('RESEARCH_LIGHT_VALIDATION_ROLLING_WINDOW', '31')))
+        rolling['step_size'] = min(int(rolling.get('step_size') or 21), int(os.getenv('RESEARCH_LIGHT_VALIDATION_ROLLING_STEP', '10')))
+        tuned['rolling_validation'] = rolling
+    tuned['validation_mode'] = 'light_recent_window'
+    return tuned
+
+
 def _write_generated_config(config: dict[str, Any], name: str) -> str:
     out_dir = ROOT / "artifacts" / "generated_configs"
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{name}.json"
-    path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+    materialized = _materialize_factor_config(config)
+    path.write_text(json.dumps(materialized, ensure_ascii=False, indent=2), encoding="utf-8")
     return str(path.relative_to(ROOT))
+
+
+def _is_generated_candidate_definition(definition: dict[str, Any]) -> bool:
+    name = str(definition.get("name") or "")
+    return (
+        name.startswith("gen__")
+        or bool(definition.get("generator_operator"))
+        or bool(definition.get("left_factor_name"))
+        or bool(definition.get("right_factor_name"))
+    )
+
+
+def _compile_generated_candidate_expression(operator: str, left_expr: str, right_expr: str) -> str | None:
+    if operator == 'combine_add':
+        return f'({left_expr}) + ({right_expr})'
+    if operator == 'combine_sub':
+        return f'({left_expr}) - ({right_expr})'
+    if operator == 'combine_ratio':
+        return f'({left_expr}) / ({right_expr})'
+    if operator == 'combine_mul':
+        return f'({left_expr}) * ({right_expr})'
+    if operator == 'combine_avg':
+        return f'(({left_expr}) + ({right_expr})) / 2'
+    if operator == 'combine_primary_bias':
+        return f'((2 * ({left_expr})) + ({right_expr})) / 3'
+    return None
+
+
+def _materialize_generated_candidate_definition(base_recent: dict[str, Any], definition: dict[str, Any]) -> dict[str, Any] | None:
+    resolved = resolve_factor_definitions(deepcopy(base_recent), config_dir=ROOT / 'configs') or []
+    factor_map = {row.get('name'): row for row in resolved if isinstance(row, dict) and row.get('name')}
+    left_name = definition.get('left_factor_name')
+    right_name = definition.get('right_factor_name')
+    operator = definition.get('generator_operator')
+    left_expr = ((factor_map.get(left_name) or {}).get('expression')) if left_name else None
+    right_expr = ((factor_map.get(right_name) or {}).get('expression')) if right_name else None
+    if not operator or not left_expr or not right_expr:
+        return None
+    compiled = _compile_generated_candidate_expression(str(operator), str(left_expr), str(right_expr))
+    if not compiled:
+        return None
+    materialized = deepcopy(definition)
+    materialized['expression'] = compiled
+    return materialized
+
+
+def _light_generated_candidate_config(base_recent: dict[str, Any], definition: dict[str, Any], *, start_date: str, end_date: str, output_dir: str) -> dict[str, Any]:
+    materialized = _materialize_generated_candidate_definition(base_recent, definition)
+    if materialized is None:
+        raise ValueError(f"generated candidate definition cannot be materialized: {definition.get('name')}")
+    cfg = deepcopy(base_recent)
+    cfg["factors"] = [materialized]
+    cfg["start_date"] = start_date
+    cfg["end_date"] = end_date
+    cfg["output_dir"] = output_dir
+    cfg["universe_limit"] = min(int(cfg.get("universe_limit") or 100), int(os.getenv("RESEARCH_GENERATED_CANDIDATE_UNIVERSE_LIMIT", "20")))
+    rolling = dict(cfg.get("rolling_validation") or {})
+    if rolling:
+        rolling["window_size"] = min(int(rolling.get("window_size") or 63), int(os.getenv("RESEARCH_GENERATED_CANDIDATE_ROLLING_WINDOW", "21")))
+        rolling["step_size"] = min(int(rolling.get("step_size") or 21), int(os.getenv("RESEARCH_GENERATED_CANDIDATE_ROLLING_STEP", "7")))
+        cfg["rolling_validation"] = rolling
+    cfg["generated_candidate_validation_mode"] = "light"
+    return cfg
 
 
 def _candidate_validation_specs(store: ExperimentStore, base_recent: dict[str, Any], end_date: str) -> list[dict[str, Any]]:
@@ -54,23 +141,47 @@ def _candidate_validation_specs(store: ExperimentStore, base_recent: dict[str, A
             if not validation.ok:
                 # Skip deterministic invalid expressions (prevents circuit breaker stalls).
                 continue
-        for days, priority in [(45, 12), (90, 14)]:
+        is_generated_candidate = _is_generated_candidate_definition(definition)
+        if is_generated_candidate and os.getenv("RESEARCH_ENABLE_GENERATED_CANDIDATE_REVALIDATION", "0").strip().lower() not in {"1", "true", "yes", "on"}:
+            continue
+        windows = [(45, 12)] if is_generated_candidate else [(45, 12), (90, 14)]
+        for days, priority in windows:
             name = f"candidate_{definition['name']}_recent_{days}d"
             output_dir = f"artifacts/generated_candidate_{definition['name']}_recent_{days}d"
-            cfg = deepcopy(base_recent)
-            cfg["factors"] = [definition]
-            cfg["start_date"] = _fmt_date(end_dt - timedelta(days=days))
-            cfg["end_date"] = end_date
-            cfg["output_dir"] = output_dir
+            if is_generated_candidate:
+                try:
+                    cfg = _light_generated_candidate_config(
+                        base_recent,
+                        definition,
+                        start_date=_fmt_date(end_dt - timedelta(days=days)),
+                        end_date=end_date,
+                        output_dir=output_dir,
+                    )
+                except ValueError:
+                    continue
+            else:
+                cfg = deepcopy(base_recent)
+                cfg["factors"] = [definition]
+                cfg["start_date"] = _fmt_date(end_dt - timedelta(days=days))
+                cfg["end_date"] = end_date
+                cfg["output_dir"] = output_dir
             config_path = _write_generated_config(cfg, name)
             fingerprint = f"workflow::{config_fingerprint(cfg)}::{output_dir}"
+            payload = {"config_path": config_path, "output_dir": output_dir}
+            if is_generated_candidate:
+                payload["source"] = "candidate_generation_validation"
+                payload["validation_stage"] = f"recent_{days}d_light"
             specs.append(
                 {
                     "task_type": "workflow",
                     "priority": priority + idx,
-                    "payload": {"config_path": config_path, "output_dir": output_dir},
+                    "payload": payload,
                     "fingerprint": fingerprint,
-                    "worker_note": f"validation｜candidate_validation {definition['name']} recent_{days}d",
+                    "worker_note": (
+                        f"validation｜candidate_generation {definition['name']} recent_{days}d｜light"
+                        if is_generated_candidate
+                        else f"validation｜candidate_validation {definition['name']} recent_{days}d"
+                    ),
                 }
             )
     return specs
@@ -125,7 +236,8 @@ def expansion_candidates(store: ExperimentStore, *, allow_repeat: bool = False) 
             "end_date": end_date,
             "output_dir": "artifacts/generated_recent_45d",
             "priority": 22,
-            "worker_note": "validation｜近期 45 天窗口验证",
+            "worker_note": "validation｜近期 45 天窗口验证｜light",
+            "light_recent_validation": True,
         },
         {
             "name": "rolling_recent_90d",
@@ -133,7 +245,8 @@ def expansion_candidates(store: ExperimentStore, *, allow_repeat: bool = False) 
             "end_date": end_date,
             "output_dir": "artifacts/generated_recent_90d",
             "priority": 24,
-            "worker_note": "validation｜近期 90 天窗口验证",
+            "worker_note": "validation｜近期 90 天窗口验证｜light",
+            "light_recent_validation": True,
         },
         {
             "name": "rolling_recent_120d",
@@ -141,7 +254,8 @@ def expansion_candidates(store: ExperimentStore, *, allow_repeat: bool = False) 
             "end_date": end_date,
             "output_dir": "artifacts/generated_recent_120d",
             "priority": 25,
-            "worker_note": "validation｜近期 120 天窗口验证",
+            "worker_note": "validation｜近期 120 天窗口验证｜light",
+            "light_recent_validation": True,
         },
         {
             "name": "expanding_from_2025_10_01",
@@ -156,15 +270,21 @@ def expansion_candidates(store: ExperimentStore, *, allow_repeat: bool = False) 
     for spec in _candidate_validation_specs(store, base_recent, end_date) + windows:
         if "start_date" in spec:
             config = _make_window_config(base_recent, spec["start_date"], spec["end_date"], spec["output_dir"])
+            if spec.get('light_recent_validation'):
+                config = _light_recent_validation_config(config)
             fingerprint = f"workflow::{config_fingerprint(config)}::{spec['output_dir']}"
             if (not allow_repeat and fingerprint in existing_fingerprints) or (fingerprint in pending_or_running_fingerprints):
                 continue
             config_path = _write_generated_config(config, spec["name"])
+            payload = {"config_path": config_path, "output_dir": spec["output_dir"]}
+            if spec.get('light_recent_validation'):
+                payload['source'] = 'recent_window_validation_light'
+                payload['validation_stage'] = 'recent_window_light'
             candidates.append(
                 {
                     "task_type": "workflow",
                     "priority": spec["priority"],
-                    "payload": {"config_path": config_path, "output_dir": spec["output_dir"]},
+                    "payload": payload,
                     "fingerprint": fingerprint,
                     "worker_note": spec["worker_note"],
                 }

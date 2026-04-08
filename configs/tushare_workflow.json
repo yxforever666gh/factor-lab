@@ -2,19 +2,19 @@
   "data_source": "tushare",
   "cache_dir": "artifacts/tushare_cache",
   "output_dir": "artifacts/tushare_workflow",
-  "start_date": "2026-01-01",
+  "start_date": "2025-01-01",
   "end_date": "2026-03-18",
-  "universe_limit": 20,
-  "factors": [
-    {"name": "mom_20", "expression": "momentum_20"},
-    {"name": "value_ep", "expression": "earnings_yield"},
-    {"name": "value_bp", "expression": "book_yield"},
-    {"name": "size_small", "expression": "size_inv"},
-    {"name": "liquidity_turnover_shock", "expression": "turnover_shock_5_20"},
-    {"name": "mom_plus_value", "expression": "momentum_20 + earnings_yield"}
-  ],
+  "universe_limit": 100,
+  "rolling_validation": {
+    "window_size": 63,
+    "step_size": 21,
+    "min_pass_rate": 0.5,
+    "max_sign_flips": 2,
+    "min_rank_ic": 0.01
+  },
   "thresholds": {
     "min_rank_ic": 0.02,
     "min_top_bottom_spread": 0.0005
-  }
+  },
+  "factor_family_config": "factor_families_v1.json"
 }

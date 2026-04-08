@@ -16,6 +16,27 @@ WARMUP_DAYS = 30
 FORWARD_LABEL_DAYS = 5
 
 
+def _enrich_derived_features(frame: pd.DataFrame) -> pd.DataFrame:
+    if frame.empty:
+        return frame
+    out = frame.copy()
+    if "date" in out.columns:
+        out["date"] = pd.to_datetime(out["date"])
+    if "roe" not in out.columns and {"earnings_yield", "book_yield"}.issubset(out.columns):
+        denom = out["book_yield"].replace(0, pd.NA)
+        out["roe"] = out["earnings_yield"] / denom
+    if "momentum_60" not in out.columns and {"ticker", "close"}.issubset(out.columns):
+        out = out.sort_values(["ticker", "date"]).reset_index(drop=True)
+        out["momentum_60"] = out.groupby("ticker")["close"].transform(lambda s: s / s.shift(60) - 1.0)
+    if "momentum_120" not in out.columns and {"ticker", "close"}.issubset(out.columns):
+        out = out.sort_values(["ticker", "date"]).reset_index(drop=True)
+        out["momentum_120"] = out.groupby("ticker")["close"].transform(lambda s: s / s.shift(120) - 1.0)
+    if "momentum_60_skip_5" not in out.columns and {"ticker", "close"}.issubset(out.columns):
+        out = out.sort_values(["ticker", "date"]).reset_index(drop=True)
+        out["momentum_60_skip_5"] = out.groupby("ticker")["close"].transform(lambda s: s.shift(5) / s.shift(60) - 1.0)
+    return out
+
+
 def _feature_dir(cache_dir: str | Path) -> Path:
     return Path(cache_dir).parent / "feature_store"
 
@@ -39,12 +60,19 @@ def _write_feature_store(frame: pd.DataFrame, universe_name: str, cache_dir: str
     store_path = feature_store_path(universe_name, cache_dir)
     meta_path = feature_store_meta_path(universe_name, cache_dir)
     store_path.parent.mkdir(parents=True, exist_ok=True)
-    ordered = frame.sort_values(["date", "ticker"]).reset_index(drop=True)
+
+    if frame.empty and not {"date", "ticker"}.issubset(frame.columns):
+        ordered = frame.reset_index(drop=True)
+    else:
+        ordered = frame.sort_values(["date", "ticker"]).reset_index(drop=True)
+
     ordered.to_parquet(store_path, index=False)
+    min_date = ordered["date"].min().strftime("%Y-%m-%d") if (not ordered.empty and "date" in ordered.columns) else None
+    max_date = ordered["date"].max().strftime("%Y-%m-%d") if (not ordered.empty and "date" in ordered.columns) else None
     meta = {
         "universe_name": universe_name,
-        "min_date": ordered["date"].min().strftime("%Y-%m-%d") if not ordered.empty else None,
-        "max_date": ordered["date"].max().strftime("%Y-%m-%d") if not ordered.empty else None,
+        "min_date": min_date,
+        "max_date": max_date,
         "row_count": int(len(ordered)),
         "columns": list(ordered.columns),
         "updated_at_utc": datetime.utcnow().isoformat() + "Z",
@@ -52,14 +80,47 @@ def _write_feature_store(frame: pd.DataFrame, universe_name: str, cache_dir: str
     meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _restore_corrupt_feature_store(universe_name: str, cache_dir: str | Path = "artifacts/tushare_cache") -> pd.DataFrame:
+    store_path = feature_store_path(universe_name, cache_dir)
+    prefix = f"{store_path.name}.corrupt."
+    candidates = sorted(
+        [path for path in store_path.parent.glob(f"{store_path.name}.corrupt.*") if path.name.startswith(prefix)],
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    for candidate in candidates:
+        try:
+            frame = pd.read_parquet(candidate)
+        except Exception:
+            continue
+        frame = _enrich_derived_features(frame)
+        _write_feature_store(frame, universe_name, cache_dir)
+        return frame
+    return pd.DataFrame()
+
+
+
 def _read_feature_store(universe_name: str, cache_dir: str | Path = "artifacts/tushare_cache") -> pd.DataFrame:
     path = feature_store_path(universe_name, cache_dir)
     if not path.exists():
-        return pd.DataFrame()
-    frame = pd.read_parquet(path)
-    if not frame.empty:
-        frame["date"] = pd.to_datetime(frame["date"])
-    return frame
+        return _restore_corrupt_feature_store(universe_name, cache_dir)
+    try:
+        frame = pd.read_parquet(path)
+    except Exception:
+        # If the master parquet is corrupted, quarantine it and try the newest readable backup first.
+        corrupt_path = path.with_suffix(path.suffix + f".corrupt.{int(datetime.utcnow().timestamp())}")
+        try:
+            path.rename(corrupt_path)
+        except Exception:
+            pass
+        meta_path = feature_store_meta_path(universe_name, cache_dir)
+        if meta_path.exists():
+            try:
+                meta_path.unlink()
+            except Exception:
+                pass
+        return _restore_corrupt_feature_store(universe_name, cache_dir)
+    return _enrich_derived_features(frame)
 
 
 def _coverage_segments(req_start: pd.Timestamp, req_end: pd.Timestamp, current_min: pd.Timestamp | None, current_max: pd.Timestamp | None) -> list[tuple[pd.Timestamp, pd.Timestamp]]:
@@ -81,7 +142,8 @@ def _merge_feature_frames(existing: pd.DataFrame, incoming_frames: list[pd.DataF
     merged = pd.concat(frames, ignore_index=True)
     merged["date"] = pd.to_datetime(merged["date"])
     merged = merged.drop_duplicates(subset=["date", "ticker"], keep="last")
-    return merged.sort_values(["date", "ticker"]).reset_index(drop=True)
+    merged = merged.sort_values(["date", "ticker"]).reset_index(drop=True)
+    return _enrich_derived_features(merged)
 
 
 def ensure_feature_coverage(
@@ -132,6 +194,9 @@ def ensure_feature_coverage(
             timing.set_counter(f"coverage_segment_{idx}", f"{request.start_date}:{request.end_date}")
 
     merged = _merge_feature_frames(existing, incoming_frames)
+    if merged.empty and not existing.empty:
+        # Empty incremental pulls should not wipe a readable master store.
+        merged = existing.copy()
     _write_feature_store(merged, resolved_universe_name, cache_dir)
     return resolved_universe_name
 

@@ -18,6 +18,7 @@ from factor_lab.research_runtime_state import recently_finished_same_fingerprint
 ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS = ROOT / "artifacts"
 SCHEMA_VERSION = "factor_lab.research_opportunity.v1"
+AUTONOMY_POLICY_PATH = ROOT / "configs" / "research_autonomy_policy.json"
 
 
 def _read_json(path: Path, default: Any) -> Any:
@@ -77,13 +78,19 @@ def _question_fingerprint(question: dict[str, Any]) -> str:
     return json.dumps(payload, ensure_ascii=False, sort_keys=True)
 
 
-def _should_pre_suppress_question(question: dict[str, Any], store: ExperimentStore) -> bool:
+def _should_pre_suppress_question(question: dict[str, Any], store: ExperimentStore, autonomy_policy: dict[str, Any] | None = None) -> bool:
     sources = set(question.get("sources") or [])
-    # Let critic/pattern-native questions punch through; suppress plain repeats early.
     if "meta_research_critique" in "".join(sources) or "pattern_learning" in "".join(sources):
         return False
     fingerprint = f"pre_question::{_question_fingerprint(question)}"
-    return recently_finished_same_fingerprint(store, fingerprint, cooldown_minutes=180)
+    repeated = recently_finished_same_fingerprint(store, fingerprint, cooldown_minutes=180)
+    if not repeated:
+        return False
+    expected_gain = set(question.get("expected_knowledge_gain") or [])
+    objectives = set((((autonomy_policy or {}).get("principles") or {}).get("objective") or []))
+    if "epistemic_gain" in objectives and expected_gain & {"search_space_reduced", "boundary_confirmed", "new_branch_opened", "repeated_graveyard_confirmed"}:
+        return False
+    return True
 
 
 def build_research_opportunities(snapshot_path: str | Path, output_path: str | Path) -> dict[str, Any]:
@@ -101,6 +108,7 @@ def build_research_opportunities(snapshot_path: str | Path, output_path: str | P
     critic_questions = build_critic_questions(snapshot, meta_research_critique)
     promoted_full_run_questions = build_full_run_followups()
     questions = list(base_questions) + list(critic_questions) + list(promoted_full_run_questions) + list(child_questions)
+    autonomy_policy = _read_json(AUTONOMY_POLICY_PATH, {})
     opportunity_budget = allocate_opportunity_budget(snapshot, opportunity_learning)
     type_budget = dict(opportunity_budget.get("budget") or {})
     child_budget = dict(opportunity_budget.get("child_budget") or {})
@@ -111,7 +119,7 @@ def build_research_opportunities(snapshot_path: str | Path, output_path: str | P
         qtype = question.get("question_type") or "probe"
         if qtype in type_budget and int(type_budget.get(qtype, 0)) <= 0:
             continue
-        if _should_pre_suppress_question(question, store):
+        if _should_pre_suppress_question(question, store, autonomy_policy):
             suppressed_questions.append({
                 "question_id": question.get("question_id"),
                 "reason": "pre_suppressed_recent_repeat",
@@ -119,6 +127,10 @@ def build_research_opportunities(snapshot_path: str | Path, output_path: str | P
             })
             continue
         scores = score_opportunity(question, snapshot)
+        expected_gain = set(question.get("expected_knowledge_gain") or [])
+        epistemic_bonus = 0.0
+        if expected_gain & {"search_space_reduced", "boundary_confirmed", "new_branch_opened", "repeated_graveyard_confirmed"}:
+            epistemic_bonus = 0.08
         opportunity = _make_opportunity(
             opportunity_id=f"opp-{question['question_id']}",
             opportunity_type=qtype,
@@ -129,12 +141,14 @@ def build_research_opportunities(snapshot_path: str | Path, output_path: str | P
             target_candidates=list(question.get("target_candidates") or []),
             expected_knowledge_gain=list(question.get("expected_knowledge_gain") or []),
             evidence_gap=question.get("evidence_gap") or "",
-            priority=float(scores.get("priority") or 0.5),
+            priority=min(0.99, float(scores.get("priority") or 0.5) + epistemic_bonus),
             novelty_score=float(scores.get("novelty_score") or 0.5),
             confidence=float(scores.get("confidence") or 0.5),
-            rationale=str(scores.get("score_rationale") or ""),
+            rationale=(str(scores.get("score_rationale") or "") + (" | autonomy_policy: epistemic_gain_priority" if epistemic_bonus > 0 else "")),
             sources=list(question.get("sources") or []),
         )
+        opportunity["regime"] = scores.get("regime")
+        opportunity["regime_confidence"] = scores.get("regime_confidence")
         if question.get("parent_opportunity_id"):
             opportunity["parent_opportunity_id"] = question.get("parent_opportunity_id")
         opportunities.append(opportunity)

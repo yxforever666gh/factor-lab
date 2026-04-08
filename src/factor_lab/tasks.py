@@ -26,6 +26,12 @@ class TaskTracker:
         self.path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         return payload
 
+    def update(self, payload: dict[str, Any], **fields: Any) -> dict[str, Any]:
+        payload = dict(payload)
+        payload.update(fields)
+        self.path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        return payload
+
     def finish(self, payload: dict[str, Any], status: str = "finished", error: str | None = None) -> dict[str, Any]:
         payload = dict(payload)
         payload["status"] = status

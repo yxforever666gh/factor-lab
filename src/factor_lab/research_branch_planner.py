@@ -24,6 +24,21 @@ class ResearchBranchPlanner:
         family_recent_gain = space_map.get("family_recent_gain", {}) or {}
         candidate_tasks = (candidate_pool or {}).get("tasks", []) or []
         family_summary = snapshot.get("family_summary", []) or []
+        available_task_families: set[str] = set()
+        for task in candidate_tasks:
+            worker_note = task.get("worker_note", "") or ""
+            if "稳定候选" in worker_note:
+                available_task_families.add("stable_candidate_validation")
+            elif "中窗" in worker_note:
+                available_task_families.add("medium_horizon_validation")
+            elif "graveyard" in worker_note:
+                available_task_families.add("graveyard_diagnosis")
+            elif "近期" in worker_note:
+                available_task_families.add("recent_window_validation")
+            elif "扩窗" in worker_note or "expanding" in worker_note:
+                available_task_families.add("window_expansion")
+            elif "exploration" in worker_note:
+                available_task_families.add("exploration")
         relationship_summary = snapshot.get("relationship_summary", {}) or {}
         family_recommendations = {row.get("family"): row for row in snapshot.get("family_recommendations", []) if row.get("family")}
         trial_summary = snapshot.get("research_trial_summary", {}) or {}
@@ -37,7 +52,7 @@ class ResearchBranchPlanner:
         branch_decisions = []
         priority_scored: list[tuple[float, str]] = []
 
-        for family in ["stable_candidate_validation", "graveyard_diagnosis", "recent_window_validation", "window_expansion", "exploration"]:
+        for family in ["stable_candidate_validation", "medium_horizon_validation", "graveyard_diagnosis", "recent_window_validation", "window_expansion", "exploration"]:
             progress = family_progress.get(family, {}) or {}
             next_level = progress.get("next_level")
             saturated = (saturation.get(family) or {}).get("saturated", False)
@@ -63,6 +78,8 @@ class ResearchBranchPlanner:
                     action_hint = max(family_action_counts.items(), key=lambda item: item[1])[0]
                 if any((row.get("recommended_action") == "validate_risk") for row in snapshot.get("family_recommendations", []) or []):
                     action_hint = "validate_risk"
+            elif family == "medium_horizon_validation":
+                action_hint = "validate_risk"
             elif family == "graveyard_diagnosis":
                 action_hint = "refine" if duplicate_count else "continue"
             elif family == "recent_window_validation":
@@ -73,6 +90,10 @@ class ResearchBranchPlanner:
                 explore_branch_count = len([row for row in family_recommendations.values() if row.get("recommended_action") == "explore_new_branch"])
                 validate_risk_count = len([row for row in family_recommendations.values() if row.get("recommended_action") == "validate_risk"])
                 action_hint = "pause" if validate_risk_count else ("explore_new_branch" if explore_branch_count >= 2 else "pause")
+
+            if next_level is None and family in available_task_families:
+                next_level = 1
+                saturated = False
 
             if saturated or next_level is None:
                 branch_decisions.append({
@@ -91,6 +112,10 @@ class ResearchBranchPlanner:
                 elif action_hint == "pause":
                     score -= 10
                 reason = f"高分 family={top_family_score:.2f}，refinement={refinement_count}，优先把强主线做深。最近增量 {recent_gain}。"
+            elif family == "medium_horizon_validation":
+                score += 66 + min(refinement_count * 2, 8)
+                decision = _normalize_decision(action_hint, "advance")
+                reason = f"soft robust 候选需要跨到 60d/90d/120d 晋级赛，确认它们能否脱离短窗依赖。最近增量 {recent_gain}。"
             elif family == "graveyard_diagnosis":
                 score += 52 + min(duplicate_count * 5, 20)
                 decision = _normalize_decision(action_hint, "advance")
@@ -133,7 +158,7 @@ class ResearchBranchPlanner:
                     decision = "refine"
 
             if family_risk_score >= 60:
-                if family in {"stable_candidate_validation", "recent_window_validation", "graveyard_diagnosis"}:
+                if family in {"stable_candidate_validation", "medium_horizon_validation", "recent_window_validation", "graveyard_diagnosis"}:
                     score += 10
                     decision = "advance"
                 else:
@@ -178,6 +203,8 @@ class ResearchBranchPlanner:
             for task in candidate_tasks:
                 worker_note = task.get("worker_note", "")
                 if family == "stable_candidate_validation" and "稳定候选" in worker_note:
+                    family_matches.append(task)
+                elif family == "medium_horizon_validation" and "中窗" in worker_note:
                     family_matches.append(task)
                 elif family == "graveyard_diagnosis" and "graveyard" in worker_note:
                     family_matches.append(task)

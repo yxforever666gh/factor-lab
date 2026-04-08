@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import ast
+import json
 from dataclasses import dataclass
-from typing import Dict
+from pathlib import Path
+from typing import Dict, Iterable, List
 
 import pandas as pd
 
@@ -27,13 +29,7 @@ class SafeExpressionEvaluator:
         self.columns: Dict[str, pd.Series] = {
             column: frame[column] for column in frame.columns if column not in {"date", "ticker"}
         }
-        # Backward-compatible aliases for factor expressions.
-        # Some candidate definitions refer to fields not present in the current feature frame.
-        # Provide conservative proxies to avoid hard-stopping the research loop.
-        self.aliases: Dict[str, str] = {
-            # ROE is not currently materialized by TushareDataProvider; use earnings_yield as a quality proxy.
-            "roe": "earnings_yield",
-        }
+        self.aliases: Dict[str, str] = {}
 
     def evaluate(self, expression: str) -> pd.Series:
         tree = ast.parse(expression, mode="eval")
@@ -65,3 +61,34 @@ def apply_factor(frame: pd.DataFrame, definition: FactorDefinition) -> pd.Series
     evaluator = SafeExpressionEvaluator(frame)
     values = evaluator.evaluate(definition.expression)
     return pd.Series(values, index=frame.index, name=definition.name)
+
+
+def expand_factor_family_config(config_path: str | Path) -> list[dict]:
+    payload = json.loads(Path(config_path).read_text(encoding='utf-8'))
+    expanded: list[dict] = []
+    for family_row in payload.get('families', []):
+        family = family_row.get('family') or 'other'
+        for variant in family_row.get('variants', []):
+            expanded.append(
+                {
+                    'family': family,
+                    'name': variant['name'],
+                    'expression': variant['expression'],
+                    'role': variant.get('role') or 'alpha_seed',
+                    'allow_in_portfolio': bool(variant.get('allow_in_portfolio', True)),
+                }
+            )
+    return expanded
+
+
+def resolve_factor_definitions(config: dict, *, config_dir: str | Path | None = None) -> list[dict]:
+    if config.get('factors'):
+        return list(config['factors'])
+    family_cfg = config.get('factor_family_config')
+    if not family_cfg:
+        return []
+    config_dir = Path(config_dir) if config_dir else Path.cwd()
+    family_path = Path(family_cfg)
+    if not family_path.is_absolute():
+        family_path = (config_dir / family_cfg).resolve()
+    return expand_factor_family_config(family_path)

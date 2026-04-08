@@ -1,0 +1,23 @@
+{
+  "template_name": "portfolio_eval_template",
+  "purpose": "Shared template for portfolio evaluation code paths.",
+  "required_structure": [
+    "consume precomputed factor signals whenever available",
+    "avoid recomputing factor expressions inside portfolio evaluation",
+    "keep portfolio evaluation semantically separate from factor generation"
+  ],
+  "preferred_patterns": [
+    "shared signal inputs from workflow cache or factor matrix",
+    "date-grouped portfolio logic operating on cached columns",
+    "cost-adjusted metrics preserved during optimization"
+  ],
+  "discouraged_patterns": [
+    "build_composite_factor recomputing already-known signals",
+    "duplicating signal normalization logic across modules"
+  ],
+  "acceptance_questions": [
+    "Does portfolio use shared signal inputs?",
+    "Did optimization preserve turnover and cost semantics?",
+    "Can this logic be reused by multiple portfolio strategies?"
+  ]
+}

@@ -4,17 +4,35 @@ import json
 from pathlib import Path
 from typing import Any
 
+from factor_lab.regime_awareness import QUESTION_TYPES, build_regime_context
+
 ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS = ROOT / "artifacts"
 STORE_PATH = ARTIFACTS / "research_opportunity_store.json"
+AUTONOMY_POLICY_PATH = ROOT / "configs" / "research_autonomy_policy.json"
 MIN_EXPLORATION_FLOOR = {"recombine": 1, "probe": 1}
 CHILD_BUDGET = {"expand": 1, "recombine": 1, "probe": 1}
+ADAPTIVE_BANDIT_SLOTS = 4
 
 
 def _read_json(path: Path, default: Any) -> Any:
     if not path.exists():
         return default
-    return json.loads(path.read_text(encoding="utf-8"))
+    text = path.read_text(encoding="utf-8")
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as exc:
+        # Tolerate common tail-corruption (for example an extra trailing brace)
+        # so planner/opportunity generation can keep running instead of deadlocking.
+        decoder = json.JSONDecoder()
+        try:
+            obj, end = decoder.raw_decode(text)
+            trailing = text[end:].strip()
+            if trailing and set(trailing) <= {'}'}:
+                return obj
+        except Exception:
+            pass
+        raise exc
 
 
 def _template_key(row: dict[str, Any]) -> str:
@@ -152,10 +170,29 @@ def build_opportunity_learning(store_path: str | Path | None = None, output_path
     return payload
 
 
+def _bandit_score_for_type(otype: str, meta: dict[str, Any], regime_context: dict[str, Any], objectives: set[str]) -> float:
+    count = float(meta.get("count") or 0.0)
+    success_rate = float(meta.get("success_rate") or 0.0)
+    epistemic_value = float(meta.get("epistemic_value_score") or 0.0)
+    normalized_epistemic = max(0.0, min(1.0, (epistemic_value + 1.0) / 2.0))
+    uncertainty_bonus = 0.45 / ((count + 1.0) ** 0.5)
+    regime_weight = float(((regime_context.get("weights") or {}).get(otype) or 1.0))
+    reward = 0.52 * success_rate + 0.33 * normalized_epistemic + 0.15 * min(1.0, regime_weight / 1.25)
+    if "epistemic_gain" in objectives and otype in {"diagnose", "probe", "recombine"}:
+        reward += 0.05
+    if (meta.get("recommended_action") or "") == "upweight":
+        reward += 0.08
+    elif (meta.get("recommended_action") or "") == "downweight":
+        reward -= 0.08
+    return reward + uncertainty_bonus
+
+
 def allocate_opportunity_budget(snapshot: dict[str, Any], opportunity_learning: dict[str, Any]) -> dict[str, Any]:
     flow_state = snapshot.get("research_flow_state") or {}
+    autonomy_policy = _read_json(AUTONOMY_POLICY_PATH, {})
     types = opportunity_learning.get("types") or {}
     recovery_state = flow_state.get("state")
+    regime_context = build_regime_context(snapshot)
 
     budget = {"confirm": 2, "diagnose": 2, "expand": 1, "recombine": 1, "probe": 1}
     reasons: list[str] = []
@@ -180,6 +217,16 @@ def allocate_opportunity_budget(snapshot: dict[str, Any], opportunity_learning: 
             budget[otype] = max(0, budget[otype] - 1)
             reasons.append(f"learning_downweight:{otype}")
 
+    regime_weights = regime_context.get("weights") or {}
+    for otype in QUESTION_TYPES:
+        weight = float(regime_weights.get(otype) or 1.0)
+        if weight >= 1.12:
+            budget[otype] += 1
+            reasons.append(f"regime_upweight:{otype}")
+        elif weight <= 0.82:
+            budget[otype] = max(0, budget[otype] - 1)
+            reasons.append(f"regime_downweight:{otype}")
+
     if all((types.get(k, {}) or {}).get("recommended_action") == "downweight" for k in ["confirm", "diagnose"] if k in types):
         budget["confirm"] = max(1, budget["confirm"] - 1)
         budget["diagnose"] = max(1, budget["diagnose"] - 1)
@@ -192,9 +239,42 @@ def allocate_opportunity_budget(snapshot: dict[str, Any], opportunity_learning: 
             budget[key] = floor
             reasons.append(f"exploration_floor:{key}")
 
+    principles = (autonomy_policy.get("principles") or {})
+    objectives = set(principles.get("objective") or [])
+    quality_gates = autonomy_policy.get("quality_gates") or {}
+    if "epistemic_gain" in objectives:
+        budget["diagnose"] = max(budget.get("diagnose", 0), 2)
+        budget["probe"] = max(budget.get("probe", 0), 2)
+        reasons.append("autonomy_policy_epistemic_gain_floor")
+    if "high_corr_duplicate_variants" in set(quality_gates.get("avoid") or []):
+        budget["recombine"] = max(1, budget.get("recombine", 0))
+        reasons.append("autonomy_policy_keep_recombine_but_not_dominant")
+
+    bandit_scores = {
+        otype: _bandit_score_for_type(otype, dict(types.get(otype) or {}), regime_context, objectives)
+        for otype in QUESTION_TYPES
+    }
+    adaptive_allocations = {otype: 0 for otype in QUESTION_TYPES}
+    for _ in range(ADAPTIVE_BANDIT_SLOTS):
+        winner = max(
+            QUESTION_TYPES,
+            key=lambda otype: (bandit_scores.get(otype, 0.0) / (1 + adaptive_allocations[otype]), budget.get(otype, 0), otype),
+        )
+        budget[winner] = int(budget.get(winner, 0)) + 1
+        adaptive_allocations[winner] += 1
+    reasons.append("bandit_allocator_applied")
+
     child_budget = dict(CHILD_BUDGET)
     reasons.append("child_budget_reserved")
-    return {"budget": budget, "child_budget": child_budget, "reasons": reasons}
+    return {
+        "budget": budget,
+        "child_budget": child_budget,
+        "reasons": reasons,
+        "autonomy_policy": autonomy_policy,
+        "regime_context": regime_context,
+        "bandit_scores": {key: round(value, 4) for key, value in bandit_scores.items()},
+        "bandit_allocations": adaptive_allocations,
+    }
 
 
 def build_child_opportunities(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
