@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -12,15 +13,35 @@ from typing import Any
 
 import fcntl
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+SCRIPT_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(SCRIPT_ROOT / "src"))
 
+from factor_lab.adaptive_scheduler import apply_scheduler_env, compute_scheduler_policy, route_status_snapshot, user_idle_snapshot, write_scheduler_state
 from factor_lab.heartbeat import append_heartbeat
-from factor_lab.research_queue import run_orchestrator
+from factor_lab.paths import artifacts_dir, project_root
+from factor_lab.research_queue import process_report_refresh_requests, report_refresh_requested, run_orchestrator
 
-ROOT = Path(__file__).resolve().parents[1]
-STATUS_PATH = ROOT / "artifacts" / "research_daemon_status.json"
-STATUS_HISTORY_PATH = ROOT / "artifacts" / "research_daemon_status_history.jsonl"
-LOCK_PATH = ROOT / "artifacts" / "research_daemon.lock"
+
+def _root_path() -> Path:
+    return project_root()
+
+
+def _artifacts_path() -> Path:
+    return artifacts_dir()
+
+
+def _status_path() -> Path:
+    return _artifacts_path() / "research_daemon_status.json"
+
+
+def _status_history_path() -> Path:
+    return _artifacts_path() / "research_daemon_status_history.jsonl"
+
+
+def _lock_path() -> Path:
+    return _artifacts_path() / "research_daemon.lock"
+
+
 RUNNING = True
 LAST_PREWARM_AT = 0.0
 LOCK_HANDLE = None
@@ -72,36 +93,34 @@ def compute_dynamic_throttle(*, base_max_tasks: int, rss_limit_mb: int) -> dict[
     mem_pressure = 1.0 - (mem_available / mem_total) if mem_total > 0 else 0.0
     rss_ratio = (current_rss_mb / rss_limit_mb) if rss_limit_mb > 0 else 0.0
 
-    dynamic_max_tasks = max(1, base_max_tasks)
-    batch_workers = 2 if usage_ratio < 0.65 else 1
-    mode = 'balanced'
-
-    if mem_available and mem_available < 2048:
-        dynamic_max_tasks = 1
-        batch_workers = 1
-        mode = 'memory_guard'
-    elif rss_ratio >= 0.85 or mem_pressure >= 0.88:
-        dynamic_max_tasks = 1
-        batch_workers = 1
-        mode = 'memory_brake'
-    elif usage_ratio < 0.55 and mem_pressure < 0.75:
-        dynamic_max_tasks = min(base_max_tasks + 1, 4)
-        batch_workers = 2
-        mode = 'cpu_push'
-    elif usage_ratio < 0.75 and mem_pressure < 0.82:
-        dynamic_max_tasks = base_max_tasks
-        batch_workers = 2
-        mode = 'target_zone'
-    elif usage_ratio > 0.95:
-        dynamic_max_tasks = max(1, base_max_tasks - 1)
-        batch_workers = 1
-        mode = 'cpu_saturated'
+    idle = user_idle_snapshot()
+    route = route_status_snapshot()
+    policy = compute_scheduler_policy(
+        base_max_tasks=base_max_tasks,
+        cpu_usage_ratio=usage_ratio,
+        mem_pressure=mem_pressure,
+        mem_available_mb=mem_available,
+        rss_ratio=rss_ratio,
+        idle_snapshot=idle,
+        route_status=route,
+    )
+    apply_scheduler_env(policy)
+    write_scheduler_state(policy, cpu_usage_ratio=usage_ratio, mem_pressure=mem_pressure, rss_ratio=rss_ratio)
 
     return {
-        'mode': mode,
-        'dynamic_max_tasks': dynamic_max_tasks,
-        'dynamic_batch_workers': batch_workers,
-        'target_cpu_ratio': 0.8,
+        'mode': policy.get('mode') or 'unknown',
+        'mode_reason': policy.get('reason'),
+        'dynamic_max_tasks': int(policy.get('dynamic_max_tasks') or max(1, base_max_tasks)),
+        'dynamic_batch_workers': int(policy.get('dynamic_batch_workers') or 1),
+        'cpu_budget': int(policy.get('cpu_budget') or max(1, base_max_tasks)),
+        'network_budget': int(policy.get('network_budget') or 0),
+        'light_task_budget': int(policy.get('light_task_budget') or 1),
+        'queue_caps': policy.get('queue_caps') or {},
+        'opportunity_enqueue_limit': int(policy.get('opportunity_enqueue_limit') or 1),
+        'idle_state': idle,
+        'route_status': route,
+        'target_cpu_ratio': policy.get('cpu_target_max') or 0.8,
+        'target_cpu_min_ratio': policy.get('cpu_target_min') or 0.45,
         'rss_mb': current_rss_mb,
         'rss_ratio': round(rss_ratio, 4),
         'mem_pressure': round(mem_pressure, 4),
@@ -129,11 +148,24 @@ def read_rss_mb(status_path: Path = Path("/proc/self/status")) -> int:
     return 0
 
 
-def should_recycle_daemon(*, processed_tasks_total: int, max_tasks_before_restart: int, rss_limit_mb: int, rss_mb: int) -> str | None:
-    if max_tasks_before_restart > 0 and processed_tasks_total >= max_tasks_before_restart:
-        return "task_budget_reached"
+def should_recycle_daemon(
+    *,
+    processed_tasks_total: int,
+    max_tasks_before_restart: int,
+    rss_limit_mb: int,
+    rss_mb: int,
+    idle: bool = False,
+) -> str | None:
+    recycle_mode = (os.getenv("RESEARCH_DAEMON_RECYCLE_MODE") or "idle_preferred").strip().lower()
     if rss_limit_mb > 0 and rss_mb >= rss_limit_mb:
         return "rss_limit_exceeded"
+    if max_tasks_before_restart > 0 and processed_tasks_total >= max_tasks_before_restart:
+        if recycle_mode in {"immediate", "always"}:
+            return "task_budget_reached"
+        if recycle_mode in {"disabled", "off", "none"}:
+            return None
+        if idle:
+            return "task_budget_reached"
     return None
 
 
@@ -144,8 +176,9 @@ def handle_stop(signum, frame):
 
 def acquire_single_instance_lock() -> bool:
     global LOCK_HANDLE
-    LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
-    LOCK_HANDLE = open(LOCK_PATH, "a+", encoding="utf-8")
+    lock_path = _lock_path()
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    LOCK_HANDLE = open(lock_path, "a+", encoding="utf-8")
     try:
         fcntl.flock(LOCK_HANDLE.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     except BlockingIOError:
@@ -167,17 +200,19 @@ def acquire_single_instance_lock() -> bool:
 
 
 def write_status(state: str, **extra: Any):
-    STATUS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    status_path = _status_path()
+    status_history_path = _status_history_path()
+    status_path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "updated_at_utc": datetime.now(timezone.utc).isoformat(),
         "pid": os.getpid(),
         "state": state,
         **extra,
     }
-    STATUS_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    status_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     try:
         compact = {k: v for k, v in payload.items() if k not in {'last_processed', 'prewarm'}}
-        with STATUS_HISTORY_PATH.open('a', encoding='utf-8') as fh:
+        with status_history_path.open('a', encoding='utf-8') as fh:
             fh.write(json.dumps(compact, ensure_ascii=False) + "\n")
     except Exception:
         pass
@@ -190,12 +225,73 @@ def merge_status_fields(*parts: dict[str, Any]) -> dict[str, Any]:
     return merged
 
 
-def emit_wake_event(text: str) -> None:
-    # Factor Lab notifications are noisy in chat; keep them opt-in.
-    # Set RESEARCH_DAEMON_WAKE_EVENTS=1 to re-enable proactive chat wake events.
+def orchestrator_status_context(result: dict[str, Any] | None) -> dict[str, Any]:
+    result = result or {}
+    blocked_task_types = list(result.get("blocked_task_types") or [])
+    blocked_lane_status = result.get("blocked_lane_status") or {}
+    context: dict[str, Any] = {}
+    if blocked_task_types:
+        context["blocked_task_types"] = blocked_task_types
+    if blocked_lane_status:
+        context["blocked_lane_status"] = blocked_lane_status
+        if blocked_lane_status.get("summary"):
+            context["blocked_lane_summary"] = blocked_lane_status.get("summary")
+        if blocked_lane_status.get("blocked_pending_count") is not None:
+            context["blocked_pending_count"] = blocked_lane_status.get("blocked_pending_count")
+        if blocked_lane_status.get("unblocked_pending_count") is not None:
+            context["unblocked_pending_count"] = blocked_lane_status.get("unblocked_pending_count")
+    return context
+
+
+def _emit_wake_event_via_openclaw(text: str) -> str:
+    """Emit wake event via OpenClaw CLI if available.
+    
+    Returns status:
+    - 'disabled': wake events are disabled via env var
+    - 'unavailable': openclaw CLI not found
+    - 'delivered': event successfully sent
+    - 'failed': openclaw CLI failed
+    """
+    # Check if wake events are enabled
     if os.getenv("RESEARCH_DAEMON_WAKE_EVENTS", "0").strip().lower() not in {"1", "true", "yes", "on"}:
-        return
-    os.system(f'openclaw system event --mode now --text {json.dumps(text, ensure_ascii=False)} >/dev/null 2>&1')
+        return "disabled"
+    
+    # Check if openclaw CLI is available
+    if not shutil.which("openclaw"):
+        return "unavailable"
+    
+    # Attempt to send the event
+    try:
+        result = subprocess.run(
+            ["openclaw", "system", "event", "--mode", "now", "--text", text],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return "delivered"
+        else:
+            return "failed"
+    except Exception:
+        return "failed"
+
+
+def emit_wake_event(text: str) -> None:
+    """Emit wake event via OpenClaw CLI if available.
+    
+    This is a non-fatal operation - daemon continues even if notification fails.
+    Factor Lab notifications are noisy in chat; keep them opt-in.
+    Set RESEARCH_DAEMON_WAKE_EVENTS=1 to re-enable proactive chat wake events.
+    """
+    status = _emit_wake_event_via_openclaw(text)
+    # Log unavailable/failed status for debugging, but don't crash
+    if status == "unavailable":
+        # OpenClaw CLI not installed - this is expected in some environments
+        pass
+    elif status == "failed":
+        # OpenClaw CLI failed - log but continue
+        pass
 
 
 def maybe_emit_stall_alert(status: dict, *, cooldown_seconds: int = 300) -> None:
@@ -241,11 +337,13 @@ def maybe_run_prewarm() -> dict | None:
     if not windows:
         return None
 
+    root = _root_path()
+    artifacts = _artifacts_path()
     universe_limit = os.getenv("RESEARCH_DAEMON_PREWARM_UNIVERSE_LIMIT", "20")
-    output = ROOT / "artifacts" / "data_prepare_status.json"
+    output = artifacts / "data_prepare_status.json"
     command = [
         sys.executable,
-        str(ROOT / "scripts" / "prepare_tushare_data.py"),
+        str(root / "scripts" / "prepare_tushare_data.py"),
         "--end-date",
         datetime.now().strftime("%Y-%m-%d"),
         "--universe-limit",
@@ -256,7 +354,7 @@ def maybe_run_prewarm() -> dict | None:
     for window in windows:
         command.extend(["--window-days", window])
 
-    result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
+    result = subprocess.run(command, cwd=root, capture_output=True, text=True)
     LAST_PREWARM_AT = now
     return {
         "ok": result.returncode == 0,
@@ -300,12 +398,14 @@ if __name__ == "__main__":
             os.environ['FACTOR_LAB_BATCH_MAX_WORKERS'] = str(dynamic_batch_workers)
             result = run_orchestrator(max_tasks=dynamic_max_tasks)
             processed = result.get("processed", [])
+            status_context = orchestrator_status_context(result)
             guardrail = result.get("guardrail")
             if guardrail:
                 write_status(
                     "guardrail",
                     **merge_status_fields(
                         throttle,
+                        status_context,
                         {
                             "guardrail": guardrail,
                             "processed_count": len(processed),
@@ -327,6 +427,7 @@ if __name__ == "__main__":
                     "running",
                     **merge_status_fields(
                         throttle,
+                        status_context,
                         {
                             "processed_count": len(processed),
                             "processed_tasks_total": processed_tasks_total,
@@ -364,6 +465,7 @@ if __name__ == "__main__":
                         rss_mb=current_rss_mb,
                     )
                     raise SystemExit(0)
+                process_report_refresh_requests()
                 time.sleep(2)
             else:
                 remaining_preview = result.get("remaining_preview") or []
@@ -373,6 +475,7 @@ if __name__ == "__main__":
                         "running",
                         **merge_status_fields(
                             throttle,
+                            status_context,
                             {
                                 "processed_count": 0,
                                 "planner_pending": len(pending_after),
@@ -390,6 +493,7 @@ if __name__ == "__main__":
                             "idle",
                             **merge_status_fields(
                                 throttle,
+                                status_context,
                                 {
                                     "processed_count": 0,
                                     "processed_tasks_total": processed_tasks_total,
@@ -407,17 +511,44 @@ if __name__ == "__main__":
                             "idle",
                             **merge_status_fields(
                                 throttle,
+                                status_context,
                                 {
                                     "processed_count": 0,
                                     "processed_tasks_total": processed_tasks_total,
                                     "rss_mb": current_rss_mb,
                                     "max_tasks_per_loop": dynamic_max_tasks,
                                     "batch_max_workers": dynamic_batch_workers,
+                                    "report_refresh_requested": report_refresh_requested(),
                                 },
                             ),
                         )
+                    process_report_refresh_requests()
+                    recycle_reason = should_recycle_daemon(
+                        processed_tasks_total=processed_tasks_total,
+                        max_tasks_before_restart=max_tasks_before_restart,
+                        rss_limit_mb=rss_limit_mb,
+                        rss_mb=current_rss_mb,
+                        idle=True,
+                    )
+                    if recycle_reason:
+                        append_heartbeat(
+                            "research_daemon",
+                            "recycling",
+                            summary=(
+                                f"daemon exiting for recycle: reason={recycle_reason}, "
+                                f"processed_tasks_total={processed_tasks_total}, rss_mb={current_rss_mb}"
+                            ),
+                        )
+                        write_status(
+                            "recycling",
+                            reason=recycle_reason,
+                            processed_tasks_total=processed_tasks_total,
+                            rss_mb=current_rss_mb,
+                        )
+                        raise SystemExit(0)
                     try:
-                        status_doc = json.loads(STATUS_PATH.read_text(encoding="utf-8")) if STATUS_PATH.exists() else {}
+                        status_path = _status_path()
+                        status_doc = json.loads(status_path.read_text(encoding="utf-8")) if status_path.exists() else {}
                     except Exception:
                         status_doc = {}
                     maybe_emit_stall_alert(status_doc, cooldown_seconds=300)
