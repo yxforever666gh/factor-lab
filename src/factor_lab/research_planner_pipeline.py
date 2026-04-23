@@ -20,8 +20,13 @@ from factor_lab.research_flow_state import derive_research_flow_state
 from factor_lab.research_opportunity_engine import build_research_opportunities
 from factor_lab.llm_diagnostics import build_llm_diagnostics
 from factor_lab.opportunity_executor import enqueue_opportunities
+from factor_lab.research_attribution import build_research_attribution
 from factor_lab.research_metrics import build_research_metrics
 from factor_lab.agent_briefs import build_planner_agent_brief, build_failure_analyst_brief
+from factor_lab.agent_responses import load_validated_agent_responses
+from factor_lab.decision_impact_report import build_decision_impact_report
+from factor_lab.llm_provider_router import DecisionProviderRouter
+from factor_lab.paths import artifacts_dir, db_path, project_root
 import subprocess
 import sys
 from factor_lab.research_strategy import (
@@ -31,10 +36,31 @@ from factor_lab.research_strategy import (
 )
 
 
-ROOT = Path(__file__).resolve().parents[2]
-DB_PATH = ROOT / "artifacts" / "factor_lab.db"
-PLANNER_FINGERPRINT_PATH = ROOT / "artifacts" / "planner_state_fingerprint.json"
 PLANNER_COOLDOWN_MINUTES = 5
+
+
+def _root_path() -> Path:
+    return project_root()
+
+
+def _artifacts_path() -> Path:
+    return artifacts_dir()
+
+
+def _db_path() -> Path:
+    return db_path()
+
+
+def _planner_fingerprint_path() -> Path:
+    return _artifacts_path() / "planner_state_fingerprint.json"
+
+
+def _live_provider_health_path() -> Path:
+    return _artifacts_path() / "llm_provider_health_live.json"
+
+
+def _observation_provider_health_path() -> Path:
+    return _artifacts_path() / "llm_provider_health.json"
 
 
 def _iso_now() -> str:
@@ -63,9 +89,10 @@ def _planner_fingerprint(snapshot: dict[str, Any], candidate_pool: dict[str, Any
 
 
 def _maybe_skip_pipeline(fingerprint: str) -> dict[str, Any] | None:
-    if not PLANNER_FINGERPRINT_PATH.exists():
+    planner_fingerprint_path = _planner_fingerprint_path()
+    if not planner_fingerprint_path.exists():
         return None
-    state = json.loads(PLANNER_FINGERPRINT_PATH.read_text(encoding="utf-8"))
+    state = json.loads(planner_fingerprint_path.read_text(encoding="utf-8"))
     last_fp = state.get("fingerprint")
     last_run_at = _parse_iso(state.get("updated_at_utc"))
     last_injected = int(state.get("last_injected_count") or 0)
@@ -86,7 +113,9 @@ def _maybe_skip_pipeline(fingerprint: str) -> dict[str, Any] | None:
 
 
 def _write_fingerprint_state(fingerprint: str, injected_count: int) -> None:
-    PLANNER_FINGERPRINT_PATH.write_text(
+    planner_fingerprint_path = _planner_fingerprint_path()
+    planner_fingerprint_path.parent.mkdir(parents=True, exist_ok=True)
+    planner_fingerprint_path.write_text(
         json.dumps(
             {
                 "updated_at_utc": _iso_now(),
@@ -117,26 +146,72 @@ def _active_sticky_medium_horizon_candidates(memory_path: Path) -> list[str]:
     return active
 
 
+def _configured_decision_provider() -> str:
+    return (
+        os.getenv("FACTOR_LAB_DECISION_PROVIDER")
+        or os.getenv("FACTOR_LAB_LLM_PROVIDER")
+        or "heuristic"
+    ).strip().lower()
+
+
+def _live_decision_provider() -> str:
+    return (
+        os.getenv("FACTOR_LAB_LIVE_DECISION_PROVIDER")
+        or _configured_decision_provider()
+    ).strip().lower()
+
+
+def _observation_decision_provider() -> str:
+    return (
+        os.getenv("FACTOR_LAB_OBSERVATION_DECISION_PROVIDER")
+        or _configured_decision_provider()
+    ).strip().lower()
+
+
+def _decision_effective_source(payload: dict[str, Any]) -> str | None:
+    metadata = payload.get("decision_metadata") or {}
+    return metadata.get("effective_source") or metadata.get("source") or payload.get("decision_source")
+
+
 def run_research_planner_pipeline() -> dict[str, Any]:
-    registry_path = ROOT / "artifacts" / "research_space_registry.json"
-    space_map_path = ROOT / "artifacts" / "research_space_map.json"
-    snapshot_path = ROOT / "artifacts" / "research_planner_snapshot.json"
-    candidate_pool_path = ROOT / "artifacts" / "research_candidate_pool.json"
-    branch_plan_path = ROOT / "artifacts" / "research_branch_plan.json"
-    proposal_path = ROOT / "artifacts" / "research_planner_proposal.json"
-    state_snapshot_path = ROOT / "artifacts" / "research_state_snapshot.json"
-    strategy_plan_path = ROOT / "artifacts" / "strategy_plan.json"
-    memory_path = ROOT / "artifacts" / "research_memory.json"
-    validated_path = ROOT / "artifacts" / "research_planner_validated.json"
-    injected_path = ROOT / "artifacts" / "research_planner_injected.json"
-    planner_agent_brief_path = ROOT / "artifacts" / "planner_agent_brief.json"
-    failure_analyst_brief_path = ROOT / "artifacts" / "failure_analyst_brief.json"
-    agent_responses_path = ROOT / "artifacts" / "agent_responses.json"
+    root = _root_path()
+    artifacts = _artifacts_path()
+    db = _db_path()
+    artifacts.mkdir(parents=True, exist_ok=True)
+
+    registry_path = artifacts / "research_space_registry.json"
+    space_map_path = artifacts / "research_space_map.json"
+    snapshot_path = artifacts / "research_planner_snapshot.json"
+    candidate_pool_path = artifacts / "research_candidate_pool.json"
+    branch_plan_path = artifacts / "research_branch_plan.json"
+    proposal_path = artifacts / "research_planner_proposal.json"
+    state_snapshot_path = artifacts / "research_state_snapshot.json"
+    strategy_plan_path = artifacts / "strategy_plan.json"
+    memory_path = artifacts / "research_memory.json"
+    validated_path = artifacts / "research_planner_validated.json"
+    injected_path = artifacts / "research_planner_injected.json"
+    planner_agent_brief_path = artifacts / "planner_agent_brief.json"
+    failure_analyst_brief_path = artifacts / "failure_analyst_brief.json"
+    agent_responses_path = artifacts / "agent_responses.json"
+    decision_impact_path = artifacts / "decision_impact_report.json"
+    research_flow_state_path = artifacts / "research_flow_state.json"
+    research_opportunities_path = artifacts / "research_opportunities.json"
+    opportunity_execution_plan_path = artifacts / "opportunity_execution_plan.json"
+    llm_diagnostics_path = artifacts / "llm_diagnostics.json"
+    research_learning_path = artifacts / "research_learning.json"
+    candidate_generation_plan_path = artifacts / "candidate_generation_plan.json"
+    promotion_scorecard_path = artifacts / "promotion_scorecard.json"
+    research_attribution_path = artifacts / "research_attribution.json"
+    factor_quality_observation_report_path = artifacts / "factor_quality_observation_report.md"
+    live_provider_health_path = _live_provider_health_path()
+    observation_provider_health_path = _observation_provider_health_path()
+    live_decision_provider = _live_decision_provider()
+    observation_decision_provider = _observation_decision_provider()
 
     with ThreadPoolExecutor(max_workers=3) as executor:
-        registry_future = executor.submit(build_research_space_registry, DB_PATH, registry_path)
-        space_map_future = executor.submit(build_research_space_map, DB_PATH, space_map_path)
-        snapshot_future = executor.submit(build_research_planner_snapshot, DB_PATH, snapshot_path)
+        registry_future = executor.submit(build_research_space_registry, db, registry_path)
+        space_map_future = executor.submit(build_research_space_map, db, space_map_path)
+        snapshot_future = executor.submit(build_research_planner_snapshot, db, snapshot_path)
         registry = registry_future.result()
         space_map = space_map_future.result()
         snapshot = snapshot_future.result()
@@ -161,59 +236,42 @@ def run_research_planner_pipeline() -> dict[str, Any]:
         recovery_used = True
     proposal = build_research_plan(snapshot_path, candidate_pool_path, proposal_path, branch_plan_path)
     state_snapshot = build_research_state_snapshot(
-        DB_PATH,
+        db,
         snapshot_path,
         candidate_pool_path,
         proposal_path,
         state_snapshot_path,
         memory_path,
     )
-    # Optional structured agent responses can be dropped into artifacts/planner_agent_response.json
-    # and artifacts/failure_analyst_response.json; we merge them here when present.
-    if os.getenv("FACTOR_LAB_ENABLE_BRIEF_RUNNER", "1").strip().lower() in {"1", "true", "yes", "on"}:
-        subprocess.run(
-            [sys.executable, str(ROOT / "scripts" / "run_agent_briefs.py")],
-            cwd=ROOT,
-            capture_output=True,
-            text=True,
-        )
-    agent_responses_payload = {
-        "planner": json.loads((ROOT / "artifacts" / "planner_agent_response.json").read_text(encoding="utf-8")) if (ROOT / "artifacts" / "planner_agent_response.json").exists() else {},
-        "failure_analyst": json.loads((ROOT / "artifacts" / "failure_analyst_response.json").read_text(encoding="utf-8")) if (ROOT / "artifacts" / "failure_analyst_response.json").exists() else {},
-    }
-    agent_responses_path.write_text(json.dumps(agent_responses_payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    strategy_plan = build_strategy_plan(state_snapshot_path, proposal_path, strategy_plan_path, branch_plan_path, agent_responses_path)
-    validated = validate_research_planner_proposal(proposal_path, validated_path)
-    injected = apply_strategy_plan(validated_path, strategy_plan_path, injected_path, memory_path, DB_PATH)
     research_flow_state = derive_research_flow_state(
         snapshot=snapshot,
         candidate_pool=candidate_pool,
         recovery_used=recovery_used,
-        injected_count=injected.get("injected_count", 0),
+        injected_count=0,
     )
-    (ROOT / "artifacts" / "research_flow_state.json").write_text(
+    research_flow_state_path.write_text(
         json.dumps(research_flow_state, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
-    research_opportunities = build_research_opportunities(snapshot_path, ROOT / "artifacts" / "research_opportunities.json")
+    research_opportunities = build_research_opportunities(snapshot_path, research_opportunities_path)
     # Autonomy knob: allow more scheduled opportunities per planner loop.
     # Keep conservative by default but not artificially capped.
     opportunity_limit = int(os.getenv("RESEARCH_OPPORTUNITY_ENQUEUE_LIMIT", "4"))
     opportunity_limit = max(1, min(8, opportunity_limit))
     opportunity_execution = enqueue_opportunities(
-        ROOT / "artifacts" / "research_opportunities.json",
-        ROOT / "artifacts" / "opportunity_execution_plan.json",
-        DB_PATH,
+        research_opportunities_path,
+        opportunity_execution_plan_path,
+        db,
         limit=opportunity_limit,
         queue_aware=True,
     )
-    llm_diagnostics = build_llm_diagnostics(snapshot_path, ROOT / "artifacts" / "research_opportunities.json", ROOT / "artifacts" / "llm_diagnostics.json")
+    llm_diagnostics = build_llm_diagnostics(snapshot_path, research_opportunities_path, llm_diagnostics_path)
     planner_agent_brief = build_planner_agent_brief(
         snapshot=snapshot,
         candidate_pool=candidate_pool,
         branch_plan=branch_plan,
         state_snapshot=state_snapshot,
-        strategy_plan=strategy_plan,
+        strategy_plan={},
         output_path=planner_agent_brief_path,
     )
     failure_analyst_brief = build_failure_analyst_brief(
@@ -222,12 +280,79 @@ def run_research_planner_pipeline() -> dict[str, Any]:
         llm_diagnostics=llm_diagnostics,
         output_path=failure_analyst_brief_path,
     )
+    live_provider_health = DecisionProviderRouter(provider=live_decision_provider).healthcheck(
+        output_path=live_provider_health_path,
+        probe=False,
+    )
+    observation_provider_health = DecisionProviderRouter(provider=observation_decision_provider).healthcheck(
+        output_path=observation_provider_health_path
+    )
+    # Enhance provider_health with explicit diagnostics for gray-mode switching
+    provider_health = {
+        "live": {
+            **live_provider_health,
+            "normalized_provider": live_provider_health.get("normalized_provider"),
+            "provider_class": live_provider_health.get("provider_class"),
+        },
+        "observation": {
+            **observation_provider_health,
+            "normalized_provider": observation_provider_health.get("normalized_provider"),
+            "provider_class": observation_provider_health.get("provider_class"),
+        },
+    }
+    brief_runner_result: dict[str, Any] = {"enabled": False}
+    if os.getenv("FACTOR_LAB_ENABLE_BRIEF_RUNNER", "1").strip().lower() in {"1", "true", "yes", "on"}:
+        completed = subprocess.run(
+            [sys.executable, str(root / "scripts" / "run_agent_briefs.py"), "--provider", live_decision_provider],
+            cwd=root,
+            capture_output=True,
+            text=True,
+        )
+        brief_runner_result = {
+            "enabled": True,
+            "provider": live_decision_provider,
+            "returncode": completed.returncode,
+            "stdout": (completed.stdout or "").strip(),
+            "stderr": (completed.stderr or "").strip(),
+        }
+    agent_responses_payload = load_validated_agent_responses(artifacts)
+    agent_responses_path.write_text(json.dumps(agent_responses_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    decision_impact = build_decision_impact_report(output_path=decision_impact_path)
+    
+    # Determine gray_mode marker when providers differ
+    gray_mode = None
+    live_normalized = provider_health["live"].get("normalized_provider")
+    observation_normalized = provider_health["observation"].get("normalized_provider")
+    if live_normalized and observation_normalized and live_normalized != observation_normalized:
+        gray_mode = "observation_only"
+    strategy_plan = build_strategy_plan(state_snapshot_path, proposal_path, strategy_plan_path, branch_plan_path, agent_responses_path)
+    validated = validate_research_planner_proposal(proposal_path, validated_path)
+    injected = apply_strategy_plan(validated_path, strategy_plan_path, injected_path, memory_path, db)
+    research_flow_state = derive_research_flow_state(
+        snapshot=snapshot,
+        candidate_pool=candidate_pool,
+        recovery_used=recovery_used,
+        injected_count=injected.get("injected_count", 0),
+    )
+    research_flow_state_path.write_text(
+        json.dumps(research_flow_state, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
     research_metrics = build_research_metrics(
-        db_path=DB_PATH,
+        db_path=db,
         memory_path=memory_path,
-        learning_path=ROOT / "artifacts" / "research_learning.json",
+        learning_path=research_learning_path,
         candidate_pool_path=candidate_pool_path,
-        output_path=ROOT / "artifacts" / "research_metrics.json",
+        output_path=artifacts / "research_metrics.json",
+    )
+    research_attribution = build_research_attribution(
+        memory_path=memory_path,
+        learning_path=research_learning_path,
+        candidate_pool_path=candidate_pool_path,
+        candidate_generation_plan_path=candidate_generation_plan_path,
+        promotion_scorecard_path=promotion_scorecard_path,
+        output_path=research_attribution_path,
+        report_path=factor_quality_observation_report_path,
     )
 
     result = {
@@ -258,6 +383,17 @@ def run_research_planner_pipeline() -> dict[str, Any]:
             "path": str(agent_responses_path),
             "planner_present": bool(agent_responses_payload.get("planner")),
             "failure_analyst_present": bool(agent_responses_payload.get("failure_analyst")),
+            "planner_errors": agent_responses_payload.get("planner_errors") or [],
+            "failure_analyst_errors": agent_responses_payload.get("failure_analyst_errors") or [],
+            "configured_live_provider": live_decision_provider,
+            "configured_observation_provider": observation_decision_provider,
+            "planner_source": _decision_effective_source(agent_responses_payload.get("planner") or {}),
+            "failure_analyst_source": _decision_effective_source(agent_responses_payload.get("failure_analyst") or {}),
+            "brief_runner": brief_runner_result,
+            "provider_health": provider_health,
+            "gray_mode": gray_mode,
+            "decision_impact_path": str(decision_impact_path),
+            "decision_impact_changed": bool((decision_impact.get("planner") or {}).get("changed") or (decision_impact.get("failure_analyst") or {}).get("changed")),
         },
         "failure_analyst_brief": {
             "path": str(failure_analyst_brief_path),
@@ -265,6 +401,7 @@ def run_research_planner_pipeline() -> dict[str, Any]:
             "recent_failed_or_risky_task_count": len((failure_analyst_brief.get("inputs") or {}).get("recent_failed_or_risky_tasks") or []),
         },
         "research_metrics": research_metrics,
+        "research_attribution": research_attribution,
         "state_snapshot_open_questions": len(state_snapshot.get("open_questions", [])),
     }
     _write_fingerprint_state(fingerprint, injected.get("injected_count", 0))
