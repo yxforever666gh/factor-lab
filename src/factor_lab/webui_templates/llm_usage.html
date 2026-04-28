@@ -87,6 +87,26 @@
     <div class="muted">暂无 agent token 统计。</div>
     {% endif %}
   </section>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>按 Provider / Profile</h2>
+    {% if usage_summary.by_provider_rows %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Provider / Profile</th><th>Rows</th><th>total_tokens</th><th>cached_tokens</th><th>cost_usd</th></tr></thead>
+        <tbody>
+        {% for row in usage_summary.by_provider_rows %}
+          <tr><td>{{ row.name }}</td><td class="num">{{ row.rows }}</td><td class="num">{{ row.total_tokens }}</td><td class="num">{{ row.cached_tokens }}</td><td class="num">${{ '%.6f'|format(row.estimated_cost_usd) }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="muted">暂无 provider token 统计。</div>
+    {% endif %}
+  </section>
   <section class="card">
     <h2>按 Model</h2>
     {% if usage_summary.by_model_rows %}

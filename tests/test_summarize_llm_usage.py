@@ -13,6 +13,7 @@ def test_summarize_llm_usage_reports_totals(tmp_path):
                     "created_at_utc": "2026-04-28T00:00:00+00:00",
                     "success": True,
                     "decision_type": "planner",
+                    "profile_name": "ai-continue",
                     "model": "gpt-5.5",
                     "estimated_user_prompt_tokens_4c": 100,
                     "usage": {
@@ -28,6 +29,7 @@ def test_summarize_llm_usage_reports_totals(tmp_path):
                     "created_at_utc": "2026-04-28T00:01:00+00:00",
                     "success": False,
                     "decision_type": "failure_analyst",
+                    "profile_name": "nowcoding",
                     "model": "gpt-5.5",
                     "estimated_user_prompt_tokens_4c": 200,
                     "usage": {"prompt_tokens": None, "completion_tokens": None, "total_tokens": None},
@@ -57,3 +59,6 @@ def test_summarize_llm_usage_reports_totals(tmp_path):
     assert "estimated_user_prompt_tokens_4c=300" in result.stdout
     assert "planner total_tokens=15 cached_tokens=7 cost_usd=0.000066 rows=1" in result.stdout
     assert "gpt-5.5 total_tokens=15 cached_tokens=7 cost_usd=0.000066 rows=2" in result.stdout
+    assert "by_provider:" in result.stdout
+    assert "ai-continue total_tokens=15 cached_tokens=7 cost_usd=0.000066 rows=1" in result.stdout
+    assert "nowcoding total_tokens=0 cached_tokens=0 cost_usd=0.000000 rows=1" in result.stdout

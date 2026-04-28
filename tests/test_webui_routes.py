@@ -70,6 +70,8 @@ def test_llm_usage_page_renders_24h_ledger_summary_and_chart(monkeypatch, tmp_pa
     assert "uncached_prompt_tokens_missing_rows" in response.text
     assert "estimated_cost_usd" in response.text
     assert "cost_usd" in response.text
+    assert "按 Provider / Profile" in response.text
+    assert "ai-continue" in response.text
     assert "$0.000066" in response.text
     assert "7" in response.text
     assert "15" in response.text

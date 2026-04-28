@@ -135,6 +135,13 @@ def _enabled_profile_names(profiles: list[dict[str, Any]]) -> list[str]:
     return names
 
 
+def _first_enabled_profile(profiles: list[dict[str, Any]]) -> dict[str, Any]:
+    for profile in profiles:
+        if _coerce_boolish(profile.get("enabled", True), default=True):
+            return profile
+    return profiles[0] if profiles else {}
+
+
 LLM_API_FORMAT_OPTIONS = [
     {"value": "openai_responses", "label": "OpenAI Responses"},
     {"value": "openai", "label": "OpenAI Chat Completions"},
@@ -231,10 +238,13 @@ def _profiles_from_form(form: dict[str, str], existing_profiles: list[dict[str, 
         for profile in profiles:
             profile.pop("order", None)
             profile.pop("_index", None)
-        fallback_order = ",".join(profile["name"] for profile in profiles)
+        fallback_order = ",".join(profile["name"] for profile in profiles if _coerce_boolish(profile.get("enabled", True), default=True))
     else:
-        fallback_order = (form.get("fallback_order") or ",".join(profile["name"] for profile in profiles)).strip()
+        fallback_order = (form.get("fallback_order") or ",".join(profile["name"] for profile in profiles if _coerce_boolish(profile.get("enabled", True), default=True))).strip()
         profiles = _ordered_profile_list(profiles, fallback_order)
+    enabled_names = _enabled_profile_names(profiles)
+    enabled_set = set(enabled_names)
+    fallback_order = ",".join(name for name in _split_csv(fallback_order) if name in enabled_set) or ",".join(enabled_names)
     return profiles, fallback_order
 
 
@@ -455,7 +465,7 @@ def load_llm_settings() -> dict[str, Any]:
     values = _read_env_values()
     merged = {key: values.get(key) or os.environ.get(key) or "" for key in [*LLM_ENV_KEYS, *LLM_PROFILE_ENV_KEYS]}
     profiles, fallback_order = _load_llm_profiles(values)
-    first_profile = profiles[0] if profiles else {}
+    first_profile = _first_enabled_profile(profiles) if profiles else {}
     api_key_configured = any(bool(profile.get("api_key_configured")) for profile in profiles)
     return {
         "decision_provider": merged.get("FACTOR_LAB_DECISION_PROVIDER") or "real_llm",
@@ -502,7 +512,7 @@ def save_llm_settings(form: dict[str, str]) -> dict[str, Any]:
             "enabled": True,
         }]
         fallback_order = "default"
-    primary = profiles[0] if profiles else {"base_url": "", "model": "", "api_key": ""}
+    primary = _first_enabled_profile(profiles) if profiles else {"base_url": "", "model": "", "api_key": ""}
     requested: dict[str, str] = {}
     for form_key, env_key in LLM_FORM_TO_ENV.items():
         requested[env_key] = (form.get(form_key) or "").strip()
@@ -1938,6 +1948,7 @@ def _summarize_llm_usage(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "estimated_user_prompt_tokens_4c": 0,
         "by_decision_type": {},
         "by_model": {},
+        "by_provider": {},
     }
     for row in rows:
         usage = row.get("usage") or {}
@@ -1966,6 +1977,7 @@ def _summarize_llm_usage(rows: list[dict[str, Any]]) -> dict[str, Any]:
         summary["estimated_user_prompt_tokens_4c"] += estimated
         decision_type = str(row.get("decision_type") or "unknown")
         model = str(row.get("model") or "unknown")
+        provider = str(row.get("profile_name") or row.get("provider") or "unknown")
         decision_bucket = summary["by_decision_type"].setdefault(decision_type, {"rows": 0, "total_tokens": 0, "cached_tokens": 0, "estimated_cost_usd": 0.0})
         decision_bucket["rows"] += 1
         decision_bucket["total_tokens"] += total_tokens
@@ -1976,11 +1988,19 @@ def _summarize_llm_usage(rows: list[dict[str, Any]]) -> dict[str, Any]:
         model_bucket["total_tokens"] += total_tokens
         model_bucket["cached_tokens"] += cached_tokens
         model_bucket["estimated_cost_usd"] += estimated_cost_usd
+        provider_bucket = summary["by_provider"].setdefault(provider, {"rows": 0, "total_tokens": 0, "cached_tokens": 0, "estimated_cost_usd": 0.0})
+        provider_bucket["rows"] += 1
+        provider_bucket["total_tokens"] += total_tokens
+        provider_bucket["cached_tokens"] += cached_tokens
+        provider_bucket["estimated_cost_usd"] += estimated_cost_usd
     summary["estimated_cost_usd"] = round(summary["estimated_cost_usd"], 6)
-    for bucket in list(summary["by_decision_type"].values()) + list(summary["by_model"].values()):
+    for bucket in list(summary["by_decision_type"].values()) + list(summary["by_model"].values()) + list(summary["by_provider"].values()):
         bucket["estimated_cost_usd"] = round(bucket["estimated_cost_usd"], 6)
     summary["by_decision_type_rows"] = [
         {"name": name, **value} for name, value in sorted(summary["by_decision_type"].items())
+    ]
+    summary["by_provider_rows"] = [
+        {"name": name, **value} for name, value in sorted(summary["by_provider"].items())
     ]
     summary["by_model_rows"] = [
         {"name": name, **value} for name, value in sorted(summary["by_model"].items())

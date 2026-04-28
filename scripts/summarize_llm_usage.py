@@ -71,6 +71,7 @@ def _summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "estimated_user_prompt_tokens_4c": 0,
         "by_decision_type": defaultdict(lambda: {"rows": 0, "total_tokens": 0, "cached_tokens": 0, "estimated_cost_usd": 0.0}),
         "by_model": defaultdict(lambda: {"rows": 0, "total_tokens": 0, "cached_tokens": 0, "estimated_cost_usd": 0.0}),
+        "by_provider": defaultdict(lambda: {"rows": 0, "total_tokens": 0, "cached_tokens": 0, "estimated_cost_usd": 0.0}),
     }
     for row in rows:
         usage = row.get("usage") or {}
@@ -99,6 +100,7 @@ def _summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
         summary["estimated_user_prompt_tokens_4c"] += estimated
         decision_type = str(row.get("decision_type") or "unknown")
         model = str(row.get("model") or "unknown")
+        provider = str(row.get("profile_name") or row.get("provider") or "unknown")
         summary["by_decision_type"][decision_type]["rows"] += 1
         summary["by_decision_type"][decision_type]["total_tokens"] += total_tokens
         summary["by_decision_type"][decision_type]["cached_tokens"] += cached_tokens
@@ -107,8 +109,12 @@ def _summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
         summary["by_model"][model]["total_tokens"] += total_tokens
         summary["by_model"][model]["cached_tokens"] += cached_tokens
         summary["by_model"][model]["estimated_cost_usd"] += estimated_cost_usd
+        summary["by_provider"][provider]["rows"] += 1
+        summary["by_provider"][provider]["total_tokens"] += total_tokens
+        summary["by_provider"][provider]["cached_tokens"] += cached_tokens
+        summary["by_provider"][provider]["estimated_cost_usd"] += estimated_cost_usd
     summary["estimated_cost_usd"] = round(summary["estimated_cost_usd"], 6)
-    for bucket in list(summary["by_decision_type"].values()) + list(summary["by_model"].values()):
+    for bucket in list(summary["by_decision_type"].values()) + list(summary["by_model"].values()) + list(summary["by_provider"].values()):
         bucket["estimated_cost_usd"] = round(bucket["estimated_cost_usd"], 6)
     return summary
 
@@ -139,6 +145,9 @@ def main() -> int:
     print(f"estimated_user_prompt_tokens_4c={summary['estimated_user_prompt_tokens_4c']}")
     print("by_decision_type:")
     for key, value in sorted(summary["by_decision_type"].items()):
+        print(f"  {key} total_tokens={value['total_tokens']} cached_tokens={value['cached_tokens']} cost_usd={value['estimated_cost_usd']:.6f} rows={value['rows']}")
+    print("by_provider:")
+    for key, value in sorted(summary["by_provider"].items()):
         print(f"  {key} total_tokens={value['total_tokens']} cached_tokens={value['cached_tokens']} cost_usd={value['estimated_cost_usd']:.6f} rows={value['rows']}")
     print("by_model:")
     for key, value in sorted(summary["by_model"].items()):

@@ -265,6 +265,39 @@ def test_save_llm_settings_uses_numeric_order_fields_when_present(tmp_path: Path
     assert [profile["name"] for profile in settings["profiles"]] == ["backup", "primary"]
 
 
+def test_save_llm_settings_uses_first_enabled_profile_for_legacy_and_fallback_order(tmp_path: Path, monkeypatch):
+    env_file = tmp_path / ".env"
+    env_file.write_text("WEB_UI_PORT=8765\n", encoding="utf-8")
+    monkeypatch.setattr(webui_app, "env_file", lambda: env_file)
+    for key in [*webui_app.LLM_ENV_KEYS, *webui_app.LLM_PROFILE_ENV_KEYS]:
+        monkeypatch.delenv(key, raising=False)
+
+    settings = webui_app.save_llm_settings(
+        {
+            "decision_provider": "real_llm",
+            "live_decision_provider": "real_llm",
+            "observation_decision_provider": "real_llm",
+            "profile_order_0": "1",
+            "profile_name_0": "disabled-primary",
+            "profile_base_url_0": "https://disabled.test/v1",
+            "profile_model_0": "disabled-model",
+            "profile_api_key_0": "disabled-secret",
+            "profile_order_1": "2",
+            "profile_name_1": "backup",
+            "profile_base_url_1": "https://backup.test/v1",
+            "profile_model_1": "backup-model",
+            "profile_api_key_1": "backup-secret",
+            "profile_enabled_1": "on",
+        }
+    )
+
+    text = env_file.read_text(encoding="utf-8")
+    assert "FACTOR_LAB_LLM_FALLBACK_ORDER=backup" in text
+    assert "FACTOR_LAB_LLM_BASE_URL=https://backup.test/v1" in text
+    assert "FACTOR_LAB_LLM_MODEL=backup-model" in text
+    assert settings["base_url"] == "https://backup.test/v1"
+
+
 def test_save_llm_settings_syncs_agent_role_fallback_when_roles_used_old_global_order(tmp_path: Path, monkeypatch):
     env_file = tmp_path / ".env"
     roles = [
