@@ -6,6 +6,13 @@
   <span class="muted">WebUI 当前进程已立即加载新配置；后台 daemon 已自动重启{% if restart_ok %}并生效{% elif restart_failed %}失败，请稍后在操作页检查{% endif %}。</span>
 </section>
 {% endif %}
+{% if test_result %}
+<section class="card" style="margin-bottom:18px; border-color: {% if test_result.ok %}var(--good){% else %}var(--bad){% endif %};">
+  <strong class="{% if test_result.ok %}good{% else %}bad{% endif %}">{{ test_result.message }}</strong>
+  <div class="muted" style="margin-top:6px;">Model: {{ test_result.model or '-' }} · API: {{ test_result.api_format or '-' }}{% if test_result.endpoint %} · Endpoint: <span class="text-break">{{ test_result.endpoint }}</span>{% endif %}</div>
+  {% if test_result.error %}<pre class="text-break" style="white-space:pre-wrap;">{{ test_result.error }}</pre>{% endif %}
+</section>
+{% endif %}
 
 <form method="post" action="/settings" style="display:grid; gap:18px;">
   <div class="grid cols-2">
@@ -58,7 +65,7 @@
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>顺序</th><th>启用</th><th>名称</th><th>Base URL</th><th>Model</th><th>API Key</th><th>当前 Key</th></tr>
+          <tr><th>顺序</th><th>启用</th><th>名称</th><th>Base URL</th><th>Model</th><th>API 格式</th><th>API Key</th><th>当前 Key</th><th>测试</th></tr>
         </thead>
         <tbody>
           {% for profile in profile_slots %}
@@ -67,9 +74,17 @@
             <td><input type="checkbox" name="profile_enabled_{{ loop.index0 }}" {% if profile.enabled %}checked{% endif %}></td>
             <td><input name="profile_name_{{ loop.index0 }}" value="{{ profile.name }}" placeholder="primary" style="width:140px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);"></td>
             <td><input name="profile_base_url_{{ loop.index0 }}" value="{{ profile.base_url }}" placeholder="https://api.openai.com/v1" style="width:260px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);"></td>
-            <td><input name="profile_model_{{ loop.index0 }}" value="{{ profile.model }}" placeholder="gpt-4o / claude-opus-4-7" style="width:190px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);"></td>
+            <td><input name="profile_model_{{ loop.index0 }}" value="{{ profile.model }}" placeholder="gpt-5.5 / opus4.7" style="width:190px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);"></td>
+            <td>
+              <select name="profile_api_format_{{ loop.index0 }}" style="width:190px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);">
+                {% for option in api_format_options %}
+                <option value="{{ option.value }}" {% if (profile.api_format or 'openai_responses') == option.value %}selected{% endif %}>{{ option.label }}</option>
+                {% endfor %}
+              </select>
+            </td>
             <td><input type="password" name="profile_api_key_{{ loop.index0 }}" value="" autocomplete="new-password" placeholder="留空保留" style="width:180px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);"></td>
             <td>{{ profile.api_key_masked or '未配置' }}</td>
+            <td><button type="submit" formaction="/settings/test-model" formmethod="post" name="profile_test_index" value="{{ loop.index0 }}" style="padding:8px 10px; border:0; border-radius:10px; background:var(--panel-2); color:var(--link); border:1px solid var(--border); cursor:pointer;">测试模型</button></td>
           </tr>
           {% endfor %}
         </tbody>
@@ -82,7 +97,7 @@
     <h2>当前 fallback 链</h2>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>顺序</th><th>名称</th><th>Base URL</th><th>Model</th><th>启用</th><th>Key</th></tr></thead>
+        <thead><tr><th>顺序</th><th>名称</th><th>Base URL</th><th>Model</th><th>API 格式</th><th>启用</th><th>Key</th></tr></thead>
         <tbody>
           {% for profile in settings.profiles %}
           <tr>
@@ -90,6 +105,7 @@
             <td>{{ profile.name }}</td>
             <td class="text-break">{{ profile.base_url }}</td>
             <td>{{ profile.model }}</td>
+            <td>{{ profile.api_format or '-' }}</td>
             <td>{{ '是' if profile.enabled else '否' }}</td>
             <td>{{ profile.api_key_masked }}</td>
           </tr>

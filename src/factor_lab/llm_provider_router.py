@@ -14,6 +14,7 @@ from uuid import uuid4
 from factor_lab.agent_roles import AgentRoleConfig, load_agent_roles, select_agent_role
 from factor_lab.data_quality_decision_engine import build_data_quality_response
 from factor_lab.failure_analyst_engine import build_failure_response
+from factor_lab.llm_pricing import estimate_llm_cost_usd
 from factor_lab.llm_response_metadata import build_response_metadata
 from factor_lab.llm_schema_validation import validate_decision_payload
 from factor_lab.paths import artifacts_dir, env_file, project_root
@@ -1134,13 +1135,54 @@ class DecisionProviderRouter:
         except (TypeError, ValueError):
             return None
 
+    def _first_int_or_none(self, *values: Any) -> int | None:
+        for value in values:
+            coerced = self._coerce_int_or_none(value)
+            if coerced is not None:
+                return coerced
+        return None
+
     def _extract_llm_usage(self, raw: dict[str, Any], api_format: str) -> dict[str, Any]:
         usage = raw.get("usage") or {}
         if not isinstance(usage, dict):
             usage = {}
-        prompt_tokens = self._coerce_int_or_none(usage.get("prompt_tokens") or usage.get("input_tokens"))
-        completion_tokens = self._coerce_int_or_none(usage.get("completion_tokens") or usage.get("output_tokens"))
+        prompt_tokens = self._first_int_or_none(usage.get("prompt_tokens"), usage.get("input_tokens"))
+        completion_tokens = self._first_int_or_none(usage.get("completion_tokens"), usage.get("output_tokens"))
         total_tokens = self._coerce_int_or_none(usage.get("total_tokens"))
+        prompt_details = usage.get("prompt_tokens_details") if isinstance(usage.get("prompt_tokens_details"), dict) else {}
+        input_details = usage.get("input_tokens_details") if isinstance(usage.get("input_tokens_details"), dict) else {}
+        cached_tokens = self._first_int_or_none(
+            prompt_details.get("cached_tokens"),
+            prompt_details.get("cache_read_tokens"),
+            prompt_details.get("cache_read_input_tokens"),
+            prompt_details.get("cached_input_tokens"),
+            input_details.get("cached_tokens"),
+            input_details.get("cache_read_tokens"),
+            input_details.get("cache_read_input_tokens"),
+            input_details.get("cached_input_tokens"),
+            usage.get("cache_read_input_tokens"),
+            usage.get("cache_read_tokens"),
+            usage.get("cached_tokens"),
+            usage.get("cached_input_tokens"),
+            usage.get("cached_content_token_count"),
+        )
+        cache_creation_tokens = self._first_int_or_none(
+            usage.get("cache_creation_input_tokens"),
+            usage.get("cache_creation_tokens"),
+            usage.get("cache_write_input_tokens"),
+            usage.get("cache_write_tokens"),
+            input_details.get("cache_creation_tokens"),
+            input_details.get("cache_creation_input_tokens"),
+            input_details.get("cache_write_input_tokens"),
+            input_details.get("cache_write_tokens"),
+            prompt_details.get("cache_creation_tokens"),
+            prompt_details.get("cache_creation_input_tokens"),
+            prompt_details.get("cache_write_input_tokens"),
+            prompt_details.get("cache_write_tokens"),
+        )
+        uncached_prompt_tokens = None
+        if prompt_tokens is not None and cached_tokens is not None:
+            uncached_prompt_tokens = max(prompt_tokens - cached_tokens, 0)
         if total_tokens is None and prompt_tokens is not None and completion_tokens is not None:
             total_tokens = prompt_tokens + completion_tokens
         if prompt_tokens is None and completion_tokens is None and total_tokens is None:
@@ -1154,6 +1196,9 @@ class DecisionProviderRouter:
             "prompt_tokens": prompt_tokens,
             "completion_tokens": completion_tokens,
             "total_tokens": total_tokens,
+            "cached_tokens": cached_tokens,
+            "cache_creation_tokens": cache_creation_tokens,
+            "uncached_prompt_tokens": uncached_prompt_tokens,
             "usage_source": source,
             "raw_usage": usage,
         }
@@ -1186,6 +1231,7 @@ class DecisionProviderRouter:
         error_type: str | None = None,
         error_message: str | None = None,
     ) -> dict[str, Any]:
+        cost = estimate_llm_cost_usd(profile.get("model") or self.model, usage)
         return {
             "created_at_utc": datetime.now(timezone.utc).isoformat(),
             "success": success,
@@ -1204,8 +1250,14 @@ class DecisionProviderRouter:
                 "prompt_tokens": usage.get("prompt_tokens"),
                 "completion_tokens": usage.get("completion_tokens"),
                 "total_tokens": usage.get("total_tokens"),
+                "cached_tokens": usage.get("cached_tokens"),
+                "cache_creation_tokens": usage.get("cache_creation_tokens"),
+                "uncached_prompt_tokens": usage.get("uncached_prompt_tokens"),
                 "usage_source": usage.get("usage_source"),
+                "raw_usage": usage.get("raw_usage"),
             },
+            "cost": cost,
+            "estimated_cost_usd": cost.get("estimated_cost_usd"),
             "latency_ms": latency_ms,
             "error_type": error_type,
             "error_message": error_message,
@@ -1406,6 +1458,7 @@ class DecisionProviderRouter:
         if not content:
             raise RuntimeError("no content returned")
         usage = self._extract_llm_usage(raw, api_format)
+        cost = estimate_llm_cost_usd(model, usage)
         latency_ms = int((time.perf_counter() - started) * 1000)
         payload = self._parse_json_content(content)
         payload.setdefault("schema_version", self._decision_schema_version(decision_type))
@@ -1414,6 +1467,7 @@ class DecisionProviderRouter:
         payload.setdefault("decision_context_id", context.get("context_id"))
         payload.setdefault("real_llm_prompt_meta", prompt_meta)
         payload.setdefault("real_llm_usage", usage)
+        payload.setdefault("real_llm_cost", cost)
         self._try_append_llm_usage_ledger(
             self._build_llm_usage_ledger_row(
                 success=True,

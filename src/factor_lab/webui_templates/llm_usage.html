@@ -1,0 +1,157 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-3">
+  <section class="card">
+    <h2>调用数</h2>
+    <div style="font-size:34px; font-weight:700;">{{ usage_summary.rows }}</div>
+    <div class="muted">最近 24h · {{ recent_rows|length }} 条 ledger 记录 · 截止 {{ usage_generated_at }} {{ usage_timezone }}</div>
+    <div style="margin-top:10px;">
+      <span class="pill good">成功 {{ usage_summary.success }}</span>
+      <span class="pill bad">失败 {{ usage_summary.failed }}</span>
+    </div>
+  </section>
+  <section class="card">
+    <h2>Provider Token</h2>
+    <table>
+      <tbody>
+        <tr><th>prompt_tokens</th><td class="num">{{ usage_summary.prompt_tokens }}</td></tr>
+        <tr><th>cached_tokens</th><td class="num">{{ usage_summary.cached_tokens }}</td></tr>
+        <tr><th>cached_tokens_missing_rows</th><td class="num">{{ usage_summary.cached_tokens_missing_rows }}</td></tr>
+        <tr><th>cache_creation_tokens</th><td class="num">{{ usage_summary.cache_creation_tokens }}</td></tr>
+        <tr><th>cache_creation_tokens_missing_rows</th><td class="num">{{ usage_summary.cache_creation_tokens_missing_rows }}</td></tr>
+        <tr><th>uncached_prompt_tokens</th><td class="num">{{ usage_summary.uncached_prompt_tokens }}</td></tr>
+        <tr><th>uncached_prompt_tokens_missing_rows</th><td class="num">{{ usage_summary.uncached_prompt_tokens_missing_rows }}</td></tr>
+        <tr><th>completion_tokens</th><td class="num">{{ usage_summary.completion_tokens }}</td></tr>
+        <tr><th>total_tokens</th><td class="num">{{ usage_summary.total_tokens }}</td></tr>
+        <tr><th>estimated_cost_usd</th><td class="num">${{ '%.6f'|format(usage_summary.estimated_cost_usd) }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2>本地估算</h2>
+    <table>
+      <tbody>
+        <tr><th>estimated_user_prompt_tokens_4c</th><td class="num">{{ usage_summary.estimated_user_prompt_tokens_4c }}</td></tr>
+        <tr><th>Ledger</th><td class="text-break">{{ ledger_path }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<section class="card" style="margin-top:18px;">
+  <h2>Token 趋势图（最近 24h）</h2>
+  <div class="muted" style="margin-bottom:10px;">按本机时间 {{ usage_timezone }} 分小时聚合最近 24h 的 provider total_tokens；tooltip 同时显示 cached_tokens；无 usage 的失败调用只计入调用数，不计入 token。</div>
+  <svg id="llm-usage-chart" viewBox="0 0 620 170" role="img" aria-label="最近 24h LLM token total_tokens 柱状图" style="width:100%; height:260px; background:var(--panel-2); border:1px solid var(--border); border-radius:12px; padding:10px;">
+    <line x1="35" y1="125" x2="605" y2="125" stroke="#2b3765" />
+    <line x1="35" y1="20" x2="35" y2="125" stroke="#2b3765" />
+    {% for bucket in usage_chart %}
+      {% set x = 42 + loop.index0 * 23 %}
+      {% set h = bucket.height_pct if bucket.height_pct > 2 else (2 if bucket.total_tokens > 0 else 0) %}
+      {% set y = 125 - h %}
+      <rect x="{{ x }}" y="{{ y }}" width="14" height="{{ h }}" fill="#84a8ff">
+        <title>{{ bucket.full_label }} total_tokens={{ bucket.total_tokens }} cached_tokens={{ bucket.cached_tokens }} cost=${{ '%.6f'|format(bucket.estimated_cost_usd) }} calls={{ bucket.rows }}</title>
+      </rect>
+      {% if loop.index0 % 4 == 0 %}
+        <text x="{{ x - 4 }}" y="145" fill="#9aa7d1" font-size="9" transform="rotate(45 {{ x - 4 }} 145)">{{ bucket.label }}</text>
+      {% endif %}
+    {% endfor %}
+    <text x="38" y="16" fill="#9aa7d1" font-size="10">total_tokens</text>
+  </svg>
+  <div class="table-wrap" style="margin-top:12px;">
+    <table>
+      <thead><tr><th>小时</th><th>调用</th><th>total_tokens</th><th>cached_tokens</th><th>cost_usd</th><th>估算 prompt</th></tr></thead>
+      <tbody>
+      {% for bucket in usage_chart if bucket.rows %}
+        <tr><td>{{ bucket.label }}</td><td class="num">{{ bucket.rows }}</td><td class="num">{{ bucket.total_tokens }}</td><td class="num">{{ bucket.cached_tokens }}</td><td class="num">${{ '%.6f'|format(bucket.estimated_cost_usd) }}</td><td class="num">{{ bucket.estimated_tokens }}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>按 Agent / Decision Type</h2>
+    {% if usage_summary.by_decision_type_rows %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Decision Type</th><th>Rows</th><th>total_tokens</th><th>cached_tokens</th><th>cost_usd</th></tr></thead>
+        <tbody>
+        {% for row in usage_summary.by_decision_type_rows %}
+          <tr><td>{{ row.name }}</td><td class="num">{{ row.rows }}</td><td class="num">{{ row.total_tokens }}</td><td class="num">{{ row.cached_tokens }}</td><td class="num">${{ '%.6f'|format(row.estimated_cost_usd) }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="muted">暂无 agent token 统计。</div>
+    {% endif %}
+  </section>
+  <section class="card">
+    <h2>按 Model</h2>
+    {% if usage_summary.by_model_rows %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Model</th><th>Rows</th><th>total_tokens</th><th>cached_tokens</th><th>cost_usd</th></tr></thead>
+        <tbody>
+        {% for row in usage_summary.by_model_rows %}
+          <tr><td>{{ row.name }}</td><td class="num">{{ row.rows }}</td><td class="num">{{ row.total_tokens }}</td><td class="num">{{ row.cached_tokens }}</td><td class="num">${{ '%.6f'|format(row.estimated_cost_usd) }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="muted">暂无 model token 统计。</div>
+    {% endif %}
+  </section>
+</div>
+
+<section class="card" style="margin-top:18px;">
+  <h2>最近 LLM 调用</h2>
+  {% if recent_rows %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>时间</th><th>结果</th><th>Agent</th><th>Profile / Model</th><th>Context</th>
+          <th>prompt</th><th>cached</th><th>cache_create</th><th>uncached_prompt</th><th>completion</th><th>total_tokens</th><th>cost_usd</th><th>估算 prompt</th><th>错误</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for row in recent_rows %}
+        <tr>
+          <td class="text-nowrap">{{ row.created_at_utc or '-' }}</td>
+          <td>{% if row.success %}<span class="pill good">success</span>{% else %}<span class="pill bad">failed</span>{% endif %}</td>
+          <td>{{ row.decision_type or '-' }}</td>
+          <td class="text-break">{{ row.profile_name or '-' }}<br><span class="muted">{{ row.model or '-' }}</span></td>
+          <td>{{ row.context_mode or '-' }}</td>
+          <td class="num">{{ row.usage_prompt_tokens if row.usage_prompt_tokens is not none else '-' }}</td>
+          <td class="num">{{ row.usage_cached_tokens if row.usage_cached_tokens is not none else '-' }}</td>
+          <td class="num">{{ row.usage_cache_creation_tokens if row.usage_cache_creation_tokens is not none else '-' }}</td>
+          <td class="num">{{ row.usage_uncached_prompt_tokens if row.usage_uncached_prompt_tokens is not none else '-' }}</td>
+          <td class="num">{{ row.usage_completion_tokens if row.usage_completion_tokens is not none else '-' }}</td>
+          <td class="num">{{ row.usage_total_tokens if row.usage_total_tokens is not none else '-' }}</td>
+          <td class="num">${{ '%.6f'|format(row.estimated_cost_usd or 0) }}<br><span class="muted">{{ row.pricing_family or '-' }}</span></td>
+          <td class="num">{{ row.estimated_user_prompt_tokens_4c or '-' }}</td>
+          <td class="text-break">{{ row.error_type or '' }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="muted">暂无 usage ledger。下一次 real_llm 调用后会自动生成。</div>
+  {% endif %}
+</section>
+
+<details class="card" style="margin-top:18px;">
+  <summary style="cursor:pointer; font-weight:600;">说明</summary>
+  <ul>
+    <li>Provider Token 来自 API 返回的 usage 字段；如果 provider 不返回，则显示为空并标记 missing。</li>
+    <li>cached_tokens 为 0 不一定代表没有缓存命中；若 cached_tokens_missing_rows 大于 0，说明 provider 没返回缓存细分字段，缓存消耗处于“未知”而不是可确认的 0。</li>
+    <li>Dollar 估算按内置 GPT-5 / Opus 4.7 系列公开 API 单价换算；可用 FACTOR_LAB_LLM_PRICING_JSON 覆盖。</li>
+    <li>本地估算使用最终 user prompt 字符数 / 4，仅用于趋势和 compact 降幅观察。</li>
+    <li>失败调用也会记录，便于观察 quota、403、timeout 等 fallback 成本。</li>
+  </ul>
+</details>
+{% endblock %}

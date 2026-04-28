@@ -812,7 +812,7 @@ def test_real_llm_uses_compact_context_by_default(monkeypatch):
     profile = {
         "name": "openai-compatible",
         "base_url": "https://api.example.test/v1",
-        "model": "gpt-4o-mini",
+        "model": "gpt-5.5",
         "api_key": "secret",
         "api_format": "openai",
         "enabled": True,
@@ -891,7 +891,7 @@ def test_real_llm_raw_context_mode_is_opt_in(monkeypatch):
     profile = {
         "name": "openai-compatible",
         "base_url": "https://api.example.test/v1",
-        "model": "gpt-4o-mini",
+        "model": "gpt-5.5",
         "api_key": "secret",
         "api_format": "openai",
         "enabled": True,
@@ -981,6 +981,69 @@ def test_extract_llm_usage_normalizes_openai_chat_usage():
     assert usage["usage_source"] == "provider"
 
 
+def test_extract_llm_usage_normalizes_cached_tokens_from_provider_details():
+    router = DecisionProviderRouter(provider="real_llm")
+    usage = router._extract_llm_usage(
+        {
+            "usage": {
+                "prompt_tokens": 100,
+                "completion_tokens": 20,
+                "total_tokens": 120,
+                "prompt_tokens_details": {"cached_tokens": 75},
+            }
+        },
+        "openai",
+    )
+
+    assert usage["prompt_tokens"] == 100
+    assert usage["cached_tokens"] == 75
+    assert usage["uncached_prompt_tokens"] == 25
+    assert usage["total_tokens"] == 120
+
+
+def test_extract_llm_usage_normalizes_anthropic_cache_tokens():
+    router = DecisionProviderRouter(provider="real_llm")
+    usage = router._extract_llm_usage(
+        {
+            "usage": {
+                "input_tokens": 40,
+                "output_tokens": 10,
+                "cache_creation_input_tokens": 12,
+                "cache_read_input_tokens": 28,
+            }
+        },
+        "anthropic",
+    )
+
+    assert usage["prompt_tokens"] == 40
+    assert usage["completion_tokens"] == 10
+    assert usage["cached_tokens"] == 28
+    assert usage["cache_creation_tokens"] == 12
+    assert usage["uncached_prompt_tokens"] == 12
+    assert usage["total_tokens"] == 50
+
+
+def test_extract_llm_usage_normalizes_provider_cache_aliases():
+    router = DecisionProviderRouter(provider="real_llm")
+    usage = router._extract_llm_usage(
+        {
+            "usage": {
+                "input_tokens": 100,
+                "output_tokens": 10,
+                "input_tokens_details": {"cached_input_tokens": 64, "cache_write_input_tokens": 8},
+            }
+        },
+        "openai_responses",
+    )
+
+    assert usage["prompt_tokens"] == 100
+    assert usage["completion_tokens"] == 10
+    assert usage["cached_tokens"] == 64
+    assert usage["cache_creation_tokens"] == 8
+    assert usage["uncached_prompt_tokens"] == 36
+    assert usage["total_tokens"] == 110
+
+
 def test_extract_llm_usage_normalizes_responses_usage():
     router = DecisionProviderRouter(provider="real_llm")
     usage = router._extract_llm_usage(
@@ -1035,7 +1098,7 @@ def test_real_llm_success_writes_usage_and_ledger(monkeypatch, tmp_path):
     profile = {
         "name": "openai-compatible",
         "base_url": "https://api.example.test/v1",
-        "model": "gpt-4o-mini",
+        "model": "gpt-5.5",
         "api_key": "secret",
         "api_format": "openai",
         "enabled": True,
@@ -1062,7 +1125,12 @@ def test_real_llm_success_writes_usage_and_ledger(monkeypatch, tmp_path):
                             "finish_reason": "stop",
                         }
                     ],
-                    "usage": {"prompt_tokens": 11, "completion_tokens": 4, "total_tokens": 15},
+                    "usage": {
+                        "prompt_tokens": 11,
+                        "completion_tokens": 4,
+                        "total_tokens": 15,
+                        "prompt_tokens_details": {"cached_tokens": 6},
+                    },
                 }
             ).encode("utf-8")
 
@@ -1074,6 +1142,8 @@ def test_real_llm_success_writes_usage_and_ledger(monkeypatch, tmp_path):
     payload = router._call_real_llm_profile("planner", PLANNER_CONTEXT, profile)
 
     assert payload["real_llm_usage"]["total_tokens"] == 15
+    assert payload["real_llm_usage"]["cached_tokens"] == 6
+    assert payload["real_llm_cost"]["estimated_cost_usd"] > 0
     assert payload["real_llm_prompt_meta"]["user_prompt_chars"] > 0
     assert payload["real_llm_prompt_meta"]["estimated_user_prompt_tokens_4c"] > 0
     rows = [json.loads(line) for line in ledger_path.read_text().splitlines()]
@@ -1081,13 +1151,16 @@ def test_real_llm_success_writes_usage_and_ledger(monkeypatch, tmp_path):
     assert rows[0]["success"] is True
     assert rows[0]["decision_type"] == "planner"
     assert rows[0]["usage"]["total_tokens"] == 15
+    assert rows[0]["usage"]["cached_tokens"] == 6
+    assert rows[0]["usage"]["uncached_prompt_tokens"] == 5
+    assert rows[0]["estimated_cost_usd"] == rows[0]["cost"]["estimated_cost_usd"]
 
 
 def test_real_llm_http_error_writes_failure_ledger(monkeypatch, tmp_path):
     profile = {
         "name": "quota-provider",
         "base_url": "https://api.example.test/v1",
-        "model": "gpt-4o-mini",
+        "model": "gpt-5.5",
         "api_key": "secret",
         "api_format": "openai",
         "enabled": True,

@@ -10,7 +10,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs
+import urllib.error
+import urllib.request
 from zoneinfo import ZoneInfo
+
+LOCAL_TZ = ZoneInfo("Asia/Shanghai")
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -30,6 +34,7 @@ from factor_lab.allocator_governance_auditor import load_allocator_governance_au
 from factor_lab.decision_ab_judge import load_decision_ab_artifacts
 from factor_lab.failure_analyst_enhancement import load_failure_analyst_enhancement
 from factor_lab.paths import env_file
+from factor_lab.llm_pricing import estimate_llm_cost_usd
 
 
 LLM_ENV_KEYS = [
@@ -39,6 +44,7 @@ LLM_ENV_KEYS = [
     "FACTOR_LAB_LLM_BASE_URL",
     "FACTOR_LAB_LLM_MODEL",
     "FACTOR_LAB_LLM_API_KEY",
+    "FACTOR_LAB_LLM_API_FORMAT",
 ]
 
 LLM_PROFILE_ENV_KEYS = [
@@ -100,6 +106,31 @@ def _ordered_profile_list(profiles: list[dict[str, Any]], fallback_order: str) -
     return ordered
 
 
+LLM_API_FORMAT_OPTIONS = [
+    {"value": "openai_responses", "label": "OpenAI Responses"},
+    {"value": "openai", "label": "OpenAI Chat Completions"},
+    {"value": "anthropic", "label": "Anthropic Messages"},
+]
+
+
+def _normalize_llm_api_format(value: Any, model: str | None = None) -> str:
+    raw = str(value or "").strip().lower()
+    if raw in {"responses", "openai_response"}:
+        raw = "openai_responses"
+    if raw in {"chat", "chat_completions", "chat_completion", "openai_chat", "openai_chat_completions"}:
+        raw = "openai"
+    if raw in {"messages", "anthropic_messages", "claude"}:
+        raw = "anthropic"
+    if raw in {"openai", "openai_responses", "anthropic"}:
+        return raw
+    model_text = str(model or "").strip().lower()
+    if model_text.startswith("claude") or "opus" in model_text:
+        return "anthropic"
+    if model_text.startswith("gpt-5"):
+        return "openai_responses"
+    return "openai"
+
+
 def _load_llm_profiles(values: dict[str, str]) -> tuple[list[dict[str, Any]], str]:
     has_legacy_file_profile = bool(values.get("FACTOR_LAB_LLM_BASE_URL") or values.get("FACTOR_LAB_LLM_API_KEY") or values.get("FACTOR_LAB_LLM_MODEL"))
     raw_profiles = values.get("FACTOR_LAB_LLM_PROFILES_JSON") or ("" if has_legacy_file_profile else os.environ.get("FACTOR_LAB_LLM_PROFILES_JSON")) or ""
@@ -122,6 +153,7 @@ def _load_llm_profiles(values: dict[str, str]) -> tuple[list[dict[str, Any]], st
                     "name": name,
                     "base_url": str(item.get("base_url") or ""),
                     "model": str(item.get("model") or ""),
+                    "api_format": _normalize_llm_api_format(item.get("api_format"), item.get("model")),
                     "api_key": "",
                     "api_key_configured": bool(api_key),
                     "api_key_masked": _mask_secret(api_key),
@@ -133,6 +165,7 @@ def _load_llm_profiles(values: dict[str, str]) -> tuple[list[dict[str, Any]], st
             "name": values.get("FACTOR_LAB_LLM_PROFILE_NAME") or os.environ.get("FACTOR_LAB_LLM_PROFILE_NAME") or "default",
             "base_url": values.get("FACTOR_LAB_LLM_BASE_URL") or os.environ.get("FACTOR_LAB_LLM_BASE_URL") or "",
             "model": values.get("FACTOR_LAB_LLM_MODEL") or os.environ.get("FACTOR_LAB_LLM_MODEL") or "",
+            "api_format": _normalize_llm_api_format(values.get("FACTOR_LAB_LLM_API_FORMAT") or os.environ.get("FACTOR_LAB_LLM_API_FORMAT"), values.get("FACTOR_LAB_LLM_MODEL") or os.environ.get("FACTOR_LAB_LLM_MODEL")),
             "api_key": "",
             "api_key_configured": bool(api_key),
             "api_key_masked": _mask_secret(api_key),
@@ -148,6 +181,7 @@ def _profiles_from_form(form: dict[str, str], existing_profiles: list[dict[str, 
         name = (form.get(f"profile_name_{index}") or "").strip()
         base_url = (form.get(f"profile_base_url_{index}") or "").strip().rstrip("/")
         model = (form.get(f"profile_model_{index}") or "").strip()
+        api_format = _normalize_llm_api_format(form.get(f"profile_api_format_{index}"), model)
         api_key = (form.get(f"profile_api_key_{index}") or "").strip()
         enabled = form.get(f"profile_enabled_{index}") in {"on", "1", "true", "yes"}
         if not any([name, base_url, model, api_key]):
@@ -156,7 +190,7 @@ def _profiles_from_form(form: dict[str, str], existing_profiles: list[dict[str, 
             name = f"profile-{index + 1}"
         if not api_key:
             api_key = existing_keys.get(name, "")
-        profiles.append({"name": name, "base_url": base_url, "model": model, "api_key": api_key, "enabled": enabled, "order": (form.get(f"profile_order_{index}") or "").strip(), "_index": index})
+        profiles.append({"name": name, "base_url": base_url, "model": model, "api_format": api_format, "api_key": api_key, "enabled": enabled, "order": (form.get(f"profile_order_{index}") or "").strip(), "_index": index})
     explicit_order = any(str(profile.get("order") or "").strip() for profile in profiles)
     if explicit_order:
         def order_key(profile: dict[str, Any]) -> tuple[int, int]:
@@ -354,6 +388,7 @@ def save_llm_settings(form: dict[str, str]) -> dict[str, Any]:
             "name": "default",
             "base_url": (form.get("base_url") or "").strip(),
             "model": (form.get("model") or "").strip(),
+            "api_format": _normalize_llm_api_format(form.get("api_format"), form.get("model")),
             "api_key": (form.get("api_key") or "").strip() or current_api_key,
             "enabled": True,
         }]
@@ -366,6 +401,7 @@ def save_llm_settings(form: dict[str, str]) -> dict[str, Any]:
         "FACTOR_LAB_LLM_BASE_URL": str(primary.get("base_url") or ""),
         "FACTOR_LAB_LLM_MODEL": str(primary.get("model") or ""),
         "FACTOR_LAB_LLM_API_KEY": str(primary.get("api_key") or ""),
+        "FACTOR_LAB_LLM_API_FORMAT": str(primary.get("api_format") or _normalize_llm_api_format(None, primary.get("model"))),
         "FACTOR_LAB_LLM_PROFILES_JSON": json.dumps(profiles, ensure_ascii=False, separators=(",", ":")),
         "FACTOR_LAB_LLM_FALLBACK_ORDER": fallback_order,
     })
@@ -417,6 +453,59 @@ def restart_research_daemon_after_settings_save() -> dict[str, Any]:
         return {"ok": False, "returncode": None, "stdout": "", "stderr": str(exc)}
 
 
+def test_llm_profile_connection(profile: dict[str, Any]) -> dict[str, Any]:
+    from factor_lab.llm_provider_router import DecisionProviderRouter
+
+    base_url = str(profile.get("base_url") or "").strip().rstrip("/")
+    model = str(profile.get("model") or "").strip()
+    api_key = str(profile.get("api_key") or "").strip()
+    api_format = _normalize_llm_api_format(profile.get("api_format"), model)
+    if not base_url or not model or not api_key:
+        return {"ok": False, "message": "模型测试失败：Base URL、Model、API Key 必须填写。", "api_format": api_format, "model": model}
+
+    router = DecisionProviderRouter(provider="real_llm", model=model)
+    url = router._real_llm_endpoint_url(base_url, api_format)
+    if api_format == "anthropic":
+        body = {
+            "model": model,
+            "system": "You are a connection test endpoint.",
+            "messages": [{"role": "user", "content": "Reply with OK only."}],
+            "max_tokens": 16,
+            "temperature": 0,
+        }
+        headers = router._real_llm_headers(api_key, auth_scheme="anthropic")
+    elif api_format == "openai_responses":
+        body = {
+            "model": model,
+            "input": [
+                {"role": "system", "content": "You are a connection test endpoint."},
+                {"role": "user", "content": "Reply with OK only."},
+            ],
+            "temperature": 0,
+        }
+        headers = router._real_llm_headers(api_key)
+    else:
+        body = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": "You are a connection test endpoint."},
+                {"role": "user", "content": "Reply with OK only."},
+            ],
+            "temperature": 0,
+        }
+        headers = router._real_llm_headers(api_key)
+    req = urllib.request.Request(url=url, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=20) as response:
+            raw_text = response.read().decode("utf-8", errors="ignore")
+        return {"ok": True, "message": "模型测试成功", "api_format": api_format, "model": model, "endpoint": url, "response_preview": raw_text[:300]}
+    except urllib.error.HTTPError as exc:
+        body_text = exc.read().decode("utf-8", errors="ignore")[:500]
+        return {"ok": False, "message": f"模型测试失败：http_error:{exc.code}", "api_format": api_format, "model": model, "endpoint": url, "error": body_text}
+    except Exception as exc:
+        return {"ok": False, "message": f"模型测试失败：{type(exc).__name__}: {exc}", "api_format": api_format, "model": model, "endpoint": url}
+
+
 def format_bj_time(value: str | None) -> str:
     if not value:
         return "-"
@@ -424,7 +513,7 @@ def format_bj_time(value: str | None) -> str:
         dt = datetime.fromisoformat(value)
         if dt.tzinfo is None:
             return value
-        bj = dt.astimezone(ZoneInfo("Asia/Shanghai"))
+        bj = dt.astimezone(LOCAL_TZ)
         return bj.strftime("%Y-%m-%d %H:%M")
     except Exception:
         return value
@@ -1660,6 +1749,190 @@ def _quick_latest_runs(limit: int = 5) -> list[dict[str, Any]]:
         return []
 
 
+def _llm_usage_ledger_path() -> Path:
+    return DB_PATH.parent / "llm_usage_ledger.jsonl"
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _parse_ledger_time(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _safe_int(value: Any) -> int:
+    try:
+        if value is None:
+            return 0
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _load_llm_usage_rows(limit: int = 200, hours: int | None = 24) -> list[dict[str, Any]]:
+    path = _llm_usage_ledger_path()
+    if not path.exists():
+        return []
+    cutoff = _utcnow() - timedelta(hours=hours) if hours is not None else None
+    lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    rows: list[dict[str, Any]] = []
+    for line in reversed(lines):
+        if len(rows) >= limit:
+            break
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(row, dict):
+            continue
+        if cutoff is not None:
+            created_at = _parse_ledger_time(row.get("created_at_utc"))
+            if created_at is None or created_at < cutoff:
+                continue
+        rows.append(row)
+    return rows
+
+
+def _summarize_llm_usage(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "rows": len(rows),
+        "success": sum(1 for row in rows if row.get("success") is True),
+        "failed": sum(1 for row in rows if row.get("success") is False),
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+        "cached_tokens": 0,
+        "cached_tokens_missing_rows": 0,
+        "cache_creation_tokens": 0,
+        "cache_creation_tokens_missing_rows": 0,
+        "uncached_prompt_tokens": 0,
+        "uncached_prompt_tokens_missing_rows": 0,
+        "estimated_cost_usd": 0.0,
+        "estimated_user_prompt_tokens_4c": 0,
+        "by_decision_type": {},
+        "by_model": {},
+    }
+    for row in rows:
+        usage = row.get("usage") or {}
+        prompt_tokens = _safe_int(usage.get("prompt_tokens"))
+        completion_tokens = _safe_int(usage.get("completion_tokens"))
+        total_tokens = _safe_int(usage.get("total_tokens"))
+        cached_tokens = _safe_int(usage.get("cached_tokens"))
+        cache_creation_tokens = _safe_int(usage.get("cache_creation_tokens"))
+        uncached_prompt_tokens = _safe_int(usage.get("uncached_prompt_tokens"))
+        cost = row.get("cost") if isinstance(row.get("cost"), dict) else estimate_llm_cost_usd(row.get("model"), usage)
+        estimated_cost_usd = float(cost.get("estimated_cost_usd") or row.get("estimated_cost_usd") or 0.0)
+        estimated = _safe_int(row.get("estimated_user_prompt_tokens_4c"))
+        summary["prompt_tokens"] += prompt_tokens
+        summary["completion_tokens"] += completion_tokens
+        summary["total_tokens"] += total_tokens
+        if usage.get("cached_tokens") is None:
+            summary["cached_tokens_missing_rows"] += 1
+        if usage.get("cache_creation_tokens") is None:
+            summary["cache_creation_tokens_missing_rows"] += 1
+        if usage.get("uncached_prompt_tokens") is None:
+            summary["uncached_prompt_tokens_missing_rows"] += 1
+        summary["cached_tokens"] += cached_tokens
+        summary["cache_creation_tokens"] += cache_creation_tokens
+        summary["uncached_prompt_tokens"] += uncached_prompt_tokens
+        summary["estimated_cost_usd"] += estimated_cost_usd
+        summary["estimated_user_prompt_tokens_4c"] += estimated
+        decision_type = str(row.get("decision_type") or "unknown")
+        model = str(row.get("model") or "unknown")
+        decision_bucket = summary["by_decision_type"].setdefault(decision_type, {"rows": 0, "total_tokens": 0, "cached_tokens": 0, "estimated_cost_usd": 0.0})
+        decision_bucket["rows"] += 1
+        decision_bucket["total_tokens"] += total_tokens
+        decision_bucket["cached_tokens"] += cached_tokens
+        decision_bucket["estimated_cost_usd"] += estimated_cost_usd
+        model_bucket = summary["by_model"].setdefault(model, {"rows": 0, "total_tokens": 0, "cached_tokens": 0, "estimated_cost_usd": 0.0})
+        model_bucket["rows"] += 1
+        model_bucket["total_tokens"] += total_tokens
+        model_bucket["cached_tokens"] += cached_tokens
+        model_bucket["estimated_cost_usd"] += estimated_cost_usd
+    summary["estimated_cost_usd"] = round(summary["estimated_cost_usd"], 6)
+    for bucket in list(summary["by_decision_type"].values()) + list(summary["by_model"].values()):
+        bucket["estimated_cost_usd"] = round(bucket["estimated_cost_usd"], 6)
+    summary["by_decision_type_rows"] = [
+        {"name": name, **value} for name, value in sorted(summary["by_decision_type"].items())
+    ]
+    summary["by_model_rows"] = [
+        {"name": name, **value} for name, value in sorted(summary["by_model"].items())
+    ]
+    return summary
+
+
+def _format_local_time(value: datetime | None = None) -> str:
+    dt = value or _utcnow()
+    return dt.astimezone(LOCAL_TZ).strftime("%Y-%m-%d %H:%M")
+
+
+def _build_llm_usage_chart(rows: list[dict[str, Any]], hours: int = 24) -> list[dict[str, Any]]:
+    now_local = _utcnow().astimezone(LOCAL_TZ).replace(minute=0, second=0, microsecond=0)
+    buckets = []
+    for offset in range(hours - 1, -1, -1):
+        start = now_local - timedelta(hours=offset)
+        buckets.append({
+            "start": start,
+            "label": start.strftime("%H:%M"),
+            "full_label": start.strftime("%m-%d %H:%M"),
+            "total_tokens": 0,
+            "estimated_tokens": 0,
+            "cached_tokens": 0,
+            "estimated_cost_usd": 0.0,
+            "rows": 0,
+            "height_pct": 0,
+        })
+    by_start = {bucket["start"]: bucket for bucket in buckets}
+    for row in rows:
+        created_at = _parse_ledger_time(row.get("created_at_utc"))
+        if created_at is None:
+            continue
+        bucket_start = created_at.astimezone(LOCAL_TZ).replace(minute=0, second=0, microsecond=0)
+        bucket = by_start.get(bucket_start)
+        if bucket is None:
+            continue
+        usage = row.get("usage") or {}
+        bucket["total_tokens"] += _safe_int(usage.get("total_tokens"))
+        bucket["cached_tokens"] += _safe_int(usage.get("cached_tokens"))
+        cost = row.get("cost") if isinstance(row.get("cost"), dict) else estimate_llm_cost_usd(row.get("model"), usage)
+        bucket["estimated_cost_usd"] += float(cost.get("estimated_cost_usd") or row.get("estimated_cost_usd") or 0.0)
+        bucket["estimated_tokens"] += _safe_int(row.get("estimated_user_prompt_tokens_4c"))
+        bucket["rows"] += 1
+    max_value = max([bucket["total_tokens"] for bucket in buckets] + [0])
+    for bucket in buckets:
+        bucket["height_pct"] = int((bucket["total_tokens"] / max_value) * 100) if max_value else 0
+        bucket["estimated_cost_usd"] = round(bucket["estimated_cost_usd"], 6)
+    return buckets
+
+
+def _latest_llm_usage_rows(limit: int = 50) -> list[dict[str, Any]]:
+    rows = _load_llm_usage_rows(limit=limit, hours=24)
+    for row in rows:
+        usage = row.get("usage") or {}
+        row["usage_total_tokens"] = usage.get("total_tokens")
+        row["usage_prompt_tokens"] = usage.get("prompt_tokens")
+        row["usage_completion_tokens"] = usage.get("completion_tokens")
+        row["usage_cached_tokens"] = usage.get("cached_tokens")
+        row["usage_cache_creation_tokens"] = usage.get("cache_creation_tokens")
+        row["usage_uncached_prompt_tokens"] = usage.get("uncached_prompt_tokens")
+        row["usage_source"] = usage.get("usage_source")
+        cost = row.get("cost") if isinstance(row.get("cost"), dict) else estimate_llm_cost_usd(row.get("model"), usage)
+        row["estimated_cost_usd"] = cost.get("estimated_cost_usd") or row.get("estimated_cost_usd")
+        row["pricing_family"] = cost.get("pricing_family")
+    return rows
+
+
 def _systemd_service_snapshot(service: str) -> dict[str, Any]:
     snapshot = {
         "name": service,
@@ -2371,13 +2644,15 @@ def settings_page(saved: str | None = None, restart: str | None = None):
     settings = load_llm_settings()
     profile_slots = list(settings.get("profiles") or [])
     while len(profile_slots) < 5:
-        profile_slots.append({"name": "", "base_url": "", "model": "", "api_key_masked": "未配置", "enabled": True})
+        profile_slots.append({"name": "", "base_url": "", "model": "", "api_format": "openai_responses", "api_key_masked": "未配置", "enabled": True})
     return render(
         "settings.html",
         title="大模型设置",
         settings=settings,
         profile_slots=profile_slots,
         provider_options=["real_llm", "openclaw_gateway", "heuristic", "mock"],
+        api_format_options=LLM_API_FORMAT_OPTIONS,
+        test_result=None,
         saved=saved == "1",
         restart_ok=restart == "1",
         restart_failed=restart == "0",
@@ -2392,6 +2667,44 @@ async def settings_save(request: Request):
     restart_result = restart_research_daemon_after_settings_save()
     restart_flag = "1" if restart_result.get("ok") else "0"
     return RedirectResponse(url=f"/settings?saved=1&restart={restart_flag}", status_code=303)
+
+
+@app.post("/settings/test-model", response_class=HTMLResponse)
+async def settings_test_model(request: Request):
+    body = (await request.body()).decode("utf-8")
+    parsed = parse_qs(body, keep_blank_values=True)
+    form = {key: values[-1] if values else "" for key, values in parsed.items()}
+    existing_values = _read_env_values()
+    raw_existing_profiles = existing_values.get("FACTOR_LAB_LLM_PROFILES_JSON") or os.environ.get("FACTOR_LAB_LLM_PROFILES_JSON") or ""
+    try:
+        existing_profiles = json.loads(raw_existing_profiles) if raw_existing_profiles else []
+    except Exception:
+        existing_profiles = []
+    if not isinstance(existing_profiles, list):
+        existing_profiles = []
+    profiles, _ = _profiles_from_form(form, existing_profiles)
+    try:
+        profile_index = int(form.get("profile_test_index") or 0)
+    except ValueError:
+        profile_index = 0
+    profile = profiles[profile_index] if 0 <= profile_index < len(profiles) else {}
+    test_result = test_llm_profile_connection(profile)
+    settings = load_llm_settings()
+    profile_slots = list(profiles)
+    while len(profile_slots) < 5:
+        profile_slots.append({"name": "", "base_url": "", "model": "", "api_format": "openai_responses", "api_key_masked": "未配置", "enabled": True})
+    return render(
+        "settings.html",
+        title="大模型设置",
+        settings=settings,
+        profile_slots=profile_slots,
+        provider_options=["real_llm", "openclaw_gateway", "heuristic", "mock"],
+        api_format_options=LLM_API_FORMAT_OPTIONS,
+        test_result=test_result,
+        saved=False,
+        restart_ok=False,
+        restart_failed=False,
+    )
 
 
 @app.get("/agents", response_class=HTMLResponse)
@@ -2493,6 +2806,22 @@ def llm_page():
         plan_validation=plan_validation,
         plan_validation_text=pretty_json_text(plan_validation, "暂无计划校验结果。"),
         agent_settings=load_agent_settings(),
+    )
+
+
+@app.get("/llm-usage", response_class=HTMLResponse)
+def llm_usage_page():
+    recent_rows = _latest_llm_usage_rows(limit=50)
+    summary_rows = _load_llm_usage_rows(limit=1000, hours=24)
+    return render(
+        "llm_usage.html",
+        title="LLM Token 用量",
+        usage_summary=_summarize_llm_usage(summary_rows),
+        usage_chart=_build_llm_usage_chart(summary_rows, hours=24),
+        recent_rows=recent_rows,
+        ledger_path=str(_llm_usage_ledger_path()),
+        usage_generated_at=_format_local_time(),
+        usage_timezone="Asia/Shanghai",
     )
 
 
