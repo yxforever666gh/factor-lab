@@ -2,6 +2,8 @@ import importlib
 import json
 from pathlib import Path
 
+import pytest
+
 import factor_lab.llm_provider_router as llm_provider_router
 from factor_lab.llm_provider_router import DECISION_SCHEMA_HINTS, DecisionProviderRouter
 
@@ -34,6 +36,11 @@ FAILURE_CONTEXT = {
         "knowledge_gain_counter": {"no_significant_information_gain": 1},
     },
 }
+
+
+@pytest.fixture(autouse=True)
+def _disable_usage_ledger_side_effects(monkeypatch):
+    monkeypatch.setattr(DecisionProviderRouter, "_try_append_llm_usage_ledger", lambda self, row: None, raising=False)
 
 
 def test_router_supports_reviewer_and_data_quality_schema_hints():
@@ -1062,6 +1069,7 @@ def test_real_llm_success_writes_usage_and_ledger(monkeypatch, tmp_path):
     monkeypatch.setattr(llm_provider_router.urllib.request, "urlopen", lambda req, timeout=0: FakeResponse())
     router = DecisionProviderRouter(provider="real_llm")
     monkeypatch.setattr(router, "_llm_usage_ledger_path", lambda: ledger_path)
+    monkeypatch.setattr(router, "_try_append_llm_usage_ledger", lambda row: router._append_llm_usage_ledger(row))
 
     payload = router._call_real_llm_profile("planner", PLANNER_CONTEXT, profile)
 
@@ -1105,6 +1113,7 @@ def test_real_llm_http_error_writes_failure_ledger(monkeypatch, tmp_path):
     monkeypatch.setattr(llm_provider_router.urllib.request, "urlopen", fake_urlopen)
     router = DecisionProviderRouter(provider="real_llm")
     monkeypatch.setattr(router, "_llm_usage_ledger_path", lambda: ledger_path)
+    monkeypatch.setattr(router, "_try_append_llm_usage_ledger", lambda row: router._append_llm_usage_ledger(row))
 
     try:
         router._call_real_llm_profile("planner", PLANNER_CONTEXT, profile)
