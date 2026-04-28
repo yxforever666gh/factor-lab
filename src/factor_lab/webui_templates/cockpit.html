@@ -1,0 +1,145 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-2">
+  <section class="card">
+    <h2>系统总状态</h2>
+    <table>
+      <tbody>
+        <tr><th>最新运行</th><td>{{ latest_run.run_id if latest_run else '-' }}</td></tr>
+        <tr><th>配置</th><td class="text-break">{{ latest_run.config_path if latest_run else '-' }}</td></tr>
+        <tr><th>LLM 状态</th><td>{{ llm_status.status or '-' }}</td></tr>
+        <tr><th>纸面组合稳定性</th><td>{{ paper_stability.label if paper_stability else '-' }} ({{ paper_stability.stability_score if paper_stability else '-' }})</td></tr>
+        <tr><th>组合风险模式</th><td>{{ portfolio_policy.risk_mode if portfolio_policy else '-' }}</td></tr>
+        <tr><th>保守模式</th><td>{{ conservative_policy.mode if conservative_policy else '-' }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>当前候选池</h2>
+    <table>
+      <thead><tr><th>因子</th><th>出现次数</th></tr></thead>
+      <tbody>
+        {% for row in stable_candidates %}
+        <tr><td>{{ row.factor_name }}</td><td>{{ row.candidate_runs }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>研究流 / Recovery 状态</h2>
+    <table>
+      <tbody>
+        <tr><th>本轮是否 recovery</th><td>{{ '是' if research_flow_state.recovery_used else '否' }}</td></tr>
+        <tr><th>研究候选数</th><td>{{ research_flow_state.candidate_count if research_flow_state else 0 }}</td></tr>
+        <tr><th>活跃 recovery 分支</th><td>{{ research_flow_state.recovery_active_branch_count if research_flow_state else 0 }}</td></tr>
+        <tr><th>最近 recovery 触发</th><td>{{ analyst_feedback_context.analyst_learning_loop.recovery_trigger_count_last_5 if analyst_feedback_context.analyst_learning_loop else 0 }}</td></tr>
+        <tr><th>最近 recovery 无增益</th><td>{{ analyst_feedback_context.analyst_learning_loop.recovery_no_gain_count_last_10 if analyst_feedback_context.analyst_learning_loop else 0 }}</td></tr>
+        <tr><th>最近注入数</th><td>{{ analyst_feedback_context.analyst_learning_loop.last_injected_count if analyst_feedback_context.analyst_learning_loop else 0 }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2>研究方向学习</h2>
+    {% if research_learning.families %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Family</th><th>运行</th><th>增益</th><th>无增益</th><th>连续无增益</th><th>建议</th><th>冷却</th></tr></thead>
+        <tbody>
+          {% for key, row in research_learning.families.items() %}
+          <tr>
+            <td>{{ key }}</td>
+            <td>{{ row.recent_runs }}</td>
+            <td>{{ row.recent_gain }}</td>
+            <td>{{ row.recent_no_gain }}</td>
+            <td>{{ row.consecutive_no_gain }}</td>
+            <td>{{ row.recommended_action }}</td>
+            <td>{{ '是' if row.cooldown_active else '否' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="muted">研究方向学习样本仍不足，当前暂无 family learning 数据。</div>
+    {% endif %}
+  </section>
+  <section class="card">
+    <h2>模板权重与疲劳</h2>
+    {% if recommendation_context.priority_summary %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>模板</th><th>建议动作</th><th>效果分</th><th>样本</th><th>疲劳</th><th>冷却</th></tr></thead>
+        <tbody>
+          {% for row in recommendation_context.priority_summary %}
+          <tr>
+            <td>{{ row.template_type }}</td>
+            <td>{{ row.recommended_action }}</td>
+            <td class="num">{{ row.decayed_effect_score }}</td>
+            <td class="num">{{ row.sample_count }}</td>
+            <td>{{ row.fatigue_level }}</td>
+            <td>{{ '是' if row.cooldown_active else '否' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="muted" style="margin-top:10px;">Planner 提示：{{ recommendation_context.planner_hint or '-' }}</div>
+    {% else %}
+    <div class="muted">暂无模板上下文。</div>
+    {% endif %}
+  </section>
+  <section class="card">
+    <h2>计划校验摘要</h2>
+    <table>
+      <tbody>
+        <tr><th>是否有效</th><td>{{ '是' if plan_validation.valid else '否' }}</td></tr>
+        <tr><th>模板类型</th><td>{{ plan_validation.normalized_plan.template_type if plan_validation.normalized_plan else '-' }}</td></tr>
+        <tr><th>错误数</th><td>{{ plan_validation.errors|length if plan_validation.errors else 0 }}</td></tr>
+        <tr><th>警告数</th><td>{{ plan_validation.warnings|length if plan_validation.warnings else 0 }}</td></tr>
+        <tr><th>原因</th><td class="text-break">{{ plan_validation.normalized_plan.rationale if plan_validation.normalized_plan else '-' }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>纸面组合摘要</h2>
+    <table>
+      <tbody>
+        <tr><th>策略</th><td>{{ paper_portfolio.strategy_name if paper_portfolio else '-' }}</td></tr>
+        <tr><th>日期</th><td>{{ paper_portfolio.as_of_date if paper_portfolio else '-' }}</td></tr>
+        <tr><th>持仓数</th><td>{{ paper_portfolio.position_count if paper_portfolio else 0 }}</td></tr>
+      </tbody>
+    </table>
+    {% if paper_portfolio_positions %}
+    <div class="table-wrap" style="margin-top:12px;">
+      <table>
+        <thead><tr><th>代码</th><th>信号</th><th>权重</th></tr></thead>
+        <tbody>
+          {% for row in paper_portfolio_positions %}
+          <tr><td>{{ row.ticker }}</td><td class="num">{{ row.signal }}</td><td class="num">{{ row.weight }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+  </section>
+  <section class="card">
+    <h2>最近变化</h2>
+    <pre>{{ change_report }}</pre>
+  </section>
+</div>
+
+<details class="card" style="margin-top:18px;">
+  <summary style="cursor:pointer; font-weight:600;">查看详细 JSON</summary>
+  <div class="grid cols-2" style="margin-top:12px;">
+    <pre>{{ recommendation_context_text }}</pre>
+    <pre>{{ paper_portfolio_text }}</pre>
+  </div>
+</details>
+{% endblock %}

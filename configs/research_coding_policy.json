@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "name": "openclaw_autonomous_research_coding_policy",
+  "mission": "在不牺牲回测语义与研究自由的前提下，持续产出可复用、可解释、可维护、可优化的研究代码。",
+  "principles": {
+    "shared_intermediates_first": true,
+    "avoid_recomputing_factor_values": true,
+    "prefer_factor_matrix_or_cache": true,
+    "prefer_small_local_frames_over_full_copy": true,
+    "separate_research_logic_from_infrastructure_logic": true,
+    "performance_optimization_must_not_silently_change_semantics": true,
+    "new_code_should_extend_existing_abstractions_before_creating_new_ones": true
+  },
+  "performance_rules": {
+    "discourage": [
+      "repeated_apply_factor_for_same_definition",
+      "repeated_groupby_date_on_same_data_path",
+      "full_dataframe_copy_inside_factor_loop",
+      "portfolio_recomputes_existing_signals",
+      "duplicate_json_or_sqlite_writes_without_need"
+    ],
+    "prefer": [
+      "factor_value_cache",
+      "shared_factor_matrix",
+      "window_slice_reuse",
+      "shared_portfolio_signal_inputs",
+      "profiling_before_parallelism"
+    ]
+  },
+  "engineering_rules": {
+    "require_tests_for_high_risk_refactors": true,
+    "prefer_low_risk_fast_win_before_large_rewrite": true,
+    "parallelism_after_structure_cleanup_only": true,
+    "code_generation_should_follow_project_templates_when_available": true
+  },
+  "review_questions": [
+    "does_this_change_recompute_existing_work",
+    "can_this_use_cached_factor_values",
+    "does_this_change_backtest_semantics",
+    "does_this_duplicate_existing_module_logic",
+    "is_this_optimization_measured_by_timing_or_only_assumed"
+  ]
+}

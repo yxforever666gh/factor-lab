@@ -1,0 +1,64 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-2" style="margin-bottom:18px;">
+  {% for svc in services %}
+  <section class="card">
+    <h2>{{ svc.name }}</h2>
+    <div style="font-size:28px; font-weight:700;" class="{{ 'good' if svc.active_state == 'active' else 'bad' }}">{{ svc.active_state or '-' }}</div>
+    <table>
+      <tbody>
+        <tr><th>PID</th><td>{{ svc.main_pid or '-' }}</td></tr>
+        <tr><th>WorkingDirectory</th><td class="text-break">{{ svc.working_directory or '-' }}</td></tr>
+        <tr><th>ExecStart</th><td class="text-break">{{ svc.exec_start or '-' }}</td></tr>
+        <tr><th>FragmentPath</th><td class="text-break">{{ svc.fragment_path or '-' }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+  {% endfor %}
+</div>
+
+<div class="grid cols-3" style="margin-bottom:18px;">
+  <section class="card">
+    <h2>Provider</h2>
+    <div style="font-size:28px; font-weight:700;">{{ provider or '-' }}</div>
+    <div class="muted">{{ provider_source or 'unknown' }}</div>
+  </section>
+  <section class="card">
+    <h2>Queue</h2>
+    <div class="grid cols-2">
+      <div><div class="muted">pending</div><div style="font-size:24px; font-weight:700;">{{ queue_counts.pending or 0 }}</div></div>
+      <div><div class="muted">running</div><div style="font-size:24px; font-weight:700;">{{ queue_counts.running or 0 }}</div></div>
+      <div><div class="muted">finished_24h</div><div style="font-size:24px; font-weight:700;">{{ queue_counts.finished_24h or 0 }}</div></div>
+      <div><div class="muted">failed_24h</div><div style="font-size:24px; font-weight:700;">{{ queue_counts.failed_24h or 0 }}</div></div>
+    </div>
+  </section>
+  <section class="card">
+    <h2>Heartbeat</h2>
+    <div class="muted">{{ heartbeat.timestamp if heartbeat else '暂无 heartbeat 文件' }}</div>
+    {% if heartbeat %}<pre>{{ heartbeat }}</pre>{% endif %}
+  </section>
+</div>
+
+<section class="card" style="margin-bottom:18px;">
+  <h2>Latest Task</h2>
+  {% if latest_task %}
+  <table>
+    <tbody>
+      <tr><th>ID</th><td>{{ latest_task.task_id or latest_task.id }}</td></tr>
+      <tr><th>Type</th><td>{{ latest_task.task_type }}</td></tr>
+      <tr><th>Status</th><td>{{ latest_task.status }}</td></tr>
+      <tr><th>Created</th><td>{{ latest_task.created_at_utc }}</td></tr>
+      <tr><th>Note</th><td class="text-break">{{ latest_task.worker_note or '-' }}</td></tr>
+    </tbody>
+  </table>
+  {% else %}
+  <div class="muted">暂无任务，或数据库正忙。</div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Read-only Control</h2>
+  <p class="muted">当前页面只读，不执行重启、取消任务、删除文件等副作用操作。高危操作将在安全设计落地后通过 POST + audit log 暴露。</p>
+  <p><a href="/runs">运行记录</a> · <a href="/agents">Agent 设置</a> · <a href="/settings">大模型设置</a> · <a href="/health">健康度</a></p>
+</section>
+{% endblock %}

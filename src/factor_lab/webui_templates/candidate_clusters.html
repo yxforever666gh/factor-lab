@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-4" style="margin-bottom:18px;">
+  <section class="card"><h2>Clusters</h2><div style="font-size:36px; font-weight:700;">{{ summary.cluster_count }}</div></section>
+  <section class="card"><h2>Connected Candidates</h2><div style="font-size:36px; font-weight:700;">{{ summary.connected_candidate_count }}</div></section>
+  <section class="card"><h2>Relationships</h2><div style="font-size:36px; font-weight:700;">{{ summary.relationship_count }}</div></section>
+  <section class="card"><h2>Suppressed Similars</h2><div style="font-size:36px; font-weight:700;">{{ summary.suppressed_candidate_count }}</div></section>
+</div>
+{% for cluster in clusters %}
+<section class="card" style="margin-top:18px;">
+  <h2>{{ cluster.primary_candidate or cluster.leader or 'unknown' }} 领头的候选簇</h2>
+  <div class="muted">dominant_family={{ cluster.dominant_family }} · size={{ cluster.cluster_size }} · edges={{ cluster.edge_count }} · avg_strength={{ cluster.avg_strength if cluster.avg_strength is not none else '-' }} · suppressed={{ cluster.suppressed_member_count or 0 }}</div>
+  <div style="margin-top:10px;">
+    {% for key, value in cluster.relationship_mix.items() %}
+    <span class="pill">{{ key }}: {{ value }}</span>
+    {% endfor %}
+    {% if cluster.primary_candidate %}<span class="pill good">primary={{ cluster.primary_candidate }}</span>{% endif %}
+  </div>
+  <div class="table-wrap" style="margin-top:12px;">
+    <table>
+      <thead><tr><th>候选</th><th>角色</th><th>Family</th><th>状态</th><th>最新分</th><th>平均分</th><th>评估数</th></tr></thead>
+      <tbody>
+        {% for row in cluster.members %}
+        <tr>
+          <td><a href="/candidates/{{ row.id }}">{{ row.name }}</a></td>
+          <td>{% if row.is_primary %}<span class="pill good">primary</span>{% elif row.is_representative %}<span class="pill good">representative</span>{% else %}<span class="pill warn">suppressed similar</span>{% endif %}</td>
+          <td>{{ row.family }}</td>
+          <td>{{ row.status }}</td>
+          <td class="num">{{ row.latest_final_score if row.latest_final_score is not none else '-' }}</td>
+          <td class="num">{{ row.avg_final_score if row.avg_final_score is not none else '-' }}</td>
+          <td class="num">{{ row.evaluation_count }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endfor %}
+{% if not clusters %}
+<section class="card"><div class="muted">暂无候选关系簇。先跑几轮 workflow/batch 后这里会出现基于高相关、同簇、同 family 的连接结果。</div></section>
+{% endif %}
+{% endblock %}

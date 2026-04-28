@@ -1,0 +1,537 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-3" style="margin-bottom:18px;">
+  <section class="card">
+    <h2>运行健康</h2>
+    <div style="font-size:40px; font-weight:700;">{{ health.run_health.score }}</div>
+    <div class="muted">24h 完成 {{ health.run_health.finished_24h }}/{{ health.run_health.runs_24h }}</div>
+  </section>
+  <section class="card">
+    <h2>研究进步</h2>
+    <div style="font-size:40px; font-weight:700;">{{ health.research_progress.score }}</div>
+    <div class="muted">主值来源：{{ '当前快照' if health.research_progress.score_basis == 'snapshot' else '24h 时间线末点' }}；当前快照 {{ health.research_progress.snapshot_score }}，时间线末点 {{ health.research_progress.timeline_score }}</div>
+    <div class="muted">拆解：稳定候选 {{ health.research_progress.breakdown.stable_candidate_component if health.research_progress.breakdown else '-' }} + 收敛 {{ health.research_progress.breakdown.convergence_component if health.research_progress.breakdown else '-' }} + 建议命中 {{ health.research_progress.breakdown.recommendation_component if health.research_progress.breakdown else '-' }} + 候选活跃 {{ health.research_progress.breakdown.candidate_activity_component if health.research_progress.breakdown else '-' }}</div>
+    {% if health.research_progress.score_warning %}
+    <div class="bad" style="margin-top:8px;">{{ health.research_progress.score_warning }}</div>
+    {% endif %}
+  </section>
+  <section class="card">
+    <h2>组合进步</h2>
+    <div style="font-size:40px; font-weight:700;">{{ health.portfolio_progress.score }}</div>
+    <div class="muted">主值来源：当前快照；时间线末点 {{ health.portfolio_progress.timeline_score }}；纸面组合 {{ health.portfolio_progress.paper_stability.label if health.portfolio_progress.paper_stability else '-' }}</div>
+    <div class="muted">拆解：Sharpe {{ health.portfolio_progress.breakdown.sharpe_component if health.portfolio_progress.breakdown else '-' }} + 稳定性 {{ health.portfolio_progress.breakdown.stability_component if health.portfolio_progress.breakdown else '-' }} + Return Gate {{ health.portfolio_progress.breakdown.return_component if health.portfolio_progress.breakdown else '-' }}</div>
+    <div class="muted">稳定性来源：{{ health.portfolio_progress.paper_stability_source if health.portfolio_progress.paper_stability_source is defined else 'snapshot_fallback' }}</div>
+  </section>
+</div>
+
+<section class="card" style="margin-bottom:18px;">
+  <h2>Decision Layer</h2>
+  <div class="grid cols-4" style="margin-bottom:12px;">
+    <div>
+      <div class="muted">live effective</div>
+      <div style="font-size:28px; font-weight:700;" class="{{ 'bad' if health.decision_layer.live.degraded_to_heuristic else 'good' }}">{{ health.decision_layer.live.effective_source or '-' }}</div>
+    </div>
+    <div>
+      <div class="muted">observe effective</div>
+      <div style="font-size:28px; font-weight:700;" class="{{ 'bad' if health.decision_layer.observation.degraded_to_heuristic else 'good' }}">{{ health.decision_layer.observation.effective_source or '-' }}</div>
+    </div>
+    <div>
+      <div class="muted">planner fallback</div>
+      <div style="font-size:18px; font-weight:700;">{{ health.decision_layer.planner.fallback_reason or '-' }}</div>
+    </div>
+    <div>
+      <div class="muted">gateway probe</div>
+      <div style="font-size:18px; font-weight:700;">
+        {% if health.decision_layer.observation.probe_skipped %}
+        skipped
+        {% elif health.decision_layer.observation.probe_ok %}
+        ok / {{ health.decision_layer.observation.probe_latency_ms if health.decision_layer.observation.probe_latency_ms is not none else '-' }}ms
+        {% else %}
+        {{ health.decision_layer.observation.probe_error or 'n/a' }}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% if health.decision_layer.degraded %}
+  <div class="bad">当前 decision layer 有显式退化，live 已不再静默假装正常。</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-bottom:18px;">
+  <h2>Repair Layer</h2>
+  <div class="grid cols-4" style="margin-bottom:12px;">
+    <div>
+      <div class="muted">active incidents</div>
+      <div style="font-size:28px; font-weight:700;" class="{{ 'bad' if health.repair_layer.active_incident_count else 'good' }}">{{ health.repair_layer.active_incident_count }}</div>
+    </div>
+    <div>
+      <div class="muted">24h incidents</div>
+      <div style="font-size:28px; font-weight:700;">{{ health.repair_layer.metrics.incident_count_24h if health.repair_layer.metrics else 0 }}</div>
+    </div>
+    <div>
+      <div class="muted">24h observations</div>
+      <div style="font-size:28px; font-weight:700;">{{ health.repair_layer.metrics.observation_count_24h if health.repair_layer.metrics else 0 }}</div>
+    </div>
+    <div>
+      <div class="muted">last verification</div>
+      <div style="font-size:18px; font-weight:700;">{{ health.repair_layer.verification.overall_status if health.repair_layer.verification else '-' }}</div>
+    </div>
+  </div>
+  <div class="muted">最新 repair 判断：{{ health.repair_layer.response.incident_type if health.repair_layer.response else '-' }} / {{ health.repair_layer.response.repair_mode if health.repair_layer.response else '-' }}</div>
+  <div class="muted">route_unhealthy={{ 'yes' if health.repair_layer.route_unhealthy else 'no' }} · restart_recently={{ 'yes' if health.repair_layer.restart_recently else 'no' }}</div>
+  {% if health.repair_layer.top_incident_types_24h %}
+  <div class="muted" style="margin-top:8px;">24h top incidents：{% for row in health.repair_layer.top_incident_types_24h %}{{ row[0] }}={{ row[1] }}{% if not loop.last %} · {% endif %}{% endfor %}</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-bottom:18px;">
+  <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
+    <div>
+      <h2 style="margin-bottom:6px;">项目进步观察</h2>
+      <div class="muted">总览页放简版：看 24h / 7d 项目进步总分，默认仍然用均值口径，不用最高值。</div>
+    </div>
+    <div class="segmented" data-segmented="project-progress-dashboard">
+      <button type="button" class="active" data-target="dashboard-project-progress-24h">24h</button>
+      <button type="button" data-target="dashboard-project-progress-7d">7d</button>
+    </div>
+  </div>
+
+  <div class="grid cols-4" style="margin-bottom:12px;">
+    <div><div class="muted">24h 新候选任务</div><div style="font-size:28px; font-weight:700;">{{ health.project_progress_observation.current_24h.generated_task_count or 0 }}</div></div>
+    <div><div class="muted">24h 候选结果</div><div style="font-size:28px; font-weight:700;">{{ health.project_progress_observation.current_24h.generated_outcome_count or 0 }}</div></div>
+    <div><div class="muted">24h 高信息占比</div><div style="font-size:28px; font-weight:700;">{{ ((health.project_progress_observation.current_24h.high_info_ratio or 0) * 100)|round(1) }}%</div></div>
+    <div><div class="muted">24h 总分</div><div style="font-size:28px; font-weight:700;">{{ health.project_progress_observation.current_scores.overall }}</div></div>
+  </div>
+
+  <div class="grid cols-3" style="margin-bottom:12px;">
+    <div><div class="muted">因子发现分</div><div style="font-size:24px; font-weight:700;">{{ health.project_progress_observation.current_scores.factor_discovery }}</div></div>
+    <div><div class="muted">研究增益分</div><div style="font-size:24px; font-weight:700;">{{ health.project_progress_observation.current_scores.research_gain }}</div></div>
+    <div><div class="muted">组合边际分</div><div style="font-size:24px; font-weight:700;">{{ health.project_progress_observation.current_scores.portfolio_edge }}</div></div>
+  </div>
+
+  <div id="dashboard-project-progress-24h" class="segment-pane active">
+    <div class="muted" style="margin-bottom:10px;">24h 口径：按小时均值聚合。</div>
+    <div style="overflow-x:auto;">{{ health.project_progress_observation.windows['24h'].chart_svg | safe }}</div>
+  </div>
+  <div id="dashboard-project-progress-7d" class="segment-pane">
+    <div class="muted" style="margin-bottom:10px;">7d 口径：按天均值聚合，每个点代表当天平均项目进步分。</div>
+    <div style="overflow-x:auto;">{{ health.project_progress_observation.windows['7d'].chart_svg | safe }}</div>
+  </div>
+</section>
+
+<script>
+  document.querySelectorAll('[data-segmented="project-progress-dashboard"]').forEach((group) => {
+    const buttons = group.querySelectorAll('button[data-target]');
+    buttons.forEach((button) => {
+      button.addEventListener('click', () => {
+        buttons.forEach((btn) => btn.classList.toggle('active', btn === button));
+        document.querySelectorAll('#dashboard-project-progress-24h, #dashboard-project-progress-7d').forEach((pane) => {
+          pane.classList.toggle('active', pane.id === button.dataset.target);
+        });
+      });
+    });
+  });
+</script>
+
+<div class="grid cols-2">
+  <section class="card">
+    <h2>最新摘要</h2>
+    <pre>{{ latest_summary }}</pre>
+  </section>
+  <section class="card">
+    <h2>研究流状态机</h2>
+    <table>
+      <tbody>
+        <tr><th>当前状态</th><td><span class="pill {{ 'good' if research_flow_state.state in ['ready','recovered'] else 'bad' if research_flow_state.state == 'exhausted' else '' }}">{{ research_flow_state.state or '-' }}</span></td></tr>
+        <tr><th>研究候选数</th><td>{{ research_flow_state.candidate_count if research_flow_state else 0 }}</td></tr>
+        <tr><th>本轮是否 recovery</th><td>{{ '是' if research_flow_state.recovery_used else '否' }}</td></tr>
+        <tr><th>活跃 recovery 分支</th><td>{{ research_flow_state.recovery_active_branch_count if research_flow_state else 0 }}</td></tr>
+        <tr><th>本轮注入数</th><td>{{ research_flow_state.injected_count if research_flow_state else 0 }}</td></tr>
+        <tr><th>原因</th><td class="text-break">{{ research_flow_state.reasons|join('、') if research_flow_state.reasons else '-' }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<section class="card" style="margin-top:18px;">
+  <h2>最近变化</h2>
+  <pre>{{ change_report }}</pre>
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>Approved Universe / Functional Agents</h2>
+  {% if approved_universe %}
+  <div class="grid cols-3" style="margin-bottom:12px;">
+    <div><div class="muted">Approved 数量</div><div style="font-size:28px; font-weight:700;">{{ approved_universe.summary.approved_count if approved_universe.summary else 0 }}</div></div>
+    <div><div class="muted">Policy</div><div style="font-size:18px; font-weight:700;">{{ approved_universe.selection_policy_version or '-' }}</div></div>
+    <div><div class="muted">当前入池</div><div style="font-size:18px; font-weight:700;">{{ approved_universe.rows|map(attribute='factor_name')|join('、') if approved_universe.rows else '无' }}</div></div>
+  </div>
+  <div class="muted">planner / promotion 可读取 approved universe 作为统一研究行为层。</div>
+  <div class="grid cols-4" style="margin-top:12px;">
+    <div><div class="muted">Novelty classes</div><div>{{ novelty_judge.summary.class_counts if novelty_judge and novelty_judge.summary else '-' }}</div></div>
+    <div><div class="muted">AU allocation audit</div><div>{{ allocator_governance_audit.allocation.summary.count_by_audit if allocator_governance_audit and allocator_governance_audit.allocation else '-' }}</div></div>
+    <div><div class="muted">Decision A/B</div><div>{{ decision_ab.report.recommendation if decision_ab and decision_ab.report else '-' }} / qΔ={{ decision_ab.report.quality_delta if decision_ab and decision_ab.report else '-' }}</div></div>
+    <div><div class="muted">Failure Analyst+</div><div>{% if failure_analyst_enhancement and failure_analyst_enhancement.summary %}reroute={{ failure_analyst_enhancement.summary.reroute_count or 0 }} / stop={{ failure_analyst_enhancement.summary.stop_count or 0 }}{% else %}-{% endif %}</div></div>
+  </div>
+  {% else %}
+  <div class="muted">Approved Universe 尚未生成。</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>质量分层快照</h2>
+  <div class="grid cols-5" style="margin-bottom:12px;">
+    <div><div class="muted">稳定 alpha 候选</div><div style="font-size:28px; font-weight:700;">{{ promotion_scorecard.summary.stable_alpha_candidate_count if promotion_scorecard.summary else 0 }}</div></div>
+    <div><div class="muted">继续验证</div><div style="font-size:28px; font-weight:700;">{{ promotion_scorecard.summary.needs_validation_count if promotion_scorecard.summary else 0 }}</div></div>
+    <div><div class="muted">Exposure Track</div><div style="font-size:28px; font-weight:700;">{{ promotion_scorecard.summary.exposure_track_count if promotion_scorecard.summary else 0 }}</div></div>
+    <div><div class="muted">Regime-sensitive</div><div style="font-size:28px; font-weight:700;">{{ promotion_scorecard.summary.quality_regime_sensitive_count if promotion_scorecard.summary else 0 }}</div></div>
+    <div><div class="muted">重复候选压制</div><div style="font-size:28px; font-weight:700;">{{ promotion_scorecard.summary.duplicate_suppress_count if promotion_scorecard.summary else 0 }}</div></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>因子</th><th>质量总分</th><th>质量分类</th><th>晋升决策</th><th>摘要</th></tr></thead>
+      <tbody>
+        {% for row in promotion_scorecard.rows[:6] %}
+        <tr>
+          <td>{{ row.factor_name }}</td>
+          <td>{{ row.quality_total_score }}</td>
+          <td>{{ row.quality_classification_label or row.quality_classification }}</td>
+          <td>{{ row.quality_promotion_decision_label or row.quality_promotion_decision }}</td>
+          <td>{{ row.quality_summary }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>自治研究指标</h2>
+  {% if health.autonomy_metrics %}
+  <div class="grid cols-4" style="margin-bottom:12px;">
+    <div><div class="muted">生成候选执行数</div><div style="font-size:28px; font-weight:700;">{{ health.autonomy_metrics.generated_candidate_task_count_recent or 0 }}</div></div>
+    <div><div class="muted">生成候选结果数</div><div style="font-size:28px; font-weight:700;">{{ health.autonomy_metrics.generated_candidate_outcome_count or 0 }}</div></div>
+    <div><div class="muted">重复压制率</div><div style="font-size:28px; font-weight:700;">{{ health.autonomy_metrics.duplicate_suppression_ratio or '-' }}</div></div>
+    <div><div class="muted">研究模式</div><div style="font-size:28px; font-weight:700;">{{ health.autonomy_metrics.research_mode.mode if health.autonomy_metrics.research_mode else '-' }}</div></div>
+  </div>
+  <div class="grid cols-4" style="margin-bottom:12px;">
+    <div><div class="muted">质量优先模式</div><div style="font-size:28px; font-weight:700;">{{ '开' if health.autonomy_metrics.quality_priority_mode else '关' }}</div></div>
+    <div><div class="muted">Frontier 证据缺口</div><div style="font-size:28px; font-weight:700;">{{ health.autonomy_metrics.frontier_evidence_missing_count or 0 }}</div></div>
+    <div><div class="muted">重复压力</div><div style="font-size:28px; font-weight:700;">{{ health.autonomy_metrics.quality_duplicate_pressure or 0 }}</div></div>
+    <div><div class="muted">新候选预算</div><div style="font-size:28px; font-weight:700;">{{ health.autonomy_metrics.quality_generated_candidate_budget or 0 }}</div></div>
+  </div>
+  {% if health.autonomy_metrics.quality_priority_reasons %}
+  <div class="muted" style="margin-bottom:10px;">质量优先原因：{{ health.autonomy_metrics.quality_priority_reasons|join('；') }}</div>
+  {% endif %}
+  <pre>{{ health.autonomy_metrics }}</pre>
+  {% else %}
+  <div class="muted">自治研究指标尚未生成。</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>自治保护 / 预算守门</h2>
+  <div class="grid cols-4" style="margin-bottom:12px;">
+    <div><div class="muted">预算守门任务数</div><div style="font-size:28px; font-weight:700;">{{ health.research_progress.stall_state.budget_guarded_tasks or 0 }}</div></div>
+    <div><div class="muted">Blocked family 事件</div><div style="font-size:28px; font-weight:700;">{{ health.research_progress.stall_state.blocked_family_events or 0 }}</div></div>
+    <div><div class="muted">当前 pending</div><div style="font-size:28px; font-weight:700;">{{ health.research_progress.stall_state.queue_pending or 0 }}</div></div>
+    <div><div class="muted">当前 running</div><div style="font-size:28px; font-weight:700;">{{ health.research_progress.stall_state.queue_running or 0 }}</div></div>
+  </div>
+
+  {% set blocked_status = health.run_health.daemon_status.blocked_lane_status if health.run_health.daemon_status else None %}
+  {% if blocked_status and blocked_status.active %}
+  <div style="padding:12px; border:1px solid var(--border); border-radius:12px; background:var(--panel-2); margin-bottom:12px;">
+    <div><strong>当前 blocked lane：</strong>{{ health.run_health.daemon_status.blocked_lane_summary or blocked_status.summary }}</div>
+    <div class="muted" style="margin-top:6px;">
+      blocked pending {{ blocked_status.blocked_pending_count or 0 }} ｜ unblocked pending {{ blocked_status.unblocked_pending_count or 0 }} ｜ {{ '仅剩 blocked lane，队列需要恢复' if blocked_status.only_blocked_pending else '仍有健康 lane 在继续推进' }}
+    </div>
+  </div>
+  <div class="table-wrap" style="margin-bottom:12px;">
+    <table>
+      <thead><tr><th>Lane</th><th>根因</th><th>连续失败</th><th>Pending</th><th>最近错误</th></tr></thead>
+      <tbody>
+        {% for lane in blocked_status.lanes %}
+        <tr>
+          <td>{{ lane.task_type }}</td>
+          <td>{{ lane.root_cause_label or lane.root_cause or '-' }}</td>
+          <td class="num">{{ lane.consecutive_failures or 0 }}</td>
+          <td class="num">{{ lane.pending_count or 0 }}</td>
+          <td class="text-break">{{ lane.latest_error or '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <div class="grid cols-2">
+    <div>
+      <h3 style="margin-top:0;">最近被预算保护拦下的任务</h3>
+      {% if health.research_progress.budget_guard_tasks %}
+      <ul>
+        {% for row in health.research_progress.budget_guard_tasks %}
+        <li class="text-break">{{ row.worker_note or row.last_error or row.task_type }}</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="muted">最近没有预算守门拦截记录。</div>
+      {% endif %}
+    </div>
+    <div>
+      <h3 style="margin-top:0;">最近 blocked / guardrail 事件</h3>
+      {% if health.research_progress.blocked_family_heartbeats %}
+      <ul>
+        {% for row in health.research_progress.blocked_family_heartbeats %}
+        <li class="text-break">{{ row.status }}：{{ row.summary or row.message or '-' }}</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="muted">最近没有 blocked family / guardrail 事件。</div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>研究方向学习</h2>
+  {% if research_learning.families %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Family</th><th>最近运行</th><th>最近增益</th><th>最近无增益</th><th>连续无增益</th><th>建议动作</th><th>冷却</th></tr></thead>
+      <tbody>
+        {% for key, row in research_learning.families.items() %}
+        <tr>
+          <td>{{ key }}</td>
+          <td>{{ row.recent_runs }}</td>
+          <td>{{ row.recent_gain }}</td>
+          <td>{{ row.recent_no_gain }}</td>
+          <td>{{ row.consecutive_no_gain }}</td>
+          <td>{{ row.recommended_action }}</td>
+          <td>{{ '是' if row.cooldown_active else '否' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="muted">研究方向学习样本还在积累中，当前暂无可用 family 学习记录。</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>新主线任务可见性</h2>
+  <div class="grid cols-2">
+    <div>
+      <h3 style="margin-top:0;">Generated Candidate</h3>
+      {% if generated_candidate_active %}
+      <ul>
+        {% for row in generated_candidate_active %}
+        <li>{{ row.worker_note }}</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="muted">当前没有活跃的 generated candidate 任务。</div>
+      {% endif %}
+    </div>
+    <div>
+      <h3 style="margin-top:0;">代表因子专项验证</h3>
+      {% if representative_active %}
+      <ul>
+        {% for row in representative_active %}
+        <li>{{ row.worker_note }}</li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <div class="muted">当前没有活跃的代表因子专项验证任务。</div>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>当前活跃的 Planner 任务</h2>
+  {% if planner_active %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>类型</th><th>状态</th><th>任务</th><th>创建时间</th></tr></thead>
+      <tbody>
+        {% for row in planner_active %}
+        <tr>
+          <td>{{ row.task_type }}</td>
+          <td>{{ row.status }}</td>
+          <td class="text-break">{{ row.worker_note }}</td>
+          <td class="text-nowrap">{{ row.created_at_utc }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="muted">当前没有活跃的 planner 任务。</div>
+  {% endif %}
+  <div class="muted" style="margin-top:12px;">
+    最近一次 planner 校验通过：{{ planner_validated.summary.accepted_count if planner_validated.summary else 0 }} 个；
+    实际注入：{{ planner_injected.injected_count if planner_injected else 0 }} 个。
+  </div>
+</section>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>最近运行</h2>
+    <table>
+      <thead><tr><th>运行</th><th>状态</th><th>配置</th></tr></thead>
+      <tbody>
+        {% for row in latest_runs %}
+        <tr>
+          <td><a href="/runs/{{ row.run_id }}">{{ row.run_id[:8] }}</a><br><span class="muted">{{ row.created_at_utc }}</span></td>
+          <td><span class="pill {{ 'good' if row.status == 'finished' else 'bad' }}">{{ '已完成' if row.status == 'finished' else row.status }}</span></td>
+          <td>{{ row.config_path }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>Alpha Track：稳定候选因子</h2>
+    <table>
+      <thead><tr><th>因子</th><th>出现次数</th></tr></thead>
+      <tbody>
+        {% for row in stable_candidates %}
+        <tr><td>{{ row.factor_name }}</td><td>{{ row.candidate_runs }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<div class="grid cols-1" style="margin-top:18px;">
+  <section class="card">
+    <h2>Exposure Track：强度优先（风格/行业轮动候选）</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>因子</th><th>类型</th><th>强度分</th><th>Raw IC</th><th>Split Fail</th><th>拥挤</th><th>建议权重上限</th><th>状态</th></tr></thead>
+        <tbody>
+          {% for row in exposure_leaderboard %}
+          <tr>
+            <td>{{ row.factor_name }}</td>
+            <td>{{ row.exposure_type }}</td>
+            <td>{{ row.strength_score }}</td>
+            <td>{{ row.raw_rank_ic_mean }}</td>
+            <td>{{ row.split_fail_count }}</td>
+            <td>{{ row.crowding_peers }}</td>
+            <td>{{ row.recommended_max_weight }}</td>
+            <td><span class="pill {{ 'good' if row.status == 'usable' else '' }}">{{ row.status }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="muted" style="margin-top:10px;">说明：Exposure Track 不要求 neutralized 通过；neutralized 结果只用于解释与风控标签。强度优先，但会给出建议权重上限以便控风险。</div>
+  </section>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>候选榜单</h2>
+    <table>
+      <thead><tr><th>候选</th><th>状态</th><th>平均分</th><th>最新分</th><th>评估数</th></tr></thead>
+      <tbody>
+        {% for row in candidate_leaderboard %}
+        <tr><td><a href="/candidates/{{ row.id }}">{{ row.name }}</a></td><td>{{ row.status }}</td><td>{{ row.avg_final_score }}</td><td>{{ row.latest_final_score }}</td><td>{{ row.evaluation_count }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>最高分因子</h2>
+    <table>
+      <thead><tr><th>因子</th><th>平均分</th><th>运行次数</th></tr></thead>
+      <tbody>
+        {% for row in top_factors %}
+        <tr><td>{{ row.factor_name }}</td><td>{{ row.avg_score }}</td><td>{{ row.runs }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>最佳策略</h2>
+    <table>
+      <thead><tr><th>策略</th><th>平均夏普</th><th>平均收益</th></tr></thead>
+      <tbody>
+        {% for row in top_strategies %}
+        <tr><td>{{ row.strategy_name }}</td><td>{{ row.avg_sharpe }}</td><td>{{ row.avg_return }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+
+
+<section class="card" style="margin-top:18px;">
+  <h2>四层研究状态</h2>
+  <div class="grid cols-4">
+    {% for stage in ['explore', 'watchlist', 'candidate', 'graveyard'] %}
+    <div>
+      <div class="muted">{{ stage }}</div>
+      <div style="font-size:28px; font-weight:700; margin-bottom:8px;">{{ stage_summary[stage]|length if stage_summary else 0 }}</div>
+      {% if stage_summary and stage_summary[stage] %}
+        {% for row in stage_summary[stage][:3] %}
+        <div style="margin-bottom:8px;">
+          <div><strong>{{ row.factor_name }}</strong></div>
+          <div class="muted">{{ row.promotion_reason or '-' }}</div>
+          <div class="muted">{{ (row.blocking_reasons or [])|join('；') if row.blocking_reasons else '-' }}</div>
+        </div>
+        {% endfor %}
+      {% else %}
+      <div class="muted">暂无</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>Rolling Stability</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>因子</th><th>稳定性</th><th>Pass Rate</th><th>Sign Flips</th><th>Avg IC</th><th>IC Std</th><th>通过</th></tr></thead>
+      <tbody>
+        {% for row in rolling_summary_rows %}
+        <tr>
+          <td>{{ row.factor_name }}</td>
+          <td>{{ row.stability_score }}</td>
+          <td>{{ row.pass_rate }}</td>
+          <td>{{ row.sign_flip_count }}</td>
+          <td>{{ row.avg_rank_ic_mean }}</td>
+          <td>{{ row.rank_ic_std }}</td>
+          <td>{{ '是' if row.pass_gate else '否' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>Family 聚合</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Family</th><th>数量</th><th>代表因子</th><th>建议</th></tr></thead>
+      <tbody>
+        {% for row in family_summary_rows %}
+        <tr>
+          <td>{{ row.family }}</td>
+          <td>{{ row.count }}</td>
+          <td>{{ row.top_factor }}</td>
+          <td>{{ row.note }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% endblock %}

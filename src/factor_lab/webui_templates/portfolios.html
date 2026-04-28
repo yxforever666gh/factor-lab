@@ -1,0 +1,43 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-2">
+  <section class="card">
+    <h2>策略平均表现</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th class="col-strategy">策略</th><th>平均夏普</th><th>平均收益</th><th>运行次数</th></tr></thead>
+        <tbody>
+          {% for row in strategies %}
+          <tr>
+            <td class="text-break col-strategy">{{ row.strategy_name }}</td>
+            <td class="num">{{ row.avg_sharpe }}</td>
+            <td class="num">{{ row.avg_return }}</td>
+            <td class="num">{{ row.runs }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <section class="card">
+    <h2>最近组合记录</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th class="col-run">运行</th><th class="col-strategy">策略</th><th>收益</th><th>夏普</th><th>回撤</th><th>换手</th></tr></thead>
+        <tbody>
+          {% for row in recent %}
+          <tr>
+            <td class="text-nowrap col-run"><a href="/runs/{{ row.run_id }}">{{ row.run_id[:8] }}</a></td>
+            <td class="text-break col-strategy">{{ row.strategy_name }}</td>
+            <td class="num">{{ row.annual_return }}</td>
+            <td class="num">{{ row.sharpe }}</td>
+            <td class="num">{{ row.max_drawdown }}</td>
+            <td class="num">{{ row.avg_turnover }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+{% endblock %}

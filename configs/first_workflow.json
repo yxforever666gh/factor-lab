@@ -1,0 +1,31 @@
+{
+  "seed": 7,
+  "num_stocks": 60,
+  "num_days": 220,
+  "factors": [
+    {
+      "name": "mom_20",
+      "expression": "momentum_20"
+    },
+    {
+      "name": "value_ep",
+      "expression": "earnings_yield"
+    },
+    {
+      "name": "quality_roe",
+      "expression": "roe"
+    },
+    {
+      "name": "liquidity_turnover_shock",
+      "expression": "turnover_shock_5_20"
+    },
+    {
+      "name": "quality_minus_value",
+      "expression": "roe - pb"
+    }
+  ],
+  "thresholds": {
+    "min_rank_ic": 0.03,
+    "min_top_bottom_spread": 0.001
+  }
+}

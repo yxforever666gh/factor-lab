@@ -1,0 +1,20 @@
+{
+  "data_source": "tushare",
+  "cache_dir": "artifacts/tushare_cache",
+  "output_dir": "artifacts/tushare_workflow_longer",
+  "start_date": "2024-01-01",
+  "end_date": "2026-03-18",
+  "universe_limit": 100,
+  "rolling_validation": {
+    "window_size": 126,
+    "step_size": 42,
+    "min_pass_rate": 0.5,
+    "max_sign_flips": 3,
+    "min_rank_ic": 0.01
+  },
+  "thresholds": {
+    "min_rank_ic": 0.02,
+    "min_top_bottom_spread": 0.0005
+  },
+  "factor_family_config": "factor_families_v1.json"
+}

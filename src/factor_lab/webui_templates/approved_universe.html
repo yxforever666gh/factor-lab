@@ -1,0 +1,208 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-2">
+  <section class="card">
+    <h2>Approved Universe 摘要</h2>
+    <table>
+      <tbody>
+        <tr><th>策略版本</th><td>{{ universe.selection_policy_version if universe else '-' }}</td></tr>
+        <tr><th>Approved 数量</th><td>{{ universe.summary.approved_count if universe and universe.summary else 0 }}</td></tr>
+        <tr><th>Considered 数量</th><td>{{ universe.summary.considered_count if universe and universe.summary else 0 }}</td></tr>
+        <tr><th>Rejected 数量</th><td>{{ universe.summary.rejected_count if universe and universe.summary else 0 }}</td></tr>
+        <tr><th>Tier 统计</th><td>{{ universe.summary.approval_tier_counts if universe and universe.summary else '-' }}</td></tr>
+        <tr><th>Bucket 统计</th><td>{{ universe.summary.portfolio_bucket_counts if universe and universe.summary else '-' }}</td></tr>
+        <tr><th>State 统计</th><td>{{ universe.summary.state_counts if universe and universe.summary else '-' }}</td></tr>
+        <tr><th>治理动作</th><td>{{ universe.summary.governance_action_counts if universe and universe.summary else '-' }}</td></tr>
+        <tr><th>预算摘要</th><td>{{ universe.budget_summary.bucket_allocations if universe and universe.budget_summary else '-' }}</td></tr>
+        <tr><th>首选 dataset</th><td class="text-break">{{ universe.preferred_dataset_path if universe else '-' }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2>拒绝原因统计</h2>
+    {% set counts = universe.summary.rejection_reason_counts if universe and universe.summary else {} %}
+    {% if counts %}
+    <ul>
+      {% for key, value in counts.items() %}
+      <li>{{ key }}：{{ value }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="muted">暂无拒绝原因统计。</div>
+    {% endif %}
+  </section>
+</div>
+
+<section class="card" style="margin-top:18px;">
+  <h2>Approved 候选</h2>
+  {% if universe.rows %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>因子</th><th>Family</th><th>来源窗口</th><th>State</th><th>Tier/Bucket</th><th>预算</th><th>代表状态</th><th>质量分类</th><th>批准原因</th><th>治理动作</th><th>阻塞摘要</th></tr></thead>
+      <tbody>
+        {% for row in universe.rows %}
+        <tr>
+          <td>{{ row.factor_name }}</td>
+          <td>{{ row.family or '-' }}</td>
+          <td>{{ row.source_windows|join('、') if row.source_windows else '-' }}</td>
+          <td>{{ row.lifecycle_state or row.universe_state or '-' }}</td>
+          <td>{{ row.approval_tier or '-' }} / {{ row.portfolio_bucket_label or row.portfolio_bucket or '-' }}</td>
+          <td>alloc={{ row.allocated_weight if row.allocated_weight is not none else row.portfolio_weight_hint if row.portfolio_weight_hint is not none else '-' }} / max={{ row.max_weight if row.max_weight is not none else '-' }}</td>
+          <td>{{ row.representative_status or '-' }}</td>
+          <td>{{ row.quality_classification or '-' }}</td>
+          <td>{{ row.approved_reason or '-' }}</td>
+          <td>{{ row.governance_action or '-' }}</td>
+          <td class="text-break">{{ row.blocking_reasons|join('；') if row.blocking_reasons else '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="muted">当前 approved universe 为空。</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>Debug / 未入选候选</h2>
+  {% if debug.rows %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>因子</th><th>Approved</th><th>来源窗口</th><th>候选/观察/墓地</th><th>拒绝原因</th></tr></thead>
+      <tbody>
+        {% for row in debug.rows %}
+        <tr>
+          <td>{{ row.factor_name }}</td>
+          <td><span class="pill {{ 'good' if row.approved else 'bad' }}">{{ 'yes' if row.approved else 'no' }}</span></td>
+          <td>{{ row.source_windows|join('、') if row.source_windows else '-' }}</td>
+          <td>{{ row.candidate_pool_count }}/{{ row.watchlist_count }}/{{ row.graveyard_count }}</td>
+          <td class="text-break">{{ row.rejection_reasons|join('；') if row.rejection_reasons else '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="muted">暂无 debug 记录。</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>来源 Runs</h2>
+  {% if universe.source_runs %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>时间</th><th>窗口</th><th>candidate pool</th><th>config</th></tr></thead>
+      <tbody>
+        {% for row in universe.source_runs %}
+        <tr>
+          <td class="text-nowrap">{{ row.created_at_utc }}</td>
+          <td>{{ row.window_label }}</td>
+          <td>{{ row.candidate_pool_count }}</td>
+          <td class="text-break">{{ row.config_path }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="muted">暂无来源 run。</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>Governance</h2>
+  {% if universe.governance and universe.governance.summary %}
+  <div class="grid cols-3">
+    <div><strong>State Counts</strong><div>{{ universe.governance.summary.state_counts if universe.governance.summary.state_counts else '无' }}</div></div>
+    <div><strong>Action Counts</strong><div>{{ universe.governance.summary.action_counts if universe.governance.summary.action_counts else '无' }}</div></div>
+    <div><strong>Transitions</strong><div>{{ universe.governance.summary.transition_counts if universe.governance.summary.transition_counts else '无' }}</div></div>
+  </div>
+  {% else %}
+  <div class="muted">暂无 governance 信息。</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>Allocator / Governance Auditor</h2>
+  <div class="grid cols-2">
+    <div>
+      <strong>Allocation Audit</strong>
+      <div>{{ allocator_governance_audit.allocation.summary.count_by_audit if allocator_governance_audit and allocator_governance_audit.allocation else '无' }}</div>
+    </div>
+    <div>
+      <strong>State Transition Audit</strong>
+      <div>{{ allocator_governance_audit.governance.summary.count_by_audit if allocator_governance_audit and allocator_governance_audit.governance else '无' }}</div>
+    </div>
+  </div>
+  {% if allocator_governance_audit and allocator_governance_audit.allocation and allocator_governance_audit.allocation.rows %}
+  <div class="table-wrap" style="margin-top:12px;">
+    <table>
+      <thead><tr><th>因子</th><th>allocation_audit</th><th>budget suggestion</th><th>state_transition_audit</th></tr></thead>
+      <tbody>
+        {% for row in allocator_governance_audit.allocation.rows[:8] %}
+        {% set gov = (allocator_governance_audit.governance.rows|selectattr('factor_name', 'equalto', row.factor_name)|list|first) %}
+        <tr>
+          <td>{{ row.factor_name }}</td>
+          <td>{{ row.allocation_audit }}</td>
+          <td>{{ row.budget_adjustment_suggestions|join('；') if row.budget_adjustment_suggestions else '-' }}</td>
+          <td>{{ gov.state_transition_audit if gov else '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>Failure Analyst+</h2>
+  {% if failure_analyst_enhancement and failure_analyst_enhancement.summary %}
+  <div class="grid cols-4">
+    <div><strong>Reroute</strong><div>{{ failure_analyst_enhancement.summary.reroute_count or 0 }}</div></div>
+    <div><strong>Stop</strong><div>{{ failure_analyst_enhancement.summary.stop_count or 0 }}</div></div>
+    <div><strong>Continue</strong><div>{{ failure_analyst_enhancement.summary.continue_count or 0 }}</div></div>
+    <div><strong>Question Cards v2</strong><div>{{ failure_analyst_enhancement.summary.question_card_count or 0 }}</div></div>
+  </div>
+  {% if failure_analyst_enhancement.reroute_proposals %}
+  <div style="margin-top:12px;" class="muted">Top reroute：{% for row in failure_analyst_enhancement.reroute_proposals[:4] %}{{ row.candidate_name }}→{{ row.to_route }}{% if not loop.last %}；{% endif %}{% endfor %}</div>
+  {% endif %}
+  {% else %}
+  <div class="muted">暂无 failure analyst enhancement 信息。</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>Decision A/B</h2>
+  {% if decision_ab and decision_ab.report %}
+  <div class="grid cols-4">
+    <div><strong>baseline</strong><div>{{ decision_ab.report.baseline_policy }}</div></div>
+    <div><strong>candidate</strong><div>{{ decision_ab.report.candidate_policy }}</div></div>
+    <div><strong>quality Δ</strong><div>{{ decision_ab.report.quality_delta }}</div></div>
+    <div><strong>recommendation</strong><div>{{ decision_ab.report.recommendation }}</div></div>
+  </div>
+  {% else %}
+  <div class="muted">暂无 Decision A/B 数据。</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>Lifecycle</h2>
+  {% if universe.lifecycle %}
+  <div class="grid cols-3">
+    <div><strong>Entered</strong><div>{{ universe.lifecycle.entered|join('、') if universe.lifecycle.entered else '无' }}</div></div>
+    <div><strong>Exited</strong><div>{{ universe.lifecycle.exited|join('、') if universe.lifecycle.exited else '无' }}</div></div>
+    <div><strong>Stayed</strong><div>{{ universe.lifecycle.stayed|join('、') if universe.lifecycle.stayed else '无' }}</div></div>
+  </div>
+  {% if universe.lifecycle.changed %}
+  <div style="margin-top:12px;">
+    {% for row in universe.lifecycle.changed %}
+      <div class="muted">{{ row.factor_name }} changed={{ row.changed_fields|join(', ') }}</div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% else %}
+  <div class="muted">暂无 lifecycle 信息。</div>
+  {% endif %}
+</section>
+{% endblock %}

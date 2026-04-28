@@ -1,0 +1,14 @@
+[Unit]
+Description=Factor Lab Web UI
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/admin/factor-lab
+Environment="PYTHONPATH=/home/admin/factor-lab/src"
+ExecStart=/usr/bin/python3 /home/admin/factor-lab/scripts/run_web_ui.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=default.target

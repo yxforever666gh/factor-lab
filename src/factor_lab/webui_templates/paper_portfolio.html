@@ -1,0 +1,124 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-2">
+  <section class="card">
+    <h2>当前纸面组合</h2>
+    <table>
+      <tbody>
+        <tr><th>策略</th><td>{{ current.strategy_name if current else '-' }}</td></tr>
+        <tr><th>日期</th><td>{{ current.as_of_date if current else '-' }}</td></tr>
+        <tr><th>持仓数</th><td>{{ current.position_count if current else 0 }}</td></tr>
+        <tr><th>入选因子</th><td>{{ current.selected_factors|map(attribute='name')|join('、') if current and current.selected_factors else '无' }}</td></tr>
+        <tr><th>Bucket / 权重</th><td>{% if current and current.selected_factors %}{% for row in current.selected_factors %}{{ row.name }}={{ row.portfolio_bucket or '-' }}/{{ row.allocated_weight if row.allocated_weight is not none else row.weight_hint if row.weight_hint is not none else '-' }}{% if not loop.last %}；{% endif %}{% endfor %}{% else %}无{% endif %}</td></tr>
+        <tr><th>状态 / 治理</th><td>{% if current and current.selected_factors %}{% for row in current.selected_factors %}{{ row.name }}={{ row.lifecycle_state or '-' }}/{{ row.governance_action or '-' }}{% if not loop.last %}；{% endif %}{% endfor %}{% else %}无{% endif %}</td></tr>
+        <tr><th>输入来源</th><td>{{ current.input_source.source if current and current.input_source else '-' }}</td></tr>
+        <tr><th>Universe 版本</th><td>{{ current.input_source.selection_policy_version if current and current.input_source else '-' }}</td></tr>
+        <tr><th>Approved 数量</th><td>{{ current.input_source.approved_count if current and current.input_source else '-' }}</td></tr>
+        <tr><th>State 统计</th><td>{{ current.input_source.state_counts if current and current.input_source else '-' }}</td></tr>
+        <tr><th>预算摘要</th><td>{{ current.input_source.budget_summary.bucket_allocations if current and current.input_source and current.input_source.budget_summary else '-' }}</td></tr>
+      </tbody>
+    </table>
+    <div class="table-wrap" style="margin-top:12px;">
+      <table>
+        <thead><tr><th>代码</th><th>信号</th><th>权重</th></tr></thead>
+        <tbody>
+          {% for row in current_positions %}
+          <tr>
+            <td class="text-nowrap">{{ row.ticker }}</td>
+            <td class="num">{{ row.signal }}</td>
+            <td class="num">{{ row.weight }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>组合稳定性评分</h2>
+    <table>
+      <tbody>
+        <tr><th>评分</th><td>{{ stability.stability_score if stability else '-' }}</td></tr>
+        <tr><th>标签</th><td>{{ stability.label if stability else '-' }}</td></tr>
+        <tr><th>历史样本数</th><td>{{ stability.history_count if stability else '-' }}</td></tr>
+        <tr><th>稳定重合率</th><td>{{ stability.stability_ratio if stability else '-' }}</td></tr>
+        <tr><th>上期重合持仓</th><td>{{ retrospective.overlap_with_previous if retrospective else '-' }}</td></tr>
+        <tr><th>新增</th><td>{{ retrospective.added|join('、') if retrospective and retrospective.added else '无' }}</td></tr>
+        <tr><th>移除</th><td>{{ retrospective.removed|join('、') if retrospective and retrospective.removed else '无' }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<section class="card" style="margin-top:18px;">
+  <h2>组合边际贡献</h2>
+  {% if contribution and contribution.rows %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>因子</th><th>分类</th><th>ΔSharpe</th><th>ΔCostAdj</th><th>最新调仓重合度</th><th>与全组合信号相关</th></tr></thead>
+      <tbody>
+        {% for row in contribution.rows %}
+        <tr>
+          <td>{{ row.factor_name }}</td>
+          <td><span class="pill {{ 'good' if row.contribution_class == 'positive' else 'bad' if row.contribution_class == 'negative' else 'warn' }}">{{ row.contribution_class }}</span></td>
+          <td class="num">{{ row.delta_sharpe if row.delta_sharpe is not none else '-' }}</td>
+          <td class="num">{{ row.delta_cost_adjusted_annual_return if row.delta_cost_adjusted_annual_return is not none else '-' }}</td>
+          <td class="num">{{ row.latest_overlap_ratio if row.latest_overlap_ratio is not none else '-' }}</td>
+          <td class="num">{{ row.latest_signal_corr_with_full if row.latest_signal_corr_with_full is not none else '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="muted">暂无组合边际贡献报告。</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>Failure Analyst+</h2>
+  {% if failure_analyst_enhancement and failure_analyst_enhancement.summary %}
+  <div class="grid cols-4">
+    <div><strong>Reroute</strong><div>{{ failure_analyst_enhancement.summary.reroute_count or 0 }}</div></div>
+    <div><strong>Stop</strong><div>{{ failure_analyst_enhancement.summary.stop_count or 0 }}</div></div>
+    <div><strong>Continue</strong><div>{{ failure_analyst_enhancement.summary.continue_count or 0 }}</div></div>
+    <div><strong>Question Cards v2</strong><div>{{ failure_analyst_enhancement.summary.question_card_count or 0 }}</div></div>
+  </div>
+  {% else %}
+  <div class="muted">暂无 failure analyst enhancement 信息。</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>Approved Universe 状态</h2>
+  {% if approved_universe and approved_universe.rows %}
+  <div class="muted">当前 paper portfolio 已与 approved universe 对齐；可用候选 {{ approved_universe.summary.approved_count if approved_universe.summary else approved_universe.rows|length }} 个。</div>
+  <div style="margin-top:10px;">{{ approved_universe.rows|map(attribute='factor_name')|join('、') }}</div>
+  <div class="grid cols-2" style="margin-top:12px;">
+    <div><strong>AU allocation audit</strong><div>{{ allocator_governance_audit.allocation.summary.count_by_audit if allocator_governance_audit and allocator_governance_audit.allocation else '-' }}</div></div>
+    <div><strong>Decision A/B</strong><div>{{ decision_ab.report.recommendation if decision_ab and decision_ab.report else '-' }}</div></div>
+  </div>
+  {% else %}
+  <div class="muted">当前 approved universe 为空或尚未生成。</div>
+  {% endif %}
+</section>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>组合变更日志</h2>
+    <pre>{{ change_log_text }}</pre>
+  </section>
+  <section class="card">
+    <h2>回溯摘要</h2>
+    <pre>{{ retrospective_text }}</pre>
+  </section>
+</div>
+
+<details class="card" style="margin-top:18px;">
+  <summary style="cursor:pointer; font-weight:600;">查看稳定性与历史原始数据</summary>
+  <div class="grid cols-2" style="margin-top:12px;">
+    <pre>{{ stability_text }}</pre>
+    <pre>{{ history_text }}</pre>
+  </div>
+</details>
+{% endblock %}

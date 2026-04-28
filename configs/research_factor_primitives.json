@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "name": "research_factor_primitives",
+  "factors": [
+    {
+      "name": "mom_20",
+      "family": "momentum",
+      "expression": "momentum_20",
+      "role": "alpha_seed",
+      "allow_in_portfolio": true
+    },
+    {
+      "name": "mom_60",
+      "family": "momentum",
+      "expression": "momentum_60",
+      "role": "alpha_seed",
+      "allow_in_portfolio": true
+    },
+    {
+      "name": "mom_60_skip_5",
+      "family": "momentum",
+      "expression": "momentum_60_skip_5",
+      "role": "family_probe",
+      "allow_in_portfolio": true
+    },
+    {
+      "name": "mom_120",
+      "family": "momentum",
+      "expression": "momentum_120",
+      "role": "family_probe",
+      "allow_in_portfolio": true
+    },
+    {
+      "name": "book_yield",
+      "family": "value",
+      "expression": "book_yield",
+      "role": "alpha_seed",
+      "allow_in_portfolio": true
+    },
+    {
+      "name": "earnings_yield",
+      "family": "value",
+      "expression": "earnings_yield",
+      "role": "exposure_probe",
+      "allow_in_portfolio": false
+    },
+    {
+      "name": "book_yield_plus_earnings_yield",
+      "family": "value",
+      "expression": "book_yield + earnings_yield",
+      "role": "family_probe",
+      "allow_in_portfolio": true
+    },
+    {
+      "name": "earnings_yield_over_pb",
+      "family": "value",
+      "expression": "earnings_yield / pb",
+      "role": "family_probe",
+      "allow_in_portfolio": true
+    },
+    {
+      "name": "value_ep",
+      "family": "value",
+      "expression": "earnings_yield",
+      "role": "exposure_probe",
+      "allow_in_portfolio": false
+    },
+    {
+      "name": "value_bp",
+      "family": "value",
+      "expression": "book_yield",
+      "role": "alpha_seed",
+      "allow_in_portfolio": true
+    },
+    {
+      "name": "quality_roe",
+      "family": "quality",
+      "expression": "roe",
+      "role": "watch_probe",
+      "allow_in_portfolio": true
+    },
+    {
+      "name": "liquidity_turnover_shock",
+      "family": "liquidity",
+      "expression": "turnover_shock_5_20",
+      "role": "family_probe",
+      "allow_in_portfolio": true
+    },
+    {
+      "name": "size_small",
+      "family": "other",
+      "expression": "size_inv",
+      "role": "watch_probe",
+      "allow_in_portfolio": true
+    },
+    {
+      "name": "mom_plus_value",
+      "family": "hybrid",
+      "expression": "momentum_20 + earnings_yield",
+      "role": "family_probe",
+      "allow_in_portfolio": true
+    }
+  ]
+}

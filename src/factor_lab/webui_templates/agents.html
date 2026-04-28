@@ -1,0 +1,78 @@
+{% extends 'base.html' %}
+{% block content %}
+{% if saved %}
+<section class="card" style="margin-bottom:18px; border-color: var(--good);">
+  <strong class="good">已保存 Agent 设置。</strong>
+  <span class="muted">后台 daemon 已自动重启{% if restart_ok %}并生效{% elif restart_failed %}失败，请稍后在操作页检查{% endif %}。</span>
+</section>
+{% endif %}
+
+<section class="card" style="margin-bottom:18px;">
+  <h2>Agent 与模型的区别</h2>
+  <div class="muted">
+    <strong>大模型 Profile</strong> 是底层模型连接；<strong>Agent Role</strong> 是研究职责分工。
+    这里用于恢复迁移前 OpenClaw 的 <code>factor-lab-planner</code> / <code>factor-lab-failure</code> 分工。
+  </div>
+  <div class="muted" style="margin-top:10px;">当前配置文件：<span class="text-break">{{ settings.env_file }}</span></div>
+</section>
+
+<form method="post" action="/agents" style="display:grid; gap:18px;">
+  {% for role in role_slots %}
+  <section class="card">
+    <h2>{{ role.display_name or role.name or '新 Agent' }}</h2>
+    <div class="grid cols-2">
+      <label>
+        <div class="muted" style="margin-bottom:6px;">Role 名称</div>
+        <input name="role_name_{{ loop.index0 }}" value="{{ role.name }}" placeholder="planner" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);">
+      </label>
+      <label>
+        <div class="muted" style="margin-bottom:6px;">显示名称</div>
+        <input name="role_display_name_{{ loop.index0 }}" value="{{ role.display_name }}" placeholder="规划 Agent" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);">
+      </label>
+      <label>
+        <div class="muted" style="margin-bottom:6px;">Decision Types</div>
+        <input name="role_decision_types_{{ loop.index0 }}" value="{{ role.decision_types }}" placeholder="planner" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);">
+      </label>
+      <label>
+        <div class="muted" style="margin-bottom:6px;">旧 OpenClaw Agent ID</div>
+        <input name="role_legacy_agent_id_{{ loop.index0 }}" value="{{ role.legacy_agent_id }}" placeholder="factor-lab-planner" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);">
+      </label>
+      <label>
+        <div class="muted" style="margin-bottom:6px;">模型 Fallback 顺序</div>
+        <input name="role_fallback_order_{{ loop.index0 }}" value="{{ role.llm_fallback_order }}" placeholder="ccvibe,nowcoding,ai-continue" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);">
+      </label>
+      <div class="grid cols-3">
+        <label>
+          <div class="muted" style="margin-bottom:6px;">启用</div>
+          <input type="checkbox" name="role_enabled_{{ loop.index0 }}" {% if role.enabled %}checked{% endif %}>
+        </label>
+        <label>
+          <div class="muted" style="margin-bottom:6px;">严格 Schema</div>
+          <input type="checkbox" name="role_strict_schema_{{ loop.index0 }}" {% if role.strict_schema %}checked{% endif %}>
+        </label>
+        <label>
+          <div class="muted" style="margin-bottom:6px;">Retry</div>
+          <input type="number" min="0" name="role_max_retries_{{ loop.index0 }}" value="{{ role.max_retries }}" style="width:90px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);">
+        </label>
+      </div>
+      <label>
+        <div class="muted" style="margin-bottom:6px;">Timeout 秒</div>
+        <input type="number" min="1" name="role_timeout_seconds_{{ loop.index0 }}" value="{{ role.timeout_seconds }}" style="width:120px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);">
+      </label>
+    </div>
+    <label style="display:block; margin-top:14px;">
+      <div class="muted" style="margin-bottom:6px;">职责说明</div>
+      <textarea name="role_purpose_{{ loop.index0 }}" rows="2" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);">{{ role.purpose }}</textarea>
+    </label>
+    <label style="display:block; margin-top:14px;">
+      <div class="muted" style="margin-bottom:6px;">System Prompt</div>
+      <textarea name="role_system_prompt_{{ loop.index0 }}" rows="4" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);">{{ role.system_prompt }}</textarea>
+    </label>
+  </section>
+  {% endfor %}
+  <section class="card">
+    <button type="submit" style="padding:11px 16px; border:0; border-radius:12px; background:var(--link); color:#08101f; font-weight:700; cursor:pointer;">保存 Agent 设置</button>
+    <span class="muted" style="margin-left:12px;">保存会自动重启后台 research daemon。</span>
+  </section>
+</form>
+{% endblock %}

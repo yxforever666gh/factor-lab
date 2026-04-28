@@ -1,0 +1,184 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-3">
+  <section class="card">
+    <h2>待处理</h2>
+    <div style="font-size:40px; font-weight:700;">{{ summary.pending }}</div>
+  </section>
+  <section class="card">
+    <h2>进行中 / 完成</h2>
+    <div style="font-size:40px; font-weight:700;">{{ summary.running }} / {{ summary.finished }}</div>
+  </section>
+  <section class="card">
+    <h2>失败</h2>
+    <div style="font-size:40px; font-weight:700;">{{ summary.failed }}</div>
+  </section>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card"><h2>baseline</h2><div style="font-size:32px; font-weight:700;">{{ summary.baseline }}</div></section>
+  <section class="card"><h2>validation</h2><div style="font-size:32px; font-weight:700;">{{ summary.validation }}</div></section>
+  <section class="card"><h2>exploration</h2><div style="font-size:32px; font-weight:700;">{{ summary.exploration }}</div></section>
+  <section class="card"><h2>retry</h2><div style="font-size:32px; font-weight:700;">{{ summary.retry }}</div></section>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>Planner 候选池</h2>
+    <div style="font-size:34px; font-weight:700;">{{ summary.planner_candidates }}</div>
+    <div class="muted">suppressed={{ summary.planner_suppressed }} · multi-rep aware</div>
+    {% if candidate_pool.representative_selection %}
+    <div style="margin-top:10px;">
+      {% for row in candidate_pool.representative_selection[:6] %}
+        {% if row.suppressed_into %}
+        <div class="muted">{{ row.candidate }} → {{ row.suppressed_into }}{% if row.available_representatives %} (reps={{ row.available_representatives|join(', ') }}){% endif %}</div>
+        {% endif %}
+      {% endfor %}
+    </div>
+    {% endif %}
+  </section>
+  <section class="card">
+    <h2>Family 建议动作</h2>
+    {% if family_summary %}
+      {% for row in family_summary[:6] %}
+      <div style="margin-bottom:8px;"><strong>{{ row.family }}</strong> · <span class="pill {{ 'good' if row.recommended_action == 'continue' else 'warn' if row.recommended_action in ['refine','explore_new_branch'] else 'bad' }}">{{ row.recommended_action }}</span> · primary={{ row.primary_candidate or '-' }} · trial={{ row.trial_pressure if row.trial_pressure is not none else '-' }} · false+={{ row.false_positive_pressure if row.false_positive_pressure is not none else '-' }}</div>
+      {% endfor %}
+    {% else %}
+      <div class="muted">暂无 family 建议。</div>
+    {% endif %}
+  </section>
+</div>
+
+{% if opportunity_metrics.rates %}
+<section class="card" style="margin-top:18px;">
+  <h2>Opportunity Metrics</h2>
+  <div class="grid cols-3">
+    <div><strong>成功率</strong><div style="font-size:28px; font-weight:700;">{{ opportunity_metrics.rates.success_rate if opportunity_metrics.rates.success_rate is not none else '-' }}</div></div>
+    <div><strong>知识增益率</strong><div style="font-size:28px; font-weight:700;">{{ opportunity_metrics.rates.knowledge_gain_rate if opportunity_metrics.rates.knowledge_gain_rate is not none else '-' }}</div></div>
+    <div><strong>分支增长率</strong><div style="font-size:28px; font-weight:700;">{{ opportunity_metrics.rates.branch_growth_rate if opportunity_metrics.rates.branch_growth_rate is not none else '-' }}</div></div>
+  </div>
+  <div class="muted" style="margin-top:10px;">total={{ opportunity_metrics.counts.total or 0 }} · promoted={{ opportunity_metrics.counts.promoted or 0 }} · archived={{ opportunity_metrics.counts.archived or 0 }} · child={{ opportunity_metrics.counts.child_count or 0 }}</div>
+</section>
+{% endif %}
+
+{% if opportunities.opportunities %}
+<section class="card" style="margin-top:18px;">
+  <h2>Research Opportunities</h2>
+  <div class="muted" style="margin-bottom:10px;">当前已进入 opportunity-first 展示：机会对象优先于底层任务。</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Type</th><th>Title</th><th>State</th><th>Priority</th><th>Novelty</th><th>Confidence</th><th>Parent</th><th>Target Family</th><th>Question</th></tr></thead>
+      <tbody>
+        {% for row in opportunities.opportunities %}
+        {% set store_row = opportunity_store.opportunities[row.opportunity_id] if opportunity_store.opportunities and row.opportunity_id in opportunity_store.opportunities else {} %}
+        <tr>
+          <td>{{ row.opportunity_type }}</td>
+          <td>{{ row.title }}</td>
+          <td>{{ store_row.state or 'proposed' }}</td>
+          <td class="num">{{ row.priority }}</td>
+          <td class="num">{{ row.novelty_score }}</td>
+          <td class="num">{{ row.confidence }}</td>
+          <td class="text-break">{{ row.parent_opportunity_id or '-' }}</td>
+          <td>{{ row.target_family or '-' }}</td>
+          <td class="text-break">{{ row.question }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if opportunity_review.challenger or opportunity_review.auditor %}
+<section class="card" style="margin-top:18px;">
+  <h2>Opportunity Review</h2>
+  <div class="grid cols-2">
+    <div>
+      <h3>Challenger</h3>
+      {% if opportunity_review.challenger %}
+        {% for row in opportunity_review.challenger %}<div style="margin-bottom:8px;">- {{ row }}</div>{% endfor %}
+      {% else %}<div class="muted">暂无 challenger 评论。</div>{% endif %}
+    </div>
+    <div>
+      <h3>Auditor</h3>
+      {% if opportunity_review.auditor %}
+        {% for row in opportunity_review.auditor %}<div style="margin-bottom:8px;">- {{ row }}</div>{% endfor %}
+      {% else %}<div class="muted">暂无 auditor 评论。</div>{% endif %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+{% if opportunity_archive_diagnostics.archive_samples %}
+<section class="card" style="margin-top:18px;">
+  <h2>Recent Archived Opportunities</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>ID</th><th>Type</th><th>Reason</th><th>Priority</th><th>Novelty</th><th>Confidence</th></tr></thead>
+      <tbody>
+        {% for row in opportunity_archive_diagnostics.archive_samples %}
+        <tr>
+          <td>{{ row.opportunity_id }}</td>
+          <td>{{ row.type }}</td>
+          <td>{{ row.reason }}</td>
+          <td class="num">{{ row.priority }}</td>
+          <td class="num">{{ row.novelty }}</td>
+          <td class="num">{{ row.confidence }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+{% if branch_plan.branch_decisions %}
+<section class="card" style="margin-top:18px;">
+  <h2>Branch Planner 决策</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Family</th><th>Decision</th><th>Recommended Action</th><th>Trial Pressure</th><th>False+ Pressure</th><th>Score</th><th>Reason</th></tr></thead>
+      <tbody>
+        {% for row in branch_plan.branch_decisions %}
+        <tr>
+          <td>{{ row.family }}</td>
+          <td>{{ row.decision }}</td>
+          <td>{{ row.recommended_action or '-' }}</td>
+          <td class="num">{{ row.trial_pressure if row.trial_pressure is not none else '-' }}</td>
+          <td class="num">{{ row.false_positive_pressure if row.false_positive_pressure is not none else '-' }}</td>
+          <td class="num">{{ row.priority_score if row.priority_score is not none else '-' }}</td>
+          <td class="text-break">{{ row.reason }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+<section class="card" style="margin-top:18px;">
+  <h2>任务明细</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>任务</th><th>类型</th><th>状态</th><th>优先级</th><th>尝试</th><th>父任务</th><th>创建时间</th><th>原因/备注</th><th>payload 摘要</th><th>知识增量</th><th>错误</th></tr></thead>
+      <tbody>
+        {% for row in tasks %}
+        <tr>
+          <td class="text-nowrap">{{ row.task_id[:8] }}</td>
+          <td>{{ row.task_type }}</td>
+          <td><span class="pill {{ 'good' if row.status == 'finished' else 'bad' if row.status == 'failed' else 'warn' }}">{{ row.status }}</span></td>
+          <td class="num">{{ row.priority }}</td>
+          <td class="num">{{ row.attempt_count }}</td>
+          <td class="text-nowrap">{{ row.parent_task_id[:8] if row.parent_task_id else '-' }}</td>
+          <td class="text-nowrap">{{ row.created_at_utc }}</td>
+          <td class="text-break">{{ row.worker_note or '-' }}</td>
+          <td class="text-break">{{ row.payload_summary or '-' }}</td>
+          <td class="text-break">{{ row.knowledge_gain_text or '-' }}</td>
+          <td class="text-break">{{ row.last_error or '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

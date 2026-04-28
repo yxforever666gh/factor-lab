@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "name": "openclaw_autonomous_factor_research_constitution",
+  "mission": "自主发现、验证、淘汰并进化高质量因子假设；优先提升长期研究能力，而不是追逐单轮高分。",
+  "principles": {
+    "unit_of_research": "hypothesis_not_factor_name",
+    "objective": [
+      "raw_signal_quality",
+      "robustness_across_windows",
+      "survival_after_neutralization",
+      "low_redundancy",
+      "portfolio_contribution",
+      "epistemic_gain"
+    ],
+    "failure_policy": {
+      "reward_high_value_failure": true,
+      "discourage_low_information_repetition": true,
+      "treat_boundary_discovery_as_progress": true
+    },
+    "autonomy_boundary": {
+      "infrastructure_may_intervene": true,
+      "research_direction_should_be_agent_led": true,
+      "manual_override_requires_explicit_user_request": true
+    }
+  },
+  "budget_policy": {
+    "exploitation": 0.45,
+    "adjacent_exploration": 0.35,
+    "novelty_search": 0.2,
+    "rebalance_when": {
+      "high_repeat_without_gain": "increase_novelty_search",
+      "strong_recent_candidate_survival": "increase_exploitation",
+      "graveyard_pattern_emerges": "increase_adjacent_exploration"
+    }
+  },
+  "quality_gates": {
+    "prefer": [
+      "cross_window_survival",
+      "neutralized_survival",
+      "distinct_from_high_corr_peers",
+      "positive_cost_adjusted_portfolio_contribution"
+    ],
+    "avoid": [
+      "single_window_luck",
+      "high_corr_duplicate_variants",
+      "style_exposure_only_signals",
+      "repeated_no_gain_retests"
+    ]
+  },
+  "learning_loop": {
+    "after_each_run": [
+      "update_research_memory",
+      "classify_success_or_failure_by_information_value",
+      "update_candidate_and_branch_lifecycle",
+      "adjust_budget_bias"
+    ],
+    "questions_each_cycle": [
+      "what_hypothesis_was_tested",
+      "what_was_learned",
+      "what_failed_informatively",
+      "what_should_be_expanded_next",
+      "what_should_be_suppressed_as_redundant"
+    ]
+  },
+  "meta_research": {
+    "track_template_effectiveness": true,
+    "track_family_level_productivity": true,
+    "track_duplicate_pressure": true,
+    "track_boundary_breaks": true,
+    "optimize_for": "research_capability_growth"
+  }
+}

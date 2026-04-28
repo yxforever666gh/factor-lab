@@ -1,0 +1,37 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Local secrets / environment files
+.env
+.env.*
+!.env.example
+
+# Local agent/session/runtime state
+.openclaw/
+.hermes/
+.playwright-mcp/
+memory/
+playwright-network-*.txt
+
+# Runtime outputs live under artifacts/. This keeps new generated files out of git;
+# already tracked artifacts still need a separate cleanup commit if you want them removed.
+artifacts/*
+!artifacts/.gitkeep
+
+# Factor Lab runtime artifacts
+artifacts/*.db
+artifacts/*.db-wal
+artifacts/*.db-shm
+artifacts/diagnostics/
+artifacts/generated_candidate_*/
+artifacts/generated_*/
+artifacts/opportunity_generated_batch_run/
+artifacts/tushare_cache/
+artifacts/tushare_batch/
+artifacts/tushare_workflow/
+artifacts/feature_store/*.parquet
+artifacts/feature_store/*.meta.json

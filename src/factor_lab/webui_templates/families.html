@@ -1,0 +1,44 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-3" style="margin-bottom:18px;">
+  <section class="card"><h2>Families</h2><div style="font-size:36px; font-weight:700;">{{ summary.family_count }}</div></section>
+  <section class="card"><h2>Promising Candidates</h2><div style="font-size:36px; font-weight:700;">{{ summary.promising_count }}</div></section>
+  <section class="card"><h2>Total Evaluations</h2><div style="font-size:36px; font-weight:700;">{{ summary.evaluation_count }}</div></section>
+</div>
+<div class="grid cols-4" style="margin-bottom:18px;">
+  <section class="card"><h2>Continue</h2><div style="font-size:30px; font-weight:700;">{{ summary.continue_count }}</div></section>
+  <section class="card"><h2>Refine</h2><div style="font-size:30px; font-weight:700;">{{ summary.refine_count }}</div></section>
+  <section class="card"><h2>Pause</h2><div style="font-size:30px; font-weight:700;">{{ summary.pause_count }}</div></section>
+  <section class="card"><h2>Explore New Branch</h2><div style="font-size:30px; font-weight:700;">{{ summary.explore_count }}</div></section>
+</div>
+<section class="card">
+  <h2>Family 聚合</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Family</th><th>候选数</th><th>Promising</th><th>Testing</th><th>Rejected</th><th>评估数</th><th>窗口数</th><th>平均候选分</th><th>平均最新分</th><th>Family Score</th><th>Trial Pressure</th><th>False+ Pressure</th><th>主代表</th><th>重复压力</th><th>建议动作</th><th>主状态</th></tr></thead>
+      <tbody>
+        {% for row in families %}
+        <tr>
+          <td>{{ row.family }}</td>
+          <td class="num">{{ row.candidate_count }}</td>
+          <td class="num good">{{ row.promising_count }}</td>
+          <td class="num warn">{{ row.testing_count }}</td>
+          <td class="num bad">{{ row.rejected_count }}</td>
+          <td class="num">{{ row.evaluation_count }}</td>
+          <td class="num">{{ row.window_count }}</td>
+          <td class="num">{{ row.avg_candidate_score if row.avg_candidate_score is not none else '-' }}</td>
+          <td class="num">{{ row.avg_latest_score if row.avg_latest_score is not none else '-' }}</td>
+          <td class="num">{{ row.family_score if row.family_score is not none else '-' }}</td>
+          <td class="num">{{ row.trial_pressure if row.trial_pressure is not none else '-' }}</td>
+          <td class="num">{{ row.false_positive_pressure if row.false_positive_pressure is not none else '-' }}</td>
+          <td>{{ row.primary_candidate or '-' }}</td>
+          <td class="num">{{ row.duplicate_pressure or 0 }}</td>
+          <td><span class="pill {{ 'good' if row.recommended_action == 'continue' else 'warn' if row.recommended_action in ['refine','explore_new_branch'] else 'bad' }}">{{ row.recommended_action or '-' }}</span></td>
+          <td>{{ row.top_status }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

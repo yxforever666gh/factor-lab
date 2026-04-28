@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+  <h2>因子评分榜</h2>
+  <table>
+    <thead><tr><th>因子</th><th>平均分</th><th>运行次数</th><th>候选次数</th><th>墓地次数</th></tr></thead>
+    <tbody>
+      {% for row in factors %}
+      <tr>
+        <td>{{ row.factor_name }}</td>
+        <td>{{ row.avg_score }}</td>
+        <td>{{ row.runs }}</td>
+        <td class="good">{{ row.candidate_runs }}</td>
+        <td class="bad">{{ row.graveyard_runs }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

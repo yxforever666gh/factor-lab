@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "name": "openclaw_research_evidence_policy",
+  "mission": "高分候选必须先补足关键证据，再进入前排研究主线。",
+  "rules": {
+    "require_acceptance_gate_for_frontier": true,
+    "allow_monitor_status_for_validation": true,
+    "prefer_validation_when_evidence_incomplete": true,
+    "deprioritize_exploration_when_evidence_incomplete": true
+  },
+  "frontier_gate": {
+    "pass_statuses": ["pass"],
+    "validation_statuses": ["monitor", "blocked"],
+    "missing_status": "missing"
+  }
+}

@@ -1,0 +1,105 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+  <h2>晋级赛 + 质量评分（先验真，再扩张）</h2>
+  <div class="muted" style="margin-bottom:12px;">
+    现在这张表同时显示旧的 promotion 决策和新的质量分层：谁该先去重、谁只是短窗机会、谁连晋升都不该谈。
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>因子</th>
+          <th>Family</th>
+          <th>最新分</th>
+          <th>窗口</th>
+          <th>通过率</th>
+          <th>旧决策</th>
+          <th>质量总分</th>
+          <th>质量分类</th>
+          <th>晋升决策</th>
+          <th>质量摘要</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in promotion_rows %}
+        <tr>
+          <td>{{ row.factor_name }}</td>
+          <td>{{ row.family }}</td>
+          <td>{{ row.latest_recent_final_score if row.latest_recent_final_score is not none else row.latest_final_score }}</td>
+          <td>{{ row.window_count }}</td>
+          <td>{{ row.pass_rate }}</td>
+          <td>
+            <span class="pill {{ 'good' if row.decision_key == 'core_candidate' else '' }}">
+              {{ row.decision_label }}
+            </span>
+          </td>
+          <td>{{ row.quality_total_score }}</td>
+          <td>
+            <span class="pill {{ 'good' if row.quality_classification == 'stable-alpha-candidate' else 'warn' if row.quality_classification in ['needs-validation','exposure-track'] else 'bad' if row.quality_classification in ['duplicate-suppress','drop'] else '' }}">
+              {{ row.quality_classification_label or row.quality_classification }}
+            </span>
+          </td>
+          <td>{{ row.quality_promotion_decision_label or row.quality_promotion_decision }}</td>
+          <td>{{ row.quality_summary or row.decision_summary }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card">
+  <h2>Exposure Track（强度优先 / 可控风险）</h2>
+  <div class="muted" style="margin-bottom:12px;">
+    这里列出最新完成运行的暴露型因子（适用于风格/行业轮动）。
+    neutralized 结果不直接淘汰，但会影响中性化残留、晋级结论和建议权重上限。
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>因子</th>
+          <th>类型</th>
+          <th>Bucket</th>
+          <th>强度分</th>
+          <th>总分</th>
+          <th>Raw IC</th>
+          <th>Raw IR</th>
+          <th>Neutral IC</th>
+          <th>残留</th>
+          <th>Split Fail</th>
+          <th>拥挤</th>
+          <th>换手</th>
+          <th>建议权重上限</th>
+          <th>状态</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in exposure_rows %}
+        <tr>
+          <td>{{ row.factor_name }}</td>
+          <td>{{ row.exposure_label }}</td>
+          <td>{{ row.effective_bucket_label }}</td>
+          <td>{{ row.strength_score }}</td>
+          <td>{{ row.total_score }}</td>
+          <td>{{ row.raw_rank_ic_mean }}</td>
+          <td>{{ row.raw_rank_ic_ir }}</td>
+          <td>{{ row.neutralized_rank_ic_mean }}</td>
+          <td>{{ row.retention_industry }}</td>
+          <td>{{ row.split_fail_count }}</td>
+          <td>{{ row.crowding_peers }}</td>
+          <td>{{ row.turnover_daily }}</td>
+          <td>{{ row.recommended_max_weight }}</td>
+          <td>
+            <span class="pill {{ 'good' if row.status in ['promoted', 'qualified'] else '' }}">
+              {{ row.status }}
+            </span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

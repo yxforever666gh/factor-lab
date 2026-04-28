@@ -1,0 +1,33 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-4" style="margin-bottom:18px;">
+  <section class="card"><h2>Promising</h2><div style="font-size:36px; font-weight:700;">{{ summary.promising }}</div></section>
+  <section class="card"><h2>Testing</h2><div style="font-size:36px; font-weight:700;">{{ summary.testing }}</div></section>
+  <section class="card"><h2>Fragile</h2><div style="font-size:36px; font-weight:700;">{{ summary.fragile }}</div></section>
+  <section class="card"><h2>Rejected / Archived</h2><div style="font-size:36px; font-weight:700;">{{ summary.rejected_archived }}</div></section>
+</div>
+<section class="card">
+  <h2>候选因子榜单</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>候选</th><th>状态</th><th>Family</th><th>最新分</th><th>平均分</th><th>最佳分</th><th>通过率</th><th>评估数</th><th>窗口数</th><th>下一步</th></tr></thead>
+      <tbody>
+        {% for row in candidates %}
+        <tr>
+          <td><a href="/candidates/{{ row.id }}">{{ row.name }}</a><br><span class="muted">{{ row.expression or '-' }}</span></td>
+          <td><span class="pill {{ 'good' if row.status == 'promising' else 'bad' if row.status in ['rejected','archived'] else 'warn' }}">{{ row.status }}</span></td>
+          <td>{{ row.family or '-' }}</td>
+          <td class="num">{{ row.latest_final_score if row.latest_final_score is not none else '-' }}</td>
+          <td class="num">{{ row.avg_final_score if row.avg_final_score is not none else '-' }}</td>
+          <td class="num">{{ row.best_final_score if row.best_final_score is not none else '-' }}</td>
+          <td class="num">{{ row.pass_rate if row.pass_rate is not none else '-' }}</td>
+          <td class="num">{{ row.evaluation_count }}</td>
+          <td class="num">{{ row.window_count }}</td>
+          <td class="text-break">{{ row.next_action or '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

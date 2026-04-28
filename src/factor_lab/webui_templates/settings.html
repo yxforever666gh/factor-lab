@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+{% block content %}
+{% if saved %}
+<section class="card" style="margin-bottom:18px; border-color: var(--good);">
+  <strong class="good">已保存大模型设置。</strong>
+  <span class="muted">WebUI 当前进程已立即加载新配置；后台 daemon 已自动重启{% if restart_ok %}并生效{% elif restart_failed %}失败，请稍后在操作页检查{% endif %}。</span>
+</section>
+{% endif %}
+
+<form method="post" action="/settings" style="display:grid; gap:18px;">
+  <div class="grid cols-2">
+    <section class="card">
+      <h2>决策 Provider</h2>
+      <label>
+        <div class="muted" style="margin-bottom:6px;">主决策 Provider</div>
+        <select name="decision_provider" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);">
+          {% for option in provider_options %}
+          <option value="{{ option }}" {% if settings.decision_provider == option %}selected{% endif %}>{{ option }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <div class="grid cols-2" style="margin-top:14px;">
+        <label>
+          <div class="muted" style="margin-bottom:6px;">Live Provider</div>
+          <select name="live_decision_provider" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);">
+            {% for option in provider_options %}
+            <option value="{{ option }}" {% if settings.live_decision_provider == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>
+          <div class="muted" style="margin-bottom:6px;">Observation Provider</div>
+          <select name="observation_decision_provider" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);">
+            {% for option in provider_options %}
+            <option value="{{ option }}" {% if settings.observation_decision_provider == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+          </select>
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Fallback 顺序</h2>
+      <label>
+        <div class="muted" style="margin-bottom:6px;">按名称用逗号分隔；排在前面的先尝试，失败后自动试下一个。</div>
+        <input name="fallback_order" value="{{ settings.fallback_order }}" placeholder="primary,backup,third" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);">
+      </label>
+      <div class="muted" style="margin-top:12px;">
+        当前配置文件：<span class="text-break">{{ settings.env_file }}</span><br>
+        当前主用：{{ settings.profiles[0].name if settings.profiles else '-' }} / {{ settings.profiles[0].model if settings.profiles else '-' }}
+      </div>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2>大模型列表</h2>
+    <div class="muted" style="margin-bottom:12px;">可以直接新增、删除（清空名称/URL/Model/Key 即删除）。直接修改“顺序”数字即可改变 fallback 优先级：1 最先尝试，失败后自动试 2、3…… API Key 留空会保留同名模型原 key。</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>顺序</th><th>启用</th><th>名称</th><th>Base URL</th><th>Model</th><th>API Key</th><th>当前 Key</th></tr>
+        </thead>
+        <tbody>
+          {% for profile in profile_slots %}
+          <tr>
+            <td><input type="number" min="1" name="profile_order_{{ loop.index0 }}" value="{{ loop.index if profile.name else '' }}" style="width:70px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);"></td>
+            <td><input type="checkbox" name="profile_enabled_{{ loop.index0 }}" {% if profile.enabled %}checked{% endif %}></td>
+            <td><input name="profile_name_{{ loop.index0 }}" value="{{ profile.name }}" placeholder="primary" style="width:140px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);"></td>
+            <td><input name="profile_base_url_{{ loop.index0 }}" value="{{ profile.base_url }}" placeholder="https://api.openai.com/v1" style="width:260px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);"></td>
+            <td><input name="profile_model_{{ loop.index0 }}" value="{{ profile.model }}" placeholder="gpt-4o / claude-opus-4-7" style="width:190px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);"></td>
+            <td><input type="password" name="profile_api_key_{{ loop.index0 }}" value="" autocomplete="new-password" placeholder="留空保留" style="width:180px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);"></td>
+            <td>{{ profile.api_key_masked or '未配置' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <button type="submit" style="margin-top:16px; padding:11px 16px; border:0; border-radius:12px; background:var(--link); color:#08101f; font-weight:700; cursor:pointer;">保存设置</button>
+  </section>
+
+  <section class="card">
+    <h2>当前 fallback 链</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>顺序</th><th>名称</th><th>Base URL</th><th>Model</th><th>启用</th><th>Key</th></tr></thead>
+        <tbody>
+          {% for profile in settings.profiles %}
+          <tr>
+            <td class="num">{{ loop.index }}</td>
+            <td>{{ profile.name }}</td>
+            <td class="text-break">{{ profile.base_url }}</td>
+            <td>{{ profile.model }}</td>
+            <td>{{ '是' if profile.enabled else '否' }}</td>
+            <td>{{ profile.api_key_masked }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</form>
+{% endblock %}

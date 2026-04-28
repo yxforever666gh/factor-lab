@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="grid cols-3">
+  <div class="card"><h3>候选风险画像数</h3><div style="font-size:28px;">{{ summary.profile_count }}</div></div>
+  <div class="card"><h3>高风险候选</h3><div style="font-size:28px;" class="bad">{{ summary.high_risk_count }}</div></div>
+  <div class="card"><h3>平均风险分</h3><div style="font-size:28px;">{{ summary.avg_risk_score }}</div></div>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>候选风险摘要</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Candidate</th><th>Family</th><th>状态</th><th>风险级别</th><th>风险分</th><th>稳健分</th><th>失败检查</th><th>摘要</th></tr>
+        </thead>
+        <tbody>
+          {% for row in profiles %}
+          <tr>
+            <td><a href="/candidates/{{ row.candidate_id }}">{{ row.candidate_name or row.candidate_id }}</a></td>
+            <td>{{ row.family or '-' }}</td>
+            <td>{{ row.candidate_status or '-' }}</td>
+            <td>{{ row.risk_level }}</td>
+            <td class="num">{{ row.risk_score }}</td>
+            <td class="num">{{ row.robustness_score }}</td>
+            <td class="num">{{ row.failing_check_count }}</td>
+            <td class="text-break">{{ row.summary }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Family 风险摘要</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Family</th><th>候选数</th><th>平均风险分</th><th>高</th><th>中</th><th>低</th><th>平均稳健分</th><th>Trial Pressure</th><th>False+ Pressure</th><th>建议动作</th></tr>
+        </thead>
+        <tbody>
+          {% for row in family_risks %}
+          <tr>
+            <td>{{ row.family }}</td>
+            <td class="num">{{ row.candidate_count }}</td>
+            <td class="num">{{ row.avg_risk_score }}</td>
+            <td class="num bad">{{ row.high_risk_count }}</td>
+            <td class="num warn">{{ row.medium_risk_count }}</td>
+            <td class="num good">{{ row.low_risk_count }}</td>
+            <td class="num">{{ row.avg_robustness_score }}</td>
+            <td class="num">{{ row.trial_pressure if row.trial_pressure is not none else '-' }}</td>
+            <td class="num">{{ row.false_positive_pressure if row.false_positive_pressure is not none else '-' }}</td>
+            <td>{{ row.recommended_action or '-' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<section class="card" style="margin-top:18px;">
+  <h2>最近稳健性检查</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>时间</th><th>Candidate</th><th>Check</th><th>状态</th><th>严重度</th><th>分数</th><th>说明</th></tr>
+      </thead>
+      <tbody>
+        {% for row in checks %}
+        <tr>
+          <td class="text-nowrap">{{ row.created_at_utc }}</td>
+          <td>{{ candidate_name_by_id.get(row.candidate_id, row.candidate_id) }}</td>
+          <td>{{ row.check_name }}</td>
+          <td>{{ row.status }}</td>
+          <td>{{ row.severity }}</td>
+          <td class="num">{{ row.score }}</td>
+          <td class="text-break">{{ row.rationale }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

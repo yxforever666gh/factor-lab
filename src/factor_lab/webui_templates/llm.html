@@ -1,0 +1,221 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-2">
+  <section class="card">
+    <h2>LLM 状态</h2>
+    <div style="margin-bottom:10px;"><a class="pill good" href="/settings">打开大模型设置</a> <a class="pill" href="/agents">打开 Agent 设置</a></div>
+    <table>
+      <tbody>
+        <tr><th>模式</th><td>{{ llm_status.mode or '-' }}</td></tr>
+        <tr><th>状态</th><td>{{ llm_status.status or '-' }}</td></tr>
+        <tr><th>Agent</th><td>{{ llm_status.agent_name or '-' }}</td></tr>
+        <tr><th>校验</th><td>{{ llm_status.validation or '-' }}</td></tr>
+        <tr><th>更新时间</th><td>{{ llm_status.imported_at_utc or llm_status.updated_at_utc or llm_status.validated_at_utc or '-' }}</td></tr>
+        <tr><th>提示</th><td class="text-break">{{ llm_status.message or '-' }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2>本轮关键信息</h2>
+    <table>
+      <tbody>
+        <tr><th>最新运行</th><td>{{ snapshot.latest_run.run_id if snapshot.latest_run else '-' }}</td></tr>
+        <tr><th>配置</th><td class="text-break">{{ snapshot.latest_run.config_path if snapshot.latest_run else '-' }}</td></tr>
+        <tr><th>时间窗口</th><td>{{ snapshot.latest_run.start_date if snapshot.latest_run else '-' }} → {{ snapshot.latest_run.end_date if snapshot.latest_run else '-' }}</td></tr>
+        <tr><th>候选池</th><td>{{ snapshot.latest_candidates|join('、') if snapshot.latest_candidates else '无' }}</td></tr>
+        <tr><th>墓地</th><td>{{ snapshot.latest_graveyard|join('、') if snapshot.latest_graveyard else '无' }}</td></tr>
+        <tr><th>规划提示</th><td class="text-break">{{ agent_request.instructions.planning_hint if agent_request.instructions else '-' }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<section class="card" style="margin-top:18px;">
+  <h2>Agent Roles</h2>
+  <div class="muted" style="margin-bottom:10px;">Agent Role 是职责分工；模型 Profile 在大模型设置中管理。</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Role</th><th>启用</th><th>Decision Types</th><th>Fallback</th><th>旧 Agent</th></tr></thead>
+      <tbody>
+        {% for role in agent_settings.roles %}
+        <tr>
+          <td>{{ role.name }} / {{ role.display_name }}</td>
+          <td>{{ '是' if role.enabled else '否' }}</td>
+          <td>{{ role.decision_types }}</td>
+          <td class="text-break">{{ role.llm_fallback_order }}</td>
+          <td>{{ role.legacy_agent_id or '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>LLM 评审</h2>
+    <pre>{{ review_text }}</pre>
+  </section>
+  <section class="card">
+    <h2>下一轮计划摘要</h2>
+    <table>
+      <tbody>
+        <tr><th>重点因子</th><td>{{ llm_plan.focus_factors|join('、') if llm_plan.focus_factors else '-' }}</td></tr>
+        <tr><th>保留核心候选</th><td>{{ llm_plan.keep_as_core_candidates|join('、') if llm_plan.keep_as_core_candidates else '-' }}</td></tr>
+        <tr><th>重点复核墓地</th><td>{{ llm_plan.review_graveyard|join('、') if llm_plan.review_graveyard else '-' }}</td></tr>
+        <tr><th>组合检查项</th><td>{{ llm_plan.portfolio_checks|join('、') if llm_plan.portfolio_checks else '-' }}</td></tr>
+        <tr><th>原因</th><td class="text-break">{{ llm_plan.rationale or '-' }}</td></tr>
+        <tr><th>新问题</th><td class="text-break">{{ llm_plan.new_questions|join('、') if llm_plan.new_questions else '-' }}</td></tr>
+        <tr><th>建议机会</th><td class="text-break">{{ llm_plan.suggested_opportunities|join('、') if llm_plan.suggested_opportunities else '-' }}</td></tr>
+        <tr><th>阻断机会</th><td class="text-break">{{ llm_plan.blocked_opportunities|join('、') if llm_plan.blocked_opportunities else '-' }}</td></tr>
+        <tr><th>不确定热点</th><td class="text-break">{{ llm_plan.uncertainty_hotspots|join('、') if llm_plan.uncertainty_hotspots else '-' }}</td></tr>
+        <tr><th>Challenger</th><td class="text-break">{{ llm_plan.challenger_notes|join('；') if llm_plan.challenger_notes else '-' }}</td></tr>
+        <tr><th>Auditor</th><td class="text-break">{{ llm_plan.auditor_notes|join('；') if llm_plan.auditor_notes else '-' }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>Bridge 请求摘要</h2>
+    <table>
+      <tbody>
+        <tr><th>Schema</th><td>{{ agent_request.schema_version or '-' }}</td></tr>
+        <tr><th>角色</th><td>{{ agent_request.agent_role or '-' }}</td></tr>
+        <tr><th>任务</th><td>{{ agent_request.tasks|join('、') if agent_request.tasks else '-' }}</td></tr>
+        <tr><th>创建时间</th><td>{{ agent_request.created_at_utc or '-' }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2>快照 Top Scores</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>因子</th><th>平均分</th><th>出现次数</th></tr></thead>
+        <tbody>
+          {% for row in snapshot.top_scores %}
+          <tr>
+            <td>{{ row.factor_name }}</td>
+            <td class="num">{{ row.avg_score }}</td>
+            <td class="num">{{ row.runs }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>计划校验状态</h2>
+    <table>
+      <tbody>
+        <tr><th>有效</th><td>{{ '是' if plan_validation.valid else '否' }}</td></tr>
+        <tr><th>模板</th><td>{{ plan_validation.normalized_plan.template_type if plan_validation.normalized_plan else '-' }}</td></tr>
+        <tr><th>建议动作</th><td>{{ plan_validation.template_policy.recommended_action if plan_validation.template_policy else '-' }}</td></tr>
+        <tr><th>风险模式</th><td>{{ plan_validation.portfolio_policy.risk_mode if plan_validation.portfolio_policy else '-' }}</td></tr>
+        <tr><th>错误</th><td>{{ plan_validation.errors|join('；') if plan_validation.errors else '无' }}</td></tr>
+        <tr><th>警告</th><td>{{ plan_validation.warnings|join('；') if plan_validation.warnings else '无' }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2>生成的 Batch 摘要</h2>
+    {% if generated_batch.jobs %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>任务</th><th>数据源</th><th>时间范围</th><th>因子数</th></tr></thead>
+        <tbody>
+          {% for row in generated_batch.jobs %}
+          <tr>
+            <td>{{ row.job_name or row.name or '-' }}</td>
+            <td>{{ row.data_source or '-' }}</td>
+            <td>{{ row.start_date or '-' }} → {{ row.end_date or '-' }}</td>
+            <td class="num">{{ row.factors|length if row.factors else 0 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="muted">暂无生成的 batch。</div>
+    {% endif %}
+  </section>
+</div>
+
+<details class="card" style="margin-top:18px;">
+  <summary style="cursor:pointer; font-weight:600;">查看生成的 Workflow 配置</summary>
+  <pre style="margin-top:12px;">{{ generated_workflow_text }}</pre>
+</details>
+
+<details class="card" style="margin-top:18px;">
+  <summary style="cursor:pointer; font-weight:600;">查看 Batch 执行反馈</summary>
+  <pre style="margin-top:12px;">{{ generated_feedback_text }}</pre>
+</details>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>建议效果回溯</h2>
+    <pre>{{ retrospective_text }}</pre>
+  </section>
+  <section class="card">
+    <h2>回溯 JSON</h2>
+    <pre>{{ retrospective_json_text }}</pre>
+  </section>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>已注入 Planner 的历史尾部</h2>
+    {% if recommendation_history_tail %}
+      {% for row in recommendation_history_tail %}
+      <div style="padding:12px; border:1px solid var(--border); border-radius:12px; margin-bottom:10px; background: var(--panel-2);">
+        <div><strong>{{ row.template_type }}</strong> · {{ row.recorded_at_utc }}</div>
+        <div class="muted" style="margin-top:6px;">效果：{{ row.effectiveness or '-' }}｜存活候选：{{ row.survived_as_candidates|join('、') if row.survived_as_candidates else '无' }}</div>
+        <div style="margin-top:6px;">{{ row.next_action_hint or row.reason or '-' }}</div>
+      </div>
+      {% endfor %}
+    {% else %}
+    <div class="muted">暂无已注入 planner 的历史尾部。</div>
+    {% endif %}
+  </section>
+  <section class="card">
+    <h2>模板优先级摘要与疲劳度</h2>
+    {% if recommendation_context.priority_summary %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>模板</th><th>建议动作</th><th>效果分</th><th>样本</th><th>疲劳</th></tr></thead>
+        <tbody>
+          {% for row in recommendation_context.priority_summary %}
+          <tr>
+            <td>{{ row.template_type }}</td>
+            <td>{{ row.recommended_action }}</td>
+            <td class="num">{{ row.decayed_effect_score }}</td>
+            <td class="num">{{ row.sample_count }}</td>
+            <td>{{ row.fatigue_level }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="muted" style="margin-top:10px;">{{ recommendation_context.planner_hint or '暂无 planner hint。' }}</div>
+    {% else %}
+    <div class="muted">暂无模板优先级摘要与疲劳度。</div>
+    {% endif %}
+  </section>
+</div>
+
+<details class="card" style="margin-top:18px;">
+  <summary style="cursor:pointer; font-weight:600;">查看原始 JSON / 请求详情</summary>
+  <div class="grid cols-2" style="margin-top:12px;">
+    <pre>{{ request_text }}</pre>
+    <pre>{{ snapshot_text }}</pre>
+  </div>
+  <pre style="margin-top:12px;">{{ plan_text }}</pre>
+  <pre style="margin-top:12px;">{{ recommendation_weights_text }}</pre>
+  <pre style="margin-top:12px;">{{ recommendation_history_text }}</pre>
+  <pre style="margin-top:12px;">{{ generated_batch_text }}</pre>
+</details>
+{% endblock %}

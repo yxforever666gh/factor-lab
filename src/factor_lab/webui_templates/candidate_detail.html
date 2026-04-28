@@ -1,0 +1,304 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-2">
+  <section class="card">
+    <h2>{{ candidate.name }}</h2>
+    <div class="muted">{{ candidate.expression or '-' }}</div>
+    <div style="margin-top:12px;">
+      <span class="pill {{ 'good' if candidate.status == 'promising' else 'bad' if candidate.status in ['rejected','archived'] else 'warn' }}">{{ candidate.status }}</span>
+      <span class="pill">{{ candidate.family or '-' }}</span>
+      {% if acceptance_snapshot.fragility and acceptance_snapshot.fragility.is_fragile %}<span class="pill warn">fragile</span>{% endif %}
+      {% if family_rollup.family_score is not none %}<span class="pill">family_score={{ family_rollup.family_score }}</span>{% endif %}
+      {% if cluster_membership.cluster_id %}<span class="pill">cluster #{{ cluster_membership.cluster_id }}</span>{% endif %}
+    </div>
+    <table style="margin-top:12px;">
+      <tbody>
+        <tr><th>最新分</th><td>{{ candidate.latest_final_score if candidate.latest_final_score is not none else '-' }}</td></tr>
+        <tr><th>平均分</th><td>{{ candidate.avg_final_score if candidate.avg_final_score is not none else '-' }}</td></tr>
+        <tr><th>最佳分</th><td>{{ candidate.best_final_score if candidate.best_final_score is not none else '-' }}</td></tr>
+        <tr><th>通过率</th><td>{{ candidate.pass_rate if candidate.pass_rate is not none else '-' }}</td></tr>
+        <tr><th>评估数</th><td>{{ candidate.evaluation_count }}</td></tr>
+        <tr><th>窗口数</th><td>{{ candidate.window_count }}</td></tr>
+        <tr><th>关系数</th><td>{{ candidate_context.relationship_count or 0 }}</td></tr>
+        <tr><th>谱系数</th><td>{{ candidate_context.lineage_count or 0 }}</td></tr>
+        <tr><th>下一步</th><td>{{ candidate.next_action or '-' }}</td></tr>
+        <tr><th>拒绝原因</th><td>{{ candidate.rejection_reason or '-' }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2>Acceptance Gate 2.0</h2>
+    {% set gate = acceptance_snapshot.acceptance_gate or {} %}
+    <div style="margin-bottom:10px;">
+      <span class="pill {{ 'good' if gate.status == 'pass' else 'bad' if gate.status in ['fail','blocked'] else 'warn' }}">{{ gate.status or '-' }}</span>
+      <span class="pill">{{ gate.promotion or '-' }}</span>
+    </div>
+    <p>{{ acceptance_snapshot.acceptance_gate_explanation or '暂无 gate 解释。' }}</p>
+    <table>
+      <tbody>
+        <tr><th>官方评估数</th><td>{{ gate.metrics.official_eval_count if gate.metrics else '-' }}</td></tr>
+        <tr><th>官方窗口数</th><td>{{ gate.metrics.official_window_count if gate.metrics else '-' }}</td></tr>
+        <tr><th>平均分</th><td>{{ gate.metrics.avg_score if gate.metrics else '-' }}</td></tr>
+        <tr><th>通过率</th><td>{{ gate.metrics.pass_rate if gate.metrics else '-' }}</td></tr>
+        <tr><th>Fragility 风险分</th><td>{{ gate.metrics.fragility_risk_score if gate.metrics else '-' }}</td></tr>
+      </tbody>
+    </table>
+    {% if gate.fragility_gate and gate.fragility_gate.triggers %}
+    <h3>Fragility 触发器</h3>
+    <ul>{% for row in gate.fragility_gate.triggers %}<li>{{ row }}</li>{% endfor %}</ul>
+    {% endif %}
+  </section>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>风险画像 / Robustness</h2>
+    {% if candidate_risk_profile %}
+    <div style="margin-bottom:10px;">
+      <span class="pill {{ 'bad' if candidate_risk_profile.risk_level == 'high' else 'warn' if candidate_risk_profile.risk_level == 'medium' else 'good' }}">risk={{ candidate_risk_profile.risk_level }}</span>
+      <span class="pill">risk_score={{ candidate_risk_profile.risk_score }}</span>
+      <span class="pill">robustness={{ candidate_risk_profile.robustness_score }}</span>
+      {% if candidate_risk_profile.profile and candidate_risk_profile.profile.fragile %}<span class="pill warn">fragile</span>{% endif %}
+    </div>
+    <table>
+      <tbody>
+        <tr><th>Family context</th><td>{{ candidate_risk_profile.family_context_score if candidate_risk_profile.family_context_score is not none else '-' }}</td></tr>
+        <tr><th>Graph context</th><td>{{ candidate_risk_profile.graph_context_score if candidate_risk_profile.graph_context_score is not none else '-' }}</td></tr>
+        <tr><th>通过检查数</th><td>{{ candidate_risk_profile.passing_check_count }}</td></tr>
+        <tr><th>失败检查数</th><td>{{ candidate_risk_profile.failing_check_count }}</td></tr>
+        <tr><th>摘要</th><td>{{ candidate_risk_profile.summary or '-' }}</td></tr>
+      </tbody>
+    </table>
+    <h3>关键风险</h3>
+    <ul>{% for row in candidate_risk_profile.key_risks %}<li>{{ row }}</li>{% endfor %}</ul>
+    <h3>缓解动作</h3>
+    <ul>{% for row in candidate_risk_profile.mitigations %}<li>{{ row }}</li>{% endfor %}</ul>
+    <h3>检查明细</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Check</th><th>Status</th><th>Severity</th><th>Score</th><th>Evidence</th><th>Rationale</th></tr></thead>
+        <tbody>
+          {% for row in candidate_risk_profile.profile.checks or [] %}
+          <tr>
+            <td>{{ row.check_name }}</td>
+            <td><span class="pill {{ 'good' if row.status == 'pass' else 'bad' if row.status == 'fail' else 'warn' }}">{{ row.status }}</span></td>
+            <td>{{ row.severity }}</td>
+            <td class="num">{{ row.score }}</td>
+            <td class="text-break">{{ row.evidence }}</td>
+            <td class="text-break">{{ row.rationale }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="muted">暂无风险画像。</div>
+    {% endif %}
+  </section>
+  <section class="card">
+    <h2>研究假设</h2>
+    {% if hypothesis %}
+    <p>{{ hypothesis.hypothesis_text }}</p>
+    <h3>支持证据</h3>
+    <ul>{% for row in hypothesis.evidence_for %}<li>{{ row }}</li>{% endfor %}</ul>
+    <h3>反对证据</h3>
+    <ul>{% for row in hypothesis.evidence_against %}<li>{{ row }}</li>{% endfor %}</ul>
+    <div class="muted">下一步：{{ hypothesis.next_action or '-' }}</div>
+    {% else %}
+    <div class="muted">暂无假设摘要。</div>
+    {% endif %}
+
+    <h2 style="margin-top:18px;">机构化 Thesis / Quality</h2>
+    {% if research_thesis or promotion_row %}
+    {% if research_thesis %}
+    <div style="margin-bottom:10px;">
+      <span class="pill">{{ research_thesis.institutional_bucket_label or '-' }}</span>
+      <span class="pill">{{ research_thesis.thesis_type or '-' }}</span>
+      <span class="pill">thesis={{ research_thesis.thesis_id or '-' }}</span>
+    </div>
+    <p>{{ research_thesis.thesis_text or research_thesis.mechanism_rationale or '-' }}</p>
+    {% if research_thesis.invalidation %}
+    <h3>失效条件</h3>
+    <ul>{% for row in research_thesis.invalidation %}<li>{{ row }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% endif %}
+    {% if promotion_row %}
+    <table style="margin-top:10px;">
+      <tbody>
+        <tr><th>质量分类</th><td>{{ promotion_row.quality_classification_label or promotion_row.quality_classification or '-' }}</td></tr>
+        <tr><th>晋升决策</th><td>{{ promotion_row.quality_promotion_decision_label or promotion_row.quality_promotion_decision or '-' }}</td></tr>
+        <tr><th>质量总分</th><td>{{ promotion_row.quality_total_score if promotion_row.quality_total_score is not none else '-' }}</td></tr>
+        <tr><th>摘要</th><td>{{ promotion_row.quality_summary or '-' }}</td></tr>
+        <tr><th>Novelty class</th><td>{{ novelty_row.novelty_class if novelty_row else promotion_row.novelty_class if promotion_row else '-' }}</td></tr>
+        <tr><th>Incrementality</th><td>{{ novelty_row.incrementality_confidence if novelty_row else promotion_row.incrementality_confidence if promotion_row else '-' }}</td></tr>
+        <tr><th>Novelty action</th><td>{{ novelty_row.recommended_action if novelty_row else promotion_row.novelty_recommended_action if promotion_row else '-' }}</td></tr>
+      </tbody>
+    </table>
+    {% endif %}
+    {% else %}
+    <div class="muted">暂无机构化 thesis / quality 信息。</div>
+    {% endif %}
+  </section>
+</div>
+
+<section class="card" style="margin-top:18px;">
+  <h2>失效画像 / Failure Dossier</h2>
+  {% if candidate_failure_dossier %}
+  <div style="margin-bottom:10px;">
+    <span class="pill">action={{ candidate_failure_dossier.recommended_action or '-' }}</span>
+    <span class="pill">regime={{ candidate_failure_dossier.regime_dependency or '-' }}</span>
+    <span class="pill">parent_delta={{ candidate_failure_dossier.parent_delta_status or '-' }}</span>
+    <span class="pill">retention_avg={{ candidate_failure_dossier.retention_avg if candidate_failure_dossier.retention_avg is not none else '-' }}</span>
+  </div>
+  <div class="grid cols-2">
+    <div>
+      <h3 style="margin-top:0;">失效模式</h3>
+      {% if candidate_failure_dossier.failure_modes %}
+      <ul>{% for row in candidate_failure_dossier.failure_modes %}<li>{{ row }}</li>{% endfor %}</ul>
+      {% else %}
+      <div class="muted">当前没有明显的失败模式标签。</div>
+      {% endif %}
+    </div>
+    <div>
+      <h3 style="margin-top:0;">证据</h3>
+      {% if candidate_failure_dossier.evidence %}
+      <ul>{% for row in candidate_failure_dossier.evidence %}<li>{{ row }}</li>{% endfor %}</ul>
+      {% else %}
+      <div class="muted">暂无失效证据摘要。</div>
+      {% endif %}
+      <div class="muted" style="margin-top:10px;">父因子：{{ candidate_failure_dossier.parent_candidates|join('、') if candidate_failure_dossier.parent_candidates else '无' }}</div>
+    </div>
+  </div>
+  <div class="table-wrap" style="margin-top:12px;">
+    <table>
+      <thead><tr><th>窗口</th><th>Bucket</th><th>最终分</th><th>Retention</th><th>Neutralized IC</th><th>状态</th></tr></thead>
+      <tbody>
+        {% for row in candidate_failure_dossier.window_evidence %}
+        <tr>
+          <td>{{ row.window_label or '-' }}</td>
+          <td>{{ row.bucket or '-' }}</td>
+          <td class="num">{{ row.final_score if row.final_score is not none else '-' }}</td>
+          <td class="num">{{ row.retention if row.retention is not none else '-' }}</td>
+          <td class="num">{{ row.neutralized_rank_ic_mean if row.neutralized_rank_ic_mean is not none else '-' }}</td>
+          <td>{{ row.status or '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="muted">暂无失效画像。</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>组合边际贡献 / Portfolio Contribution</h2>
+  {% if candidate_portfolio_contribution %}
+  <div style="margin-bottom:10px;">
+    <span class="pill {{ 'good' if candidate_portfolio_contribution.contribution_class == 'positive' else 'bad' if candidate_portfolio_contribution.contribution_class == 'negative' else 'warn' }}">{{ candidate_portfolio_contribution.contribution_class }}</span>
+    <span class="pill">ΔSharpe={{ candidate_portfolio_contribution.delta_sharpe if candidate_portfolio_contribution.delta_sharpe is not none else '-' }}</span>
+    <span class="pill">ΔCostAdj={{ candidate_portfolio_contribution.delta_cost_adjusted_annual_return if candidate_portfolio_contribution.delta_cost_adjusted_annual_return is not none else '-' }}</span>
+    <span class="pill">latest_overlap={{ candidate_portfolio_contribution.latest_overlap_ratio if candidate_portfolio_contribution.latest_overlap_ratio is not none else '-' }}</span>
+  </div>
+  <div class="muted">正值表示把这个因子放进当前 paper portfolio 候选池后，组合级表现比 leave-one-out 更好；负值表示更像噪音或重复。</div>
+  {% else %}
+  <div class="muted">暂无组合边际贡献报告。</div>
+  {% endif %}
+</section>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>谱系 / Lineage</h2>
+    {% if candidate_lineage %}
+    <ul>
+      {% for row in candidate_lineage %}
+      <li>
+        <a href="/candidates/{{ row.candidate_id }}">{{ row.candidate_name }}</a>
+        <span class="pill">{{ row.relationship_type }}</span>
+        {% if row.details.parent_candidate %}<span class="muted">parent={{ row.details.parent_candidate }}</span>{% endif %}
+        {% if row.details.child_candidate %}<span class="muted">child={{ row.details.child_candidate }}</span>{% endif %}
+        {% if row.details.hybrid_candidate %}<span class="muted">hybrid={{ row.details.hybrid_candidate }}</span>{% endif %}
+        {% if row.details.shared_atoms %}<div class="muted">shared={{ row.details.shared_atoms|join(', ') }}</div>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="muted">暂无 duplicate / refinement / hybrid 谱系。</div>
+    {% endif %}
+  </section>
+  <section class="card">
+    <h2>Cluster 归属</h2>
+    {% if cluster_membership.cluster_id %}
+    <div class="muted">cluster #{{ cluster_membership.cluster_id }} · leader={{ cluster_membership.leader }} · dominant_family={{ cluster_membership.dominant_family }} · size={{ cluster_membership.cluster_size }}</div>
+    <div style="margin-top:10px;">
+      {% for key, value in cluster_membership.relationship_mix.items() %}
+      <span class="pill">{{ key }}: {{ value }}</span>
+      {% endfor %}
+    </div>
+    <ul style="margin-top:10px;">
+      {% for row in cluster_membership.members %}
+      <li>
+        {% if row.id == candidate.id %}
+        <strong>{{ row.name }}</strong>
+        {% else %}
+        <a href="/candidates/{{ row.id }}">{{ row.name }}</a>
+        {% endif %}
+        <span class="muted">{{ row.family }} / {{ row.status }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <div class="muted">当前未归属到任何候选 cluster。</div>
+    {% endif %}
+  </section>
+</div>
+
+<section class="card" style="margin-top:18px;">
+  <h2>相关候选</h2>
+  {% if related_candidates %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>候选</th><th>关系类型</th><th>强度</th><th>细节</th></tr></thead>
+      <tbody>
+        {% for row in related_candidates %}
+        <tr>
+          <td><a href="/candidates/{{ row.candidate_id }}">{{ row.candidate_name }}</a></td>
+          <td>{{ row.relationship_type }}</td>
+          <td class="num">{{ row.strength if row.strength is not none else '-' }}</td>
+          <td class="text-break">{{ row.details }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="muted">暂无相关候选。</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>评估历史</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>时间</th><th>窗口</th><th>状态</th><th>最终分</th><th>稳定分</th><th>质量分</th><th>收益</th><th>Sharpe</th><th>回撤</th><th>Split Fail</th><th>原因</th></tr></thead>
+      <tbody>
+        {% for row in evaluations %}
+        <tr>
+          <td class="text-nowrap">{{ row.created_at_utc }}</td>
+          <td>{{ row.window_label or '-' }}</td>
+          <td><span class="pill {{ 'good' if row.status == 'promising' else 'bad' if row.status in ['rejected','archived'] else 'warn' }}">{{ row.status }}</span></td>
+          <td class="num">{{ row.final_score }}</td>
+          <td class="num">{{ row.stability_score }}</td>
+          <td class="num">{{ row.quality_score }}</td>
+          <td class="num">{{ row.return_metric }}</td>
+          <td class="num">{{ row.sharpe_like }}</td>
+          <td class="num">{{ row.max_drawdown }}</td>
+          <td class="num">{{ row.split_fail_count }}</td>
+          <td class="text-break">{{ row.rejection_reason or '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

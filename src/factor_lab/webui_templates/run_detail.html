@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-2">
+  <section class="card">
+    <h2>运行元信息</h2>
+    <div class="table-wrap">
+      <table>
+        <tbody>
+          {% for key, value in run.items() %}
+          <tr><th class="text-nowrap">{{ key }}</th><td class="text-break">{{ value }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  <section class="card">
+    <h2>产物文件</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>名称</th><th>路径</th></tr></thead>
+        <tbody>
+          {% for row in artifacts %}
+          <tr><td class="text-nowrap">{{ row.artifact_name }}</td><td class="text-break">{{ row.artifact_path }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<section class="card" style="margin-top:18px;">
+  <h2>组合结果</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th class="col-strategy">策略</th><th>年化收益</th><th>夏普</th><th>最大回撤</th><th>换手</th></tr></thead>
+      <tbody>
+        {% for row in portfolios %}
+        <tr>
+          <td class="text-break col-strategy">{{ row.strategy_name }}</td>
+          <td class="num">{{ row.annual_return }}</td>
+          <td class="num">{{ row.sharpe }}</td>
+          <td class="num">{{ row.max_drawdown }}</td>
+          <td class="num">{{ row.avg_turnover }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>因子明细</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>因子</th><th>变体</th><th>IC</th><th>IR</th><th>评分</th><th>通过</th><th>失败原因</th></tr></thead>
+      <tbody>
+        {% for row in factors %}
+        <tr>
+          <td class="text-break">{{ row.factor_name }}</td>
+          <td class="text-nowrap">{{ row.variant }}</td>
+          <td class="num">{{ row.rank_ic_mean }}</td>
+          <td class="num">{{ row.rank_ic_ir }}</td>
+          <td class="num">{{ row.score }}</td>
+          <td class="num">{{ row.pass_gate }}</td>
+          <td class="text-break">{{ row.fail_reason or '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

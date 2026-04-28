@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "name": "openclaw_candidate_generation_policy",
+  "mission": "基于稳定候选、高价值失败、family 缺口与互补性，持续生成少而精的新候选因子。",
+  "budgets": {
+    "stable_neighbor": 2,
+    "failure_driven": 2,
+    "template_driven": 2,
+    "family_gap": 1
+  },
+  "enabled_operators": [
+    "combine_add",
+    "combine_sub",
+    "combine_ratio",
+    "combine_mul",
+    "combine_avg",
+    "combine_primary_bias",
+    "residualize_against_peer",
+    "orthogonalize_against_peer"
+  ],
+  "limits": {
+    "max_new_candidates_per_cycle": 4,
+    "max_bases_per_candidate": 2,
+    "max_operators_per_pair": 2
+  },
+  "constraints": {
+    "base_pair_cooldown_after_failures": 2,
+    "max_variants_per_cluster_per_cycle": 1
+  },
+  "cheap_screen": {
+    "min_score": 0.55,
+    "cross_family_bonus": 0.2,
+    "stable_graveyard_pair_bonus": 0.2,
+    "high_value_failure_seed_bonus": 0.15,
+    "epistemic_gain_bonus": 0.15,
+    "same_family_penalty": 0.25,
+    "duplicate_penalty": 0.3
+  },
+  "failure_reason_operator_map": {
+    "repeated_graveyard_confirmed": ["residualize_against_peer", "combine_sub", "combine_ratio"],
+    "neutralization_diagnosis_requested": ["residualize_against_peer", "orthogonalize_against_peer", "combine_sub"],
+    "search_space_reduced": ["combine_add", "combine_sub", "orthogonalize_against_peer"],
+    "boundary_confirmed": ["combine_primary_bias", "combine_add"]
+  },
+  "selection_rules": {
+    "prefer_cross_family_pairs": true,
+    "prefer_stable_plus_graveyard": true,
+    "suppress_duplicate_base_pairs": true
+  },
+  "source_operator_preferences": {
+    "stable_plus_graveyard": [
+      "residualize_against_peer",
+      "orthogonalize_against_peer",
+      "combine_sub",
+      "combine_ratio"
+    ],
+    "high_value_failure_seed": [
+      "residualize_against_peer",
+      "orthogonalize_against_peer",
+      "combine_primary_bias",
+      "combine_sub"
+    ],
+    "family_gap": [
+      "residualize_against_peer",
+      "orthogonalize_against_peer",
+      "combine_sub",
+      "combine_primary_bias"
+    ],
+    "hypothesis_template": [
+      "combine_sub",
+      "combine_primary_bias",
+      "combine_ratio",
+      "combine_mul"
+    ],
+    "failure_question": [
+      "combine_sub",
+      "combine_ratio",
+      "combine_mul",
+      "combine_avg",
+      "combine_primary_bias"
+    ]
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "template_name": "factor_eval_template",
+  "purpose": "Shared template for workflow factor evaluation paths.",
+  "required_structure": [
+    "precompute factor_value_cache before evaluation loops",
+    "reuse cached factor values for raw evaluation",
+    "reuse cached factor values for split evaluation",
+    "reuse cached factor values for rolling evaluation",
+    "avoid full dataframe copy inside per-factor loop unless strictly required"
+  ],
+  "preferred_patterns": [
+    "factor_value_cache[name] = computed_series",
+    "pass precomputed factor series into helper functions",
+    "shared window slicing over recomputation",
+    "small local frames instead of dataset.frame.copy()"
+  ],
+  "discouraged_patterns": [
+    "apply_factor called repeatedly for same definition across workflow paths",
+    "split and rolling helpers recomputing factor expressions",
+    "full dataframe copy inside tight loops"
+  ],
+  "acceptance_questions": [
+    "Does this path reuse cached factor values?",
+    "Does this change keep backtest semantics unchanged?",
+    "Did we reduce repeated groupby/apply work?"
+  ]
+}

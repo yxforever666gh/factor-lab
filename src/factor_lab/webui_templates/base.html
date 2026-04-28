@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Factor Lab 控制台 - {{ title }}</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #141b34;
+      --panel-2: #1b2444;
+      --text: #ebf0ff;
+      --muted: #9aa7d1;
+      --good: #3ddc97;
+      --bad: #ff6b6b;
+      --warn: #ffd166;
+      --link: #84a8ff;
+      --border: #2b3765;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: Inter, Arial, sans-serif; background: var(--bg); color: var(--text); }
+    a { color: var(--link); text-decoration: none; }
+    .layout { display: grid; grid-template-columns: 250px 1fr; min-height: 100vh; }
+    .sidebar { background: #0f1530; border-right: 1px solid var(--border); padding: 24px 18px; }
+    .sidebar h1 { font-size: 20px; margin: 0 0 20px; }
+    .nav a { display: block; padding: 10px 12px; border-radius: 10px; color: var(--text); margin-bottom: 8px; background: transparent; }
+    .nav a:hover { background: var(--panel); }
+    .content { padding: 28px; }
+    .grid { display: grid; gap: 18px; }
+    .grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 18px; }
+    .card h2, .card h3 { margin-top: 0; }
+    .muted { color: var(--muted); }
+    .good { color: var(--good); }
+    .bad { color: var(--bad); }
+    .warn { color: var(--warn); }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: auto; }
+    th, td { padding: 10px 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+    tr:last-child td { border-bottom: none; }
+    pre { white-space: pre-wrap; word-break: break-word; background: var(--panel-2); border-radius: 12px; padding: 12px; border: 1px solid var(--border); }
+    .table-wrap { width: 100%; overflow-x: auto; overflow-y: hidden; }
+    .table-wrap table { min-width: 100%; }
+    .text-break { word-break: break-word; overflow-wrap: anywhere; }
+    .text-nowrap { white-space: nowrap; }
+    .num { white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .col-strategy { min-width: 320px; }
+    .col-run { min-width: 110px; }
+    .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; background: var(--panel-2); border: 1px solid var(--border); }
+    .pill.good { color: var(--good); }
+    .pill.bad { color: var(--bad); }
+    .topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .segmented { display: inline-flex; gap: 8px; padding: 6px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 14px; }
+    .segmented button { border: 0; background: transparent; color: var(--muted); padding: 8px 14px; border-radius: 10px; cursor: pointer; font-weight: 600; }
+    .segmented button.active { background: var(--link); color: #08101f; }
+    .segment-pane { display: none; }
+    .segment-pane.active { display: block; }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <h1>Factor Lab</h1>
+      <div class="muted" style="margin-bottom:16px;">本地研究控制台</div>
+      <nav class="nav">
+        <a href="/">总览</a>
+        <a href="/cockpit">驾驶舱</a>
+        <a href="/health">健康度</a>
+        <a href="/research">研究队列</a>
+        <a href="/weekly">周报</a>
+        <a href="/runs">运行记录</a>
+        <a href="/exposure">Exposure Track</a>
+        <a href="/factors">因子</a>
+        <a href="/candidates">候选榜单</a>
+        <a href="/families">候选 Family</a>
+        <a href="/candidate-clusters">候选簇</a>
+        <a href="/robustness">稳健性</a>
+        <a href="/portfolios">组合</a>
+        <a href="/paper-portfolio">纸面组合</a>
+        <a href="/approved-universe">Approved Universe</a>
+        <a href="/settings">大模型设置</a>
+        <a href="/agents">Agent 设置</a>
+        <a href="/llm">LLM</a>
+        <a href="/ops">操作</a>
+        <a href="/control">控制</a>
+      </nav>
+    </aside>
+    <main class="content">
+      <div class="topbar">
+        <div>
+          <h1 style="margin:0; font-size:28px;">{{ title }}</h1>
+        </div>
+      </div>
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</body>
+</html>

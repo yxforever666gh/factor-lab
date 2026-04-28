@@ -1,0 +1,372 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-3">
+  <section class="card">
+    <h2>运行健康</h2>
+    <div style="font-size:40px; font-weight:700;">{{ health.run_health.score }}</div>
+    <div class="muted">最近 24h 成功率 {{ (health.run_health.success_rate_24h * 100)|round(1) if health.run_health.success_rate_24h is not none else 0 }}%</div>
+  </section>
+  <section class="card">
+    <h2>研究进步</h2>
+    <div style="font-size:40px; font-weight:700;">{{ health.research_progress.score }}</div>
+    <div class="muted">主值来源：{{ '当前快照' if health.research_progress.score_basis == 'snapshot' else '24h 时间线末点' }}；当前快照 {{ health.research_progress.snapshot_score }}，时间线末点 {{ health.research_progress.timeline_score }}</div>
+    <div class="muted">拆解：稳定候选 {{ health.research_progress.breakdown.stable_candidate_component if health.research_progress.breakdown else '-' }} + 收敛 {{ health.research_progress.breakdown.convergence_component if health.research_progress.breakdown else '-' }} + 建议命中 {{ health.research_progress.breakdown.recommendation_component if health.research_progress.breakdown else '-' }} + 候选活跃 {{ health.research_progress.breakdown.candidate_activity_component if health.research_progress.breakdown else '-' }}</div>
+    {% if health.research_progress.score_warning %}
+    <div class="bad" style="margin-top:8px;">{{ health.research_progress.score_warning }}</div>
+    {% endif %}
+  </section>
+  <section class="card">
+    <h2>组合进步</h2>
+    <div style="font-size:40px; font-weight:700;">{{ health.portfolio_progress.score }}</div>
+    <div class="muted">主值来源：当前快照；时间线末点 {{ health.portfolio_progress.timeline_score }}；纸面组合稳定性 {{ health.portfolio_progress.paper_stability.label if health.portfolio_progress.paper_stability else '-' }}</div>
+    <div class="muted">拆解：Sharpe {{ health.portfolio_progress.breakdown.sharpe_component if health.portfolio_progress.breakdown else '-' }} + 稳定性 {{ health.portfolio_progress.breakdown.stability_component if health.portfolio_progress.breakdown else '-' }} + Return Gate {{ health.portfolio_progress.breakdown.return_component if health.portfolio_progress.breakdown else '-' }}</div>
+    <div class="muted">稳定性来源：{{ health.portfolio_progress.paper_stability_source if health.portfolio_progress.paper_stability_source is defined else 'snapshot_fallback' }}</div>
+  </section>
+</div>
+
+<section class="card" style="margin-top:18px;">
+  <h2>Decision Layer</h2>
+  <div class="grid cols-2" style="margin-bottom:12px;">
+    <div>
+      <div class="muted">live 决策链</div>
+      <div style="font-size:24px; font-weight:700;" class="{{ 'bad' if health.decision_layer.live.degraded_to_heuristic else 'good' }}">
+        {{ health.decision_layer.live.effective_source or '-' }}
+      </div>
+      <div class="muted">configured={{ health.decision_layer.live.configured_provider or '-' }}</div>
+      <div class="muted">probe={{ 'skipped' if health.decision_layer.live.probe_skipped else ('ok' if health.decision_layer.live.probe_ok else 'n/a') }}</div>
+    </div>
+    <div>
+      <div class="muted">observation / gateway 观测</div>
+      <div style="font-size:24px; font-weight:700;" class="{{ 'bad' if health.decision_layer.observation.degraded_to_heuristic else 'good' }}">
+        {{ health.decision_layer.observation.effective_source or '-' }}
+      </div>
+      <div class="muted">configured={{ health.decision_layer.observation.configured_provider or '-' }}</div>
+      <div class="muted">
+        latency={{ health.decision_layer.observation.probe_latency_ms if health.decision_layer.observation.probe_latency_ms is not none else '-' }}ms
+      </div>
+    </div>
+  </div>
+  {% if health.decision_layer.degraded %}
+  <div class="bad" style="margin-bottom:12px;">当前存在显式退化到 heuristic，不再是静默 fallback。</div>
+  {% endif %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Agent</th><th>effective</th><th>fallback</th><th>degraded</th><th>latency</th><th>session</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>planner</td>
+          <td>{{ health.decision_layer.planner.effective_source or '-' }}</td>
+          <td class="text-break">{{ health.decision_layer.planner.fallback_reason or '-' }}</td>
+          <td>{{ '是' if health.decision_layer.planner.degraded_to_heuristic else '否' }}</td>
+          <td>{{ health.decision_layer.planner.provider_latency_ms if health.decision_layer.planner.provider_latency_ms is not none else '-' }}ms</td>
+          <td class="text-break">{{ health.decision_layer.planner.session_mode or '-' }} / {{ health.decision_layer.planner.session_id or '-' }}</td>
+        </tr>
+        <tr>
+          <td>failure_analyst</td>
+          <td>{{ health.decision_layer.failure_analyst.effective_source or '-' }}</td>
+          <td class="text-break">{{ health.decision_layer.failure_analyst.fallback_reason or '-' }}</td>
+          <td>{{ '是' if health.decision_layer.failure_analyst.degraded_to_heuristic else '否' }}</td>
+          <td>{{ health.decision_layer.failure_analyst.provider_latency_ms if health.decision_layer.failure_analyst.provider_latency_ms is not none else '-' }}ms</td>
+          <td class="text-break">{{ health.decision_layer.failure_analyst.session_mode or '-' }} / {{ health.decision_layer.failure_analyst.session_id or '-' }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  {% if health.decision_layer.last_fallback_reason %}
+  <div class="muted" style="margin-top:10px;">最近 fallback 原因：{{ health.decision_layer.last_fallback_reason }}</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>Repair Layer</h2>
+  <div class="grid cols-4" style="margin-bottom:12px;">
+    <div><div class="muted">active incidents</div><div style="font-size:28px; font-weight:700;" class="{{ 'bad' if health.repair_layer.active_incident_count else 'good' }}">{{ health.repair_layer.active_incident_count }}</div></div>
+    <div><div class="muted">24h incidents</div><div style="font-size:28px; font-weight:700;">{{ health.repair_layer.metrics.incident_count_24h if health.repair_layer.metrics else 0 }}</div></div>
+    <div><div class="muted">24h observations</div><div style="font-size:28px; font-weight:700;">{{ health.repair_layer.metrics.observation_count_24h if health.repair_layer.metrics else 0 }}</div></div>
+    <div><div class="muted">last verification</div><div style="font-size:20px; font-weight:700;">{{ health.repair_layer.verification.overall_status if health.repair_layer.verification else '-' }}</div></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>最新 incident</th><th>repair mode</th><th>route unhealthy</th><th>restart recently</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>{{ health.repair_layer.response.incident_type if health.repair_layer.response else '-' }}</td>
+          <td>{{ health.repair_layer.response.repair_mode if health.repair_layer.response else '-' }}</td>
+          <td>{{ '是' if health.repair_layer.route_unhealthy else '否' }}</td>
+          <td>{{ '是' if health.repair_layer.restart_recently else '否' }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  {% if health.repair_layer.top_incident_types_24h %}
+  <div class="muted" style="margin-top:8px;">24h top incidents：{% for row in health.repair_layer.top_incident_types_24h %}{{ row[0] }}={{ row[1] }}{% if not loop.last %} · {% endif %}{% endfor %}</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>最近 24 小时分数时间轴</h2>
+  {% if health.score_timeline.chart_svg %}
+  <div style="overflow-x:auto;">
+    {{ health.score_timeline.chart_svg | safe }}
+  </div>
+  <div class="grid cols-3" style="margin-top:12px;">
+    <div>
+      <div class="muted">运行健康变化</div>
+      <div style="font-size:24px; font-weight:700;" class="{{ 'good' if health.score_timeline.summary.run_delta >= 0 else 'bad' }}">
+        {{ '+' if health.score_timeline.summary.run_delta > 0 else '' }}{{ health.score_timeline.summary.run_delta }}
+      </div>
+    </div>
+    <div>
+      <div class="muted">研究进步变化</div>
+      <div style="font-size:24px; font-weight:700;" class="{{ 'good' if health.score_timeline.summary.research_delta >= 0 else 'bad' }}">
+        {{ '+' if health.score_timeline.summary.research_delta > 0 else '' }}{{ health.score_timeline.summary.research_delta }}
+      </div>
+    </div>
+    <div>
+      <div class="muted">组合进步变化</div>
+      <div style="font-size:24px; font-weight:700;" class="{{ 'good' if health.score_timeline.summary.portfolio_delta >= 0 else 'bad' }}">
+        {{ '+' if health.score_timeline.summary.portfolio_delta > 0 else '' }}{{ health.score_timeline.summary.portfolio_delta }}
+      </div>
+    </div>
+  </div>
+  <div class="muted" style="margin-top:10px;">横轴是最近 24 小时的运行时间点，纵轴是 0-100 分；背景色把分数分成弱 / 中 / 强三个区间。主卡片优先显示当前快照分，时间线只负责看趋势；两者不一致时，多半是时间线口径不完整。</div>
+  {% else %}
+  <div class="muted">最近 24 小时运行点不足，暂时还画不出时间轴。</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
+    <div>
+      <h2 style="margin-bottom:6px;">项目进步观察</h2>
+      <div class="muted">`24h` 看小时级推进，`7d` 看按天均值。这里故意用均值，不用最高值，避免把单次侥幸 spike 当成真实进步。</div>
+    </div>
+    <div class="segmented" data-segmented="project-progress">
+      <button type="button" class="active" data-target="project-progress-24h">24h</button>
+      <button type="button" data-target="project-progress-7d">7d</button>
+    </div>
+  </div>
+
+  <div class="grid cols-4" style="margin-bottom:12px;">
+    <div><div class="muted">24h 新候选任务</div><div style="font-size:28px; font-weight:700;">{{ health.project_progress_observation.current_24h.generated_task_count or 0 }}</div></div>
+    <div><div class="muted">24h 候选结果</div><div style="font-size:28px; font-weight:700;">{{ health.project_progress_observation.current_24h.generated_outcome_count or 0 }}</div></div>
+    <div><div class="muted">24h 高信息占比</div><div style="font-size:28px; font-weight:700;">{{ ((health.project_progress_observation.current_24h.high_info_ratio or 0) * 100)|round(1) }}%</div></div>
+    <div><div class="muted">24h 低价值重复</div><div style="font-size:28px; font-weight:700;">{{ health.project_progress_observation.current_24h.low_value_repeat_count or 0 }}</div></div>
+  </div>
+
+  <div class="grid cols-4" style="margin-bottom:12px;">
+    <div><div class="muted">因子发现分</div><div style="font-size:28px; font-weight:700;">{{ health.project_progress_observation.current_scores.factor_discovery }}</div></div>
+    <div><div class="muted">研究增益分</div><div style="font-size:28px; font-weight:700;">{{ health.project_progress_observation.current_scores.research_gain }}</div></div>
+    <div><div class="muted">组合边际分</div><div style="font-size:28px; font-weight:700;">{{ health.project_progress_observation.current_scores.portfolio_edge }}</div></div>
+    <div><div class="muted">24h 总分</div><div style="font-size:28px; font-weight:700;">{{ health.project_progress_observation.current_scores.overall }}</div></div>
+  </div>
+
+  <div id="project-progress-24h" class="segment-pane active">
+    <div class="muted" style="margin-bottom:10px;">24h 口径：按小时均值聚合；为了可读性，图上每隔几个点印一个值。</div>
+    <div style="overflow-x:auto;">{{ health.project_progress_observation.windows['24h'].chart_svg | safe }}</div>
+  </div>
+  <div id="project-progress-7d" class="segment-pane">
+    <div class="muted" style="margin-bottom:10px;">7d 口径：按天均值聚合；每个点就是一天的平均项目进步分。</div>
+    <div style="overflow-x:auto;">{{ health.project_progress_observation.windows['7d'].chart_svg | safe }}</div>
+  </div>
+</section>
+
+<script>
+  document.querySelectorAll('[data-segmented="project-progress"]').forEach((group) => {
+    const buttons = group.querySelectorAll('button[data-target]');
+    buttons.forEach((button) => {
+      button.addEventListener('click', () => {
+        buttons.forEach((btn) => btn.classList.toggle('active', btn === button));
+        document.querySelectorAll('#project-progress-24h, #project-progress-7d').forEach((pane) => {
+          pane.classList.toggle('active', pane.id === button.dataset.target);
+        });
+      });
+    });
+  });
+</script>
+
+<div class="grid cols-3" style="margin-top:18px;">
+  <section class="card">
+    <h2>运行趋势</h2>
+    {{ health.run_health.run_success_sparkline | safe }}
+    <div class="muted">最近 12 次运行：完成=1，失败/其他=0</div>
+  </section>
+  <section class="card">
+    <h2>候选数量趋势</h2>
+    {{ health.research_progress.candidate_count_sparkline | safe }}
+    <div class="muted">最近 12 次候选池大小变化</div>
+  </section>
+  <section class="card">
+    <h2>候选组合 Sharpe 趋势</h2>
+    {{ health.portfolio_progress.strategy_sharpe_sparkline | safe }}
+    <div class="muted">最近 12 次 candidates_only Sharpe</div>
+  </section>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>守护状态</h2>
+    <table>
+      <tbody>
+        <tr><th>队列待处理</th><td>{{ health.research_progress.stall_state.queue_pending }}</td></tr>
+        <tr><th>队列运行中</th><td>{{ health.research_progress.stall_state.queue_running }}</td></tr>
+        <tr><th>最近完成任务</th><td>{{ health.research_progress.stall_state.recent_finished_tasks }}</td></tr>
+        <tr><th>最近失败任务</th><td>{{ health.research_progress.stall_state.recent_failed_tasks }}</td></tr>
+        <tr><th>停摆红灯</th><td class="{{ 'bad' if health.research_progress.stall_state.stalled else 'good' }}">{{ '是' if health.research_progress.stall_state.stalled else '否' }}</td></tr>
+        <tr><th>失败告警</th><td class="{{ 'bad' if health.research_progress.stall_state.warning else 'good' }}">{{ '是' if health.research_progress.stall_state.warning else '否' }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <section class="card">
+    <h2>知识增量摘要</h2>
+    <table>
+      <tbody>
+        {% for key, value in health.research_progress.knowledge_gain_counter.items() %}
+        <tr><th>{{ key }}</th><td>{{ value }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="muted" style="margin-top:10px;">如果 no_significant_information_gain 长期偏高，说明探索需要降权。</div>
+  </section>
+</div>
+
+{% set blocked_status = health.run_health.daemon_status.blocked_lane_status if health.run_health.daemon_status else None %}
+{% if blocked_status and blocked_status.active %}
+<section class="card" style="margin-top:18px;">
+  <h2>Blocked Lanes / Root Cause</h2>
+  <div class="muted" style="margin-bottom:10px;">{{ health.run_health.daemon_status.blocked_lane_summary or blocked_status.summary }}</div>
+  <div class="grid cols-3" style="margin-bottom:12px;">
+    <div><div class="muted">blocked pending</div><div style="font-size:28px; font-weight:700;">{{ blocked_status.blocked_pending_count or 0 }}</div></div>
+    <div><div class="muted">unblocked pending</div><div style="font-size:28px; font-weight:700;">{{ blocked_status.unblocked_pending_count or 0 }}</div></div>
+    <div><div class="muted">队列判定</div><div style="font-size:20px; font-weight:700;">{{ '仅剩 blocked lane' if blocked_status.only_blocked_pending else '仍有健康 lane' }}</div></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Lane</th><th>根因</th><th>连续失败</th><th>Pending</th><th>最近错误</th></tr></thead>
+      <tbody>
+        {% for lane in blocked_status.lanes %}
+        <tr>
+          <td>{{ lane.task_type }}</td>
+          <td>{{ lane.root_cause_label or lane.root_cause or '-' }}</td>
+          <td class="num">{{ lane.consecutive_failures or 0 }}</td>
+          <td class="num">{{ lane.pending_count or 0 }}</td>
+          <td class="text-break">{{ lane.latest_error or '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>它有没有持续在跑？</h2>
+    <table>
+      <tbody>
+        <tr><th>最近 24h 运行次数</th><td>{{ health.run_health.runs_24h }}</td></tr>
+        <tr><th>最近 24h 完成次数</th><td>{{ health.run_health.finished_24h }}</td></tr>
+        <tr><th>最近 7d 运行次数</th><td>{{ health.run_health.runs_7d }}</td></tr>
+        <tr><th>最近 7d 完成次数</th><td>{{ health.run_health.finished_7d }}</td></tr>
+        <tr><th>最近状态</th><td>{{ health.run_health.latest_status or '-' }}</td></tr>
+        <tr><th>Daemon 状态</th><td>{{ health.run_health.daemon_status.state if health.run_health.daemon_status else '-' }}</td></tr>
+        <tr><th>Daemon 更新时间</th><td>{{ health.run_health.daemon_status.updated_at_utc if health.run_health.daemon_status else '-' }}</td></tr>
+        <tr><th>最新数据终点</th><td>{{ health.run_health.latest_end_date or '-' }}</td></tr>
+        <tr><th>最新样本行数</th><td>{{ health.run_health.latest_dataset_rows or '-' }}</td></tr>
+      </tbody>
+    </table>
+    <div class="muted" style="margin-top:10px;">看这里主要判断：有没有断档、有没有静默失败、数据是不是在前进。</div>
+  </section>
+
+  <section class="card">
+    <h2>它有没有一步一步变好？</h2>
+    <table>
+      <tbody>
+        <tr><th>稳定候选数量</th><td>{{ health.research_progress.stable_candidate_count }}</td></tr>
+        <tr><th>本轮候选</th><td>{{ health.research_progress.latest_candidates|join('、') if health.research_progress.latest_candidates else '无' }}</td></tr>
+        <tr><th>上轮候选</th><td>{{ health.research_progress.previous_candidates|join('、') if health.research_progress.previous_candidates else '无' }}</td></tr>
+        <tr><th>候选 churn</th><td>{{ health.research_progress.candidate_churn }}</td></tr>
+        <tr><th>LLM 建议命中率</th><td>{{ ((health.research_progress.recommendation_hit_rate or 0) * 100)|round(1) }}%</td></tr>
+        <tr><th>最近建议样本数</th><td>{{ health.research_progress.recommendation_tail_size }}</td></tr>
+      </tbody>
+    </table>
+    <div class="muted" style="margin-top:10px;">看这里主要判断：候选池有没有收敛、建议有没有后验价值，而不是只看某一次最高 Sharpe。组合层指标按各策略各自最近 5 次结果统计，避免被全局最近记录窗口误伤。</div>
+  </section>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>组合层是否更稳</h2>
+    <table>
+      <tbody>
+        <tr><th>候选组合近 5 次平均 Sharpe（按该策略最近 5 次）</th><td>{{ health.portfolio_progress.candidates_only_recent_sharpe or '-' }}</td></tr>
+        <tr><th>全因子组合近 5 次平均 Sharpe（按该策略最近 5 次）</th><td>{{ health.portfolio_progress.all_factors_recent_sharpe or '-' }}</td></tr>
+        <tr><th>候选组合近 5 次平均收益（按该策略最近 5 次）</th><td>{{ health.portfolio_progress.candidates_only_recent_return or '-' }}</td></tr>
+        <tr><th>全因子组合近 5 次平均收益（按该策略最近 5 次）</th><td>{{ health.portfolio_progress.all_factors_recent_return or '-' }}</td></tr>
+        <tr><th>纸面组合稳定性评分</th><td>{{ health.portfolio_progress.paper_stability.stability_score if health.portfolio_progress.paper_stability else '-' }}</td></tr>
+        <tr><th>纸面组合标签</th><td>{{ health.portfolio_progress.paper_stability.label if health.portfolio_progress.paper_stability else '-' }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>值得盯的高分因子</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>因子</th><th>平均分</th><th>样本次数</th></tr></thead>
+        <tbody>
+          {% for row in health.research_progress.factor_score_trend %}
+          <tr><td>{{ row.factor_name }}</td><td class="num">{{ row.avg_score }}</td><td class="num">{{ row.runs }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+<div class="grid cols-2" style="margin-top:18px;">
+  <section class="card">
+    <h2>最近运行记录</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>时间</th><th>运行</th><th>配置</th><th>状态</th><th>数据区间</th><th>样本</th></tr></thead>
+        <tbody>
+          {% for row in health.recent_runs[:12] %}
+          <tr>
+            <td class="text-nowrap">{{ row.created_at_utc }}</td>
+            <td><a href="/runs/{{ row.run_id }}">{{ row.run_id[:8] }}</a></td>
+            <td class="text-break">{{ row.config_path }}</td>
+            <td>{{ row.status }}</td>
+            <td class="text-nowrap">{{ row.start_date or '-' }} → {{ row.end_date or '-' }}</td>
+            <td class="num">{{ row.dataset_rows or '-' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>系统心跳</h2>
+    {% if health.run_health.recent_heartbeat_rows %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>时间</th><th>范围</th><th>状态</th><th>说明</th></tr></thead>
+        <tbody>
+          {% for row in health.run_health.recent_heartbeat_rows %}
+          <tr>
+            <td class="text-nowrap">{{ row.recorded_at_utc or '-' }}</td>
+            <td>{{ row.scope or '-' }}</td>
+            <td>{{ row.status or '-' }}</td>
+            <td class="text-break">{{ row.message or row.summary or '-' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="muted">还没有系统心跳记录。跑完新周期后会开始累计。</div>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}
