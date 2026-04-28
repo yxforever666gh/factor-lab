@@ -1958,7 +1958,7 @@ def _summarize_llm_usage(rows: list[dict[str, Any]]) -> dict[str, Any]:
         cached_tokens = _safe_int(usage.get("cached_tokens"))
         cache_creation_tokens = _safe_int(usage.get("cache_creation_tokens"))
         uncached_prompt_tokens = _safe_int(usage.get("uncached_prompt_tokens"))
-        cost = row.get("cost") if isinstance(row.get("cost"), dict) else estimate_llm_cost_usd(row.get("model"), usage)
+        cost = estimate_llm_cost_usd(row.get("model"), usage)
         estimated_cost_usd = float(cost.get("estimated_cost_usd") or row.get("estimated_cost_usd") or 0.0)
         estimated = _safe_int(row.get("estimated_user_prompt_tokens_4c"))
         summary["prompt_tokens"] += prompt_tokens
@@ -2041,7 +2041,7 @@ def _build_llm_usage_chart(rows: list[dict[str, Any]], hours: int = 24) -> list[
         usage = row.get("usage") or {}
         bucket["total_tokens"] += _safe_int(usage.get("total_tokens"))
         bucket["cached_tokens"] += _safe_int(usage.get("cached_tokens"))
-        cost = row.get("cost") if isinstance(row.get("cost"), dict) else estimate_llm_cost_usd(row.get("model"), usage)
+        cost = estimate_llm_cost_usd(row.get("model"), usage)
         bucket["estimated_cost_usd"] += float(cost.get("estimated_cost_usd") or row.get("estimated_cost_usd") or 0.0)
         bucket["estimated_tokens"] += _safe_int(row.get("estimated_user_prompt_tokens_4c"))
         bucket["rows"] += 1
@@ -2063,7 +2063,7 @@ def _latest_llm_usage_rows(limit: int = 50) -> list[dict[str, Any]]:
         row["usage_cache_creation_tokens"] = usage.get("cache_creation_tokens")
         row["usage_uncached_prompt_tokens"] = usage.get("uncached_prompt_tokens")
         row["usage_source"] = usage.get("usage_source")
-        cost = row.get("cost") if isinstance(row.get("cost"), dict) else estimate_llm_cost_usd(row.get("model"), usage)
+        cost = estimate_llm_cost_usd(row.get("model"), usage)
         row["estimated_cost_usd"] = cost.get("estimated_cost_usd") or row.get("estimated_cost_usd")
         row["pricing_family"] = cost.get("pricing_family")
     return rows

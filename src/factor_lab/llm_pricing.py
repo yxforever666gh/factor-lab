@@ -8,6 +8,14 @@ from typing import Any
 # OpenAI GPT-5 family: input $1.25, cached input $0.125, output $10 per 1M tokens.
 # Opus 4.7 family: input $15, cache write 5m $18.75, cache read $1.50, output $75 per 1M tokens.
 DEFAULT_LLM_PRICING: dict[str, dict[str, Any]] = {
+    "gpt-5.5": {
+        "pricing_family": "gpt-5.5",
+        "match": ["gpt-5.5", "gpt5.5", "gpt-5-5", "gpt_5_5"],
+        "input_per_mtok_usd": 1.25,
+        "cached_input_per_mtok_usd": 0.125,
+        "cache_creation_per_mtok_usd": 1.25,
+        "output_per_mtok_usd": 10.0,
+    },
     "gpt-5": {
         "pricing_family": "gpt-5",
         "match": ["gpt-5", "gpt5"],

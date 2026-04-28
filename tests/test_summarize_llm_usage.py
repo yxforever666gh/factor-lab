@@ -16,6 +16,7 @@ def test_summarize_llm_usage_reports_totals(tmp_path):
                     "profile_name": "ai-continue",
                     "model": "gpt-5.5",
                     "estimated_user_prompt_tokens_4c": 100,
+                    "cost": {"pricing_family": "stale-gpt-5", "estimated_cost_usd": 999.0},
                     "usage": {
                         "prompt_tokens": 10,
                         "completion_tokens": 5,

@@ -81,7 +81,7 @@ def _summarize(rows: list[dict[str, Any]]) -> dict[str, Any]:
         cached_tokens = _int_value(usage.get("cached_tokens"))
         cache_creation_tokens = _int_value(usage.get("cache_creation_tokens"))
         uncached_prompt_tokens = _int_value(usage.get("uncached_prompt_tokens"))
-        cost = row.get("cost") if isinstance(row.get("cost"), dict) else estimate_llm_cost_usd(row.get("model"), usage)
+        cost = estimate_llm_cost_usd(row.get("model"), usage)
         estimated_cost_usd = float(cost.get("estimated_cost_usd") or row.get("estimated_cost_usd") or 0.0)
         estimated = _int_value(row.get("estimated_user_prompt_tokens_4c"))
         summary["prompt_tokens"] += prompt_tokens

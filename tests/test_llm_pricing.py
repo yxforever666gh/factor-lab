@@ -2,7 +2,8 @@ from factor_lab.llm_pricing import estimate_llm_cost_usd, pricing_for_model
 
 
 def test_pricing_for_model_matches_gpt_and_opus_families():
-    assert pricing_for_model("gpt-5.5")["pricing_family"] == "gpt-5"
+    assert pricing_for_model("gpt-5.5")["pricing_family"] == "gpt-5.5"
+    assert pricing_for_model("gpt-5")["pricing_family"] == "gpt-5"
     assert pricing_for_model("opus4.7")["pricing_family"] == "opus4.7"
     assert pricing_for_model("claude-opus-4.7-20260428")["pricing_family"] == "opus4.7"
 
@@ -17,7 +18,7 @@ def test_estimate_llm_cost_usd_uses_gpt_cached_input_rate():
         },
     )
 
-    assert cost["pricing_family"] == "gpt-5"
+    assert cost["pricing_family"] == "gpt-5.5"
     assert cost["uncached_input_tokens"] == 200
     assert cost["cached_input_tokens"] == 800
     # GPT-5 default: $1.25/M uncached input, $0.125/M cached input, $10/M output.
