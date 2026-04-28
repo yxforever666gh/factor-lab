@@ -123,3 +123,44 @@ def test_llm_page_shows_agent_roles(tmp_path: Path, monkeypatch):
     assert "failure_analyst" in response.text
     assert "reviewer" in response.text
     assert "data_quality" in response.text
+
+
+def test_agents_page_warns_about_stale_fallback_profile_names(tmp_path: Path, monkeypatch):
+    env_file = tmp_path / ".env"
+    roles = [
+        webui_app.AgentRoleConfig(
+            name="planner",
+            display_name="规划 Agent",
+            enabled=True,
+            decision_types=["planner"],
+            purpose="plan",
+            system_prompt="planner prompt",
+            llm_fallback_order=["missing", "primary"],
+            timeout_seconds=90,
+            max_retries=1,
+            strict_schema=True,
+            legacy_agent_id="factor-lab-planner",
+        )
+    ]
+    profiles = [
+        {"name": "primary", "base_url": "https://primary.test/v1", "model": "primary-model", "api_key": "primary-secret", "enabled": True},
+    ]
+    env_file.write_text(
+        "FACTOR_LAB_LLM_PROFILES_JSON=" + webui_app.json.dumps(profiles, ensure_ascii=False) + "\n"
+        "FACTOR_LAB_LLM_FALLBACK_ORDER=primary\n"
+        "FACTOR_LAB_AGENT_ROLES_JSON=" + webui_app.agent_roles_to_json(roles) + "\n"
+        "FACTOR_LAB_AGENT_ROLE_ORDER=planner\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(webui_app, "env_file", lambda: env_file)
+    for key in [*webui_app.LLM_ENV_KEYS, *webui_app.LLM_PROFILE_ENV_KEYS, *webui_app.AGENT_ROLE_ENV_KEYS]:
+        monkeypatch.delenv(key, raising=False)
+    client = TestClient(webui_app.app)
+
+    response = client.get("/agents")
+
+    assert response.status_code == 200
+    assert "可用大模型 Profiles" in response.text
+    assert "primary" in response.text
+    assert "fallback 引用了不存在或已禁用的 profile" in response.text
+    assert "missing" in response.text

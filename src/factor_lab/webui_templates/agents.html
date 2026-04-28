@@ -16,6 +16,36 @@
   <div class="muted" style="margin-top:10px;">当前配置文件：<span class="text-break">{{ settings.env_file }}</span></div>
 </section>
 
+<section class="card" style="margin-bottom:18px;">
+  <h2>可用大模型 Profiles</h2>
+  <div class="muted">
+    Agent fallback 只能引用这里列出的已启用 profile。全局顺序在 <a href="/settings">大模型设置</a> 中保存；这里可为单个 Agent 设置角色级顺序。
+  </div>
+  <div style="margin-top:10px;">
+    {% if available_profile_names %}
+      {% for name in available_profile_names %}<span class="badge">{{ name }}</span>{% endfor %}
+    {% else %}
+      <span class="bad">当前没有已启用的大模型 profile。</span>
+    {% endif %}
+  </div>
+  {% if agent_fallback_warnings %}
+  <div class="bad" style="margin-top:12px;">
+    以下 Agent fallback 引用了不存在或已禁用的 profile：
+    <ul>
+      {% for warning in agent_fallback_warnings %}
+      <li><strong>{{ warning.role }}</strong>: {{ warning.stale_names | join(', ') }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</section>
+
+<datalist id="llm-profile-names">
+  {% for name in available_profile_names %}
+  <option value="{{ name }}"></option>
+  {% endfor %}
+</datalist>
+
 <form method="post" action="/agents" style="display:grid; gap:18px;">
   {% for role in role_slots %}
   <section class="card">
@@ -39,7 +69,7 @@
       </label>
       <label>
         <div class="muted" style="margin-bottom:6px;">模型 Fallback 顺序</div>
-        <input name="role_fallback_order_{{ loop.index0 }}" value="{{ role.llm_fallback_order }}" placeholder="ccvibe,nowcoding,ai-continue" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);">
+        <input list="llm-profile-names" name="role_fallback_order_{{ loop.index0 }}" value="{{ role.llm_fallback_order }}" placeholder="ccvibe,nowcoding,ai-continue" style="width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);">
       </label>
       <div class="grid cols-3">
         <label>

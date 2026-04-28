@@ -7,6 +7,7 @@ pytest.importorskip("jinja2")
 from fastapi.testclient import TestClient
 
 from factor_lab import webui_app
+from factor_lab.agent_roles import AgentRoleConfig, agent_roles_to_json
 
 
 def test_load_llm_settings_masks_api_key_and_reads_env_file(tmp_path: Path, monkeypatch):
@@ -262,6 +263,111 @@ def test_save_llm_settings_uses_numeric_order_fields_when_present(tmp_path: Path
 
     assert settings["fallback_order"] == "backup,primary"
     assert [profile["name"] for profile in settings["profiles"]] == ["backup", "primary"]
+
+
+def test_save_llm_settings_syncs_agent_role_fallback_when_roles_used_old_global_order(tmp_path: Path, monkeypatch):
+    env_file = tmp_path / ".env"
+    roles = [
+        AgentRoleConfig(
+            name="planner",
+            display_name="规划 Agent",
+            enabled=True,
+            decision_types=["planner"],
+            purpose="plan",
+            system_prompt="planner prompt",
+            llm_fallback_order=["primary", "backup"],
+            timeout_seconds=90,
+            max_retries=1,
+            strict_schema=True,
+            legacy_agent_id="factor-lab-planner",
+        )
+    ]
+    env_file.write_text(
+        "FACTOR_LAB_LLM_FALLBACK_ORDER=primary,backup\n"
+        "FACTOR_LAB_AGENT_ROLES_JSON=" + agent_roles_to_json(roles) + "\n"
+        "FACTOR_LAB_AGENT_ROLE_ORDER=planner\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(webui_app, "env_file", lambda: env_file)
+    for key in [*webui_app.LLM_ENV_KEYS, *webui_app.LLM_PROFILE_ENV_KEYS, *webui_app.AGENT_ROLE_ENV_KEYS]:
+        monkeypatch.delenv(key, raising=False)
+
+    webui_app.save_llm_settings(
+        {
+            "decision_provider": "real_llm",
+            "live_decision_provider": "real_llm",
+            "observation_decision_provider": "real_llm",
+            "profile_order_0": "2",
+            "profile_name_0": "primary",
+            "profile_base_url_0": "https://primary.test/v1",
+            "profile_model_0": "primary-model",
+            "profile_api_key_0": "primary-secret",
+            "profile_enabled_0": "on",
+            "profile_order_1": "1",
+            "profile_name_1": "backup",
+            "profile_base_url_1": "https://backup.test/v1",
+            "profile_model_1": "backup-model",
+            "profile_api_key_1": "backup-secret",
+            "profile_enabled_1": "on",
+        }
+    )
+
+    updated_roles = webui_app.json.loads(webui_app.os.environ["FACTOR_LAB_AGENT_ROLES_JSON"])
+    assert updated_roles[0]["llm_fallback_order"] == ["backup", "primary"]
+    text = env_file.read_text(encoding="utf-8")
+    assert "FACTOR_LAB_LLM_FALLBACK_ORDER=backup,primary" in text
+    assert "FACTOR_LAB_AGENT_ROLES_JSON=" in text
+
+
+def test_save_llm_settings_filters_stale_agent_role_profile_names_but_preserves_custom_order(tmp_path: Path, monkeypatch):
+    env_file = tmp_path / ".env"
+    roles = [
+        AgentRoleConfig(
+            name="planner",
+            display_name="规划 Agent",
+            enabled=True,
+            decision_types=["planner"],
+            purpose="plan",
+            system_prompt="planner prompt",
+            llm_fallback_order=["third", "backup"],
+            timeout_seconds=90,
+            max_retries=1,
+            strict_schema=True,
+            legacy_agent_id="factor-lab-planner",
+        )
+    ]
+    env_file.write_text(
+        "FACTOR_LAB_LLM_FALLBACK_ORDER=primary,backup,third\n"
+        "FACTOR_LAB_AGENT_ROLES_JSON=" + agent_roles_to_json(roles) + "\n"
+        "FACTOR_LAB_AGENT_ROLE_ORDER=planner\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(webui_app, "env_file", lambda: env_file)
+    for key in [*webui_app.LLM_ENV_KEYS, *webui_app.LLM_PROFILE_ENV_KEYS, *webui_app.AGENT_ROLE_ENV_KEYS]:
+        monkeypatch.delenv(key, raising=False)
+
+    webui_app.save_llm_settings(
+        {
+            "decision_provider": "real_llm",
+            "live_decision_provider": "real_llm",
+            "observation_decision_provider": "real_llm",
+            "profile_order_0": "1",
+            "profile_name_0": "primary",
+            "profile_base_url_0": "https://primary.test/v1",
+            "profile_model_0": "primary-model",
+            "profile_api_key_0": "primary-secret",
+            "profile_enabled_0": "on",
+            "profile_order_1": "2",
+            "profile_name_1": "backup",
+            "profile_base_url_1": "https://backup.test/v1",
+            "profile_model_1": "backup-model",
+            "profile_api_key_1": "backup-secret",
+            "profile_enabled_1": "on",
+        }
+    )
+
+    updated_roles = webui_app.json.loads(webui_app.os.environ["FACTOR_LAB_AGENT_ROLES_JSON"])
+    assert updated_roles[0]["llm_fallback_order"] == ["backup"]
 
 
 def test_restart_research_daemon_after_settings_save_reports_success(monkeypatch):

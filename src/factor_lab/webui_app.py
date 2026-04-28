@@ -95,8 +95,28 @@ def _read_env_values(path: Path | None = None) -> dict[str, str]:
     return values
 
 
+def _split_csv(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return [item.strip() for item in str(value or "").split(",") if item.strip()]
+
+
+def _coerce_boolish(value: Any, default: bool = True) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if lowered in {"0", "false", "no", "off", "disabled"}:
+            return False
+    return bool(value)
+
+
 def _ordered_profile_list(profiles: list[dict[str, Any]], fallback_order: str) -> list[dict[str, Any]]:
-    order = [item.strip() for item in (fallback_order or "").split(",") if item.strip()]
+    order = _split_csv(fallback_order)
     if not order:
         return profiles
     by_name = {str(profile.get("name") or ""): profile for profile in profiles}
@@ -104,6 +124,15 @@ def _ordered_profile_list(profiles: list[dict[str, Any]], fallback_order: str) -
     ordered_names = {str(profile.get("name") or "") for profile in ordered}
     ordered.extend(profile for profile in profiles if str(profile.get("name") or "") not in ordered_names)
     return ordered
+
+
+def _enabled_profile_names(profiles: list[dict[str, Any]]) -> list[str]:
+    names: list[str] = []
+    for profile in profiles:
+        name = str(profile.get("name") or "").strip()
+        if name and _coerce_boolish(profile.get("enabled", True), default=True):
+            names.append(name)
+    return names
 
 
 LLM_API_FORMAT_OPTIONS = [
@@ -157,7 +186,7 @@ def _load_llm_profiles(values: dict[str, str]) -> tuple[list[dict[str, Any]], st
                     "api_key": "",
                     "api_key_configured": bool(api_key),
                     "api_key_masked": _mask_secret(api_key),
-                    "enabled": bool(item.get("enabled", True)),
+                    "enabled": _coerce_boolish(item.get("enabled", True), default=True),
                 })
     if not profiles:
         api_key = values.get("FACTOR_LAB_LLM_API_KEY") or os.environ.get("FACTOR_LAB_LLM_API_KEY") or ""
@@ -343,6 +372,85 @@ def save_agent_settings(form: dict[str, str]) -> dict[str, Any]:
     return load_agent_settings()
 
 
+def _reconcile_role_fallback_order(
+    role_order: list[str] | str,
+    old_global_order: list[str] | str,
+    new_global_order: list[str] | str,
+    enabled_names: list[str],
+) -> list[str]:
+    available = [name for name in enabled_names if name]
+    if not available:
+        return _split_csv(role_order)
+    available_set = set(available)
+    old_order = [name for name in _split_csv(old_global_order) if name in available_set or name]
+    new_order = [name for name in _split_csv(new_global_order) if name in available_set]
+    if not new_order:
+        new_order = available
+    current = _split_csv(role_order)
+    current_valid = [name for name in current if name in available_set]
+    current_was_default = (not current) or (current == old_order) or (current_valid == [name for name in old_order if name in available_set])
+    if current_was_default or not current_valid:
+        return new_order
+    return current_valid
+
+
+def _sync_agent_roles_with_llm_profiles(
+    existing_values: dict[str, str],
+    profiles: list[dict[str, Any]],
+    old_fallback_order: str,
+    new_fallback_order: str,
+) -> dict[str, str]:
+    raw_roles = existing_values.get("FACTOR_LAB_AGENT_ROLES_JSON") or os.environ.get("FACTOR_LAB_AGENT_ROLES_JSON") or ""
+    if not raw_roles.strip():
+        return {}
+    roles = _agent_roles_from_values({**existing_values, "FACTOR_LAB_AGENT_ROLES_JSON": raw_roles})
+    enabled_names = _enabled_profile_names(profiles)
+    if not enabled_names:
+        return {}
+    updated_roles = [
+        AgentRoleConfig(
+            name=role.name,
+            display_name=role.display_name,
+            enabled=role.enabled,
+            decision_types=role.decision_types,
+            purpose=role.purpose,
+            system_prompt=role.system_prompt,
+            llm_fallback_order=_reconcile_role_fallback_order(
+                role.llm_fallback_order,
+                old_fallback_order,
+                new_fallback_order,
+                enabled_names,
+            ),
+            timeout_seconds=role.timeout_seconds,
+            max_retries=role.max_retries,
+            strict_schema=role.strict_schema,
+            legacy_agent_id=role.legacy_agent_id,
+        )
+        for role in roles
+    ]
+    role_order = existing_values.get("FACTOR_LAB_AGENT_ROLE_ORDER") or os.environ.get("FACTOR_LAB_AGENT_ROLE_ORDER") or ",".join(role.name for role in updated_roles)
+    return {
+        "FACTOR_LAB_AGENT_ROLES_JSON": agent_roles_to_json(updated_roles),
+        "FACTOR_LAB_AGENT_ROLE_ORDER": role_order,
+    }
+
+
+def _agent_fallback_warnings(roles: list[dict[str, Any]], available_profile_names: list[str]) -> list[dict[str, Any]]:
+    available = set(available_profile_names)
+    warnings: list[dict[str, Any]] = []
+    if not available:
+        return warnings
+    for role in roles:
+        fallback_names = _split_csv(role.get("llm_fallback_order"))
+        stale = [name for name in fallback_names if name not in available]
+        if stale:
+            warnings.append({
+                "role": role.get("name") or role.get("display_name") or "agent",
+                "stale_names": stale,
+            })
+    return warnings
+
+
 def load_llm_settings() -> dict[str, Any]:
     values = _read_env_values()
     merged = {key: values.get(key) or os.environ.get(key) or "" for key in [*LLM_ENV_KEYS, *LLM_PROFILE_ENV_KEYS]}
@@ -368,6 +476,7 @@ def save_llm_settings(form: dict[str, str]) -> dict[str, Any]:
     path = env_file()
     path.parent.mkdir(parents=True, exist_ok=True)
     existing_values = _read_env_values(path)
+    old_fallback_order = existing_values.get("FACTOR_LAB_LLM_FALLBACK_ORDER") or os.environ.get("FACTOR_LAB_LLM_FALLBACK_ORDER") or ""
     raw_existing_profiles = os.environ.get("FACTOR_LAB_LLM_PROFILES_JSON") or existing_values.get("FACTOR_LAB_LLM_PROFILES_JSON", "")
     try:
         existing_profiles = json.loads(raw_existing_profiles) if raw_existing_profiles else []
@@ -405,11 +514,18 @@ def save_llm_settings(form: dict[str, str]) -> dict[str, Any]:
         "FACTOR_LAB_LLM_PROFILES_JSON": json.dumps(profiles, ensure_ascii=False, separators=(",", ":")),
         "FACTOR_LAB_LLM_FALLBACK_ORDER": fallback_order,
     })
+    synced_agent_role_values = _sync_agent_roles_with_llm_profiles(
+        existing_values,
+        profiles,
+        old_fallback_order,
+        fallback_order,
+    )
+    requested.update(synced_agent_role_values)
 
     lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
     seen: set[str] = set()
     updated_lines: list[str] = []
-    managed_keys = [*LLM_ENV_KEYS, *LLM_PROFILE_ENV_KEYS]
+    managed_keys = [*LLM_ENV_KEYS, *LLM_PROFILE_ENV_KEYS, *(AGENT_ROLE_ENV_KEYS if synced_agent_role_values else [])]
     for line in lines:
         stripped = line.strip()
         if not stripped or stripped.startswith("#") or "=" not in line:
@@ -2710,6 +2826,9 @@ async def settings_test_model(request: Request):
 @app.get("/agents", response_class=HTMLResponse)
 def agents_page(saved: str | None = None, restart: str | None = None):
     settings = load_agent_settings()
+    llm_settings = load_llm_settings()
+    available_profile_names = _enabled_profile_names(list(llm_settings.get("profiles") or []))
+    agent_fallback_warnings = _agent_fallback_warnings(list(settings.get("roles") or []), available_profile_names)
     role_slots = list(settings.get("roles") or [])
     while len(role_slots) < 3:
         role_slots.append({
@@ -2730,6 +2849,8 @@ def agents_page(saved: str | None = None, restart: str | None = None):
         title="Agent 设置",
         settings=settings,
         role_slots=role_slots,
+        available_profile_names=available_profile_names,
+        agent_fallback_warnings=agent_fallback_warnings,
         saved=saved == "1",
         restart_ok=restart == "1",
         restart_failed=restart == "0",
