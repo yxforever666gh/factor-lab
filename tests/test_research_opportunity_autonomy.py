@@ -91,6 +91,46 @@ def test_allocate_opportunity_budget_bandit_and_regime_push_budget_toward_diagno
     assert payload["bandit_scores"]["diagnose"] > payload["bandit_scores"]["expand"]
 
 
+def test_allocate_opportunity_budget_uses_representative_failure_dossiers_to_bias_diagnose():
+    snapshot = {
+        "research_flow_state": {"state": "ready"},
+        "representative_failure_dossiers": {
+            "rep_a": {
+                "recommended_action": "diagnose",
+                "regime_dependency": "short_window_only",
+                "parent_delta_status": "non_incremental",
+            }
+        },
+    }
+    learning = {"types": {}, "families": {}}
+
+    payload = allocate_opportunity_budget(snapshot, learning)
+
+    assert payload["budget"]["diagnose"] >= 3
+    assert payload["representative_failure_summary"]["diagnose_count"] == 1
+    assert "representative_failure_bias_to_diagnose" in payload["reasons"]
+
+
+
+def test_allocate_opportunity_budget_shifts_from_low_yield_exploration_to_validation():
+    snapshot = {"research_flow_state": {"state": "recovered"}}
+    learning = {
+        "types": {
+            "expand": {"recent_no_gain_count": 2, "recent_gain_count": 0, "recent_resource_exhaustion_count": 1, "cooldown_active": True, "recommended_action": "downweight"},
+            "recombine": {"recent_no_gain_count": 2, "recent_gain_count": 0, "recent_resource_exhaustion_count": 1, "cooldown_active": True, "recommended_action": "downweight"},
+            "probe": {"recent_no_gain_count": 1, "recent_gain_count": 0, "recent_resource_exhaustion_count": 0, "cooldown_active": False, "recommended_action": "keep"},
+        },
+        "families": {},
+    }
+
+    payload = allocate_opportunity_budget(snapshot, learning)
+
+    assert payload["budget"]["diagnose"] >= payload["budget"]["expand"]
+    assert payload["budget"]["confirm"] >= 2
+    assert "recent_low_yield_exploration_shift_to_validation" in payload["reasons"]
+    assert payload["exploration_pressure"]["recent_resource_exhaustion_count"] >= 2
+
+
 def test_exploration_budget_inherits_regime_bias_for_fragile_frontier():
     snapshot = {
         "frontier_focus": {

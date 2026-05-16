@@ -1,9 +1,0 @@
-{
-  "task_id": "a56e54c8-4bde-4469-8a3e-e50bb39ae169",
-  "config_path": "artifacts/generated_configs/candidate_size_small_recent_45d.json",
-  "output_dir": "artifacts/generated_candidate_size_small_recent_45d",
-  "status": "finished",
-  "started_at_utc": "2026-03-21T19:39:43.386116+00:00",
-  "finished_at_utc": "2026-03-21T19:39:44.393390+00:00",
-  "error": null
-}

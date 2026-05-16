@@ -1,8 +1,0 @@
-{
-  "generated_at_utc": "2026-03-18T21:49:28.783416+00:00",
-  "diagnostic_type": "graveyard_neutralization_review",
-  "source_output_dir": "artifacts/tushare_batch",
-  "reasons": [
-    "repeated_graveyard_after_batch_consistency_review"
-  ]
-}

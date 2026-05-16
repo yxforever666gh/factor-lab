@@ -11,6 +11,7 @@ from factor_lab.expression_validation import validate_expression
 from factor_lab.feature_schema import TUSHARE_FEATURE_COLUMNS
 from factor_lab.promotion_scorecard import build_promotion_scorecard
 from factor_lab.storage import ExperimentStore
+from factor_lab.generated_artifacts import upgrade_generated_batch, upgrade_generated_config
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -61,7 +62,8 @@ def _write_generated_config(config: dict[str, Any], name: str) -> str:
     out_dir = ROOT / "artifacts" / "generated_robustness_configs"
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{name}.json"
-    path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+    payload = upgrade_generated_config(config, source="robustness_batch")
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return str(path.relative_to(ROOT))
 
 
@@ -181,7 +183,7 @@ def build_robustness_batch(
 
         manifest_candidates.append(manifest_row)
 
-    batch_payload = {"jobs": jobs}
+    batch_payload = upgrade_generated_batch({"jobs": jobs}, source="robustness_batch")
     batch_config_path.parent.mkdir(parents=True, exist_ok=True)
     batch_config_path.write_text(json.dumps(batch_payload, ensure_ascii=False, indent=2), encoding="utf-8")
 

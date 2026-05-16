@@ -71,6 +71,13 @@
       "combine_primary_bias",
       "combine_ratio",
       "combine_mul"
+    ],
+    "failure_question": [
+      "combine_sub",
+      "combine_ratio",
+      "combine_mul",
+      "combine_avg",
+      "combine_primary_bias"
     ]
   }
 }

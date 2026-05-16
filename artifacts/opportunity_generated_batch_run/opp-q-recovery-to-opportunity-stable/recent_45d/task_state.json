@@ -1,9 +1,0 @@
-{
-  "task_id": "8f3df5e6-c5fc-48df-bd71-c23eaff3da13",
-  "config_path": "artifacts/generated_opportunity_configs/opp-q-recovery-to-opportunity-stable__recent_45d.json",
-  "output_dir": "artifacts/opportunity_generated_batch_run/opp-q-recovery-to-opportunity-stable/recent_45d",
-  "status": "finished",
-  "started_at_utc": "2026-03-22T16:31:56.166968+00:00",
-  "finished_at_utc": "2026-03-22T16:31:58.206781+00:00",
-  "error": null
-}

@@ -1,0 +1,32 @@
+{
+  "updated_at_utc": "2026-05-10T10:26:27.150196+00:00",
+  "blocked_value_routes": [
+    {
+      "route_id": "historical_valuation_percentile",
+      "mechanism_id": "historical_valuation_percentile",
+      "target_family": "value",
+      "hypothesis": "股票相对自身历史估值便宜比横截面绝对便宜更可比。",
+      "required_data_fields": [
+        "pb_history_756d",
+        "pe_ttm_history_756d"
+      ],
+      "missing_fields": [
+        "pb_history_756d",
+        "pe_ttm_history_756d"
+      ],
+      "expected_horizons": [
+        "60d",
+        "120d"
+      ],
+      "falsification_criteria": [
+        "long valuation history coverage below 60%"
+      ],
+      "budget_bucket": "data_quality_coverage",
+      "status": "blocked_missing_fields",
+      "candidate_expressions": []
+    }
+  ],
+  "missing_fields": [
+    "quality_roe"
+  ]
+}

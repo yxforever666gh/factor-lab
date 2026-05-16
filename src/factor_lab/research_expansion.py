@@ -8,11 +8,13 @@ import time
 from pathlib import Path
 from typing import Any
 
-from factor_lab.dedup import config_fingerprint
+from factor_lab.dedup import workflow_experiment_fingerprint
 from factor_lab.factors import resolve_factor_definitions
 from factor_lab.storage import ExperimentStore
 from factor_lab.feature_schema import TUSHARE_FEATURE_COLUMNS
 from factor_lab.expression_validation import validate_expression
+from factor_lab.generated_artifacts import upgrade_generated_config
+from factor_lab.research_task_governance import govern_workflow_task_spec
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -60,8 +62,63 @@ def _write_generated_config(config: dict[str, Any], name: str) -> str:
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{name}.json"
     materialized = _materialize_factor_config(config)
+    materialized = upgrade_generated_config(materialized, source="research_expansion")
     path.write_text(json.dumps(materialized, ensure_ascii=False, indent=2), encoding="utf-8")
     return str(path.relative_to(ROOT))
+
+
+def _governance_payload_defaults(spec: dict[str, Any]) -> dict[str, Any]:
+    note = str(spec.get("worker_note") or "")
+    payload = dict(spec.get("payload") or {})
+    payload.setdefault("hypothesis", note or "research expansion workflow should add information")
+    payload.setdefault("falsification_criteria", ["net sharpe and information gain fail to improve versus recent baseline"])
+    if "baseline" in note.lower():
+        payload.setdefault("expected_information_gain", ["window_stability_check", "boundary_confirmed"])
+        payload.setdefault("budget_bucket", "data_quality_coverage")
+    else:
+        payload.setdefault("expected_information_gain", ["window_stability_check", "candidate_survival_check"])
+        payload.setdefault("budget_bucket", "robustness_validation")
+    return payload
+
+
+def _workflow_governance_used_counts(recent_tasks: list[dict[str, Any]]) -> dict[str, int]:
+    counts = {"total": 0}
+    for task in recent_tasks:
+        if task.get("status") not in {"pending", "running"}:
+            continue
+        counts["total"] += 1
+        payload = task.get("payload") or {}
+        bucket = payload.get("budget_bucket")
+        if bucket:
+            counts[str(bucket)] = counts.get(str(bucket), 0) + 1
+    return counts
+
+
+def _govern_expansion_workflow_spec(
+    spec: dict[str, Any],
+    *,
+    config: dict[str, Any],
+    store: ExperimentStore,
+    used_counts: dict[str, int],
+) -> dict[str, Any] | None:
+    task_spec = deepcopy(spec)
+    task_spec["payload"] = _governance_payload_defaults(task_spec)
+    task_spec.pop("_governance_config", None)
+    result = govern_workflow_task_spec(
+        task_spec,
+        config=config,
+        store=store,
+        used_counts=used_counts,
+        source="research_expansion",
+    )
+    allowed = result.get("task_spec") if result.get("decision") == "allow" else None
+    if not allowed:
+        return None
+    budget_bucket = str(((result.get("gate") or {}).get("budget_bucket")) or task_spec["payload"].get("budget_bucket") or "")
+    used_counts["total"] = int(used_counts.get("total") or 0) + 1
+    if budget_bucket:
+        used_counts[budget_bucket] = int(used_counts.get(budget_bucket) or 0) + 1
+    return allowed
 
 
 def _is_generated_candidate_definition(definition: dict[str, Any]) -> bool:
@@ -166,7 +223,7 @@ def _candidate_validation_specs(store: ExperimentStore, base_recent: dict[str, A
                 cfg["end_date"] = end_date
                 cfg["output_dir"] = output_dir
             config_path = _write_generated_config(cfg, name)
-            fingerprint = f"workflow::{config_fingerprint(cfg)}::{output_dir}"
+            fingerprint = workflow_experiment_fingerprint(cfg)
             payload = {"config_path": config_path, "output_dir": output_dir}
             if is_generated_candidate:
                 payload["source"] = "candidate_generation_validation"
@@ -182,6 +239,7 @@ def _candidate_validation_specs(store: ExperimentStore, base_recent: dict[str, A
                         if is_generated_candidate
                         else f"validation｜candidate_validation {definition['name']} recent_{days}d"
                     ),
+                    "_governance_config": cfg,
                 }
             )
     return specs
@@ -267,12 +325,14 @@ def expansion_candidates(store: ExperimentStore, *, allow_repeat: bool = False) 
         },
     ]
 
+    used_counts = _workflow_governance_used_counts(recent_tasks)
+
     for spec in _candidate_validation_specs(store, base_recent, end_date) + windows:
         if "start_date" in spec:
             config = _make_window_config(base_recent, spec["start_date"], spec["end_date"], spec["output_dir"])
             if spec.get('light_recent_validation'):
                 config = _light_recent_validation_config(config)
-            fingerprint = f"workflow::{config_fingerprint(config)}::{spec['output_dir']}"
+            fingerprint = workflow_experiment_fingerprint(config)
             if (not allow_repeat and fingerprint in existing_fingerprints) or (fingerprint in pending_or_running_fingerprints):
                 continue
             config_path = _write_generated_config(config, spec["name"])
@@ -280,19 +340,25 @@ def expansion_candidates(store: ExperimentStore, *, allow_repeat: bool = False) 
             if spec.get('light_recent_validation'):
                 payload['source'] = 'recent_window_validation_light'
                 payload['validation_stage'] = 'recent_window_light'
-            candidates.append(
-                {
-                    "task_type": "workflow",
-                    "priority": spec["priority"],
-                    "payload": payload,
-                    "fingerprint": fingerprint,
-                    "worker_note": spec["worker_note"],
-                }
-            )
+            candidate = {
+                "task_type": "workflow",
+                "priority": spec["priority"],
+                "payload": payload,
+                "fingerprint": fingerprint,
+                "worker_note": spec["worker_note"],
+            }
+            governed = _govern_expansion_workflow_spec(candidate, config=config, store=store, used_counts=used_counts)
+            if governed:
+                candidates.append(governed)
             continue
         if (not allow_repeat and spec["fingerprint"] in existing_fingerprints) or (spec["fingerprint"] in pending_or_running_fingerprints):
             continue
-        candidates.append(spec)
+        config = spec.get("_governance_config")
+        if not isinstance(config, dict):
+            continue
+        governed = _govern_expansion_workflow_spec(spec, config=config, store=store, used_counts=used_counts)
+        if governed:
+            candidates.append(governed)
 
     return candidates
 
@@ -313,14 +379,21 @@ def maybe_expand_research_space(store: ExperimentStore, max_new_tasks: int = 3, 
         cfg = deepcopy(base_recent)
         cfg["output_dir"] = output_dir
         config_path = _write_generated_config(cfg, f"forced_expand_{nonce}")
-        fingerprint = f"workflow::{config_fingerprint(cfg)}::{output_dir}"
-        task_specs = [{
+        fingerprint = workflow_experiment_fingerprint(cfg)
+        candidate = {
             "task_type": "workflow",
             "priority": 26,
             "payload": {"config_path": config_path, "output_dir": output_dir},
             "fingerprint": fingerprint,
             "worker_note": "exploration｜forced expansion to break stagnation",
-        }]
+        }
+        governed = _govern_expansion_workflow_spec(
+            candidate,
+            config=cfg,
+            store=store,
+            used_counts=_workflow_governance_used_counts(recent_tasks),
+        )
+        task_specs = [governed] if governed else []
     new_task_ids = []
     for spec in task_specs:
         task_id = store.enqueue_research_task(

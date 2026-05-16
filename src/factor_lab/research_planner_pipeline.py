@@ -8,6 +8,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor
 
+from factor_lab.agent_runtime_hooks import safe_run_reviewer_review
 from factor_lab.research_planner_snapshot import build_research_planner_snapshot
 from factor_lab.research_candidate_pool import build_research_candidate_pool
 from factor_lab.research_branch_planner import build_branch_planner_output
@@ -203,6 +204,7 @@ def run_research_planner_pipeline() -> dict[str, Any]:
     promotion_scorecard_path = artifacts / "promotion_scorecard.json"
     research_attribution_path = artifacts / "research_attribution.json"
     factor_quality_observation_report_path = artifacts / "factor_quality_observation_report.md"
+    reviewer_review_path = artifacts / "reviewer_review.json"
     live_provider_health_path = _live_provider_health_path()
     observation_provider_health_path = _observation_provider_health_path()
     live_decision_provider = _live_decision_provider()
@@ -354,6 +356,21 @@ def run_research_planner_pipeline() -> dict[str, Any]:
         output_path=research_attribution_path,
         report_path=factor_quality_observation_report_path,
     )
+    reviewer_review = safe_run_reviewer_review(
+        context={
+            "context_id": f"reviewer:{(snapshot.get('latest_run') or {}).get('run_id') or 'planner-cycle'}",
+            "inputs": {
+                "latest_run": snapshot.get("latest_run") or {},
+                "promotion_scorecard": snapshot.get("promotion_scorecard") or {},
+                "candidate_pool": candidate_pool,
+                "research_attribution": research_attribution,
+                "stable_candidates": snapshot.get("stable_candidates") or [],
+                "latest_graveyard": snapshot.get("latest_graveyard") or [],
+            },
+        },
+        output_path=reviewer_review_path,
+        provider=observation_decision_provider,
+    ) or {}
 
     result = {
         "registry_windows_count": len((registry.get("windows_covered") or {})),
@@ -402,6 +419,12 @@ def run_research_planner_pipeline() -> dict[str, Any]:
         },
         "research_metrics": research_metrics,
         "research_attribution": research_attribution,
+        "reviewer_review": {
+            "path": str(reviewer_review_path),
+            "schema_version": reviewer_review.get("schema_version"),
+            "source": _decision_effective_source(reviewer_review),
+            "recommendation_count": len(reviewer_review.get("candidate_reviews") or []),
+        },
         "state_snapshot_open_questions": len(state_snapshot.get("open_questions", [])),
     }
     _write_fingerprint_state(fingerprint, injected.get("injected_count", 0))

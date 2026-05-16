@@ -1,0 +1,60 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="grid cols-3" style="margin-bottom:18px;">
+  <section class="card">
+    <h2>WebUI</h2>
+    <div style="font-size:32px; font-weight:700;" class="good">online</div>
+    <div class="muted">轻量首页，不执行重型 dashboard 查询。</div>
+  </section>
+  <section class="card">
+    <h2>Daemon</h2>
+    <div style="font-size:24px; font-weight:700;" class="{{ 'good' if daemon_status.active else 'warn' }}">{{ daemon_status.label }}</div>
+    <div class="muted">{{ daemon_status.detail }}</div>
+  </section>
+  <section class="card">
+    <h2>Provider</h2>
+    <div style="font-size:24px; font-weight:700;">{{ provider or '-' }}</div>
+    <div class="muted">来源：{{ provider_source or 'unknown' }}</div>
+  </section>
+</div>
+
+<section class="card" style="margin-bottom:18px;">
+  <h2>快速入口</h2>
+  <div class="grid cols-3">
+    <a class="card" href="/health">健康度</a>
+    <a class="card" href="/runs">运行记录</a>
+    <a class="card" href="/research">研究队列</a>
+    <a class="card" href="/agents">Agent 设置</a>
+    <a class="card" href="/settings">大模型设置</a>
+    <a class="card" href="/cockpit">完整驾驶舱</a>
+  </div>
+</section>
+
+<section class="card" style="margin-bottom:18px;">
+  <h2>最近运行</h2>
+  {% if latest_runs %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Run</th><th>状态</th><th>时间</th><th>配置</th></tr></thead>
+      <tbody>
+      {% for row in latest_runs %}
+        <tr>
+          <td>{{ row.run_id }}</td>
+          <td>{{ row.status }}</td>
+          <td>{{ row.created_at_utc }}</td>
+          <td>{{ row.config_path }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="muted">暂无运行记录，或 SQLite 正忙；请进入 /runs 查看详细信息。</div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>说明</h2>
+  <p class="muted">总览页现在只读取轻量运行态信息，避免因大型 SQLite 查询、JSON artifact 解析或锁等待导致首页超时。完整图表和研究质量细节迁移到 /cockpit、/health、/runs、/research 等页面。</p>
+</section>
+{% endblock %}

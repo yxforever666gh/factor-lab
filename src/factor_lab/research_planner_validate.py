@@ -22,10 +22,16 @@ def _task_repeat_blocked(store: ExperimentStore, task: dict[str, Any], fingerpri
     cooldown = RECOVERY_REPEAT_COOLDOWN_MINUTES if "recovery_step" in reasons else None
     if cooldown is not None:
         return recently_finished_same_fingerprint(store, fingerprint, cooldown_minutes=cooldown)
-    return recently_finished_same_fingerprint(store, fingerprint)
+    return recently_finished_same_fingerprint(
+        store,
+        fingerprint,
+        task_type=("generated_batch" if task.get("category") == "exploration" else "diagnostic" if task.get("category") == "validation" else "workflow"),
+        payload=payload,
+        worker_note=task.get("worker_note"),
+    )
 
 
-CATEGORY_LIMITS_DEFAULT = {"baseline": 2, "validation": 2, "exploration": 1}
+CATEGORY_LIMITS_DEFAULT = {"baseline": 2, "validation": 3, "exploration": 1}
 DB_PATH = Path("artifacts") / "factor_lab.db"
 
 
@@ -35,11 +41,33 @@ def _budget_bucket(task: dict[str, Any]) -> str:
     branch_id = str(task.get("branch_id") or (task.get("payload") or {}).get("branch_id") or "")
     worker_note = str(task.get("worker_note") or "")
     text = " ".join([goal, branch_id, worker_note]).lower()
+    if category == "validation" and ("fragile_candidate" in text or "fragile 候选" in text):
+        return "validation_fragile"
     if category == "validation" and ("medium_horizon" in text or "中窗" in text):
         return "validation_medium_horizon"
     if category == "validation" and ("stable_candidate" in text or "稳定候选" in text):
         return "validation_stable"
     return category
+
+
+
+def _representative_scope_key(task: dict[str, Any]) -> str | None:
+    payload = task.get("payload") or {}
+    focus_names = sorted(
+        {
+            name
+            for name in (payload.get("focus_factors") or [])
+            if name
+        }
+        | {
+            row.get("candidate_name")
+            for row in (task.get("focus_candidates") or [])
+            if row.get("candidate_name")
+        }
+    )
+    if not focus_names:
+        return None
+    return "|".join(focus_names)
 
 
 def validate_research_planner_proposal(proposal_path: str | Path, output_path: str | Path) -> dict[str, Any]:
@@ -50,11 +78,12 @@ def validate_research_planner_proposal(proposal_path: str | Path, output_path: s
     selection_policy = proposal.get("selection_policy") or {}
     category_limits = selection_policy.get("category_limits") or CATEGORY_LIMITS_DEFAULT
     floor = selection_policy.get("exploration_floor") or exploration_floor_context({})
-    bucket_limits = {**category_limits, "validation_stable": 1, "validation_medium_horizon": 1}
-    counts = {"baseline": 0, "validation": 0, "exploration": 0, "exploration_generated": 0, "validation_stable": 0, "validation_medium_horizon": 0}
+    bucket_limits = {**category_limits, "validation_stable": 2, "validation_medium_horizon": 2, "validation_fragile": 1}
+    counts = {"baseline": 0, "validation": 0, "exploration": 0, "exploration_generated": 0, "validation_stable": 0, "validation_medium_horizon": 0, "validation_fragile": 0}
     accepted = []
     rejected = []
     selected_exploration = 0
+    accepted_representative_scopes: set[str] = set()
 
     required_payload_fields = {"goal", "hypothesis", "expected_information_gain", "branch_id", "stop_if", "promote_if", "disconfirm_if"}
 
@@ -81,6 +110,11 @@ def validate_research_planner_proposal(proposal_path: str | Path, output_path: s
             ok = False
             reason.append("duplicate_within_plan")
 
+        representative_scope = _representative_scope_key(task)
+        if representative_scope and representative_scope in accepted_representative_scopes:
+            ok = False
+            reason.append("duplicate_representative_scope_within_plan")
+
         missing_fields = sorted(field for field in required_payload_fields if field not in payload)
         if missing_fields:
             ok = False
@@ -88,6 +122,8 @@ def validate_research_planner_proposal(proposal_path: str | Path, output_path: s
 
         if ok:
             accepted.append(task)
+            if representative_scope:
+                accepted_representative_scopes.add(representative_scope)
             if category in counts:
                 counts[category] += 1
             if bucket in counts:

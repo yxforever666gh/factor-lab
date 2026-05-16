@@ -67,3 +67,39 @@ def test_workflow_handles_simple_and_generated_factors_out_of_order(tmp_path, mo
 
     results = json.loads((output_dir / "results.json").read_text(encoding="utf-8"))
     assert {row["factor_name"] for row in results} == {"hybrid_mom_value", "mom_20", "value_ep"}
+
+
+def test_workflow_can_skip_global_refreshes(tmp_path, monkeypatch):
+    from factor_lab import workflow as workflow_module
+
+    output_dir = tmp_path / "light_workflow"
+    config_path = tmp_path / "light_workflow.json"
+    config = {
+        "seed": 7,
+        "num_stocks": 20,
+        "num_days": 60,
+        "write_dataset_csv": False,
+        "refresh_global_risk": False,
+        "refresh_exposure_track": False,
+        "factors": [{"name": "mom_20", "expression": "momentum_20"}],
+        "thresholds": {
+            "min_rank_ic": -1.0,
+            "min_top_bottom_spread": -1.0,
+        },
+    }
+    config_path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    refresh_calls = {"risk": 0}
+
+    monkeypatch.setattr(
+        workflow_module,
+        "refresh_candidate_risk_profiles",
+        lambda *args, **kwargs: refresh_calls.__setitem__("risk", refresh_calls["risk"] + 1),
+    )
+
+    monkeypatch.chdir(tmp_path)
+    run_workflow(str(config_path), str(output_dir))
+
+    assert refresh_calls["risk"] == 0
+    assert not (output_dir / "dataset.csv").exists()
+    assert (output_dir / "results.json").exists()

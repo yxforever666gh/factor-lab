@@ -1,9 +1,0 @@
-{
-  "generated_at_utc": "2026-03-20T20:18:32.930750+00:00",
-  "diagnostic_type": "fallback_graveyard_review",
-  "source_output_dir": "artifacts/tushare_batch",
-  "reasons": [
-    "planner_zero_candidates_fallback",
-    "graveyard_review_required"
-  ]
-}

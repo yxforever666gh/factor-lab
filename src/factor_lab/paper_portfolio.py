@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -9,6 +10,67 @@ import pandas as pd
 
 from factor_lab.factors import FactorDefinition
 from factor_lab.portfolio import build_composite_factor
+from factor_lab.portfolio_contribution import build_portfolio_contribution_report
+
+
+def resolve_latest_paper_portfolio_inputs(
+    db_path: str | Path,
+    *,
+    fallback_candidate_pool_path: str | Path | None = None,
+    fallback_dataset_path: str | Path | None = None,
+) -> dict[str, Any]:
+    db_path = Path(db_path)
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute(
+            """
+            SELECT run_id, created_at_utc, output_dir, config_path
+            FROM workflow_runs
+            WHERE status = 'finished'
+            ORDER BY created_at_utc DESC
+            LIMIT 1
+            """
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if row:
+        run_id, created_at_utc, output_dir, config_path = row
+        output_dir_path = Path(output_dir) if output_dir else None
+        candidate_pool_path = output_dir_path / "candidate_pool.json" if output_dir_path else None
+        dataset_path = output_dir_path / "dataset.csv" if output_dir_path else None
+        if candidate_pool_path and dataset_path and candidate_pool_path.exists() and dataset_path.exists():
+            return {
+                "source": "latest_finished_run",
+                "run_id": run_id,
+                "created_at_utc": created_at_utc,
+                "config_path": config_path,
+                "output_dir": str(output_dir_path),
+                "candidate_pool_path": candidate_pool_path,
+                "dataset_path": dataset_path,
+            }
+
+    return {
+        "source": "fallback",
+        "run_id": None,
+        "created_at_utc": None,
+        "config_path": None,
+        "output_dir": None,
+        "candidate_pool_path": Path(fallback_candidate_pool_path) if fallback_candidate_pool_path else None,
+        "dataset_path": Path(fallback_dataset_path) if fallback_dataset_path else None,
+    }
+
+
+def _json_safe(value: Any) -> Any:
+    if isinstance(value, Path):
+        return str(value)
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, tuple):
+        return [_json_safe(v) for v in value]
+    return value
 
 
 def _empty_portfolio_payload(
@@ -33,6 +95,9 @@ def build_paper_portfolio(
     output_dir: str | Path,
     strategy_name: str = "paper_candidates_only",
     long_q: float = 0.2,
+    target_position_count: int | None = None,
+    single_name_weight_cap: float | None = None,
+    source_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
@@ -47,23 +112,75 @@ def build_paper_portfolio(
     latest_date = frame["date"].max()
     latest = frame[frame["date"] == latest_date].copy()
 
+    source = _json_safe(source_metadata or {})
+
     if not factor_definitions:
         payload = _empty_portfolio_payload(strategy_name, latest_date, "candidate_pool_empty")
+        payload["selected_factors"] = []
+        payload["input_source"] = source
         (output / "current_portfolio.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        build_portfolio_contribution_report(
+            dataset_path=dataset_path,
+            factor_definitions=[],
+            output_path=output / "portfolio_contribution_report.json",
+            strategy_name=strategy_name,
+            long_q=long_q,
+        )
         return payload
 
     defs = [FactorDefinition(name=item["name"], expression=item["expression"]) for item in factor_definitions]
-    full_signal = build_composite_factor(frame, defs, neutralize=False)
+    factor_weights = {
+        item["name"]: float(item.get("allocated_weight") or item.get("weight_hint") or 1.0)
+        for item in factor_definitions
+        if item.get("name")
+    }
+    full_signal = build_composite_factor(frame, defs, neutralize=False, factor_weights=factor_weights)
     latest["signal"] = full_signal.loc[latest.index].values
 
-    cut = latest["signal"].quantile(1 - long_q)
-    target = latest[latest["signal"] >= cut].copy().sort_values("signal", ascending=False)
+    if target_position_count is not None:
+        available_count = int(latest["signal"].notna().sum())
+        selected_count = max(0, min(int(target_position_count), available_count))
+        target = latest.dropna(subset=["signal"]).copy().sort_values("signal", ascending=False).head(selected_count)
+        construction = {
+            "mode": "target_position_count",
+            "target_position_count": int(target_position_count),
+            "long_q": long_q,
+            "available_universe_count": available_count,
+            "selected_count": int(len(target)),
+        }
+    else:
+        cut = latest["signal"].quantile(1 - long_q)
+        target = latest[latest["signal"] >= cut].copy().sort_values("signal", ascending=False)
+        construction = {
+            "mode": "long_q",
+            "target_position_count": None,
+            "long_q": long_q,
+            "available_universe_count": int(latest["signal"].notna().sum()),
+            "selected_count": int(len(target)),
+        }
     if target.empty:
         payload = _empty_portfolio_payload(strategy_name, latest_date, "no_positions_selected")
+        payload["selected_factors"] = [{"name": item["name"], "expression": item["expression"], "weight_hint": item.get("weight_hint"), "allocated_weight": item.get("allocated_weight"), "portfolio_weight_target": item.get("portfolio_weight_target"), "portfolio_bucket": item.get("portfolio_bucket"), "portfolio_bucket_label": item.get("portfolio_bucket_label"), "approval_tier": item.get("approval_tier"), "lifecycle_state": item.get("lifecycle_state") or item.get("universe_state"), "governance_action": item.get("governance_action"), "max_weight": item.get("max_weight"), "family_budget_cap": item.get("family_budget_cap"), "bucket_budget_cap": item.get("bucket_budget_cap"), "budget_reason": item.get("budget_reason")} for item in factor_definitions if item.get("name") and item.get("expression")]
+        payload["input_source"] = source
         (output / "current_portfolio.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        build_portfolio_contribution_report(
+            dataset_path=dataset_path,
+            factor_definitions=factor_definitions,
+            output_path=output / "portfolio_contribution_report.json",
+            strategy_name=strategy_name,
+            long_q=long_q,
+        )
         return payload
 
     target["weight"] = 1.0 / len(target)
+    max_position_weight = float(target["weight"].max()) if not target.empty else 0.0
+    constraints = {
+        "single_name_weight_cap": single_name_weight_cap,
+        "max_position_weight": round(max_position_weight, 6),
+    }
+    constraint_warnings: list[str] = []
+    if single_name_weight_cap is not None and max_position_weight > float(single_name_weight_cap) + 1e-12:
+        constraint_warnings.append("single_name_weight_cap_breached")
     positions = [
         {
             "ticker": row["ticker"],
@@ -79,8 +196,20 @@ def build_paper_portfolio(
         "as_of_date": str(latest_date.date()),
         "position_count": len(positions),
         "positions": positions,
+        "selected_factors": [{"name": item["name"], "expression": item["expression"], "weight_hint": item.get("weight_hint"), "allocated_weight": item.get("allocated_weight"), "portfolio_weight_target": item.get("portfolio_weight_target"), "portfolio_bucket": item.get("portfolio_bucket"), "portfolio_bucket_label": item.get("portfolio_bucket_label"), "approval_tier": item.get("approval_tier"), "lifecycle_state": item.get("lifecycle_state") or item.get("universe_state"), "governance_action": item.get("governance_action"), "max_weight": item.get("max_weight"), "family_budget_cap": item.get("family_budget_cap"), "bucket_budget_cap": item.get("bucket_budget_cap"), "budget_reason": item.get("budget_reason")} for item in factor_definitions if item.get("name") and item.get("expression")],
+        "construction": construction,
+        "constraints": constraints,
+        "constraint_warnings": constraint_warnings,
+        "input_source": source,
     }
     (output / "current_portfolio.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    build_portfolio_contribution_report(
+        dataset_path=dataset_path,
+        factor_definitions=factor_definitions,
+        output_path=output / "portfolio_contribution_report.json",
+        strategy_name=strategy_name,
+        long_q=long_q,
+    )
     return payload
 
 

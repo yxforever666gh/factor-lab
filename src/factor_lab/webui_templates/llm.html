@@ -3,6 +3,7 @@
 <div class="grid cols-2">
   <section class="card">
     <h2>LLM 状态</h2>
+    <div style="margin-bottom:10px;"><a class="pill good" href="/settings">打开大模型设置</a> <a class="pill" href="/agents">打开 Agent 设置</a></div>
     <table>
       <tbody>
         <tr><th>模式</th><td>{{ llm_status.mode or '-' }}</td></tr>
@@ -28,6 +29,27 @@
     </table>
   </section>
 </div>
+
+<section class="card" style="margin-top:18px;">
+  <h2>Agent Roles</h2>
+  <div class="muted" style="margin-bottom:10px;">Agent Role 是职责分工；模型 Profile 在大模型设置中管理。</div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Role</th><th>启用</th><th>Decision Types</th><th>Fallback</th><th>旧 Agent</th></tr></thead>
+      <tbody>
+        {% for role in agent_settings.roles %}
+        <tr>
+          <td>{{ role.name }} / {{ role.display_name }}</td>
+          <td>{{ '是' if role.enabled else '否' }}</td>
+          <td>{{ role.decision_types }}</td>
+          <td class="text-break">{{ role.llm_fallback_order }}</td>
+          <td>{{ role.legacy_agent_id or '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
 
 <div class="grid cols-2" style="margin-top:18px;">
   <section class="card">

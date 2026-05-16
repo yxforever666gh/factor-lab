@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from factor_lab.candidate_failure_dossier import build_candidate_failure_dossiers
 from factor_lab.storage import ExperimentStore
+from factor_lab.novelty_judge import load_novelty_judgments
 
 
 _FRONTIER_PASS_STATUSES = {"pass"}
@@ -69,7 +72,7 @@ def _clip(value: float | None, low: float = 0.0, high: float = 1.0) -> float:
 def _latest_finished_run(conn: sqlite3.Connection) -> dict[str, Any] | None:
     row = conn.execute(
         """
-        SELECT run_id, created_at_utc, config_path
+        SELECT run_id, created_at_utc, config_path, output_dir
         FROM workflow_runs
         WHERE status = 'finished'
           AND COALESCE(config_path, '') NOT LIKE 'artifacts/generated_ab_configs/%'
@@ -102,7 +105,8 @@ def _load_latest_exposure_map(conn: sqlite3.Connection, run_id: str) -> dict[str
     rows = conn.execute(
         """
         SELECT factor_name, total_score, status, retention_industry, split_fail_count,
-               crowding_peers, recommended_max_weight, effective_bucket_label,
+               crowding_peers, recommended_max_weight, bucket_key, bucket_label,
+               effective_bucket_key, effective_bucket_label,
                turnover_daily, net_metric, hard_flags_json
         FROM exposure_factors
         WHERE run_id = ?
@@ -141,6 +145,120 @@ def _load_risk_map(conn: sqlite3.Connection) -> dict[str, dict[str, Any]]:
             "acceptance_gate_explanation": profile.get("acceptance_gate_explanation"),
         }
     return out
+
+
+def _load_thesis_map(conn: sqlite3.Connection) -> dict[str, dict[str, Any]]:
+    rows = conn.execute(
+        """
+        SELECT fc.name, rt.thesis_id, rt.title, rt.family, rt.thesis_type,
+               rt.institutional_bucket_key, rt.institutional_bucket_label,
+               rt.thesis_text, rt.mechanism_rationale, rt.status,
+               rt.invalidation_json, rt.representative_candidate, rt.representative_rank,
+               rt.representative_count, rt.roster_json, rt.source_context_json
+        FROM research_theses rt
+        LEFT JOIN factor_candidates fc ON fc.id = rt.candidate_id
+        """
+    ).fetchall()
+    thesis_map: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if not row["name"]:
+            continue
+        thesis_map[row["name"]] = {
+            "thesis_id": row["thesis_id"],
+            "title": row["title"],
+            "family": row["family"],
+            "thesis_type": row["thesis_type"],
+            "institutional_bucket_key": row["institutional_bucket_key"],
+            "institutional_bucket_label": row["institutional_bucket_label"],
+            "thesis_text": row["thesis_text"],
+            "mechanism_rationale": row["mechanism_rationale"],
+            "status": row["status"],
+            "invalidation": json.loads(row["invalidation_json"] or "[]"),
+            "representative_candidate": row["representative_candidate"],
+            "representative_rank": row["representative_rank"],
+            "representative_count": row["representative_count"],
+            "roster": json.loads(row["roster_json"] or "[]"),
+            "source_context": json.loads(row["source_context_json"] or "{}"),
+        }
+    return thesis_map
+
+
+def _load_representative_roster(output_dir: str | None) -> dict[str, dict[str, Any]]:
+    if not output_dir:
+        return {}
+    path = Path(output_dir) / "cluster_representatives.json"
+    if not path.exists():
+        return {}
+    try:
+        rows = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    group_map: dict[tuple[str, ...], dict[str, Any]] = {}
+    rep_row_map: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        members = tuple(sorted(row.get("cluster_members") or [row.get("factor_name")]))
+        group = group_map.setdefault(
+            members,
+            {"cluster_members": list(members), "representative_candidates": [], "primary_candidate": None},
+        )
+        factor_name = row.get("factor_name")
+        if factor_name and factor_name not in group["representative_candidates"]:
+            group["representative_candidates"].append(factor_name)
+        if row.get("is_primary_representative") and factor_name:
+            group["primary_candidate"] = factor_name
+        if factor_name:
+            rep_row_map[factor_name] = row
+    roster_map: dict[str, dict[str, Any]] = {}
+    for members, group in group_map.items():
+        primary = group.get("primary_candidate") or next(iter(group.get("representative_candidates") or group.get("cluster_members") or []), None)
+        reps = list(group.get("representative_candidates") or [])
+        suppressed = [name for name in group.get("cluster_members") or [] if name not in reps]
+        for member in members:
+            rep_row = rep_row_map.get(member) or {}
+            roster_map[member] = {
+                "primary_candidate": primary,
+                "representative_candidates": reps,
+                "cluster_members": list(group.get("cluster_members") or []),
+                "representative_rank": rep_row.get("cluster_rep_rank") or rep_row.get("representative_rank"),
+                "representative_count": rep_row.get("cluster_rep_count") or rep_row.get("representative_count") or len(reps),
+                "is_representative": member in reps,
+                "is_primary_representative": member == primary,
+                "suppressed_members": suppressed,
+            }
+    return roster_map
+
+
+def _load_portfolio_contribution_map(root: Path) -> dict[str, dict[str, Any]]:
+    path = root / "paper_portfolio" / "portfolio_contribution_report.json"
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    rows = payload.get("rows") or []
+    return {
+        row.get("factor_name"): row
+        for row in rows
+        if row.get("factor_name")
+    }
+
+
+def _load_approved_universe_map(root: Path) -> dict[str, dict[str, Any]]:
+    path = root / "approved_candidate_universe.json"
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    rows = payload.get("rows") or []
+    return {
+        row.get("factor_name"): {**row, "selection_policy_version": payload.get("selection_policy_version")}
+        for row in rows
+        if row.get("factor_name")
+    }
+
 
 
 def _load_relationship_map(conn: sqlite3.Connection) -> dict[str, dict[str, Any]]:
@@ -270,17 +388,35 @@ def _score_neutralized_quality(retention: float | None, neutral_ic: float | None
     return int(round(_clip(score, 0.0, 20.0)))
 
 
-def _score_incremental_value(candidate: dict[str, Any], row: dict[str, Any]) -> int:
+def _score_incremental_value(
+    candidate: dict[str, Any],
+    row: dict[str, Any],
+    failure_dossier: dict[str, Any],
+    portfolio_contribution: dict[str, Any],
+    representative_context: dict[str, Any],
+) -> int:
     latest_score = float(candidate.get("latest_recent_final_score") or candidate.get("latest_final_score") or 0.0)
     avg_score = float(candidate.get("avg_final_score") or 0.0)
     pass_rate = float(candidate.get("pass_rate") or 0.0)
     exposure_total = float(row.get("exposure_total_score") or 0.0)
+    delta_sharpe = float(portfolio_contribution.get("delta_sharpe") or 0.0)
+    delta_cost = float(portfolio_contribution.get("delta_cost_adjusted_annual_return") or 0.0)
 
     score = 0.0
-    score += _clip((latest_score - 5.0) / 4.5) * 8.0
-    score += _clip((avg_score - 1.5) / 5.0) * 4.0
-    score += _clip(pass_rate / 0.5) * 4.0
-    score += _clip(exposure_total / 80.0) * 4.0
+    score += _clip((latest_score - 5.0) / 4.5) * 6.0
+    score += _clip((avg_score - 1.5) / 5.0) * 3.0
+    score += _clip(pass_rate / 0.5) * 3.0
+    score += _clip(exposure_total / 80.0) * 2.0
+    if failure_dossier.get("parent_delta_status") == "incremental":
+        score += 4.0
+    elif failure_dossier.get("parent_delta_status") == "non_incremental":
+        score -= 6.0
+    score += _clip((delta_sharpe + 0.05) / 0.20) * 4.0
+    score += _clip((delta_cost + 0.02) / 0.08) * 2.0
+    if representative_context.get("is_primary_representative"):
+        score += 2.0
+    elif representative_context and not representative_context.get("is_representative", True):
+        score -= 4.0
     return int(round(_clip(score, 0.0, 20.0)))
 
 
@@ -317,11 +453,19 @@ def _score_interpretability(name: str, exposure: dict[str, Any], relationships: 
     return int(round(_clip(score, 0.0, 5.0)))
 
 
-def _build_quality_scores(candidate: dict[str, Any], risk: dict[str, Any], row: dict[str, Any], relationships: dict[str, Any]) -> dict[str, int]:
+def _build_quality_scores(
+    candidate: dict[str, Any],
+    risk: dict[str, Any],
+    row: dict[str, Any],
+    relationships: dict[str, Any],
+    failure_dossier: dict[str, Any],
+    portfolio_contribution: dict[str, Any],
+    representative_context: dict[str, Any],
+) -> dict[str, int]:
     return {
         "cross_window_robustness": _score_cross_window(candidate, risk, int(row.get("split_fail_count") or 0)),
         "neutralized_quality": _score_neutralized_quality(row.get("retention_industry"), row.get("neutralized_rank_ic_mean"), {"hard_flags": row.get("hard_flags") or []}),
-        "incremental_value": _score_incremental_value(candidate, row),
+        "incremental_value": _score_incremental_value(candidate, row, failure_dossier, portfolio_contribution, representative_context),
         "deduped_independence": _score_deduped_independence(
             int(row.get("duplicate_peer_count") or 0),
             int(row.get("refinement_peer_count") or 0),
@@ -359,32 +503,50 @@ def _build_quality_hard_flags(row: dict[str, Any]) -> dict[str, bool]:
     refinement_peer_count = int(row.get("refinement_peer_count") or 0)
     high_corr_peer_count = int(row.get("high_corr_peer_count") or 0)
     evidence_gate = row.get("evidence_gate") or {}
+    net_metric = row.get("net_metric")
+    turnover_daily = row.get("turnover_daily")
+    window_count = int(row.get("window_count") or 0)
 
     failed_60d = False
-    if row.get("window_count") and int(row.get("window_count") or 0) >= 4:
+    if window_count >= 4:
         failed_60d = (
             split_fail_count >= 1
             and (retention is not None and float(retention or 0.0) <= 0.15)
             and neutral_ic <= 0.0
         )
 
+    implementability_weak = False
+    if net_metric is not None and float(net_metric) <= 0.0:
+        implementability_weak = True
+    if turnover_daily is not None and float(turnover_daily) > 0.60:
+        implementability_weak = True
+
+    portfolio_contribution = row.get("portfolio_contribution") or {}
+    representative_context = row.get("representative_context") or {}
+    failure_dossier = row.get("failure_dossier") or {}
+
     return {
         "failed_60d": failed_60d,
         "neutralized_weak": (retention is not None and float(retention or 0.0) <= 0.15) or neutral_ic < 0.0,
         "duplicate_risk": duplicate_peer_count >= 1 or refinement_peer_count >= 2 or high_corr_peer_count >= 3,
         "untrusted_runs": False,
-        "insufficient_window_evidence": int(row.get("window_count") or 0) < 3,
+        "insufficient_window_evidence": window_count < 3,
+        "insufficient_long_horizon_evidence": window_count < 4,
         "insufficient_eval_evidence": int(row.get("evaluation_count") or 0) < 40,
+        "implementability_weak": implementability_weak,
         "exposure_hard_flag": bool(hard_flag_list),
         "evidence_missing": evidence_gate.get("action") == "evidence_missing",
         "evidence_blocked": evidence_gate.get("status") == "blocked",
+        "non_incremental_vs_parent": failure_dossier.get("parent_delta_status") == "non_incremental",
+        "negative_portfolio_contribution": float(portfolio_contribution.get("delta_sharpe") or 0.0) < -0.05 or float(portfolio_contribution.get("delta_cost_adjusted_annual_return") or 0.0) < -0.02,
+        "representative_suppressed": bool(representative_context) and not representative_context.get("is_representative", True),
     }
 
 
 def _classify_candidate(total_score: int, hard_flags: dict[str, bool], row: dict[str, Any]) -> str:
     if hard_flags["untrusted_runs"]:
         return "validate-only"
-    if hard_flags["duplicate_risk"]:
+    if hard_flags["duplicate_risk"] or hard_flags["representative_suppressed"]:
         return "duplicate-suppress"
     if hard_flags["evidence_missing"]:
         return "validate-only"
@@ -394,9 +556,11 @@ def _classify_candidate(total_score: int, hard_flags: dict[str, bool], row: dict
         if row.get("effective_bucket_label"):
             return "exposure-track"
         return "regime-sensitive"
-    if total_score >= 85 and not hard_flags["neutralized_weak"] and not hard_flags["insufficient_window_evidence"]:
+    if hard_flags["implementability_weak"] or hard_flags["negative_portfolio_contribution"]:
+        return "exposure-track" if row.get("effective_bucket_label") else "validate-only"
+    if total_score >= 88 and not hard_flags["neutralized_weak"] and not hard_flags["insufficient_long_horizon_evidence"] and not hard_flags["non_incremental_vs_parent"]:
         return "stable-alpha-candidate"
-    if total_score >= 70:
+    if total_score >= 72:
         return "needs-validation"
     if total_score >= 50:
         return "exposure-track" if row.get("effective_bucket_label") else "regime-sensitive"
@@ -408,7 +572,7 @@ def _classify_candidate(total_score: int, hard_flags: dict[str, bool], row: dict
 def _promotion_decision(classification: str, hard_flags: dict[str, bool]) -> str:
     if hard_flags["untrusted_runs"]:
         return "hold"
-    if hard_flags["duplicate_risk"]:
+    if hard_flags["duplicate_risk"] or hard_flags["representative_suppressed"]:
         return "suppress"
     if hard_flags["evidence_missing"]:
         return "hold"
@@ -416,6 +580,10 @@ def _promotion_decision(classification: str, hard_flags: dict[str, bool]) -> str
         return "keep_validating"
     if hard_flags["failed_60d"]:
         return "do_not_promote"
+    if hard_flags["implementability_weak"] or hard_flags["negative_portfolio_contribution"] or hard_flags["non_incremental_vs_parent"]:
+        return "do_not_promote"
+    if hard_flags["insufficient_long_horizon_evidence"]:
+        return "keep_validating"
     if classification == "stable-alpha-candidate":
         return "promote"
     if classification in {"needs-validation", "exposure-track", "regime-sensitive", "validate-only"}:
@@ -434,6 +602,16 @@ def _build_quality_summary(classification: str, promotion_decision: str, hard_fl
         parts.append("重复/高相关风险")
     if hard_flags.get("insufficient_window_evidence"):
         parts.append("窗口证据不足")
+    if hard_flags.get("insufficient_long_horizon_evidence"):
+        parts.append("中长窗证据不足")
+    if hard_flags.get("implementability_weak"):
+        parts.append("implementability 偏弱")
+    if hard_flags.get("non_incremental_vs_parent"):
+        parts.append("相对父因子缺少新增信息")
+    if hard_flags.get("negative_portfolio_contribution"):
+        parts.append("组合边际贡献为负")
+    if hard_flags.get("representative_suppressed"):
+        parts.append("非 representative，先压制近邻变体")
     if hard_flags.get("evidence_missing"):
         parts.append("acceptance gate 缺失")
     elif hard_flags.get("evidence_blocked"):
@@ -450,6 +628,11 @@ def _build_row(
     exposure_map: dict[str, dict[str, Any]],
     factor_map: dict[str, dict[str, dict[str, Any]]],
     relationship_map: dict[str, dict[str, Any]],
+    thesis_map: dict[str, dict[str, Any]],
+    representative_roster: dict[str, dict[str, Any]],
+    failure_dossier_map: dict[str, dict[str, Any]],
+    portfolio_contribution_map: dict[str, dict[str, Any]],
+    approved_universe_map: dict[str, dict[str, Any]],
 ) -> dict[str, Any]:
     name = candidate["name"]
     risk = risk_map.get(name) or {}
@@ -458,6 +641,14 @@ def _build_row(
     raw_row = variants.get("raw_scored") or {}
     neutral_row = variants.get("neutralized") or {}
     relationships = relationship_map.get(name) or {}
+    thesis = thesis_map.get(name) or {}
+    representative_context = representative_roster.get(name) or {}
+    failure_dossier = failure_dossier_map.get(name) or {}
+    portfolio_contribution = portfolio_contribution_map.get(name) or {}
+    approved_universe_row = approved_universe_map.get(name) or {}
+    novelty_payload = load_novelty_judgments(Path(candidate.get("_db_parent") or "."))
+    novelty_map = {row.get("candidate_name"): row for row in (novelty_payload.get("rows") or []) if row.get("candidate_name")}
+    novelty_row = novelty_map.get(name) or {}
 
     duplicate_peers = relationships.get("duplicate_peers") or []
     refinement_peers = relationships.get("refinement_peers") or []
@@ -538,6 +729,38 @@ def _build_row(
         "promotion_score": promotion_score,
         "acceptance_gate": risk.get("acceptance_gate") or {},
         "acceptance_gate_explanation": risk.get("acceptance_gate_explanation"),
+        "thesis_id": thesis.get("thesis_id"),
+        "thesis_title": thesis.get("title"),
+        "thesis_type": thesis.get("thesis_type"),
+        "institutional_bucket_key": thesis.get("institutional_bucket_key"),
+        "institutional_bucket_label": thesis.get("institutional_bucket_label"),
+        "thesis_text": thesis.get("thesis_text"),
+        "thesis_status": thesis.get("status"),
+        "thesis_invalidation": thesis.get("invalidation") or [],
+        "representative_context": representative_context,
+        "representative_primary_candidate": representative_context.get("primary_candidate") or thesis.get("representative_candidate"),
+        "representative_rank": representative_context.get("representative_rank") or thesis.get("representative_rank"),
+        "representative_count": representative_context.get("representative_count") or thesis.get("representative_count"),
+        "is_representative": representative_context.get("is_representative"),
+        "is_primary_representative": representative_context.get("is_primary_representative"),
+        "failure_dossier": failure_dossier,
+        "failure_modes": failure_dossier.get("failure_modes") or [],
+        "failure_recommended_action": failure_dossier.get("recommended_action"),
+        "failure_regime_dependency": failure_dossier.get("regime_dependency"),
+        "portfolio_contribution": portfolio_contribution,
+        "approved_universe_member": bool(approved_universe_row),
+        "approved_universe_reason": approved_universe_row.get("approved_reason"),
+        "approved_universe_version": approved_universe_row.get("selection_policy_version"),
+        "approved_universe_source_windows": approved_universe_row.get("source_windows") or [],
+        "approved_universe_state": approved_universe_row.get("lifecycle_state") or approved_universe_row.get("universe_state"),
+        "approved_universe_governance_action": approved_universe_row.get("governance_action"),
+        "approved_universe_allocated_weight": approved_universe_row.get("allocated_weight") or approved_universe_row.get("portfolio_weight_hint"),
+        "approved_universe_max_weight": approved_universe_row.get("max_weight"),
+        "approved_universe_budget_reason": approved_universe_row.get("budget_reason"),
+        "novelty_class": novelty_row.get("novelty_class"),
+        "incrementality_confidence": novelty_row.get("incrementality_confidence"),
+        "novelty_recommended_action": novelty_row.get("recommended_action"),
+        "novelty_reasoning_summary": novelty_row.get("reasoning_summary"),
     }
     decision_key, reasons = _decide_candidate(row)
     row["decision_key"] = decision_key
@@ -546,7 +769,7 @@ def _build_row(
     row["decision_summary"] = "；".join(reasons[:3]) if reasons else _DECISION_LABELS[decision_key]
     row["decision_priority"] = _DECISION_PRIORITY[decision_key]
 
-    quality_scores = _build_quality_scores(candidate, risk, row, relationships)
+    quality_scores = _build_quality_scores(candidate, risk, row, relationships, failure_dossier, portfolio_contribution, representative_context)
     total_quality_score = int(sum(quality_scores.values()))
     row["evidence_gate"] = _build_evidence_gate(row)
     quality_hard_flags = _build_quality_hard_flags(row)
@@ -561,7 +784,7 @@ def _build_row(
     row["quality_promotion_decision"] = quality_promotion_decision
     row["quality_promotion_decision_label"] = _PROMOTION_LABELS.get(quality_promotion_decision, quality_promotion_decision)
     row["quality_summary"] = _build_quality_summary(quality_classification, quality_promotion_decision, quality_hard_flags, row["evidence_gate"])
-    row["scorecard_schema_version"] = "factor-quality-v1"
+    row["scorecard_schema_version"] = "factor-quality-v2"
     return row
 
 
@@ -578,7 +801,7 @@ def build_promotion_scorecard(db_path: str | Path, limit: int = 12) -> dict[str,
                 "latest_run": None,
                 "rows": [],
                 "summary": {"has_data": False},
-                "rubric": {"version": "factor-quality-v1"},
+                "rubric": {"version": "factor-quality-v2"},
             }
 
         candidates = [
@@ -600,8 +823,41 @@ def build_promotion_scorecard(db_path: str | Path, limit: int = 12) -> dict[str,
         exposure_map = _load_latest_exposure_map(conn, latest_run["run_id"])
         factor_map = _load_latest_factor_map(conn, latest_run["run_id"])
         relationship_map = _load_relationship_map(conn)
+        thesis_map = _load_thesis_map(conn)
+        representative_roster = _load_representative_roster(latest_run.get("output_dir"))
+        portfolio_contribution_map = _load_portfolio_contribution_map(db_path.parent)
+        approved_universe_map = _load_approved_universe_map(db_path.parent)
+        all_candidates = store.list_factor_candidates(limit=2000)
+        all_evaluations = store.list_factor_evaluations(limit=5000)
+        all_relationships = store.list_candidate_relationships(limit=5000)
+        failure_dossier_rows = build_candidate_failure_dossiers(
+            all_candidates,
+            all_evaluations,
+            all_relationships,
+            focus_names=[row.get("name") for row in candidates if row.get("name")],
+            limit=len(candidates),
+        )
+        failure_dossier_map = {
+            row.get("candidate_name"): row
+            for row in failure_dossier_rows
+            if row.get("candidate_name")
+        }
 
-        rows = [_build_row(row, risk_map, exposure_map, factor_map, relationship_map) for row in candidates]
+        rows = [
+            _build_row(
+                {**row, "_db_parent": str(db_path.parent)},
+                risk_map,
+                exposure_map,
+                factor_map,
+                relationship_map,
+                thesis_map,
+                representative_roster,
+                failure_dossier_map,
+                portfolio_contribution_map,
+                approved_universe_map,
+            )
+            for row in candidates
+        ]
         rows.sort(
             key=lambda row: (
                 _CLASSIFICATION_PRIORITY.get(row.get("quality_classification") or "drop", 99),
@@ -628,6 +884,11 @@ def build_promotion_scorecard(db_path: str | Path, limit: int = 12) -> dict[str,
             "duplicate_suppress_count": len([row for row in rows if row["quality_classification"] == "duplicate-suppress"]),
             "validate_only_count": len([row for row in rows if row["quality_classification"] == "validate-only"]),
             "quality_drop_count": len([row for row in rows if row["quality_classification"] == "drop"]),
+            "positive_portfolio_contributor_count": len([row for row in rows if (row.get("portfolio_contribution") or {}).get("contribution_class") == "positive"]),
+            "negative_portfolio_contributor_count": len([row for row in rows if (row.get("portfolio_contribution") or {}).get("contribution_class") == "negative"]),
+            "representative_candidate_count": len([row for row in rows if row.get("is_representative")]),
+            "approved_universe_member_count": len([row for row in rows if row.get("approved_universe_member")]),
+            "approved_universe_state_counts": dict(Counter(row.get("approved_universe_state") or "outside" for row in rows)),
         }
         priority_rows = [
             {
@@ -643,7 +904,7 @@ def build_promotion_scorecard(db_path: str | Path, limit: int = 12) -> dict[str,
         summary["priority_rows"] = priority_rows
 
         rubric = {
-            "version": "factor-quality-v1",
+            "version": "factor-quality-v2",
             "dimensions": {
                 "cross_window_robustness": {"weight": 30, "description": "跨窗口稳健性"},
                 "neutralized_quality": {"weight": 20, "description": "neutralized 保留质量"},
@@ -662,6 +923,9 @@ def build_promotion_scorecard(db_path: str | Path, limit: int = 12) -> dict[str,
                 "exposure_hard_flag": "Exposure scorecard 存在硬标志",
                 "evidence_missing": "acceptance gate 缺失，不能把高分当成高质量因子",
                 "evidence_blocked": "acceptance gate 阻塞，需先补验证再晋升",
+                "non_incremental_vs_parent": "相对父因子没有足够新增信息",
+                "negative_portfolio_contribution": "leave-one-out 组合边际贡献为负",
+                "representative_suppressed": "当前候选不是簇内 representative，先压制近邻变体",
             },
             "classifications": _CLASSIFICATION_LABELS,
             "promotion_decisions": _PROMOTION_LABELS,

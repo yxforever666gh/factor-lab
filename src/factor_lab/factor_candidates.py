@@ -4,6 +4,8 @@ import json
 from collections import Counter, defaultdict
 from typing import Any
 
+from factor_lab.exposure_scorecard import classify_bucket
+
 
 GOOD_STATUSES = {"promising", "testing", "fragile"}
 BAD_STATUSES = {"rejected", "archived"}
@@ -486,6 +488,108 @@ def build_hypothesis_summary(candidate: dict[str, Any], evaluations: list[dict[s
         "evidence_for_json": json.dumps(evidence_for, ensure_ascii=False),
         "evidence_against_json": json.dumps(evidence_against, ensure_ascii=False),
         "next_action": next_action,
+    }
+
+
+def _institutional_bucket_from_candidate(name: str, expression: str | None = None) -> tuple[str, str, str, str]:
+    bucket_key, bucket_label = classify_bucket(name, expression)
+    mapping = {
+        "raw_exposure": ("exposure_regime", "Exposure / Regime Track"),
+        "controlled_composite": ("controlled_composite", "Controlled Composite"),
+        "residual_like": ("residual_like_alpha", "Residual-like / Alpha"),
+    }
+    institutional_key, institutional_label = mapping[bucket_key]
+    return bucket_key, bucket_label, institutional_key, institutional_label
+
+
+def _thesis_type_from_family(family: str, factor_role: str | None = None) -> str:
+    if factor_role == "exposure_probe":
+        return "regime_exposure"
+    mapping = {
+        "momentum": "behavioral_continuation",
+        "value": "valuation_mean_reversion",
+        "quality": "quality_persistence",
+        "liquidity": "liquidity_shock",
+        "size": "trading_frictions",
+        "volatility": "risk_transfer",
+    }
+    return mapping.get((family or "other").lower(), "cross_sectional_anomaly")
+
+
+def build_research_thesis_summary(
+    candidate: dict[str, Any],
+    evaluations: list[dict[str, Any]],
+    representative_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    representative_context = representative_context or {}
+    definition = dict(candidate.get("definition") or {})
+    candidate_name = candidate.get("name") or definition.get("name") or "candidate"
+    expression = candidate.get("expression") or definition.get("expression")
+    family = candidate.get("family") or infer_factor_family(candidate_name, expression)
+    factor_role = candidate.get("factor_role") or definition.get("role")
+    thesis_type = _thesis_type_from_family(family, factor_role)
+    source_template_id = definition.get("hypothesis_template_id") or definition.get("template_id")
+    source_template_label = definition.get("hypothesis_template_label") or definition.get("template_label")
+    bucket_key, bucket_label, institutional_bucket_key, institutional_bucket_label = _institutional_bucket_from_candidate(candidate_name, expression)
+
+    promising_windows = [row.get("window_label") for row in evaluations if row.get("status") == "promising" and row.get("window_label")]
+    rejected_windows = [row.get("window_label") for row in evaluations if row.get("status") in BAD_STATUSES and row.get("window_label")]
+    fragile_windows = [row.get("window_label") for row in evaluations if row.get("status") == "fragile" and row.get("window_label")]
+    recent_reason = next((row.get("rejection_reason") for row in reversed(evaluations) if row.get("rejection_reason")), None)
+
+    mechanism_bits = [
+        f"{candidate_name} 围绕 {family} family 的 {thesis_type} 命题展开。",
+        f"当前制度桶归类为 {institutional_bucket_label}（表达式桶={bucket_label}）。",
+    ]
+    if source_template_label or source_template_id:
+        mechanism_bits.append(f"来源模板={source_template_label or source_template_id}。")
+    if definition.get("generator_operator"):
+        mechanism_bits.append(f"生成算子={definition.get('generator_operator')}。")
+    if factor_role:
+        mechanism_bits.append(f"factor_role={factor_role}。")
+
+    invalidation_bits: list[str] = []
+    if fragile_windows:
+        invalidation_bits.append(f"更多窗口继续出现 fragility: {', '.join(fragile_windows[:4])}")
+    if rejected_windows:
+        invalidation_bits.append(f"中长窗继续失守: {', '.join(rejected_windows[:4])}")
+    if recent_reason:
+        invalidation_bits.append(recent_reason)
+    if not invalidation_bits:
+        invalidation_bits.append("若后续验证显示没有增量价值或长期窗口无法延展，则该 thesis 应降级。")
+
+    roster = representative_context.get("representative_candidates") or []
+    primary_representative = representative_context.get("primary_candidate") or representative_context.get("representative_candidate") or candidate_name
+    thesis_id = source_template_id or f"{family}:{thesis_type}:{institutional_bucket_key}"
+    thesis_title = source_template_label or f"{family} thesis / {institutional_bucket_label}"
+    source_context = {
+        "hypothesis_template_id": source_template_id,
+        "hypothesis_template_label": source_template_label,
+        "question_card_id": definition.get("question_card_id"),
+        "generator_operator": definition.get("generator_operator"),
+        "parent_factor_name": definition.get("parent_factor_name") or definition.get("left_factor_name"),
+        "paired_factor_name": definition.get("right_factor_name"),
+        "factor_role": factor_role,
+        "promising_windows": promising_windows[:6],
+        "rejected_windows": rejected_windows[:6],
+    }
+
+    return {
+        "thesis_id": thesis_id,
+        "title": thesis_title,
+        "family": family,
+        "thesis_type": thesis_type,
+        "institutional_bucket_key": institutional_bucket_key,
+        "institutional_bucket_label": institutional_bucket_label,
+        "thesis_text": " ".join(mechanism_bits),
+        "mechanism_rationale": " ".join(mechanism_bits),
+        "status": candidate.get("status") or "testing",
+        "invalidation_json": json.dumps(invalidation_bits[:5], ensure_ascii=False),
+        "representative_candidate": primary_representative,
+        "representative_rank": representative_context.get("representative_rank"),
+        "representative_count": representative_context.get("representative_count"),
+        "roster_json": json.dumps(roster, ensure_ascii=False),
+        "source_context_json": json.dumps(source_context, ensure_ascii=False),
     }
 
 

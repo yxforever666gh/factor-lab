@@ -5,7 +5,8 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from factor_lab.dedup import config_fingerprint
+from factor_lab.dedup import workflow_experiment_fingerprint
+from factor_lab.exploration_pools import classify_exploration_pool
 from factor_lab.factors import resolve_factor_definitions
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -95,7 +96,7 @@ def compile_candidate_generation_plan(plan_path: str | Path) -> list[dict[str, A
         config_path = GENERATED_CONFIG_DIR / f"{candidate_name}.json"
         config_path.parent.mkdir(parents=True, exist_ok=True)
         config_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
-        fingerprint = f"workflow::{config_fingerprint(cfg)}::{cfg['output_dir']}"
+        fingerprint = workflow_experiment_fingerprint(cfg)
         triage = dict(proposal.get("triage") or {})
         triage_score = float(triage.get("score") or 0.0)
         triage_label = triage.get("label") or ("high" if triage_score >= 0.67 else "medium" if triage_score >= 0.48 else "low")
@@ -106,6 +107,7 @@ def compile_candidate_generation_plan(plan_path: str | Path) -> list[dict[str, A
             priority_hint = 41
         elif triage_score >= 0.48:
             priority_hint = 49
+        exploration_pool = classify_exploration_pool(proposal.get("source"), proposal)
         tasks.append({
             "task_type": "workflow",
             "category": "exploration",
@@ -125,9 +127,14 @@ def compile_candidate_generation_plan(plan_path: str | Path) -> list[dict[str, A
                 "expected_information_gain": proposal.get("expected_information_gain") or ["candidate_survival_check"],
                 "candidate_generation_context": proposal,
                 "triage": triage,
+                "exploration_pool": exploration_pool,
+                "mechanism_novelty_class": proposal.get("mechanism_novelty_class") or ("new_mechanism" if exploration_pool.endswith("exploration") else "old_space"),
+                "decision_source": proposal.get("decision_source"),
+                "novelty_judgment_source": proposal.get("novelty_judgment_source"),
+                "mechanism_rationale": proposal.get("mechanism_rationale"),
             },
             "fingerprint": fingerprint,
-            "worker_note": f"exploration｜generated_candidate:{candidate_name}｜triage={triage_label}",
+            "worker_note": f"exploration｜generated_candidate:{candidate_name}｜pool={exploration_pool}｜triage={triage_label}",
             "family_focus": proposal.get("target_family") or "generated",
         })
     return tasks

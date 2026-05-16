@@ -16,6 +16,10 @@ def build_factor_value_frame(frame: pd.DataFrame, definitions: List[FactorDefini
     return base
 
 
+def _numeric_factor_frame(factor_df: pd.DataFrame) -> pd.DataFrame:
+    return factor_df.apply(lambda col: pd.to_numeric(col, errors="coerce"))
+
+
 def factor_correlation_matrix(
     frame: pd.DataFrame | None = None,
     definitions: List[FactorDefinition] | None = None,
@@ -25,13 +29,13 @@ def factor_correlation_matrix(
 ) -> pd.DataFrame:
     if factor_value_frame is not None:
         factor_df = factor_value_frame.drop(columns=[col for col in ["date", "ticker", "forward_return_5d"] if col in factor_value_frame.columns])
-        return factor_df.corr(method="spearman")
+        return _numeric_factor_frame(factor_df).corr(method="spearman")
     if factor_value_cache is not None:
         factor_df = pd.DataFrame({name: series for name, series in factor_value_cache.items()})
-        return factor_df.corr(method="spearman")
+        return _numeric_factor_frame(factor_df).corr(method="spearman")
     values = {definition.name: apply_factor(frame, definition) for definition in (definitions or [])}
     factor_df = pd.DataFrame(values)
-    return factor_df.corr(method="spearman")
+    return _numeric_factor_frame(factor_df).corr(method="spearman")
 
 
 def high_correlation_peers(correlation: pd.DataFrame, threshold: float = 0.8) -> Dict[str, List[str]]:

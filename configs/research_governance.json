@@ -1,0 +1,13 @@
+{
+  "duplicate_control": {
+    "enabled": true,
+    "max_equivalent_runs_24h": 1,
+    "max_equivalent_runs_7d": 3,
+    "allow_repeat_reasons": [
+      "data_cache_changed",
+      "factor_definition_changed",
+      "validation_protocol_changed",
+      "explicit_manual_override"
+    ]
+  }
+}

@@ -42,6 +42,13 @@ TASK_FAMILIES: dict[str, TaskFamilySpec] = {
         max_level=8,
         base_priority=28,
     ),
+    "fragile_candidate_hardening": TaskFamilySpec(
+        family="fragile_candidate_hardening",
+        category="validation",
+        min_level=1,
+        max_level=6,
+        base_priority=29,
+    ),
     "watchlist_candidate_validation": TaskFamilySpec(
         family="watchlist_candidate_validation",
         category="validation",

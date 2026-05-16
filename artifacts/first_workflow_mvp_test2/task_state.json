@@ -1,9 +1,0 @@
-{
-  "task_id": "a237fc4d-fa0c-44ad-a5fb-527a6709d093",
-  "config_path": "configs/first_workflow.json",
-  "output_dir": "artifacts/first_workflow_mvp_test2",
-  "status": "finished",
-  "started_at_utc": "2026-03-20T00:06:38.052490+00:00",
-  "finished_at_utc": "2026-03-20T00:06:50.488792+00:00",
-  "error": null
-}

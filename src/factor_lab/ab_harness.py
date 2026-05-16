@@ -13,6 +13,7 @@ from factor_lab.feature_schema import TUSHARE_FEATURE_COLUMNS
 from factor_lab.frontier_policy import build_frontier_focus
 from factor_lab.promotion_scorecard import build_promotion_scorecard
 from factor_lab.storage import ExperimentStore
+from factor_lab.generated_artifacts import upgrade_generated_batch, upgrade_generated_config
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -109,7 +110,8 @@ def _write_generated_config(config: dict[str, Any], name: str, folder: str) -> s
     out_dir = ROOT / "artifacts" / folder
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f"{name}.json"
-    path.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")
+    payload = upgrade_generated_config(config, source="ab_harness")
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return str(path.relative_to(ROOT))
 
 
@@ -489,7 +491,8 @@ def build_ab_harness_plan(
             expanding_start_date=expanding_start_date,
         )
         batch_path = output_root / f"{mode}_batch.json"
-        batch_path.write_text(json.dumps({"jobs": jobs}, ensure_ascii=False, indent=2), encoding="utf-8")
+        batch_payload = upgrade_generated_batch({"jobs": jobs}, source="ab_harness")
+        batch_path.write_text(json.dumps(batch_payload, ensure_ascii=False, indent=2), encoding="utf-8")
         mode_payloads[mode] = {
             "label": MODE_LABELS[mode],
             "batch_config_path": str(batch_path.relative_to(ROOT)),

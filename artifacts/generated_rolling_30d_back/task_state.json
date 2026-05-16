@@ -1,9 +1,0 @@
-{
-  "task_id": "14f7b8d7-7102-4d62-acf7-cb985a1fa0f5",
-  "config_path": "artifacts/generated_configs/rolling_30d_back.json",
-  "output_dir": "artifacts/generated_rolling_30d_back",
-  "status": "finished",
-  "started_at_utc": "2026-03-22T18:07:12.678600+00:00",
-  "finished_at_utc": "2026-03-22T18:07:24.283194+00:00",
-  "error": null
-}

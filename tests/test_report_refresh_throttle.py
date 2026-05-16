@@ -29,3 +29,21 @@ def test_should_refresh_reports_respects_cooldown(monkeypatch, tmp_path):
 def test_should_refresh_reports_force(monkeypatch, tmp_path):
     monkeypatch.setattr(research_queue, 'REPORT_REFRESH_STATE_PATH', tmp_path / 'state.json')
     assert research_queue.should_refresh_reports(force=True) is True
+
+
+def test_process_report_refresh_requests_deferred(monkeypatch, tmp_path):
+    monkeypatch.setattr(research_queue, 'REPORT_REFRESH_STATE_PATH', tmp_path / 'state.json')
+    monkeypatch.setattr(research_queue, 'REPORT_REFRESH_REQUEST_PATH', tmp_path / 'request.json')
+    monkeypatch.setattr(research_queue, 'REPORT_REFRESH_LOCK_PATH', tmp_path / 'refresh.lock')
+
+    calls = {'count': 0}
+    monkeypatch.setattr(research_queue, 'should_refresh_reports', lambda force=False: True)
+    monkeypatch.setattr(research_queue, '_run_report_refresh_once', lambda: calls.__setitem__('count', calls['count'] + 1))
+
+    research_queue.request_report_refresh(source='generated_batch', reason='task_completed')
+    refreshed, note = research_queue.process_report_refresh_requests()
+
+    assert refreshed is True
+    assert note is None
+    assert calls['count'] == 1
+    assert research_queue.report_refresh_requested() is False

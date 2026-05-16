@@ -52,7 +52,11 @@ def score_opportunity(question: dict[str, Any], snapshot: dict[str, Any]) -> dic
     confidence = 0.60
     rationale_bits: list[str] = [f"base_type={qtype}"]
 
-    if family_learning.get("recommended_action") == "upweight":
+    if family_learning.get("cooldown_active"):
+        priority -= 0.18
+        confidence -= 0.10
+        rationale_bits.append(f"family_learning=cooldown:{family_learning.get('cooldown_reason') or 'generic'}")
+    elif family_learning.get("recommended_action") == "upweight":
         priority += 0.10
         confidence += 0.08
         rationale_bits.append("family_learning=upweight")
@@ -60,10 +64,6 @@ def score_opportunity(question: dict[str, Any], snapshot: dict[str, Any]) -> dic
         priority -= 0.08
         confidence -= 0.05
         rationale_bits.append("family_learning=downweight")
-    elif family_learning.get("cooldown_active"):
-        priority -= 0.18
-        confidence -= 0.10
-        rationale_bits.append("family_learning=cooldown")
 
     family_epistemic_value = float(family_learning.get("epistemic_value_score") or 0.0)
     template_epistemic_value = float(template_learning.get("epistemic_value_score") or 0.0)
@@ -80,7 +80,11 @@ def score_opportunity(question: dict[str, Any], snapshot: dict[str, Any]) -> dic
         confidence -= 0.05
         rationale_bits.append("epistemic_learning=low_value")
 
-    if template_learning.get("recommended_action") == "upweight":
+    if template_learning.get("cooldown_active"):
+        priority -= 0.12
+        confidence -= 0.07
+        rationale_bits.append(f"template_learning=cooldown:{template_learning.get('cooldown_reason') or template_key}")
+    elif template_learning.get("recommended_action") == "upweight":
         priority += 0.05
         novelty += 0.05
         confidence += 0.03
@@ -90,7 +94,12 @@ def score_opportunity(question: dict[str, Any], snapshot: dict[str, Any]) -> dic
         confidence -= 0.04
         rationale_bits.append(f"template_learning=downweight:{template_key}")
 
-    if pattern_learning.get("recommended_action") == "upweight":
+    if pattern_learning.get("cooldown_active"):
+        priority -= 0.14
+        confidence -= 0.08
+        novelty -= 0.04
+        rationale_bits.append(f"pattern_learning=cooldown:{pattern_learning.get('cooldown_reason') or pattern_prefix}")
+    elif pattern_learning.get("recommended_action") == "upweight":
         priority += 0.04
         novelty += 0.06
         confidence += 0.03
@@ -100,13 +109,32 @@ def score_opportunity(question: dict[str, Any], snapshot: dict[str, Any]) -> dic
         confidence -= 0.04
         rationale_bits.append(f"pattern_learning=downweight:{pattern_prefix}")
 
+    if int(template_learning.get("recent_resource_exhaustion_count") or 0) > 0 or int(pattern_learning.get("recent_resource_exhaustion_count") or 0) > 0:
+        priority -= 0.08
+        confidence -= 0.05
+        rationale_bits.append("recent_resource_exhaustion_penalty")
+
+    if (
+        qtype in {"expand", "recombine", "probe"}
+        and int(pattern_learning.get("recent_no_gain_count") or 0) >= 2
+        and int(pattern_learning.get("recent_gain_count") or 0) == 0
+    ):
+        priority -= 0.09
+        confidence -= 0.06
+        rationale_bits.append("recent_no_gain_pattern_penalty")
+
     if flow_state.get("state") == "recovering" and qtype in {"confirm", "diagnose"}:
         priority += 0.06
         rationale_bits.append("recovering_prefers_confirm_diagnose")
+    candidate_count = int(flow_state.get("candidate_count") or 0)
     if flow_state.get("state") == "recovered" and qtype in {"expand", "recombine"}:
         priority += 0.07
         novelty += 0.08
         rationale_bits.append("recovered_prefers_expand_recombine")
+    if flow_state.get("state") == "recovered" and candidate_count > 0 and qtype in {"confirm", "diagnose"}:
+        priority += 0.05
+        confidence += 0.03
+        rationale_bits.append("recovered_with_candidates_prefers_validation")
 
     targets = set(question.get("target_candidates") or [])
     analyst_focus = set(analyst.get("focus_factors") or [])

@@ -1,9 +1,0 @@
-{
-  "task_id": "dfd26faa-50ec-492b-b1b3-4d9cf8239ad4",
-  "config_path": "artifacts/generated_workflow_from_llm.json",
-  "output_dir": "artifacts/opportunity_generated_batch_run/llm_focus_batch",
-  "status": "finished",
-  "started_at_utc": "2026-03-20T23:53:08.889813+00:00",
-  "finished_at_utc": "2026-03-20T23:53:16.025925+00:00",
-  "error": null
-}

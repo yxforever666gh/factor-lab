@@ -4,12 +4,13 @@ import json
 import os
 import shutil
 import signal
+import sqlite3
 import subprocess
 import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import fcntl
 
@@ -20,6 +21,7 @@ from factor_lab.adaptive_scheduler import apply_scheduler_env, compute_scheduler
 from factor_lab.heartbeat import append_heartbeat
 from factor_lab.paths import artifacts_dir, project_root
 from factor_lab.research_queue import process_report_refresh_requests, report_refresh_requested, run_orchestrator
+from factor_lab.controlled_restart_audit import dry_run_controlled_restart
 
 
 def _root_path() -> Path:
@@ -34,6 +36,14 @@ def _status_path() -> Path:
     return _artifacts_path() / "research_daemon_status.json"
 
 
+def _heartbeat_path() -> Path:
+    return _artifacts_path() / "research_daemon_heartbeat.json"
+
+
+def _db_path() -> Path:
+    return _artifacts_path() / "factor_lab.db"
+
+
 def _status_history_path() -> Path:
     return _artifacts_path() / "research_daemon_status_history.jsonl"
 
@@ -43,8 +53,88 @@ def _lock_path() -> Path:
 
 
 RUNNING = True
+SHUTDOWN_REQUESTED = False
 LAST_PREWARM_AT = 0.0
 LOCK_HANDLE = None
+
+
+_TRUE_VALUES = {"1", "true", "yes", "on"}
+_FALSE_VALUES = {"0", "false", "no", "off"}
+
+
+class DaemonRuntimeConfig:
+    def __init__(
+        self,
+        idle_sleep_seconds: int = 60,
+        base_max_tasks_per_loop: int = 1,
+        max_tasks_before_restart: int = 8,
+        rss_limit_mb: int = 2048,
+        max_loops: int = 0,
+        exit_when_idle: bool = False,
+        exit_when_no_claimable: bool = False,
+        controlled_only: bool = True,
+    ) -> None:
+        self.idle_sleep_seconds = idle_sleep_seconds
+        self.base_max_tasks_per_loop = base_max_tasks_per_loop
+        self.max_tasks_before_restart = max_tasks_before_restart
+        self.rss_limit_mb = rss_limit_mb
+        self.max_loops = max_loops
+        self.exit_when_idle = exit_when_idle
+        self.exit_when_no_claimable = exit_when_no_claimable
+        self.controlled_only = controlled_only
+
+
+class DaemonLoopResult:
+    def __init__(
+        self,
+        *,
+        state: str,
+        processed_count: int,
+        processed_tasks_total: int,
+        exit_reason: str | None = None,
+        sleep_seconds: int = 0,
+        status_payload: dict[str, Any] | None = None,
+    ) -> None:
+        self.state = state
+        self.processed_count = processed_count
+        self.processed_tasks_total = processed_tasks_total
+        self.exit_reason = exit_reason
+        self.sleep_seconds = sleep_seconds
+        self.status_payload = status_payload or {}
+
+
+def _runtime_env_int(env: Mapping[str, str], name: str, default: int, *, minimum: int = 0) -> int:
+    raw = str(env.get(name, "") or "").strip()
+    try:
+        value = int(float(raw)) if raw else int(default)
+    except Exception:
+        value = int(default)
+    return max(minimum, value)
+
+
+def _runtime_env_bool(env: Mapping[str, str], name: str, default: bool) -> bool:
+    raw = str(env.get(name, "") or "").strip().lower()
+    if not raw:
+        return bool(default)
+    if raw in _TRUE_VALUES:
+        return True
+    if raw in _FALSE_VALUES:
+        return False
+    return bool(default)
+
+
+def load_runtime_config(env: Mapping[str, str] | None = None) -> DaemonRuntimeConfig:
+    env = env or os.environ
+    return DaemonRuntimeConfig(
+        idle_sleep_seconds=_runtime_env_int(env, "RESEARCH_DAEMON_IDLE_SECONDS", 60, minimum=0),
+        base_max_tasks_per_loop=_runtime_env_int(env, "RESEARCH_DAEMON_MAX_TASKS", 1, minimum=1),
+        max_tasks_before_restart=_runtime_env_int(env, "RESEARCH_DAEMON_MAX_TASKS_BEFORE_RESTART", 8, minimum=0),
+        rss_limit_mb=_runtime_env_int(env, "RESEARCH_DAEMON_RSS_LIMIT_MB", 2048, minimum=0),
+        max_loops=_runtime_env_int(env, "RESEARCH_DAEMON_MAX_LOOPS", 0, minimum=0),
+        exit_when_idle=_runtime_env_bool(env, "RESEARCH_DAEMON_EXIT_WHEN_IDLE", False),
+        exit_when_no_claimable=_runtime_env_bool(env, "RESEARCH_DAEMON_EXIT_WHEN_NO_CLAIMABLE", False),
+        controlled_only=_runtime_env_bool(env, "RESEARCH_DAEMON_CONTROLLED_ONLY", True),
+    )
 
 
 def cpu_count() -> int:
@@ -83,7 +173,7 @@ def read_meminfo_mb() -> dict[str, int]:
     return totals
 
 
-def compute_dynamic_throttle(*, base_max_tasks: int, rss_limit_mb: int) -> dict[str, Any]:
+def compute_dynamic_throttle(*, base_max_tasks: int, rss_limit_mb: int, skip_route_probe: bool = False) -> dict[str, Any]:
     load = read_system_load()
     mem = read_meminfo_mb()
     current_rss_mb = read_rss_mb()
@@ -94,7 +184,7 @@ def compute_dynamic_throttle(*, base_max_tasks: int, rss_limit_mb: int) -> dict[
     rss_ratio = (current_rss_mb / rss_limit_mb) if rss_limit_mb > 0 else 0.0
 
     idle = user_idle_snapshot()
-    route = route_status_snapshot()
+    route = {"healthy": True, "resolved_mode": "skipped_controlled_probe", "last_error": None, "last_probe_ms": None} if skip_route_probe else route_status_snapshot()
     policy = compute_scheduler_policy(
         base_max_tasks=base_max_tasks,
         cpu_usage_ratio=usage_ratio,
@@ -169,9 +259,42 @@ def should_recycle_daemon(
     return None
 
 
+def mark_running_tasks_interrupted(reason: str = "daemon_shutdown_requested") -> int:
+    db_path = _db_path()
+    if not db_path.exists():
+        return 0
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        conn = sqlite3.connect(db_path, timeout=1.0)
+        try:
+            cur = conn.execute(
+                """
+                UPDATE research_tasks
+                SET status='failed', finished_at_utc=?, last_error=?,
+                    worker_note=COALESCE(worker_note, '') || ?
+                WHERE status='running'
+                """,
+                (now, reason, f"｜{reason}"),
+            )
+            conn.commit()
+            return int(cur.rowcount or 0)
+        finally:
+            conn.close()
+    except Exception:
+        return 0
+
+
 def handle_stop(signum, frame):
-    global RUNNING
+    global RUNNING, SHUTDOWN_REQUESTED
     RUNNING = False
+    SHUTDOWN_REQUESTED = True
+    try:
+        write_status("stopping", signal=signum, reason="shutdown_requested")
+    except Exception:
+        pass
+    mark_running_tasks_interrupted("daemon_shutdown_requested")
+    if (os.getenv("RESEARCH_DAEMON_EXIT_IMMEDIATELY_ON_STOP") or "1").strip().lower() in _TRUE_VALUES:
+        raise SystemExit(0)
 
 
 def acquire_single_instance_lock() -> bool:
@@ -199,6 +322,55 @@ def acquire_single_instance_lock() -> bool:
     return True
 
 
+def write_daemon_heartbeat(state: str, status_payload: dict[str, Any]) -> None:
+    """Write a small, stable heartbeat document for WebUI/control pages."""
+    heartbeat_path = _heartbeat_path()
+    heartbeat_path.parent.mkdir(parents=True, exist_ok=True)
+    queue = {"pending": 0, "running": 0, "finished_24h": 0, "failed_24h": 0}
+    current_task = None
+    db_path = _db_path()
+    if db_path.exists():
+        try:
+            conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=0.2)
+            conn.row_factory = sqlite3.Row
+            try:
+                for row in conn.execute("SELECT status, COUNT(*) AS n FROM research_tasks GROUP BY status").fetchall():
+                    if row["status"] in queue:
+                        queue[row["status"]] = int(row["n"] or 0)
+                queue["finished_24h"] = int(conn.execute("SELECT COUNT(*) FROM research_tasks WHERE status='finished' AND finished_at_utc >= datetime('now', '-1 day')").fetchone()[0])
+                queue["failed_24h"] = int(conn.execute("SELECT COUNT(*) FROM research_tasks WHERE status='failed' AND finished_at_utc >= datetime('now', '-1 day')").fetchone()[0])
+                row = conn.execute("SELECT task_id, task_type, status, started_at_utc, created_at_utc FROM research_tasks WHERE status='running' ORDER BY COALESCE(started_at_utc, created_at_utc) DESC LIMIT 1").fetchone()
+                current_task = dict(row) if row else None
+            finally:
+                conn.close()
+        except Exception as exc:
+            queue["error"] = str(exc)[:200]
+    last_processed = status_payload.get("last_processed") or {}
+    if current_task is None and last_processed:
+        current_task = {
+            "id": last_processed.get("id") or last_processed.get("task_id"),
+            "type": last_processed.get("task_type"),
+            "status": last_processed.get("status"),
+            "started_at": last_processed.get("started_at_utc") or last_processed.get("created_at_utc"),
+        }
+    payload = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "pid": os.getpid(),
+        "project_root": str(_root_path()),
+        "provider": os.getenv("FACTOR_LAB_DECISION_PROVIDER") or os.getenv("FACTOR_LAB_LIVE_DECISION_PROVIDER") or "unknown",
+        "state": state,
+        "queue": queue,
+        "current_task": current_task,
+        "last_injection": status_payload.get("last_injection") or status_payload.get("planner_injection") or {},
+        "skip_reasons_24h": status_payload.get("skip_reasons_24h") or status_payload.get("skip_reasons") or {},
+        "processed_tasks_total": status_payload.get("processed_tasks_total", 0),
+        "rss_mb": status_payload.get("rss_mb"),
+    }
+    tmp_path = heartbeat_path.with_suffix(".json.tmp")
+    tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp_path.replace(heartbeat_path)
+
+
 def write_status(state: str, **extra: Any):
     status_path = _status_path()
     status_history_path = _status_history_path()
@@ -210,6 +382,10 @@ def write_status(state: str, **extra: Any):
         **extra,
     }
     status_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:
+        write_daemon_heartbeat(state, payload)
+    except Exception:
+        pass
     try:
         compact = {k: v for k, v in payload.items() if k not in {'last_processed', 'prewarm'}}
         with status_history_path.open('a', encoding='utf-8') as fh:
@@ -323,6 +499,180 @@ def maybe_emit_stall_alert(status: dict, *, cooldown_seconds: int = 300) -> None
     write_status(state or "unknown", **{k: v for k, v in status.items() if k not in {"state"}})
 
 
+def run_daemon_loop_once(
+    *,
+    config: DaemonRuntimeConfig,
+    processed_tasks_total: int,
+    loop_index: int,
+) -> DaemonLoopResult:
+    if SHUTDOWN_REQUESTED:
+        payload = {
+            "loop_index": loop_index,
+            "processed_count": 0,
+            "processed_tasks_total": processed_tasks_total,
+            "exit_reason": "shutdown_requested",
+        }
+        write_status("stopping", **payload)
+        return DaemonLoopResult(
+            state="stopping",
+            processed_count=0,
+            processed_tasks_total=processed_tasks_total,
+            exit_reason="shutdown_requested",
+            sleep_seconds=0,
+            status_payload=payload,
+        )
+    throttle = compute_dynamic_throttle(
+        base_max_tasks=config.base_max_tasks_per_loop,
+        rss_limit_mb=config.rss_limit_mb,
+        skip_route_probe=config.controlled_only,
+    )
+    controlled_audit: dict[str, Any] | None = None
+    if config.controlled_only:
+        controlled_audit = dry_run_controlled_restart(db_path=_db_path())
+        if int(controlled_audit.get("would_run_count") or 0) <= 0:
+            payload = merge_status_fields(
+                throttle,
+                {
+                    "loop_index": loop_index,
+                    "processed_count": 0,
+                    "processed_tasks_total": processed_tasks_total,
+                    "controlled_restart": controlled_audit,
+                    "exit_reason": "no_admitted_workflow",
+                },
+            )
+            write_status("idle", **payload)
+            return DaemonLoopResult(
+                state="idle",
+                processed_count=0,
+                processed_tasks_total=processed_tasks_total,
+                exit_reason="no_admitted_workflow" if config.exit_when_no_claimable or config.exit_when_idle else None,
+                sleep_seconds=0 if (config.exit_when_no_claimable or config.exit_when_idle) else config.idle_sleep_seconds,
+                status_payload=payload,
+            )
+    dynamic_max_tasks = int(throttle['dynamic_max_tasks'])
+    if config.controlled_only and controlled_audit is not None:
+        dynamic_max_tasks = max(1, min(dynamic_max_tasks, int(controlled_audit.get("would_run_count") or 1)))
+    dynamic_batch_workers = int(throttle['dynamic_batch_workers'])
+    os.environ['FACTOR_LAB_BATCH_MAX_WORKERS'] = str(dynamic_batch_workers)
+    if config.controlled_only:
+        result = run_orchestrator(max_tasks=dynamic_max_tasks, skip_preclaim_refill=True)
+    else:
+        result = run_orchestrator(max_tasks=dynamic_max_tasks)
+    processed = result.get("processed", [])
+    status_context = orchestrator_status_context(result)
+    guardrail = result.get("guardrail")
+    base_status = merge_status_fields(
+        throttle,
+        status_context,
+        {
+            "loop_index": loop_index,
+            "processed_count": len(processed),
+            "processed_tasks_total": processed_tasks_total,
+            "max_tasks_per_loop": dynamic_max_tasks,
+            "batch_max_workers": dynamic_batch_workers,
+        },
+    )
+
+    if guardrail:
+        payload = {**base_status, "guardrail": guardrail}
+        write_status("guardrail", **payload)
+        emit_wake_event(f"Factor Lab guardrail triggered: {guardrail}.")
+        return DaemonLoopResult(
+            state="guardrail",
+            processed_count=0,
+            processed_tasks_total=processed_tasks_total,
+            sleep_seconds=config.idle_sleep_seconds,
+            status_payload=payload,
+        )
+
+    if processed:
+        processed_tasks_total += len(processed)
+        latest = processed[-1]
+        current_rss_mb = int(throttle.get('rss_mb') or read_rss_mb())
+        payload = merge_status_fields(
+            base_status,
+            {
+                "processed_tasks_total": processed_tasks_total,
+                "rss_mb": current_rss_mb,
+                "last_processed": latest,
+            },
+        )
+        write_status("running", **payload)
+        if latest.get("status") == "finished":
+            emit_wake_event(f"Factor Lab task finished: {latest.get('summary', 'task completed')}")
+        elif latest.get("status") == "failed":
+            emit_wake_event(f"Factor Lab task failed: {latest.get('error', 'unknown error')}")
+        process_report_refresh_requests()
+        recycle_reason = should_recycle_daemon(
+            processed_tasks_total=processed_tasks_total,
+            max_tasks_before_restart=config.max_tasks_before_restart,
+            rss_limit_mb=config.rss_limit_mb,
+            rss_mb=current_rss_mb,
+        )
+        if recycle_reason:
+            payload["exit_reason"] = recycle_reason
+            write_status("recycling", reason=recycle_reason, processed_tasks_total=processed_tasks_total, rss_mb=current_rss_mb)
+            return DaemonLoopResult(
+                state="recycling",
+                processed_count=len(processed),
+                processed_tasks_total=processed_tasks_total,
+                exit_reason=recycle_reason,
+                status_payload=payload,
+            )
+        return DaemonLoopResult(
+            state="running",
+            processed_count=len(processed),
+            processed_tasks_total=processed_tasks_total,
+            sleep_seconds=2,
+            status_payload=payload,
+        )
+
+    remaining_preview = result.get("remaining_preview") or []
+    pending_after = [row for row in remaining_preview if row.get("status") == "pending"]
+    if pending_after:
+        exit_reason = "pending_not_claimable" if config.exit_when_no_claimable else None
+        payload = merge_status_fields(
+            base_status,
+            {
+                "planner_pending": len(pending_after),
+                "pending_after_count": len(pending_after),
+                "exit_reason": exit_reason,
+            },
+        )
+        write_status("running", **payload)
+        return DaemonLoopResult(
+            state="running",
+            processed_count=0,
+            processed_tasks_total=processed_tasks_total,
+            exit_reason=exit_reason,
+            sleep_seconds=0 if exit_reason else 2,
+            status_payload=payload,
+        )
+
+    prewarm = maybe_run_prewarm()
+    current_rss_mb = read_rss_mb()
+    exit_reason = "idle_no_pending" if config.exit_when_idle else None
+    payload = merge_status_fields(
+        base_status,
+        {
+            "rss_mb": current_rss_mb,
+            "prewarm": prewarm,
+            "report_refresh_requested": report_refresh_requested(),
+            "exit_reason": exit_reason,
+        },
+    )
+    write_status("idle", **payload)
+    process_report_refresh_requests()
+    return DaemonLoopResult(
+        state="idle",
+        processed_count=0,
+        processed_tasks_total=processed_tasks_total,
+        exit_reason=exit_reason,
+        sleep_seconds=0 if exit_reason else config.idle_sleep_seconds,
+        status_payload=payload,
+    )
+
+
 def maybe_run_prewarm() -> dict | None:
     global LAST_PREWARM_AT
     windows_env = os.getenv("RESEARCH_DAEMON_PREWARM_WINDOWS", "").strip()
@@ -374,190 +724,57 @@ if __name__ == "__main__":
         write_status("skipped", reason="lock_already_held")
         raise SystemExit(0)
 
-    idle_sleep_seconds = int(os.getenv("RESEARCH_DAEMON_IDLE_SECONDS", "60"))
-    base_max_tasks_per_loop = int(os.getenv("RESEARCH_DAEMON_MAX_TASKS", "1"))
-    max_tasks_before_restart = int(os.getenv("RESEARCH_DAEMON_MAX_TASKS_BEFORE_RESTART", "8"))
-    rss_limit_mb = int(os.getenv("RESEARCH_DAEMON_RSS_LIMIT_MB", "2048"))
+    config = load_runtime_config()
     processed_tasks_total = 0
+    loop_index = 0
 
     append_heartbeat("research_daemon", "started", summary="research daemon started")
     write_status(
         "running",
-        idle_sleep_seconds=idle_sleep_seconds,
-        max_tasks_per_loop=base_max_tasks_per_loop,
-        max_tasks_before_restart=max_tasks_before_restart,
-        rss_limit_mb=rss_limit_mb,
+        idle_sleep_seconds=config.idle_sleep_seconds,
+        max_tasks_per_loop=config.base_max_tasks_per_loop,
+        max_tasks_before_restart=config.max_tasks_before_restart,
+        rss_limit_mb=config.rss_limit_mb,
+        max_loops=config.max_loops,
+        exit_when_idle=config.exit_when_idle,
+        exit_when_no_claimable=config.exit_when_no_claimable,
+        controlled_only=config.controlled_only,
         cpu_cores=cpu_count(),
     )
 
     while RUNNING:
+        loop_index += 1
         try:
-            throttle = compute_dynamic_throttle(base_max_tasks=base_max_tasks_per_loop, rss_limit_mb=rss_limit_mb)
-            dynamic_max_tasks = int(throttle['dynamic_max_tasks'])
-            dynamic_batch_workers = int(throttle['dynamic_batch_workers'])
-            os.environ['FACTOR_LAB_BATCH_MAX_WORKERS'] = str(dynamic_batch_workers)
-            result = run_orchestrator(max_tasks=dynamic_max_tasks)
-            processed = result.get("processed", [])
-            status_context = orchestrator_status_context(result)
-            guardrail = result.get("guardrail")
-            if guardrail:
-                write_status(
-                    "guardrail",
-                    **merge_status_fields(
-                        throttle,
-                        status_context,
-                        {
-                            "guardrail": guardrail,
-                            "processed_count": len(processed),
-                            "processed_tasks_total": processed_tasks_total,
-                            "max_tasks_per_loop": dynamic_max_tasks,
-                            "batch_max_workers": dynamic_batch_workers,
-                        },
-                    ),
+            loop_result = run_daemon_loop_once(
+                config=config,
+                processed_tasks_total=processed_tasks_total,
+                loop_index=loop_index,
+            )
+            processed_tasks_total = loop_result.processed_tasks_total
+            if loop_result.exit_reason:
+                append_heartbeat(
+                    "research_daemon",
+                    "exiting",
+                    summary=f"daemon exiting: reason={loop_result.exit_reason}, processed_tasks_total={processed_tasks_total}",
                 )
-                emit_wake_event(f"Factor Lab guardrail triggered: {guardrail}.")
-                time.sleep(idle_sleep_seconds)
-                continue
-
-            if processed:
-                processed_tasks_total += len(processed)
-                latest = processed[-1]
-                current_rss_mb = int(throttle.get('rss_mb') or read_rss_mb())
-                write_status(
-                    "running",
-                    **merge_status_fields(
-                        throttle,
-                        status_context,
-                        {
-                            "processed_count": len(processed),
-                            "processed_tasks_total": processed_tasks_total,
-                            "rss_mb": current_rss_mb,
-                            "max_tasks_per_loop": dynamic_max_tasks,
-                            "batch_max_workers": dynamic_batch_workers,
-                            "last_processed": latest,
-                        },
-                    ),
+                raise SystemExit(0)
+            if config.max_loops and loop_index >= config.max_loops:
+                append_heartbeat(
+                    "research_daemon",
+                    "exiting",
+                    summary=f"daemon exiting: reason=max_loops_reached, loops={loop_index}, processed_tasks_total={processed_tasks_total}",
                 )
-                if latest.get("status") == "finished":
-                    emit_wake_event(f"Factor Lab task finished: {latest.get('summary', 'task completed')}")
-                elif latest.get("status") == "failed":
-                    emit_wake_event(f"Factor Lab task failed: {latest.get('error', 'unknown error')}")
-
-                recycle_reason = should_recycle_daemon(
-                    processed_tasks_total=processed_tasks_total,
-                    max_tasks_before_restart=max_tasks_before_restart,
-                    rss_limit_mb=rss_limit_mb,
-                    rss_mb=current_rss_mb,
-                )
-                if recycle_reason:
-                    append_heartbeat(
-                        "research_daemon",
-                        "recycling",
-                        summary=(
-                            f"daemon exiting for recycle: reason={recycle_reason}, "
-                            f"processed_tasks_total={processed_tasks_total}, rss_mb={current_rss_mb}"
-                        ),
-                    )
-                    write_status(
-                        "recycling",
-                        reason=recycle_reason,
-                        processed_tasks_total=processed_tasks_total,
-                        rss_mb=current_rss_mb,
-                    )
-                    raise SystemExit(0)
-                process_report_refresh_requests()
-                time.sleep(2)
-            else:
-                remaining_preview = result.get("remaining_preview") or []
-                pending_after = [row for row in remaining_preview if row.get("status") == "pending"]
-                if pending_after:
-                    write_status(
-                        "running",
-                        **merge_status_fields(
-                            throttle,
-                            status_context,
-                            {
-                                "processed_count": 0,
-                                "planner_pending": len(pending_after),
-                                "max_tasks_per_loop": dynamic_max_tasks,
-                                "batch_max_workers": dynamic_batch_workers,
-                            },
-                        ),
-                    )
-                    time.sleep(2)
-                else:
-                    prewarm = maybe_run_prewarm()
-                    current_rss_mb = read_rss_mb()
-                    if prewarm:
-                        write_status(
-                            "idle",
-                            **merge_status_fields(
-                                throttle,
-                                status_context,
-                                {
-                                    "processed_count": 0,
-                                    "processed_tasks_total": processed_tasks_total,
-                                    "rss_mb": current_rss_mb,
-                                    "max_tasks_per_loop": dynamic_max_tasks,
-                                    "batch_max_workers": dynamic_batch_workers,
-                                    "prewarm": prewarm,
-                                },
-                            ),
-                        )
-                        if not prewarm.get("ok"):
-                            emit_wake_event(f"Factor Lab prewarm failed: {prewarm.get('stderr') or prewarm.get('stdout') or 'unknown error'}")
-                    else:
-                        write_status(
-                            "idle",
-                            **merge_status_fields(
-                                throttle,
-                                status_context,
-                                {
-                                    "processed_count": 0,
-                                    "processed_tasks_total": processed_tasks_total,
-                                    "rss_mb": current_rss_mb,
-                                    "max_tasks_per_loop": dynamic_max_tasks,
-                                    "batch_max_workers": dynamic_batch_workers,
-                                    "report_refresh_requested": report_refresh_requested(),
-                                },
-                            ),
-                        )
-                    process_report_refresh_requests()
-                    recycle_reason = should_recycle_daemon(
-                        processed_tasks_total=processed_tasks_total,
-                        max_tasks_before_restart=max_tasks_before_restart,
-                        rss_limit_mb=rss_limit_mb,
-                        rss_mb=current_rss_mb,
-                        idle=True,
-                    )
-                    if recycle_reason:
-                        append_heartbeat(
-                            "research_daemon",
-                            "recycling",
-                            summary=(
-                                f"daemon exiting for recycle: reason={recycle_reason}, "
-                                f"processed_tasks_total={processed_tasks_total}, rss_mb={current_rss_mb}"
-                            ),
-                        )
-                        write_status(
-                            "recycling",
-                            reason=recycle_reason,
-                            processed_tasks_total=processed_tasks_total,
-                            rss_mb=current_rss_mb,
-                        )
-                        raise SystemExit(0)
-                    try:
-                        status_path = _status_path()
-                        status_doc = json.loads(status_path.read_text(encoding="utf-8")) if status_path.exists() else {}
-                    except Exception:
-                        status_doc = {}
-                    maybe_emit_stall_alert(status_doc, cooldown_seconds=300)
-                    time.sleep(idle_sleep_seconds)
+                write_status("exiting", reason="max_loops_reached", loop_index=loop_index, processed_tasks_total=processed_tasks_total)
+                raise SystemExit(0)
+            if loop_result.sleep_seconds > 0:
+                time.sleep(loop_result.sleep_seconds)
+        except SystemExit:
+            raise
         except Exception as exc:
             append_heartbeat("research_daemon", "failed", message=str(exc))
-            write_status("failed", error=str(exc))
+            write_status("failed", error=str(exc), loop_index=loop_index)
             emit_wake_event(f"Factor Lab daemon failed: {str(exc)}")
-            time.sleep(idle_sleep_seconds)
+            time.sleep(config.idle_sleep_seconds)
 
     append_heartbeat("research_daemon", "stopped", summary="research daemon stopped")
     write_status("stopped")

@@ -10,6 +10,18 @@ class DummyStore:
         return "task-123"
 
 
+class CapturingStore:
+    def __init__(self):
+        self.enqueued = []
+
+    def list_research_tasks(self, limit=300):
+        return []
+
+    def enqueue_research_task(self, **kwargs):
+        self.enqueued.append(kwargs)
+        return "task-legacy"
+
+
 def test_apply_strategy_plan_writes_candidate_generation_history(monkeypatch, tmp_path):
     validated_path = tmp_path / "validated.json"
     strategy_plan_path = tmp_path / "strategy_plan.json"
@@ -60,6 +72,46 @@ def test_apply_strategy_plan_writes_candidate_generation_history(monkeypatch, tm
     row = memory["candidate_generation_history"][-1]
     assert row["operator"] == "combine_sub"
     assert row["cheap_screen"]["pass"] is True
+
+
+def test_apply_strategy_plan_marks_non_workflow_tasks_as_governed(monkeypatch, tmp_path):
+    validated_path = tmp_path / "validated.json"
+    strategy_plan_path = tmp_path / "strategy_plan.json"
+    output_path = tmp_path / "injected.json"
+    memory_path = tmp_path / "research_memory.json"
+    store = CapturingStore()
+
+    validated_path.write_text(json.dumps({"accepted_tasks": []}, ensure_ascii=False), encoding="utf-8")
+    strategy_plan_path.write_text(
+        json.dumps(
+            {
+                "approved_tasks": [
+                    {
+                        "task_type": "generated_batch",
+                        "category": "exploration",
+                        "priority_hint": 55,
+                        "fingerprint": "fp-generated",
+                        "payload": {"source": "candidate_generation", "branch_id": "gen__x"},
+                    }
+                ],
+                "memory_updates": {},
+                "branch_actions": [],
+                "convergence_policy": {"archive_after_no_gain_runs": 2},
+                "autonomy_policy": {},
+                "coding_policy": {},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr("factor_lab.research_strategy.ExperimentStore", lambda _path: store)
+    monkeypatch.setattr("factor_lab.research_strategy.recently_finished_same_fingerprint", lambda *args, **kwargs: False)
+
+    apply_strategy_plan(validated_path, strategy_plan_path, output_path, memory_path, db_path=tmp_path / "db.sqlite")
+
+    assert store.enqueued[0]["payload"]["governance"]["decision"] == "allow"
+    assert store.enqueued[0]["payload"]["governance"]["source"] == "research_strategy.apply_strategy_plan"
 
 
 def test_research_learning_exposes_candidate_generation_history(tmp_path):

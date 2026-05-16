@@ -122,6 +122,38 @@ def test_recent_window_validation_specs_use_light_profile(monkeypatch):
     assert recent_cfgs['rolling_recent_45d']['rolling_validation']['step_size'] == 10
 
 
+def test_expansion_candidates_apply_governance_before_returning_workflow_specs(monkeypatch):
+    captured = []
+    governed = []
+
+    def fake_write(config, name):
+        captured.append((name, config))
+        return f"artifacts/generated_configs/{name}.json"
+
+    def fake_govern(task_spec, *, config, store, used_counts=None, source=None, **kwargs):
+        governed.append((task_spec, config, used_counts, source))
+        if task_spec["payload"].get("output_dir") == "artifacts/generated_recent_45d":
+            return {"decision": "block", "task_spec": None, "gate": {"reasons": ["blocked for test"]}, "budget": {}}
+        return {"decision": "allow", "task_spec": task_spec, "gate": {}, "budget": {}}
+
+    class EmptyStore:
+        def top_promising_candidates(self, limit=4):
+            return []
+
+        def list_research_tasks(self, limit=300):
+            return []
+
+    monkeypatch.setattr(research_expansion, "_write_generated_config", fake_write)
+    monkeypatch.setattr(research_expansion, "govern_workflow_task_spec", fake_govern)
+
+    specs = research_expansion.expansion_candidates(EmptyStore(), allow_repeat=True)
+
+    assert governed
+    assert all(source == "research_expansion" for _, _, _, source in governed)
+    assert any(config["output_dir"] == "artifacts/generated_recent_45d" for _, config, _, _ in governed)
+    assert all((row.get("payload") or {}).get("output_dir") != "artifacts/generated_recent_45d" for row in specs)
+
+
 def test_generated_candidate_validation_followup_promotes_45d_to_90d(tmp_path, monkeypatch):
     db_path = tmp_path / "factor_lab.db"
     store = ExperimentStore(db_path)

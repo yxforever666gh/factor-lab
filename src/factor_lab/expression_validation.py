@@ -6,6 +6,15 @@ from typing import Iterable
 
 from factor_lab.feature_schema import EXPRESSION_ALIASES
 
+SUPPORTED_TRANSFORM_FUNCTIONS = {
+    "zscore_by_date",
+    "rank_by_date",
+    "zscore_by_date_industry",
+    "rank_by_date_industry",
+    "winsorize_by_date",
+    "neutralize_against_size_industry",
+}
+
 
 @dataclass
 class ExpressionValidation:
@@ -39,6 +48,8 @@ def validate_expression(expression: str, *, available_fields: Iterable[str]) -> 
     unknown: list[str] = []
     resolved: list[str] = []
     for name in expression_fields(expression):
+        if name in SUPPORTED_TRANSFORM_FUNCTIONS:
+            continue
         if name in available:
             resolved.append(name)
             continue

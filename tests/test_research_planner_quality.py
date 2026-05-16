@@ -93,3 +93,43 @@ def test_research_planner_rewards_quality_validation_targets():
     result = planner.rank_tasks(snapshot, candidate_pool, None)
 
     assert result["selected_tasks"][0]["planner_score"] > 100
+
+
+def test_research_planner_uses_failure_dossier_to_prioritize_validation():
+    planner = ResearchPlannerAgent()
+    snapshot = {
+        "exploration_state": {},
+        "failure_state": {},
+        "knowledge_gain_counter": {},
+        "analyst_signals": {},
+        "promotion_scorecard": {"rows": []},
+    }
+    candidate_pool = {
+        "tasks": [
+            {
+                "task_type": "diagnostic",
+                "category": "validation",
+                "priority_hint": 40,
+                "worker_note": "validation｜stable_candidate",
+                "payload": {},
+                "focus_candidates": [
+                    {
+                        "candidate_name": "fragile_factor",
+                        "evidence_gate": {"action": "needs_validation"},
+                        "failure_dossier": {
+                            "recommended_action": "diagnose",
+                            "regime_dependency": "short_window_only",
+                            "parent_delta_status": "non_incremental",
+                        },
+                    }
+                ],
+                "expected_knowledge_gain": ["stable_candidate_confirmed"],
+                "reason": "validate failure-prone factor",
+            }
+        ]
+    }
+
+    result = planner.rank_tasks(snapshot, candidate_pool, None)
+
+    assert result["selected_tasks"][0]["planner_score"] >= 94
+    assert "failure_dossier:" in result["selected_tasks"][0]["planner_reason"]

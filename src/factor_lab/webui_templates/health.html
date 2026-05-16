@@ -25,6 +25,85 @@
 </div>
 
 <section class="card" style="margin-top:18px;">
+  <h2>Decision Layer</h2>
+  <div class="grid cols-2" style="margin-bottom:12px;">
+    <div>
+      <div class="muted">live 决策链</div>
+      <div style="font-size:24px; font-weight:700;" class="{{ 'bad' if health.decision_layer.live.degraded_to_heuristic else 'good' }}">
+        {{ health.decision_layer.live.effective_source or '-' }}
+      </div>
+      <div class="muted">configured={{ health.decision_layer.live.configured_provider or '-' }}</div>
+      <div class="muted">probe={{ 'skipped' if health.decision_layer.live.probe_skipped else ('ok' if health.decision_layer.live.probe_ok else 'n/a') }}</div>
+    </div>
+    <div>
+      <div class="muted">observation / gateway 观测</div>
+      <div style="font-size:24px; font-weight:700;" class="{{ 'bad' if health.decision_layer.observation.degraded_to_heuristic else 'good' }}">
+        {{ health.decision_layer.observation.effective_source or '-' }}
+      </div>
+      <div class="muted">configured={{ health.decision_layer.observation.configured_provider or '-' }}</div>
+      <div class="muted">
+        latency={{ health.decision_layer.observation.probe_latency_ms if health.decision_layer.observation.probe_latency_ms is not none else '-' }}ms
+      </div>
+    </div>
+  </div>
+  {% if health.decision_layer.degraded %}
+  <div class="bad" style="margin-bottom:12px;">当前存在显式退化到 heuristic，不再是静默 fallback。</div>
+  {% endif %}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Agent</th><th>effective</th><th>fallback</th><th>degraded</th><th>latency</th><th>session</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>planner</td>
+          <td>{{ health.decision_layer.planner.effective_source or '-' }}</td>
+          <td class="text-break">{{ health.decision_layer.planner.fallback_reason or '-' }}</td>
+          <td>{{ '是' if health.decision_layer.planner.degraded_to_heuristic else '否' }}</td>
+          <td>{{ health.decision_layer.planner.provider_latency_ms if health.decision_layer.planner.provider_latency_ms is not none else '-' }}ms</td>
+          <td class="text-break">{{ health.decision_layer.planner.session_mode or '-' }} / {{ health.decision_layer.planner.session_id or '-' }}</td>
+        </tr>
+        <tr>
+          <td>failure_analyst</td>
+          <td>{{ health.decision_layer.failure_analyst.effective_source or '-' }}</td>
+          <td class="text-break">{{ health.decision_layer.failure_analyst.fallback_reason or '-' }}</td>
+          <td>{{ '是' if health.decision_layer.failure_analyst.degraded_to_heuristic else '否' }}</td>
+          <td>{{ health.decision_layer.failure_analyst.provider_latency_ms if health.decision_layer.failure_analyst.provider_latency_ms is not none else '-' }}ms</td>
+          <td class="text-break">{{ health.decision_layer.failure_analyst.session_mode or '-' }} / {{ health.decision_layer.failure_analyst.session_id or '-' }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  {% if health.decision_layer.last_fallback_reason %}
+  <div class="muted" style="margin-top:10px;">最近 fallback 原因：{{ health.decision_layer.last_fallback_reason }}</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>Repair Layer</h2>
+  <div class="grid cols-4" style="margin-bottom:12px;">
+    <div><div class="muted">active incidents</div><div style="font-size:28px; font-weight:700;" class="{{ 'bad' if health.repair_layer.active_incident_count else 'good' }}">{{ health.repair_layer.active_incident_count }}</div></div>
+    <div><div class="muted">24h incidents</div><div style="font-size:28px; font-weight:700;">{{ health.repair_layer.metrics.incident_count_24h if health.repair_layer.metrics else 0 }}</div></div>
+    <div><div class="muted">24h observations</div><div style="font-size:28px; font-weight:700;">{{ health.repair_layer.metrics.observation_count_24h if health.repair_layer.metrics else 0 }}</div></div>
+    <div><div class="muted">last verification</div><div style="font-size:20px; font-weight:700;">{{ health.repair_layer.verification.overall_status if health.repair_layer.verification else '-' }}</div></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>最新 incident</th><th>repair mode</th><th>route unhealthy</th><th>restart recently</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>{{ health.repair_layer.response.incident_type if health.repair_layer.response else '-' }}</td>
+          <td>{{ health.repair_layer.response.repair_mode if health.repair_layer.response else '-' }}</td>
+          <td>{{ '是' if health.repair_layer.route_unhealthy else '否' }}</td>
+          <td>{{ '是' if health.repair_layer.restart_recently else '否' }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  {% if health.repair_layer.top_incident_types_24h %}
+  <div class="muted" style="margin-top:8px;">24h top incidents：{% for row in health.repair_layer.top_incident_types_24h %}{{ row[0] }}={{ row[1] }}{% if not loop.last %} · {% endif %}{% endfor %}</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:18px;">
   <h2>最近 24 小时分数时间轴</h2>
   {% if health.score_timeline.chart_svg %}
   <div style="overflow-x:auto;">
@@ -150,6 +229,35 @@
     <div class="muted" style="margin-top:10px;">如果 no_significant_information_gain 长期偏高，说明探索需要降权。</div>
   </section>
 </div>
+
+{% set blocked_status = health.run_health.daemon_status.blocked_lane_status if health.run_health.daemon_status else None %}
+{% if blocked_status and blocked_status.active %}
+<section class="card" style="margin-top:18px;">
+  <h2>Blocked Lanes / Root Cause</h2>
+  <div class="muted" style="margin-bottom:10px;">{{ health.run_health.daemon_status.blocked_lane_summary or blocked_status.summary }}</div>
+  <div class="grid cols-3" style="margin-bottom:12px;">
+    <div><div class="muted">blocked pending</div><div style="font-size:28px; font-weight:700;">{{ blocked_status.blocked_pending_count or 0 }}</div></div>
+    <div><div class="muted">unblocked pending</div><div style="font-size:28px; font-weight:700;">{{ blocked_status.unblocked_pending_count or 0 }}</div></div>
+    <div><div class="muted">队列判定</div><div style="font-size:20px; font-weight:700;">{{ '仅剩 blocked lane' if blocked_status.only_blocked_pending else '仍有健康 lane' }}</div></div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Lane</th><th>根因</th><th>连续失败</th><th>Pending</th><th>最近错误</th></tr></thead>
+      <tbody>
+        {% for lane in blocked_status.lanes %}
+        <tr>
+          <td>{{ lane.task_type }}</td>
+          <td>{{ lane.root_cause_label or lane.root_cause or '-' }}</td>
+          <td class="num">{{ lane.consecutive_failures or 0 }}</td>
+          <td class="num">{{ lane.pending_count or 0 }}</td>
+          <td class="text-break">{{ lane.latest_error or '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
 
 <div class="grid cols-2" style="margin-top:18px;">
   <section class="card">

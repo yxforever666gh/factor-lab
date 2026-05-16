@@ -184,6 +184,28 @@ CREATE TABLE IF NOT EXISTS research_hypotheses (
     last_reviewed_at_utc TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS research_theses (
+    id TEXT PRIMARY KEY,
+    candidate_id TEXT UNIQUE,
+    thesis_id TEXT NOT NULL,
+    title TEXT NOT NULL,
+    family TEXT,
+    thesis_type TEXT,
+    institutional_bucket_key TEXT,
+    institutional_bucket_label TEXT,
+    thesis_text TEXT,
+    mechanism_rationale TEXT,
+    status TEXT,
+    invalidation_json TEXT,
+    representative_candidate TEXT,
+    representative_rank INTEGER,
+    representative_count INTEGER,
+    roster_json TEXT,
+    source_context_json TEXT,
+    created_at_utc TEXT NOT NULL,
+    updated_at_utc TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS candidate_relationships (
     left_candidate_id TEXT NOT NULL,
     right_candidate_id TEXT NOT NULL,
@@ -596,6 +618,19 @@ class ExperimentStore:
         )
         self.conn.commit()
 
+    def _decode_research_task_rows(self, rows: list[tuple[Any, ...]]) -> list[dict[str, Any]]:
+        columns = [
+            'task_id', 'task_type', 'status', 'priority', 'fingerprint', 'payload_json',
+            'parent_task_id', 'attempt_count', 'last_error', 'created_at_utc',
+            'started_at_utc', 'finished_at_utc', 'worker_note'
+        ]
+        result = []
+        for row in rows:
+            item = dict(zip(columns, row))
+            item['payload'] = json.loads(item.pop('payload_json'))
+            result.append(item)
+        return result
+
     def list_research_tasks(self, limit: int = 50) -> list[dict[str, Any]]:
         rows = self.conn.execute(
             """
@@ -608,17 +643,33 @@ class ExperimentStore:
             """,
             (limit,),
         ).fetchall()
-        columns = [
-            'task_id', 'task_type', 'status', 'priority', 'fingerprint', 'payload_json',
-            'parent_task_id', 'attempt_count', 'last_error', 'created_at_utc',
-            'started_at_utc', 'finished_at_utc', 'worker_note'
-        ]
-        result = []
-        for row in rows:
-            item = dict(zip(columns, row))
-            item['payload'] = json.loads(item.pop('payload_json'))
-            result.append(item)
-        return result
+        return self._decode_research_task_rows(rows)
+
+    def list_research_tasks_by_status(
+        self,
+        statuses: list[str] | tuple[str, ...],
+        *,
+        limit: int = 1000,
+        oldest_first: bool = False,
+    ) -> list[dict[str, Any]]:
+        wanted = tuple(str(status).strip() for status in statuses if str(status).strip())
+        if not wanted:
+            return []
+        order = "ASC" if oldest_first else "DESC"
+        placeholders = ", ".join("?" for _ in wanted)
+        rows = self.conn.execute(
+            f"""
+            SELECT task_id, task_type, status, priority, fingerprint, payload_json,
+                   parent_task_id, attempt_count, last_error, created_at_utc,
+                   started_at_utc, finished_at_utc, worker_note
+            FROM research_tasks
+            WHERE status IN ({placeholders})
+            ORDER BY COALESCE(started_at_utc, created_at_utc) {order}, created_at_utc {order}
+            LIMIT ?
+            """,
+            (*wanted, limit),
+        ).fetchall()
+        return self._decode_research_task_rows(rows)
 
     def upsert_factor_candidate(
         self,
@@ -898,6 +949,106 @@ class ExperimentStore:
         item = dict(zip(columns, row))
         item["evidence_for"] = json.loads(item.pop("evidence_for_json") or "[]")
         item["evidence_against"] = json.loads(item.pop("evidence_against_json") or "[]")
+        return item
+
+    def upsert_research_thesis(self, candidate_id: str, payload: dict[str, Any]) -> str:
+        now = datetime.now(timezone.utc).isoformat()
+        row = self.conn.execute("SELECT id FROM research_theses WHERE candidate_id = ?", (candidate_id,)).fetchone()
+        if row:
+            thesis_row_id = row[0]
+            self.conn.execute(
+                """
+                UPDATE research_theses
+                SET thesis_id = ?, title = ?, family = ?, thesis_type = ?,
+                    institutional_bucket_key = ?, institutional_bucket_label = ?,
+                    thesis_text = ?, mechanism_rationale = ?, status = ?, invalidation_json = ?,
+                    representative_candidate = ?, representative_rank = ?, representative_count = ?,
+                    roster_json = ?, source_context_json = ?, updated_at_utc = ?
+                WHERE id = ?
+                """,
+                (
+                    payload["thesis_id"],
+                    payload["title"],
+                    payload.get("family"),
+                    payload.get("thesis_type"),
+                    payload.get("institutional_bucket_key"),
+                    payload.get("institutional_bucket_label"),
+                    payload.get("thesis_text"),
+                    payload.get("mechanism_rationale"),
+                    payload.get("status"),
+                    payload.get("invalidation_json"),
+                    payload.get("representative_candidate"),
+                    payload.get("representative_rank"),
+                    payload.get("representative_count"),
+                    payload.get("roster_json"),
+                    payload.get("source_context_json"),
+                    now,
+                    thesis_row_id,
+                ),
+            )
+        else:
+            thesis_row_id = str(uuid4())
+            self.conn.execute(
+                """
+                INSERT INTO research_theses (
+                    id, candidate_id, thesis_id, title, family, thesis_type,
+                    institutional_bucket_key, institutional_bucket_label, thesis_text,
+                    mechanism_rationale, status, invalidation_json, representative_candidate,
+                    representative_rank, representative_count, roster_json, source_context_json,
+                    created_at_utc, updated_at_utc
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    thesis_row_id,
+                    candidate_id,
+                    payload["thesis_id"],
+                    payload["title"],
+                    payload.get("family"),
+                    payload.get("thesis_type"),
+                    payload.get("institutional_bucket_key"),
+                    payload.get("institutional_bucket_label"),
+                    payload.get("thesis_text"),
+                    payload.get("mechanism_rationale"),
+                    payload.get("status"),
+                    payload.get("invalidation_json"),
+                    payload.get("representative_candidate"),
+                    payload.get("representative_rank"),
+                    payload.get("representative_count"),
+                    payload.get("roster_json"),
+                    payload.get("source_context_json"),
+                    now,
+                    now,
+                ),
+            )
+        self.conn.commit()
+        return thesis_row_id
+
+    def get_research_thesis_for_candidate(self, candidate_id: str) -> dict[str, Any] | None:
+        row = self.conn.execute(
+            """
+            SELECT id, candidate_id, thesis_id, title, family, thesis_type,
+                   institutional_bucket_key, institutional_bucket_label, thesis_text,
+                   mechanism_rationale, status, invalidation_json, representative_candidate,
+                   representative_rank, representative_count, roster_json, source_context_json,
+                   created_at_utc, updated_at_utc
+            FROM research_theses
+            WHERE candidate_id = ?
+            """,
+            (candidate_id,),
+        ).fetchone()
+        if not row:
+            return None
+        columns = [
+            "id", "candidate_id", "thesis_id", "title", "family", "thesis_type",
+            "institutional_bucket_key", "institutional_bucket_label", "thesis_text",
+            "mechanism_rationale", "status", "invalidation_json", "representative_candidate",
+            "representative_rank", "representative_count", "roster_json", "source_context_json",
+            "created_at_utc", "updated_at_utc",
+        ]
+        item = dict(zip(columns, row))
+        item["invalidation"] = json.loads(item.pop("invalidation_json") or "[]")
+        item["roster"] = json.loads(item.pop("roster_json") or "[]")
+        item["source_context"] = json.loads(item.pop("source_context_json") or "{}")
         return item
 
     def upsert_candidate_relationship(

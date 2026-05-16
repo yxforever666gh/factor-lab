@@ -33,6 +33,18 @@ def derive_research_flow_state(
         if str(branch_id).startswith("fallback_") and state.get("state") in {"validating", "exploring", "stable_candidate"}
     ]
     recent_recovery_success = any(row.get("has_gain") for row in recent_recovery_events)
+    queue_counts = snapshot.get("queue_counts") or {}
+    queue_finished = int(queue_counts.get("finished") or 0)
+    queue_failed = int(queue_counts.get("failed") or 0)
+    queue_pending = int(queue_counts.get("pending") or 0)
+    queue_running = int(queue_counts.get("running") or 0)
+    recovery_soft_landing = bool(
+        recovery_active
+        and recent_recovery_success
+        and main_candidates > 0
+        and queue_failed <= 0
+        and (queue_finished > 0 or queue_pending > 0 or queue_running > 0)
+    )
 
     state = "ready"
     reasons: list[str] = []
@@ -45,6 +57,9 @@ def derive_research_flow_state(
     elif recovery_used:
         state = "recovering"
         reasons.append("recovery_step_triggered")
+    elif recovery_soft_landing:
+        state = "recovered"
+        reasons.append("recovery_branches_stable_under_load")
     elif recovery_active:
         state = "recovering"
         reasons.append("recovery_branch_still_active")
@@ -64,6 +79,6 @@ def derive_research_flow_state(
         "recent_recovery_event_count": len(recent_recovery_events),
         "recent_recovery_success": recent_recovery_success,
         "injected_count": injected_count or 0,
-        "queue_counts": snapshot.get("queue_counts") or {},
+        "queue_counts": queue_counts,
     }
     return payload

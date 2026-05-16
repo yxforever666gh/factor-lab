@@ -1,15 +1,20 @@
 from __future__ import annotations
 
 import json
+import os
+import signal
 import shutil
 import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from factor_lab.dedup import config_fingerprint
+import fcntl
+
+from factor_lab.dedup import config_fingerprint, workflow_experiment_fingerprint
 from factor_lab.heartbeat import append_heartbeat
 from factor_lab.storage import ExperimentStore
 from factor_lab.change_detection import build_change_report
@@ -22,33 +27,252 @@ from factor_lab.llm_bridge import write_bridge_status
 from factor_lab.candidate_graph import build_graph_artifacts
 from factor_lab.research_expansion import maybe_expand_research_space
 from factor_lab.research_planner_pipeline import run_research_planner_pipeline
+from factor_lab.generated_artifacts import upgrade_generated_batch, upgrade_generated_config
 from factor_lab.research_runtime_state import queue_budget_snapshot, recent_failure_stats, exploration_health, parse_iso_utc, recently_finished_same_fingerprint
 from factor_lab.research_strategy import update_research_memory_from_task_result
+from factor_lab.research_task_governance import govern_workflow_task_spec
 from factor_lab.opportunity_store import update_opportunity_state
 from factor_lab.opportunity_evaluator import evaluate_opportunity_from_task
+from factor_lab.agent_briefs import build_repair_agent_brief
+from factor_lab.repair_runtime import build_repair_runtime_snapshot
+from factor_lab.repair_agent_engine import build_repair_response
+from factor_lab.repair_playbooks import execute_repair_actions
+from factor_lab.repair_verifier import verify_repair_actions
 from datetime import datetime, timezone, timedelta
-import os
 
 
 BASELINE_PRIORITY = 10
 VALIDATION_PRIORITY = 30
 EXPLORATION_PRIORITY = 60
 RETRY_PRIORITY = 15
-MAX_PENDING_BASELINE = 2
-MAX_PENDING_VALIDATION = 2
-MAX_PENDING_EXPLORATION = 1
+DEFAULT_MAX_PENDING_BASELINE = 2
+DEFAULT_MAX_PENDING_VALIDATION = 3
+DEFAULT_MAX_PENDING_EXPLORATION = 2
 MAX_CONSECUTIVE_FAILURES = 3
 CIRCUIT_OPEN_COOLDOWN_MINUTES = 5
 EXPLORATION_NO_GAIN_THRESHOLD = 3
 BASELINE_RESEED_COOLDOWN_MINUTES = 30
-TASK_REPEAT_COOLDOWN_MINUTES = 180
 TASK_FAMILY_CIRCUIT_TYPES = ("generated_batch",)
 RESOURCE_EXHAUSTION_QUARANTINE_TASK_TYPES = ("generated_batch", "workflow", "batch")
+ROOT_CAUSE_LABELS = {
+    "deterministic_task_error": "确定性任务错误",
+    "invalid_expression_field": "表达式字段不存在",
+    "missing_factor_family_config": "缺少 factor family 配置",
+    "generated_config_missing_lineage": "生成因子 lineage 缺字段",
+    "generated_config_missing_base_factor": "生成因子引用了缺失 base factor",
+    "generated_batch_preflight_failed": "generated batch 预检失败",
+    "worker_rss_exceeded": "worker RSS 超限",
+    "worker_timeout": "worker 执行超时",
+    "generated_batch_worker_rss_exceeded": "generated_batch worker RSS 超限",
+    "generated_batch_worker_timeout": "generated_batch worker 执行超时",
+    "workflow_worker_rss_exceeded": "workflow worker RSS 超限",
+    "workflow_worker_timeout": "workflow worker 执行超时",
+    "batch_worker_rss_exceeded": "batch worker RSS 超限",
+    "batch_worker_timeout": "batch worker 执行超时",
+    "task_failed": "任务失败",
+}
 
 
 DB_PATH = Path("artifacts") / "factor_lab.db"
 STAGNATION_PATH = Path("artifacts") / "research_stagnation.json"
 REPORT_REFRESH_STATE_PATH = Path("artifacts") / "report_refresh_state.json"
+REPORT_REFRESH_REQUEST_PATH = Path("artifacts") / "report_refresh_request.json"
+REPORT_REFRESH_LOCK_PATH = Path("artifacts") / "report_refresh.lock"
+REFILL_STATE_PATH = Path("artifacts") / "research_queue_refill_state.json"
+RESEED_DIAGNOSTICS_PATH = Path("artifacts") / "research_queue_reseed_diagnostics.json"
+OPPORTUNITY_RUNTIME_HEALTH_PATH = Path("artifacts") / "opportunity_runtime_health.json"
+REPAIR_RUNTIME_SNAPSHOT_PATH = Path("artifacts") / "repair_runtime_snapshot.json"
+REPAIR_AGENT_BRIEF_PATH = Path("artifacts") / "repair_agent_brief.json"
+REPAIR_AGENT_RESPONSE_PATH = Path("artifacts") / "repair_agent_response.json"
+REPAIR_ACTION_PLAN_PATH = Path("artifacts") / "repair_action_plan.json"
+REPAIR_VERIFICATION_PATH = Path("artifacts") / "repair_verification.json"
+
+
+def _env_int(name: str, default: int, *, minimum: int = 0) -> int:
+    raw = os.getenv(name, str(default)).strip()
+    try:
+        value = int(raw)
+    except Exception:
+        value = default
+    return max(minimum, value)
+
+
+def _max_pending_baseline() -> int:
+    return _env_int("RESEARCH_QUEUE_MAX_PENDING_BASELINE", DEFAULT_MAX_PENDING_BASELINE, minimum=1)
+
+
+def _max_pending_validation() -> int:
+    return _env_int("RESEARCH_QUEUE_MAX_PENDING_VALIDATION", DEFAULT_MAX_PENDING_VALIDATION, minimum=1)
+
+
+def _max_pending_exploration() -> int:
+    return _env_int("RESEARCH_QUEUE_MAX_PENDING_EXPLORATION", DEFAULT_MAX_PENDING_EXPLORATION, minimum=1)
+
+
+def _read_json_doc(path: Path, default: dict[str, Any] | None = None) -> dict[str, Any]:
+    if not path.exists():
+        return dict(default or {})
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return dict(default or {})
+    return payload if isinstance(payload, dict) else dict(default or {})
+
+
+def _write_json_doc(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _opportunity_runtime_window() -> int:
+    return max(4, _env_int("RESEARCH_OPPORTUNITY_RUNTIME_WINDOW", 12, minimum=4))
+
+
+def _classify_runtime_event(*, status: str, summary: str | None = None, error_text: str | None = None) -> dict[str, bool]:
+    text = f"{summary or ''} {error_text or ''}".lower()
+    timeout = "worker timeout" in text or "generated_batch_worker_timeout" in text or "research task worker timeout" in text
+    rss = "rss exceeded" in text or "worker_rss_exceeded" in text or "generated_batch_worker_rss_exceeded" in text
+    no_gain = "knowledge_gain=no_significant_information_gain" in text
+    useful_gain = "knowledge_gain=" in text and not no_gain
+    clean_finished = status == "finished" and not timeout and not rss and not error_text
+    return {
+        "timeout": timeout,
+        "rss": rss,
+        "no_gain": no_gain,
+        "useful_gain": useful_gain,
+        "clean_finished": clean_finished,
+    }
+
+
+def update_opportunity_runtime_health(
+    task: dict[str, Any],
+    *,
+    status: str,
+    summary: str | None = None,
+    error_text: str | None = None,
+) -> dict[str, Any] | None:
+    payload = task.get("payload") or {}
+    opportunity_id = payload.get("opportunity_id")
+    if not opportunity_id:
+        return None
+
+    state = _read_json_doc(OPPORTUNITY_RUNTIME_HEALTH_PATH, {"opportunities": {}})
+    opportunities = state.setdefault("opportunities", {})
+    row = opportunities.setdefault(opportunity_id, {"recent_events": []})
+    events = list(row.get("recent_events") or [])
+    classification = _classify_runtime_event(status=status, summary=summary, error_text=error_text)
+    events.append(
+        {
+            "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
+            "task_type": task.get("task_type"),
+            "status": status,
+            "summary": summary,
+            "error_text": error_text,
+            **classification,
+        }
+    )
+    window = _opportunity_runtime_window()
+    events = events[-window:]
+    timeout_streak = 0
+    for event in reversed(events):
+        if event.get("timeout"):
+            timeout_streak += 1
+        else:
+            break
+    timeout_count = sum(1 for event in events if event.get("timeout"))
+    no_gain_count = sum(1 for event in events if event.get("no_gain"))
+    useful_gain_count = sum(1 for event in events if event.get("useful_gain"))
+    rss_count = sum(1 for event in events if event.get("rss"))
+    clean_finished_count = sum(1 for event in events if event.get("clean_finished"))
+    timeout_threshold = max(2, _env_int("RESEARCH_OPPORTUNITY_TIMEOUT_COOLDOWN_THRESHOLD", 3, minimum=2))
+    low_yield_min_events = max(4, _env_int("RESEARCH_OPPORTUNITY_LOW_YIELD_MIN_EVENTS", 6, minimum=4))
+    low_yield_ratio_threshold = float(os.getenv("RESEARCH_OPPORTUNITY_LOW_YIELD_RATIO_THRESHOLD") or 0.8)
+    low_yield_ratio = ((timeout_count + no_gain_count) / len(events)) if events else 0.0
+    cooldown_active = False
+    cooldown_reason = None
+    if timeout_streak >= timeout_threshold:
+        cooldown_active = True
+        cooldown_reason = "timeout_streak"
+    elif len(events) >= low_yield_min_events and low_yield_ratio >= low_yield_ratio_threshold and useful_gain_count <= 0:
+        cooldown_active = True
+        cooldown_reason = "low_recent_yield"
+    elif rss_count >= timeout_threshold:
+        cooldown_active = True
+        cooldown_reason = "rss_risk"
+
+    updated = {
+        "recent_events": events,
+        "recent_event_count": len(events),
+        "recent_timeout_count": timeout_count,
+        "recent_no_gain_count": no_gain_count,
+        "recent_useful_gain_count": useful_gain_count,
+        "recent_rss_count": rss_count,
+        "recent_clean_finished_count": clean_finished_count,
+        "timeout_streak": timeout_streak,
+        "low_yield_ratio": round(low_yield_ratio, 3),
+        "cooldown_active": cooldown_active,
+        "cooldown_reason": cooldown_reason,
+        "updated_at_utc": datetime.now(timezone.utc).isoformat(),
+    }
+    opportunities[opportunity_id] = updated
+    state["updated_at_utc"] = datetime.now(timezone.utc).isoformat()
+    _write_json_doc(OPPORTUNITY_RUNTIME_HEALTH_PATH, state)
+    return updated
+
+
+def _queue_refill_status(store: ExperimentStore) -> dict[str, Any]:
+    budget = queue_budget_snapshot(store)
+    validation_target = _target_validation_backlog()
+    exploration_target = _target_exploration_backlog()
+    validation_deficit = max(0, validation_target - int(budget.get("validation", 0)))
+    exploration_deficit = max(0, exploration_target - int(budget.get("exploration", 0)))
+    active_count = sum(int(budget.get(key, 0)) for key in ("baseline", "validation", "exploration"))
+    return {
+        "budget": budget,
+        "validation_target": validation_target,
+        "exploration_target": exploration_target,
+        "validation_deficit": validation_deficit,
+        "exploration_deficit": exploration_deficit,
+        "active_count": active_count,
+        "queue_empty": active_count <= 0,
+        "needs_refill": active_count <= 0 or validation_deficit > 0 or exploration_deficit > 0,
+    }
+
+
+def _refill_cooldown_ready() -> bool:
+    cooldown_seconds = max(0, int(os.getenv("RESEARCH_QUEUE_REFILL_COOLDOWN_SECONDS", "15")))
+    if cooldown_seconds <= 0:
+        return True
+    state = _read_json_doc(REFILL_STATE_PATH)
+    try:
+        last_attempt = float(state.get("last_attempt_ts") or 0.0)
+    except Exception:
+        last_attempt = 0.0
+    return (time.time() - last_attempt) >= cooldown_seconds
+
+
+def _mark_refill_attempt(*, refill: dict[str, Any], planner_result: dict[str, Any] | None = None, planner_error: str | None = None) -> None:
+    payload = {
+        "updated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "last_attempt_ts": time.time(),
+        "queue_empty": bool(refill.get("queue_empty")),
+        "validation_deficit": int(refill.get("validation_deficit") or 0),
+        "exploration_deficit": int(refill.get("exploration_deficit") or 0),
+        "budget": refill.get("budget") or {},
+        "planner_error": planner_error,
+        "planner_injected": int((planner_result or {}).get("injected_count") or 0),
+        "opportunity_injected": int((((planner_result or {}).get("opportunity_execution") or {}).get("injected_count") or 0)),
+        "recovery_used": bool((planner_result or {}).get("recovery_used")),
+    }
+    _write_json_doc(REFILL_STATE_PATH, payload)
+
+
+def _target_validation_backlog() -> int:
+    return min(_max_pending_validation(), _env_int("RESEARCH_QUEUE_TARGET_VALIDATION_BACKLOG", 2, minimum=1))
+
+
+def _target_exploration_backlog() -> int:
+    return min(_max_pending_exploration(), _env_int("RESEARCH_QUEUE_TARGET_EXPLORATION_BACKLOG", 2, minimum=1))
 
 
 def _category_from_note(note: str | None) -> str:
@@ -121,6 +345,128 @@ def blocked_task_types(store: ExperimentStore) -> list[str]:
         if stats["consecutive_failures"] >= MAX_CONSECUTIVE_FAILURES and stats["cooldown_active"]:
             blocked.append(task_type)
     return blocked
+
+
+def _deterministic_failure_reason(error_text: str) -> str | None:
+    if error_text.startswith("Unknown field in expression:"):
+        return "invalid_expression_field"
+    if "factor_families" in error_text and "No such file or directory" in error_text:
+        return "missing_factor_family_config"
+    if error_text.startswith("generated config missing lineage fields:"):
+        return "generated_config_missing_lineage"
+    if error_text.startswith("generated config references missing base factor:") or error_text.startswith("missing base factor for generated operator:"):
+        return "generated_config_missing_base_factor"
+    if error_text.startswith("generated batch"):
+        return "generated_batch_preflight_failed"
+    if error_text:
+        return "deterministic_task_error"
+    return None
+
+
+def _root_cause_label(reason: str | None) -> str:
+    if not reason:
+        return "未知"
+    return ROOT_CAUSE_LABELS.get(reason, reason.replace("_", " "))
+
+
+def _quarantine_reason_from_note(note: str | None) -> str | None:
+    if not note or not note.startswith("quarantined｜"):
+        return None
+    parts = note.split("｜")
+    if len(parts) < 2:
+        return None
+    reason = (parts[1] or "").strip()
+    return reason or None
+
+
+def _task_root_cause(task: dict[str, Any] | None) -> dict[str, Any]:
+    if not task:
+        return {"reason": None, "label": "未知", "detail": None}
+    error_text = str(task.get("last_error") or "").strip()
+    worker_note = str(task.get("worker_note") or "").strip()
+    reason = _quarantine_reason_from_note(worker_note)
+    if not reason:
+        resource_reason = _resource_exhaustion_reason(error_text)
+        if resource_reason:
+            task_type = str(task.get("task_type") or "").strip().lower()
+            if task_type:
+                reason = f"{task_type}_{resource_reason}"
+            else:
+                reason = resource_reason
+    if not reason and error_text:
+        reason = _deterministic_failure_reason(error_text) or "task_failed"
+    return {
+        "reason": reason,
+        "label": _root_cause_label(reason),
+        "detail": error_text or worker_note or None,
+    }
+
+
+def blocked_lane_status(store: ExperimentStore, blocked_types: list[str] | None = None) -> dict[str, Any]:
+    blocked_types = blocked_types if blocked_types is not None else blocked_task_types(store)
+    tasks = store.list_research_tasks(limit=300)
+    blocked_set = set(blocked_types)
+    blocked_pending_count = len([t for t in tasks if t.get("status") == "pending" and t.get("task_type") in blocked_set])
+    unblocked_pending_count = len([t for t in tasks if t.get("status") == "pending" and t.get("task_type") not in blocked_set])
+    lanes: list[dict[str, Any]] = []
+    for task_type in blocked_types:
+        stats = recent_failure_stats(store, limit=50, task_type=task_type)
+        lane_tasks = [t for t in tasks if t.get("task_type") == task_type]
+        pending_count = len([t for t in lane_tasks if t.get("status") == "pending"])
+        running_count = len([t for t in lane_tasks if t.get("status") == "running"])
+        recent_failed = [t for t in lane_tasks if t.get("status") == "failed"]
+        latest_failure = recent_failed[0] if recent_failed else next(
+            (
+                t
+                for t in lane_tasks
+                if (t.get("last_error") or "") or (t.get("worker_note") or "").startswith("quarantined｜")
+            ),
+            None,
+        )
+        root_cause = _task_root_cause(latest_failure)
+        lanes.append(
+            {
+                "task_type": task_type,
+                "consecutive_failures": stats.get("consecutive_failures", 0),
+                "failed_recently": stats.get("failed_recently", 0),
+                "cooldown_active": bool(stats.get("cooldown_active")),
+                "last_failure_at": stats.get("last_failure_at"),
+                "pending_count": pending_count,
+                "running_count": running_count,
+                "root_cause": root_cause["reason"],
+                "root_cause_label": root_cause["label"],
+                "latest_error": root_cause["detail"],
+                "recent_error_samples": [
+                    str(t.get("last_error") or "").strip()
+                    for t in recent_failed[:3]
+                    if str(t.get("last_error") or "").strip()
+                ],
+            }
+        )
+
+    if lanes:
+        summary = "; ".join(
+            [
+                (
+                    f"{lane['task_type']} blocked｜原因={lane['root_cause_label']}"
+                    f"｜连续失败={lane['consecutive_failures']}｜pending={lane['pending_count']}"
+                )
+                for lane in lanes
+            ]
+        )
+    else:
+        summary = ""
+
+    return {
+        "active": bool(lanes),
+        "blocked_task_types": blocked_types,
+        "blocked_pending_count": blocked_pending_count,
+        "unblocked_pending_count": unblocked_pending_count,
+        "only_blocked_pending": blocked_pending_count > 0 and unblocked_pending_count == 0,
+        "healthy_lane_available": unblocked_pending_count > 0,
+        "summary": summary,
+        "lanes": lanes,
+    }
 
 
 def has_pending_unblocked_tasks(store: ExperimentStore, blocked: list[str]) -> bool:
@@ -222,45 +568,171 @@ def can_reseed_baseline(store: ExperimentStore) -> bool:
     return True
 
 
-def enqueue_baseline_tasks(store: ExperimentStore) -> list[str]:
-    seeds = [
-        {
-            "task_type": "workflow",
-            "priority": BASELINE_PRIORITY,
-            "config_path": "configs/tushare_workflow.json",
-            "output_dir": "artifacts/tushare_workflow",
-            "worker_note": "baseline｜标准中窗口基线",
-        },
-        {
-            "task_type": "batch",
-            "priority": VALIDATION_PRIORITY,
-            "config_path": "configs/tushare_batch.json",
-            "output_dir": "artifacts/tushare_batch",
-            "worker_note": "validation｜标准 batch 对比",
-        },
-    ]
+BASELINE_RESEED_SEEDS = [
+    {
+        "task_type": "workflow",
+        "priority": BASELINE_PRIORITY,
+        "config_path": "configs/tushare_workflow.json",
+        "output_dir": "artifacts/tushare_workflow",
+        "worker_note": "baseline｜标准中窗口基线",
+    },
+    {
+        "task_type": "batch",
+        "priority": VALIDATION_PRIORITY,
+        "config_path": "configs/tushare_batch.json",
+        "output_dir": "artifacts/tushare_batch",
+        "worker_note": "validation｜标准 batch 对比",
+    },
+]
+
+
+def _write_reseed_diagnostics(result: dict[str, Any]) -> None:
+    payload = dict(result)
+    payload["updated_at_utc"] = datetime.now(timezone.utc).isoformat()
+    _write_json_doc(RESEED_DIAGNOSTICS_PATH, payload)
+
+
+def _governance_payload_defaults(task_spec: dict[str, Any]) -> dict[str, Any]:
+    note = str(task_spec.get("worker_note") or "")
+    payload = dict(task_spec.get("payload") or {})
+    payload.setdefault("hypothesis", note or "baseline workflow should refresh research evidence")
+    payload.setdefault("falsification_criteria", ["net sharpe and information gain fail to improve versus recent baseline"])
+    payload.setdefault("expected_information_gain", ["window_stability_check", "boundary_confirmed"] if "baseline" in note.lower() else ["window_stability_check", "candidate_survival_check"])
+    payload.setdefault("budget_bucket", "data_quality_coverage" if "baseline" in note.lower() else "robustness_validation")
+    return payload
+
+
+def _govern_workflow_seed(
+    *,
+    seed: dict[str, Any],
+    payload: dict[str, Any],
+    fingerprint: str,
+    config: dict[str, Any],
+    store: ExperimentStore,
+    budget: dict[str, int],
+    source: str,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    task_spec = {
+        "task_type": seed["task_type"],
+        "priority": seed["priority"],
+        "payload": _governance_payload_defaults({"payload": payload, "worker_note": seed["worker_note"]}),
+        "fingerprint": fingerprint,
+        "worker_note": seed["worker_note"],
+    }
+    used_counts = {
+        "total": sum(int(budget.get(name) or 0) for name in ("baseline", "validation", "exploration")),
+        "data_quality_coverage": int(budget.get("baseline") or 0),
+        "robustness_validation": int(budget.get("validation") or 0),
+        "pure_exploration": int(budget.get("exploration") or 0),
+    }
+    result = govern_workflow_task_spec(
+        task_spec,
+        config=config,
+        store=store,
+        used_counts=used_counts,
+        source=source,
+    )
+    if result.get("decision") != "allow" or not result.get("task_spec"):
+        return None, {
+            "seed": seed["worker_note"],
+            "reason": "governance_blocked",
+            "decision": result.get("decision"),
+            "gate_reasons": list((result.get("gate") or {}).get("reasons") or []),
+            "budget_reasons": list((result.get("budget") or {}).get("reasons") or []),
+            "fingerprint": fingerprint,
+        }
+    return result["task_spec"], None
+
+
+def enqueue_baseline_tasks_with_diagnostics(store: ExperimentStore) -> dict[str, Any]:
     budget = queue_budget_snapshot(store)
-    task_ids = []
-    for seed in seeds:
+    task_ids: list[str] = []
+    skipped: list[dict[str, Any]] = []
+    enqueue_error_count = 0
+    for seed in BASELINE_RESEED_SEEDS:
         category = _category_from_note(seed["worker_note"])
-        if category == "baseline" and budget["baseline"] >= MAX_PENDING_BASELINE:
+        if category == "baseline" and int(budget.get("baseline") or 0) >= _max_pending_baseline():
+            skipped.append({"seed": seed["worker_note"], "reason": "budget_full", "category": category})
             continue
-        if category == "validation" and budget["validation"] >= MAX_PENDING_VALIDATION:
+        if category == "validation" and int(budget.get("validation") or 0) >= _max_pending_validation():
+            skipped.append({"seed": seed["worker_note"], "reason": "budget_full", "category": category})
             continue
-        cfg = json.loads(Path(seed["config_path"]).read_text(encoding="utf-8"))
-        fingerprint = f"{seed['task_type']}::{config_fingerprint(cfg)}::{seed['output_dir']}"
-        if recently_finished_same_fingerprint(store, fingerprint):
+        try:
+            cfg = json.loads(Path(seed["config_path"]).read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            skipped.append({"seed": seed["worker_note"], "reason": "config_missing", "config_path": seed["config_path"]})
             continue
-        task_id = store.enqueue_research_task(
+        except Exception as exc:
+            skipped.append({"seed": seed["worker_note"], "reason": "config_error", "config_path": seed["config_path"], "error": str(exc)})
+            continue
+        fingerprint = workflow_experiment_fingerprint(cfg) if seed["task_type"] == "workflow" else f"{seed['task_type']}::{config_fingerprint(cfg)}::{seed['output_dir']}"
+        payload = {"config_path": seed["config_path"], "output_dir": seed["output_dir"]}
+        if seed["task_type"] == "workflow":
+            governed_spec, governance_skip = _govern_workflow_seed(
+                seed=seed,
+                payload=payload,
+                fingerprint=fingerprint,
+                config=cfg,
+                store=store,
+                budget=budget,
+                source="baseline_reseed",
+            )
+            if governance_skip:
+                skipped.append(governance_skip)
+                continue
+            assert governed_spec is not None
+            payload = governed_spec["payload"]
+            fingerprint = governed_spec["fingerprint"]
+        if recently_finished_same_fingerprint(
+            store,
+            fingerprint,
             task_type=seed["task_type"],
-            payload={"config_path": seed["config_path"], "output_dir": seed["output_dir"]},
-            priority=seed["priority"],
-            fingerprint=fingerprint,
+            payload=payload,
             worker_note=seed["worker_note"],
-        )
+        ):
+            skipped.append({"seed": seed["worker_note"], "reason": "recently_finished_same_fingerprint", "fingerprint": fingerprint})
+            continue
+        try:
+            task_id = store.enqueue_research_task(
+                task_type=seed["task_type"],
+                payload=payload,
+                priority=seed["priority"],
+                fingerprint=fingerprint,
+                worker_note=seed["worker_note"],
+            )
+        except Exception as exc:
+            enqueue_error_count += 1
+            skipped.append({"seed": seed["worker_note"], "reason": "enqueue_error", "error": str(exc)})
+            continue
         task_ids.append(task_id)
-        budget[category] += 1
-    return task_ids
+        budget[category] = int(budget.get(category) or 0) + 1
+
+    result = {
+        "task_ids": task_ids,
+        "skipped": skipped,
+        "repeat_blocked_count": len([s for s in skipped if s.get("reason") == "recently_finished_same_fingerprint"]),
+        "budget_blocked_count": len([s for s in skipped if s.get("reason") == "budget_full"]),
+        "config_missing_count": len([s for s in skipped if s.get("reason") == "config_missing"]),
+        "enqueue_error_count": enqueue_error_count,
+    }
+    _write_reseed_diagnostics(result)
+    return result
+
+
+def enqueue_baseline_tasks(store: ExperimentStore) -> list[str]:
+    return enqueue_baseline_tasks_with_diagnostics(store)["task_ids"]
+
+
+def refill_empty_queue_with_fallback(store: ExperimentStore, *, allow_repeat_expand: bool = True) -> dict[str, Any]:
+    reseed = enqueue_baseline_tasks_with_diagnostics(store)
+    if reseed["task_ids"]:
+        return {"source": "baseline_reseed", "task_ids": reseed["task_ids"], "reseed_diagnostics": reseed}
+
+    expanded = maybe_expand_research_space(store, max_new_tasks=4, allow_repeat=allow_repeat_expand)
+    if expanded:
+        return {"source": "expand_research_space", "task_ids": expanded, "reseed_diagnostics": reseed}
+
+    return {"source": "none", "task_ids": [], "reseed_diagnostics": reseed}
 
 
 def should_refresh_reports(*, force: bool = False) -> bool:
@@ -269,7 +741,7 @@ def should_refresh_reports(*, force: bool = False) -> bool:
     cooldown_seconds = int(os.getenv("RESEARCH_REPORT_REFRESH_MIN_SECONDS", "300"))
     if cooldown_seconds <= 0:
         return True
-    state = _read_json(REPORT_REFRESH_STATE_PATH, {})
+    state = _read_json_doc(REPORT_REFRESH_STATE_PATH, {})
     last_refresh_at = parse_iso_utc(state.get("last_refresh_at_utc"))
     if last_refresh_at is None:
         return True
@@ -277,7 +749,7 @@ def should_refresh_reports(*, force: bool = False) -> bool:
 
 
 def mark_reports_refreshed() -> None:
-    _write_json(
+    _write_json_doc(
         REPORT_REFRESH_STATE_PATH,
         {
             "last_refresh_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -285,9 +757,58 @@ def mark_reports_refreshed() -> None:
     )
 
 
-def refresh_reports(*, force: bool = False) -> bool:
-    if not should_refresh_reports(force=force):
-        return False
+@contextmanager
+def _report_refresh_lock():
+    REPORT_REFRESH_LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    handle = open(REPORT_REFRESH_LOCK_PATH, "a+", encoding="utf-8")
+    acquired = False
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        acquired = True
+    except BlockingIOError:
+        acquired = False
+    try:
+        yield acquired
+    finally:
+        if acquired:
+            try:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            except Exception:
+                pass
+        handle.close()
+
+
+def request_report_refresh(*, source: str | None = None, reason: str | None = None) -> dict[str, Any]:
+    state = _read_json_doc(REPORT_REFRESH_REQUEST_PATH, {})
+    pending = max(0, int(state.get("pending_count") or 0)) + 1
+    payload = {
+        "requested": True,
+        "pending_count": pending,
+        "last_requested_at_utc": datetime.now(timezone.utc).isoformat(),
+        "last_source": source,
+        "last_reason": reason,
+    }
+    _write_json_doc(REPORT_REFRESH_REQUEST_PATH, payload)
+    return payload
+
+
+def report_refresh_requested() -> bool:
+    state = _read_json_doc(REPORT_REFRESH_REQUEST_PATH, {})
+    return bool(state.get("requested")) or int(state.get("pending_count") or 0) > 0
+
+
+def clear_report_refresh_request() -> None:
+    _write_json_doc(
+        REPORT_REFRESH_REQUEST_PATH,
+        {
+            "requested": False,
+            "pending_count": 0,
+            "last_cleared_at_utc": datetime.now(timezone.utc).isoformat(),
+        },
+    )
+
+
+def _run_report_refresh_once() -> None:
     write_sqlite_report(db_path=DB_PATH, output_path="artifacts/sqlite_report.md")
     build_html_report(db_path=DB_PATH, output_path="artifacts/report.html")
     build_index_page(db_path=DB_PATH, output_path="artifacts/index.html")
@@ -295,7 +816,28 @@ def refresh_reports(*, force: bool = False) -> bool:
     build_change_report(db_path=DB_PATH, output_path="artifacts/change_report.md")
     build_graph_artifacts(DB_PATH, DB_PATH.parent)
     mark_reports_refreshed()
+
+
+def refresh_reports(*, force: bool = False) -> bool:
+    if not should_refresh_reports(force=force):
+        return False
+    with _report_refresh_lock() as acquired:
+        if not acquired:
+            return False
+        _run_report_refresh_once()
     return True
+
+
+def process_report_refresh_requests(*, force: bool = False) -> tuple[bool, str | None]:
+    if not force and not report_refresh_requested():
+        return False, None
+    if not should_refresh_reports(force=force):
+        return False, "cooldown_active"
+    refreshed = refresh_reports(force=True)
+    if refreshed:
+        clear_report_refresh_request()
+        return True, None
+    return False, "refresh_busy"
 
 
 def _enqueue_generated_candidate_validation_followup(store: ExperimentStore, task: dict[str, Any], payload: dict[str, Any]) -> list[str]:
@@ -331,8 +873,20 @@ def _enqueue_generated_candidate_validation_followup(store: ExperimentStore, tas
         next_path = config_path.with_name(config_path.stem + "_recent_90d" + config_path.suffix)
     next_path.write_text(json.dumps(next_cfg, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    fingerprint = f"workflow::{config_fingerprint(next_cfg)}::{next_output_dir}"
-    if recently_finished_same_fingerprint(store, fingerprint):
+    fingerprint = workflow_experiment_fingerprint(next_cfg)
+    if recently_finished_same_fingerprint(
+        store,
+        fingerprint,
+        task_type="workflow",
+        payload={
+            "config_path": str(next_path),
+            "output_dir": next_output_dir,
+            "source": payload.get("source") or "candidate_generation_validation",
+            "validation_stage": "recent_90d_light",
+            "expected_information_gain": payload.get("expected_information_gain") or [],
+        },
+        worker_note=(str(task.get("worker_note") or "").replace("recent_45d", "recent_90d") or "validation｜candidate_generation recent_90d｜light"),
+    ):
         return []
     task_id = store.enqueue_research_task(
         task_type="workflow",
@@ -352,13 +906,21 @@ def _enqueue_generated_candidate_validation_followup(store: ExperimentStore, tas
 
 def _enqueue_followups_for_workflow(store: ExperimentStore, task: dict[str, Any], payload: dict[str, Any]) -> list[str]:
     config_path = payload["config_path"]
+    if payload.get("source") == "bucket_aware_controlled_validation" or payload.get("portfolio_construction", {}).get("mode") == "bucket_pair":
+        return []
     followups: list[str] = []
     budget = queue_budget_snapshot(store)
     exploration_state = exploration_health(store)
-    if config_path == "configs/tushare_workflow.json" and budget["validation"] < MAX_PENDING_VALIDATION:
+    if config_path == "configs/tushare_workflow.json" and budget["validation"] < _target_validation_backlog():
         cfg = json.loads(Path("configs/tushare_batch.json").read_text(encoding="utf-8"))
         fingerprint = f"batch::{config_fingerprint(cfg)}::artifacts/tushare_batch"
-        if not recently_finished_same_fingerprint(store, fingerprint):
+        if not recently_finished_same_fingerprint(
+            store,
+            fingerprint,
+            task_type="batch",
+            payload={"config_path": "configs/tushare_batch.json", "output_dir": "artifacts/tushare_batch"},
+            worker_note="validation｜由 workflow 完成后自动触发的 batch 对比",
+        ):
             followups.append(
                 store.enqueue_research_task(
                     task_type="batch",
@@ -372,11 +934,20 @@ def _enqueue_followups_for_workflow(store: ExperimentStore, task: dict[str, Any]
     generated_batch_path = Path("artifacts/generated_batch_from_llm.json")
     failure_state = recent_failure_stats(store)
     true_fault_recovery = bool(failure_state.get("cooldown_active"))
-    should_preserve_exploration_floor = budget["exploration"] < 1 and not true_fault_recovery
-    if generated_batch_path.exists() and budget["exploration"] < MAX_PENDING_EXPLORATION and (should_preserve_exploration_floor or not exploration_state["should_throttle"]):
+    should_preserve_exploration_floor = budget["exploration"] < _target_exploration_backlog() and not true_fault_recovery
+    if generated_batch_path.exists() and budget["exploration"] < _max_pending_exploration() and (should_preserve_exploration_floor or not exploration_state["should_throttle"]):
         generated_batch = json.loads(generated_batch_path.read_text(encoding="utf-8"))
         fingerprint = f"generated_batch::{config_fingerprint(generated_batch)}::artifacts/llm_generated_batch_run"
-        if not recently_finished_same_fingerprint(store, fingerprint):
+        if not recently_finished_same_fingerprint(
+            store,
+            fingerprint,
+            task_type="generated_batch",
+            payload={
+                "batch_path": str(generated_batch_path),
+                "output_dir": "artifacts/llm_generated_batch_run",
+            },
+            worker_note="exploration｜执行 LLM 生成的 batch",
+        ):
             followups.append(
                 store.enqueue_research_task(
                     task_type="generated_batch",
@@ -398,7 +969,7 @@ def _enqueue_followups_for_batch(store: ExperimentStore, task: dict[str, Any], p
     followups: list[str] = []
     budget = queue_budget_snapshot(store)
     comparison_path = Path(payload["output_dir"]) / "batch_comparison.json"
-    if not comparison_path.exists() or budget["validation"] >= MAX_PENDING_VALIDATION:
+    if not comparison_path.exists() or budget["validation"] >= _max_pending_validation():
         return followups
     comparison = json.loads(comparison_path.read_text(encoding="utf-8"))
     graveyard_presence = comparison.get("graveyard_presence", {}) or {}
@@ -422,29 +993,36 @@ def _enqueue_followups_for_batch(store: ExperimentStore, task: dict[str, Any], p
 
     if diagnostic_reasons:
         fingerprint = f"diagnostic::{payload['output_dir']}::{';'.join(diagnostic_reasons)}"
-        if not recently_finished_same_fingerprint(store, fingerprint):
+        diagnostic_payload = {
+            "diagnostic_type": "batch_consistency_review",
+            "source_output_dir": payload["output_dir"],
+            "reasons": diagnostic_reasons,
+            "knowledge_gain": [
+                "stable_candidate_confirmed" if stable_candidates else None,
+                "repeated_graveyard_confirmed" if repeated_graveyard else None,
+            ],
+            "goal": "review_batch_consistency",
+            "hypothesis": "跨窗口重复出现的 stable candidate / graveyard 代表了可复用的结构信号，而不是偶然结果。",
+            "expected_information_gain": [
+                "stable_candidate_confirmed" if stable_candidates else None,
+                "repeated_graveyard_confirmed" if repeated_graveyard else None,
+            ],
+            "branch_id": "batch_consistency_review",
+            "stop_if": ["batch_consistency_review_finds_no_repeated_pattern"],
+            "promote_if": ["batch_consistency_review_confirms_repeatable_pattern"],
+            "disconfirm_if": ["batch_consistency_review_shows_inconsistent_cross_window_behavior"],
+        }
+        if not recently_finished_same_fingerprint(
+            store,
+            fingerprint,
+            task_type="diagnostic",
+            payload=diagnostic_payload,
+            worker_note="validation｜batch 一致性诊断",
+        ):
             followups.append(
                 store.enqueue_research_task(
                     task_type="diagnostic",
-                    payload={
-                        "diagnostic_type": "batch_consistency_review",
-                        "source_output_dir": payload["output_dir"],
-                        "reasons": diagnostic_reasons,
-                        "knowledge_gain": [
-                            "stable_candidate_confirmed" if stable_candidates else None,
-                            "repeated_graveyard_confirmed" if repeated_graveyard else None,
-                        ],
-                        "goal": "review_batch_consistency",
-                        "hypothesis": "跨窗口重复出现的 stable candidate / graveyard 代表了可复用的结构信号，而不是偶然结果。",
-                        "expected_information_gain": [
-                            "stable_candidate_confirmed" if stable_candidates else None,
-                            "repeated_graveyard_confirmed" if repeated_graveyard else None,
-                        ],
-                        "branch_id": "batch_consistency_review",
-                        "stop_if": ["batch_consistency_review_finds_no_repeated_pattern"],
-                        "promote_if": ["batch_consistency_review_confirms_repeatable_pattern"],
-                        "disconfirm_if": ["batch_consistency_review_shows_inconsistent_cross_window_behavior"],
-                    },
+                    payload=diagnostic_payload,
                     priority=VALIDATION_PRIORITY + 5,
                     fingerprint=fingerprint,
                     parent_task_id=task["task_id"],
@@ -457,7 +1035,7 @@ def _enqueue_followups_for_batch(store: ExperimentStore, task: dict[str, Any], p
 def _enqueue_followups_for_diagnostic(store: ExperimentStore, task: dict[str, Any], payload: dict[str, Any]) -> list[str]:
     followups: list[str] = []
     budget = queue_budget_snapshot(store)
-    if payload.get("diagnostic_type") == "batch_consistency_review" and budget["validation"] < MAX_PENDING_VALIDATION:
+    if payload.get("diagnostic_type") == "batch_consistency_review" and budget["validation"] < _max_pending_validation():
         source_output_dir = payload.get("source_output_dir")
         comparison_path = Path(source_output_dir) / "batch_comparison.json"
         if comparison_path.exists():
@@ -465,24 +1043,31 @@ def _enqueue_followups_for_diagnostic(store: ExperimentStore, task: dict[str, An
             repeated_graveyard = sorted((comparison.get("graveyard_presence") or {}).keys())
             if repeated_graveyard:
                 fingerprint = f"diagnostic::{source_output_dir}::graveyard_neutralization::{','.join(repeated_graveyard)}"
-                if not recently_finished_same_fingerprint(store, fingerprint):
+                diagnostic_payload = {
+                    "diagnostic_type": "graveyard_neutralization_review",
+                    "source_output_dir": source_output_dir,
+                    "focus_factors": repeated_graveyard,
+                    "reasons": ["repeated_graveyard_after_batch_consistency_review"],
+                    "knowledge_gain": ["neutralization_diagnosis_requested"],
+                    "goal": "diagnose_neutralization_failure",
+                    "hypothesis": "重复进入 graveyard 的因子，可能是被 neutralization 暴露出伪 alpha 或结构性缺陷。",
+                    "expected_information_gain": ["neutralization_diagnosis_requested"],
+                    "branch_id": "graveyard_neutralization_review",
+                    "stop_if": ["neutralization_review_finds_no_shared_failure_pattern"],
+                    "promote_if": ["neutralization_review_identifies_actionable_failure_cause"],
+                    "disconfirm_if": ["neutralization_effect_does_not_explain_graveyard_behavior"],
+                }
+                if not recently_finished_same_fingerprint(
+                    store,
+                    fingerprint,
+                    task_type="diagnostic",
+                    payload=diagnostic_payload,
+                    worker_note="validation｜graveyard 中性化诊断",
+                ):
                     followups.append(
                         store.enqueue_research_task(
                             task_type="diagnostic",
-                            payload={
-                                "diagnostic_type": "graveyard_neutralization_review",
-                                "source_output_dir": source_output_dir,
-                                "focus_factors": repeated_graveyard,
-                                "reasons": ["repeated_graveyard_after_batch_consistency_review"],
-                                "knowledge_gain": ["neutralization_diagnosis_requested"],
-                                "goal": "diagnose_neutralization_failure",
-                                "hypothesis": "重复进入 graveyard 的因子，可能是被 neutralization 暴露出伪 alpha 或结构性缺陷。",
-                                "expected_information_gain": ["neutralization_diagnosis_requested"],
-                                "branch_id": "graveyard_neutralization_review",
-                                "stop_if": ["neutralization_review_finds_no_shared_failure_pattern"],
-                                "promote_if": ["neutralization_review_identifies_actionable_failure_cause"],
-                                "disconfirm_if": ["neutralization_effect_does_not_explain_graveyard_behavior"],
-                            },
+                            payload=diagnostic_payload,
                             priority=VALIDATION_PRIORITY + 10,
                             fingerprint=fingerprint,
                             parent_task_id=task["task_id"],
@@ -511,9 +1096,20 @@ def _load_json_file(path: Path) -> Any:
 
 def _generated_config_lineage_error(config_path: Path) -> str | None:
     try:
-        config = _load_json_file(config_path)
+        config = upgrade_generated_config(_load_json_file(config_path), source="legacy_config_read")
     except Exception as exc:
         return f"generated config unreadable: {config_path}: {exc}"
+
+    start_date = str(config.get("start_date") or "").strip()
+    end_date = str(config.get("end_date") or "").strip()
+    if start_date and end_date:
+        try:
+            start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+            end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+        except Exception:
+            return f"generated config invalid date format: {config_path}::{start_date},{end_date}"
+        if start_dt > end_dt:
+            return f"generated config invalid date range: {config_path}::{start_date}>{end_date}"
 
     factors = list(config.get("factors") or [])
     factor_map = {row.get("name"): row for row in factors if isinstance(row, dict) and row.get("name")}
@@ -545,7 +1141,7 @@ def validate_generated_batch_payload(task: dict[str, Any]) -> tuple[bool, str | 
         return False, f"generated batch not found: {batch_path}"
 
     try:
-        batch = _load_json_file(batch_path)
+        batch = upgrade_generated_batch(_load_json_file(batch_path), source="legacy_batch_read")
     except Exception as exc:
         return False, f"generated batch unreadable: {batch_path}: {exc}"
 
@@ -571,8 +1167,6 @@ def validate_generated_batch_payload(task: dict[str, Any]) -> tuple[bool, str | 
 def classify_task_failure(task: dict[str, Any], error_text: str) -> str:
     deterministic_markers = [
         "dataset slice empty:",
-        "Unknown field in expression:",
-        "missing_factor_family_config",
         "generated batch not found:",
         "generated batch unreadable:",
         "generated batch has no jobs:",
@@ -580,13 +1174,10 @@ def classify_task_failure(task: dict[str, Any], error_text: str) -> str:
         "generated batch job missing config_path:",
         "generated batch job config missing:",
         "generated config unreadable:",
-        "generated config missing lineage fields:",
-        "generated config references missing base factor:",
-        "missing base factor for generated operator:",
     ]
     if any(marker in error_text for marker in deterministic_markers):
         return "deterministic"
-    if "factor_families" in error_text and "No such file or directory" in error_text:
+    if _deterministic_failure_reason(error_text):
         return "deterministic"
     return "transient"
 
@@ -635,6 +1226,71 @@ def _read_pid_rss_mb(pid: int) -> int:
     return 0
 
 
+def _worker_runtime_limits(task_type: str) -> dict[str, Any]:
+    normalized = str(task_type or "").strip().upper()
+    generic_timeout = int(os.getenv("RESEARCH_TASK_WORKER_TIMEOUT_SECONDS", "180"))
+    timeout_defaults = {
+        "WORKFLOW": 900,
+        "BATCH": 600,
+        "GENERATED_BATCH": 300,
+    }
+    timeout_seconds = int(
+        os.getenv(
+            f"RESEARCH_TASK_WORKER_TIMEOUT_SECONDS_{normalized}",
+            str(timeout_defaults.get(normalized, generic_timeout)),
+        )
+    )
+    return {
+        "timeout_seconds": timeout_seconds,
+        "rss_limit_mb": int(os.getenv("RESEARCH_TASK_WORKER_RSS_LIMIT_MB", "2048")),
+        "poll_interval": float(os.getenv("RESEARCH_TASK_WORKER_POLL_SECONDS", "0.5")),
+        "kill_grace_seconds": float(os.getenv("RESEARCH_TASK_WORKER_KILL_GRACE_SECONDS", "10")),
+    }
+
+
+def _terminate_process_group(proc: subprocess.Popen, *, grace_seconds: float, reason: str) -> dict[str, Any]:
+    audit = {
+        "reason": reason,
+        "pid": getattr(proc, "pid", None),
+        "sent_sigterm": False,
+        "sent_sigkill": False,
+    }
+    pid = getattr(proc, "pid", None)
+    if not pid:
+        return audit
+    try:
+        os.killpg(pid, signal.SIGTERM)
+        audit["sent_sigterm"] = True
+    except ProcessLookupError:
+        return audit
+    except Exception:
+        try:
+            proc.terminate()
+            audit["sent_sigterm"] = True
+        except Exception:
+            pass
+
+    deadline = time.time() + max(0.0, grace_seconds)
+    while time.time() < deadline:
+        if proc.poll() is not None:
+            return audit
+        time.sleep(0.05)
+
+    if proc.poll() is None:
+        try:
+            os.killpg(pid, signal.SIGKILL)
+            audit["sent_sigkill"] = True
+        except ProcessLookupError:
+            pass
+        except Exception:
+            try:
+                proc.kill()
+                audit["sent_sigkill"] = True
+            except Exception:
+                pass
+    return audit
+
+
 def _execute_heavy_task_in_subprocess(task: dict[str, Any]) -> str:
     task_json = json.dumps(task, ensure_ascii=False)
     command = [
@@ -643,22 +1299,19 @@ def _execute_heavy_task_in_subprocess(task: dict[str, Any]) -> str:
         task_json,
     ]
     task_type = str(task.get("task_type") or "").strip().lower()
-    generic_timeout = int(os.getenv("RESEARCH_TASK_WORKER_TIMEOUT_SECONDS", "180"))
-    timeout_defaults = {
-        "workflow": 900,
-        "batch": 600,
-        "generated_batch": 300,
-    }
-    timeout_seconds = int(
-        os.getenv(
-            f"RESEARCH_TASK_WORKER_TIMEOUT_SECONDS_{task_type.upper()}",
-            str(timeout_defaults.get(task_type, generic_timeout)),
-        )
-    )
-    rss_limit_mb = int(os.getenv("RESEARCH_TASK_WORKER_RSS_LIMIT_MB", "2048"))
-    poll_interval = float(os.getenv("RESEARCH_TASK_WORKER_POLL_SECONDS", "0.5"))
+    limits = _worker_runtime_limits(task_type)
+    timeout_seconds = int(limits["timeout_seconds"])
+    rss_limit_mb = int(limits["rss_limit_mb"])
+    poll_interval = float(limits["poll_interval"])
+    kill_grace_seconds = float(limits["kill_grace_seconds"])
     started = time.time()
-    proc = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    proc = subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
 
     killed_reason = None
     while True:
@@ -668,13 +1321,13 @@ def _execute_heavy_task_in_subprocess(task: dict[str, Any]) -> str:
         elapsed = time.time() - started
         if timeout_seconds > 0 and elapsed >= timeout_seconds:
             killed_reason = f"research task worker timeout after {timeout_seconds}s"
-            proc.kill()
+            _terminate_process_group(proc, grace_seconds=kill_grace_seconds, reason=killed_reason)
             break
         if rss_limit_mb > 0:
             rss_mb = _read_pid_rss_mb(proc.pid)
             if rss_mb >= rss_limit_mb:
                 killed_reason = f"research task worker rss exceeded limit: {rss_mb}MB >= {rss_limit_mb}MB"
-                proc.kill()
+                _terminate_process_group(proc, grace_seconds=kill_grace_seconds, reason=killed_reason)
                 break
         time.sleep(max(0.1, poll_interval))
 
@@ -808,12 +1461,10 @@ def _repair_running_task_state_file(task: dict[str, Any], *, status: str, error:
 
 
 def _cleanup_stale_running_tasks(store: ExperimentStore, *, stale_minutes: int = 10) -> list[str]:
-    tasks = store.list_research_tasks(limit=300)
+    tasks = store.list_research_tasks_by_status(("running",), limit=1000, oldest_first=True)
     cutoff = datetime.now(timezone.utc) - timedelta(minutes=stale_minutes)
     cleaned: list[str] = []
     for task in tasks:
-        if task.get("status") != "running":
-            continue
         started_at = parse_iso_utc(task.get("started_at_utc")) or parse_iso_utc(task.get("created_at_utc"))
         if not started_at or started_at >= cutoff:
             continue
@@ -823,12 +1474,14 @@ def _cleanup_stale_running_tasks(store: ExperimentStore, *, stale_minutes: int =
         note_suffix = "｜auto_repaired_unfinalized_workflow_output" if completed_outputs else "｜auto_cleaned_stale_running"
         error_text = "stale_running_task_repaired_after_outputs_written" if completed_outputs else "stale_running_task_cleaned"
 
+        worker_note = ((task.get("worker_note") or "") + note_suffix)
         store.finish_research_task(
             task["task_id"],
             status="failed",
             last_error=error_text,
-            worker_note=((task.get("worker_note") or "") + note_suffix),
+            worker_note=worker_note,
         )
+        update_opportunity_runtime_health(task, status="failed", summary=worker_note, error_text=error_text)
         _repair_running_task_state_file(task, status="failed", error=error_text)
         cleaned.append(task["task_id"])
     return cleaned
@@ -898,6 +1551,7 @@ def _quarantine_budget_risky_task(store: ExperimentStore, task: dict[str, Any], 
         summary=note,
         error_text=reason,
     )
+    update_opportunity_runtime_health(task, status="quarantined", summary=note, error_text=reason)
     opportunity_id = ((task.get("payload") or {}).get("opportunity_id"))
     if opportunity_id:
         update_opportunity_state(opportunity_id, "rejected", reason=reason, extra={"budget_guard": True})
@@ -953,6 +1607,7 @@ def _quarantine_resource_exhausted_task_group(
             last_error=error_text,
             worker_note=detail_note,
         )
+        update_opportunity_runtime_health(task, status="quarantined", summary=detail_note, error_text=error_text)
         _repair_running_task_state_file(task, status="failed", error=error_text)
         cleaned.append(task["task_id"])
 
@@ -1029,8 +1684,41 @@ def _auto_quarantine_budget_blocked_tasks(store: ExperimentStore, blocked_types:
     return cleaned
 
 
-def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
+def run_orchestrator(max_tasks: int = 1, *, skip_preclaim_refill: bool = False) -> dict[str, Any]:
     store = ExperimentStore(DB_PATH)
+    repair_runtime_snapshot_path = DB_PATH.parent / "repair_runtime_snapshot.json"
+    repair_agent_brief_path = DB_PATH.parent / "repair_agent_brief.json"
+    repair_agent_response_path = DB_PATH.parent / "repair_agent_response.json"
+    repair_action_plan_path = DB_PATH.parent / "repair_action_plan.json"
+    repair_verification_path = DB_PATH.parent / "repair_verification.json"
+
+    repair_snapshot = build_repair_runtime_snapshot(
+        store,
+        output_path=repair_runtime_snapshot_path,
+        stale_minutes=int(os.getenv("RESEARCH_STALE_RUNNING_MINUTES", "10")),
+    )
+    repair_brief = build_repair_agent_brief(
+        runtime_snapshot=repair_snapshot,
+        state_snapshot={"open_questions": []},
+        diagnostics={
+            "stale_running_candidate_count": len(repair_snapshot.get("stale_running_candidates") or []),
+            "recent_failed_or_risky_task_count": len(repair_snapshot.get("recent_failed_or_risky_tasks") or []),
+        },
+        output_path=repair_agent_brief_path,
+    )
+    repair_response = build_repair_response(
+        {
+            "context_id": f"repair-{int(time.time())}",
+            "inputs": repair_brief.get("inputs") or {},
+        },
+        source_label="heuristic",
+    )
+    _write_json_doc(repair_agent_response_path, repair_response)
+    repair_execution = execute_repair_actions(repair_response, store=store, auto_only=True)
+    _write_json_doc(repair_action_plan_path, repair_execution)
+    repair_verification = verify_repair_actions(repair_response, repair_execution, store=store)
+    _write_json_doc(repair_verification_path, repair_verification)
+
     cleaned_running = _cleanup_stale_running_tasks(store, stale_minutes=int(os.getenv("RESEARCH_STALE_RUNNING_MINUTES", "10")))
     if cleaned_running:
         append_heartbeat(
@@ -1053,8 +1741,11 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
             "stagnation_break",
             summary=f"auto-quarantined budget-risky blocked tasks={len(cleaned_budget)}",
         )
-    existing_tasks = store.list_research_tasks(limit=50)
-    if not existing_tasks or not any(t["status"] in {"pending", "running"} for t in existing_tasks):
+    refill = _queue_refill_status(store)
+    should_run_planner = (not skip_preclaim_refill) and (
+        refill["queue_empty"] or (refill["needs_refill"] and _refill_cooldown_ready())
+    )
+    if should_run_planner:
         planner_result = None
         planner_error = None
         try:
@@ -1086,6 +1777,8 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
                 summary=f"planner pipeline failed, fallback to rules: {planner_error}",
             )
 
+        _mark_refill_attempt(refill=refill, planner_result=planner_result, planner_error=planner_error)
+
         planner_injected = int((planner_result or {}).get("injected_count") or 0)
         opp_injected = int((((planner_result or {}).get("opportunity_execution") or {}).get("injected_count") or 0))
         injected_total = planner_injected + opp_injected
@@ -1098,7 +1791,7 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
                 "info",
                 summary=f"planner/opportunities injected tasks={planner_injected}+{opp_injected}",
             )
-        else:
+        elif refill["queue_empty"]:
             # Recovery deadlock protection: if recovery keeps producing zero injections while the queue is empty,
             # escalate quickly into autonomous expansion / forced reseed instead of looping forever.
             if recovery_used:
@@ -1144,18 +1837,27 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
                             summary=f"recovery deadlock detected but no reseed/expansion succeeded; stagnation={st.get('consecutive_no_injection')}",
                         )
             elif can_reseed_baseline(store):
-                seeded = enqueue_baseline_tasks(store)
+                refill_result = refill_empty_queue_with_fallback(store)
+                seeded = refill_result["task_ids"]
                 if seeded:
-                    _reset_stagnation(reason="reseeded")
-                    append_heartbeat("research_orchestrator", "info", summary=f"queue reseeded with {len(seeded)} baseline tasks")
+                    reason = "reseeded" if refill_result.get("source") == "baseline_reseed" else "reseed_fallback_expanded"
+                    _reset_stagnation(reason=reason)
+                    append_heartbeat(
+                        "research_orchestrator",
+                        "stagnation_break" if refill_result.get("source") != "baseline_reseed" else "info",
+                        summary=f"queue refill via {refill_result.get('source')} injected {len(seeded)} tasks",
+                    )
                 else:
-                    forced = maybe_expand_research_space(store, max_new_tasks=4, allow_repeat=True)
-                    if forced:
-                        _reset_stagnation(reason="reseed_noop_forced_expand")
-                        append_heartbeat("research_orchestrator", "stagnation_break", summary=f"reseed noop; forced expansion injected {len(forced)} tasks")
-                    else:
-                        st = _bump_stagnation(reason="reseed_attempt_noop")
-                        append_heartbeat("research_orchestrator", "info", summary=f"queue empty; reseed noop; stagnation={st.get('consecutive_no_injection')}")
+                    st = _bump_stagnation(reason="reseed_attempt_noop")
+                    diagnostics = refill_result.get("reseed_diagnostics") or {}
+                    append_heartbeat(
+                        "research_orchestrator",
+                        "info",
+                        summary=(
+                            f"queue empty; reseed/fallback noop; repeat_blocked={diagnostics.get('repeat_blocked_count', 0)}; "
+                            f"stagnation={st.get('consecutive_no_injection')}"
+                        ),
+                    )
             else:
                 forced = maybe_expand_research_space(store, max_new_tasks=4, allow_repeat=True)
                 if forced:
@@ -1181,27 +1883,46 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
                         "stagnation_break",
                         summary=f"stagnation reached {threshold}, forced expansion injected {len(forced)} tasks",
                     )
+        elif refill["validation_deficit"] > 0 or refill["exploration_deficit"] > 0:
+            append_heartbeat(
+                "research_orchestrator",
+                "info",
+                summary=(
+                    "queue refill attempt injected 0 tasks "
+                    f"(validation_deficit={refill['validation_deficit']}, exploration_deficit={refill['exploration_deficit']})"
+                ),
+            )
 
     failure_state = recent_failure_stats(store)
     blocked_types = blocked_task_types(store)
+    blocked_status = blocked_lane_status(store, blocked_types)
     if failure_state["consecutive_failures"] >= MAX_CONSECUTIVE_FAILURES and failure_state["cooldown_active"]:
         if blocked_types and has_pending_unblocked_tasks(store, blocked_types):
             append_heartbeat(
                 "research_orchestrator",
                 "circuit_open_family",
-                summary=f"temporarily skipping task_types={','.join(blocked_types)} due to family failures",
+                summary=blocked_status.get("summary") or f"temporarily skipping task_types={','.join(blocked_types)} due to family failures",
             )
         else:
             append_heartbeat(
                 "research_orchestrator",
                 "circuit_open",
-                summary=f"paused due to consecutive failures={failure_state['consecutive_failures']}",
+                summary=(
+                    blocked_status.get("summary")
+                    or f"paused due to consecutive failures={failure_state['consecutive_failures']}"
+                ),
             )
             return {
                 "processed": [],
                 "remaining_preview": store.list_research_tasks(limit=10),
                 "guardrail": "circuit_open",
                 "blocked_task_types": blocked_types,
+                "blocked_lane_status": blocked_status,
+                "repair": {
+                    "response": repair_response,
+                    "execution": repair_execution,
+                    "verification": repair_verification,
+                },
             }
 
     processed = []
@@ -1230,6 +1951,7 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
             status="finished",
             summary=note,
         )
+        update_opportunity_runtime_health(task, status="finished", summary=note)
         evaluation = evaluate_opportunity_from_task(task, status="finished", summary=note)
         if evaluation:
             update_opportunity_state(evaluation["opportunity_id"], evaluation["next_state"], reason=evaluation["evaluation_label"], extra={"evaluation": evaluation})
@@ -1249,6 +1971,7 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
                 summary=note,
                 error_text=error_text,
             )
+            update_opportunity_runtime_health(task, status="finished", summary=note, error_text=error_text)
             evaluation = evaluate_opportunity_from_task(task, status="finished", summary=note)
             if evaluation:
                 update_opportunity_state(evaluation["opportunity_id"], evaluation["next_state"], reason=evaluation["evaluation_label"], extra={"evaluation": evaluation, "recovered_outputs": True})
@@ -1294,17 +2017,7 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
         failure_kind = classify_task_failure(task, error_text)
 
         if failure_kind == "deterministic":
-            reason = "deterministic_task_error"
-            if error_text.startswith("Unknown field in expression:"):
-                reason = "invalid_expression_field"
-            elif "factor_families" in error_text and "No such file or directory" in error_text:
-                reason = "missing_factor_family_config"
-            elif error_text.startswith("generated config missing lineage fields:"):
-                reason = "generated_config_missing_lineage"
-            elif error_text.startswith("generated config references missing base factor:") or error_text.startswith("missing base factor for generated operator:"):
-                reason = "generated_config_missing_base_factor"
-            elif error_text.startswith("generated batch"):
-                reason = "generated_batch_preflight_failed"
+            reason = _deterministic_failure_reason(error_text) or "deterministic_task_error"
 
             quarantined_path = _quarantine_output_dir(task, reason)
             note = f"quarantined｜{reason}｜{error_text}"
@@ -1326,6 +2039,7 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
                     reason=reason,
                     extra={"evaluation": evaluation, "error": error_text},
                 )
+            update_opportunity_runtime_health(task, status="quarantined", summary=note, error_text=error_text)
             processed.append({"task_id": task["task_id"], "status": "quarantined", "error": error_text, "retry_task_id": None, "opportunity_evaluation": evaluation})
             append_heartbeat(
                 "research_orchestrator",
@@ -1354,6 +2068,7 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
             status="failed",
             error_text=error_text,
         )
+        update_opportunity_runtime_health(task, status="failed", error_text=error_text)
         evaluation = evaluate_opportunity_from_task(task, status="failed", error_text=error_text)
         if evaluation:
             update_opportunity_state(evaluation["opportunity_id"], evaluation["next_state"], reason=evaluation["evaluation_label"], extra={"evaluation": evaluation})
@@ -1371,17 +2086,25 @@ def run_orchestrator(max_tasks: int = 1) -> dict[str, Any]:
                 except Exception as exc:
                     _handle_task_exception(task, exc)
 
+    final_blocked_types = blocked_task_types(store)
+    final_blocked_status = blocked_lane_status(store, final_blocked_types)
     if not processed:
-        if blocked_types and not has_pending_unblocked_tasks(store, blocked_types):
+        if final_blocked_status.get("only_blocked_pending"):
             append_heartbeat(
                 "research_orchestrator",
                 "idle_family_blocked",
-                summary=f"only blocked task families remain pending: {','.join(blocked_types)}",
+                summary=final_blocked_status.get("summary") or f"only blocked task families remain pending: {','.join(final_blocked_types)}",
             )
         else:
             append_heartbeat("research_orchestrator", "idle", summary="no pending research tasks")
     return {
         "processed": processed,
         "remaining_preview": store.list_research_tasks(limit=10),
-        "blocked_task_types": blocked_types,
+        "blocked_task_types": final_blocked_types,
+        "blocked_lane_status": final_blocked_status,
+        "repair": {
+            "response": repair_response,
+            "execution": repair_execution,
+            "verification": repair_verification,
+        },
     }

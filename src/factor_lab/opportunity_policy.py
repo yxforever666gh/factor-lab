@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +10,7 @@ from factor_lab.regime_awareness import QUESTION_TYPES, build_regime_context
 ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS = ROOT / "artifacts"
 STORE_PATH = ARTIFACTS / "research_opportunity_store.json"
+MEMORY_PATH = ARTIFACTS / "research_memory.json"
 AUTONOMY_POLICY_PATH = ROOT / "configs" / "research_autonomy_policy.json"
 MIN_EXPLORATION_FLOOR = {"recombine": 1, "probe": 1}
 CHILD_BUDGET = {"expand": 1, "recombine": 1, "probe": 1}
@@ -33,6 +35,15 @@ def _read_json(path: Path, default: Any) -> Any:
         except Exception:
             pass
         raise exc
+
+
+def _env_int(name: str, default: int, *, minimum: int = 0) -> int:
+    raw = os.getenv(name, str(default)).strip()
+    try:
+        value = int(raw)
+    except Exception:
+        value = default
+    return max(minimum, value)
 
 
 def _template_key(row: dict[str, Any]) -> str:
@@ -87,13 +98,66 @@ def _apply_epistemic_updates(meta: dict[str, Any], evaluation: dict[str, Any]) -
         meta["epistemic_value_score"] -= 0.2
 
 
+def _feedback_is_resource_exhausted(feedback: dict[str, Any]) -> bool:
+    text = " ".join([
+        str(feedback.get("summary") or ""),
+        str(feedback.get("error_text") or ""),
+    ]).lower()
+    return any(token in text for token in ["rss exceeded", "worker_rss_exceeded", "generated_batch_worker_rss_exceeded", "quarantined｜generated_batch_worker_rss_exceeded"])
+
+
+def _apply_feedback_updates(meta: dict[str, Any], feedback: dict[str, Any], branch_state: dict[str, Any]) -> None:
+    meta["recent_execution_count"] += 1
+    has_gain = bool(feedback.get("has_gain"))
+    if has_gain:
+        meta["recent_gain_count"] += 1
+    else:
+        meta["recent_no_gain_count"] += 1
+    if _feedback_is_resource_exhausted(feedback):
+        meta["recent_resource_exhaustion_count"] += 1
+    meta["max_no_gain_runs"] = max(meta["max_no_gain_runs"], int(branch_state.get("no_gain_runs") or 0))
+
+
 def _finalize_learning_bucket(meta: dict[str, Any]) -> None:
     terminal = meta["promoted"] + meta["evaluated"] + meta["rejected"] + meta["archived"]
     if terminal > 0:
         meta["success_rate"] = round(meta["promoted"] / terminal, 3)
         meta["epistemic_value_score"] = round(meta["epistemic_value_score"] / terminal, 3)
+    recent_execution_count = int(meta.get("recent_execution_count") or 0)
+    recent_gain_count = int(meta.get("recent_gain_count") or 0)
+    recent_no_gain_count = int(meta.get("recent_no_gain_count") or 0)
+    recent_resource_exhaustion_count = int(meta.get("recent_resource_exhaustion_count") or 0)
+    meta["recent_yield"] = round(recent_gain_count / recent_execution_count, 3) if recent_execution_count else None
+
+    no_gain_cooldown_threshold = _env_int("RESEARCH_OPPORTUNITY_NO_GAIN_COOLDOWN_THRESHOLD", 2, minimum=1)
+    resource_cooldown_threshold = _env_int("RESEARCH_OPPORTUNITY_RESOURCE_COOLDOWN_THRESHOLD", 2, minimum=1)
+    low_yield_window = _env_int("RESEARCH_OPPORTUNITY_LOW_YIELD_WINDOW", 3, minimum=1)
+    max_no_gain_runs = int(meta.get("max_no_gain_runs") or 0)
+    cooldown_active = bool(
+        max_no_gain_runs >= no_gain_cooldown_threshold
+        or recent_resource_exhaustion_count >= resource_cooldown_threshold
+        or (
+            recent_execution_count >= low_yield_window
+            and recent_gain_count == 0
+            and recent_no_gain_count >= no_gain_cooldown_threshold
+        )
+    )
+    meta["cooldown_active"] = cooldown_active
+
+    if cooldown_active:
+        if recent_resource_exhaustion_count >= resource_cooldown_threshold:
+            meta["cooldown_reason"] = "resource_exhaustion"
+        elif max_no_gain_runs >= no_gain_cooldown_threshold:
+            meta["cooldown_reason"] = "repeated_no_gain"
+        else:
+            meta["cooldown_reason"] = "low_recent_yield"
+    else:
+        meta["cooldown_reason"] = None
+
     if meta["success_rate"] is None:
         meta["recommended_action"] = "keep"
+    elif cooldown_active:
+        meta["recommended_action"] = "downweight"
     elif meta["uncertainty_reduction_count"] >= 2 or meta["new_branch_count"] >= 1 or meta["epistemic_value_score"] >= 0.45:
         meta["recommended_action"] = "upweight"
     elif meta["repeat_signal_count"] >= max(2, meta["uncertainty_reduction_count"] + meta["negative_informative_count"]) or meta["epistemic_value_score"] <= -0.25:
@@ -120,6 +184,14 @@ def _new_meta(identity_key: str, label_key: str) -> dict[str, Any]:
         "negative_informative_count": 0,
         "new_branch_count": 0,
         "inconclusive_count": 0,
+        "recent_execution_count": 0,
+        "recent_gain_count": 0,
+        "recent_no_gain_count": 0,
+        "recent_resource_exhaustion_count": 0,
+        "max_no_gain_runs": 0,
+        "recent_yield": None,
+        "cooldown_active": False,
+        "cooldown_reason": None,
     }
 
 
@@ -128,27 +200,35 @@ def build_opportunity_learning(store_path: str | Path | None = None, output_path
     opath = Path(output_path) if output_path else (ARTIFACTS / "opportunity_learning.json")
     store = _read_json(spath, {"opportunities": {}})
     items = list((store.get("opportunities") or {}).values())
+    items_by_id = {
+        row.get("opportunity_id"): row
+        for row in items
+        if row.get("opportunity_id")
+    }
+    memory = _read_json(MEMORY_PATH, {})
+    branch_lifecycle = dict(memory.get("branch_lifecycle") or {})
+    execution_feedback = list(memory.get("execution_feedback") or [])[-160:]
 
     types: dict[str, dict[str, Any]] = {}
     families: dict[str, dict[str, Any]] = {}
     templates: dict[str, dict[str, Any]] = {}
     patterns: dict[str, dict[str, Any]] = {}
 
-    for row in items:
+    def buckets_for_row(row: dict[str, Any]) -> list[tuple[dict[str, dict[str, Any]], str, str]]:
         otype = row.get("opportunity_type") or "unknown"
         family = row.get("target_family") or "none"
-        template = _template_key(row)
-        pattern = _pattern_signature(row)
-        buckets = [
+        return [
             (types, otype, "opportunity_type"),
             (families, family, "family"),
-            (templates, template, "template"),
-            (patterns, pattern, "pattern"),
+            (templates, _template_key(row), "template"),
+            (patterns, _pattern_signature(row), "pattern"),
         ]
+
+    for row in items:
         state = row.get("state")
         evaluation = row.get("evaluation") or {}
-
-        for container, identity, label_key in buckets:
+        branch_state = dict(branch_lifecycle.get(row.get("opportunity_id") or "") or {})
+        for container, identity, label_key in buckets_for_row(row):
             meta = container.setdefault(identity, _new_meta(identity, label_key))
             meta["count"] += 1
             if state == "promoted":
@@ -159,13 +239,33 @@ def build_opportunity_learning(store_path: str | Path | None = None, output_path
                 meta["rejected"] += 1
             elif state == "archived":
                 meta["archived"] += 1
+            meta["max_no_gain_runs"] = max(meta["max_no_gain_runs"], int(branch_state.get("no_gain_runs") or 0))
             _apply_epistemic_updates(meta, evaluation)
+
+    for feedback in execution_feedback:
+        branch_id = feedback.get("branch_id")
+        row = items_by_id.get(branch_id)
+        if not row:
+            continue
+        branch_state = dict(branch_lifecycle.get(branch_id) or {})
+        for container, identity, label_key in buckets_for_row(row):
+            meta = container.setdefault(identity, _new_meta(identity, label_key))
+            _apply_feedback_updates(meta, feedback, branch_state)
 
     for bucket in (types, families, templates, patterns):
         for meta in bucket.values():
             _finalize_learning_bucket(meta)
 
-    payload = {"types": types, "families": families, "templates": templates, "patterns": patterns}
+    payload = {
+        "types": types,
+        "families": families,
+        "templates": templates,
+        "patterns": patterns,
+        "memory_window": {
+            "execution_feedback_count": len(execution_feedback),
+            "branch_lifecycle_count": len(branch_lifecycle),
+        },
+    }
     opath.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return payload
 
@@ -193,6 +293,7 @@ def allocate_opportunity_budget(snapshot: dict[str, Any], opportunity_learning: 
     types = opportunity_learning.get("types") or {}
     recovery_state = flow_state.get("state")
     regime_context = build_regime_context(snapshot)
+    representative_failure_dossiers = snapshot.get("representative_failure_dossiers") or {}
 
     budget = {"confirm": 2, "diagnose": 2, "expand": 1, "recombine": 1, "probe": 1}
     reasons: list[str] = []
@@ -234,6 +335,32 @@ def allocate_opportunity_budget(snapshot: dict[str, Any], opportunity_learning: 
         budget["probe"] += 1
         reasons.append("dynamic_shift_from_stalled_confirm_diagnose")
 
+    dossier_diagnose_count = len([row for row in representative_failure_dossiers.values() if row.get("recommended_action") == "diagnose"])
+    dossier_suppress_count = len([row for row in representative_failure_dossiers.values() if row.get("recommended_action") == "suppress"])
+    dossier_short_window_only_count = len([row for row in representative_failure_dossiers.values() if row.get("regime_dependency") == "short_window_only"])
+    dossier_parent_delta_failure_count = len([row for row in representative_failure_dossiers.values() if row.get("parent_delta_status") == "non_incremental"])
+    if dossier_diagnose_count or dossier_short_window_only_count:
+        budget["diagnose"] += min(2, dossier_diagnose_count + dossier_short_window_only_count)
+        budget["expand"] = max(0, budget["expand"] - 1)
+        reasons.append("representative_failure_bias_to_diagnose")
+    if dossier_suppress_count or dossier_parent_delta_failure_count:
+        budget["recombine"] = max(0, budget["recombine"] - 1)
+        budget["expand"] = max(0, budget["expand"] - 1)
+        budget["probe"] = max(budget.get("probe", 0), 2)
+        reasons.append("representative_failure_bias_away_from_old_space_recombine")
+
+    exploration_types = [types.get(key) or {} for key in ["expand", "recombine", "probe"]]
+    exploration_no_gain = sum(int(row.get("recent_no_gain_count") or 0) for row in exploration_types)
+    exploration_gain = sum(int(row.get("recent_gain_count") or 0) for row in exploration_types)
+    exploration_resource_pressure = sum(int(row.get("recent_resource_exhaustion_count") or 0) for row in exploration_types)
+    exploration_cooldown_count = sum(1 for row in exploration_types if row.get("cooldown_active"))
+    if exploration_resource_pressure >= 2 or exploration_cooldown_count >= 2 or (exploration_no_gain >= 4 and exploration_no_gain >= (exploration_gain + 2)):
+        budget["confirm"] += 1
+        budget["diagnose"] += 1
+        budget["expand"] = max(0, budget.get("expand", 0) - 1)
+        budget["recombine"] = max(0, budget.get("recombine", 0) - 1)
+        reasons.append("recent_low_yield_exploration_shift_to_validation")
+
     for key, floor in MIN_EXPLORATION_FLOOR.items():
         if budget.get(key, 0) < floor:
             budget[key] = floor
@@ -272,8 +399,21 @@ def allocate_opportunity_budget(snapshot: dict[str, Any], opportunity_learning: 
         "reasons": reasons,
         "autonomy_policy": autonomy_policy,
         "regime_context": regime_context,
+        "representative_failure_summary": {
+            "count": len(representative_failure_dossiers),
+            "diagnose_count": dossier_diagnose_count,
+            "suppress_count": dossier_suppress_count,
+            "short_window_only_count": dossier_short_window_only_count,
+            "parent_delta_failure_count": dossier_parent_delta_failure_count,
+        },
         "bandit_scores": {key: round(value, 4) for key, value in bandit_scores.items()},
         "bandit_allocations": adaptive_allocations,
+        "exploration_pressure": {
+            "recent_no_gain_count": exploration_no_gain,
+            "recent_gain_count": exploration_gain,
+            "recent_resource_exhaustion_count": exploration_resource_pressure,
+            "cooldown_count": exploration_cooldown_count,
+        },
     }
 
 
@@ -307,11 +447,20 @@ def should_bypass_recent_fingerprint(opportunity: dict[str, Any]) -> dict[str, A
     novelty = float(opportunity.get("novelty_score") or 0.0)
     confidence = float(opportunity.get("confidence") or 0.0)
     otype = opportunity.get("opportunity_type") or "unknown"
+    expected_gain = {
+        str(item).strip()
+        for item in (opportunity.get("expected_knowledge_gain") or [])
+        if item
+    }
+    high_epistemic = bool(expected_gain & {"boundary_confirmed", "new_branch_opened", "repeated_graveyard_confirmed", "uncertainty_reduced", "stable_candidate_confirmed"})
     allow = False
     reason = None
     if otype in {"confirm", "diagnose"} and priority >= 0.88 and confidence >= 0.6:
         allow = True
         reason = "high_priority_validation_override"
+    elif high_epistemic and otype in {"diagnose", "probe", "recombine"} and priority >= 0.72 and confidence >= 0.5:
+        allow = True
+        reason = "high_epistemic_gain_override"
     elif novelty >= 0.7 and priority >= 0.75:
         allow = True
         reason = "high_novelty_override"

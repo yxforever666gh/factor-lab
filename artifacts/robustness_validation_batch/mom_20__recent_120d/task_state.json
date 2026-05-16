@@ -1,9 +1,0 @@
-{
-  "task_id": "475572cc-32d6-4f0a-b914-3abca53eba39",
-  "config_path": "artifacts/generated_robustness_configs/mom_20__recent_120d.json",
-  "output_dir": "artifacts/robustness_validation_batch/mom_20__recent_120d",
-  "status": "finished",
-  "started_at_utc": "2026-03-22T16:18:46.372247+00:00",
-  "finished_at_utc": "2026-03-22T16:18:55.283462+00:00",
-  "error": null
-}

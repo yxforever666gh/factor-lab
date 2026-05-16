@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "phase": "A_baseline",
+  "strategy_mode": "long_only_equity_enhancement",
+  "target_holdings_min": 50,
+  "target_holdings_max": 100,
+  "benchmark_candidates": ["CSI500", "CSI1000", "custom_mid_small_cap_universe"],
+  "rebalance_candidates": ["monthly", "biweekly"],
+  "runtime_constraints": {
+    "broad_daemon_forbidden": true,
+    "controlled_only_allowed": true,
+    "max_unapproved_workflows": 0
+  },
+  "portfolio_constraints_next_phase": {
+    "single_name_weight_cap": 0.02,
+    "industry_weight_cap": 0.25,
+    "turnover_budget_per_rebalance": 0.35,
+    "cost_bps_round_trip_placeholder": 30
+  }
+}

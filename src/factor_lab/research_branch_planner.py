@@ -43,11 +43,17 @@ class ResearchBranchPlanner:
         family_recommendations = {row.get("family"): row for row in snapshot.get("family_recommendations", []) if row.get("family")}
         trial_summary = snapshot.get("research_trial_summary", {}) or {}
         analyst_signals = snapshot.get("analyst_signals") or {}
+        representative_failure_dossiers = snapshot.get("representative_failure_dossiers") or {}
+        failure_question_cards = snapshot.get("failure_question_cards") or []
 
         top_family_score = max([row.get("family_score") or 0 for row in family_summary] or [0])
         hybrid_count = int(relationship_summary.get("hybrid_of", 0) or 0)
         refinement_count = int(relationship_summary.get("refinement_of", 0) or 0)
         duplicate_count = int(relationship_summary.get("duplicate_of", 0) or 0)
+        diagnose_representative_count = len([row for row in representative_failure_dossiers.values() if row.get("recommended_action") == "diagnose"])
+        suppress_representative_count = len([row for row in representative_failure_dossiers.values() if row.get("recommended_action") == "suppress"])
+        short_window_only_count = len([row for row in representative_failure_dossiers.values() if row.get("regime_dependency") == "short_window_only"])
+        parent_delta_failure_count = len([row for row in representative_failure_dossiers.values() if row.get("parent_delta_status") == "non_incremental"])
 
         branch_decisions = []
         priority_scored: list[tuple[float, str]] = []
@@ -113,7 +119,7 @@ class ResearchBranchPlanner:
                     score -= 10
                 reason = f"高分 family={top_family_score:.2f}，refinement={refinement_count}，优先把强主线做深。最近增量 {recent_gain}。"
             elif family == "medium_horizon_validation":
-                score += 66 + min(refinement_count * 2, 8)
+                score += 66 + min(refinement_count * 2, 8) + min(short_window_only_count * 4, 12)
                 decision = _normalize_decision(action_hint, "advance")
                 reason = f"soft robust 候选需要跨到 60d/90d/120d 晋级赛，确认它们能否脱离短窗依赖。最近增量 {recent_gain}。"
             elif family == "graveyard_diagnosis":
@@ -135,7 +141,22 @@ class ResearchBranchPlanner:
                     decision = "pause" if action_hint != "explore_new_branch" else "advance"
                 if action_hint == "explore_new_branch":
                     score += 8
+                if failure_question_cards:
+                    score += min(len(failure_question_cards) * 3, 12)
+                    decision = "advance"
                 reason = f"exploration 仅在已有 family 分数较强且混合支路出现时推进。最近增量 {recent_gain}。"
+
+            if diagnose_representative_count:
+                if family in {"stable_candidate_validation", "medium_horizon_validation", "graveyard_diagnosis", "recent_window_validation"}:
+                    score += min(diagnose_representative_count * 3, 9)
+                elif family in {"window_expansion", "exploration"}:
+                    score -= min(diagnose_representative_count * 4, 12)
+                reason += f" representative_diagnose={diagnose_representative_count}。"
+            if suppress_representative_count and family in {"exploration", "window_expansion"}:
+                score -= min(suppress_representative_count * 4 + parent_delta_failure_count * 3, 14)
+                reason += f" representative_suppress={suppress_representative_count}，parent_delta_failures={parent_delta_failure_count}。"
+            if failure_question_cards and family == "exploration":
+                reason += f" failure_question_cards={len(failure_question_cards)}，本轮探索应直接响应失败模式出题。"
 
             if fatigue_level == "medium":
                 score -= 6

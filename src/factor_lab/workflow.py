@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 import pandas as pd
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List
+from typing import Any, List
 
 from factor_lab.analytics import (
     evaluate_rolling_windows,
@@ -18,12 +18,13 @@ from factor_lab.analytics import (
 )
 from factor_lab.clustering import greedy_correlation_clusters, pick_cluster_representatives
 from factor_lab.data import SampleDataGenerator
-from factor_lab.data_cache import ensure_feature_coverage, slice_feature_store
-from factor_lab.dedup import config_fingerprint
+from factor_lab.data_cache import ensure_feature_coverage, inspect_feature_store_coverage, slice_feature_store
+from factor_lab.dedup import workflow_experiment_fingerprint
 from factor_lab.evaluation import evaluate_factor
 from factor_lab.experiments import ExperimentLedger
 from factor_lab.factor_candidates import (
     build_hypothesis_summary,
+    build_research_thesis_summary,
     derive_window_label,
     infer_factor_family,
     score_candidate_evaluation,
@@ -31,8 +32,12 @@ from factor_lab.factor_candidates import (
 )
 from factor_lab.candidate_graph import build_candidate_relationships
 from factor_lab.factors import FactorDefinition, apply_factor, resolve_factor_definitions
+from factor_lab.factor_transforms import add_pit_value_trap_transforms
+from factor_lab.feature_overlay import apply_feature_overlay_from_config
 from factor_lab.neutralization import neutralize_by_date
 from factor_lab.portfolio import build_composite_factor, evaluate_long_short_portfolio
+from factor_lab.bucket_aware_portfolio import evaluate_bucket_pair_portfolio
+from factor_lab.portfolio_construction_config import parse_portfolio_construction
 from factor_lab.registry import FactorRegistry
 from factor_lab.scoring import score_factors
 from factor_lab.storage import ExperimentStore
@@ -53,23 +58,97 @@ def _load_dataset(config: dict, timing: WorkflowTiming | None = None):
     if source == "tushare":
         provider = TushareDataProvider()
         cache_dir = config.get("cache_dir", "artifacts/tushare_cache")
-        universe_limit = config.get("universe_limit", 80)
-        universe_name = config.get("universe_name") or default_universe_name(universe_limit)
-        ensure_feature_coverage(
-            provider=provider,
-            universe_limit=universe_limit,
-            start_date=config["start_date"],
-            end_date=config["end_date"],
-            cache_dir=cache_dir,
-            universe_name=universe_name,
-            timing=timing,
-        )
-        return slice_feature_store(
-            universe_name=universe_name,
-            start_date=config["start_date"],
-            end_date=config["end_date"],
-            cache_dir=cache_dir,
-        )
+        universe_limit = int(config.get("universe_limit", 80) or 80)
+        research_profile = str(config.get("research_profile") or "").strip().lower()
+        validation_mode = str(config.get("validation_mode") or "").strip().lower()
+        allow_stale_cache_days = max(0, int(config.get("allow_stale_cache_days") or os.getenv("FACTOR_LAB_GENERATED_BATCH_ALLOW_STALE_CACHE_DAYS") or 0))
+        should_defer_when_route_unhealthy = str(os.getenv("FACTOR_LAB_GENERATED_BATCH_DEFER_WHEN_ROUTE_UNHEALTHY") or "1").strip().lower() not in {"0", "false", "no", "off"}
+        cheap_screen_mode = research_profile in {"opportunity_cheap_screen", "cheap_screen"} or validation_mode.startswith("light")
+
+        def stale_cache_dataset(limit: int):
+            if not cheap_screen_mode or allow_stale_cache_days <= 0:
+                return None, None
+            universe_name = config.get("universe_name") or default_universe_name(limit)
+            coverage = inspect_feature_store_coverage(
+                universe_name=universe_name,
+                start_date=config["start_date"],
+                end_date=config["end_date"],
+                cache_dir=cache_dir,
+            )
+            stale_days = coverage.get("stale_days")
+            effective_end_date = coverage.get("effective_end_date")
+            if not coverage.get("available") or not coverage.get("covers_start") or stale_days is None:
+                return None, universe_name
+            if int(stale_days or 0) > allow_stale_cache_days or not effective_end_date:
+                return None, universe_name
+            dataset = slice_feature_store(
+                universe_name=universe_name,
+                start_date=config["start_date"],
+                end_date=str(effective_end_date),
+                cache_dir=cache_dir,
+            )
+            if dataset.frame.empty:
+                return None, universe_name
+            config["effective_end_date"] = str(effective_end_date)
+            config["data_freshness"] = "stale_acceptable_for_cheap_screen"
+            if timing:
+                timing.set_counter("cache_hit_type", "feature_master_stale_fallback")
+                timing.set_counter("stale_cache_days", int(stale_days or 0))
+            return dataset, universe_name
+
+        def load_for_limit(limit: int):
+            universe_name = config.get("universe_name") or default_universe_name(limit)
+            if should_defer_when_route_unhealthy and cheap_screen_mode and not provider.route_healthy():
+                stale_dataset, stale_universe_name = stale_cache_dataset(limit)
+                if stale_dataset is not None:
+                    return stale_dataset, stale_universe_name or universe_name
+                raise RuntimeError(
+                    "tushare route unhealthy and no acceptable stale cache: "
+                    f"universe={universe_name} start={config['start_date']} end={config['end_date']}"
+                )
+            ensure_feature_coverage(
+                provider=provider,
+                universe_limit=limit,
+                start_date=config["start_date"],
+                end_date=config["end_date"],
+                cache_dir=cache_dir,
+                universe_name=universe_name,
+                timing=timing,
+            )
+            dataset = slice_feature_store(
+                universe_name=universe_name,
+                start_date=config["start_date"],
+                end_date=config.get("effective_end_date") or config["end_date"],
+                cache_dir=cache_dir,
+            )
+            if config.get("pit_requirements") or config.get("required_pit_features"):
+                dataset.frame = provider.enrich_frame_with_pit_financial_features(
+                    dataset.frame,
+                    cache_dir=cache_dir,
+                    timing=timing,
+                    retain_pit_cashflow_diagnostics=bool(config.get("retain_pit_cashflow_diagnostics")),
+                )
+                if config.get("pit_value_trap_repair") or config.get("standardized_pit_features"):
+                    dataset.frame = add_pit_value_trap_transforms(dataset.frame)
+            if config.get("feature_overlay_csv") or config.get("feature_overlay_path"):
+                dataset.frame = apply_feature_overlay_from_config(dataset.frame, config)
+                if timing:
+                    timing.set_counter("feature_overlay_applied", 1)
+            return dataset, universe_name
+
+        dataset, universe_name = load_for_limit(universe_limit)
+        config["effective_universe_limit"] = universe_limit
+        config["effective_universe_name"] = universe_name
+
+        fallback_universe_limit = int(config.get("fallback_universe_limit") or 0)
+        if dataset.frame.empty and fallback_universe_limit > universe_limit:
+            fallback_dataset, fallback_universe_name = load_for_limit(fallback_universe_limit)
+            if not fallback_dataset.frame.empty:
+                dataset = fallback_dataset
+                config["effective_universe_limit"] = fallback_universe_limit
+                config["effective_universe_name"] = fallback_universe_name
+
+        return dataset
 
     return SampleDataGenerator(seed=config.get("seed", 7)).generate(
         num_stocks=config.get("num_stocks", 60),
@@ -208,6 +287,37 @@ def _evaluate_definition_bundle(
         "splits": split_payload,
         "rolling": rolling_payload,
     }
+
+
+def evaluate_bucket_aware_portfolios(
+    dataset_frame: pd.DataFrame,
+    definitions: list[FactorDefinition],
+    factor_value_cache: dict[str, pd.Series],
+    config: dict[str, Any],
+) -> list[dict[str, Any]]:
+    construction = parse_portfolio_construction(config)
+    if construction.get("mode") != "bucket_pair":
+        return []
+    thresholds = config.get("thresholds") or {}
+    min_spread = float(thresholds.get("min_bucket_spread", thresholds.get("min_top_bottom_spread", 0.0)) or 0.0)
+    rows: list[dict[str, Any]] = []
+    for definition in definitions:
+        values = factor_value_cache.get(definition.name)
+        if values is None:
+            continue
+        factor_frame = dataset_frame[["date", "ticker", "forward_return_5d"]].copy()
+        factor_frame["factor_value"] = values
+        result = evaluate_bucket_pair_portfolio(
+            factor_frame,
+            quantiles=int(construction["quantiles"]),
+            long_quantile=int(construction["long_quantile"]),
+            short_quantile=int(construction["short_quantile"]),
+            min_spread=min_spread,
+        ).to_dict()
+        result["factor_name"] = definition.name
+        result["expression"] = definition.expression
+        rows.append(result)
+    return rows
 
 
 def _write_summary(
@@ -410,6 +520,7 @@ def _register_candidate_intelligence(
     graveyard: list[dict],
     portfolio_results: list[dict],
     clusters: list[list[str]] | None = None,
+    cluster_representatives: list[dict] | None = None,
 ) -> None:
     raw_map = {row['factor_name']: row for row in results}
     neutral_map = {row['factor_name']: row for row in neutralized_results}
@@ -422,6 +533,53 @@ def _register_candidate_intelligence(
         rolling_map.setdefault(row['factor_name'], []).append(row)
     candidate_map = {row['factor_name']: row for row in candidates}
     graveyard_map = {row['factor_name']: row for row in graveyard}
+
+    representative_rows = list(cluster_representatives or [])
+    representative_group_map: dict[tuple[str, ...], dict[str, Any]] = {}
+    for row in representative_rows:
+        members = tuple(sorted(row.get('cluster_members') or [row.get('factor_name')]))
+        group = representative_group_map.setdefault(
+            members,
+            {
+                'cluster_members': list(members),
+                'representative_candidates': [],
+                'primary_candidate': None,
+            },
+        )
+        factor_name = row.get('factor_name')
+        if factor_name and factor_name not in group['representative_candidates']:
+            group['representative_candidates'].append(factor_name)
+        if row.get('is_primary_representative') and factor_name:
+            group['primary_candidate'] = factor_name
+    representative_context_by_name: dict[str, dict[str, Any]] = {}
+    for row in representative_rows:
+        members = tuple(sorted(row.get('cluster_members') or [row.get('factor_name')]))
+        group = representative_group_map.get(members) or {}
+        factor_name = row.get('factor_name')
+        if not factor_name:
+            continue
+        representative_context_by_name[factor_name] = {
+            'representative_candidate': factor_name,
+            'representative_rank': row.get('cluster_rep_rank') or row.get('representative_rank'),
+            'representative_count': row.get('cluster_rep_count') or row.get('representative_count'),
+            'representative_candidates': list(group.get('representative_candidates') or [factor_name]),
+            'primary_candidate': group.get('primary_candidate') or factor_name,
+            'cluster_members': list(group.get('cluster_members') or [factor_name]),
+        }
+    for group in representative_group_map.values():
+        primary_candidate = group.get('primary_candidate') or next(iter(group.get('representative_candidates') or group.get('cluster_members') or []), None)
+        for member in group.get('cluster_members') or []:
+            representative_context_by_name.setdefault(
+                member,
+                {
+                    'representative_candidate': primary_candidate,
+                    'representative_rank': None,
+                    'representative_count': len(group.get('representative_candidates') or []),
+                    'representative_candidates': list(group.get('representative_candidates') or []),
+                    'primary_candidate': primary_candidate,
+                    'cluster_members': list(group.get('cluster_members') or []),
+                },
+            )
 
     portfolio_by_name = {row['strategy_name']: row for row in portfolio_results}
     candidate_portfolio = portfolio_by_name.get('long_short_top_bottom_candidates_only') or {}
@@ -498,7 +656,7 @@ def _register_candidate_intelligence(
                 'candidate_id': candidate_id,
                 'run_id': run_id,
                 'window_label': window_label,
-                'market_scope': config.get('universe_name') or f"top_{config.get('universe_limit') or 'all'}",
+                'market_scope': config.get('effective_universe_name') or config.get('universe_name') or f"top_{config.get('effective_universe_limit') or config.get('universe_limit') or 'all'}",
                 **metric_payload,
                 **scored,
                 'notes': notes,
@@ -511,6 +669,12 @@ def _register_candidate_intelligence(
         candidate_row = store.get_factor_candidate(candidate_id) or {'name': name, 'family': inferred_family, 'status': summary.get('status')}
         hypothesis = build_hypothesis_summary(candidate_row, evaluations)
         store.upsert_research_hypothesis(candidate_id, hypothesis)
+        thesis = build_research_thesis_summary(
+            candidate_row,
+            evaluations,
+            representative_context=representative_context_by_name.get(name) or {},
+        )
+        store.upsert_research_thesis(candidate_id, thesis)
 
     relationship_rows = build_candidate_relationships(
         candidates=candidates,
@@ -542,7 +706,7 @@ def run_workflow(config_path: str, output_dir: str) -> None:
     task = task_tracker.start(config_path=config_path, output_dir=str(output))
     run_id = task["task_id"]
     created_at = task["started_at_utc"]
-    cfg_fingerprint = config_fingerprint(config)
+    cfg_fingerprint = workflow_experiment_fingerprint(config)
 
     try:
         store = ExperimentStore(Path("artifacts") / "factor_lab.db")
@@ -551,12 +715,13 @@ def run_workflow(config_path: str, output_dir: str) -> None:
         task = task_tracker.update(task, stage="load_dataset")
         with timing.stage("load_dataset"):
             dataset = _load_dataset(config, timing=timing)
-        dataset.frame.to_csv(output / "dataset.csv", index=False)
+        if bool(config.get("write_dataset_csv", True)):
+            dataset.frame.to_csv(output / "dataset.csv", index=False)
         if dataset.frame.empty:
             raise ValueError(
                 "dataset slice empty: "
                 f"start={config.get('start_date')} end={config.get('end_date')} "
-                f"universe_limit={config.get('universe_limit')} output_dir={output}"
+                f"universe_limit={config.get('effective_universe_limit') or config.get('universe_limit')} output_dir={output}"
             )
 
         factor_configs = resolve_factor_definitions(config, config_dir=Path(config_path).resolve().parent)
@@ -667,6 +832,7 @@ def run_workflow(config_path: str, output_dir: str) -> None:
         task = task_tracker.update(task, stage="portfolio")
         with timing.stage("portfolio"):
             portfolio_results = []
+            bucket_aware_portfolio_results = []
             cost_bps = float(config.get("portfolio_cost_bps_per_turnover") or 10.0)
 
             metadata_lookup = {item["name"]: item for item in factor_configs}
@@ -724,11 +890,14 @@ def run_workflow(config_path: str, output_dir: str) -> None:
                 family_defs.append(definition)
                 seen_families.add(family)
             eval_group("family_distinct_only", family_defs, neutralize=False)
+            bucket_aware_portfolio_results = evaluate_bucket_aware_portfolios(dataset.frame, definitions, factor_value_cache, config)
 
         task = task_tracker.update(task, stage="persist_final")
         with timing.stage("persist_final"):
             with open(output / "portfolio_results.json", "w", encoding="utf-8") as handle:
                 json.dump(portfolio_results, handle, ensure_ascii=False, indent=2)
+            with open(output / "bucket_aware_portfolio_results.json", "w", encoding="utf-8") as handle:
+                json.dump(bucket_aware_portfolio_results, handle, ensure_ascii=False, indent=2)
 
             ledger = ExperimentLedger(output)
             ledger_payload = {
@@ -744,6 +913,7 @@ def run_workflow(config_path: str, output_dir: str) -> None:
                 "cluster_representatives": [row["factor_name"] for row in cluster_representatives],
                 "top_scores": scored_factors[:3],
                 "portfolio_results": portfolio_results,
+                "bucket_aware_portfolio_results": bucket_aware_portfolio_results,
                 "rolling_summary": rolling_summary_rows,
                 "rolling_failures": rolling_failures,
             }
@@ -758,7 +928,7 @@ def run_workflow(config_path: str, output_dir: str) -> None:
                     "data_source": config.get("data_source", "sample"),
                     "start_date": config.get("start_date"),
                     "end_date": config.get("end_date"),
-                    "universe_limit": config.get("universe_limit"),
+                    "universe_limit": config.get("effective_universe_limit") or config.get("universe_limit"),
                     "factor_count": len(definitions),
                     "dataset_rows": int(len(dataset.frame)),
                     "status": "finished",
@@ -893,17 +1063,20 @@ def run_workflow(config_path: str, output_dir: str) -> None:
                 graveyard=graveyard,
                 portfolio_results=portfolio_results,
                 clusters=clusters,
+                cluster_representatives=cluster_representatives,
             )
-            refresh_candidate_risk_profiles(store, run_id=run_id, output_dir=Path("artifacts"))
+            if bool(config.get("refresh_global_risk", True)):
+                refresh_candidate_risk_profiles(store, run_id=run_id, output_dir=Path("artifacts"))
 
             # Exposure Track: strength-first factors for style/industry rotation.
-            try:
-                from factor_lab.exposure_track import refresh_exposure_track
+            if bool(config.get("refresh_exposure_track", True)):
+                try:
+                    from factor_lab.exposure_track import refresh_exposure_track
 
-                refresh_exposure_track(store, run_id=run_id)
-            except Exception:
-                # Exposure track should not break the main workflow.
-                pass
+                    refresh_exposure_track(store, run_id=run_id)
+                except Exception:
+                    # Exposure track should not break the main workflow.
+                    pass
 
             _write_summary(
                 results=results,
@@ -953,7 +1126,7 @@ def run_workflow(config_path: str, output_dir: str) -> None:
                 "data_source": config.get("data_source", "sample"),
                 "start_date": config.get("start_date"),
                 "end_date": config.get("end_date"),
-                "universe_limit": config.get("universe_limit"),
+                "universe_limit": config.get("effective_universe_limit") or config.get("universe_limit"),
                 "factor_count": len(config.get("factors", [])),
                 "dataset_rows": 0,
                 "status": "failed",

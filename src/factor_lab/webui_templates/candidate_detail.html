@@ -107,8 +107,104 @@
     {% else %}
     <div class="muted">暂无假设摘要。</div>
     {% endif %}
+
+    <h2 style="margin-top:18px;">机构化 Thesis / Quality</h2>
+    {% if research_thesis or promotion_row %}
+    {% if research_thesis %}
+    <div style="margin-bottom:10px;">
+      <span class="pill">{{ research_thesis.institutional_bucket_label or '-' }}</span>
+      <span class="pill">{{ research_thesis.thesis_type or '-' }}</span>
+      <span class="pill">thesis={{ research_thesis.thesis_id or '-' }}</span>
+    </div>
+    <p>{{ research_thesis.thesis_text or research_thesis.mechanism_rationale or '-' }}</p>
+    {% if research_thesis.invalidation %}
+    <h3>失效条件</h3>
+    <ul>{% for row in research_thesis.invalidation %}<li>{{ row }}</li>{% endfor %}</ul>
+    {% endif %}
+    {% endif %}
+    {% if promotion_row %}
+    <table style="margin-top:10px;">
+      <tbody>
+        <tr><th>质量分类</th><td>{{ promotion_row.quality_classification_label or promotion_row.quality_classification or '-' }}</td></tr>
+        <tr><th>晋升决策</th><td>{{ promotion_row.quality_promotion_decision_label or promotion_row.quality_promotion_decision or '-' }}</td></tr>
+        <tr><th>质量总分</th><td>{{ promotion_row.quality_total_score if promotion_row.quality_total_score is not none else '-' }}</td></tr>
+        <tr><th>摘要</th><td>{{ promotion_row.quality_summary or '-' }}</td></tr>
+        <tr><th>Novelty class</th><td>{{ novelty_row.novelty_class if novelty_row else promotion_row.novelty_class if promotion_row else '-' }}</td></tr>
+        <tr><th>Incrementality</th><td>{{ novelty_row.incrementality_confidence if novelty_row else promotion_row.incrementality_confidence if promotion_row else '-' }}</td></tr>
+        <tr><th>Novelty action</th><td>{{ novelty_row.recommended_action if novelty_row else promotion_row.novelty_recommended_action if promotion_row else '-' }}</td></tr>
+      </tbody>
+    </table>
+    {% endif %}
+    {% else %}
+    <div class="muted">暂无机构化 thesis / quality 信息。</div>
+    {% endif %}
   </section>
 </div>
+
+<section class="card" style="margin-top:18px;">
+  <h2>失效画像 / Failure Dossier</h2>
+  {% if candidate_failure_dossier %}
+  <div style="margin-bottom:10px;">
+    <span class="pill">action={{ candidate_failure_dossier.recommended_action or '-' }}</span>
+    <span class="pill">regime={{ candidate_failure_dossier.regime_dependency or '-' }}</span>
+    <span class="pill">parent_delta={{ candidate_failure_dossier.parent_delta_status or '-' }}</span>
+    <span class="pill">retention_avg={{ candidate_failure_dossier.retention_avg if candidate_failure_dossier.retention_avg is not none else '-' }}</span>
+  </div>
+  <div class="grid cols-2">
+    <div>
+      <h3 style="margin-top:0;">失效模式</h3>
+      {% if candidate_failure_dossier.failure_modes %}
+      <ul>{% for row in candidate_failure_dossier.failure_modes %}<li>{{ row }}</li>{% endfor %}</ul>
+      {% else %}
+      <div class="muted">当前没有明显的失败模式标签。</div>
+      {% endif %}
+    </div>
+    <div>
+      <h3 style="margin-top:0;">证据</h3>
+      {% if candidate_failure_dossier.evidence %}
+      <ul>{% for row in candidate_failure_dossier.evidence %}<li>{{ row }}</li>{% endfor %}</ul>
+      {% else %}
+      <div class="muted">暂无失效证据摘要。</div>
+      {% endif %}
+      <div class="muted" style="margin-top:10px;">父因子：{{ candidate_failure_dossier.parent_candidates|join('、') if candidate_failure_dossier.parent_candidates else '无' }}</div>
+    </div>
+  </div>
+  <div class="table-wrap" style="margin-top:12px;">
+    <table>
+      <thead><tr><th>窗口</th><th>Bucket</th><th>最终分</th><th>Retention</th><th>Neutralized IC</th><th>状态</th></tr></thead>
+      <tbody>
+        {% for row in candidate_failure_dossier.window_evidence %}
+        <tr>
+          <td>{{ row.window_label or '-' }}</td>
+          <td>{{ row.bucket or '-' }}</td>
+          <td class="num">{{ row.final_score if row.final_score is not none else '-' }}</td>
+          <td class="num">{{ row.retention if row.retention is not none else '-' }}</td>
+          <td class="num">{{ row.neutralized_rank_ic_mean if row.neutralized_rank_ic_mean is not none else '-' }}</td>
+          <td>{{ row.status or '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="muted">暂无失效画像。</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:18px;">
+  <h2>组合边际贡献 / Portfolio Contribution</h2>
+  {% if candidate_portfolio_contribution %}
+  <div style="margin-bottom:10px;">
+    <span class="pill {{ 'good' if candidate_portfolio_contribution.contribution_class == 'positive' else 'bad' if candidate_portfolio_contribution.contribution_class == 'negative' else 'warn' }}">{{ candidate_portfolio_contribution.contribution_class }}</span>
+    <span class="pill">ΔSharpe={{ candidate_portfolio_contribution.delta_sharpe if candidate_portfolio_contribution.delta_sharpe is not none else '-' }}</span>
+    <span class="pill">ΔCostAdj={{ candidate_portfolio_contribution.delta_cost_adjusted_annual_return if candidate_portfolio_contribution.delta_cost_adjusted_annual_return is not none else '-' }}</span>
+    <span class="pill">latest_overlap={{ candidate_portfolio_contribution.latest_overlap_ratio if candidate_portfolio_contribution.latest_overlap_ratio is not none else '-' }}</span>
+  </div>
+  <div class="muted">正值表示把这个因子放进当前 paper portfolio 候选池后，组合级表现比 leave-one-out 更好；负值表示更像噪音或重复。</div>
+  {% else %}
+  <div class="muted">暂无组合边际贡献报告。</div>
+  {% endif %}
+</section>
 
 <div class="grid cols-2" style="margin-top:18px;">
   <section class="card">

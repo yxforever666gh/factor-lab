@@ -25,6 +25,66 @@
 </div>
 
 <section class="card" style="margin-bottom:18px;">
+  <h2>Decision Layer</h2>
+  <div class="grid cols-4" style="margin-bottom:12px;">
+    <div>
+      <div class="muted">live effective</div>
+      <div style="font-size:28px; font-weight:700;" class="{{ 'bad' if health.decision_layer.live.degraded_to_heuristic else 'good' }}">{{ health.decision_layer.live.effective_source or '-' }}</div>
+    </div>
+    <div>
+      <div class="muted">observe effective</div>
+      <div style="font-size:28px; font-weight:700;" class="{{ 'bad' if health.decision_layer.observation.degraded_to_heuristic else 'good' }}">{{ health.decision_layer.observation.effective_source or '-' }}</div>
+    </div>
+    <div>
+      <div class="muted">planner fallback</div>
+      <div style="font-size:18px; font-weight:700;">{{ health.decision_layer.planner.fallback_reason or '-' }}</div>
+    </div>
+    <div>
+      <div class="muted">gateway probe</div>
+      <div style="font-size:18px; font-weight:700;">
+        {% if health.decision_layer.observation.probe_skipped %}
+        skipped
+        {% elif health.decision_layer.observation.probe_ok %}
+        ok / {{ health.decision_layer.observation.probe_latency_ms if health.decision_layer.observation.probe_latency_ms is not none else '-' }}ms
+        {% else %}
+        {{ health.decision_layer.observation.probe_error or 'n/a' }}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% if health.decision_layer.degraded %}
+  <div class="bad">当前 decision layer 有显式退化，live 已不再静默假装正常。</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-bottom:18px;">
+  <h2>Repair Layer</h2>
+  <div class="grid cols-4" style="margin-bottom:12px;">
+    <div>
+      <div class="muted">active incidents</div>
+      <div style="font-size:28px; font-weight:700;" class="{{ 'bad' if health.repair_layer.active_incident_count else 'good' }}">{{ health.repair_layer.active_incident_count }}</div>
+    </div>
+    <div>
+      <div class="muted">24h incidents</div>
+      <div style="font-size:28px; font-weight:700;">{{ health.repair_layer.metrics.incident_count_24h if health.repair_layer.metrics else 0 }}</div>
+    </div>
+    <div>
+      <div class="muted">24h observations</div>
+      <div style="font-size:28px; font-weight:700;">{{ health.repair_layer.metrics.observation_count_24h if health.repair_layer.metrics else 0 }}</div>
+    </div>
+    <div>
+      <div class="muted">last verification</div>
+      <div style="font-size:18px; font-weight:700;">{{ health.repair_layer.verification.overall_status if health.repair_layer.verification else '-' }}</div>
+    </div>
+  </div>
+  <div class="muted">最新 repair 判断：{{ health.repair_layer.response.incident_type if health.repair_layer.response else '-' }} / {{ health.repair_layer.response.repair_mode if health.repair_layer.response else '-' }}</div>
+  <div class="muted">route_unhealthy={{ 'yes' if health.repair_layer.route_unhealthy else 'no' }} · restart_recently={{ 'yes' if health.repair_layer.restart_recently else 'no' }}</div>
+  {% if health.repair_layer.top_incident_types_24h %}
+  <div class="muted" style="margin-top:8px;">24h top incidents：{% for row in health.repair_layer.top_incident_types_24h %}{{ row[0] }}={{ row[1] }}{% if not loop.last %} · {% endif %}{% endfor %}</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-bottom:18px;">
   <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
     <div>
       <h2 style="margin-bottom:6px;">项目进步观察</h2>
@@ -99,6 +159,26 @@
 </section>
 
 <section class="card" style="margin-top:18px;">
+  <h2>Approved Universe / Functional Agents</h2>
+  {% if approved_universe %}
+  <div class="grid cols-3" style="margin-bottom:12px;">
+    <div><div class="muted">Approved 数量</div><div style="font-size:28px; font-weight:700;">{{ approved_universe.summary.approved_count if approved_universe.summary else 0 }}</div></div>
+    <div><div class="muted">Policy</div><div style="font-size:18px; font-weight:700;">{{ approved_universe.selection_policy_version or '-' }}</div></div>
+    <div><div class="muted">当前入池</div><div style="font-size:18px; font-weight:700;">{{ approved_universe.rows|map(attribute='factor_name')|join('、') if approved_universe.rows else '无' }}</div></div>
+  </div>
+  <div class="muted">planner / promotion 可读取 approved universe 作为统一研究行为层。</div>
+  <div class="grid cols-4" style="margin-top:12px;">
+    <div><div class="muted">Novelty classes</div><div>{{ novelty_judge.summary.class_counts if novelty_judge and novelty_judge.summary else '-' }}</div></div>
+    <div><div class="muted">AU allocation audit</div><div>{{ allocator_governance_audit.allocation.summary.count_by_audit if allocator_governance_audit and allocator_governance_audit.allocation else '-' }}</div></div>
+    <div><div class="muted">Decision A/B</div><div>{{ decision_ab.report.recommendation if decision_ab and decision_ab.report else '-' }} / qΔ={{ decision_ab.report.quality_delta if decision_ab and decision_ab.report else '-' }}</div></div>
+    <div><div class="muted">Failure Analyst+</div><div>{% if failure_analyst_enhancement and failure_analyst_enhancement.summary %}reroute={{ failure_analyst_enhancement.summary.reroute_count or 0 }} / stop={{ failure_analyst_enhancement.summary.stop_count or 0 }}{% else %}-{% endif %}</div></div>
+  </div>
+  {% else %}
+  <div class="muted">Approved Universe 尚未生成。</div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-top:18px;">
   <h2>质量分层快照</h2>
   <div class="grid cols-5" style="margin-bottom:12px;">
     <div><div class="muted">稳定 alpha 候选</div><div style="font-size:28px; font-weight:700;">{{ promotion_scorecard.summary.stable_alpha_candidate_count if promotion_scorecard.summary else 0 }}</div></div>
@@ -157,6 +237,32 @@
     <div><div class="muted">当前 pending</div><div style="font-size:28px; font-weight:700;">{{ health.research_progress.stall_state.queue_pending or 0 }}</div></div>
     <div><div class="muted">当前 running</div><div style="font-size:28px; font-weight:700;">{{ health.research_progress.stall_state.queue_running or 0 }}</div></div>
   </div>
+
+  {% set blocked_status = health.run_health.daemon_status.blocked_lane_status if health.run_health.daemon_status else None %}
+  {% if blocked_status and blocked_status.active %}
+  <div style="padding:12px; border:1px solid var(--border); border-radius:12px; background:var(--panel-2); margin-bottom:12px;">
+    <div><strong>当前 blocked lane：</strong>{{ health.run_health.daemon_status.blocked_lane_summary or blocked_status.summary }}</div>
+    <div class="muted" style="margin-top:6px;">
+      blocked pending {{ blocked_status.blocked_pending_count or 0 }} ｜ unblocked pending {{ blocked_status.unblocked_pending_count or 0 }} ｜ {{ '仅剩 blocked lane，队列需要恢复' if blocked_status.only_blocked_pending else '仍有健康 lane 在继续推进' }}
+    </div>
+  </div>
+  <div class="table-wrap" style="margin-bottom:12px;">
+    <table>
+      <thead><tr><th>Lane</th><th>根因</th><th>连续失败</th><th>Pending</th><th>最近错误</th></tr></thead>
+      <tbody>
+        {% for lane in blocked_status.lanes %}
+        <tr>
+          <td>{{ lane.task_type }}</td>
+          <td>{{ lane.root_cause_label or lane.root_cause or '-' }}</td>
+          <td class="num">{{ lane.consecutive_failures or 0 }}</td>
+          <td class="num">{{ lane.pending_count or 0 }}</td>
+          <td class="text-break">{{ lane.latest_error or '-' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
 
   <div class="grid cols-2">
     <div>

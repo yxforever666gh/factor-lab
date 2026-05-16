@@ -13,7 +13,7 @@ from factor_lab.opportunity_policy import build_opportunity_learning, allocate_o
 from factor_lab.research_portfolio import build_research_portfolio_plan
 from factor_lab.meta_research_critic import build_meta_research_critique
 from factor_lab.storage import ExperimentStore
-from factor_lab.research_runtime_state import recently_finished_same_fingerprint
+from factor_lab.research_runtime_state import recently_finished_same_fingerprint, task_repeat_cooldown_minutes
 
 ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS = ROOT / "artifacts"
@@ -83,7 +83,11 @@ def _should_pre_suppress_question(question: dict[str, Any], store: ExperimentSto
     if "meta_research_critique" in "".join(sources) or "pattern_learning" in "".join(sources):
         return False
     fingerprint = f"pre_question::{_question_fingerprint(question)}"
-    repeated = recently_finished_same_fingerprint(store, fingerprint, cooldown_minutes=180)
+    repeated = recently_finished_same_fingerprint(
+        store,
+        fingerprint,
+        cooldown_minutes=task_repeat_cooldown_minutes(task_type="diagnostic", payload={"expected_information_gain": list(question.get("expected_knowledge_gain") or [])}),
+    )
     if not repeated:
         return False
     expected_gain = set(question.get("expected_knowledge_gain") or [])

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,32 @@ from factor_lab.opportunity_policy import should_bypass_recent_fingerprint
 from factor_lab.opportunity_diagnostics import build_opportunity_review
 from factor_lab.storage import ExperimentStore
 from factor_lab.research_runtime_state import recently_finished_same_fingerprint
+from factor_lab.research_task_governance import govern_research_task_spec
+
+
+def _task_governance_payload_defaults(task: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(task.get("payload") or {})
+    note = str(task.get("worker_note") or "")
+    task_type = str(task.get("task_type") or "")
+    payload.setdefault("hypothesis", payload.get("question") or payload.get("goal") or note or "research task should add information")
+    payload.setdefault("falsification_criteria", ["task produces no actionable evidence or accepted follow-up"])
+    if task_type == "diagnostic":
+        payload.setdefault("expected_information_gain", ["mechanism_validation", "boundary_confirmed"])
+        payload.setdefault("budget_bucket", "mechanism_validation")
+    elif task_type == "generated_batch":
+        payload.setdefault("expected_information_gain", ["new_branch_opened", "candidate_survival_check"])
+        payload.setdefault("budget_bucket", "pure_exploration")
+    return payload
+
+
+def _task_with_governance_annotation(task: dict[str, Any], *, source: str, store: ExperimentStore) -> dict[str, Any]:
+    annotated = dict(task)
+    annotated["payload"] = _task_governance_payload_defaults(annotated)
+    if annotated.get("task_type") != "workflow":
+        result = govern_research_task_spec(annotated, store=store, source=source)
+        if result.get("task_spec"):
+            return result["task_spec"]
+    return annotated
 
 
 def _queue_counts(store: ExperimentStore, limit: int = 200) -> dict[str, int]:
@@ -32,18 +59,71 @@ def _queue_counts(store: ExperimentStore, limit: int = 200) -> dict[str, int]:
     return counts
 
 
+def _env_int(name: str, default: int, *, minimum: int = 0) -> int:
+    raw = os.getenv(name, str(default)).strip()
+    try:
+        value = int(raw)
+    except Exception:
+        value = default
+    return max(minimum, value)
+
+
 def _queue_capacity() -> dict[str, int]:
     # These caps prevent the opportunity system from flooding the queue.
     # Make exploration larger than validation by default to encourage autonomy.
-    import os
-
     return {
-        "validation": int(os.getenv("RESEARCH_QUEUE_MAX_PENDING_VALIDATION", "2")),
-        "exploration": int(os.getenv("RESEARCH_QUEUE_MAX_PENDING_EXPLORATION", "2")),
+        "validation": _env_int("RESEARCH_QUEUE_MAX_PENDING_VALIDATION", 3, minimum=1),
+        "exploration": _env_int("RESEARCH_QUEUE_MAX_PENDING_EXPLORATION", 2, minimum=1),
+    }
+
+
+def _queue_backlog_targets() -> dict[str, int]:
+    caps = _queue_capacity()
+    return {
+        "validation": min(caps["validation"], _env_int("RESEARCH_QUEUE_TARGET_VALIDATION_BACKLOG", 2, minimum=1)),
+        "exploration": min(caps["exploration"], _env_int("RESEARCH_QUEUE_TARGET_EXPLORATION_BACKLOG", 2, minimum=1)),
     }
 
 ROOT = Path(__file__).resolve().parents[2]
 DB_PATH = ROOT / "artifacts" / "factor_lab.db"
+OPPORTUNITY_LEARNING_PATH = ROOT / "artifacts" / "opportunity_learning.json"
+OPPORTUNITY_RUNTIME_HEALTH_PATH = ROOT / "artifacts" / "opportunity_runtime_health.json"
+
+
+def _opportunity_learning() -> dict[str, Any]:
+    if not OPPORTUNITY_LEARNING_PATH.exists():
+        return {}
+    try:
+        payload = json.loads(OPPORTUNITY_LEARNING_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _learning_channel_bias(limit: int) -> dict[str, int]:
+    learning = _opportunity_learning()
+    types = learning.get("types") or {}
+    exploration_rows = [types.get(key) or {} for key in ["expand", "recombine", "probe"]]
+    no_gain = sum(int(row.get("recent_no_gain_count") or 0) for row in exploration_rows)
+    gain = sum(int(row.get("recent_gain_count") or 0) for row in exploration_rows)
+    resource = sum(int(row.get("recent_resource_exhaustion_count") or 0) for row in exploration_rows)
+    cooldowns = sum(1 for row in exploration_rows if row.get("cooldown_active"))
+    if limit < 2:
+        return {"validation_bonus": 0, "exploration_penalty": 0}
+    should_shift = resource >= 2 or cooldowns >= 2 or (no_gain >= 4 and no_gain >= gain + 2)
+    if not should_shift:
+        return {"validation_bonus": 0, "exploration_penalty": 0}
+    return {"validation_bonus": 1, "exploration_penalty": 1}
+
+
+def _opportunity_runtime_health() -> dict[str, Any]:
+    if not OPPORTUNITY_RUNTIME_HEALTH_PATH.exists():
+        return {}
+    try:
+        payload = json.loads(OPPORTUNITY_RUNTIME_HEALTH_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
 
 
 def _opportunity_channel(task: dict[str, Any] | None) -> str | None:
@@ -71,6 +151,7 @@ def enqueue_opportunities(
     review = build_opportunity_review()
     blocks = review.get("blocks") or {}
     downweights = review.get("downweights") or {}
+    runtime_health = (_opportunity_runtime_health().get("opportunities") or {})
     critique_path = ROOT / "artifacts" / "meta_research_critique.json"
     portfolio_path = ROOT / "artifacts" / "research_portfolio_plan.json"
     critique = json.loads(critique_path.read_text(encoding="utf-8")) if critique_path.exists() else {}
@@ -92,6 +173,13 @@ def enqueue_opportunities(
             update_opportunity_state(oid, "rejected", reason=f"blocked:{blocks[oid].get('reason')}")
             continue
 
+        runtime_meta = runtime_health.get(oid) or {}
+        if runtime_meta.get("cooldown_active"):
+            reason = runtime_meta.get("cooldown_reason") or "runtime_cooldown"
+            skipped.append({"opportunity_id": oid, "reason": f"runtime_cooldown:{reason}"})
+            update_opportunity_state(oid, "archived", reason=f"runtime_cooldown:{reason}")
+            continue
+
         if oid in downweights:
             opportunity = {
                 **opportunity,
@@ -106,7 +194,13 @@ def enqueue_opportunities(
 
         bypass = should_bypass_recent_fingerprint(opportunity)
         fingerprint = task.get("fingerprint")
-        if fingerprint and recently_finished_same_fingerprint(store, fingerprint) and not bypass.get("allow_bypass"):
+        if fingerprint and recently_finished_same_fingerprint(
+            store,
+            fingerprint,
+            task_type=task.get("task_type"),
+            payload=task.get("payload") or {},
+            worker_note=task.get("worker_note"),
+        ) and not bypass.get("allow_bypass"):
             skipped.append({"opportunity_id": oid, "reason": "recently_finished_same_fingerprint"})
             update_opportunity_state(oid, "archived", reason="recently_finished_same_fingerprint")
             continue
@@ -125,13 +219,16 @@ def enqueue_opportunities(
 
     # Scale scheduling with `limit` (previously hard-capped at 1 validation + 1 exploration).
     # Default policy: always keep some validation, spend the rest on exploration.
+    learning_bias = _learning_channel_bias(int(limit))
     if limit <= 0:
         channel_limits = {"validation": 0, "exploration": 0}
     elif limit == 1:
         channel_limits = {"validation": 1, "exploration": 0}
     else:
-        validation_quota = 1
-        exploration_quota = max(0, int(limit) - validation_quota)
+        validation_quota = min(int(limit), 1 + int(learning_bias.get("validation_bonus") or 0))
+        exploration_quota = max(0, int(limit) - validation_quota - int(learning_bias.get("exploration_penalty") or 0))
+        if validation_quota + exploration_quota <= 0:
+            exploration_quota = max(0, int(limit) - validation_quota)
         channel_limits = {"validation": validation_quota, "exploration": exploration_quota}
 
     if force_positive_frontier_probe:
@@ -141,8 +238,15 @@ def enqueue_opportunities(
     if queue_aware:
         pending = _queue_counts(store)
         caps = _queue_capacity()
+        targets = _queue_backlog_targets()
         channel_limits = {
-            ch: max(0, min(int(channel_limits.get(ch, 0)), max(0, int(caps.get(ch, 0)) - int(pending.get(ch, 0)))))
+            ch: max(
+                0,
+                min(
+                    max(int(channel_limits.get(ch, 0)), max(0, int(targets.get(ch, 0)) - int(pending.get(ch, 0)))),
+                    max(0, int(caps.get(ch, 0)) - int(pending.get(ch, 0))),
+                ),
+            )
             for ch in ("validation", "exploration")
         }
 
@@ -168,14 +272,29 @@ def enqueue_opportunities(
             selected_ids.add(row["opportunity"].get("opportunity_id"))
             selected_families.add(row["opportunity"].get("target_family") or "none")
 
-    remaining_slots = max(0, limit - len(selected))
+    effective_total_limit = sum(int(channel_limits.get(ch, 0)) for ch in ("validation", "exploration")) if queue_aware else int(limit)
+    remaining_slots = max(0, effective_total_limit - len(selected))
     if remaining_slots > 0:
-        for row in prepared:
-            oid = row["opportunity"].get("opportunity_id")
-            if oid in selected_ids:
+        selected_channel_counts = {
+            ch: sum(1 for row in selected if row["channel"] == ch)
+            for ch in ("validation", "exploration")
+        }
+        prioritized_remainder = sorted(
+            [row for row in prepared if row["opportunity"].get("opportunity_id") not in selected_ids],
+            key=lambda row: (
+                0 if row["channel"] == "exploration" else 1,
+                -float((row["opportunity"] or {}).get("priority") or 0.0),
+                -float((row["opportunity"] or {}).get("novelty_score") or 0.0),
+            ),
+        )
+        for row in prioritized_remainder:
+            channel = row["channel"]
+            if queue_aware and selected_channel_counts.get(channel, 0) >= int(channel_limits.get(channel, 0)):
                 continue
+            oid = row["opportunity"].get("opportunity_id")
             selected.append(row)
             selected_ids.add(oid)
+            selected_channel_counts[channel] = selected_channel_counts.get(channel, 0) + 1
             remaining_slots -= 1
             if remaining_slots <= 0:
                 break
@@ -183,7 +302,7 @@ def enqueue_opportunities(
     injected = []
     for row in selected:
         opportunity = row["opportunity"]
-        task = row["task"]
+        task = _task_with_governance_annotation(row["task"], source="opportunity_executor", store=store)
         bypass = row["bypass"]
         oid = opportunity.get("opportunity_id")
         fingerprint = task.get("fingerprint")
@@ -201,6 +320,7 @@ def enqueue_opportunities(
             "priority": task.get("priority"),
             "channel": row["channel"],
             "dedupe_bypass": bool(bypass.get("allow_bypass")),
+            "governance_decision": ((task.get("payload") or {}).get("governance") or {}).get("decision"),
         })
         update_opportunity_state(oid, "scheduled", reason="task_enqueued", extra={"task_id": task_id, "task_type": task.get("task_type")})
 

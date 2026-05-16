@@ -6,7 +6,16 @@ from typing import Any
 
 from factor_lab.exploration_budget import exploration_floor_context
 from factor_lab.candidate_triage import load_candidate_triage_model, score_generation_proposal
+from factor_lab.exploration_pools import (
+    NEW_MECHANISM_POOL,
+    OLD_SPACE_POOL,
+    classify_exploration_pool,
+    split_exploration_pool_budget,
+)
 from factor_lab.regime_awareness import build_regime_context
+from factor_lab.hypothesis_generator_llm import generate_hypothesis_routes
+from factor_lab.novelty_judge_llm import judge_generation_proposal
+from factor_lab.mechanism_templates import apply_mechanism_template, load_mechanism_templates, select_mechanism_template_for_family
 
 ROOT = Path(__file__).resolve().parents[2]
 POLICY_PATH = ROOT / "configs" / "candidate_generation_policy.json"
@@ -140,6 +149,36 @@ def _frontier_focus_names(snapshot: dict[str, Any]) -> list[str]:
     return ordered
 
 
+
+def _promotion_row_map(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    rows = ((snapshot.get("promotion_scorecard") or {}).get("rows") or [])
+    return {row.get("factor_name"): row for row in rows if row.get("factor_name")}
+
+
+
+def _representative_failure_dossier_map(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return dict(snapshot.get("representative_failure_dossiers") or {})
+
+
+
+def _front_gate_blocked_names(snapshot: dict[str, Any]) -> set[str]:
+    blocked: set[str] = set()
+    for name, row in _promotion_row_map(snapshot).items():
+        quality_class = row.get("quality_classification")
+        retention = row.get("retention_industry")
+        net_metric = row.get("net_metric")
+        if quality_class in {"duplicate-suppress", "drop"}:
+            blocked.add(name)
+            continue
+        if net_metric is not None and float(net_metric) <= 0:
+            blocked.add(name)
+            continue
+        if retention is not None and float(retention) < 0.15 and float(row.get("latest_recent_final_score") or row.get("latest_final_score") or 0.0) > 0.5:
+            blocked.add(name)
+    return blocked
+
+
+
 def _quality_throttle(snapshot: dict[str, Any], factor_context: dict[str, dict[str, Any]], evidence_policy: dict[str, Any], research_mode: str) -> dict[str, Any]:
     focus_names = _frontier_focus_names(snapshot)[:4]
     evidence_missing = []
@@ -160,7 +199,28 @@ def _quality_throttle(snapshot: dict[str, Any], factor_context: dict[str, dict[s
     floor = exploration_floor_context(snapshot)
     regime_context = build_regime_context(snapshot)
     regime = str(regime_context.get("regime") or "neutral")
-    quality_priority_mode = bool(evidence_missing or duplicate_pressure >= 8 or research_mode == "diagnosis_heavy")
+    representative_failure_dossiers = _representative_failure_dossier_map(snapshot)
+    front_gate_blocked_candidates = sorted(_front_gate_blocked_names(snapshot))
+    dossier_diagnose_count = len([row for row in representative_failure_dossiers.values() if row.get("recommended_action") == "diagnose"])
+    dossier_suppress_count = len([row for row in representative_failure_dossiers.values() if row.get("recommended_action") == "suppress"])
+    dossier_short_window_only_count = len([row for row in representative_failure_dossiers.values() if row.get("regime_dependency") == "short_window_only"])
+    dossier_parent_delta_failure_count = len([row for row in representative_failure_dossiers.values() if row.get("parent_delta_status") == "non_incremental"])
+    unresolved_failure_focus = sorted(
+        {
+            name
+            for name, row in representative_failure_dossiers.items()
+            if row.get("recommended_action") in {"diagnose", "suppress"}
+            or row.get("regime_dependency") == "short_window_only"
+            or row.get("parent_delta_status") == "non_incremental"
+        }
+    )
+    quality_priority_mode = bool(
+        evidence_missing
+        or duplicate_pressure >= 8
+        or research_mode == "diagnosis_heavy"
+        or dossier_diagnose_count >= 1
+        or dossier_short_window_only_count >= 1
+    )
     severe_quality_hold = floor["true_fault_recovery"] and (bool(evidence_missing) or duplicate_pressure >= 12 or (research_mode == "diagnosis_heavy" and evidence_needs_validation))
 
     candidate_floor = int(floor["exploration_floor_slots"] or 0)
@@ -190,6 +250,14 @@ def _quality_throttle(snapshot: dict[str, Any], factor_context: dict[str, dict[s
         "regime_context": regime_context,
         "candidate_floor": candidate_floor,
         "relaxed_admission": relaxed_admission,
+        "front_gate_blocked_candidates": front_gate_blocked_candidates,
+        "representative_failure_dossier_count": len(representative_failure_dossiers),
+        "dossier_diagnose_count": dossier_diagnose_count,
+        "dossier_suppress_count": dossier_suppress_count,
+        "dossier_short_window_only_count": dossier_short_window_only_count,
+        "dossier_parent_delta_failure_count": dossier_parent_delta_failure_count,
+        "unresolved_failure_focus": unresolved_failure_focus,
+        "new_mechanism_bias": bool(dossier_suppress_count or dossier_parent_delta_failure_count or dossier_short_window_only_count),
     }
 
 
@@ -298,6 +366,106 @@ def _template_routes(snapshot: dict[str, Any], factor_context: dict[str, dict[st
                 "target_family": template.get("target_family") or (factor_context.get(anchor) or {}).get("family") or "generated",
                 "expected_information_gain": list(template.get("expected_information_gain") or []),
                 "rationale": rationale_template.format(anchor=anchor, context=context, template_id=template.get("template_id") or "template"),
+                "exploration_pool": NEW_MECHANISM_POOL,
+                "mechanism_novelty_class": "new_mechanism",
+            }
+        )
+    return routes
+
+
+
+def _failure_question_cards(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
+    direct_cards = list(snapshot.get("failure_question_cards") or [])
+    if direct_cards:
+        return direct_cards
+    enhanced_cards = list(((snapshot.get("failure_analyst_enhancement") or {}).get("question_cards_v2") or []))
+    if enhanced_cards:
+        return enhanced_cards
+    return list(((snapshot.get("research_learning") or {}).get("failure_question_cards") or []))
+
+
+
+def _candidate_sort_key(name: str, factor_context: dict[str, dict[str, Any]], stable_set: set[str], *, anchor_family: str | None = None) -> tuple[Any, ...]:
+    row = factor_context.get(name) or {}
+    family = row.get("family")
+    return (
+        family == anchor_family,
+        name in stable_set,
+        not bool(row.get("is_primary_candidate")),
+        int(row.get("relationship_count") or 0),
+        -(float(row.get("robustness_score") or -999.0)),
+        name,
+    )
+
+
+
+def _failure_question_routes(
+    snapshot: dict[str, Any],
+    factor_context: dict[str, dict[str, Any]],
+    stable: list[str],
+    family_gap_seeds: list[str],
+) -> list[dict[str, Any]]:
+    cards = _failure_question_cards(snapshot)
+    if not cards:
+        return []
+    stable_set = {name for name in stable if name}
+    available = [name for name in factor_context if name]
+    frontier_focus = _frontier_focus_names(snapshot)
+    routes: list[dict[str, Any]] = []
+    seen_pairs: set[tuple[str, str, str]] = set()
+
+    for card in cards:
+        candidate_name = card.get("candidate_name")
+        if candidate_name not in factor_context:
+            candidate_name = next((name for name in frontier_focus if name in factor_context), None)
+        if not candidate_name:
+            continue
+        anchor_family = (factor_context.get(candidate_name) or {}).get("family")
+        context_candidates = list(family_gap_seeds) + frontier_focus + available
+        ordered_context = []
+        seen_context: set[str] = set()
+        preferred_context_mode = card.get("preferred_context_mode") or ""
+        for name in context_candidates:
+            if not name or name == candidate_name or name in seen_context or name not in factor_context:
+                continue
+            family = (factor_context.get(name) or {}).get("family")
+            if preferred_context_mode == "far_family" and anchor_family and family == anchor_family:
+                continue
+            if preferred_context_mode == "cross_family_or_quality" and anchor_family and family == anchor_family and family != "quality":
+                continue
+            seen_context.add(name)
+            ordered_context.append(name)
+        if not ordered_context and preferred_context_mode in {"far_family", "cross_family_or_quality"}:
+            for name in context_candidates:
+                if not name or name == candidate_name or name in seen_context or name not in factor_context:
+                    continue
+                seen_context.add(name)
+                ordered_context.append(name)
+        ordered_context.sort(key=lambda name: _candidate_sort_key(name, factor_context, stable_set, anchor_family=anchor_family))
+        context_name = ordered_context[0] if ordered_context else None
+        if not context_name:
+            continue
+        question_type = card.get("question_type") or "failure_question"
+        pair_key = tuple(sorted([candidate_name, context_name])) + (question_type,)
+        if pair_key in seen_pairs:
+            continue
+        seen_pairs.add(pair_key)
+        routes.append(
+            {
+                "template_id": card.get("card_id") or f"question::{candidate_name}",
+                "template_label": question_type,
+                "source": "failure_question",
+                "base_factors": [candidate_name, context_name],
+                "target_family": (factor_context.get(context_name) or {}).get("family") or anchor_family or "generated",
+                "expected_information_gain": list(card.get("expected_information_gain") or ["new_branch_opened"]),
+                "rationale": card.get("prompt") or f"failure question for {candidate_name}",
+                "question_card_id": card.get("card_id"),
+                "question_type": question_type,
+                "route_bias": card.get("route_bias"),
+                "preferred_context_mode": card.get("preferred_context_mode"),
+                "allowed_operators": list(card.get("allowed_operators") or []),
+                "exploration_pool": card.get("target_pool") or NEW_MECHANISM_POOL,
+                "mechanism_novelty_class": "new_mechanism",
             }
         )
     return routes
@@ -419,6 +587,15 @@ def build_candidate_generation_plan(
     failure_routes = _high_value_failure_routes(memory)
     family_gap_seeds = _family_gap_seeds(snapshot, factor_context, generation_anchors)
     template_routes = _template_routes(snapshot, factor_context, generation_anchors)
+    failure_question_cards = _failure_question_cards(snapshot)
+    failure_question_routes = _failure_question_routes(snapshot, factor_context, generation_anchors, family_gap_seeds)
+    llm_hypothesis_routes = generate_hypothesis_routes(
+        failure_question_cards=failure_question_cards,
+        generation_anchors=generation_anchors,
+        family_gap_seeds=family_gap_seeds,
+        limit=4,
+        source_label="heuristic",
+    )
     constraints = _generation_constraints(memory)
 
     proposals: list[dict[str, Any]] = []
@@ -435,6 +612,7 @@ def build_candidate_generation_plan(
     allowed_operators = list(policy.get("enabled_operators") or [])
     floor_slots = int(((quality_throttle.get("exploration_floor") or {}).get("exploration_floor_slots") or 0))
     candidate_floor = int(quality_throttle.get("candidate_floor") or 0)
+    regime = str(((quality_throttle.get("regime_context") or {}).get("regime") or "neutral"))
     if quality_throttle["quality_priority_mode"]:
         max_new = min(max_new, max(1, candidate_floor or floor_slots or 1))
         max_operators_per_pair = 1
@@ -446,8 +624,25 @@ def build_candidate_generation_plan(
         max_new = max(max_new, min(candidate_floor, max_new + 1))
     if quality_throttle.get("relaxed_admission"):
         max_variants_per_cluster = max(max_variants_per_cluster, max(1, candidate_floor or 1))
+    if quality_throttle.get("new_mechanism_bias"):
+        max_variants_per_cluster = 1
     if quality_throttle["severe_quality_hold"]:
         max_new = 0
+
+    pool_budgets = split_exploration_pool_budget(
+        max_new,
+        prioritize_new_mechanism=bool(quality_throttle.get("new_mechanism_bias") or failure_question_cards),
+        quality_priority_mode=bool(quality_throttle.get("quality_priority_mode")),
+        regime=regime,
+    )
+    mechanism_registry = load_mechanism_templates()
+    proposal_pool_counts = {
+        OLD_SPACE_POOL: 0,
+        NEW_MECHANISM_POOL: 0,
+    }
+
+    front_gate_blocked_candidates = set(quality_throttle.get("front_gate_blocked_candidates") or [])
+    unresolved_failure_focus = set(quality_throttle.get("unresolved_failure_focus") or [])
 
     def _cluster_budget_key(a: str, b: str) -> str | None:
         cluster_ids = sorted(
@@ -479,6 +674,10 @@ def build_candidate_generation_plan(
         ctx_b = factor_context.get(b) or {}
         fam_a = ctx_a.get("family")
         fam_b = ctx_b.get("family")
+        if source not in {"hypothesis_template", "family_gap", "failure_question"} and (a in front_gate_blocked_candidates or b in front_gate_blocked_candidates):
+            return
+        if source in {"stable_plus_graveyard", "high_value_failure_seed"} and (a in unresolved_failure_focus or b in unresolved_failure_focus):
+            return
         if prefer_cross_family and fam_a and fam_b and fam_a == fam_b:
             return
         pair_key = tuple(sorted([a, b]))
@@ -491,6 +690,16 @@ def build_candidate_generation_plan(
         cluster_budget_key = _cluster_budget_key(a, b)
         if cluster_budget_key and int(cluster_variant_counts.get(cluster_budget_key) or 0) >= max_variants_per_cluster:
             return
+        extra_fields = dict(extra_fields or {})
+        exploration_pool = classify_exploration_pool(source, extra_fields)
+        if int(proposal_pool_counts.get(exploration_pool) or 0) >= int(pool_budgets.get(exploration_pool) or 0):
+            return
+        route_allowed_operators = list(extra_fields.get("allowed_operators") or allowed_operators)
+        if not extra_fields.get("allowed_operators") and exploration_pool == NEW_MECHANISM_POOL and source in {"failure_question", "hypothesis_template"}:
+            route_allowed_operators = [
+                op for op in route_allowed_operators
+                if op not in {"orthogonalize_against_peer", "residualize_against_peer"}
+            ] or route_allowed_operators
         for operator in _operators_for(
             expected_gain,
             policy,
@@ -498,7 +707,7 @@ def build_candidate_generation_plan(
             source=source,
             target_family=fam_a or fam_b,
             family_operator_stats=family_operator_stats,
-            allowed_operators=allowed_operators,
+            allowed_operators=route_allowed_operators,
         ):
             key = pair_key + (operator,)
             if key in seen_keys or key in constraints["blocked_operator_pairs"]:
@@ -518,8 +727,19 @@ def build_candidate_generation_plan(
                 rationale=rationale,
                 expected_gain=expected_gain,
             )
+            proposal["exploration_pool"] = exploration_pool
+            proposal["mechanism_novelty_class"] = "new_mechanism" if exploration_pool == NEW_MECHANISM_POOL else "old_space"
+            proposal["decision_source"] = "heuristic"
             if extra_fields:
                 proposal.update(extra_fields)
+            mechanism_template_id = proposal.get("hypothesis_template_id")
+            mechanism_template = mechanism_registry.get(str(mechanism_template_id)) if mechanism_template_id else None
+            if not mechanism_template:
+                mechanism_template = select_mechanism_template_for_family(proposal.get("target_family"), registry=mechanism_registry)
+            if mechanism_template:
+                proposal = apply_mechanism_template(proposal, template_id=mechanism_template["mechanism_id"], registry=mechanism_registry)
+            novelty = judge_generation_proposal(proposal, factor_context=factor_context, source_label="heuristic")
+            proposal.update(novelty)
             if allow_relaxed_retry:
                 proposal["relaxed_admission"] = {
                     "pair_failure_count": pair_failure_count,
@@ -534,18 +754,52 @@ def build_candidate_generation_plan(
                 model=triage_model,
             )
             proposals.append(proposal)
+            proposal_pool_counts[exploration_pool] = int(proposal_pool_counts.get(exploration_pool) or 0) + 1
             if cluster_budget_key:
                 cluster_variant_counts[cluster_budget_key] = int(cluster_variant_counts.get(cluster_budget_key) or 0) + 1
             if len(proposals) >= max_new:
                 return
+            if int(proposal_pool_counts.get(exploration_pool) or 0) >= int(pool_budgets.get(exploration_pool) or 0):
+                return
+
+    failure_driven_budget = int((policy.get("budgets") or {}).get("failure_driven", 2))
+    if quality_throttle.get("new_mechanism_bias"):
+        failure_driven_budget = min(failure_driven_budget, 1)
+
+    if len(proposals) < max_new:
+        candidate_question_routes = llm_hypothesis_routes + failure_question_routes
+        question_budget = min(len(candidate_question_routes), max(1, pool_budgets.get(NEW_MECHANISM_POOL, 0)))
+        for route in candidate_question_routes[:question_budget]:
+            bases = list(route.get("base_factors") or [])
+            if len(bases) < 2:
+                continue
+            add_pair(
+                bases[0],
+                bases[1],
+                source=route.get("source") or "failure_question",
+                expected_gain=list(route.get("expected_information_gain") or []),
+                rationale_override=route.get("rationale"),
+                target_family_override=route.get("target_family"),
+                extra_fields={
+                    "question_card_id": route.get("question_card_id"),
+                    "question_type": route.get("question_type"),
+                    "route_bias": route.get("route_bias"),
+                    "hypothesis_template_id": route.get("template_id"),
+                    "hypothesis_template_label": route.get("template_label"),
+                    "exploration_pool": route.get("exploration_pool") or NEW_MECHANISM_POOL,
+                    "mechanism_novelty_class": route.get("mechanism_novelty_class") or "new_mechanism",
+                },
+            )
+            if len(proposals) >= max_new:
+                break
 
     if research_mode == "diagnosis_heavy":
         if len(proposals) < max_new:
-            for route in failure_routes[: int((policy.get("budgets") or {}).get("failure_driven", 2))]:
+            for route in failure_routes[:failure_driven_budget]:
                 bases = list(route.get("base_factors") or [])
                 if len(bases) < 2:
                     continue
-                add_pair(bases[0], bases[1], source="high_value_failure_seed", expected_gain=["boundary_confirmed", "search_space_reduced", "candidate_survival_check"])
+                add_pair(bases[0], bases[1], source="high_value_failure_seed", expected_gain=["boundary_confirmed", "search_space_reduced", "candidate_survival_check"], extra_fields={"exploration_pool": OLD_SPACE_POOL, "mechanism_novelty_class": "old_space"})
                 if len(proposals) >= max_new:
                     break
 
@@ -553,6 +807,8 @@ def build_candidate_generation_plan(
         template_budget = int((policy.get("budgets") or {}).get("template_driven", 2))
         if quality_throttle.get("relaxed_admission"):
             template_budget = max(template_budget, min(len(template_routes), max_new * 3))
+        if quality_throttle.get("new_mechanism_bias"):
+            template_budget = max(template_budget, min(len(template_routes), max_new * 4))
         for route in template_routes[:template_budget]:
             bases = list(route.get("base_factors") or [])
             if len(bases) < 2:
@@ -567,33 +823,37 @@ def build_candidate_generation_plan(
                 extra_fields={
                     "hypothesis_template_id": route.get("template_id"),
                     "hypothesis_template_label": route.get("template_label"),
+                    "exploration_pool": route.get("exploration_pool") or NEW_MECHANISM_POOL,
+                    "mechanism_novelty_class": route.get("mechanism_novelty_class") or "new_mechanism",
                 },
             )
             if len(proposals) >= max_new:
                 break
 
     anchor_budget = int((policy.get("budgets") or {}).get("stable_neighbor", 2))
+    if quality_throttle.get("new_mechanism_bias"):
+        anchor_budget = min(anchor_budget, 1)
     for a in generation_anchors[:anchor_budget]:
         for b in graveyard[:2]:
-            add_pair(a, b, source="stable_plus_graveyard", expected_gain=["search_space_reduced", "candidate_survival_check"])
+            add_pair(a, b, source="stable_plus_graveyard", expected_gain=["search_space_reduced", "candidate_survival_check"], extra_fields={"exploration_pool": OLD_SPACE_POOL, "mechanism_novelty_class": "old_space"})
             if len(proposals) >= max_new:
                 break
         if len(proposals) >= max_new:
             break
 
     if len(proposals) < max_new:
-        for route in failure_routes[: int((policy.get("budgets") or {}).get("failure_driven", 2))]:
+        for route in failure_routes[:failure_driven_budget]:
             bases = list(route.get("base_factors") or [])
             if len(bases) < 2:
                 continue
-            add_pair(bases[0], bases[1], source="high_value_failure_seed", expected_gain=["boundary_confirmed", "search_space_reduced", "candidate_survival_check"])
+            add_pair(bases[0], bases[1], source="high_value_failure_seed", expected_gain=["boundary_confirmed", "search_space_reduced", "candidate_survival_check"], extra_fields={"exploration_pool": OLD_SPACE_POOL, "mechanism_novelty_class": "old_space"})
             if len(proposals) >= max_new:
                 break
 
     if len(proposals) < max_new:
         for a in generation_anchors[:2]:
-            for b in failure_seeds[: int((policy.get("budgets") or {}).get("failure_driven", 2))]:
-                add_pair(a, b, source="high_value_failure_seed", expected_gain=["boundary_confirmed", "candidate_survival_check"])
+            for b in failure_seeds[:failure_driven_budget]:
+                add_pair(a, b, source="high_value_failure_seed", expected_gain=["boundary_confirmed", "candidate_survival_check"], extra_fields={"exploration_pool": OLD_SPACE_POOL, "mechanism_novelty_class": "old_space"})
                 if len(proposals) >= max_new:
                     break
             if len(proposals) >= max_new:
@@ -603,7 +863,7 @@ def build_candidate_generation_plan(
         family_gap_budget = int((policy.get("budgets") or {}).get("family_gap", 1))
         for a in generation_anchors[: max(1, family_gap_budget)]:
             for b in family_gap_seeds[:family_gap_budget]:
-                add_pair(a, b, source="family_gap", expected_gain=["new_branch_opened", "candidate_survival_check"])
+                add_pair(a, b, source="family_gap", expected_gain=["new_branch_opened", "candidate_survival_check"], extra_fields={"exploration_pool": NEW_MECHANISM_POOL, "mechanism_novelty_class": "new_mechanism"})
                 if len(proposals) >= max_new:
                     break
             if len(proposals) >= max_new:
@@ -611,7 +871,7 @@ def build_candidate_generation_plan(
 
     relaxed_minimum = min(max_new, max(1, candidate_floor or 0))
     if quality_throttle.get("relaxed_admission") and max_new > 0 and len(proposals) < relaxed_minimum:
-        fallback_routes = template_routes[: min(len(template_routes), max_new * 6)]
+        fallback_routes = (failure_question_routes + template_routes)[: min(len(failure_question_routes) + len(template_routes), max_new * 6)]
         for route in fallback_routes:
             bases = list(route.get("base_factors") or [])
             if len(bases) < 2:
@@ -626,6 +886,11 @@ def build_candidate_generation_plan(
                 extra_fields={
                     "hypothesis_template_id": route.get("template_id"),
                     "hypothesis_template_label": route.get("template_label"),
+                    "question_card_id": route.get("question_card_id"),
+                    "question_type": route.get("question_type"),
+                    "route_bias": route.get("route_bias"),
+                    "exploration_pool": route.get("exploration_pool") or classify_exploration_pool(route.get("source"), route),
+                    "mechanism_novelty_class": route.get("mechanism_novelty_class") or ("new_mechanism" if classify_exploration_pool(route.get("source"), route) == NEW_MECHANISM_POOL else "old_space"),
                 },
                 allow_relaxed_retry=True,
             )
@@ -656,13 +921,21 @@ def build_candidate_generation_plan(
             "regime_context": quality_throttle.get("regime_context") or {},
             "candidate_floor": quality_throttle.get("candidate_floor") or 0,
             "relaxed_admission": bool(quality_throttle.get("relaxed_admission")),
+            "front_gate_blocked_candidates": quality_throttle.get("front_gate_blocked_candidates") or [],
+            "unresolved_failure_focus": quality_throttle.get("unresolved_failure_focus") or [],
+            "new_mechanism_bias": bool(quality_throttle.get("new_mechanism_bias")),
             "generation_anchors": generation_anchors,
             "family_gap_seeds": family_gap_seeds,
             "template_routes": template_routes,
+            "failure_question_cards": failure_question_cards,
+            "failure_question_routes": failure_question_routes,
+            "llm_hypothesis_routes": llm_hypothesis_routes,
             "exploration_floor": quality_throttle.get("exploration_floor") or {},
             "allowed_operators": allowed_operators,
             "max_new_candidates_per_cycle": max_new,
             "max_operators_per_pair": max_operators_per_pair,
+            "pool_budgets": pool_budgets,
+            "pool_counts": proposal_pool_counts,
             "constraints": {
                 "base_pair_cooldown_after_failures": pair_failure_threshold,
                 "max_variants_per_cluster_per_cycle": max_variants_per_cluster,

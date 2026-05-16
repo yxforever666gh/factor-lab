@@ -2,15 +2,25 @@ from __future__ import annotations
 
 import sqlite3
 import json
+import os
+import subprocess
+import time
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import parse_qs
+import urllib.error
+import urllib.request
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+LOCAL_TZ = ZoneInfo("Asia/Shanghai")
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from factor_lab.agent_roles import AgentRoleConfig, agent_roles_to_json, default_agent_roles, load_agent_roles
 from factor_lab.candidate_graph import build_graph_artifacts, build_candidate_graph_context, candidate_clusters, family_rollup
 from factor_lab.factor_candidates import summarize_candidate_status
 from factor_lab.db_views import ensure_views
@@ -18,6 +28,41 @@ from factor_lab.ops import latest_task_states, trigger_script
 from factor_lab.storage import ExperimentStore
 from factor_lab.opportunity_diagnostics import build_opportunity_metrics, build_opportunity_review, build_opportunity_archive_diagnostics
 from factor_lab.promotion_scorecard import build_promotion_scorecard
+from factor_lab.candidate_failure_dossier import build_candidate_failure_dossier
+from factor_lab.novelty_judge import load_novelty_judgments
+from factor_lab.allocator_governance_auditor import load_allocator_governance_audit
+from factor_lab.decision_ab_judge import load_decision_ab_artifacts
+from factor_lab.failure_analyst_enhancement import load_failure_analyst_enhancement
+from factor_lab.paths import env_file
+from factor_lab.llm_pricing import estimate_llm_cost_usd
+from factor_lab.research_quality_summary import build_research_quality_summary
+
+
+LLM_ENV_KEYS = [
+    "FACTOR_LAB_DECISION_PROVIDER",
+    "FACTOR_LAB_LIVE_DECISION_PROVIDER",
+    "FACTOR_LAB_OBSERVATION_DECISION_PROVIDER",
+    "FACTOR_LAB_LLM_BASE_URL",
+    "FACTOR_LAB_LLM_MODEL",
+    "FACTOR_LAB_LLM_API_KEY",
+    "FACTOR_LAB_LLM_API_FORMAT",
+]
+
+LLM_PROFILE_ENV_KEYS = [
+    "FACTOR_LAB_LLM_PROFILES_JSON",
+    "FACTOR_LAB_LLM_FALLBACK_ORDER",
+]
+
+AGENT_ROLE_ENV_KEYS = [
+    "FACTOR_LAB_AGENT_ROLES_JSON",
+    "FACTOR_LAB_AGENT_ROLE_ORDER",
+]
+
+LLM_FORM_TO_ENV = {
+    "decision_provider": "FACTOR_LAB_DECISION_PROVIDER",
+    "live_decision_provider": "FACTOR_LAB_LIVE_DECISION_PROVIDER",
+    "observation_decision_provider": "FACTOR_LAB_OBSERVATION_DECISION_PROVIDER",
+}
 
 
 def pretty_json_text(value: Any, empty_text: str = "暂无数据。") -> str:
@@ -28,6 +73,566 @@ def pretty_json_text(value: Any, empty_text: str = "暂无数据。") -> str:
     return json.dumps(value, ensure_ascii=False, indent=2)
 
 
+def _mask_secret(value: str | None) -> str:
+    secret = (value or "").strip()
+    if not secret:
+        return "未配置"
+    if len(secret) <= 8:
+        return "***"
+    return f"{secret[:4]}...{secret[-4:]}"
+
+
+def _read_env_values(path: Path | None = None) -> dict[str, str]:
+    path = path or env_file()
+    values: dict[str, str] = {}
+    if not path.exists():
+        return values
+    for line in path.read_text(encoding="utf-8").splitlines():
+        raw = line.strip()
+        if not raw or raw.startswith("#") or "=" not in raw:
+            continue
+        key, value = raw.split("=", 1)
+        values[key.strip()] = value.strip()
+    return values
+
+
+def _split_csv(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return [item.strip() for item in str(value or "").split(",") if item.strip()]
+
+
+def _coerce_boolish(value: Any, default: bool = True) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "yes", "on", "enabled"}:
+            return True
+        if lowered in {"0", "false", "no", "off", "disabled"}:
+            return False
+    return bool(value)
+
+
+def _ordered_profile_list(profiles: list[dict[str, Any]], fallback_order: str) -> list[dict[str, Any]]:
+    order = _split_csv(fallback_order)
+    if not order:
+        return profiles
+    by_name = {str(profile.get("name") or ""): profile for profile in profiles}
+    ordered = [by_name[name] for name in order if name in by_name]
+    ordered_names = {str(profile.get("name") or "") for profile in ordered}
+    ordered.extend(profile for profile in profiles if str(profile.get("name") or "") not in ordered_names)
+    return ordered
+
+
+def _enabled_profile_names(profiles: list[dict[str, Any]]) -> list[str]:
+    names: list[str] = []
+    for profile in profiles:
+        name = str(profile.get("name") or "").strip()
+        if name and _coerce_boolish(profile.get("enabled", True), default=True):
+            names.append(name)
+    return names
+
+
+def _first_enabled_profile(profiles: list[dict[str, Any]]) -> dict[str, Any]:
+    for profile in profiles:
+        if _coerce_boolish(profile.get("enabled", True), default=True):
+            return profile
+    return profiles[0] if profiles else {}
+
+
+LLM_API_FORMAT_OPTIONS = [
+    {"value": "openai_responses", "label": "OpenAI Responses"},
+    {"value": "openai", "label": "OpenAI Chat Completions"},
+    {"value": "anthropic", "label": "Anthropic Messages"},
+]
+
+
+def _normalize_llm_api_format(value: Any, model: str | None = None) -> str:
+    raw = str(value or "").strip().lower()
+    if raw in {"responses", "openai_response"}:
+        raw = "openai_responses"
+    if raw in {"chat", "chat_completions", "chat_completion", "openai_chat", "openai_chat_completions"}:
+        raw = "openai"
+    if raw in {"messages", "anthropic_messages", "claude"}:
+        raw = "anthropic"
+    if raw in {"openai", "openai_responses", "anthropic"}:
+        return raw
+    model_text = str(model or "").strip().lower()
+    if model_text.startswith("claude") or "opus" in model_text:
+        return "anthropic"
+    if model_text.startswith("gpt-5"):
+        return "openai_responses"
+    return "openai"
+
+
+def _load_llm_profiles(values: dict[str, str]) -> tuple[list[dict[str, Any]], str]:
+    has_legacy_file_profile = bool(values.get("FACTOR_LAB_LLM_BASE_URL") or values.get("FACTOR_LAB_LLM_API_KEY") or values.get("FACTOR_LAB_LLM_MODEL"))
+    raw_profiles = values.get("FACTOR_LAB_LLM_PROFILES_JSON") or ("" if has_legacy_file_profile else os.environ.get("FACTOR_LAB_LLM_PROFILES_JSON")) or ""
+    fallback_order = values.get("FACTOR_LAB_LLM_FALLBACK_ORDER") or ("" if has_legacy_file_profile else os.environ.get("FACTOR_LAB_LLM_FALLBACK_ORDER")) or ""
+    profiles: list[dict[str, Any]] = []
+    if raw_profiles:
+        try:
+            parsed = json.loads(raw_profiles)
+        except Exception:
+            parsed = []
+        if isinstance(parsed, list):
+            for index, item in enumerate(parsed):
+                if not isinstance(item, dict):
+                    continue
+                name = str(item.get("name") or f"profile-{index + 1}").strip()
+                if not name:
+                    continue
+                api_key = str(item.get("api_key") or "")
+                profiles.append({
+                    "name": name,
+                    "base_url": str(item.get("base_url") or ""),
+                    "model": str(item.get("model") or ""),
+                    "api_format": _normalize_llm_api_format(item.get("api_format"), item.get("model")),
+                    "api_key": "",
+                    "api_key_configured": bool(api_key),
+                    "api_key_masked": _mask_secret(api_key),
+                    "enabled": _coerce_boolish(item.get("enabled", True), default=True),
+                })
+    if not profiles:
+        api_key = values.get("FACTOR_LAB_LLM_API_KEY") or os.environ.get("FACTOR_LAB_LLM_API_KEY") or ""
+        profiles.append({
+            "name": values.get("FACTOR_LAB_LLM_PROFILE_NAME") or os.environ.get("FACTOR_LAB_LLM_PROFILE_NAME") or "default",
+            "base_url": values.get("FACTOR_LAB_LLM_BASE_URL") or os.environ.get("FACTOR_LAB_LLM_BASE_URL") or "",
+            "model": values.get("FACTOR_LAB_LLM_MODEL") or os.environ.get("FACTOR_LAB_LLM_MODEL") or "",
+            "api_format": _normalize_llm_api_format(values.get("FACTOR_LAB_LLM_API_FORMAT") or os.environ.get("FACTOR_LAB_LLM_API_FORMAT"), values.get("FACTOR_LAB_LLM_MODEL") or os.environ.get("FACTOR_LAB_LLM_MODEL")),
+            "api_key": "",
+            "api_key_configured": bool(api_key),
+            "api_key_masked": _mask_secret(api_key),
+            "enabled": True,
+        })
+    return _ordered_profile_list(profiles, fallback_order), fallback_order or ",".join(str(profile.get("name")) for profile in profiles if profile.get("name"))
+
+
+def _profiles_from_form(form: dict[str, str], existing_profiles: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], str]:
+    existing_keys = {str(profile.get("name") or ""): str(profile.get("api_key") or "") for profile in existing_profiles}
+    profiles: list[dict[str, Any]] = []
+    for index in range(10):
+        name = (form.get(f"profile_name_{index}") or "").strip()
+        base_url = (form.get(f"profile_base_url_{index}") or "").strip().rstrip("/")
+        model = (form.get(f"profile_model_{index}") or "").strip()
+        api_format = _normalize_llm_api_format(form.get(f"profile_api_format_{index}"), model)
+        api_key = (form.get(f"profile_api_key_{index}") or "").strip()
+        enabled = form.get(f"profile_enabled_{index}") in {"on", "1", "true", "yes"}
+        if not any([name, base_url, model, api_key]):
+            continue
+        if not name:
+            name = f"profile-{index + 1}"
+        if not api_key:
+            api_key = existing_keys.get(name, "")
+        profiles.append({"name": name, "base_url": base_url, "model": model, "api_format": api_format, "api_key": api_key, "enabled": enabled, "order": (form.get(f"profile_order_{index}") or "").strip(), "_index": index})
+    explicit_order = any(str(profile.get("order") or "").strip() for profile in profiles)
+    if explicit_order:
+        def order_key(profile: dict[str, Any]) -> tuple[int, int]:
+            try:
+                return (int(str(profile.get("order") or "9999")), int(profile.get("_index") or 0))
+            except ValueError:
+                return (9999, int(profile.get("_index") or 0))
+        profiles = sorted(profiles, key=order_key)
+        for profile in profiles:
+            profile.pop("order", None)
+            profile.pop("_index", None)
+        fallback_order = ",".join(profile["name"] for profile in profiles if _coerce_boolish(profile.get("enabled", True), default=True))
+    else:
+        fallback_order = (form.get("fallback_order") or ",".join(profile["name"] for profile in profiles if _coerce_boolish(profile.get("enabled", True), default=True))).strip()
+        profiles = _ordered_profile_list(profiles, fallback_order)
+    enabled_names = _enabled_profile_names(profiles)
+    enabled_set = set(enabled_names)
+    fallback_order = ",".join(name for name in _split_csv(fallback_order) if name in enabled_set) or ",".join(enabled_names)
+    return profiles, fallback_order
+
+
+def _role_to_form_dict(role: AgentRoleConfig) -> dict[str, Any]:
+    return {
+        "name": role.name,
+        "display_name": role.display_name,
+        "enabled": role.enabled,
+        "decision_types": ",".join(role.decision_types),
+        "purpose": role.purpose,
+        "system_prompt": role.system_prompt,
+        "llm_fallback_order": ",".join(role.llm_fallback_order),
+        "timeout_seconds": role.timeout_seconds,
+        "max_retries": role.max_retries,
+        "strict_schema": role.strict_schema,
+        "legacy_agent_id": role.legacy_agent_id or "",
+    }
+
+
+def _agent_roles_from_values(values: dict[str, str]) -> list[AgentRoleConfig]:
+    raw = values.get("FACTOR_LAB_AGENT_ROLES_JSON") or os.environ.get("FACTOR_LAB_AGENT_ROLES_JSON") or ""
+    if raw.strip():
+        old = os.environ.get("FACTOR_LAB_AGENT_ROLES_JSON")
+        os.environ["FACTOR_LAB_AGENT_ROLES_JSON"] = raw
+        try:
+            return load_agent_roles()
+        finally:
+            if old is None:
+                os.environ.pop("FACTOR_LAB_AGENT_ROLES_JSON", None)
+            else:
+                os.environ["FACTOR_LAB_AGENT_ROLES_JSON"] = old
+    fallback_order = [item.strip() for item in (values.get("FACTOR_LAB_LLM_FALLBACK_ORDER") or os.environ.get("FACTOR_LAB_LLM_FALLBACK_ORDER") or "").split(",") if item.strip()]
+    roles = default_agent_roles()
+    if not fallback_order:
+        return roles
+    return [
+        AgentRoleConfig(
+            name=role.name,
+            display_name=role.display_name,
+            enabled=role.enabled,
+            decision_types=role.decision_types,
+            purpose=role.purpose,
+            system_prompt=role.system_prompt,
+            llm_fallback_order=fallback_order,
+            timeout_seconds=role.timeout_seconds,
+            max_retries=role.max_retries,
+            strict_schema=role.strict_schema,
+            legacy_agent_id=role.legacy_agent_id,
+        )
+        for role in roles
+    ]
+
+
+def load_agent_settings() -> dict[str, Any]:
+    values = _read_env_values()
+    roles = _agent_roles_from_values(values)
+    return {
+        "roles": [_role_to_form_dict(role) for role in roles],
+        "env_file": str(env_file()),
+        "role_order": values.get("FACTOR_LAB_AGENT_ROLE_ORDER") or os.environ.get("FACTOR_LAB_AGENT_ROLE_ORDER") or ",".join(role.name for role in roles),
+    }
+
+
+def _agent_roles_from_form(form: dict[str, str]) -> list[AgentRoleConfig]:
+    roles: list[AgentRoleConfig] = []
+    defaults = {role.name: role for role in default_agent_roles()}
+    for index in range(20):
+        name = (form.get(f"role_name_{index}") or "").strip()
+        if not name:
+            continue
+        default = defaults.get(name)
+        decision_types = [item.strip() for item in (form.get(f"role_decision_types_{index}") or name).split(",") if item.strip()]
+        fallback_order = [item.strip() for item in (form.get(f"role_fallback_order_{index}") or "").split(",") if item.strip()]
+        if not fallback_order and default:
+            fallback_order = default.llm_fallback_order
+        try:
+            timeout_seconds = max(1, int(form.get(f"role_timeout_seconds_{index}") or (default.timeout_seconds if default else 90)))
+        except ValueError:
+            timeout_seconds = default.timeout_seconds if default else 90
+        try:
+            max_retries = max(0, int(form.get(f"role_max_retries_{index}") or (default.max_retries if default else 1)))
+        except ValueError:
+            max_retries = default.max_retries if default else 1
+        roles.append(
+            AgentRoleConfig(
+                name=name,
+                display_name=(form.get(f"role_display_name_{index}") or (default.display_name if default else name)).strip(),
+                enabled=form.get(f"role_enabled_{index}") in {"on", "1", "true", "yes"},
+                decision_types=decision_types or ([name] if not default else default.decision_types),
+                purpose=(form.get(f"role_purpose_{index}") or (default.purpose if default else "")).strip(),
+                system_prompt=(form.get(f"role_system_prompt_{index}") or (default.system_prompt if default else "")).strip(),
+                llm_fallback_order=fallback_order,
+                timeout_seconds=timeout_seconds,
+                max_retries=max_retries,
+                strict_schema=form.get(f"role_strict_schema_{index}") in {"on", "1", "true", "yes"},
+                legacy_agent_id=(form.get(f"role_legacy_agent_id_{index}") or (default.legacy_agent_id if default else "") or "").strip() or None,
+            )
+        )
+    return roles or default_agent_roles()
+
+
+def save_agent_settings(form: dict[str, str]) -> dict[str, Any]:
+    path = env_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    roles = _agent_roles_from_form(form)
+    requested = {
+        "FACTOR_LAB_AGENT_ROLES_JSON": agent_roles_to_json(roles),
+        "FACTOR_LAB_AGENT_ROLE_ORDER": ",".join(role.name for role in roles),
+    }
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    seen: set[str] = set()
+    updated_lines: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in line:
+            updated_lines.append(line)
+            continue
+        key, _ = line.split("=", 1)
+        key = key.strip()
+        if key in requested:
+            updated_lines.append(f"{key}={requested[key]}")
+            seen.add(key)
+        else:
+            updated_lines.append(line)
+    for key in AGENT_ROLE_ENV_KEYS:
+        if key not in seen:
+            updated_lines.append(f"{key}={requested.get(key, '')}")
+    path.write_text("\n".join(updated_lines).rstrip() + "\n", encoding="utf-8")
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
+    for key, value in requested.items():
+        os.environ[key] = value
+    return load_agent_settings()
+
+
+def _reconcile_role_fallback_order(
+    role_order: list[str] | str,
+    old_global_order: list[str] | str,
+    new_global_order: list[str] | str,
+    enabled_names: list[str],
+) -> list[str]:
+    available = [name for name in enabled_names if name]
+    if not available:
+        return _split_csv(role_order)
+    available_set = set(available)
+    old_order = [name for name in _split_csv(old_global_order) if name in available_set or name]
+    new_order = [name for name in _split_csv(new_global_order) if name in available_set]
+    if not new_order:
+        new_order = available
+    current = _split_csv(role_order)
+    current_valid = [name for name in current if name in available_set]
+    current_was_default = (not current) or (current == old_order) or (current_valid == [name for name in old_order if name in available_set])
+    if current_was_default or not current_valid:
+        return new_order
+    return current_valid
+
+
+def _sync_agent_roles_with_llm_profiles(
+    existing_values: dict[str, str],
+    profiles: list[dict[str, Any]],
+    old_fallback_order: str,
+    new_fallback_order: str,
+) -> dict[str, str]:
+    raw_roles = existing_values.get("FACTOR_LAB_AGENT_ROLES_JSON") or os.environ.get("FACTOR_LAB_AGENT_ROLES_JSON") or ""
+    if not raw_roles.strip():
+        return {}
+    roles = _agent_roles_from_values({**existing_values, "FACTOR_LAB_AGENT_ROLES_JSON": raw_roles})
+    enabled_names = _enabled_profile_names(profiles)
+    if not enabled_names:
+        return {}
+    updated_roles = [
+        AgentRoleConfig(
+            name=role.name,
+            display_name=role.display_name,
+            enabled=role.enabled,
+            decision_types=role.decision_types,
+            purpose=role.purpose,
+            system_prompt=role.system_prompt,
+            llm_fallback_order=_reconcile_role_fallback_order(
+                role.llm_fallback_order,
+                old_fallback_order,
+                new_fallback_order,
+                enabled_names,
+            ),
+            timeout_seconds=role.timeout_seconds,
+            max_retries=role.max_retries,
+            strict_schema=role.strict_schema,
+            legacy_agent_id=role.legacy_agent_id,
+        )
+        for role in roles
+    ]
+    role_order = existing_values.get("FACTOR_LAB_AGENT_ROLE_ORDER") or os.environ.get("FACTOR_LAB_AGENT_ROLE_ORDER") or ",".join(role.name for role in updated_roles)
+    return {
+        "FACTOR_LAB_AGENT_ROLES_JSON": agent_roles_to_json(updated_roles),
+        "FACTOR_LAB_AGENT_ROLE_ORDER": role_order,
+    }
+
+
+def _agent_fallback_warnings(roles: list[dict[str, Any]], available_profile_names: list[str]) -> list[dict[str, Any]]:
+    available = set(available_profile_names)
+    warnings: list[dict[str, Any]] = []
+    if not available:
+        return warnings
+    for role in roles:
+        fallback_names = _split_csv(role.get("llm_fallback_order"))
+        stale = [name for name in fallback_names if name not in available]
+        if stale:
+            warnings.append({
+                "role": role.get("name") or role.get("display_name") or "agent",
+                "stale_names": stale,
+            })
+    return warnings
+
+
+def load_llm_settings() -> dict[str, Any]:
+    values = _read_env_values()
+    merged = {key: values.get(key) or os.environ.get(key) or "" for key in [*LLM_ENV_KEYS, *LLM_PROFILE_ENV_KEYS]}
+    profiles, fallback_order = _load_llm_profiles(values)
+    first_profile = _first_enabled_profile(profiles) if profiles else {}
+    api_key_configured = any(bool(profile.get("api_key_configured")) for profile in profiles)
+    return {
+        "decision_provider": merged.get("FACTOR_LAB_DECISION_PROVIDER") or "real_llm",
+        "live_decision_provider": merged.get("FACTOR_LAB_LIVE_DECISION_PROVIDER") or merged.get("FACTOR_LAB_DECISION_PROVIDER") or "real_llm",
+        "observation_decision_provider": merged.get("FACTOR_LAB_OBSERVATION_DECISION_PROVIDER") or merged.get("FACTOR_LAB_DECISION_PROVIDER") or "real_llm",
+        "base_url": first_profile.get("base_url") or merged.get("FACTOR_LAB_LLM_BASE_URL", ""),
+        "model": first_profile.get("model") or merged.get("FACTOR_LAB_LLM_MODEL", ""),
+        "api_key": "",
+        "api_key_configured": api_key_configured,
+        "api_key_masked": first_profile.get("api_key_masked") or _mask_secret(merged.get("FACTOR_LAB_LLM_API_KEY")),
+        "profiles": profiles,
+        "fallback_order": fallback_order,
+        "env_file": str(env_file()),
+    }
+
+
+def save_llm_settings(form: dict[str, str]) -> dict[str, Any]:
+    path = env_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    existing_values = _read_env_values(path)
+    old_fallback_order = existing_values.get("FACTOR_LAB_LLM_FALLBACK_ORDER") or os.environ.get("FACTOR_LAB_LLM_FALLBACK_ORDER") or ""
+    raw_existing_profiles = os.environ.get("FACTOR_LAB_LLM_PROFILES_JSON") or existing_values.get("FACTOR_LAB_LLM_PROFILES_JSON", "")
+    try:
+        existing_profiles = json.loads(raw_existing_profiles) if raw_existing_profiles else []
+    except Exception:
+        existing_profiles = []
+    if not isinstance(existing_profiles, list):
+        existing_profiles = []
+    if not existing_profiles:
+        existing_profiles = [{
+            "name": "default",
+            "api_key": os.environ.get("FACTOR_LAB_LLM_API_KEY") or existing_values.get("FACTOR_LAB_LLM_API_KEY", ""),
+        }]
+    if any(key.startswith("profile_") for key in form):
+        profiles, fallback_order = _profiles_from_form(form, existing_profiles)
+    else:
+        current_api_key = os.environ.get("FACTOR_LAB_LLM_API_KEY") or existing_values.get("FACTOR_LAB_LLM_API_KEY", "")
+        profiles = [{
+            "name": "default",
+            "base_url": (form.get("base_url") or "").strip(),
+            "model": (form.get("model") or "").strip(),
+            "api_format": _normalize_llm_api_format(form.get("api_format"), form.get("model")),
+            "api_key": (form.get("api_key") or "").strip() or current_api_key,
+            "enabled": True,
+        }]
+        fallback_order = "default"
+    primary = _first_enabled_profile(profiles) if profiles else {"base_url": "", "model": "", "api_key": ""}
+    requested: dict[str, str] = {}
+    for form_key, env_key in LLM_FORM_TO_ENV.items():
+        requested[env_key] = (form.get(form_key) or "").strip()
+    requested.update({
+        "FACTOR_LAB_LLM_BASE_URL": str(primary.get("base_url") or ""),
+        "FACTOR_LAB_LLM_MODEL": str(primary.get("model") or ""),
+        "FACTOR_LAB_LLM_API_KEY": str(primary.get("api_key") or ""),
+        "FACTOR_LAB_LLM_API_FORMAT": str(primary.get("api_format") or _normalize_llm_api_format(None, primary.get("model"))),
+        "FACTOR_LAB_LLM_PROFILES_JSON": json.dumps(profiles, ensure_ascii=False, separators=(",", ":")),
+        "FACTOR_LAB_LLM_FALLBACK_ORDER": fallback_order,
+    })
+    synced_agent_role_values = _sync_agent_roles_with_llm_profiles(
+        existing_values,
+        profiles,
+        old_fallback_order,
+        fallback_order,
+    )
+    requested.update(synced_agent_role_values)
+
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    seen: set[str] = set()
+    updated_lines: list[str] = []
+    managed_keys = [*LLM_ENV_KEYS, *LLM_PROFILE_ENV_KEYS, *(AGENT_ROLE_ENV_KEYS if synced_agent_role_values else [])]
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in line:
+            updated_lines.append(line)
+            continue
+        key, _ = line.split("=", 1)
+        key = key.strip()
+        if key in requested:
+            updated_lines.append(f"{key}={requested[key]}")
+            seen.add(key)
+        else:
+            updated_lines.append(line)
+    for key in managed_keys:
+        if key not in seen:
+            updated_lines.append(f"{key}={requested.get(key, '')}")
+    path.write_text("\n".join(updated_lines).rstrip() + "\n", encoding="utf-8")
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
+    for key, value in requested.items():
+        os.environ[key] = value
+    return load_llm_settings()
+
+
+def restart_research_daemon_after_settings_save() -> dict[str, Any]:
+    try:
+        completed = subprocess.run(
+            ["systemctl", "--user", "restart", "factor-lab-research-daemon.service"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        return {
+            "ok": completed.returncode == 0,
+            "returncode": completed.returncode,
+            "stdout": completed.stdout.strip(),
+            "stderr": completed.stderr.strip(),
+        }
+    except Exception as exc:
+        return {"ok": False, "returncode": None, "stdout": "", "stderr": str(exc)}
+
+
+def test_llm_profile_connection(profile: dict[str, Any]) -> dict[str, Any]:
+    from factor_lab.llm_provider_router import DecisionProviderRouter
+
+    base_url = str(profile.get("base_url") or "").strip().rstrip("/")
+    model = str(profile.get("model") or "").strip()
+    api_key = str(profile.get("api_key") or "").strip()
+    api_format = _normalize_llm_api_format(profile.get("api_format"), model)
+    if not base_url or not model or not api_key:
+        return {"ok": False, "message": "模型测试失败：Base URL、Model、API Key 必须填写。", "api_format": api_format, "model": model}
+
+    router = DecisionProviderRouter(provider="real_llm", model=model)
+    url = router._real_llm_endpoint_url(base_url, api_format)
+    if api_format == "anthropic":
+        body = {
+            "model": model,
+            "system": "You are a connection test endpoint.",
+            "messages": [{"role": "user", "content": "Reply with OK only."}],
+            "max_tokens": 16,
+            "temperature": 0,
+        }
+        headers = router._real_llm_headers(api_key, auth_scheme="anthropic")
+    elif api_format == "openai_responses":
+        body = {
+            "model": model,
+            "input": [
+                {"role": "system", "content": "You are a connection test endpoint."},
+                {"role": "user", "content": "Reply with OK only."},
+            ],
+            "temperature": 0,
+        }
+        headers = router._real_llm_headers(api_key)
+    else:
+        body = {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": "You are a connection test endpoint."},
+                {"role": "user", "content": "Reply with OK only."},
+            ],
+            "temperature": 0,
+        }
+        headers = router._real_llm_headers(api_key)
+    req = urllib.request.Request(url=url, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=20) as response:
+            raw_text = response.read().decode("utf-8", errors="ignore")
+        return {"ok": True, "message": "模型测试成功", "api_format": api_format, "model": model, "endpoint": url, "response_preview": raw_text[:300]}
+    except urllib.error.HTTPError as exc:
+        body_text = exc.read().decode("utf-8", errors="ignore")[:500]
+        return {"ok": False, "message": f"模型测试失败：http_error:{exc.code}", "api_format": api_format, "model": model, "endpoint": url, "error": body_text}
+    except Exception as exc:
+        return {"ok": False, "message": f"模型测试失败：{type(exc).__name__}: {exc}", "api_format": api_format, "model": model, "endpoint": url}
+
+
 def format_bj_time(value: str | None) -> str:
     if not value:
         return "-"
@@ -35,7 +640,7 @@ def format_bj_time(value: str | None) -> str:
         dt = datetime.fromisoformat(value)
         if dt.tzinfo is None:
             return value
-        bj = dt.astimezone(ZoneInfo("Asia/Shanghai"))
+        bj = dt.astimezone(LOCAL_TZ)
         return bj.strftime("%Y-%m-%d %H:%M")
     except Exception:
         return value
@@ -60,11 +665,40 @@ def portfolio_positions(current: dict[str, Any]) -> list[dict[str, Any]]:
     return sorted(positions, key=lambda row: row.get("weight", 0), reverse=True)
 
 
-def read_jsonl(path: Path) -> list[dict[str, Any]]:
+def _tail_lines(path: Path, max_lines: int, chunk_size: int = 8192) -> list[str]:
+    if max_lines <= 0 or not path.exists():
+        return []
+    with path.open("rb") as handle:
+        handle.seek(0, 2)
+        file_size = handle.tell()
+        if file_size == 0:
+            return []
+        position = file_size
+        buffer = b""
+        line_count = 0
+        while position > 0 and line_count <= max_lines:
+            read_size = min(chunk_size, position)
+            position -= read_size
+            handle.seek(position)
+            chunk = handle.read(read_size)
+            buffer = chunk + buffer
+            line_count = buffer.count(b"\n")
+        lines = buffer.splitlines()
+        if len(lines) > max_lines:
+            lines = lines[-max_lines:]
+        return [line.decode("utf-8", errors="ignore") for line in lines]
+
+
+def read_jsonl(path: Path, tail_lines: int | None = None) -> list[dict[str, Any]]:
     if not path.exists():
         return []
     rows = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    lines: list[str]
+    if tail_lines is not None:
+        lines = _tail_lines(path, tail_lines)
+    else:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    for line in lines:
         line = line.strip()
         if not line:
             continue
@@ -218,7 +852,7 @@ def score_timeline_svg(series: list[dict[str, Any]], width: int = 960, height: i
 
 
 def compute_weekly_report(health: dict[str, Any] | None = None) -> dict[str, Any]:
-    health = health or compute_health_metrics()
+    health = health or get_cached_health_metrics()
     conn = get_conn()
     try:
         week_runs = [dict(row) for row in conn.execute(
@@ -264,7 +898,7 @@ def compute_weekly_report(health: dict[str, Any] | None = None) -> dict[str, Any
             """
         ).fetchall()]
 
-        heartbeat_rows = read_jsonl(DB_PATH.parent / 'system_heartbeat.jsonl')[-20:]
+        heartbeat_rows = read_jsonl(DB_PATH.parent / 'system_heartbeat.jsonl', tail_lines=20)
         cycle_heartbeats = [row for row in heartbeat_rows if row.get('scope') == 'scheduled_cycle']
         llm_heartbeats = [row for row in heartbeat_rows if row.get('scope') == 'llm_cycle']
 
@@ -296,6 +930,109 @@ def _read_json_file(path: Path, default: Any) -> Any:
         return json.loads(path.read_text(encoding='utf-8'))
     except Exception:
         return default
+
+
+_PAYLOAD_CACHE: dict[str, tuple[float, Any]] = {}
+
+
+def _cached_payload(key: str, ttl_seconds: float, builder) -> Any:
+    now = time.time()
+    cached = _PAYLOAD_CACHE.get(key)
+    if cached and (now - cached[0]) <= ttl_seconds:
+        return deepcopy(cached[1])
+    value = builder()
+    _PAYLOAD_CACHE[key] = (now, value)
+    return deepcopy(value)
+
+
+def get_cached_health_metrics() -> dict[str, Any]:
+    return _cached_payload('health_metrics', 15.0, compute_health_metrics)
+
+
+def get_cached_promotion_scorecard(limit: int) -> dict[str, Any]:
+    return _cached_payload(
+        f'promotion_scorecard:{limit}',
+        30.0,
+        lambda: build_promotion_scorecard(DB_PATH, limit=limit),
+    )
+
+
+def _decision_effective_source(payload: dict[str, Any]) -> str | None:
+    metadata = payload.get("decision_metadata") or {}
+    return metadata.get("effective_source") or metadata.get("source") or payload.get("decision_source")
+
+
+def _decision_layer_payload(base: Path) -> dict[str, Any]:
+    live_health = _read_json_file(base / "llm_provider_health_live.json", {})
+    observation_health = _read_json_file(base / "llm_provider_health.json", {})
+    agent_responses = _read_json_file(base / "agent_responses.json", {})
+    decision_impact = _read_json_file(base / "decision_impact_report.json", {})
+
+    def normalize_provider_health(payload: dict[str, Any]) -> dict[str, Any]:
+        probe = payload.get("probe") or {}
+        effective_source = payload.get("effective_source") or payload.get("recommended_effective_source")
+        return {
+            "configured_provider": payload.get("configured_provider"),
+            "effective_source": effective_source,
+            "degraded_to_heuristic": bool(payload.get("degraded_to_heuristic")),
+            "probe_attempted": bool(probe.get("attempted")),
+            "probe_skipped": bool(probe.get("skipped")),
+            "probe_ok": probe.get("ok"),
+            "probe_latency_ms": probe.get("latency_ms"),
+            "probe_error": probe.get("error"),
+        }
+
+    def normalize_agent(payload: dict[str, Any]) -> dict[str, Any]:
+        metadata = payload.get("decision_metadata") or {}
+        return {
+            "effective_source": _decision_effective_source(payload),
+            "configured_provider": metadata.get("configured_provider"),
+            "degraded_to_heuristic": bool(metadata.get("degraded_to_heuristic")),
+            "fallback_reason": metadata.get("fallback_reason"),
+            "provider_latency_ms": metadata.get("provider_latency_ms") or metadata.get("latency_ms"),
+            "session_mode": metadata.get("session_mode"),
+            "session_id": metadata.get("session_id"),
+            "request_scope_id": metadata.get("request_scope_id"),
+        }
+
+    planner = normalize_agent(agent_responses.get("planner") or {})
+    failure_analyst = normalize_agent(agent_responses.get("failure_analyst") or {})
+    fallback_reasons = [reason for reason in [planner.get("fallback_reason"), failure_analyst.get("fallback_reason")] if reason]
+
+    return {
+        "live": normalize_provider_health(live_health),
+        "observation": normalize_provider_health(observation_health),
+        "planner": planner,
+        "failure_analyst": failure_analyst,
+        "degraded": bool(
+            normalize_provider_health(live_health).get("degraded_to_heuristic")
+            or normalize_provider_health(observation_health).get("degraded_to_heuristic")
+            or planner.get("degraded_to_heuristic")
+            or failure_analyst.get("degraded_to_heuristic")
+        ),
+        "last_fallback_reason": fallback_reasons[0] if fallback_reasons else None,
+        "decision_impact_changed": bool((decision_impact.get("planner") or {}).get("changed") or (decision_impact.get("failure_analyst") or {}).get("changed")),
+    }
+
+
+
+def _repair_layer_payload(base: Path) -> dict[str, Any]:
+    feedback = _read_json_file(base / "repair_feedback.json", {})
+    metrics = _read_json_file(base / "repair_metrics.json", {})
+    verification = _read_json_file(base / "repair_verification.json", {})
+    response = _read_json_file(base / "repair_agent_response.json", {})
+    action_plan = _read_json_file(base / "repair_action_plan.json", {})
+    return {
+        "feedback": feedback,
+        "metrics": metrics,
+        "verification": verification,
+        "response": response,
+        "action_plan": action_plan,
+        "active_incident_count": int(feedback.get("active_incident_count") or 0),
+        "route_unhealthy": bool(feedback.get("route_unhealthy")),
+        "restart_recently": bool(feedback.get("restart_recently")),
+        "top_incident_types_24h": feedback.get("top_incident_types_24h") or [],
+    }
 
 
 def _load_health_paper_stability(base: Path, snapshot: dict[str, Any]) -> tuple[dict[str, Any], str]:
@@ -827,10 +1564,10 @@ def compute_health_metrics() -> dict[str, Any]:
             'portfolio_current': timeline_series['portfolio'][-1]['score'] if timeline_series['portfolio'] else 0,
         }
 
-        heartbeat_rows = read_jsonl(DB_PATH.parent / 'system_heartbeat.jsonl')
+        heartbeat_rows = read_jsonl(DB_PATH.parent / 'system_heartbeat.jsonl', tail_lines=12)
         recent_heartbeat_rows = heartbeat_rows[-12:]
 
-        daemon_status_history = read_jsonl(DB_PATH.parent / 'research_daemon_status_history.jsonl')
+        daemon_status_history = read_jsonl(DB_PATH.parent / 'research_daemon_status_history.jsonl', tail_lines=240)
         recent_daemon_points = [row for row in daemon_status_history if row.get('updated_at_utc')][-240:]
         resource_timeline_series = {
             'cpu': [{'ts': row['updated_at_utc'], 'score': round(float(row.get('cpu_usage_ratio') or 0) * 100, 1)} for row in recent_daemon_points if row.get('cpu_usage_ratio') is not None],
@@ -872,6 +1609,8 @@ def compute_health_metrics() -> dict[str, Any]:
             candidates_only_recent_return=candidates_only_recent_return,
             all_factors_recent_return=all_factors_recent_return,
         )
+        decision_layer = _decision_layer_payload(base)
+        repair_layer = _repair_layer_payload(base)
         knowledge_gain_counter = {
             'stable_candidate_confirmed': 0,
             'repeated_graveyard_confirmed': 0,
@@ -1014,6 +1753,8 @@ def compute_health_metrics() -> dict[str, Any]:
                 'series': resource_timeline_series,
             },
             'project_progress_observation': project_progress,
+            'decision_layer': decision_layer,
+            'repair_layer': repair_layer,
         }
     finally:
         conn.close()
@@ -1056,6 +1797,13 @@ env = Environment(
 app = FastAPI(title="Factor Lab 中文控制台")
 
 
+@app.on_event("startup")
+def warm_dashboard_cache() -> None:
+    # Precompute the heaviest homepage payloads once at process startup.
+    get_cached_health_metrics()
+    get_cached_promotion_scorecard(limit=6)
+
+
 def render(template_name: str, **context) -> HTMLResponse:
     template = env.get_template(template_name)
     return HTMLResponse(template.render(**localize_times(context)))
@@ -1082,9 +1830,357 @@ def build_candidate_detail_context(store: ExperimentStore, candidate_id: str) ->
     }
 
 
+def _quick_provider_status() -> tuple[str | None, str | None]:
+    for key in ("FACTOR_LAB_DECISION_PROVIDER", "FACTOR_LAB_LIVE_DECISION_PROVIDER"):
+        value = os.environ.get(key)
+        if value:
+            return value, f"env:{key}"
+    env_path = env_file()
+    if env_path.exists():
+        for line in env_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            if line.startswith("FACTOR_LAB_DECISION_PROVIDER="):
+                return line.split("=", 1)[1].strip().strip('"').strip("'"), ".env:FACTOR_LAB_DECISION_PROVIDER"
+    return None, None
+
+
+def _quick_daemon_status() -> dict[str, Any]:
+    try:
+        proc = subprocess.run(
+            ["systemctl", "--user", "is-active", "factor-lab-research-daemon.service"],
+            text=True,
+            capture_output=True,
+            timeout=0.5,
+            check=False,
+        )
+        status = (proc.stdout or proc.stderr).strip() or "unknown"
+        return {"active": status == "active", "label": status, "detail": "systemd user service"}
+    except Exception as exc:
+        return {"active": False, "label": "unknown", "detail": str(exc)}
+
+
+def _quick_latest_runs(limit: int = 5) -> list[dict[str, Any]]:
+    if not DB_PATH.exists():
+        return []
+    try:
+        conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, timeout=0.2)
+        conn.row_factory = sqlite3.Row
+        try:
+            rows = conn.execute(
+                "SELECT run_id, created_at_utc, status, config_path FROM workflow_runs ORDER BY created_at_utc DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            return [dict(row) for row in rows]
+        finally:
+            conn.close()
+    except Exception:
+        return []
+
+
+def _llm_usage_ledger_path() -> Path:
+    return DB_PATH.parent / "llm_usage_ledger.jsonl"
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _parse_ledger_time(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _safe_int(value: Any) -> int:
+    try:
+        if value is None:
+            return 0
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _load_llm_usage_rows(limit: int = 200, hours: int | None = 24) -> list[dict[str, Any]]:
+    path = _llm_usage_ledger_path()
+    if not path.exists():
+        return []
+    cutoff = _utcnow() - timedelta(hours=hours) if hours is not None else None
+    lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    rows: list[dict[str, Any]] = []
+    for line in reversed(lines):
+        if len(rows) >= limit:
+            break
+        if not line.strip():
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(row, dict):
+            continue
+        if cutoff is not None:
+            created_at = _parse_ledger_time(row.get("created_at_utc"))
+            if created_at is None or created_at < cutoff:
+                continue
+        rows.append(row)
+    return rows
+
+
+def _summarize_llm_usage(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    summary: dict[str, Any] = {
+        "rows": len(rows),
+        "success": sum(1 for row in rows if row.get("success") is True),
+        "failed": sum(1 for row in rows if row.get("success") is False),
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "total_tokens": 0,
+        "cached_tokens": 0,
+        "cached_tokens_missing_rows": 0,
+        "cache_creation_tokens": 0,
+        "cache_creation_tokens_missing_rows": 0,
+        "uncached_prompt_tokens": 0,
+        "uncached_prompt_tokens_missing_rows": 0,
+        "estimated_cost_usd": 0.0,
+        "estimated_user_prompt_tokens_4c": 0,
+        "by_decision_type": {},
+        "by_model": {},
+        "by_provider": {},
+    }
+    for row in rows:
+        usage = row.get("usage") or {}
+        prompt_tokens = _safe_int(usage.get("prompt_tokens"))
+        completion_tokens = _safe_int(usage.get("completion_tokens"))
+        total_tokens = _safe_int(usage.get("total_tokens"))
+        cached_tokens = _safe_int(usage.get("cached_tokens"))
+        cache_creation_tokens = _safe_int(usage.get("cache_creation_tokens"))
+        uncached_prompt_tokens = _safe_int(usage.get("uncached_prompt_tokens"))
+        cost = estimate_llm_cost_usd(row.get("model"), usage)
+        estimated_cost_usd = float(cost.get("estimated_cost_usd") or row.get("estimated_cost_usd") or 0.0)
+        estimated = _safe_int(row.get("estimated_user_prompt_tokens_4c"))
+        summary["prompt_tokens"] += prompt_tokens
+        summary["completion_tokens"] += completion_tokens
+        summary["total_tokens"] += total_tokens
+        if usage.get("cached_tokens") is None:
+            summary["cached_tokens_missing_rows"] += 1
+        if usage.get("cache_creation_tokens") is None:
+            summary["cache_creation_tokens_missing_rows"] += 1
+        if usage.get("uncached_prompt_tokens") is None:
+            summary["uncached_prompt_tokens_missing_rows"] += 1
+        summary["cached_tokens"] += cached_tokens
+        summary["cache_creation_tokens"] += cache_creation_tokens
+        summary["uncached_prompt_tokens"] += uncached_prompt_tokens
+        summary["estimated_cost_usd"] += estimated_cost_usd
+        summary["estimated_user_prompt_tokens_4c"] += estimated
+        decision_type = str(row.get("decision_type") or "unknown")
+        model = str(row.get("model") or "unknown")
+        provider = str(row.get("profile_name") or row.get("provider") or "unknown")
+        decision_bucket = summary["by_decision_type"].setdefault(decision_type, {"rows": 0, "total_tokens": 0, "cached_tokens": 0, "estimated_cost_usd": 0.0})
+        decision_bucket["rows"] += 1
+        decision_bucket["total_tokens"] += total_tokens
+        decision_bucket["cached_tokens"] += cached_tokens
+        decision_bucket["estimated_cost_usd"] += estimated_cost_usd
+        model_bucket = summary["by_model"].setdefault(model, {"rows": 0, "total_tokens": 0, "cached_tokens": 0, "estimated_cost_usd": 0.0})
+        model_bucket["rows"] += 1
+        model_bucket["total_tokens"] += total_tokens
+        model_bucket["cached_tokens"] += cached_tokens
+        model_bucket["estimated_cost_usd"] += estimated_cost_usd
+        provider_bucket = summary["by_provider"].setdefault(provider, {"rows": 0, "total_tokens": 0, "cached_tokens": 0, "estimated_cost_usd": 0.0})
+        provider_bucket["rows"] += 1
+        provider_bucket["total_tokens"] += total_tokens
+        provider_bucket["cached_tokens"] += cached_tokens
+        provider_bucket["estimated_cost_usd"] += estimated_cost_usd
+    summary["estimated_cost_usd"] = round(summary["estimated_cost_usd"], 6)
+    for bucket in list(summary["by_decision_type"].values()) + list(summary["by_model"].values()) + list(summary["by_provider"].values()):
+        bucket["estimated_cost_usd"] = round(bucket["estimated_cost_usd"], 6)
+    summary["by_decision_type_rows"] = [
+        {"name": name, **value} for name, value in sorted(summary["by_decision_type"].items())
+    ]
+    summary["by_provider_rows"] = [
+        {"name": name, **value} for name, value in sorted(summary["by_provider"].items())
+    ]
+    summary["by_model_rows"] = [
+        {"name": name, **value} for name, value in sorted(summary["by_model"].items())
+    ]
+    return summary
+
+
+def _format_local_time(value: datetime | None = None) -> str:
+    dt = value or _utcnow()
+    return dt.astimezone(LOCAL_TZ).strftime("%Y-%m-%d %H:%M")
+
+
+def _build_llm_usage_chart(rows: list[dict[str, Any]], hours: int = 24) -> list[dict[str, Any]]:
+    now_local = _utcnow().astimezone(LOCAL_TZ).replace(minute=0, second=0, microsecond=0)
+    buckets = []
+    for offset in range(hours - 1, -1, -1):
+        start = now_local - timedelta(hours=offset)
+        buckets.append({
+            "start": start,
+            "label": start.strftime("%H:%M"),
+            "full_label": start.strftime("%m-%d %H:%M"),
+            "total_tokens": 0,
+            "estimated_tokens": 0,
+            "cached_tokens": 0,
+            "estimated_cost_usd": 0.0,
+            "rows": 0,
+            "height_pct": 0,
+        })
+    by_start = {bucket["start"]: bucket for bucket in buckets}
+    for row in rows:
+        created_at = _parse_ledger_time(row.get("created_at_utc"))
+        if created_at is None:
+            continue
+        bucket_start = created_at.astimezone(LOCAL_TZ).replace(minute=0, second=0, microsecond=0)
+        bucket = by_start.get(bucket_start)
+        if bucket is None:
+            continue
+        usage = row.get("usage") or {}
+        bucket["total_tokens"] += _safe_int(usage.get("total_tokens"))
+        bucket["cached_tokens"] += _safe_int(usage.get("cached_tokens"))
+        cost = estimate_llm_cost_usd(row.get("model"), usage)
+        bucket["estimated_cost_usd"] += float(cost.get("estimated_cost_usd") or row.get("estimated_cost_usd") or 0.0)
+        bucket["estimated_tokens"] += _safe_int(row.get("estimated_user_prompt_tokens_4c"))
+        bucket["rows"] += 1
+    max_value = max([bucket["total_tokens"] for bucket in buckets] + [0])
+    for bucket in buckets:
+        bucket["height_pct"] = int((bucket["total_tokens"] / max_value) * 100) if max_value else 0
+        bucket["estimated_cost_usd"] = round(bucket["estimated_cost_usd"], 6)
+    return buckets
+
+
+def _latest_llm_usage_rows(limit: int = 50) -> list[dict[str, Any]]:
+    rows = _load_llm_usage_rows(limit=limit, hours=24)
+    for row in rows:
+        usage = row.get("usage") or {}
+        row["usage_total_tokens"] = usage.get("total_tokens")
+        row["usage_prompt_tokens"] = usage.get("prompt_tokens")
+        row["usage_completion_tokens"] = usage.get("completion_tokens")
+        row["usage_cached_tokens"] = usage.get("cached_tokens")
+        row["usage_cache_creation_tokens"] = usage.get("cache_creation_tokens")
+        row["usage_uncached_prompt_tokens"] = usage.get("uncached_prompt_tokens")
+        row["usage_source"] = usage.get("usage_source")
+        cost = estimate_llm_cost_usd(row.get("model"), usage)
+        row["estimated_cost_usd"] = cost.get("estimated_cost_usd") or row.get("estimated_cost_usd")
+        row["pricing_family"] = cost.get("pricing_family")
+    return rows
+
+
+def _systemd_service_snapshot(service: str) -> dict[str, Any]:
+    snapshot = {
+        "name": service,
+        "active_state": "unknown",
+        "main_pid": None,
+        "working_directory": None,
+        "exec_start": None,
+        "fragment_path": None,
+    }
+    try:
+        proc = subprocess.run(
+            ["systemctl", "--user", "show", service, "--no-pager"],
+            text=True,
+            capture_output=True,
+            timeout=0.8,
+            check=False,
+        )
+    except Exception as exc:
+        snapshot["active_state"] = "error"
+        snapshot["exec_start"] = str(exc)
+        return snapshot
+    if proc.returncode != 0:
+        snapshot["active_state"] = "error"
+        snapshot["exec_start"] = (proc.stderr or proc.stdout).strip()
+        return snapshot
+    data: dict[str, str] = {}
+    for line in proc.stdout.splitlines():
+        if "=" in line:
+            key, value = line.split("=", 1)
+            data[key] = value
+    snapshot.update(
+        {
+            "active_state": data.get("ActiveState") or "unknown",
+            "main_pid": data.get("MainPID") or None,
+            "working_directory": data.get("WorkingDirectory") or None,
+            "exec_start": data.get("ExecStart") or None,
+            "fragment_path": data.get("FragmentPath") or None,
+        }
+    )
+    return snapshot
+
+
+def _quick_research_queue_snapshot() -> tuple[dict[str, int], dict[str, Any] | None]:
+    empty_counts = {"pending": 0, "running": 0, "finished_24h": 0, "failed_24h": 0}
+    if not DB_PATH.exists():
+        return empty_counts, None
+    try:
+        conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, timeout=0.2)
+        conn.row_factory = sqlite3.Row
+        try:
+            status_rows = conn.execute("SELECT status, COUNT(*) AS n FROM research_tasks GROUP BY status").fetchall()
+            counts = dict(empty_counts)
+            for row in status_rows:
+                status = row["status"]
+                if status in counts:
+                    counts[status] = int(row["n"] or 0)
+            counts["finished_24h"] = int(conn.execute("SELECT COUNT(*) FROM research_tasks WHERE status='finished' AND finished_at_utc >= datetime('now', '-1 day')").fetchone()[0])
+            counts["failed_24h"] = int(conn.execute("SELECT COUNT(*) FROM research_tasks WHERE status='failed' AND finished_at_utc >= datetime('now', '-1 day')").fetchone()[0])
+            latest = conn.execute("SELECT task_id, task_type, status, created_at_utc, worker_note FROM research_tasks ORDER BY created_at_utc DESC LIMIT 1").fetchone()
+            return counts, (dict(latest) if latest else None)
+        finally:
+            conn.close()
+    except Exception:
+        return empty_counts, None
+
+
+def _quick_heartbeat() -> dict[str, Any] | None:
+    path = DB_PATH.parent / "research_daemon_heartbeat.json"
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return {"timestamp": None, "error": str(exc)}
+
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard():
-    health = compute_health_metrics()
+    provider, provider_source = _quick_provider_status()
+    return render(
+        "dashboard_quick.html",
+        title="总览",
+        daemon_status=_quick_daemon_status(),
+        provider=provider,
+        provider_source=provider_source,
+        latest_runs=_quick_latest_runs(),
+    )
+
+
+@app.get("/control", response_class=HTMLResponse)
+def control_page():
+    provider, provider_source = _quick_provider_status()
+    queue_counts, latest_task = _quick_research_queue_snapshot()
+    return render(
+        "control.html",
+        title="控制",
+        services=[
+            _systemd_service_snapshot("factor-lab-web-ui.service"),
+            _systemd_service_snapshot("factor-lab-research-daemon.service"),
+        ],
+        provider=provider,
+        provider_source=provider_source,
+        queue_counts=queue_counts,
+        latest_task=latest_task,
+        heartbeat=_quick_heartbeat(),
+    )
+
+
+@app.get("/dashboard-full", response_class=HTMLResponse)
+def dashboard_full():
+    health = get_cached_health_metrics()
     latest_runs = fetch_all(
         "SELECT run_id, created_at_utc, status, config_path FROM workflow_runs ORDER BY created_at_utc DESC LIMIT 8"
     )
@@ -1130,7 +2226,13 @@ def dashboard():
     planner_injected = json.loads(planner_injected_path.read_text(encoding='utf-8')) if planner_injected_path.exists() else {}
     research_flow_state = json.loads(research_flow_state_path.read_text(encoding='utf-8')) if research_flow_state_path.exists() else {}
     research_learning = json.loads(research_learning_path.read_text(encoding='utf-8')) if research_learning_path.exists() else {}
-    promotion_scorecard = build_promotion_scorecard(DB_PATH, limit=6)
+    promotion_scorecard = get_cached_promotion_scorecard(limit=6)
+    approved_universe_path = DB_PATH.parent / 'approved_candidate_universe.json'
+    approved_universe = json.loads(approved_universe_path.read_text(encoding='utf-8')) if approved_universe_path.exists() else {}
+    novelty_judge = load_novelty_judgments(DB_PATH.parent)
+    allocator_governance_audit = load_allocator_governance_audit(DB_PATH.parent)
+    decision_ab = load_decision_ab_artifacts(DB_PATH.parent)
+    failure_analyst_enhancement = load_failure_analyst_enhancement(DB_PATH.parent)
     stable_names = [row['factor_name'] for row in stable_candidates[:4]]
     latest_output_dir = Path(latest_run['output_dir']) if latest_run and latest_run.get('output_dir') else None
     candidate_status_snapshot = []
@@ -1207,6 +2309,18 @@ def dashboard():
         f"Regime-sensitive {int(promotion_summary.get('quality_regime_sensitive_count') or 0)} 个，"
         f"重复候选压制 {int(promotion_summary.get('duplicate_suppress_count') or 0)} 个。"
     )
+    if approved_universe:
+        au_summary = approved_universe.get('summary') or {}
+        latest_summary_lines.append(
+            f"Approved Universe：{int(au_summary.get('approved_count') or 0)} 个，当前入池={ '、'.join([row.get('factor_name') for row in (approved_universe.get('rows') or [])[:5] if row.get('factor_name')]) or '无' }。"
+        )
+        latest_summary_lines.append(
+            f"AU 治理：state={au_summary.get('state_counts') or {}}, actions={au_summary.get('governance_action_counts') or {}}, bucket_budget={(approved_universe.get('budget_summary') or {}).get('bucket_allocations') or {}}。"
+        )
+    if failure_analyst_enhancement and failure_analyst_enhancement.get('summary'):
+        latest_summary_lines.append(
+            f"Failure Analyst+：reroute={failure_analyst_enhancement['summary'].get('reroute_count') or 0}, stop={failure_analyst_enhancement['summary'].get('stop_count') or 0}, question_cards_v2={failure_analyst_enhancement['summary'].get('question_card_count') or 0}。"
+        )
     latest_summary = '\n'.join(latest_summary_lines) if latest_summary_lines else '暂无摘要。'
 
     change_lines = []
@@ -1239,6 +2353,11 @@ def dashboard():
         research_flow_state=research_flow_state,
         research_learning=research_learning,
         promotion_scorecard=promotion_scorecard,
+        approved_universe=approved_universe,
+        novelty_judge=novelty_judge,
+        allocator_governance_audit=allocator_governance_audit,
+        decision_ab=decision_ab,
+        failure_analyst_enhancement=failure_analyst_enhancement,
         stage_summary=stage_summary,
         rolling_summary_rows=rolling_summary_rows[:8],
         family_summary_rows=family_summary_rows,
@@ -1247,7 +2366,7 @@ def dashboard():
 
 @app.get("/health", response_class=HTMLResponse)
 def health_page():
-    health = compute_health_metrics()
+    health = get_cached_health_metrics()
     weekly = compute_weekly_report(health)
     return render("health.html", title="健康度", health=health, weekly=weekly)
 
@@ -1312,9 +2431,15 @@ def research_page():
     )
 
 
+@app.get("/research-quality", response_class=HTMLResponse)
+def research_quality_page():
+    summary = build_research_quality_summary()
+    return render("research_quality.html", title="研究质量", summary=summary)
+
+
 @app.get("/weekly", response_class=HTMLResponse)
 def weekly_page():
-    health = compute_health_metrics()
+    health = get_cached_health_metrics()
     weekly = compute_weekly_report(health)
     return render("weekly.html", title="周报", health=health, weekly=weekly)
 
@@ -1461,9 +2586,26 @@ def candidate_detail_page(candidate_id: str):
         raise HTTPException(status_code=404, detail='未找到该候选因子')
     evaluations = store.list_factor_evaluations(candidate_id=candidate_id, limit=200)
     hypothesis = store.get_hypothesis_for_candidate(candidate_id)
+    research_thesis = store.get_research_thesis_for_candidate(candidate_id)
     detail_context = build_candidate_detail_context(store, candidate_id)
     candidate_risk_profile = next((row for row in store.list_candidate_risk_profiles(limit=5000) if row.get('candidate_id') == candidate_id), None)
     acceptance_snapshot = summarize_candidate_status(evaluations)
+    candidate_failure_dossier = build_candidate_failure_dossier(
+        candidate,
+        evaluations,
+        store.list_candidate_relationships(limit=5000),
+        {row.get('name'): row for row in store.list_factor_candidates(limit=1000) if row.get('name')},
+    )
+    contribution_report_path = DB_PATH.parent / 'paper_portfolio' / 'portfolio_contribution_report.json'
+    contribution_report = json.loads(contribution_report_path.read_text(encoding='utf-8')) if contribution_report_path.exists() else {}
+    candidate_portfolio_contribution = next(
+        (row for row in (contribution_report.get('rows') or []) if row.get('factor_name') == candidate.get('name')),
+        None,
+    )
+    promotion_scorecard = build_promotion_scorecard(DB_PATH, limit=200)
+    promotion_row = next((row for row in (promotion_scorecard.get('rows') or []) if row.get('factor_name') == candidate.get('name')), None)
+    novelty_payload = load_novelty_judgments(DB_PATH.parent)
+    novelty_row = next((row for row in (novelty_payload.get('rows') or []) if row.get('candidate_name') == candidate.get('name')), None)
     return render(
         'candidate_detail.html',
         title=f"候选详情 {candidate['name']}",
@@ -1472,6 +2614,11 @@ def candidate_detail_page(candidate_id: str):
         hypothesis=hypothesis,
         candidate_risk_profile=candidate_risk_profile,
         acceptance_snapshot=acceptance_snapshot,
+        candidate_failure_dossier=candidate_failure_dossier,
+        research_thesis=research_thesis,
+        candidate_portfolio_contribution=candidate_portfolio_contribution,
+        promotion_row=promotion_row,
+        novelty_row=novelty_row,
         **detail_context,
     )
 
@@ -1581,6 +2728,9 @@ def portfolios_page():
 @app.get("/paper-portfolio", response_class=HTMLResponse)
 def paper_portfolio_page():
     base = DB_PATH.parent / "paper_portfolio"
+    allocator_governance_audit = load_allocator_governance_audit(DB_PATH.parent)
+    decision_ab = load_decision_ab_artifacts(DB_PATH.parent)
+    failure_analyst_enhancement = load_failure_analyst_enhancement(DB_PATH.parent)
     current_path = base / "current_portfolio.json"
     history_path = base / "portfolio_history.json"
     change_log_path = base / "portfolio_change_log.md"
@@ -1589,6 +2739,10 @@ def paper_portfolio_page():
     current = json.loads(current_path.read_text(encoding="utf-8")) if current_path.exists() else {}
     retrospective = json.loads(retro_path.read_text(encoding="utf-8")) if retro_path.exists() else {}
     stability = json.loads(stability_path.read_text(encoding="utf-8")) if stability_path.exists() else {}
+    contribution_path = base / "portfolio_contribution_report.json"
+    contribution = json.loads(contribution_path.read_text(encoding="utf-8")) if contribution_path.exists() else {}
+    approved_universe_path = DB_PATH.parent / "approved_candidate_universe.json"
+    approved_universe = json.loads(approved_universe_path.read_text(encoding="utf-8")) if approved_universe_path.exists() else {}
     return render(
         "paper_portfolio.html",
         title="纸面组合",
@@ -1596,11 +2750,148 @@ def paper_portfolio_page():
         current_positions=portfolio_positions(current),
         retrospective=retrospective,
         stability=stability,
+        contribution=contribution,
+        approved_universe=approved_universe,
+        allocator_governance_audit=allocator_governance_audit,
+        decision_ab=decision_ab,
+        failure_analyst_enhancement=failure_analyst_enhancement,
         history_text=history_path.read_text(encoding="utf-8") if history_path.exists() else "暂无组合历史。",
         change_log_text=change_log_path.read_text(encoding="utf-8") if change_log_path.exists() else "暂无组合变更日志。",
         retrospective_text=pretty_json_text(retrospective, "暂无组合回溯。"),
         stability_text=pretty_json_text(stability, "暂无稳定性评分。"),
     )
+
+
+@app.get("/approved-universe", response_class=HTMLResponse)
+def approved_universe_page():
+    universe_path = DB_PATH.parent / "approved_candidate_universe.json"
+    debug_path = DB_PATH.parent / "approved_candidate_universe_debug.json"
+    universe = json.loads(universe_path.read_text(encoding="utf-8")) if universe_path.exists() else {}
+    debug = json.loads(debug_path.read_text(encoding="utf-8")) if debug_path.exists() else {}
+    allocator_governance_audit = load_allocator_governance_audit(DB_PATH.parent)
+    decision_ab = load_decision_ab_artifacts(DB_PATH.parent)
+    failure_analyst_enhancement = load_failure_analyst_enhancement(DB_PATH.parent)
+    return render(
+        "approved_universe.html",
+        title="Approved Universe",
+        universe=universe,
+        debug=debug,
+        allocator_governance_audit=allocator_governance_audit,
+        decision_ab=decision_ab,
+        failure_analyst_enhancement=failure_analyst_enhancement,
+    )
+
+
+@app.get("/settings", response_class=HTMLResponse)
+def settings_page(saved: str | None = None, restart: str | None = None):
+    settings = load_llm_settings()
+    profile_slots = list(settings.get("profiles") or [])
+    while len(profile_slots) < 5:
+        profile_slots.append({"name": "", "base_url": "", "model": "", "api_format": "openai_responses", "api_key_masked": "未配置", "enabled": True})
+    return render(
+        "settings.html",
+        title="大模型设置",
+        settings=settings,
+        profile_slots=profile_slots,
+        provider_options=["real_llm", "openclaw_gateway", "heuristic", "mock"],
+        api_format_options=LLM_API_FORMAT_OPTIONS,
+        test_result=None,
+        saved=saved == "1",
+        restart_ok=restart == "1",
+        restart_failed=restart == "0",
+    )
+
+
+@app.post("/settings")
+async def settings_save(request: Request):
+    body = (await request.body()).decode("utf-8")
+    parsed = parse_qs(body, keep_blank_values=True)
+    save_llm_settings({key: values[-1] if values else "" for key, values in parsed.items()})
+    restart_result = restart_research_daemon_after_settings_save()
+    restart_flag = "1" if restart_result.get("ok") else "0"
+    return RedirectResponse(url=f"/settings?saved=1&restart={restart_flag}", status_code=303)
+
+
+@app.post("/settings/test-model", response_class=HTMLResponse)
+async def settings_test_model(request: Request):
+    body = (await request.body()).decode("utf-8")
+    parsed = parse_qs(body, keep_blank_values=True)
+    form = {key: values[-1] if values else "" for key, values in parsed.items()}
+    existing_values = _read_env_values()
+    raw_existing_profiles = existing_values.get("FACTOR_LAB_LLM_PROFILES_JSON") or os.environ.get("FACTOR_LAB_LLM_PROFILES_JSON") or ""
+    try:
+        existing_profiles = json.loads(raw_existing_profiles) if raw_existing_profiles else []
+    except Exception:
+        existing_profiles = []
+    if not isinstance(existing_profiles, list):
+        existing_profiles = []
+    profiles, _ = _profiles_from_form(form, existing_profiles)
+    try:
+        profile_index = int(form.get("profile_test_index") or 0)
+    except ValueError:
+        profile_index = 0
+    profile = profiles[profile_index] if 0 <= profile_index < len(profiles) else {}
+    test_result = test_llm_profile_connection(profile)
+    settings = load_llm_settings()
+    profile_slots = list(profiles)
+    while len(profile_slots) < 5:
+        profile_slots.append({"name": "", "base_url": "", "model": "", "api_format": "openai_responses", "api_key_masked": "未配置", "enabled": True})
+    return render(
+        "settings.html",
+        title="大模型设置",
+        settings=settings,
+        profile_slots=profile_slots,
+        provider_options=["real_llm", "openclaw_gateway", "heuristic", "mock"],
+        api_format_options=LLM_API_FORMAT_OPTIONS,
+        test_result=test_result,
+        saved=False,
+        restart_ok=False,
+        restart_failed=False,
+    )
+
+
+@app.get("/agents", response_class=HTMLResponse)
+def agents_page(saved: str | None = None, restart: str | None = None):
+    settings = load_agent_settings()
+    llm_settings = load_llm_settings()
+    available_profile_names = _enabled_profile_names(list(llm_settings.get("profiles") or []))
+    agent_fallback_warnings = _agent_fallback_warnings(list(settings.get("roles") or []), available_profile_names)
+    role_slots = list(settings.get("roles") or [])
+    while len(role_slots) < 3:
+        role_slots.append({
+            "name": "",
+            "display_name": "",
+            "enabled": True,
+            "decision_types": "",
+            "purpose": "",
+            "system_prompt": "",
+            "llm_fallback_order": "",
+            "timeout_seconds": 90,
+            "max_retries": 1,
+            "strict_schema": True,
+            "legacy_agent_id": "",
+        })
+    return render(
+        "agents.html",
+        title="Agent 设置",
+        settings=settings,
+        role_slots=role_slots,
+        available_profile_names=available_profile_names,
+        agent_fallback_warnings=agent_fallback_warnings,
+        saved=saved == "1",
+        restart_ok=restart == "1",
+        restart_failed=restart == "0",
+    )
+
+
+@app.post("/agents")
+async def agents_save(request: Request):
+    body = (await request.body()).decode("utf-8")
+    parsed = parse_qs(body, keep_blank_values=True)
+    save_agent_settings({key: values[-1] if values else "" for key, values in parsed.items()})
+    restart_result = restart_research_daemon_after_settings_save()
+    restart_flag = "1" if restart_result.get("ok") else "0"
+    return RedirectResponse(url=f"/agents?saved=1&restart={restart_flag}", status_code=303)
 
 
 @app.get("/llm", response_class=HTMLResponse)
@@ -1662,6 +2953,23 @@ def llm_page():
         recommendation_context_text=pretty_json_text(recommendation_context, "暂无模板优先级摘要与疲劳度。"),
         plan_validation=plan_validation,
         plan_validation_text=pretty_json_text(plan_validation, "暂无计划校验结果。"),
+        agent_settings=load_agent_settings(),
+    )
+
+
+@app.get("/llm-usage", response_class=HTMLResponse)
+def llm_usage_page():
+    recent_rows = _latest_llm_usage_rows(limit=50)
+    summary_rows = _load_llm_usage_rows(limit=1000, hours=24)
+    return render(
+        "llm_usage.html",
+        title="LLM Token 用量",
+        usage_summary=_summarize_llm_usage(summary_rows),
+        usage_chart=_build_llm_usage_chart(summary_rows, hours=24),
+        recent_rows=recent_rows,
+        ledger_path=str(_llm_usage_ledger_path()),
+        usage_generated_at=_format_local_time(),
+        usage_timezone="Asia/Shanghai",
     )
 
 

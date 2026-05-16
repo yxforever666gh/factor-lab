@@ -8,6 +8,7 @@ from typing import Any
 
 PLANNER_AGENT_SCHEMA_VERSION = "factor_lab.planner_agent_brief.v1"
 FAILURE_ANALYST_SCHEMA_VERSION = "factor_lab.failure_analyst_brief.v1"
+REPAIR_AGENT_SCHEMA_VERSION = "factor_lab.repair_agent_brief.v1"
 
 
 def _iso_now() -> str:
@@ -77,6 +78,8 @@ def build_planner_agent_brief(
             "research_flow_state": snapshot.get("research_flow_state") or {},
             "research_learning": snapshot.get("research_learning") or {},
             "knowledge_gain_counter": snapshot.get("knowledge_gain_counter") or {},
+            "repair_feedback": snapshot.get("repair_feedback") or {},
+            "repair_metrics": snapshot.get("repair_metrics") or {},
             "candidate_pool_tasks": candidate_pool.get("tasks") or [],
             "candidate_pool_suppressed": candidate_pool.get("suppressed_tasks") or [],
             "branch_selected_families": branch_plan.get("selected_families") or [],
@@ -106,6 +109,14 @@ def build_planner_agent_brief(
                 }
             ],
             "challenger_queue": ["candidate identifier"],
+            "experiment_proposal_requirements": [
+                "mechanism_hypothesis",
+                "expected_information_gain",
+                "required_data_fields",
+                "falsification_criteria",
+                "duplicate_rationale",
+                "budget_justification",
+            ],
             "confidence_score": "0..1",
             "rationale_markdown": "short markdown summary",
         },
@@ -141,6 +152,8 @@ def build_failure_analyst_brief(
             "failure_state": snapshot.get("failure_state") or {},
             "research_flow_state": snapshot.get("research_flow_state") or {},
             "knowledge_gain_counter": snapshot.get("knowledge_gain_counter") or {},
+            "repair_feedback": snapshot.get("repair_feedback") or {},
+            "repair_metrics": snapshot.get("repair_metrics") or {},
             "recent_failed_or_risky_tasks": failed_or_risky[:20],
             "open_questions": state_snapshot.get("open_questions") or [],
             "llm_diagnostics": llm_diagnostics or {},
@@ -162,12 +175,92 @@ def build_failure_analyst_brief(
             "should_stop": ["route identifiers"],
             "should_probe": ["diagnostic targets"],
             "should_reroute": ["family/branch identifiers"],
+            "failure_taxonomy": [
+                "data_insufficiency",
+                "mechanism_failure",
+                "horizon_mismatch",
+                "universe_mismatch",
+                "factor_direction_error",
+                "neutralization_exposure_collapse",
+                "portfolio_construction_issue",
+            ],
             "summary_markdown": "short markdown summary",
         },
         "constraints": [
             "must_reference concrete evidence from snapshot",
             "must separate deterministic errors from research dead ends",
             "must prefer high-information-gain diagnostics over blind retries",
+        ],
+    }
+    return _write_json(output_path, payload)
+
+
+
+def build_repair_agent_brief(
+    runtime_snapshot: dict[str, Any],
+    state_snapshot: dict[str, Any],
+    diagnostics: dict[str, Any],
+    output_path: str | Path,
+) -> dict[str, Any]:
+    payload = {
+        "schema_version": REPAIR_AGENT_SCHEMA_VERSION,
+        "generated_at_utc": _iso_now(),
+        "agent_role": "repair_agent",
+        "mission": "识别当前运行时堵点、状态异常和可恢复故障，输出结构化修复建议、动作优先级和验收条件；优先恢复系统流动性，不直接改研究目标。",
+        "inputs": {
+            "daemon_status": runtime_snapshot.get("daemon_status") or {},
+            "queue_budget": runtime_snapshot.get("queue_budget") or {},
+            "queue_counts": runtime_snapshot.get("queue_counts") or {},
+            "queue_liveness": runtime_snapshot.get("queue_liveness") or {},
+            "failure_state": runtime_snapshot.get("failure_state") or {},
+            "blocked_lane_status": runtime_snapshot.get("blocked_lane_status") or {},
+            "route_status": runtime_snapshot.get("route_status") or {},
+            "resource_pressure": runtime_snapshot.get("resource_pressure") or {},
+            "heartbeat_gap": runtime_snapshot.get("heartbeat_gap") or {},
+            "recent_research_tasks": runtime_snapshot.get("recent_research_tasks") or [],
+            "recent_failed_or_risky_tasks": runtime_snapshot.get("recent_failed_or_risky_tasks") or [],
+            "stale_running_candidates": runtime_snapshot.get("stale_running_candidates") or [],
+            "status_file_consistency": runtime_snapshot.get("status_file_consistency") or {},
+            "open_incidents": runtime_snapshot.get("open_incidents") or [],
+            "open_questions": state_snapshot.get("open_questions") or [],
+            "repair_diagnostics": diagnostics or {},
+        },
+        "required_output_schema": {
+            "incident_type": "stale_running|output_state_drift|queue_stall|restart_loop|resource_exhaustion|timeout_storm|blocked_lane_deadlock|provider_route_failure|unknown",
+            "severity": "low|medium|high|critical",
+            "repair_mode": "observe|repair|quarantine|restart|reroute|escalate",
+            "suspected_root_causes": [
+                {
+                    "cause": "best guess grounded on evidence",
+                    "confidence_score": "0..1",
+                    "evidence": ["short evidence string"],
+                }
+            ],
+            "recommended_actions": [
+                {
+                    "action_type": "clean_stale_task|recover_outputs|restart_daemon|quarantine_branch|reseed_queue|reroute_provider|mark_incident_only|escalate",
+                    "target": "task_id/branch/service/route",
+                    "reason": "why now",
+                    "risk_level": "low|medium|high",
+                }
+            ],
+            "verification_checks": [
+                {
+                    "check": "what to verify",
+                    "success_signal": "what good looks like",
+                }
+            ],
+            "do_not_touch": ["strategy", "numeric_metrics", "promotion_gate"],
+            "confidence_score": "0..1",
+            "summary_markdown": "short markdown summary",
+        },
+        "constraints": [
+            "must_ground_on_runtime_artifacts",
+            "must_separate_hard_failure_from_soft_stall",
+            "prefer_low_risk_repair_before_high_risk_repair",
+            "must_define_verification_checks",
+            "must_not_override_research_strategy_directly",
+            "must_not_execute_unapproved_non_playbook_actions",
         ],
     }
     return _write_json(output_path, payload)

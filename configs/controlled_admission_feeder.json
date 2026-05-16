@@ -1,0 +1,8 @@
+{
+  "profile": "conservative",
+  "limit": 1,
+  "priority": 0,
+  "cooldown_minutes": 60,
+  "daily_budget": 3,
+  "force_new": false
+}

@@ -1,9 +1,0 @@
-{
-  "task_id": "74ba3c6d-4c0f-4304-8344-2f27b2d6ccd7",
-  "config_path": "configs/tushare_workflow.json",
-  "output_dir": "artifacts/tushare_workflow_mvp_test",
-  "status": "finished",
-  "started_at_utc": "2026-03-20T00:00:27.678208+00:00",
-  "finished_at_utc": "2026-03-20T00:04:22.582672+00:00",
-  "error": null
-}

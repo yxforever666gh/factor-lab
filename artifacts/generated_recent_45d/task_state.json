@@ -1,9 +1,0 @@
-{
-  "task_id": "527db357-4fbc-49e2-9648-a0f138e6325a",
-  "config_path": "artifacts/generated_configs/rolling_recent_45d.json",
-  "output_dir": "artifacts/generated_recent_45d",
-  "status": "finished",
-  "started_at_utc": "2026-03-22T18:06:02.843830+00:00",
-  "finished_at_utc": "2026-03-22T18:06:07.897623+00:00",
-  "error": null
-}

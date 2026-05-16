@@ -5,6 +5,8 @@ import os
 from pathlib import Path
 from typing import Any
 
+from factor_lab.hypothesis_library import list_all_hypotheses
+
 
 class SingleLLMAgent:
     def __init__(self, provider: str | None = None) -> None:
@@ -73,6 +75,8 @@ class SingleLLMAgent:
                 rationale_parts.append(f"重点验证候选: {', '.join(focus)}。")
             if review_graveyard:
                 rationale_parts.append(f"同时复核墓地因子: {', '.join(review_graveyard)}。")
+            all_hypotheses = list_all_hypotheses()
+            suggested_hypotheses = all_hypotheses[: min(5, len(all_hypotheses))]
             return {
                 "focus_factors": focus,
                 "keep_as_core_candidates": core,
@@ -82,6 +86,7 @@ class SingleLLMAgent:
                 "novelty_reason": "mock provider switched to validator-compatible structured output.",
                 "risk_flags": ["mock_provider"],
                 "suggested_families": ["stable_candidate_validation"] + (["graveyard_diagnosis"] if review_graveyard else []),
+                "suggested_hypotheses": suggested_hypotheses,
                 "confidence_score": 0.35,
                 "must_validate_before_expand": True,
             }

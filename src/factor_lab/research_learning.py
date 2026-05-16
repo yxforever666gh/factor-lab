@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from factor_lab.failure_question_generator import build_failure_question_cards
 
 ROOT = Path(__file__).resolve().parents[2]
 ARTIFACTS = ROOT / "artifacts"
@@ -39,6 +40,138 @@ def _family_key_from_branch_id(branch_id: str | None) -> str | None:
         if key in text:
             return key
     return None
+
+
+
+def _avg(values: list[float]) -> float | None:
+    if not values:
+        return None
+    return round(sum(values) / len(values), 6)
+
+
+
+def _recommend_representative_next_question(meta: dict[str, Any]) -> str:
+    if int(meta.get("parent_delta_failures") or 0) >= 1:
+        return "verify_incremental_value_vs_parent"
+    if int(meta.get("decay_45_to_60") or 0) >= 1:
+        return "verify_medium_horizon_decay"
+    if int(meta.get("decay_45_to_90") or 0) >= 1:
+        return "verify_longer_horizon_decay"
+    if int(meta.get("neutralized_break_count") or 0) >= 1:
+        return "verify_post_neutralization_signal"
+    if int(meta.get("gain_count") or 0) >= 1:
+        return "promote_representative_validation"
+    return "keep_monitoring"
+
+
+
+def _build_representative_failure_dossiers(reviews: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    dossiers: dict[str, dict[str, Any]] = {}
+    for row in reviews:
+        candidate_name = row.get("candidate_name")
+        if not candidate_name:
+            continue
+        meta = dossiers.setdefault(
+            candidate_name,
+            {
+                "candidate_name": candidate_name,
+                "review_count": 0,
+                "gain_count": 0,
+                "high_value_failure_count": 0,
+                "low_value_repeat_count": 0,
+                "decay_45_to_60": 0,
+                "decay_45_to_90": 0,
+                "neutralized_break_count": 0,
+                "parent_delta_failures": 0,
+                "current_frontier_status": None,
+                "latest_stage": None,
+                "latest_summary": None,
+                "recommended_action": "keep_validating",
+                "recommended_next_question": "keep_monitoring",
+                "regime_dependency": "unclear",
+                "parent_delta_status": "unknown",
+                "recent_failures": [],
+                "regime_dependency_counts": {},
+                "failure_mode_counts": {},
+                "source_stage_counts": {},
+                "retention_values": [],
+                "raw_values": [],
+                "neutralized_values": [],
+            },
+        )
+        meta["review_count"] += 1
+        if row.get("has_gain"):
+            meta["gain_count"] += 1
+        if row.get("outcome_class") == "high_value_failure":
+            meta["high_value_failure_count"] += 1
+        if row.get("outcome_class") == "low_value_repeat":
+            meta["low_value_repeat_count"] += 1
+        source_stage = row.get("source_stage") or "unknown"
+        meta["source_stage_counts"][source_stage] = int(meta["source_stage_counts"].get(source_stage) or 0) + 1
+        current_frontier_status = row.get("quality_classification") or row.get("candidate_status")
+        if current_frontier_status:
+            meta["current_frontier_status"] = current_frontier_status
+        if row.get("summary"):
+            meta["latest_summary"] = row.get("summary")
+        meta["latest_stage"] = source_stage
+        regime_dependency = row.get("regime_dependency") or "unclear"
+        meta["regime_dependency_counts"][regime_dependency] = int(meta["regime_dependency_counts"].get(regime_dependency) or 0) + 1
+        meta["regime_dependency"] = max(meta["regime_dependency_counts"].items(), key=lambda item: (item[1], item[0]))[0]
+        for failure_mode in (row.get("failure_modes") or []):
+            meta["failure_mode_counts"][failure_mode] = int(meta["failure_mode_counts"].get(failure_mode) or 0) + 1
+            if failure_mode == "short_to_medium_decay":
+                if "90" in source_stage:
+                    meta["decay_45_to_90"] += 1
+                else:
+                    meta["decay_45_to_60"] += 1
+            elif failure_mode == "neutralized_break":
+                meta["neutralized_break_count"] += 1
+        if row.get("parent_delta_status") == "non_incremental":
+            meta["parent_delta_failures"] += 1
+            meta["parent_delta_status"] = "non_incremental"
+        elif meta.get("parent_delta_status") == "unknown" and row.get("parent_delta_status"):
+            meta["parent_delta_status"] = row.get("parent_delta_status")
+        if row.get("retention_industry") is not None:
+            meta["retention_values"].append(float(row.get("retention_industry") or 0.0))
+        if row.get("raw_rank_ic_mean") is not None:
+            meta["raw_values"].append(float(row.get("raw_rank_ic_mean") or 0.0))
+        if row.get("neutralized_rank_ic_mean") is not None:
+            meta["neutralized_values"].append(float(row.get("neutralized_rank_ic_mean") or 0.0))
+        if row.get("error_text") or row.get("summary"):
+            meta["recent_failures"].append(
+                {
+                    "updated_at_utc": row.get("updated_at_utc"),
+                    "source_stage": source_stage,
+                    "summary": row.get("summary"),
+                    "error_text": row.get("error_text"),
+                    "failure_modes": list(row.get("failure_modes") or []),
+                }
+            )
+
+    for meta in dossiers.values():
+        retention_values = [float(value) for value in meta.pop("retention_values", [])]
+        raw_values = [float(value) for value in meta.pop("raw_values", [])]
+        neutralized_values = [float(value) for value in meta.pop("neutralized_values", [])]
+        meta["raw_to_neutralized_retention"] = {
+            "avg": _avg(retention_values),
+            "last": retention_values[-1] if retention_values else None,
+        }
+        meta["latest_raw_rank_ic_mean"] = raw_values[-1] if raw_values else None
+        meta["latest_neutralized_rank_ic_mean"] = neutralized_values[-1] if neutralized_values else None
+        meta["avg_raw_rank_ic_mean"] = _avg(raw_values)
+        meta["avg_neutralized_rank_ic_mean"] = _avg(neutralized_values)
+        meta["recent_failures"] = meta.get("recent_failures", [])[-5:]
+        if meta["parent_delta_failures"] >= 1 and meta["gain_count"] == 0:
+            meta["recommended_action"] = "suppress"
+        elif meta["decay_45_to_60"] >= 1 or meta["decay_45_to_90"] >= 1 or meta["neutralized_break_count"] >= 1:
+            meta["recommended_action"] = "diagnose"
+        elif meta["gain_count"] >= 1:
+            meta["recommended_action"] = "promote_validation"
+        else:
+            meta["recommended_action"] = "keep_validating"
+        meta["recommended_next_question"] = _recommend_representative_next_question(meta)
+
+    return dossiers
 
 
 def build_research_learning(memory_path: str | Path | None = None) -> dict[str, Any]:
@@ -167,6 +300,9 @@ def build_research_learning(memory_path: str | Path | None = None) -> dict[str, 
     elif representative_candidate_stats["low_value_repeat_count"] >= 1:
         representative_candidate_stats["recommended_action"] = "downweight"
 
+    representative_failure_dossiers = _build_representative_failure_dossiers(representative_candidate_reviews)
+    failure_question_cards = build_failure_question_cards(representative_failure_dossiers)
+
     family_operator_stats: dict[str, dict[str, Any]] = {}
     for row in generated_candidate_outcomes:
         family = row.get("target_family") or "generated"
@@ -224,6 +360,8 @@ def build_research_learning(memory_path: str | Path | None = None) -> dict[str, 
         "operator_stats": operator_stats,
         "family_operator_stats": family_operator_stats,
         "representative_candidate_stats": representative_candidate_stats,
+        "representative_failure_dossiers": representative_failure_dossiers,
+        "failure_question_cards": failure_question_cards,
         "research_mode": research_mode,
     }
     (ARTIFACTS / "research_learning.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

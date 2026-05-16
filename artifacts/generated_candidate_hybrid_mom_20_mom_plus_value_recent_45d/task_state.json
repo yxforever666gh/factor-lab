@@ -1,9 +1,0 @@
-{
-  "task_id": "786f2605-9249-4418-8e3b-e882bb1ed089",
-  "config_path": "artifacts/generated_configs/candidate_hybrid_mom_20_mom_plus_value_recent_45d.json",
-  "output_dir": "artifacts/generated_candidate_hybrid_mom_20_mom_plus_value_recent_45d",
-  "status": "finished",
-  "started_at_utc": "2026-03-21T20:33:03.386011+00:00",
-  "finished_at_utc": "2026-03-21T20:33:04.600437+00:00",
-  "error": null
-}

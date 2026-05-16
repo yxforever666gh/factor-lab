@@ -35,7 +35,12 @@ def test_generate_batch_from_plan_writes_materialized_workflow(tmp_path):
     workflow = json.loads(workflow_path.read_text(encoding="utf-8"))
 
     assert batch["jobs"][0]["config_path"] == str(workflow_path)
+    assert batch["schema_version"] == "factor_lab.generated_batch.v2"
+    assert batch["job_count"] == 1
     assert "factor_family_config" not in workflow
+    assert workflow["schema_version"] == "factor_lab.generated_config.v2"
+    assert workflow["artifact_type"] == "generated_workflow_config"
+    assert workflow["dependency_graph"]["node_count"] >= 2
     assert [row["name"] for row in workflow["factors"]] == ["mom_20", "mom_60"]
 
 

@@ -98,6 +98,9 @@ def test_candidate_generation_emits_hypothesis_template_proposal(tmp_path, monke
 
     assert any(row["source"] == "hypothesis_template" for row in payload["proposals"])
     assert any(row.get("hypothesis_template_id") == "liquidity_shock_reversal" for row in payload["proposals"])
+    templated = [row for row in payload["proposals"] if row.get("hypothesis_template_id") == "liquidity_shock_reversal"]
+    assert templated[0]["mechanism_id"] == "liquidity_shock_reversal"
+    assert templated[0]["falsification_criteria"]
 
 
 
@@ -219,6 +222,72 @@ def test_candidate_generation_quality_throttle_preserves_exploration_floor_witho
     assert payload["quality_throttle"]["severe_quality_hold"] is False
     assert payload["quality_throttle"]["exploration_floor"]["exploration_floor_slots"] == 2
     assert len(payload["proposals"]) >= 1
+
+
+
+def test_candidate_generation_front_gate_and_dossier_bias_reduce_old_space_pairs(tmp_path, monkeypatch):
+    snapshot = {
+        "stable_candidates": [{"factor_name": "mom_20"}],
+        "latest_graveyard": ["book_yield"],
+        "frontier_focus": {"robust_candidates": ["mom_20"]},
+        "candidate_context": [
+            {"candidate_name": "mom_20", "family": "momentum", "relationship_count": 2, "acceptance_gate": {"status": "pass"}},
+            {"candidate_name": "book_yield", "family": "value", "relationship_count": 2},
+            {"candidate_name": "liquidity_turnover_shock", "family": "liquidity", "relationship_count": 1},
+        ],
+        "promotion_scorecard": {
+            "rows": [
+                {
+                    "factor_name": "mom_20",
+                    "quality_classification": "needs-validation",
+                    "retention_industry": 0.1,
+                    "net_metric": -0.2,
+                    "latest_recent_final_score": 1.1,
+                }
+            ]
+        },
+        "representative_failure_dossiers": {
+            "mom_20": {
+                "recommended_action": "diagnose",
+                "regime_dependency": "short_window_only",
+                "parent_delta_status": "non_incremental",
+            }
+        },
+        "research_flow_state": {"state": "ready"},
+        "failure_state": {"cooldown_active": False},
+    }
+    memory = {"execution_feedback": []}
+    learning_path = tmp_path / "research_learning.json"
+    evidence_path = tmp_path / "research_evidence_policy.json"
+    snapshot_path = tmp_path / "snapshot.json"
+    memory_path = tmp_path / "memory.json"
+    output_path = tmp_path / "plan.json"
+
+    learning_path.write_text(json.dumps({"research_mode": {"mode": "balanced"}}, ensure_ascii=False), encoding="utf-8")
+    evidence_path.write_text(
+        json.dumps(
+            {
+                "frontier_gate": {
+                    "pass_statuses": ["pass"],
+                    "validation_statuses": ["monitor", "blocked"],
+                    "missing_status": "missing",
+                }
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+    memory_path.write_text(json.dumps(memory, ensure_ascii=False), encoding="utf-8")
+
+    monkeypatch.setattr(candidate_generator_module, "LEARNING_PATH", learning_path)
+    monkeypatch.setattr(candidate_generator_module, "EVIDENCE_POLICY_PATH", evidence_path)
+
+    payload = build_candidate_generation_plan(snapshot_path, memory_path, output_path)
+
+    assert "mom_20" in payload["quality_throttle"]["front_gate_blocked_candidates"]
+    assert payload["quality_throttle"]["new_mechanism_bias"] is True
+    assert not any(row["base_factors"] == ["mom_20", "book_yield"] for row in payload["proposals"])
 
 
 
@@ -404,6 +473,66 @@ def test_candidate_compiler_supports_primitive_library_factors(tmp_path):
     assert len(tasks) == 1
     assert tasks[0]["payload"]["candidate_generation_context"]["hypothesis_template_id"] == "small_cap_quality_activation"
     assert tasks[0]["payload"]["triage"]["label"] in {"low", "medium", "high"}
+
+
+
+def test_candidate_generation_failure_questions_feed_new_mechanism_pool(tmp_path, monkeypatch):
+    snapshot = {
+        "stable_candidates": [{"factor_name": "mom_20"}],
+        "latest_graveyard": ["book_yield"],
+        "candidate_context": [
+            {"candidate_name": "mom_20", "family": "momentum", "relationship_count": 1, "acceptance_gate": {"status": "pass"}},
+            {"candidate_name": "book_yield", "family": "value", "relationship_count": 1},
+            {"candidate_name": "quality_roe", "family": "quality", "relationship_count": 1},
+        ],
+        "failure_question_cards": [
+            {
+                "card_id": "question::mom_20::parent_non_incremental",
+                "candidate_name": "mom_20",
+                "question_type": "parent_non_incremental",
+                "prompt": "探索更远的跨 family 增量机制",
+                "route_bias": "far_family_incremental",
+                "expected_information_gain": ["new_branch_opened"],
+                "target_pool": "new_mechanism_exploration",
+                "priority": 95,
+            }
+        ],
+    }
+    memory = {"execution_feedback": []}
+    learning_path = tmp_path / "research_learning.json"
+    evidence_path = tmp_path / "research_evidence_policy.json"
+    snapshot_path = tmp_path / "snapshot.json"
+    memory_path = tmp_path / "memory.json"
+    output_path = tmp_path / "plan.json"
+
+    learning_path.write_text(json.dumps({"research_mode": {"mode": "balanced"}}, ensure_ascii=False), encoding="utf-8")
+    evidence_path.write_text(
+        json.dumps(
+            {
+                "frontier_gate": {
+                    "pass_statuses": ["pass"],
+                    "validation_statuses": ["monitor", "blocked"],
+                    "missing_status": "missing",
+                }
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+    memory_path.write_text(json.dumps(memory, ensure_ascii=False), encoding="utf-8")
+
+    monkeypatch.setattr(candidate_generator_module, "LEARNING_PATH", learning_path)
+    monkeypatch.setattr(candidate_generator_module, "EVIDENCE_POLICY_PATH", evidence_path)
+
+    payload = build_candidate_generation_plan(snapshot_path, memory_path, output_path)
+
+    assert payload["quality_throttle"]["pool_budgets"]["new_mechanism_exploration"] >= 1
+    assert any(row.get("question_card_id") == "question::mom_20::parent_non_incremental" for row in payload["proposals"])
+    assert any(row.get("exploration_pool") == "new_mechanism_exploration" for row in payload["proposals"])
+    question_proposals = [row for row in payload["proposals"] if row.get("question_card_id") == "question::mom_20::parent_non_incremental"]
+    assert question_proposals
+    assert all(row.get("operator") not in {"orthogonalize_against_peer", "residualize_against_peer"} for row in question_proposals)
 
 
 

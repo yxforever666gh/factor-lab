@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+import json
+import os
 import re
 import time
 
@@ -10,6 +14,8 @@ import pandas as pd
 import tushare as ts
 
 from factor_lab.data import SampleDataset
+from factor_lab.factor_transforms import add_initial_value_transforms
+from factor_lab.pit_financial_features import build_pit_financial_features
 from factor_lab.settings import get_required_env
 from factor_lab.timing import WorkflowTiming
 
@@ -24,11 +30,348 @@ class TushareRequest:
     use_request_cache: bool = True
 
 
+@dataclass
+class TushareRoutePolicy:
+    requested_mode: str
+    resolved_mode: str
+    proxy_url: str | None
+    no_proxy_hosts: list[str]
+    connect_timeout_seconds: float
+    read_timeout_seconds: float
+    request_timeout_seconds: float
+    max_retries: int
+    probe_on_start: bool
+    last_good_route_ttl_seconds: int
+
+
+def _workspace_root() -> Path:
+    return Path(__file__).resolve().parents[2]
+
+
+def _route_status_path() -> Path:
+    return _workspace_root() / "artifacts" / "tushare_route_status.json"
+
+
+def _split_hosts(raw: str | None) -> list[str]:
+    if not raw:
+        return ["api.waditu.com"]
+    seen: set[str] = set()
+    hosts: list[str] = []
+    for part in str(raw).split(","):
+        host = part.strip()
+        if not host or host in seen:
+            continue
+        seen.add(host)
+        hosts.append(host)
+    if "api.waditu.com" not in seen:
+        hosts.append("api.waditu.com")
+    return hosts
+
+
+def _dedupe_csv(raw: str | None, extra_hosts: list[str]) -> str:
+    seen: set[str] = set()
+    items: list[str] = []
+    for source in [raw or "", ",".join(extra_hosts)]:
+        for token in source.split(","):
+            value = token.strip()
+            if not value or value in seen:
+                continue
+            seen.add(value)
+            items.append(value)
+    return ",".join(items)
+
+
+def _load_route_status() -> dict:
+    path = _route_status_path()
+    if not path.exists():
+        return {}
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _write_route_status(payload: dict) -> None:
+    path = _route_status_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 class TushareDataProvider:
+    PROXY_KEYS = [
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+        "NO_PROXY",
+        "no_proxy",
+    ]
+
     def __init__(self, token: str | None = None) -> None:
         self.token = token or get_required_env("TUSHARE_TOKEN")
         ts.set_token(self.token)
         self.pro = ts.pro_api(self.token)
+        self.route_policy = self._build_route_policy()
+        self._apply_request_timeout()
+        self._route_status = self._initialize_route_status()
+
+    def _build_route_policy(self) -> TushareRoutePolicy:
+        requested_mode = (os.getenv("FACTOR_LAB_TUSHARE_ROUTE_MODE") or "auto").strip().lower()
+        if requested_mode not in {"auto", "direct", "proxy", "hybrid"}:
+            requested_mode = "auto"
+        proxy_url = (os.getenv("FACTOR_LAB_TUSHARE_PROXY_URL") or "").strip() or None
+        connect_timeout = max(1.0, float(os.getenv("FACTOR_LAB_TUSHARE_CONNECT_TIMEOUT_SECONDS") or 5))
+        read_timeout = max(1.0, float(os.getenv("FACTOR_LAB_TUSHARE_READ_TIMEOUT_SECONDS") or 15))
+        max_retries = max(1, int(float(os.getenv("FACTOR_LAB_TUSHARE_MAX_RETRIES") or 2)))
+        probe_on_start = (os.getenv("FACTOR_LAB_TUSHARE_ROUTE_PROBE_ON_START") or "1").strip().lower() not in {"0", "false", "no", "off"}
+        ttl_seconds = max(60, int(float(os.getenv("FACTOR_LAB_TUSHARE_LAST_GOOD_ROUTE_TTL_SECONDS") or 1800)))
+        no_proxy_hosts = _split_hosts(os.getenv("FACTOR_LAB_TUSHARE_NO_PROXY_HOSTS"))
+
+        resolved_mode = requested_mode
+        if requested_mode == "hybrid":
+            resolved_mode = "hybrid"
+        elif requested_mode == "direct":
+            resolved_mode = "direct"
+        elif requested_mode == "proxy":
+            resolved_mode = "proxy" if self._proxy_available(proxy_url) else "direct"
+        else:
+            resolved_mode = "auto"
+
+        return TushareRoutePolicy(
+            requested_mode=requested_mode,
+            resolved_mode=resolved_mode,
+            proxy_url=proxy_url,
+            no_proxy_hosts=no_proxy_hosts,
+            connect_timeout_seconds=connect_timeout,
+            read_timeout_seconds=read_timeout,
+            request_timeout_seconds=max(connect_timeout, read_timeout),
+            max_retries=max_retries,
+            probe_on_start=probe_on_start,
+            last_good_route_ttl_seconds=ttl_seconds,
+        )
+
+    def _apply_request_timeout(self) -> None:
+        timeout_seconds = float(self.route_policy.request_timeout_seconds)
+        for attr in ("_DataApi__timeout", "timeout"):
+            try:
+                setattr(self.pro, attr, timeout_seconds)
+            except Exception:
+                continue
+
+    def _proxy_available(self, proxy_url: str | None = None) -> bool:
+        proxy = proxy_url or os.getenv("HTTP_PROXY") or os.getenv("http_proxy") or os.getenv("HTTPS_PROXY") or os.getenv("https_proxy")
+        return bool(str(proxy or "").strip())
+
+    def _initialize_route_status(self) -> dict:
+        base = {
+            "updated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "requested_mode": self.route_policy.requested_mode,
+            "resolved_mode": self.route_policy.resolved_mode,
+            "healthy": True,
+            "last_error": None,
+            "last_probe_ms": None,
+            "proxy_available": self._proxy_available(self.route_policy.proxy_url),
+        }
+        if self.route_policy.requested_mode != "auto":
+            _write_route_status(base)
+            return base
+
+        cached = self._load_cached_good_route()
+        if cached:
+            payload = {
+                **base,
+                "resolved_mode": cached.get("resolved_mode") or "direct",
+                "healthy": True,
+                "cached_route": True,
+                "last_probe_ms": cached.get("last_probe_ms"),
+            }
+            self.route_policy.resolved_mode = payload["resolved_mode"]
+            _write_route_status(payload)
+            return payload
+
+        if not self.route_policy.probe_on_start:
+            payload = {
+                **base,
+                "resolved_mode": "direct",
+                "healthy": True,
+                "cached_route": False,
+                "probe_skipped": True,
+            }
+            self.route_policy.resolved_mode = "direct"
+            _write_route_status(payload)
+            return payload
+
+        best = self._probe_best_route()
+        if best:
+            payload = {
+                **base,
+                "resolved_mode": best["resolved_mode"],
+                "healthy": True,
+                "cached_route": False,
+                "last_probe_ms": best.get("elapsed_ms"),
+                "probe_results": best.get("probe_results") or [],
+            }
+            self.route_policy.resolved_mode = payload["resolved_mode"]
+            _write_route_status(payload)
+            return payload
+
+        payload = {
+            **base,
+            "resolved_mode": "direct",
+            "healthy": False,
+            "cached_route": False,
+            "last_error": "route_probe_failed",
+        }
+        self.route_policy.resolved_mode = "direct"
+        _write_route_status(payload)
+        return payload
+
+    def _load_cached_good_route(self) -> dict | None:
+        payload = _load_route_status()
+        if not payload:
+            return None
+        if not payload.get("healthy"):
+            return None
+        resolved_mode = str(payload.get("resolved_mode") or "").strip().lower()
+        if resolved_mode not in {"direct", "proxy", "hybrid"}:
+            return None
+        updated_at = payload.get("updated_at_utc")
+        try:
+            updated = datetime.fromisoformat(str(updated_at)) if updated_at else None
+        except Exception:
+            updated = None
+        if updated is None:
+            return None
+        if datetime.now(timezone.utc) - updated > timedelta(seconds=self.route_policy.last_good_route_ttl_seconds):
+            return None
+        if resolved_mode == "proxy" and not self._proxy_available(self.route_policy.proxy_url):
+            return None
+        return payload
+
+    def _probe_best_route(self) -> dict | None:
+        candidates = ["direct"]
+        if self._proxy_available(self.route_policy.proxy_url):
+            candidates.append("proxy")
+        results: list[dict] = []
+        for mode in candidates:
+            started = time.perf_counter()
+            try:
+                self._run_route_probe(mode)
+            except Exception as exc:
+                results.append({
+                    "mode": mode,
+                    "ok": False,
+                    "error": str(exc),
+                })
+                continue
+            elapsed_ms = round((time.perf_counter() - started) * 1000, 3)
+            results.append({"mode": mode, "ok": True, "elapsed_ms": elapsed_ms})
+        successes = [row for row in results if row.get("ok")]
+        if not successes:
+            _write_route_status(
+                {
+                    "updated_at_utc": datetime.now(timezone.utc).isoformat(),
+                    "requested_mode": self.route_policy.requested_mode,
+                    "resolved_mode": "direct",
+                    "healthy": False,
+                    "proxy_available": self._proxy_available(self.route_policy.proxy_url),
+                    "probe_results": results,
+                    "last_error": "route_probe_failed",
+                }
+            )
+            return None
+        successes.sort(key=lambda row: float(row.get("elapsed_ms") or 0.0))
+        best = dict(successes[0])
+        best["resolved_mode"] = best["mode"]
+        best["probe_results"] = [dict(row) for row in results]
+        return best
+
+    def _run_route_probe(self, mode: str) -> None:
+        with self._route_env(mode):
+            self._apply_request_timeout()
+            probe = getattr(self.pro, "stock_basic")(
+                exchange="",
+                list_status="L",
+                fields="ts_code,symbol,name,area,industry,list_date",
+            )
+        if probe is None or getattr(probe, "empty", False):
+            raise RuntimeError(f"tushare route probe returned empty result via {mode}")
+
+    @contextmanager
+    def _route_env(self, mode: str | None = None):
+        route_mode = (mode or self.route_policy.resolved_mode or "direct").strip().lower()
+        original = {key: os.environ.get(key) for key in self.PROXY_KEYS}
+        try:
+            if route_mode == "direct":
+                for key in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]:
+                    os.environ.pop(key, None)
+                no_proxy = _dedupe_csv(None, self.route_policy.no_proxy_hosts)
+                os.environ["NO_PROXY"] = no_proxy
+                os.environ["no_proxy"] = no_proxy
+            elif route_mode == "hybrid":
+                no_proxy = _dedupe_csv(original.get("NO_PROXY") or original.get("no_proxy"), self.route_policy.no_proxy_hosts)
+                os.environ["NO_PROXY"] = no_proxy
+                os.environ["no_proxy"] = no_proxy
+            elif route_mode == "proxy":
+                proxy = self.route_policy.proxy_url or original.get("HTTP_PROXY") or original.get("http_proxy") or original.get("HTTPS_PROXY") or original.get("https_proxy")
+                if proxy:
+                    for key in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]:
+                        os.environ[key] = proxy
+                else:
+                    for key in ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"]:
+                        os.environ.pop(key, None)
+                no_proxy = _dedupe_csv(None, [])
+                if self.route_policy.no_proxy_hosts:
+                    no_proxy = _dedupe_csv(None, self.route_policy.no_proxy_hosts)
+                if no_proxy:
+                    os.environ["NO_PROXY"] = no_proxy
+                    os.environ["no_proxy"] = no_proxy
+                else:
+                    os.environ.pop("NO_PROXY", None)
+                    os.environ.pop("no_proxy", None)
+            yield
+        finally:
+            for key, value in original.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
+    def route_status(self) -> dict:
+        payload = dict(self._route_status)
+        payload.setdefault("resolved_mode", self.route_policy.resolved_mode)
+        payload.setdefault("requested_mode", self.route_policy.requested_mode)
+        return payload
+
+    def route_healthy(self) -> bool:
+        return bool(self.route_status().get("healthy", True))
+
+    def _note_route_success(self, route_mode: str | None = None, elapsed_ms: float | None = None) -> None:
+        payload = {
+            **self.route_status(),
+            "updated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "healthy": True,
+            "resolved_mode": (route_mode or self.route_policy.resolved_mode),
+            "last_error": None,
+        }
+        if elapsed_ms is not None:
+            payload["last_probe_ms"] = round(float(elapsed_ms), 3)
+        self._route_status = payload
+        _write_route_status(payload)
+
+    def _note_route_error(self, exc: Exception, route_mode: str | None = None) -> None:
+        payload = {
+            **self.route_status(),
+            "updated_at_utc": datetime.now(timezone.utc).isoformat(),
+            "healthy": False if self.route_policy.requested_mode == "auto" else self.route_status().get("healthy", True),
+            "resolved_mode": (route_mode or self.route_policy.resolved_mode),
+            "last_error": str(exc),
+        }
+        self._route_status = payload
+        _write_route_status(payload)
 
     def _quarantine_cache_file(self, path: Path) -> None:
         quarantine = path.with_suffix(path.suffix + f".invalid.{int(time.time())}")
@@ -46,16 +389,37 @@ class TushareDataProvider:
             self._quarantine_cache_file(path)
             return None
 
-    def _query_with_retry(self, api_name: str, retries: int = 4, sleep_seconds: float = 1.5, timing: WorkflowTiming | None = None, **kwargs):
+    def _query_with_retry(
+        self,
+        api_name: str,
+        retries: int | None = None,
+        sleep_seconds: float = 1.5,
+        timing: WorkflowTiming | None = None,
+        *,
+        route_mode: str | None = None,
+        count_metrics: bool = True,
+        note_route_status: bool = True,
+        **kwargs,
+    ):
         last_error = None
-        if timing:
+        if timing and count_metrics:
             timing.add_counter("api_call_count", 1)
-        for attempt in range(1, retries + 1):
+        max_retries = max(1, int(retries or self.route_policy.max_retries))
+        effective_mode = route_mode or self.route_policy.resolved_mode
+        for attempt in range(1, max_retries + 1):
+            started = time.perf_counter()
             try:
-                return getattr(self.pro, api_name)(**kwargs)
+                with self._route_env(effective_mode):
+                    self._apply_request_timeout()
+                    result = getattr(self.pro, api_name)(**kwargs)
+                if note_route_status:
+                    self._note_route_success(effective_mode, elapsed_ms=(time.perf_counter() - started) * 1000)
+                return result
             except Exception as exc:
                 last_error = exc
-                if attempt == retries:
+                if note_route_status:
+                    self._note_route_error(exc, effective_mode)
+                if attempt == max_retries:
                     raise
                 time.sleep(sleep_seconds * attempt)
         raise last_error
@@ -132,7 +496,7 @@ class TushareDataProvider:
                         ts_code=ts_code,
                         start_date=chunk_start,
                         end_date=chunk_end,
-                        fields="ts_code,trade_date,turnover_rate,pe_ttm,pb,total_mv",
+                        fields="ts_code,trade_date,turnover_rate,pe_ttm,pb,ps_ttm,dv_ttm,total_mv",
                         timing=timing,
                     )
                 )
@@ -142,9 +506,143 @@ class TushareDataProvider:
             timing.metrics_ms["daily_basic_fetch_ms"] = elapsed_ms
         return pd.concat(daily_parts, ignore_index=True), pd.concat(daily_basic_parts, ignore_index=True)
 
+    def _pit_financial_cache_path(self, cache_dir: str | Path, tickers: list[str], start_date: str, end_date: str, *, diagnostics: bool = False) -> Path:
+        import hashlib
+
+        digest = hashlib.sha1(",".join(sorted(tickers)).encode("utf-8")).hexdigest()[:12]
+        safe_start = pd.Timestamp(start_date).strftime("%Y-%m-%d")
+        safe_end = pd.Timestamp(end_date).strftime("%Y-%m-%d")
+        suffix = "_diag_v2" if diagnostics else "_v2"
+        return Path(cache_dir) / f"pit_financial_{safe_start}_{safe_end}_{len(tickers)}_{digest}{suffix}.csv"
+
+    def _fetch_financial_statement_tables(
+        self,
+        *,
+        tickers: list[str],
+        start_date: str,
+        end_date: str,
+        timing: WorkflowTiming | None = None,
+    ) -> dict[str, pd.DataFrame]:
+        """Fetch bounded Tushare PIT financial statements for an already selected universe."""
+        req_start = pd.Timestamp(start_date)
+        req_end = pd.Timestamp(end_date)
+        fetch_start = (req_start - pd.DateOffset(years=3)).strftime("%Y%m%d")
+        fetch_end = req_end.strftime("%Y%m%d")
+        tables = {
+            "cashflow": "ts_code,ann_date,f_ann_date,end_date,n_cashflow_act,net_profit,free_cashflow",
+            "income": "ts_code,ann_date,f_ann_date,end_date,n_income_attr_p,total_profit,n_income,income",
+            "balancesheet": "ts_code,ann_date,f_ann_date,end_date,total_assets,total_liab,total_cur_assets,total_cur_liab",
+            "fina_indicator": "ts_code,ann_date,end_date,debt_to_assets,current_ratio,quick_ratio,roe,roe_dt,grossprofit_margin,netprofit_margin,q_netprofit_yoy,netprofit_yoy,dt_netprofit_yoy,q_sales_yoy,tr_yoy,or_yoy",
+        }
+        out: dict[str, pd.DataFrame] = {}
+        started = time.perf_counter()
+        for table, fields in tables.items():
+            parts = []
+            for ts_code in tickers:
+                try:
+                    df = self._query_with_retry(
+                        table,
+                        ts_code=ts_code,
+                        start_date=fetch_start,
+                        end_date=fetch_end,
+                        fields=fields,
+                        timing=timing,
+                    )
+                except Exception:
+                    df = pd.DataFrame()
+                if df is not None and not df.empty:
+                    parts.append(df)
+                time.sleep(0.01)
+            out[table] = pd.concat(parts, ignore_index=True).drop_duplicates() if parts else pd.DataFrame()
+        if timing:
+            timing.metrics_ms["pit_financial_fetch_ms"] = round((time.perf_counter() - started) * 1000, 3)
+        return out
+
+    def enrich_frame_with_pit_financial_features(
+        self,
+        frame: pd.DataFrame,
+        *,
+        cache_dir: str | Path = "artifacts/tushare_cache",
+        timing: WorkflowTiming | None = None,
+        retain_pit_cashflow_diagnostics: bool = False,
+    ) -> pd.DataFrame:
+        """Add opt-in PIT financial features using ann_date/f_ann_date as-of joins."""
+        if frame.empty or not {"ticker", "date"}.issubset(frame.columns):
+            return frame
+        out = frame.copy()
+        out["date"] = pd.to_datetime(out["date"])
+        tickers = sorted(str(t) for t in out["ticker"].dropna().unique())
+        if not tickers:
+            return out
+        start_date = out["date"].min().strftime("%Y-%m-%d")
+        end_date = out["date"].max().strftime("%Y-%m-%d")
+        cache_path = self._pit_financial_cache_path(cache_dir, tickers, start_date, end_date, diagnostics=retain_pit_cashflow_diagnostics)
+        if cache_path.exists():
+            pit = pd.read_csv(cache_path)
+            pit["date"] = pd.to_datetime(pit["date"])
+            if timing:
+                timing.set_counter("pit_financial_cache_hit", 1)
+        else:
+            statements = self._fetch_financial_statement_tables(tickers=tickers, start_date=start_date, end_date=end_date, timing=timing)
+            trade_dates = out[["ticker", "date"]].rename(columns={"ticker": "ts_code"})
+            pit = build_pit_financial_features(statements, trade_dates, code_col="ts_code", trade_date_col="date")
+            pit = pit.rename(columns={"ts_code": "ticker"})
+            pit["debt_to_asset"] = pit.get("debt_to_assets")
+            pit["profit_yoy"] = pit.get("netprofit_yoy")
+            pit["revenue_yoy"] = pit.get("tr_yoy")
+            pit["pit_source_ann_date"] = pit.get("fina_indicator__source_ann_date").combine_first(pit.get("cashflow__source_ann_date")) if "fina_indicator__source_ann_date" in pit.columns and "cashflow__source_ann_date" in pit.columns else pit.get("fina_indicator__source_ann_date", pit.get("cashflow__source_ann_date"))
+            pit["pit_source_end_date"] = pit.get("fina_indicator__source_end_date").combine_first(pit.get("cashflow__source_end_date")) if "fina_indicator__source_end_date" in pit.columns and "cashflow__source_end_date" in pit.columns else pit.get("fina_indicator__source_end_date", pit.get("cashflow__source_end_date"))
+            keep = [
+                c
+                for c in [
+                    "ticker",
+                    "date",
+                    "operating_cashflow_to_profit",
+                    "debt_to_asset",
+                    "debt_to_assets",
+                    "profit_yoy",
+                    "netprofit_yoy",
+                    "revenue_yoy",
+                    "tr_yoy",
+                    "pit_source_ann_date",
+                    "pit_source_end_date",
+                    "pit_feature_validated",
+                    "pit_feature_blocked_reason",
+                    "pit_feature_warnings",
+                    *([
+                        "pit_cashflow_numerator_raw",
+                        "pit_cashflow_denominator_raw",
+                        "pit_cashflow_denominator_source",
+                        "pit_cashflow_formula_block_reason",
+                    ] if retain_pit_cashflow_diagnostics else []),
+                ]
+                if c in pit.columns
+            ]
+            pit = pit[keep]
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            pit.to_csv(cache_path, index=False)
+            if timing:
+                timing.set_counter("pit_financial_cache_hit", 0)
+        merged = out.merge(pit, on=["ticker", "date"], how="left", suffixes=("", "__pit"))
+        for col in ["operating_cashflow_to_profit", "debt_to_asset", "debt_to_assets", "profit_yoy", "netprofit_yoy", "revenue_yoy", "tr_yoy"]:
+            pit_col = f"{col}__pit"
+            if pit_col in merged.columns:
+                merged[col] = merged[pit_col].combine_first(merged[col]) if col in merged.columns else merged[pit_col]
+                merged = merged.drop(columns=[pit_col])
+        for col in ["pit_feature_validated", "pit_feature_blocked_reason", "pit_feature_warnings", "pit_source_ann_date", "pit_source_end_date", "pit_cashflow_numerator_raw", "pit_cashflow_denominator_raw", "pit_cashflow_denominator_source", "pit_cashflow_formula_block_reason"]:
+            pit_col = f"{col}__pit"
+            if pit_col in merged.columns:
+                merged = merged.rename(columns={pit_col: col})
+        if timing and "pit_feature_validated" in merged.columns:
+            timing.set_counter("pit_financial_valid_rows", int(merged["pit_feature_validated"].fillna(False).sum()))
+        return merged
+
     def _build_feature_frame(self, daily: pd.DataFrame, daily_basic: pd.DataFrame, universe_meta: pd.DataFrame, request: TushareRequest, timing: WorkflowTiming | None = None) -> pd.DataFrame:
         started_at = time.perf_counter()
         frame = daily.merge(daily_basic, on=["ts_code", "trade_date"], how="inner")
+        for optional_col in ("ps_ttm", "dv_ttm"):
+            if optional_col not in frame.columns:
+                frame[optional_col] = pd.NA
         frame = frame.merge(universe_meta[["ts_code", "industry", "list_date"]], on="ts_code", how="left")
         frame["trade_date"] = pd.to_datetime(frame["trade_date"])
         frame["list_date"] = pd.to_datetime(frame["list_date"], format="%Y%m%d", errors="coerce")
@@ -167,16 +665,23 @@ class TushareDataProvider:
         frame["turnover_ma5"] = frame.groupby("ts_code")["turnover_rate"].transform(lambda s: s.rolling(5).mean())
         frame["turnover_ma20"] = frame.groupby("ts_code")["turnover_rate"].transform(lambda s: s.rolling(20).mean())
         frame["turnover_shock_5_20"] = frame["turnover_ma5"] / frame["turnover_ma20"] - 1.0
+        frame["volatility_20"] = frame.groupby("ts_code")["return_1d"].transform(lambda s: s.rolling(20).std())
+        frame["volatility_60"] = frame.groupby("ts_code")["return_1d"].transform(lambda s: s.rolling(60).std())
         frame["earnings_yield"] = 1.0 / frame["pe_ttm"]
         frame["book_yield"] = 1.0 / frame["pb"]
-        # Approximate profitability / ROE-like signal from valuation identity:
-        #   ROE ~= (E/P) / (B/P) = PB / PE
-        # This is materially better than aliasing `roe` to earnings_yield, which collapses
-        # quality into value and pollutes quality-family research.
+        frame["ps_yield"] = np.where(frame["ps_ttm"].notna() & (frame["ps_ttm"] > 0), 1.0 / frame["ps_ttm"], np.nan)
+        frame["dividend_yield"] = frame["dv_ttm"]
         frame["roe"] = frame["earnings_yield"] / frame["book_yield"]
+        frame["roe_delta"] = frame.groupby("ts_code")["roe"].diff(20)
+        frame["roe_yoy"] = frame.groupby("ts_code")["roe"].diff(252)
+        frame["profit_yoy"] = pd.NA
+        frame["revenue_yoy"] = pd.NA
+        frame["debt_to_asset"] = pd.NA
+        frame["operating_cashflow_to_profit"] = pd.NA
         frame["size_inv"] = -np.log(frame["total_mv"])
 
         frame = frame.rename(columns={"trade_date": "date", "ts_code": "ticker", "turnover_rate": "turnover"})
+        frame = add_initial_value_transforms(frame)
         frame = frame[
             [
                 "date",
@@ -197,9 +702,43 @@ class TushareDataProvider:
                 "size_inv",
                 "pe_ttm",
                 "pb",
+                "ps_ttm",
+                "ps_yield",
+                "dividend_yield",
+                "roe_delta",
+                "roe_yoy",
+                "profit_yoy",
+                "revenue_yoy",
+                "debt_to_asset",
+                "operating_cashflow_to_profit",
+                "volatility_20",
+                "volatility_60",
+                "industry_relative_pb",
+                "industry_relative_pe",
+                "industry_relative_book_yield",
+                "industry_relative_earnings_yield",
                 "total_mv",
             ]
-        ].dropna().reset_index(drop=True)
+        ].dropna(subset=[
+            "date",
+            "ticker",
+            "industry",
+            "close",
+            "forward_return_5d",
+            "turnover",
+            "momentum_20",
+            "momentum_60",
+            "momentum_120",
+            "momentum_60_skip_5",
+            "turnover_shock_5_20",
+            "earnings_yield",
+            "book_yield",
+            "roe",
+            "size_inv",
+            "pe_ttm",
+            "pb",
+            "total_mv",
+        ]).reset_index(drop=True)
         if timing:
             timing.metrics_ms["merge_clean_ms"] = round((time.perf_counter() - started_at) * 1000, 3)
             timing.metrics_ms["feature_build_ms"] = timing.metrics_ms["merge_clean_ms"]

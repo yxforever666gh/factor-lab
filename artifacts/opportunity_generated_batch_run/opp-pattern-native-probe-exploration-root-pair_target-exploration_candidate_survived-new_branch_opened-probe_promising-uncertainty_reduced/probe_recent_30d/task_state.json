@@ -1,9 +1,0 @@
-{
-  "task_id": "9749ffb4-66db-41f2-85bf-b2aa6b08baa8",
-  "config_path": "artifacts/generated_opportunity_configs/opp-pattern-native-probe-exploration-root-pair_target-exploration_candidate_survived-new_branch_opened-probe_promising-uncertainty_reduced__probe_recent_30d.json",
-  "output_dir": "artifacts/opportunity_generated_batch_run/opp-pattern-native-probe-exploration-root-pair_target-exploration_candidate_survived-new_branch_opened-probe_promising-uncertainty_reduced/probe_recent_30d",
-  "status": "finished",
-  "started_at_utc": "2026-03-21T20:00:47.019473+00:00",
-  "finished_at_utc": "2026-03-21T20:00:47.995641+00:00",
-  "error": null
-}

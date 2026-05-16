@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from factor_lab.research_runtime_state import recently_finished_same_fingerprint
+from factor_lab.research_task_governance import govern_research_task_spec
 from factor_lab.storage import ExperimentStore
 from factor_lab.exploration_budget import exploration_floor_context
 
@@ -43,6 +44,62 @@ def _task_payload(task: dict[str, Any]) -> dict[str, Any]:
         except Exception:
             return {}
     return {}
+
+
+def _annotate_legacy_governance(payload: dict[str, Any], *, task_type: str | None, source: str) -> dict[str, Any]:
+    annotated = dict(payload)
+    if task_type != "workflow":
+        annotated.setdefault(
+            "governance",
+            {
+                "decision": "legacy_bypass",
+                "source": source,
+                "reason": "non_workflow_task_requires_specialized_governance",
+            },
+        )
+    return annotated
+
+
+def _task_governance_payload_defaults(payload: dict[str, Any], *, task_type: str | None, worker_note: str | None = None) -> dict[str, Any]:
+    annotated = dict(payload)
+    note = str(worker_note or "")
+    task_name = str(task_type or "")
+    annotated.setdefault("hypothesis", annotated.get("question") or annotated.get("goal") or note or "strategy selected research task should add information")
+    annotated.setdefault("falsification_criteria", ["task produces no actionable evidence or accepted follow-up"])
+    if task_name == "diagnostic":
+        annotated.setdefault("expected_information_gain", ["mechanism_validation", "boundary_confirmed"])
+        annotated.setdefault("budget_bucket", "mechanism_validation")
+    elif task_name == "generated_batch":
+        annotated.setdefault("expected_information_gain", ["new_branch_opened", "candidate_survival_check"])
+        annotated.setdefault("budget_bucket", "pure_exploration")
+    return annotated
+
+
+def _govern_non_workflow_task_payload(
+    payload: dict[str, Any],
+    *,
+    task_type: str | None,
+    fingerprint: str | None,
+    worker_note: str | None,
+    store: ExperimentStore,
+    source: str,
+) -> dict[str, Any]:
+    annotated = _task_governance_payload_defaults(payload, task_type=task_type, worker_note=worker_note)
+    if task_type == "workflow":
+        return annotated
+    result = govern_research_task_spec(
+        {
+            "task_type": task_type,
+            "payload": annotated,
+            "fingerprint": fingerprint,
+            "worker_note": worker_note,
+        },
+        store=store,
+        source=source,
+    )
+    if result.get("task_spec"):
+        return result["task_spec"]["payload"]
+    return annotated
 
 
 def _frontier_preferred_candidates(source: dict[str, Any]) -> set[str]:
@@ -414,6 +471,8 @@ class StrategyBrain:
         branch_id = str(task.get("branch_id") or (task.get("payload") or {}).get("branch_id") or "")
         worker_note = str(task.get("worker_note") or "")
         text = " ".join([goal, branch_id, worker_note]).lower()
+        if category == "validation" and ("fragile_candidate" in text or "fragile 候选" in text):
+            return "validation_fragile"
         if category == "validation" and ("medium_horizon" in text or "中窗" in text):
             return "validation_medium_horizon"
         if category == "validation" and ("stable_candidate" in text or "稳定候选" in text):
@@ -444,7 +503,8 @@ class StrategyBrain:
             new_budgets["validation"] = max(new_budgets["validation"], 3)
         if stable_gain_count > 0:
             new_budgets["validation"] += 1
-            new_budgets["validation_stable"] = max(int(new_budgets.get("validation_stable") or 1), 1) + 1
+            new_budgets["validation_stable"] = max(int(new_budgets.get("validation_stable") or 1), 2)
+            new_budgets["validation_fragile"] = max(int(new_budgets.get("validation_fragile") or 0), 1)
         if repeated_diagnostic_failures >= 2:
             new_budgets["validation"] += 1
         return new_budgets
@@ -504,8 +564,9 @@ class StrategyBrain:
         autonomy_policy = state_snapshot.get("autonomy_policy") or {}
         coding_policy = state_snapshot.get("coding_policy") or {}
         budgets = dict(self.DEFAULT_BUDGETS)
-        budgets["validation_stable"] = 1
-        budgets["validation_medium_horizon"] = 1
+        budgets["validation_stable"] = 2
+        budgets["validation_medium_horizon"] = 2
+        budgets["validation_fragile"] = 1
         budgets = self._apply_autonomy_budget_policy(
             budgets,
             autonomy_policy,
@@ -970,6 +1031,71 @@ def _classify_research_outcome(*, status: str, has_gain: bool, knowledge_gain: l
     return {'outcome_class': 'ordinary_failure', 'epistemic_value': 'medium', 'should_downweight': False}
 
 
+
+def _representative_review_stage(task: dict[str, Any], payload: dict[str, Any]) -> str:
+    validation_stage = str(payload.get('validation_stage') or '').strip()
+    if validation_stage:
+        return validation_stage
+    worker_note = str(task.get('worker_note') or '')
+    for token in ('recent_45d', 'recent_60d', 'recent_90d', 'recent_120d', 'expanding'):
+        if token in worker_note:
+            return token
+    return str(payload.get('goal') or payload.get('diagnostic_type') or task.get('task_type') or 'unknown')
+
+
+
+def _representative_review_rows(
+    *,
+    task: dict[str, Any],
+    payload: dict[str, Any],
+    branch_id: str,
+    status: str,
+    summary: str | None,
+    error_text: str | None,
+    has_gain: bool,
+    outcome_meta: dict[str, Any],
+) -> list[dict[str, Any]]:
+    if task.get('category') != 'validation' and payload.get('diagnostic_type') != 'representative_candidate_competition_review':
+        return []
+    focus_rows = list(task.get('focus_candidates') or [])
+    if not focus_rows:
+        return []
+    rows: list[dict[str, Any]] = []
+    source_stage = _representative_review_stage(task, payload)
+    focus_scope = sorted({row.get('candidate_name') for row in focus_rows if row.get('candidate_name')})
+    for row in focus_rows:
+        candidate_name = row.get('candidate_name')
+        if not candidate_name:
+            continue
+        failure = row.get('failure_dossier') or {}
+        rows.append({
+            'updated_at_utc': _iso_now(),
+            'branch_id': branch_id,
+            'candidate_name': candidate_name,
+            'focus_scope': focus_scope,
+            'source_stage': source_stage,
+            'worker_note': task.get('worker_note'),
+            'task_type': task.get('task_type'),
+            'status': status,
+            'outcome_class': outcome_meta.get('outcome_class'),
+            'epistemic_value': outcome_meta.get('epistemic_value'),
+            'has_gain': has_gain,
+            'summary': summary,
+            'error_text': error_text,
+            'candidate_status': row.get('candidate_status'),
+            'quality_classification': row.get('quality_classification'),
+            'raw_rank_ic_mean': row.get('raw_rank_ic_mean'),
+            'neutralized_rank_ic_mean': row.get('neutralized_rank_ic_mean'),
+            'retention_industry': row.get('retention_industry'),
+            'failure_modes': list(failure.get('failure_modes') or []),
+            'recommended_action': failure.get('recommended_action'),
+            'regime_dependency': failure.get('regime_dependency'),
+            'parent_delta_status': failure.get('parent_delta_status'),
+            'parent_candidates': list(failure.get('parent_candidates') or []),
+        })
+    return rows
+
+
 def update_research_memory_from_task_result(
     memory_path: str | Path,
     task: dict[str, Any],
@@ -1089,6 +1215,10 @@ def update_research_memory_from_task_result(
             "source": candidate_generation_context.get("source") or payload.get("source"),
             "target_family": candidate_generation_context.get("target_family"),
             "expected_information_gain": list(candidate_generation_context.get("expected_information_gain") or payload.get("expected_information_gain") or []),
+            "exploration_pool": candidate_generation_context.get("exploration_pool") or payload.get("exploration_pool"),
+            "mechanism_novelty_class": candidate_generation_context.get("mechanism_novelty_class") or payload.get("mechanism_novelty_class"),
+            "question_card_id": candidate_generation_context.get("question_card_id"),
+            "question_type": candidate_generation_context.get("question_type"),
             "outcome_class": outcome_meta.get("outcome_class"),
             "epistemic_value": outcome_meta.get("epistemic_value"),
             "has_gain": has_gain,
@@ -1098,18 +1228,19 @@ def update_research_memory_from_task_result(
     memory["generated_candidate_outcomes"] = generated_candidate_outcomes[-100:]
 
     representative_candidate_reviews = list(memory.get("representative_candidate_reviews") or [])
-    if payload.get("diagnostic_type") == "representative_candidate_competition_review":
-        representative_candidate_reviews.append({
-            "updated_at_utc": _iso_now(),
-            "branch_id": branch_id,
-            "focus_candidates": list(payload.get("focus_factors") or []),
-            "outcome_class": outcome_meta.get("outcome_class"),
-            "epistemic_value": outcome_meta.get("epistemic_value"),
-            "has_gain": has_gain,
-            "summary": summary,
-            "error_text": error_text,
-        })
-    memory["representative_candidate_reviews"] = representative_candidate_reviews[-60:]
+    representative_candidate_reviews.extend(
+        _representative_review_rows(
+            task=task,
+            payload=payload,
+            branch_id=branch_id,
+            status=status,
+            summary=summary,
+            error_text=error_text,
+            has_gain=has_gain,
+            outcome_meta=outcome_meta,
+        )
+    )
+    memory["representative_candidate_reviews"] = representative_candidate_reviews[-120:]
 
     candidate_lifecycle = dict(memory.get("candidate_lifecycle") or {})
     stable_candidates = set(memory.get("stable_candidates") or [])
@@ -1196,21 +1327,33 @@ def apply_strategy_plan(
         validated_task = validated_by_fingerprint.get(fingerprint, task)
         payload = dict(validated_task.get("payload") or task.get("payload") or {})
         reasons = payload.get("reasons") or []
+        worker_note = (validated_task.get("worker_note") or task.get("worker_note") or "")
         repeat_blocked = recently_finished_same_fingerprint(
             store,
             fingerprint,
-            cooldown_minutes=30 if "recovery_step" in reasons else 180,
+            cooldown_minutes=30 if "recovery_step" in reasons else None,
+            task_type=validated_task.get("task_type") or task.get("task_type"),
+            payload=payload,
+            worker_note=worker_note,
         ) if fingerprint else False
         if repeat_blocked:
             skipped.append({"fingerprint": fingerprint, "reason": "recently_finished_same_fingerprint"})
             continue
         payload["strategy"] = task.get("strategy_meta") or {}
-        worker_note = (validated_task.get("worker_note") or task.get("worker_note") or "")
+        task_type = validated_task.get("task_type") or task.get("task_type")
+        payload = _govern_non_workflow_task_payload(
+            payload,
+            task_type=task_type,
+            fingerprint=fingerprint,
+            worker_note=worker_note,
+            store=store,
+            source="research_strategy.apply_strategy_plan",
+        )
         strategy_reason = ((task.get("strategy_meta") or {}).get("reason") or "").strip()
         if strategy_reason:
             worker_note = f"{worker_note}｜strategy:{strategy_reason}"
         task_id = store.enqueue_research_task(
-            task_type=validated_task.get("task_type") or task.get("task_type"),
+            task_type=task_type,
             payload=payload,
             priority=int(task.get("priority_hint") or validated_task.get("priority_hint") or 50),
             fingerprint=fingerprint,
@@ -1232,6 +1375,10 @@ def apply_strategy_plan(
                 "source": ((payload.get("candidate_generation_context") or {}).get("source") or payload.get("source")),
                 "target_family": ((payload.get("candidate_generation_context") or {}).get("target_family")),
                 "cheap_screen": dict(((payload.get("candidate_generation_context") or {}).get("cheap_screen") or {})),
+                "exploration_pool": ((payload.get("candidate_generation_context") or {}).get("exploration_pool") or payload.get("exploration_pool")),
+                "mechanism_novelty_class": ((payload.get("candidate_generation_context") or {}).get("mechanism_novelty_class") or payload.get("mechanism_novelty_class")),
+                "question_card_id": ((payload.get("candidate_generation_context") or {}).get("question_card_id")),
+                "question_type": ((payload.get("candidate_generation_context") or {}).get("question_type")),
                 "injected": True,
                 "task_id": task_id,
             })

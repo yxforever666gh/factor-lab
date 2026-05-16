@@ -7,6 +7,7 @@ from pathlib import Path
 import pandas as pd
 
 from factor_lab.data import SampleDataset
+from factor_lab.factor_transforms import add_initial_value_transforms
 from factor_lab.timing import WorkflowTiming
 from factor_lab.tushare_provider import TushareDataProvider, TushareRequest
 from factor_lab.universe import default_universe_name, ensure_universe_snapshot
@@ -34,6 +35,8 @@ def _enrich_derived_features(frame: pd.DataFrame) -> pd.DataFrame:
     if "momentum_60_skip_5" not in out.columns and {"ticker", "close"}.issubset(out.columns):
         out = out.sort_values(["ticker", "date"]).reset_index(drop=True)
         out["momentum_60_skip_5"] = out.groupby("ticker")["close"].transform(lambda s: s.shift(5) / s.shift(60) - 1.0)
+    if {"date", "industry"}.issubset(out.columns):
+        out = add_initial_value_transforms(out)
     return out
 
 
@@ -53,7 +56,79 @@ def read_feature_meta(universe_name: str, cache_dir: str | Path = "artifacts/tus
     path = feature_store_meta_path(universe_name, cache_dir)
     if not path.exists():
         return None
-    return json.loads(path.read_text(encoding="utf-8"))
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        # Corrupt meta files should not keep the workflow in a deterministic-failure loop.
+        # Best effort: quarantine the bad meta and force downstream code to treat coverage as unknown.
+        corrupt_path = path.with_suffix(path.suffix + f".corrupt.{int(datetime.utcnow().timestamp())}")
+        try:
+            path.rename(corrupt_path)
+        except Exception:
+            try:
+                path.unlink()
+            except Exception:
+                pass
+        return None
+
+
+def inspect_feature_store_coverage(
+    universe_name: str,
+    start_date: str,
+    end_date: str,
+    cache_dir: str | Path = "artifacts/tushare_cache",
+) -> dict[str, object]:
+    meta = read_feature_meta(universe_name, cache_dir)
+    if not meta:
+        return {
+            "available": False,
+            "covers_exact": False,
+            "covers_start": False,
+            "min_date": None,
+            "max_date": None,
+            "stale_days": None,
+            "effective_end_date": None,
+        }
+
+    min_date = meta.get("min_date")
+    max_date = meta.get("max_date")
+    try:
+        min_ts = pd.Timestamp(min_date) if min_date else None
+        max_ts = pd.Timestamp(max_date) if max_date else None
+        req_start = pd.Timestamp(start_date)
+        req_end = pd.Timestamp(end_date)
+    except Exception:
+        return {
+            "available": False,
+            "covers_exact": False,
+            "covers_start": False,
+            "min_date": min_date,
+            "max_date": max_date,
+            "stale_days": None,
+            "effective_end_date": None,
+        }
+
+    covers_start = bool(min_ts is not None and min_ts <= req_start)
+    covers_exact = bool(covers_start and max_ts is not None and max_ts >= req_end)
+    stale_days = None
+    effective_end_date = None
+    if max_ts is not None:
+        effective_end = min(req_end, max_ts)
+        effective_end_date = effective_end.strftime("%Y-%m-%d")
+        if max_ts < req_end:
+            stale_days = max(0, int((req_end - max_ts).days))
+        else:
+            stale_days = 0
+
+    return {
+        "available": True,
+        "covers_exact": covers_exact,
+        "covers_start": covers_start,
+        "min_date": min_date,
+        "max_date": max_date,
+        "stale_days": stale_days,
+        "effective_end_date": effective_end_date,
+    }
 
 
 def _write_feature_store(frame: pd.DataFrame, universe_name: str, cache_dir: str | Path = "artifacts/tushare_cache") -> None:

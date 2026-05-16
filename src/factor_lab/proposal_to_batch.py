@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from factor_lab.factors import resolve_factor_definitions
+from factor_lab.generated_artifacts import upgrade_generated_batch, upgrade_generated_config
 
 
 def load_base_config(config_path: str | Path) -> dict[str, Any]:
@@ -34,17 +35,21 @@ def generate_batch_from_plan(
     focused_config["output_dir"] = "artifacts/generated_from_llm"
 
     focused_config_path = Path(output_path).with_name("generated_workflow_from_llm.json")
+    focused_config = upgrade_generated_config(focused_config, source="proposal_to_batch")
     focused_config_path.write_text(json.dumps(focused_config, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    batch = {
-        "source": "llm_plan",
-        "summary": plan.get("rationale", ""),
-        "jobs": [
-            {
-                "name": "llm_focus_batch",
-                "config_path": str(focused_config_path),
-            }
-        ],
-    }
+    batch = upgrade_generated_batch(
+        {
+            "source": "llm_plan",
+            "summary": plan.get("rationale", ""),
+            "jobs": [
+                {
+                    "name": "llm_focus_batch",
+                    "config_path": str(focused_config_path),
+                }
+            ],
+        },
+        source="proposal_to_batch",
+    )
     Path(output_path).write_text(json.dumps(batch, ensure_ascii=False, indent=2), encoding="utf-8")
     return batch

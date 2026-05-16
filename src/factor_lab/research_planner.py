@@ -18,6 +18,8 @@ class ResearchPlannerAgent:
         branch_id = str(task.get("branch_id") or payload.get("branch_id") or "")
         worker_note = str(task.get("worker_note") or "")
         text = " ".join([goal, branch_id, worker_note]).lower()
+        if category == "validation" and ("fragile_candidate" in text or "fragile 候选" in text):
+            return "validation_fragile"
         if category == "validation" and ("medium_horizon" in text or "中窗" in text):
             return "validation_medium_horizon"
         if category == "validation" and ("stable_candidate" in text or "稳定候选" in text):
@@ -29,6 +31,49 @@ class ResearchPlannerAgent:
         rows = ((snapshot.get("promotion_scorecard") or {}).get("rows") or [])
         return {row.get("factor_name"): row for row in rows if row.get("factor_name")}
 
+    @staticmethod
+    def _novelty_row_map(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
+        rows = ((snapshot.get("novelty_judge") or {}).get("rows") or [])
+        return {row.get("candidate_name"): row for row in rows if row.get("candidate_name")}
+
+    @staticmethod
+    def _approved_universe_names(snapshot: dict[str, Any]) -> set[str]:
+        return {name for name in (snapshot.get("approved_universe_names") or []) if name}
+
+    @staticmethod
+    def _failure_analyst_maps(snapshot: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+        payload = snapshot.get("failure_analyst_enhancement") or {}
+        stop_map = {
+            row.get("candidate_name"): row
+            for row in (payload.get("stop_or_continue_recommendation") or [])
+            if row.get("candidate_name")
+        }
+        reroute_map = {
+            row.get("candidate_name"): row
+            for row in (payload.get("reroute_proposals") or [])
+            if row.get("candidate_name")
+        }
+        return stop_map, reroute_map
+
+    @staticmethod
+    def _representative_scope_key(task: dict[str, Any]) -> str | None:
+        payload = task.get("payload") or {}
+        focus_names = sorted(
+            {
+                name
+                for name in (payload.get("focus_factors") or [])
+                if name
+            }
+            | {
+                row.get("candidate_name")
+                for row in (task.get("focus_candidates") or [])
+                if row.get("candidate_name")
+            }
+        )
+        if not focus_names:
+            return None
+        return "|".join(focus_names)
+
     def rank_tasks(self, snapshot: dict[str, Any], candidate_pool: dict[str, Any], branch_plan: dict[str, Any] | None = None) -> dict[str, Any]:
         tasks = list(candidate_pool.get("tasks", []))
         exploration_state = (snapshot.get("exploration_state") or {})
@@ -36,6 +81,9 @@ class ResearchPlannerAgent:
         knowledge_gain_counter = snapshot.get("knowledge_gain_counter") or {}
         selected_families = set((branch_plan or {}).get("selected_families", []))
         quality_map = self._quality_row_map(snapshot)
+        novelty_map = self._novelty_row_map(snapshot)
+        approved_universe_names = self._approved_universe_names(snapshot)
+        failure_stop_map, failure_reroute_map = self._failure_analyst_maps(snapshot)
         analyst_signals = snapshot.get("analyst_signals") or {}
         analyst_focus = set(analyst_signals.get("focus_factors") or [])
         analyst_core = set(analyst_signals.get("keep_as_core_candidates") or [])
@@ -53,9 +101,41 @@ class ResearchPlannerAgent:
             focus_candidate_rows = list(task.get("focus_candidates") or [])
             focus_candidates = {row.get("candidate_name") for row in focus_candidate_rows if row.get("candidate_name")}
             quality_rows = [quality_map.get(name) for name in focus_candidates if quality_map.get(name)]
+            novelty_rows = [novelty_map.get(name) for name in focus_candidates if novelty_map.get(name)]
             evidence_rows = [row.get("evidence_gate") or {} for row in focus_candidate_rows if row.get("evidence_gate")]
+            dossier_rows = [row.get("failure_dossier") or {} for row in focus_candidate_rows if row.get("failure_dossier")]
             evidence_missing = any(row.get("action") == "evidence_missing" for row in evidence_rows)
             evidence_needs_validation = any(row.get("action") == "needs_validation" for row in evidence_rows)
+            approved_focus = focus_candidates & approved_universe_names
+            approved_alignment = task.get("approved_universe_alignment") or {}
+            approved_states = set(approved_alignment.get("state_summary") or [])
+            approved_budget_weight = float(approved_alignment.get("budget_weight") or 0.0)
+            governance_actions = set(approved_alignment.get("governance_actions") or [])
+            failure_stop_hits = [name for name in focus_candidates if (failure_stop_map.get(name) or {}).get("recommendation") == "stop"]
+            failure_reroute_hits = [name for name in focus_candidates if failure_reroute_map.get(name)]
+
+            if approved_focus:
+                if "rejected" in approved_states:
+                    if category in {"exploration", "baseline"}:
+                        score -= 25
+                        reason_bits.append(f"approved universe: 命中已 rejected 候选 {','.join(sorted(approved_focus))}，避免继续消耗主线预算。")
+                    else:
+                        score += 2
+                        reason_bits.append("approved universe: 已被拒绝的候选只保留轻量复核/诊断。")
+                elif category == "validation":
+                    score += 18
+                    if "approved" in approved_states:
+                        score += min(int(approved_budget_weight * 20), 8)
+                    elif "watchlist" in approved_states:
+                        score += 6
+                    reason_bits.append(f"approved universe: 命中 {','.join(sorted(approved_focus))}，state={','.join(sorted(approved_states)) or 'approved'}，优先补证据/维护入池候选。")
+                elif category == "exploration":
+                    if "shadow" in approved_states or governance_actions & {"monitor_negative_contribution", "demote_bridge_candidate", "demote_candidate"}:
+                        score -= 10
+                        reason_bits.append("approved universe: 当前处于 watch/shadow/demotion 监控，探索降权。")
+                    else:
+                        score += 4
+                        reason_bits.append(f"approved universe: exploration 与入池候选相关，保留轻量探索。")
 
             if category == "validation":
                 score += 12
@@ -63,6 +143,40 @@ class ResearchPlannerAgent:
                 if evidence_missing or evidence_needs_validation:
                     score += 10
                     reason_bits.append("证据完整性不足，优先补验证而不是提前晋升。")
+            if failure_stop_hits:
+                if category in {"exploration", "baseline"}:
+                    score -= 22
+                else:
+                    score += 4
+                reason_bits.append(f"failure_analyst: stop={','.join(sorted(failure_stop_hits))}。")
+            if failure_reroute_hits:
+                if category == "validation":
+                    score += 8
+                elif category == "exploration":
+                    score -= 8
+                reason_bits.append(f"failure_analyst: reroute={','.join(sorted(failure_reroute_hits))}。")
+            if dossier_rows:
+                diagnose_needed = len([row for row in dossier_rows if row.get("recommended_action") == "diagnose"])
+                suppress_needed = len([row for row in dossier_rows if row.get("recommended_action") == "suppress"])
+                parent_delta_failures = len([row for row in dossier_rows if row.get("parent_delta_status") == "non_incremental"])
+                short_window_only = len([row for row in dossier_rows if row.get("regime_dependency") == "short_window_only"])
+                if category == "validation":
+                    score += min(diagnose_needed * 8, 16)
+                    if short_window_only:
+                        score += min(short_window_only * 4, 8)
+                    reason_bits.append(f"failure_dossier: diagnose={diagnose_needed}, short_window_only={short_window_only}。")
+                elif category == "exploration" and (suppress_needed or parent_delta_failures):
+                    score -= min(suppress_needed * 12 + parent_delta_failures * 6, 22)
+                    reason_bits.append(f"failure_dossier: suppress={suppress_needed}, non_incremental={parent_delta_failures}。")
+            if novelty_rows:
+                novelty_promote = len([row for row in novelty_rows if row.get("recommended_action") == "promote"])
+                novelty_suppress = len([row for row in novelty_rows if row.get("recommended_action") == "suppress"])
+                novelty_new = len([row for row in novelty_rows if row.get("novelty_class") == "new_mechanism"])
+                if category == "validation":
+                    score += min(novelty_promote * 6 + novelty_new * 3, 12)
+                elif category == "exploration" and novelty_suppress:
+                    score -= min(novelty_suppress * 10, 20)
+                reason_bits.append(f"novelty_judge: promote={novelty_promote}, suppress={novelty_suppress}, new={novelty_new}。")
             if quality_rows:
                 avg_quality = sum(float(row.get("quality_total_score") or 0.0) for row in quality_rows) / max(len(quality_rows), 1)
                 avg_incremental = sum(float((row.get("quality_scores") or {}).get("incremental_value") or 0.0) for row in quality_rows) / max(len(quality_rows), 1)
@@ -229,7 +343,7 @@ class ResearchPlannerAgent:
         ranked.sort(key=lambda item: (-item["planner_score"], item.get("priority_hint", 999)))
 
         floor = exploration_floor_context(snapshot)
-        limits = {"baseline": 2, "validation": 2, "exploration": 1, "exploration_generated": 1, "validation_stable": 1, "validation_medium_horizon": 1}
+        limits = {"baseline": 2, "validation": 3, "exploration": 1, "exploration_generated": 1, "validation_stable": 2, "validation_medium_horizon": 2, "validation_fragile": 1}
         if floor["true_fault_recovery"]:
             limits["exploration"] = 0
             limits["exploration_generated"] = 0
@@ -238,10 +352,11 @@ class ResearchPlannerAgent:
             limits["exploration_generated"] = max(limits["exploration_generated"], floor["exploration_floor_slots"])
 
         selected = []
-        counts = {"baseline": 0, "validation": 0, "exploration": 0, "exploration_generated": 0, "validation_stable": 0, "validation_medium_horizon": 0}
+        counts = {"baseline": 0, "validation": 0, "exploration": 0, "exploration_generated": 0, "validation_stable": 0, "validation_medium_horizon": 0, "validation_fragile": 0}
         selected_ids = set()
+        selected_representative_scopes: set[str] = set()
         exploration_reserve = 0 if floor["true_fault_recovery"] else floor["exploration_floor_slots"]
-        max_total = 4 + max(0, exploration_reserve - 1)
+        max_total = 5 + max(0, exploration_reserve - 1)
 
         for task in ranked:
             if len(selected) >= max_total - exploration_reserve:
@@ -254,8 +369,13 @@ class ResearchPlannerAgent:
                 continue
             if bucket in counts and counts[bucket] >= limits.get(bucket, limits.get(category, 99)):
                 continue
+            representative_scope = self._representative_scope_key(task)
+            if representative_scope and representative_scope in selected_representative_scopes:
+                continue
             selected.append(task)
             selected_ids.add(id(task))
+            if representative_scope:
+                selected_representative_scopes.add(representative_scope)
             if category in counts:
                 counts[category] += 1
             if bucket in counts:
@@ -275,8 +395,13 @@ class ResearchPlannerAgent:
                     continue
                 if bucket in counts and counts[bucket] >= limits.get(bucket, limits.get(category, 99)):
                     continue
+                representative_scope = self._representative_scope_key(task)
+                if representative_scope and representative_scope in selected_representative_scopes:
+                    continue
                 selected.append(task)
                 selected_ids.add(id(task))
+                if representative_scope:
+                    selected_representative_scopes.add(representative_scope)
                 if category in counts:
                     counts[category] += 1
                 if bucket in counts:
@@ -293,8 +418,13 @@ class ResearchPlannerAgent:
                 continue
             if bucket in counts and counts[bucket] >= limits.get(bucket, limits.get(category, 99)):
                 continue
+            representative_scope = self._representative_scope_key(task)
+            if representative_scope and representative_scope in selected_representative_scopes:
+                continue
             selected.append(task)
             selected_ids.add(id(task))
+            if representative_scope:
+                selected_representative_scopes.add(representative_scope)
             if category in counts:
                 counts[category] += 1
             if bucket in counts:
@@ -307,6 +437,7 @@ class ResearchPlannerAgent:
                 "max_total": max_total,
                 "category_limits": limits,
                 "exploration_floor": floor,
+                "representative_only_budget": True,
             },
             "selected_tasks": selected,
             "rejected_tasks": [task for task in ranked if id(task) not in selected_ids],

@@ -4,8 +4,9 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from factor_lab.dedup import config_fingerprint
+from factor_lab.dedup import config_fingerprint, workflow_experiment_fingerprint
 from factor_lab.factors import resolve_factor_definitions
+from factor_lab.generated_artifacts import upgrade_generated_config
 from factor_lab.research_families import (
     level_priority,
     stable_candidate_task_name,
@@ -72,6 +73,7 @@ def write_generated_config(config: dict[str, Any], name: str) -> str:
     out_dir.mkdir(parents=True, exist_ok=True)
     path = out_dir / f'{name}.json'
     materialized = _materialize_factor_config(config)
+    materialized = upgrade_generated_config(materialized, source='research_family_generators')
     path.write_text(json.dumps(materialized, ensure_ascii=False, indent=2), encoding='utf-8')
     return str(path.relative_to(ROOT))
 
@@ -126,7 +128,7 @@ def make_task(
     enriched_payload.setdefault('disconfirm_if', disconfirm_if or [])
     if task_type == 'workflow':
         config = read_json(ROOT / enriched_payload['config_path'])
-        fingerprint = f"workflow::{config_fingerprint(config)}::{enriched_payload['output_dir']}"
+        fingerprint = workflow_experiment_fingerprint(config)
     elif task_type == 'generated_batch':
         batch = read_json(ROOT / enriched_payload['batch_path'])
         fingerprint = f"generated_batch::{config_fingerprint(batch)}::{enriched_payload['output_dir']}"
@@ -280,6 +282,36 @@ def build_watchlist_candidate_task(level: int, watchlist_candidates: list[str], 
         stop_if=['watchlist_candidates_fail_progressive_validation_twice'],
         promote_if=['watchlist_candidates_survive_progressive_validation'],
         disconfirm_if=['watchlist_candidates_collapse_outside_short_window'],
+    )
+    return [] if task['fingerprint'] in existing_fingerprints else [task]
+
+
+def build_fragile_candidate_task(level: int, fragile_candidates: list[str], existing_fingerprints: set[str]) -> list[dict[str, Any]]:
+    if not fragile_candidates:
+        return []
+    worker_note = "validation｜fragile 候选加固"
+    reason = f'fragile 候选当前需要第 {level} 层专项加固验证，避免长期卡在短窗有效 / 中窗脆弱状态。'
+    payload = {
+        'diagnostic_type': f'fragile_candidate_hardening_v{level}',
+        'focus_factors': fragile_candidates,
+        'reasons': ['fragile_candidates_need_hardening'],
+        'knowledge_gain': ['candidate_survival_check', 'stable_candidate_confirmed'],
+        'source_output_dir': 'artifacts/tushare_batch',
+    }
+    task = make_task(
+        'diagnostic',
+        'validation',
+        level_priority('fragile_candidate_hardening', level),
+        reason,
+        ['candidate_survival_check', 'stable_candidate_confirmed'],
+        payload,
+        worker_note,
+        goal='harden_fragile_candidates',
+        hypothesis='当前 fragile 候选里至少有一部分并非纯短窗噪声，经过专项加固验证后可向 stable/candidate 晋升。',
+        branch_id=f'fragile_candidate_hardening_level_{level}',
+        stop_if=['fragile_candidates_fail_hardening_twice'],
+        promote_if=['fragile_candidates_survive_hardening_validation'],
+        disconfirm_if=['fragile_candidates_collapse_after_hardening'],
     )
     return [] if task['fingerprint'] in existing_fingerprints else [task]
 

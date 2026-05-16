@@ -1,9 +1,0 @@
-{
-  "task_id": "52127cd1-a29a-4ca9-ade1-6a5aed71627e",
-  "config_path": "artifacts/generated_configs/candidate_value_ep_recent_45d.json",
-  "output_dir": "artifacts/generated_candidate_value_ep_recent_45d",
-  "status": "finished",
-  "started_at_utc": "2026-03-21T21:02:45.607522+00:00",
-  "finished_at_utc": "2026-03-21T21:02:46.497807+00:00",
-  "error": null
-}

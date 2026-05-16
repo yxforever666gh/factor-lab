@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 
-from factor_lab.research_family_generators import build_watchlist_candidate_task
+from factor_lab.research_family_generators import build_watchlist_candidate_task, build_fragile_candidate_task
 from factor_lab.research_planner import ResearchPlannerAgent
 
 
@@ -25,6 +25,19 @@ def test_build_watchlist_candidate_task_creates_progressive_validation_workflow(
     assert tasks[0]["category"] == "validation"
     assert tasks[0]["payload"]["focus_factors"] == ["book_yield_plus_earnings_yield", "earnings_yield_over_pb"]
     assert "watchlist" in tasks[0]["worker_note"]
+
+
+def test_build_fragile_candidate_task_creates_hardening_validation():
+    tasks = build_fragile_candidate_task(
+        1,
+        ["hybrid_mom_20_value_ep", "mom_plus_value"],
+        set(),
+    )
+
+    assert len(tasks) == 1
+    assert tasks[0]["category"] == "validation"
+    assert tasks[0]["payload"]["focus_factors"] == ["hybrid_mom_20_value_ep", "mom_plus_value"]
+    assert "fragile" in tasks[0]["worker_note"]
 
 
 def test_research_planner_keeps_high_triage_generated_candidate_in_exploration_mix():

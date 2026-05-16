@@ -32,8 +32,10 @@ def build_composite_factor(
     neutralize: bool = False,
     *,
     factor_value_cache: Mapping[str, pd.Series] | None = None,
+    factor_weights: Mapping[str, float] | None = None,
 ) -> pd.Series:
     signals: List[pd.Series] = []
+    weights: List[float] = []
     for definition in definitions:
         if factor_value_cache is not None and definition.name in factor_value_cache:
             values = factor_value_cache[definition.name]
@@ -47,9 +49,19 @@ def build_composite_factor(
             lambda s: (s - s.mean()) / s.std(ddof=0) if s.std(ddof=0) not in (0, 0.0) else 0.0
         )
         signals.append(zscored.fillna(0.0))
+        weight = float((factor_weights or {}).get(definition.name, 1.0) or 0.0)
+        weights.append(weight if weight > 0 else 0.0)
     if not signals:
         raise ValueError("build_composite_factor requires at least one factor definition")
-    return sum(signals) / len(signals)
+    total_weight = sum(weights)
+    if total_weight <= 0:
+        total_weight = float(len(signals))
+        weights = [1.0 for _ in signals]
+    combined = None
+    for signal, weight in zip(signals, weights):
+        term = signal * (weight / total_weight)
+        combined = term if combined is None else combined + term
+    return combined
 
 
 def evaluate_long_short_portfolio(
