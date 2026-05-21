@@ -98,6 +98,8 @@ def test_build_repair_blocks_without_drawdown_safe_candidate(tmp_path):
     assert payload["candidate_count"] == 0
     assert payload["recommended_candidate"] is None
     assert payload["automation_allowed"] is False
+    assert payload["best_available_max_drawdown"] == -0.36
+    assert payload["drawdown_gap_to_limit"] == 0.01
 
 
 def test_write_repair_outputs_json_and_markdown(tmp_path):
@@ -140,4 +142,5 @@ def test_repair_markdown_includes_status_candidate_and_dimension_summary():
 
     assert "blocked_no_drawdown_safe_candidate" in markdown
     assert "automation_allowed: False" in markdown
+    assert "drawdown_gap_to_limit" in markdown
     assert "signal_column" in markdown

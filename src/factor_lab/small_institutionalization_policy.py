@@ -115,6 +115,24 @@ def _paper_portfolio_section(paper_portfolio: dict[str, Any], portfolio_diagnost
     return section
 
 
+def _paper_monitoring_section(weekly_monitoring_report: dict[str, Any]) -> dict[str, Any]:
+    if not weekly_monitoring_report:
+        return {
+            "weekly_report_status": "missing",
+            "cadence": None,
+            "missing_artifacts": [],
+            "runtime_safe": None,
+        }
+    missing = weekly_monitoring_report.get("missing_artifacts") or []
+    runtime = weekly_monitoring_report.get("runtime") or {}
+    return {
+        "weekly_report_status": "ready" if not missing else "incomplete",
+        "cadence": weekly_monitoring_report.get("cadence"),
+        "missing_artifacts": missing,
+        "runtime_safe": runtime.get("safe"),
+    }
+
+
 def build_small_institutionalization_status(
     *,
     policy_path: str | Path = DEFAULT_POLICY_PATH,
@@ -184,6 +202,7 @@ def build_small_institutionalization_status(
         "runtime_safety": runtime_safety,
         "value_sleeve": value_sleeve,
         "paper_portfolio": paper,
+        "paper_monitoring": _paper_monitoring_section(weekly_monitoring_report),
         "retrospective_tracking": _retrospective_tracking_section(retrospective_tracking),
         "portfolio_constraint_hardening": _constraint_hardening_section(constraint_hardening),
         "paper_live_promotion_readiness": _promotion_readiness_section(promotion_readiness),
@@ -268,6 +287,8 @@ def _simulated_portfolio_construction_repair_section(repair: dict[str, Any]) -> 
         "candidate_count": int(repair.get("candidate_count") or 0),
         "recommended_candidate": repair.get("recommended_candidate"),
         "automation_allowed": bool(repair.get("automation_allowed")),
+        "best_available_max_drawdown": repair.get("best_available_max_drawdown"),
+        "drawdown_gap_to_limit": repair.get("drawdown_gap_to_limit"),
     }
 
 
@@ -336,6 +357,7 @@ def status_to_markdown(status: dict[str, Any]) -> str:
     runtime = status.get("runtime_safety") or {}
     sleeve = status.get("value_sleeve") or {}
     paper = status.get("paper_portfolio") or {}
+    monitoring = status.get("paper_monitoring") or {}
     retrospective = status.get("retrospective_tracking") or {}
     constraint = status.get("portfolio_constraint_hardening") or {}
     readiness = status.get("paper_live_promotion_readiness") or {}
@@ -363,6 +385,12 @@ def status_to_markdown(status: dict[str, Any]) -> str:
             f"- Benchmark ID: {paper.get('benchmark_id')}",
             f"- One-way turnover estimate: {paper.get('turnover_one_way_estimate')}",
             f"- Estimated round-trip cost: {paper.get('estimated_round_trip_cost')}",
+            "",
+            "## Paper monitoring",
+            f"- Weekly report status: {monitoring.get('weekly_report_status')}",
+            f"- Cadence: {monitoring.get('cadence')}",
+            f"- Runtime safe: {monitoring.get('runtime_safe')}",
+            f"- Missing artifacts: {monitoring.get('missing_artifacts')}",
             "",
             "## Retrospective tracking",
             f"- Tracking status: {retrospective.get('tracking_status')}",
@@ -393,6 +421,8 @@ def status_to_markdown(status: dict[str, Any]) -> str:
             f"- Repair status: {repair.get('repair_status')}",
             f"- Candidate count: {repair.get('candidate_count')}",
             f"- Recommended candidate: {repair.get('recommended_candidate')}",
+            f"- Best available max drawdown: {repair.get('best_available_max_drawdown')}",
+            f"- Drawdown gap to limit: {repair.get('drawdown_gap_to_limit')}",
             f"- Automation allowed: {repair.get('automation_allowed')}",
             "",
             "## Next phase policy",

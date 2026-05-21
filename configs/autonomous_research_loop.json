@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "enabled": true,
+  "mode": "dry_run_first",
+  "primary_mainline": "defensive_quality_risk_layer",
+  "allowed_mainlines": ["defensive_quality_risk_layer"],
+  "live_trading_enabled": false,
+  "broad_daemon_restore_allowed": false,
+  "max_experiments_per_cycle": 3,
+  "default_experiments_per_cycle": 2,
+  "cycle_budget": {"max_cycles_per_day": 4, "cooldown_minutes": 180},
+  "risk_targets": {"max_drawdown_limit": -0.35, "min_holding_count": 50, "max_holding_count": 100, "max_single_position_weight": 0.02, "min_sharpe_preference": 0.8},
+  "manual_approval_required_for": ["broad_daemon_restore", "increase_budget", "new_external_data_source", "paper_portfolio_promotion", "live_trading"]
+}

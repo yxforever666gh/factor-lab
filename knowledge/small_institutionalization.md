@@ -1,6 +1,6 @@
 # Factor Lab Small Institutionalization Status
 
-Generated: 2026-05-15T10:42:07.482068+00:00
+Generated: 2026-05-21T11:32:36.493326+00:00
 Phase: A_baseline
 Strategy mode: long_only_equity_enhancement
 Decision: ready_for_portfolio_mvp
@@ -27,6 +27,12 @@ Next action: repair_simulated_portfolio_construction
 - Benchmark ID: CSI1000
 - One-way turnover estimate: 0.0
 - Estimated round-trip cost: 0.0
+
+## Paper monitoring
+- Weekly report status: ready
+- Cadence: weekly
+- Runtime safe: True
+- Missing artifacts: []
 
 ## Retrospective tracking
 - Tracking status: ok
@@ -57,6 +63,8 @@ Next action: repair_simulated_portfolio_construction
 - Repair status: blocked_no_drawdown_safe_candidate
 - Candidate count: 0
 - Recommended candidate: None
+- Best available max drawdown: -0.478256
+- Drawdown gap to limit: 0.128256
 - Automation allowed: False
 
 ## Next phase policy

@@ -156,11 +156,25 @@ def test_status_includes_portfolio_diagnostics_when_present_and_advances_next_ac
 def test_status_advances_to_retrospective_tracking_after_weekly_monitoring_report_exists(tmp_path):
     paths = _baseline_files(tmp_path)
     _write_json(paths["portfolio_diagnostics_path"], {"benchmark": {"benchmark_id": "CSI1000"}})
-    _write_json(paths["weekly_monitoring_report_path"], {"cadence": "weekly"})
+    _write_json(paths["weekly_monitoring_report_path"], {"cadence": "weekly", "missing_artifacts": [], "runtime": {"safe": True}})
 
     status = build_small_institutionalization_status(**paths)
 
+    assert status["paper_monitoring"]["weekly_report_status"] == "ready"
+    assert status["paper_monitoring"]["cadence"] == "weekly"
+    assert status["paper_monitoring"]["missing_artifacts"] == []
+    assert status["paper_monitoring"]["runtime_safe"] is True
     assert status["next_action"] == "run_small_institutional_self_diagnosis"
+
+
+def test_status_marks_weekly_monitoring_report_missing_until_report_exists(tmp_path):
+    paths = _baseline_files(tmp_path)
+    _write_json(paths["portfolio_diagnostics_path"], {"benchmark": {"benchmark_id": "CSI1000"}})
+
+    status = build_small_institutionalization_status(**paths)
+
+    assert status["paper_monitoring"]["weekly_report_status"] == "missing"
+    assert status["next_action"] == "paper_monitoring_weekly_report"
 
 
 def test_status_waits_when_retrospective_tracking_has_insufficient_forward_window(tmp_path):
@@ -284,7 +298,7 @@ def test_status_surfaces_blocked_simulated_portfolio_construction_repair(tmp_pat
     paths = _baseline_files(tmp_path)
     _complete_paper_path(paths)
     _write_json(paths["simulation_self_diagnosis_path"], {"diagnosis_status": "blocked", "primary_issue": "drawdown_risk_too_high", "automation_allowed": False})
-    _write_json(paths["simulated_portfolio_construction_repair_path"], {"repair_status": "blocked_no_drawdown_safe_candidate", "candidate_count": 0, "recommended_candidate": None, "automation_allowed": False})
+    _write_json(paths["simulated_portfolio_construction_repair_path"], {"repair_status": "blocked_no_drawdown_safe_candidate", "candidate_count": 0, "recommended_candidate": None, "automation_allowed": False, "best_available_max_drawdown": -0.478256, "drawdown_gap_to_limit": 0.128256})
 
     status = build_small_institutionalization_status(**paths)
 
@@ -293,6 +307,8 @@ def test_status_surfaces_blocked_simulated_portfolio_construction_repair(tmp_pat
         "candidate_count": 0,
         "recommended_candidate": None,
         "automation_allowed": False,
+        "best_available_max_drawdown": -0.478256,
+        "drawdown_gap_to_limit": 0.128256,
     }
     assert status["next_action"] == "repair_simulated_portfolio_construction"
 

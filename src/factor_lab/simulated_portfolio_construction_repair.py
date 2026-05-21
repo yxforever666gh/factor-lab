@@ -108,6 +108,12 @@ def _safe_candidates(matrix_payload: dict[str, Any], drawdown_limit: float) -> l
     )
 
 
+def _best_available_max_drawdown(matrix_payload: dict[str, Any]) -> float | None:
+    drawdowns = [_float_or_none(row.get("max_drawdown")) for row in _ok_results(matrix_payload)]
+    valid = [value for value in drawdowns if value is not None]
+    return round(max(valid), 6) if valid else None
+
+
 def build_simulated_portfolio_construction_repair(
     matrix_path: str | Path = DEFAULT_MATRIX_PATH,
     policy_path: str | Path = DEFAULT_POLICY_PATH,
@@ -119,6 +125,10 @@ def build_simulated_portfolio_construction_repair(
     grouped = group_matrix_results(matrix_payload, drawdown_limit)
     safe = _safe_candidates(matrix_payload, drawdown_limit)
     recommended = _candidate_projection(safe[0]) if safe else None
+    best_available_max_drawdown = _best_available_max_drawdown(matrix_payload)
+    drawdown_gap_to_limit = (
+        round(drawdown_limit - best_available_max_drawdown, 6) if best_available_max_drawdown is not None else None
+    )
     repair_status = "candidate_found" if safe else "blocked_no_drawdown_safe_candidate"
     return {
         "schema_version": 1,
@@ -128,6 +138,8 @@ def build_simulated_portfolio_construction_repair(
         "repair_status": repair_status,
         "candidate_count": len(safe),
         "recommended_candidate": recommended,
+        "best_available_max_drawdown": best_available_max_drawdown,
+        "drawdown_gap_to_limit": drawdown_gap_to_limit,
         "automation_allowed": False,
         "grouped_results": grouped,
     }
@@ -140,6 +152,8 @@ def repair_to_markdown(payload: dict[str, Any]) -> str:
         f"Generated: {payload.get('generated_at_utc')}",
         f"repair_status: {payload.get('repair_status')}",
         f"drawdown_limit: {payload.get('drawdown_limit')}",
+        f"best_available_max_drawdown: {payload.get('best_available_max_drawdown')}",
+        f"drawdown_gap_to_limit: {payload.get('drawdown_gap_to_limit')}",
         f"candidate_count: {payload.get('candidate_count')}",
         f"automation_allowed: {payload.get('automation_allowed')}",
         "",
