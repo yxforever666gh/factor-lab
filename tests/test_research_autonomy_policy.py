@@ -11,7 +11,7 @@ def test_autonomy_policy_file_exists_and_has_core_keys():
     path = REPO_ROOT / "configs" / "research_autonomy_policy.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
 
-    assert payload["name"] == "openclaw_autonomous_factor_research_constitution"
+    assert payload["name"] == "hermes_native_autonomous_factor_research_constitution"
     assert payload["principles"]["unit_of_research"] == "hypothesis_not_factor_name"
     assert "budget_policy" in payload
 

@@ -4,8 +4,8 @@ from pathlib import Path
 
 
 def _load_brief_runner_module():
-    path = Path(__file__).resolve().parents[1] / 'scripts' / 'run_agent_briefs.py'
-    spec = importlib.util.spec_from_file_location('run_agent_briefs_test', path)
+    path = Path(__file__).resolve().parents[1] / 'scripts' / 'run_hermes_briefings.py'
+    spec = importlib.util.spec_from_file_location('run_hermes_research_briefings_test', path)
     module = importlib.util.module_from_spec(spec)
     assert spec and spec.loader
     spec.loader.exec_module(module)
@@ -34,10 +34,10 @@ def test_brief_runner_uses_configurable_artifacts_dir(tmp_path, monkeypatch, cap
     monkeypatch.setenv('FACTOR_LAB_ARTIFACTS_DIR', str(artifacts))
     module = _load_brief_runner_module()
 
-    (artifacts / 'planner_agent_brief.json').write_text(json.dumps({'brief': 'planner'}, ensure_ascii=False), encoding='utf-8')
-    (artifacts / 'failure_analyst_brief.json').write_text(json.dumps({'brief': 'failure'}, ensure_ascii=False), encoding='utf-8')
+    (artifacts / 'researcher_profile_brief.json').write_text(json.dumps({'brief': 'planner'}, ensure_ascii=False), encoding='utf-8')
+    (artifacts / 'diagnostician_brief.json').write_text(json.dumps({'brief': 'failure'}, ensure_ascii=False), encoding='utf-8')
 
-    monkeypatch.setattr(module, 'DecisionProviderRouter', FakeRouter)
+    monkeypatch.setattr(module, 'HermesDecisionRouter', FakeRouter)
     monkeypatch.setattr(module, 'build_planner_decision_context', lambda brief: {'context_id': 'planner-ctx', 'brief': brief})
     monkeypatch.setattr(module, 'build_failure_decision_context', lambda brief: {'context_id': 'failure-ctx', 'brief': brief})
     monkeypatch.setattr(module, '_parse_args', lambda: type('Args', (), {'provider': 'heuristic'})())
@@ -46,9 +46,9 @@ def test_brief_runner_uses_configurable_artifacts_dir(tmp_path, monkeypatch, cap
 
     assert (artifacts / 'planner_decision_context.json').exists()
     assert (artifacts / 'failure_decision_context.json').exists()
-    assert (artifacts / 'planner_agent_response.json').exists()
-    assert (artifacts / 'failure_analyst_response.json').exists()
-    assert (artifacts / 'agent_responses.json').exists()
+    assert (artifacts / 'researcher_profile_response.json').exists()
+    assert (artifacts / 'diagnostician_response.json').exists()
+    assert (artifacts / 'hermes_decision_artifacts.json').exists()
 
     stdout = capsys.readouterr().out.strip()
     payload = json.loads(stdout)

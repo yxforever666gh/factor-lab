@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "name": "openclaw_candidate_generation_policy",
+  "name": "hermes_native_candidate_generation_policy",
   "mission": "基于稳定候选、高价值失败、family 缺口与互补性，持续生成少而精的新候选因子。",
   "budgets": {
     "stable_neighbor": 2,

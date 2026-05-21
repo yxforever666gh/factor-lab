@@ -394,7 +394,7 @@ Expected: PASS。
 
 **Files:**
 - Modify: `src/factor_lab/repair_agent_engine.py` 或实际包含 `build_repair_response` 的文件
-- Modify if needed: `src/factor_lab/agent_briefs.py`
+- Modify if needed: `src/factor_lab/hermes_research_briefings.py`
 - Test: `tests/test_repair_runtime_liveness.py`
 
 **Step 1: 定位 repair response 构造函数**
@@ -776,7 +776,7 @@ Expected: PASS。
 **Files:**
 - Modify: `docs/plans/2026-04-27-agent-queue-idle-fix-plan.md` only if findings change
 - Inspect: `artifacts/llm_provider_health_live.json`
-- Inspect: `artifacts/agent_responses.json`
+- Inspect: `artifacts/hermes_decision_artifacts.json`
 
 **Step 1: 验证当前 provider 状态**
 
@@ -784,11 +784,11 @@ Expected: PASS。
 python3 - <<'PY'
 import json
 from pathlib import Path
-for f in ['artifacts/llm_provider_health_live.json', 'artifacts/agent_responses.json']:
+for f in ['artifacts/llm_provider_health_live.json', 'artifacts/hermes_decision_artifacts.json']:
     p = Path(f)
     print('\n###', f)
     d = json.loads(p.read_text())
-    print(json.dumps(d.get('agent_responses', d), ensure_ascii=False, indent=2)[:3000])
+    print(json.dumps(d.get('hermes_decision_artifacts', d), ensure_ascii=False, indent=2)[:3000])
 PY
 ```
 
@@ -800,7 +800,7 @@ PY
 - `effective_source`
 - `degraded_to_heuristic`
 - `fallback_reason`
-- missing env，例如 `FACTOR_LAB_OPENCLAW_*`
+- missing env，例如 `FACTOR_LAB_HERMES_NATIVE_*`
 
 **Step 3: 不在本轮修 provider**
 

@@ -378,7 +378,7 @@ def _failure_question_cards(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
     direct_cards = list(snapshot.get("failure_question_cards") or [])
     if direct_cards:
         return direct_cards
-    enhanced_cards = list(((snapshot.get("failure_analyst_enhancement") or {}).get("question_cards_v2") or []))
+    enhanced_cards = list(((snapshot.get("diagnostician_enhancement") or {}).get("question_cards_v2") or []))
     if enhanced_cards:
         return enhanced_cards
     return list(((snapshot.get("research_learning") or {}).get("failure_question_cards") or []))

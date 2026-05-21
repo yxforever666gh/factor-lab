@@ -31,7 +31,7 @@ if __name__ == "__main__":
     )
 
     status_payload = {
-        "mode": "openclaw_agent_bridge",
+        "mode": "hermes_native_agent_bridge",
         "updated_at_utc": datetime.now(timezone.utc).isoformat(),
         "plan_validation": result,
     }

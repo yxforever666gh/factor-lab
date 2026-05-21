@@ -49,20 +49,20 @@ def test_pipeline_runs_reviewer_review_and_reports_artifact(tmp_path, monkeypatc
     monkeypatch.setattr(pipeline, "apply_strategy_plan", lambda *args, **kwargs: {"injected_count": 0, "injected_tasks": []})
     monkeypatch.setattr(pipeline, "build_research_metrics", lambda *args, **kwargs: {"ok": True})
     monkeypatch.setattr(pipeline, "build_research_attribution", lambda *args, **kwargs: {"ok": True})
-    monkeypatch.setattr(pipeline.DecisionProviderRouter, "healthcheck", lambda self, output_path=None, probe=True: {"normalized_provider": "heuristic", "provider_class": "generic"})
+    monkeypatch.setattr(pipeline.HermesDecisionRouter, "healthcheck", lambda self, output_path=None, probe=True: {"normalized_provider": "heuristic", "provider_class": "generic"})
     monkeypatch.setattr(pipeline.subprocess, "run", lambda *args, **kwargs: type("Completed", (), {"returncode": 0, "stdout": "ok", "stderr": ""})())
-    monkeypatch.setattr(pipeline, "build_planner_agent_brief", lambda **kwargs: {"schema_version": "factor_lab.planner_agent_brief.v1", "inputs": {"open_questions": [], "candidate_pool_tasks": []}})
-    monkeypatch.setattr(pipeline, "build_failure_analyst_brief", lambda **kwargs: {"schema_version": "factor_lab.failure_analyst_brief.v1", "inputs": {"recent_failed_or_risky_tasks": []}})
+    monkeypatch.setattr(pipeline, "build_researcher_profile_brief", lambda **kwargs: {"schema_version": "factor_lab.researcher_profile_brief.v1", "inputs": {"open_questions": [], "candidate_pool_tasks": []}})
+    monkeypatch.setattr(pipeline, "build_diagnostician_brief", lambda **kwargs: {"schema_version": "factor_lab.diagnostician_brief.v1", "inputs": {"recent_failed_or_risky_tasks": []}})
     monkeypatch.setattr(
         pipeline,
-        "load_validated_agent_responses",
-        lambda *_args, **_kwargs: {"planner": {}, "planner_errors": [], "failure_analyst": {}, "failure_analyst_errors": []},
+        "load_validated_hermes_decision_artifacts",
+        lambda *_args, **_kwargs: {"planner": {}, "planner_errors": [], "diagnostician": {}, "diagnostician_errors": []},
     )
 
     calls = []
     def fake_review(context, output_path=None, provider=None):
         calls.append({"context": context, "output_path": Path(output_path), "provider": provider})
-        payload = {"schema_version": "factor_lab.reviewer_agent_response.v1", "decision_metadata": {"agent_role": "reviewer"}}
+        payload = {"schema_version": "factor_lab.reviewer_agent_response.v1", "decision_metadata": {"hermes_profile": "reviewer"}}
         Path(output_path).write_text(json.dumps(payload), encoding="utf-8")
         return payload
 

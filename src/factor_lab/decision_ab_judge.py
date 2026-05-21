@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from factor_lab.agent_schemas import DECISION_AB_SCHEMA_VERSION
+from factor_lab.hermes_research_schemas import DECISION_AB_SCHEMA_VERSION
 
 
 def _load_json(path: Path, default: Any) -> Any:

@@ -171,7 +171,7 @@
     <div><div class="muted">Novelty classes</div><div>{{ novelty_judge.summary.class_counts if novelty_judge and novelty_judge.summary else '-' }}</div></div>
     <div><div class="muted">AU allocation audit</div><div>{{ allocator_governance_audit.allocation.summary.count_by_audit if allocator_governance_audit and allocator_governance_audit.allocation else '-' }}</div></div>
     <div><div class="muted">Decision A/B</div><div>{{ decision_ab.report.recommendation if decision_ab and decision_ab.report else '-' }} / qΔ={{ decision_ab.report.quality_delta if decision_ab and decision_ab.report else '-' }}</div></div>
-    <div><div class="muted">Failure Analyst+</div><div>{% if failure_analyst_enhancement and failure_analyst_enhancement.summary %}reroute={{ failure_analyst_enhancement.summary.reroute_count or 0 }} / stop={{ failure_analyst_enhancement.summary.stop_count or 0 }}{% else %}-{% endif %}</div></div>
+    <div><div class="muted">Failure Analyst+</div><div>{% if diagnostician_enhancement and diagnostician_enhancement.summary %}reroute={{ diagnostician_enhancement.summary.reroute_count or 0 }} / stop={{ diagnostician_enhancement.summary.stop_count or 0 }}{% else %}-{% endif %}</div></div>
   </div>
   {% else %}
   <div class="muted">Approved Universe 尚未生成。</div>

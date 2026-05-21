@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Verify Factor Lab runtime is de-OpenClaw in the operational sense.
+"""Verify Factor Lab runtime is de-HermesNative in the operational sense.
 
 This verifier intentionally distinguishes between:
-- allowed OpenClaw *concept* references, such as agent-role architecture docs or
+- allowed HermesNative *concept* references, such as agent-role architecture docs or
   compatibility names; and
 - blocked runtime dependencies, such as the old workspace path, old env files, or
-  unconditional OpenClaw CLI calls.
+  unconditional HermesNative CLI calls.
 
 The script prints PASS/WARN/FAIL lines and exits non-zero on FAIL.
 """
@@ -22,9 +22,9 @@ from pathlib import Path
 from typing import Iterable
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-OLD_WORKSPACE = "/home/admin/.openclaw/workspace"
+OLD_WORKSPACE = "/home/admin/.hermes_native/workspace"
 EXPECTED_ROOT = str(PROJECT_ROOT)
-DEFAULT_ALLOWED_PROVIDERS = {"real_llm"}
+DEFAULT_ALLOWED_PROVIDERS = {"direct_model"}
 
 TEXT_SUFFIXES = {
     ".py",
@@ -40,8 +40,8 @@ TEXT_SUFFIXES = {
 SCAN_DIRS = ["src", "scripts", "systemd", "docs", "tests"]
 RUNTIME_BLOCKED_DIRS = {"src", "scripts", "systemd"}
 ALLOWED_BLOCKED_REFERENCE_FILES = {
-    "scripts/verify_de_openclaw_runtime.py",
-    "tests/test_verify_de_openclaw_runtime.py",
+    "scripts/verify_de_hermes_native_runtime.py",
+    "tests/test_verify_de_hermes_native_runtime.py",
 }
 BLOCKED_PATTERNS = [
     ("old_workspace_path", OLD_WORKSPACE),
@@ -95,7 +95,7 @@ def check_service_path(service: str, check_name: str, expected_root: str = EXPEC
 
 
 def process_lines() -> list[str]:
-    proc = run_command(["pgrep", "-af", "factor-lab|run_research_daemon|run_web_ui|run_agent_briefs"], timeout=5)
+    proc = run_command(["pgrep", "-af", "factor-lab|run_research_daemon|run_web_ui|run_hermes_research_briefings"], timeout=5)
     if proc.returncode not in (0, 1):
         return []
     return proc.stdout.splitlines()
@@ -105,7 +105,7 @@ def check_no_old_workspace_process() -> CheckResult:
     offenders = [line for line in process_lines() if OLD_WORKSPACE in line]
     if offenders:
         return CheckResult("FAIL", "no_old_workspace_process", "; ".join(offenders[:5]))
-    return CheckResult("PASS", "no_old_workspace_process", "no running Factor Lab process uses old OpenClaw workspace")
+    return CheckResult("PASS", "no_old_workspace_process", "no running Factor Lab process uses old HermesNative workspace")
 
 
 def provider_from_processes() -> str | None:
@@ -146,10 +146,10 @@ def iter_text_files(root: Path = PROJECT_ROOT) -> Iterable[Path]:
                 yield path
 
 
-def scan_openclaw_references(root: Path = PROJECT_ROOT) -> tuple[list[tuple[str, str]], list[str]]:
+def scan_hermes_native_references(root: Path = PROJECT_ROOT) -> tuple[list[tuple[str, str]], list[str]]:
     """Return blocked runtime references and non-blocking concept/history refs.
 
-    Documentation and tests may mention the old OpenClaw workspace as history,
+    Documentation and tests may mention the old HermesNative workspace as history,
     examples, or verifier fixtures. Runtime code and service files must not
     depend on it. The verifier itself is also allowed to contain the blocked
     literal because it needs to detect it.
@@ -163,7 +163,7 @@ def scan_openclaw_references(root: Path = PROJECT_ROOT) -> tuple[list[tuple[str,
         except OSError:
             continue
         lower = text.lower()
-        if "openclaw" in lower:
+        if "hermes_native" in lower:
             concept_refs.append(rel)
         top_dir = rel.split("/", 1)[0]
         is_runtime_file = top_dir in RUNTIME_BLOCKED_DIRS
@@ -175,15 +175,15 @@ def scan_openclaw_references(root: Path = PROJECT_ROOT) -> tuple[list[tuple[str,
     return blocked, sorted(set(concept_refs))
 
 
-def check_openclaw_references() -> list[CheckResult]:
-    blocked, concept_refs = scan_openclaw_references()
+def check_hermes_native_references() -> list[CheckResult]:
+    blocked, concept_refs = scan_hermes_native_references()
     results: list[CheckResult] = []
     if blocked:
         summary = ", ".join(f"{name}:{path}" for name, path in blocked[:20])
-        results.append(CheckResult("FAIL", "no_blocked_openclaw_refs", summary))
+        results.append(CheckResult("FAIL", "no_blocked_hermes_native_refs", summary))
     else:
-        results.append(CheckResult("PASS", "no_blocked_openclaw_refs", "no blocked old workspace/env references found in scanned source/docs"))
-    results.append(CheckResult("WARN", "allowed_openclaw_concept_refs", f"{len(concept_refs)} files mention OpenClaw concept/compatibility terms"))
+        results.append(CheckResult("PASS", "no_blocked_hermes_native_refs", "no blocked old workspace/env references found in scanned source/docs"))
+    results.append(CheckResult("WARN", "allowed_hermes_native_concept_refs", f"{len(concept_refs)} files mention HermesNative concept/compatibility terms"))
     return results
 
 
@@ -194,7 +194,7 @@ def run_checks(allowed_providers: set[str]) -> list[CheckResult]:
         check_provider(allowed_providers),
         check_no_old_workspace_process(),
     ]
-    results.extend(check_openclaw_references())
+    results.extend(check_hermes_native_references())
     return results
 
 
@@ -204,7 +204,7 @@ def main(argv: list[str] | None = None) -> int:
         "--allowed-provider",
         action="append",
         dest="allowed_providers",
-        help="Allowed decision provider. May be repeated. Defaults to real_llm.",
+        help="Allowed decision provider. May be repeated. Defaults to direct_model.",
     )
     args = parser.parse_args(argv)
     allowed = set(args.allowed_providers or DEFAULT_ALLOWED_PROVIDERS)

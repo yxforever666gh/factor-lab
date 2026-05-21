@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from factor_lab.agent_responses import load_validated_agent_responses
+from factor_lab.hermes_decision_artifact_loader import load_validated_hermes_decision_artifacts
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -23,10 +23,10 @@ def load_analyst_signals(base_dir: str | Path | None = None) -> dict[str, Any]:
     context = _read_json(base / "llm_recommendation_context.json", {})
     weights = _read_json(base / "llm_recommendation_weights.json", {})
     status = _read_json(base / "llm_status.json", {})
-    agent_responses = load_validated_agent_responses(base)
+    hermes_decision_artifacts = load_validated_hermes_decision_artifacts(base)
 
-    planner_response = agent_responses.get("planner") or {}
-    failure_response = agent_responses.get("failure_analyst") or {}
+    planner_response = hermes_decision_artifacts.get("planner") or {}
+    failure_response = hermes_decision_artifacts.get("diagnostician") or {}
 
     focus_factors = [x for x in (plan.get("focus_factors") or []) if x]
     core_candidates = [x for x in (plan.get("keep_as_core_candidates") or []) if x]
@@ -94,7 +94,7 @@ def load_analyst_signals(base_dir: str | Path | None = None) -> dict[str, Any]:
         "failure_patterns": failure_response.get("failure_patterns") or [],
         "failure_should_probe": failure_response.get("should_probe") or [],
         "agent_response_errors": {
-            "planner": agent_responses.get("planner_errors") or [],
-            "failure_analyst": agent_responses.get("failure_analyst_errors") or [],
+            "planner": hermes_decision_artifacts.get("planner_errors") or [],
+            "diagnostician": hermes_decision_artifacts.get("diagnostician_errors") or [],
         },
     }

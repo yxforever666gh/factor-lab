@@ -419,27 +419,27 @@ def orchestrator_status_context(result: dict[str, Any] | None) -> dict[str, Any]
     return context
 
 
-def _emit_wake_event_via_openclaw(text: str) -> str:
-    """Emit wake event via OpenClaw CLI if available.
+def _emit_wake_event_via_hermes_native(text: str) -> str:
+    """Emit wake event via HermesNative CLI if available.
     
     Returns status:
     - 'disabled': wake events are disabled via env var
-    - 'unavailable': openclaw CLI not found
+    - 'unavailable': hermes_native CLI not found
     - 'delivered': event successfully sent
-    - 'failed': openclaw CLI failed
+    - 'failed': hermes_native CLI failed
     """
     # Check if wake events are enabled
     if os.getenv("RESEARCH_DAEMON_WAKE_EVENTS", "0").strip().lower() not in {"1", "true", "yes", "on"}:
         return "disabled"
     
-    # Check if openclaw CLI is available
-    if not shutil.which("openclaw"):
+    # Check if hermes_native CLI is available
+    if not shutil.which("hermes_native"):
         return "unavailable"
     
     # Attempt to send the event
     try:
         result = subprocess.run(
-            ["openclaw", "system", "event", "--mode", "now", "--text", text],
+            ["hermes_native", "system", "event", "--mode", "now", "--text", text],
             check=False,
             capture_output=True,
             text=True,
@@ -454,19 +454,19 @@ def _emit_wake_event_via_openclaw(text: str) -> str:
 
 
 def emit_wake_event(text: str) -> None:
-    """Emit wake event via OpenClaw CLI if available.
+    """Emit wake event via HermesNative CLI if available.
     
     This is a non-fatal operation - daemon continues even if notification fails.
     Factor Lab notifications are noisy in chat; keep them opt-in.
     Set RESEARCH_DAEMON_WAKE_EVENTS=1 to re-enable proactive chat wake events.
     """
-    status = _emit_wake_event_via_openclaw(text)
+    status = _emit_wake_event_via_hermes_native(text)
     # Log unavailable/failed status for debugging, but don't crash
     if status == "unavailable":
-        # OpenClaw CLI not installed - this is expected in some environments
+        # HermesNative CLI not installed - this is expected in some environments
         pass
     elif status == "failed":
-        # OpenClaw CLI failed - log but continue
+        # HermesNative CLI failed - log but continue
         pass
 
 

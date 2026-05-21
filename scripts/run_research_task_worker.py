@@ -14,7 +14,7 @@ sys.path.insert(0, str(SCRIPT_ROOT / "src"))
 warnings.filterwarnings("ignore", category=Warning, module="requests")
 warnings.filterwarnings("ignore", category=FutureWarning, module="factor_lab.portfolio")
 
-from factor_lab.agent_runtime_hooks import safe_run_data_quality_review
+from factor_lab.legacy_runtime_review_hooks import safe_run_data_steward_review
 from factor_lab.batch import run_batch
 from factor_lab.paths import artifacts_dir, project_root
 from factor_lab.research_queue import request_report_refresh, validate_generated_batch_payload
@@ -113,7 +113,7 @@ def _latest_workflow_run_summary() -> dict:
         return {}
 
 
-def _run_data_quality_hook(*, task_id: str | None, task_type: str, payload: dict, last_error: str | None = None) -> None:
+def _run_data_steward_hook(*, task_id: str | None, task_type: str, payload: dict, last_error: str | None = None) -> None:
     latest_run = _latest_workflow_run_summary()
     context = {
         "context_id": f"data-quality:{task_id or task_type}",
@@ -127,9 +127,9 @@ def _run_data_quality_hook(*, task_id: str | None, task_type: str, payload: dict
             "last_error": last_error or "",
         },
     }
-    safe_run_data_quality_review(
+    safe_run_data_steward_review(
         context=context,
-        output_path=_artifacts_path() / "data_quality_review.json",
+        output_path=_artifacts_path() / "data_steward_review.json",
         provider=_observation_decision_provider(),
     )
 
@@ -152,7 +152,7 @@ def main() -> int:
                 return 1
             payload = admission.get("task", {}).get("payload", payload)
             run_workflow(config_path=payload["config_path"], output_dir=payload["output_dir"])
-            _run_data_quality_hook(task_id=task_id, task_type=task_type, payload=payload)
+            _run_data_steward_hook(task_id=task_id, task_type=task_type, payload=payload)
             refreshed, refresh_note = schedule_report_refresh(source="workflow")
             summary = f"workflow finished: {payload['config_path']}"
             if refresh_note:
@@ -162,13 +162,13 @@ def main() -> int:
             print(json.dumps({"ok": True, "summary": summary}, ensure_ascii=False))
             return 0
     except Exception as exc:
-        _run_data_quality_hook(task_id=task_id, task_type=task_type, payload=payload, last_error=str(exc))
+        _run_data_steward_hook(task_id=task_id, task_type=task_type, payload=payload, last_error=str(exc))
         raise
 
     if task_type == "batch":
         try:
             run_batch(config_path=payload["config_path"], output_dir=payload["output_dir"])
-            _run_data_quality_hook(task_id=task_id, task_type=task_type, payload=payload)
+            _run_data_steward_hook(task_id=task_id, task_type=task_type, payload=payload)
             refreshed, refresh_note = schedule_report_refresh(source="batch")
             summary = f"batch finished: {payload['config_path']}"
             if refresh_note:
@@ -178,21 +178,21 @@ def main() -> int:
             print(json.dumps({"ok": True, "summary": summary}, ensure_ascii=False))
             return 0
         except Exception as exc:
-            _run_data_quality_hook(task_id=task_id, task_type=task_type, payload=payload, last_error=str(exc))
+            _run_data_steward_hook(task_id=task_id, task_type=task_type, payload=payload, last_error=str(exc))
             raise
 
     if task_type == "generated_batch":
         try:
             ok, validation_error = validate_generated_batch_payload(task)
             if not ok:
-                _run_data_quality_hook(task_id=task_id, task_type=task_type, payload=payload, last_error=validation_error or "generated batch preflight failed")
+                _run_data_steward_hook(task_id=task_id, task_type=task_type, payload=payload, last_error=validation_error or "generated batch preflight failed")
                 print(json.dumps({"ok": False, "error": validation_error or "generated batch preflight failed"}, ensure_ascii=False))
                 return 1
             batch_path = Path(payload["batch_path"])
             feedback_path = _feedback_path()
             bridge_status_path = _bridge_status_path()
             run_batch(str(batch_path), payload["output_dir"])
-            _run_data_quality_hook(task_id=task_id, task_type=task_type, payload=payload)
+            _run_data_steward_hook(task_id=task_id, task_type=task_type, payload=payload)
             feedback = summarize_generated_batch_run(payload["output_dir"], str(feedback_path))
             batch_summary = feedback.get("batch_summary", []) or []
             knowledge_gain = []
@@ -205,7 +205,7 @@ def main() -> int:
             write_bridge_status(
                 str(bridge_status_path),
                 {
-                    "mode": "openclaw_agent_bridge",
+                    "mode": "hermes_native_agent_bridge",
                     "status": "plan_executed",
                     "updated_at_utc": datetime.now(timezone.utc).isoformat(),
                     "generated_batch_path": str(batch_path),
@@ -224,7 +224,7 @@ def main() -> int:
             print(json.dumps({"ok": True, "summary": summary}, ensure_ascii=False))
             return 0
         except Exception as exc:
-            _run_data_quality_hook(task_id=task_id, task_type=task_type, payload=payload, last_error=str(exc))
+            _run_data_steward_hook(task_id=task_id, task_type=task_type, payload=payload, last_error=str(exc))
             raise
 
     print(json.dumps({"ok": False, "error": f"unsupported task_type: {task_type}"}, ensure_ascii=False))

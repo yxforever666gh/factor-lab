@@ -84,7 +84,7 @@ def _bucket_from_task(task: dict[str, Any]) -> str:
     note = str(task.get("worker_note") or "").lower()
     task_type = str(task.get("task_type") or "")
     if "baseline" in note:
-        return "data_quality_coverage"
+        return "data_steward_coverage"
     if "validation" in note or task_type == "workflow":
         return "robustness_validation"
     if task_type == "diagnostic":

@@ -7,13 +7,13 @@ pytest.importorskip("jinja2")
 from fastapi.testclient import TestClient
 
 from factor_lab import webui_app
-from factor_lab.agent_roles import AgentRoleConfig, agent_roles_to_json
+from factor_lab.hermes_profile_settings import HermesProfileSetting, hermes_profile_settings_to_json
 
 
 def test_load_llm_settings_masks_api_key_and_reads_env_file(tmp_path: Path, monkeypatch):
     env_file = tmp_path / ".env"
     env_file.write_text(
-        "FACTOR_LAB_DECISION_PROVIDER=real_llm\n"
+        "FACTOR_LAB_DECISION_PROVIDER=direct_model\n"
         "FACTOR_LAB_LLM_BASE_URL=https://example.test/v1\n"
         "FACTOR_LAB_LLM_MODEL=gpt-test\n"
         "FACTOR_LAB_LLM_API_KEY=sk-secret-value\n",
@@ -23,7 +23,7 @@ def test_load_llm_settings_masks_api_key_and_reads_env_file(tmp_path: Path, monk
 
     settings = webui_app.load_llm_settings()
 
-    assert settings["decision_provider"] == "real_llm"
+    assert settings["decision_provider"] == "direct_model"
     assert settings["base_url"] == "https://example.test/v1"
     assert settings["model"] == "gpt-test"
     assert settings["api_key_configured"] is True
@@ -46,9 +46,9 @@ def test_save_llm_settings_updates_env_file_preserves_unrelated_values_and_runti
 
     saved = webui_app.save_llm_settings(
         {
-            "decision_provider": "real_llm",
-            "live_decision_provider": "real_llm",
-            "observation_decision_provider": "real_llm",
+            "decision_provider": "direct_model",
+            "live_decision_provider": "direct_model",
+            "observation_decision_provider": "direct_model",
             "base_url": "https://new.example/v1",
             "model": "new-model",
             "api_key": "new-secret",
@@ -58,9 +58,9 @@ def test_save_llm_settings_updates_env_file_preserves_unrelated_values_and_runti
     text = env_file.read_text(encoding="utf-8")
     assert "# existing comment" in text
     assert "WEB_UI_PORT=8765" in text
-    assert "FACTOR_LAB_DECISION_PROVIDER=real_llm" in text
-    assert "FACTOR_LAB_LIVE_DECISION_PROVIDER=real_llm" in text
-    assert "FACTOR_LAB_OBSERVATION_DECISION_PROVIDER=real_llm" in text
+    assert "FACTOR_LAB_DECISION_PROVIDER=direct_model" in text
+    assert "FACTOR_LAB_LIVE_DECISION_PROVIDER=direct_model" in text
+    assert "FACTOR_LAB_OBSERVATION_DECISION_PROVIDER=direct_model" in text
     assert "FACTOR_LAB_LLM_BASE_URL=https://new.example/v1" in text
     assert "FACTOR_LAB_LLM_MODEL=new-model" in text
     assert "FACTOR_LAB_LLM_API_KEY=new-secret" in text
@@ -80,9 +80,9 @@ def test_save_llm_settings_keeps_existing_api_key_when_form_leaves_it_blank(tmp_
 
     webui_app.save_llm_settings(
         {
-            "decision_provider": "real_llm",
-            "live_decision_provider": "real_llm",
-            "observation_decision_provider": "real_llm",
+            "decision_provider": "direct_model",
+            "live_decision_provider": "direct_model",
+            "observation_decision_provider": "direct_model",
             "base_url": "https://new.example/v1",
             "model": "new-model",
             "api_key": "",
@@ -126,9 +126,9 @@ def test_save_llm_settings_writes_profile_api_format_selection(tmp_path: Path, m
 
     settings = webui_app.save_llm_settings(
         {
-            "decision_provider": "real_llm",
-            "live_decision_provider": "real_llm",
-            "observation_decision_provider": "real_llm",
+            "decision_provider": "direct_model",
+            "live_decision_provider": "direct_model",
+            "observation_decision_provider": "direct_model",
             "profile_order_0": "1",
             "profile_name_0": "primary",
             "profile_base_url_0": "https://primary.test/v1",
@@ -208,9 +208,9 @@ def test_save_llm_settings_writes_multiple_profiles_and_legacy_first_profile(tmp
 
     settings = webui_app.save_llm_settings(
         {
-            "decision_provider": "real_llm",
-            "live_decision_provider": "real_llm",
-            "observation_decision_provider": "real_llm",
+            "decision_provider": "direct_model",
+            "live_decision_provider": "direct_model",
+            "observation_decision_provider": "direct_model",
             "profile_name_0": "primary",
             "profile_base_url_0": "https://primary.test/v1",
             "profile_model_0": "primary-model",
@@ -243,9 +243,9 @@ def test_save_llm_settings_uses_numeric_order_fields_when_present(tmp_path: Path
 
     settings = webui_app.save_llm_settings(
         {
-            "decision_provider": "real_llm",
-            "live_decision_provider": "real_llm",
-            "observation_decision_provider": "real_llm",
+            "decision_provider": "direct_model",
+            "live_decision_provider": "direct_model",
+            "observation_decision_provider": "direct_model",
             "profile_order_0": "2",
             "profile_name_0": "primary",
             "profile_base_url_0": "https://primary.test/v1",
@@ -274,9 +274,9 @@ def test_save_llm_settings_uses_first_enabled_profile_for_legacy_and_fallback_or
 
     settings = webui_app.save_llm_settings(
         {
-            "decision_provider": "real_llm",
-            "live_decision_provider": "real_llm",
-            "observation_decision_provider": "real_llm",
+            "decision_provider": "direct_model",
+            "live_decision_provider": "direct_model",
+            "observation_decision_provider": "direct_model",
             "profile_order_0": "1",
             "profile_name_0": "disabled-primary",
             "profile_base_url_0": "https://disabled.test/v1",
@@ -298,10 +298,10 @@ def test_save_llm_settings_uses_first_enabled_profile_for_legacy_and_fallback_or
     assert settings["base_url"] == "https://backup.test/v1"
 
 
-def test_save_llm_settings_syncs_agent_role_fallback_when_roles_used_old_global_order(tmp_path: Path, monkeypatch):
+def test_save_llm_settings_syncs_hermes_profile_fallback_when_roles_used_old_global_order(tmp_path: Path, monkeypatch):
     env_file = tmp_path / ".env"
     roles = [
-        AgentRoleConfig(
+        HermesProfileSetting(
             name="planner",
             display_name="规划 Agent",
             enabled=True,
@@ -317,19 +317,19 @@ def test_save_llm_settings_syncs_agent_role_fallback_when_roles_used_old_global_
     ]
     env_file.write_text(
         "FACTOR_LAB_LLM_FALLBACK_ORDER=primary,backup\n"
-        "FACTOR_LAB_AGENT_ROLES_JSON=" + agent_roles_to_json(roles) + "\n"
-        "FACTOR_LAB_AGENT_ROLE_ORDER=planner\n",
+        "FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON=" + hermes_profile_settings_to_json(roles) + "\n"
+        "FACTOR_LAB_HERMES_PROFILE_ORDER=planner\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(webui_app, "env_file", lambda: env_file)
-    for key in [*webui_app.LLM_ENV_KEYS, *webui_app.LLM_PROFILE_ENV_KEYS, *webui_app.AGENT_ROLE_ENV_KEYS]:
+    for key in [*webui_app.LLM_ENV_KEYS, *webui_app.LLM_PROFILE_ENV_KEYS, *webui_app.HERMES_PROFILE_SETTING_ENV_KEYS]:
         monkeypatch.delenv(key, raising=False)
 
     webui_app.save_llm_settings(
         {
-            "decision_provider": "real_llm",
-            "live_decision_provider": "real_llm",
-            "observation_decision_provider": "real_llm",
+            "decision_provider": "direct_model",
+            "live_decision_provider": "direct_model",
+            "observation_decision_provider": "direct_model",
             "profile_order_0": "2",
             "profile_name_0": "primary",
             "profile_base_url_0": "https://primary.test/v1",
@@ -345,17 +345,17 @@ def test_save_llm_settings_syncs_agent_role_fallback_when_roles_used_old_global_
         }
     )
 
-    updated_roles = webui_app.json.loads(webui_app.os.environ["FACTOR_LAB_AGENT_ROLES_JSON"])
+    updated_roles = webui_app.json.loads(webui_app.os.environ["FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON"])
     assert updated_roles[0]["llm_fallback_order"] == ["backup", "primary"]
     text = env_file.read_text(encoding="utf-8")
     assert "FACTOR_LAB_LLM_FALLBACK_ORDER=backup,primary" in text
-    assert "FACTOR_LAB_AGENT_ROLES_JSON=" in text
+    assert "FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON=" in text
 
 
-def test_save_llm_settings_filters_stale_agent_role_profile_names_but_preserves_custom_order(tmp_path: Path, monkeypatch):
+def test_save_llm_settings_filters_stale_hermes_profile_profile_names_but_preserves_custom_order(tmp_path: Path, monkeypatch):
     env_file = tmp_path / ".env"
     roles = [
-        AgentRoleConfig(
+        HermesProfileSetting(
             name="planner",
             display_name="规划 Agent",
             enabled=True,
@@ -371,19 +371,19 @@ def test_save_llm_settings_filters_stale_agent_role_profile_names_but_preserves_
     ]
     env_file.write_text(
         "FACTOR_LAB_LLM_FALLBACK_ORDER=primary,backup,third\n"
-        "FACTOR_LAB_AGENT_ROLES_JSON=" + agent_roles_to_json(roles) + "\n"
-        "FACTOR_LAB_AGENT_ROLE_ORDER=planner\n",
+        "FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON=" + hermes_profile_settings_to_json(roles) + "\n"
+        "FACTOR_LAB_HERMES_PROFILE_ORDER=planner\n",
         encoding="utf-8",
     )
     monkeypatch.setattr(webui_app, "env_file", lambda: env_file)
-    for key in [*webui_app.LLM_ENV_KEYS, *webui_app.LLM_PROFILE_ENV_KEYS, *webui_app.AGENT_ROLE_ENV_KEYS]:
+    for key in [*webui_app.LLM_ENV_KEYS, *webui_app.LLM_PROFILE_ENV_KEYS, *webui_app.HERMES_PROFILE_SETTING_ENV_KEYS]:
         monkeypatch.delenv(key, raising=False)
 
     webui_app.save_llm_settings(
         {
-            "decision_provider": "real_llm",
-            "live_decision_provider": "real_llm",
-            "observation_decision_provider": "real_llm",
+            "decision_provider": "direct_model",
+            "live_decision_provider": "direct_model",
+            "observation_decision_provider": "direct_model",
             "profile_order_0": "1",
             "profile_name_0": "primary",
             "profile_base_url_0": "https://primary.test/v1",
@@ -399,7 +399,7 @@ def test_save_llm_settings_filters_stale_agent_role_profile_names_but_preserves_
         }
     )
 
-    updated_roles = webui_app.json.loads(webui_app.os.environ["FACTOR_LAB_AGENT_ROLES_JSON"])
+    updated_roles = webui_app.json.loads(webui_app.os.environ["FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON"])
     assert updated_roles[0]["llm_fallback_order"] == ["backup"]
 
 

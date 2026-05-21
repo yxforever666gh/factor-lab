@@ -62,12 +62,12 @@
           <td class="text-break">{{ health.decision_layer.planner.session_mode or '-' }} / {{ health.decision_layer.planner.session_id or '-' }}</td>
         </tr>
         <tr>
-          <td>failure_analyst</td>
-          <td>{{ health.decision_layer.failure_analyst.effective_source or '-' }}</td>
-          <td class="text-break">{{ health.decision_layer.failure_analyst.fallback_reason or '-' }}</td>
-          <td>{{ '是' if health.decision_layer.failure_analyst.degraded_to_heuristic else '否' }}</td>
-          <td>{{ health.decision_layer.failure_analyst.provider_latency_ms if health.decision_layer.failure_analyst.provider_latency_ms is not none else '-' }}ms</td>
-          <td class="text-break">{{ health.decision_layer.failure_analyst.session_mode or '-' }} / {{ health.decision_layer.failure_analyst.session_id or '-' }}</td>
+          <td>diagnostician</td>
+          <td>{{ health.decision_layer.diagnostician.effective_source or '-' }}</td>
+          <td class="text-break">{{ health.decision_layer.diagnostician.fallback_reason or '-' }}</td>
+          <td>{{ '是' if health.decision_layer.diagnostician.degraded_to_heuristic else '否' }}</td>
+          <td>{{ health.decision_layer.diagnostician.provider_latency_ms if health.decision_layer.diagnostician.provider_latency_ms is not none else '-' }}ms</td>
+          <td class="text-break">{{ health.decision_layer.diagnostician.session_mode or '-' }} / {{ health.decision_layer.diagnostician.session_id or '-' }}</td>
         </tr>
       </tbody>
     </table>

@@ -23,7 +23,7 @@ if __name__ == "__main__":
     write_bridge_status(
         "artifacts/llm_status.json",
         {
-            "mode": "openclaw_agent_bridge",
+            "mode": "hermes_native_agent_bridge",
             "status": "plan_executed",
             "updated_at_utc": datetime.now(timezone.utc).isoformat(),
             "generated_batch_path": str(batch_path),

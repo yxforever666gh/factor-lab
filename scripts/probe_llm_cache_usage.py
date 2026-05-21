@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from factor_lab.llm_provider_router import DecisionProviderRouter
+from factor_lab.hermes_decision_router import HermesDecisionRouter
 from factor_lab.paths import artifacts_dir, env_file
 
 
@@ -127,7 +127,7 @@ def _build_request_body(api_format: str, model: str, stable_prompt: str, max_out
 
 
 def _probe_once(
-    router: DecisionProviderRouter,
+    router: HermesDecisionRouter,
     profile: dict[str, Any],
     stable_prompt: str,
     timeout: float,
@@ -141,9 +141,9 @@ def _probe_once(
     request_body = _build_request_body(api_format, model, stable_prompt, max_output_tokens)
     auth_scheme = "anthropic" if api_format == "anthropic" else "bearer"
     req = urllib.request.Request(
-        url=router._real_llm_endpoint_url(base_url, api_format),
+        url=router._direct_model_endpoint_url(base_url, api_format),
         data=json.dumps(request_body).encode("utf-8"),
-        headers=router._real_llm_headers(api_key, auth_scheme=auth_scheme),
+        headers=router._direct_model_headers(api_key, auth_scheme=auth_scheme),
         method="POST",
     )
     try:
@@ -197,8 +197,8 @@ def main() -> int:
     args = parser.parse_args()
 
     _load_env_file(env_file())
-    router = DecisionProviderRouter(provider="real_llm")
-    profiles = router._real_llm_profiles()
+    router = HermesDecisionRouter(provider="direct_model")
+    profiles = router._direct_model_profiles()
     wanted = {item.strip() for item in args.profiles.split(",") if item.strip()}
     if wanted:
         profiles = [profile for profile in profiles if str(profile.get("name") or "") in wanted]

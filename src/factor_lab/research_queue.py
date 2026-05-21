@@ -33,7 +33,7 @@ from factor_lab.research_strategy import update_research_memory_from_task_result
 from factor_lab.research_task_governance import govern_workflow_task_spec
 from factor_lab.opportunity_store import update_opportunity_state
 from factor_lab.opportunity_evaluator import evaluate_opportunity_from_task
-from factor_lab.agent_briefs import build_repair_agent_brief
+from factor_lab.hermes_research_briefing_builders import build_repair_agent_brief
 from factor_lab.repair_runtime import build_repair_runtime_snapshot
 from factor_lab.repair_agent_engine import build_repair_response
 from factor_lab.repair_playbooks import execute_repair_actions
@@ -598,7 +598,7 @@ def _governance_payload_defaults(task_spec: dict[str, Any]) -> dict[str, Any]:
     payload.setdefault("hypothesis", note or "baseline workflow should refresh research evidence")
     payload.setdefault("falsification_criteria", ["net sharpe and information gain fail to improve versus recent baseline"])
     payload.setdefault("expected_information_gain", ["window_stability_check", "boundary_confirmed"] if "baseline" in note.lower() else ["window_stability_check", "candidate_survival_check"])
-    payload.setdefault("budget_bucket", "data_quality_coverage" if "baseline" in note.lower() else "robustness_validation")
+    payload.setdefault("budget_bucket", "data_steward_coverage" if "baseline" in note.lower() else "robustness_validation")
     return payload
 
 
@@ -621,7 +621,7 @@ def _govern_workflow_seed(
     }
     used_counts = {
         "total": sum(int(budget.get(name) or 0) for name in ("baseline", "validation", "exploration")),
-        "data_quality_coverage": int(budget.get("baseline") or 0),
+        "data_steward_coverage": int(budget.get("baseline") or 0),
         "robustness_validation": int(budget.get("validation") or 0),
         "pure_exploration": int(budget.get("exploration") or 0),
     }

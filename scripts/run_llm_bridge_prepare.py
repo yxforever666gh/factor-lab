@@ -18,7 +18,7 @@ if __name__ == "__main__":
     write_bridge_status(
         "artifacts/llm_status.json",
         {
-            "mode": "openclaw_agent_bridge",
+            "mode": "hermes_native_agent_bridge",
             "status": "request_ready",
             "updated_at_utc": datetime.now(timezone.utc).isoformat(),
             "request_path": "artifacts/agent_request.json",

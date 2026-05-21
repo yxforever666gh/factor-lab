@@ -50,7 +50,7 @@
       "candidate_expressions": ["historical_pb_percentile_inv"],
       "expected_horizons": ["60d", "120d"],
       "falsification_criteria": ["long valuation history coverage below 60%"],
-      "budget_bucket": "data_quality_coverage"
+      "budget_bucket": "data_steward_coverage"
     },
     {
       "route_id": "value_trap_exclusion",
@@ -60,7 +60,7 @@
       "candidate_expressions": ["industry_relative_book_yield + roe + momentum_60_skip_5 - debt_to_asset"],
       "expected_horizons": ["60d", "120d"],
       "falsification_criteria": ["trap exclusion reduces coverage below 50%", "filtered value does not improve drawdown"],
-      "budget_bucket": "data_quality_coverage"
+      "budget_bucket": "data_steward_coverage"
     }
   ]
 }

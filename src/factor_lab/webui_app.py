@@ -20,7 +20,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from factor_lab.agent_roles import AgentRoleConfig, agent_roles_to_json, default_agent_roles, load_agent_roles
+from factor_lab.hermes_profile_settings import HermesProfileSetting, hermes_profile_settings_to_json, default_hermes_profile_settings, load_hermes_profile_settings
 from factor_lab.candidate_graph import build_graph_artifacts, build_candidate_graph_context, candidate_clusters, family_rollup
 from factor_lab.factor_candidates import summarize_candidate_status
 from factor_lab.db_views import ensure_views
@@ -32,7 +32,7 @@ from factor_lab.candidate_failure_dossier import build_candidate_failure_dossier
 from factor_lab.novelty_judge import load_novelty_judgments
 from factor_lab.allocator_governance_auditor import load_allocator_governance_audit
 from factor_lab.decision_ab_judge import load_decision_ab_artifacts
-from factor_lab.failure_analyst_enhancement import load_failure_analyst_enhancement
+from factor_lab.diagnostician_enhancement import load_diagnostician_enhancement
 from factor_lab.paths import env_file
 from factor_lab.llm_pricing import estimate_llm_cost_usd
 from factor_lab.research_quality_summary import build_research_quality_summary
@@ -53,9 +53,9 @@ LLM_PROFILE_ENV_KEYS = [
     "FACTOR_LAB_LLM_FALLBACK_ORDER",
 ]
 
-AGENT_ROLE_ENV_KEYS = [
-    "FACTOR_LAB_AGENT_ROLES_JSON",
-    "FACTOR_LAB_AGENT_ROLE_ORDER",
+HERMES_PROFILE_SETTING_ENV_KEYS = [
+    "FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON",
+    "FACTOR_LAB_HERMES_PROFILE_ORDER",
 ]
 
 LLM_FORM_TO_ENV = {
@@ -249,7 +249,7 @@ def _profiles_from_form(form: dict[str, str], existing_profiles: list[dict[str, 
     return profiles, fallback_order
 
 
-def _role_to_form_dict(role: AgentRoleConfig) -> dict[str, Any]:
+def _role_to_form_dict(role: HermesProfileSetting) -> dict[str, Any]:
     return {
         "name": role.name,
         "display_name": role.display_name,
@@ -265,24 +265,24 @@ def _role_to_form_dict(role: AgentRoleConfig) -> dict[str, Any]:
     }
 
 
-def _agent_roles_from_values(values: dict[str, str]) -> list[AgentRoleConfig]:
-    raw = values.get("FACTOR_LAB_AGENT_ROLES_JSON") or os.environ.get("FACTOR_LAB_AGENT_ROLES_JSON") or ""
+def _hermes_profile_settings_from_values(values: dict[str, str]) -> list[HermesProfileSetting]:
+    raw = values.get("FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON") or os.environ.get("FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON") or ""
     if raw.strip():
-        old = os.environ.get("FACTOR_LAB_AGENT_ROLES_JSON")
-        os.environ["FACTOR_LAB_AGENT_ROLES_JSON"] = raw
+        old = os.environ.get("FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON")
+        os.environ["FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON"] = raw
         try:
-            return load_agent_roles()
+            return load_hermes_profile_settings()
         finally:
             if old is None:
-                os.environ.pop("FACTOR_LAB_AGENT_ROLES_JSON", None)
+                os.environ.pop("FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON", None)
             else:
-                os.environ["FACTOR_LAB_AGENT_ROLES_JSON"] = old
+                os.environ["FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON"] = old
     fallback_order = [item.strip() for item in (values.get("FACTOR_LAB_LLM_FALLBACK_ORDER") or os.environ.get("FACTOR_LAB_LLM_FALLBACK_ORDER") or "").split(",") if item.strip()]
-    roles = default_agent_roles()
+    roles = default_hermes_profile_settings()
     if not fallback_order:
         return roles
     return [
-        AgentRoleConfig(
+        HermesProfileSetting(
             name=role.name,
             display_name=role.display_name,
             enabled=role.enabled,
@@ -301,17 +301,17 @@ def _agent_roles_from_values(values: dict[str, str]) -> list[AgentRoleConfig]:
 
 def load_agent_settings() -> dict[str, Any]:
     values = _read_env_values()
-    roles = _agent_roles_from_values(values)
+    roles = _hermes_profile_settings_from_values(values)
     return {
         "roles": [_role_to_form_dict(role) for role in roles],
         "env_file": str(env_file()),
-        "role_order": values.get("FACTOR_LAB_AGENT_ROLE_ORDER") or os.environ.get("FACTOR_LAB_AGENT_ROLE_ORDER") or ",".join(role.name for role in roles),
+        "role_order": values.get("FACTOR_LAB_HERMES_PROFILE_ORDER") or os.environ.get("FACTOR_LAB_HERMES_PROFILE_ORDER") or ",".join(role.name for role in roles),
     }
 
 
-def _agent_roles_from_form(form: dict[str, str]) -> list[AgentRoleConfig]:
-    roles: list[AgentRoleConfig] = []
-    defaults = {role.name: role for role in default_agent_roles()}
+def _hermes_profile_settings_from_form(form: dict[str, str]) -> list[HermesProfileSetting]:
+    roles: list[HermesProfileSetting] = []
+    defaults = {role.name: role for role in default_hermes_profile_settings()}
     for index in range(20):
         name = (form.get(f"role_name_{index}") or "").strip()
         if not name:
@@ -330,7 +330,7 @@ def _agent_roles_from_form(form: dict[str, str]) -> list[AgentRoleConfig]:
         except ValueError:
             max_retries = default.max_retries if default else 1
         roles.append(
-            AgentRoleConfig(
+            HermesProfileSetting(
                 name=name,
                 display_name=(form.get(f"role_display_name_{index}") or (default.display_name if default else name)).strip(),
                 enabled=form.get(f"role_enabled_{index}") in {"on", "1", "true", "yes"},
@@ -344,16 +344,16 @@ def _agent_roles_from_form(form: dict[str, str]) -> list[AgentRoleConfig]:
                 legacy_agent_id=(form.get(f"role_legacy_agent_id_{index}") or (default.legacy_agent_id if default else "") or "").strip() or None,
             )
         )
-    return roles or default_agent_roles()
+    return roles or default_hermes_profile_settings()
 
 
 def save_agent_settings(form: dict[str, str]) -> dict[str, Any]:
     path = env_file()
     path.parent.mkdir(parents=True, exist_ok=True)
-    roles = _agent_roles_from_form(form)
+    roles = _hermes_profile_settings_from_form(form)
     requested = {
-        "FACTOR_LAB_AGENT_ROLES_JSON": agent_roles_to_json(roles),
-        "FACTOR_LAB_AGENT_ROLE_ORDER": ",".join(role.name for role in roles),
+        "FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON": hermes_profile_settings_to_json(roles),
+        "FACTOR_LAB_HERMES_PROFILE_ORDER": ",".join(role.name for role in roles),
     }
     lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
     seen: set[str] = set()
@@ -370,7 +370,7 @@ def save_agent_settings(form: dict[str, str]) -> dict[str, Any]:
             seen.add(key)
         else:
             updated_lines.append(line)
-    for key in AGENT_ROLE_ENV_KEYS:
+    for key in HERMES_PROFILE_SETTING_ENV_KEYS:
         if key not in seen:
             updated_lines.append(f"{key}={requested.get(key, '')}")
     path.write_text("\n".join(updated_lines).rstrip() + "\n", encoding="utf-8")
@@ -405,21 +405,21 @@ def _reconcile_role_fallback_order(
     return current_valid
 
 
-def _sync_agent_roles_with_llm_profiles(
+def _sync_hermes_profile_settings_with_llm_profiles(
     existing_values: dict[str, str],
     profiles: list[dict[str, Any]],
     old_fallback_order: str,
     new_fallback_order: str,
 ) -> dict[str, str]:
-    raw_roles = existing_values.get("FACTOR_LAB_AGENT_ROLES_JSON") or os.environ.get("FACTOR_LAB_AGENT_ROLES_JSON") or ""
+    raw_roles = existing_values.get("FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON") or os.environ.get("FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON") or ""
     if not raw_roles.strip():
         return {}
-    roles = _agent_roles_from_values({**existing_values, "FACTOR_LAB_AGENT_ROLES_JSON": raw_roles})
+    roles = _hermes_profile_settings_from_values({**existing_values, "FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON": raw_roles})
     enabled_names = _enabled_profile_names(profiles)
     if not enabled_names:
         return {}
     updated_roles = [
-        AgentRoleConfig(
+        HermesProfileSetting(
             name=role.name,
             display_name=role.display_name,
             enabled=role.enabled,
@@ -439,14 +439,14 @@ def _sync_agent_roles_with_llm_profiles(
         )
         for role in roles
     ]
-    role_order = existing_values.get("FACTOR_LAB_AGENT_ROLE_ORDER") or os.environ.get("FACTOR_LAB_AGENT_ROLE_ORDER") or ",".join(role.name for role in updated_roles)
+    role_order = existing_values.get("FACTOR_LAB_HERMES_PROFILE_ORDER") or os.environ.get("FACTOR_LAB_HERMES_PROFILE_ORDER") or ",".join(role.name for role in updated_roles)
     return {
-        "FACTOR_LAB_AGENT_ROLES_JSON": agent_roles_to_json(updated_roles),
-        "FACTOR_LAB_AGENT_ROLE_ORDER": role_order,
+        "FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON": hermes_profile_settings_to_json(updated_roles),
+        "FACTOR_LAB_HERMES_PROFILE_ORDER": role_order,
     }
 
 
-def _agent_fallback_warnings(roles: list[dict[str, Any]], available_profile_names: list[str]) -> list[dict[str, Any]]:
+def _hermes_profile_fallback_warnings(roles: list[dict[str, Any]], available_profile_names: list[str]) -> list[dict[str, Any]]:
     available = set(available_profile_names)
     warnings: list[dict[str, Any]] = []
     if not available:
@@ -469,9 +469,9 @@ def load_llm_settings() -> dict[str, Any]:
     first_profile = _first_enabled_profile(profiles) if profiles else {}
     api_key_configured = any(bool(profile.get("api_key_configured")) for profile in profiles)
     return {
-        "decision_provider": merged.get("FACTOR_LAB_DECISION_PROVIDER") or "real_llm",
-        "live_decision_provider": merged.get("FACTOR_LAB_LIVE_DECISION_PROVIDER") or merged.get("FACTOR_LAB_DECISION_PROVIDER") or "real_llm",
-        "observation_decision_provider": merged.get("FACTOR_LAB_OBSERVATION_DECISION_PROVIDER") or merged.get("FACTOR_LAB_DECISION_PROVIDER") or "real_llm",
+        "decision_provider": merged.get("FACTOR_LAB_DECISION_PROVIDER") or "direct_model",
+        "live_decision_provider": merged.get("FACTOR_LAB_LIVE_DECISION_PROVIDER") or merged.get("FACTOR_LAB_DECISION_PROVIDER") or "direct_model",
+        "observation_decision_provider": merged.get("FACTOR_LAB_OBSERVATION_DECISION_PROVIDER") or merged.get("FACTOR_LAB_DECISION_PROVIDER") or "direct_model",
         "base_url": first_profile.get("base_url") or merged.get("FACTOR_LAB_LLM_BASE_URL", ""),
         "model": first_profile.get("model") or merged.get("FACTOR_LAB_LLM_MODEL", ""),
         "api_key": "",
@@ -525,18 +525,18 @@ def save_llm_settings(form: dict[str, str]) -> dict[str, Any]:
         "FACTOR_LAB_LLM_PROFILES_JSON": json.dumps(profiles, ensure_ascii=False, separators=(",", ":")),
         "FACTOR_LAB_LLM_FALLBACK_ORDER": fallback_order,
     })
-    synced_agent_role_values = _sync_agent_roles_with_llm_profiles(
+    synced_hermes_profile_values = _sync_hermes_profile_settings_with_llm_profiles(
         existing_values,
         profiles,
         old_fallback_order,
         fallback_order,
     )
-    requested.update(synced_agent_role_values)
+    requested.update(synced_hermes_profile_values)
 
     lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
     seen: set[str] = set()
     updated_lines: list[str] = []
-    managed_keys = [*LLM_ENV_KEYS, *LLM_PROFILE_ENV_KEYS, *(AGENT_ROLE_ENV_KEYS if synced_agent_role_values else [])]
+    managed_keys = [*LLM_ENV_KEYS, *LLM_PROFILE_ENV_KEYS, *(HERMES_PROFILE_SETTING_ENV_KEYS if synced_hermes_profile_values else [])]
     for line in lines:
         stripped = line.strip()
         if not stripped or stripped.startswith("#") or "=" not in line:
@@ -581,7 +581,7 @@ def restart_research_daemon_after_settings_save() -> dict[str, Any]:
 
 
 def test_llm_profile_connection(profile: dict[str, Any]) -> dict[str, Any]:
-    from factor_lab.llm_provider_router import DecisionProviderRouter
+    from factor_lab.hermes_decision_router import HermesDecisionRouter
 
     base_url = str(profile.get("base_url") or "").strip().rstrip("/")
     model = str(profile.get("model") or "").strip()
@@ -590,8 +590,8 @@ def test_llm_profile_connection(profile: dict[str, Any]) -> dict[str, Any]:
     if not base_url or not model or not api_key:
         return {"ok": False, "message": "模型测试失败：Base URL、Model、API Key 必须填写。", "api_format": api_format, "model": model}
 
-    router = DecisionProviderRouter(provider="real_llm", model=model)
-    url = router._real_llm_endpoint_url(base_url, api_format)
+    router = HermesDecisionRouter(provider="direct_model", model=model)
+    url = router._direct_model_endpoint_url(base_url, api_format)
     if api_format == "anthropic":
         body = {
             "model": model,
@@ -600,7 +600,7 @@ def test_llm_profile_connection(profile: dict[str, Any]) -> dict[str, Any]:
             "max_tokens": 16,
             "temperature": 0,
         }
-        headers = router._real_llm_headers(api_key, auth_scheme="anthropic")
+        headers = router._direct_model_headers(api_key, auth_scheme="anthropic")
     elif api_format == "openai_responses":
         body = {
             "model": model,
@@ -610,7 +610,7 @@ def test_llm_profile_connection(profile: dict[str, Any]) -> dict[str, Any]:
             ],
             "temperature": 0,
         }
-        headers = router._real_llm_headers(api_key)
+        headers = router._direct_model_headers(api_key)
     else:
         body = {
             "model": model,
@@ -620,7 +620,7 @@ def test_llm_profile_connection(profile: dict[str, Any]) -> dict[str, Any]:
             ],
             "temperature": 0,
         }
-        headers = router._real_llm_headers(api_key)
+        headers = router._direct_model_headers(api_key)
     req = urllib.request.Request(url=url, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=20) as response:
@@ -965,7 +965,7 @@ def _decision_effective_source(payload: dict[str, Any]) -> str | None:
 def _decision_layer_payload(base: Path) -> dict[str, Any]:
     live_health = _read_json_file(base / "llm_provider_health_live.json", {})
     observation_health = _read_json_file(base / "llm_provider_health.json", {})
-    agent_responses = _read_json_file(base / "agent_responses.json", {})
+    hermes_decision_artifacts = _read_json_file(base / "hermes_decision_artifacts.json", {})
     decision_impact = _read_json_file(base / "decision_impact_report.json", {})
 
     def normalize_provider_health(payload: dict[str, Any]) -> dict[str, Any]:
@@ -995,23 +995,23 @@ def _decision_layer_payload(base: Path) -> dict[str, Any]:
             "request_scope_id": metadata.get("request_scope_id"),
         }
 
-    planner = normalize_agent(agent_responses.get("planner") or {})
-    failure_analyst = normalize_agent(agent_responses.get("failure_analyst") or {})
-    fallback_reasons = [reason for reason in [planner.get("fallback_reason"), failure_analyst.get("fallback_reason")] if reason]
+    planner = normalize_agent(hermes_decision_artifacts.get("planner") or {})
+    diagnostician = normalize_agent(hermes_decision_artifacts.get("diagnostician") or {})
+    fallback_reasons = [reason for reason in [planner.get("fallback_reason"), diagnostician.get("fallback_reason")] if reason]
 
     return {
         "live": normalize_provider_health(live_health),
         "observation": normalize_provider_health(observation_health),
         "planner": planner,
-        "failure_analyst": failure_analyst,
+        "diagnostician": diagnostician,
         "degraded": bool(
             normalize_provider_health(live_health).get("degraded_to_heuristic")
             or normalize_provider_health(observation_health).get("degraded_to_heuristic")
             or planner.get("degraded_to_heuristic")
-            or failure_analyst.get("degraded_to_heuristic")
+            or diagnostician.get("degraded_to_heuristic")
         ),
         "last_fallback_reason": fallback_reasons[0] if fallback_reasons else None,
-        "decision_impact_changed": bool((decision_impact.get("planner") or {}).get("changed") or (decision_impact.get("failure_analyst") or {}).get("changed")),
+        "decision_impact_changed": bool((decision_impact.get("planner") or {}).get("changed") or (decision_impact.get("diagnostician") or {}).get("changed")),
     }
 
 
@@ -1831,15 +1831,17 @@ def build_candidate_detail_context(store: ExperimentStore, candidate_id: str) ->
 
 
 def _quick_provider_status() -> tuple[str | None, str | None]:
-    for key in ("FACTOR_LAB_DECISION_PROVIDER", "FACTOR_LAB_LIVE_DECISION_PROVIDER"):
-        value = os.environ.get(key)
-        if value:
-            return value, f"env:{key}"
     env_path = env_file()
     if env_path.exists():
         for line in env_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            if line.startswith("FACTOR_LAB_AGENT_BACKEND="):
+                return line.split("=", 1)[1].strip().strip('"').strip("'"), ".env:FACTOR_LAB_AGENT_BACKEND"
             if line.startswith("FACTOR_LAB_DECISION_PROVIDER="):
                 return line.split("=", 1)[1].strip().strip('"').strip("'"), ".env:FACTOR_LAB_DECISION_PROVIDER"
+    for key in ("FACTOR_LAB_AGENT_BACKEND", "FACTOR_LAB_DECISION_PROVIDER", "FACTOR_LAB_LIVE_DECISION_PROVIDER"):
+        value = os.environ.get(key)
+        if value:
+            return value, f"env:{key}"
     return None, None
 
 
@@ -2232,7 +2234,7 @@ def dashboard_full():
     novelty_judge = load_novelty_judgments(DB_PATH.parent)
     allocator_governance_audit = load_allocator_governance_audit(DB_PATH.parent)
     decision_ab = load_decision_ab_artifacts(DB_PATH.parent)
-    failure_analyst_enhancement = load_failure_analyst_enhancement(DB_PATH.parent)
+    diagnostician_enhancement = load_diagnostician_enhancement(DB_PATH.parent)
     stable_names = [row['factor_name'] for row in stable_candidates[:4]]
     latest_output_dir = Path(latest_run['output_dir']) if latest_run and latest_run.get('output_dir') else None
     candidate_status_snapshot = []
@@ -2317,9 +2319,9 @@ def dashboard_full():
         latest_summary_lines.append(
             f"AU 治理：state={au_summary.get('state_counts') or {}}, actions={au_summary.get('governance_action_counts') or {}}, bucket_budget={(approved_universe.get('budget_summary') or {}).get('bucket_allocations') or {}}。"
         )
-    if failure_analyst_enhancement and failure_analyst_enhancement.get('summary'):
+    if diagnostician_enhancement and diagnostician_enhancement.get('summary'):
         latest_summary_lines.append(
-            f"Failure Analyst+：reroute={failure_analyst_enhancement['summary'].get('reroute_count') or 0}, stop={failure_analyst_enhancement['summary'].get('stop_count') or 0}, question_cards_v2={failure_analyst_enhancement['summary'].get('question_card_count') or 0}。"
+            f"Failure Analyst+：reroute={diagnostician_enhancement['summary'].get('reroute_count') or 0}, stop={diagnostician_enhancement['summary'].get('stop_count') or 0}, question_cards_v2={diagnostician_enhancement['summary'].get('question_card_count') or 0}。"
         )
     latest_summary = '\n'.join(latest_summary_lines) if latest_summary_lines else '暂无摘要。'
 
@@ -2357,7 +2359,7 @@ def dashboard_full():
         novelty_judge=novelty_judge,
         allocator_governance_audit=allocator_governance_audit,
         decision_ab=decision_ab,
-        failure_analyst_enhancement=failure_analyst_enhancement,
+        diagnostician_enhancement=diagnostician_enhancement,
         stage_summary=stage_summary,
         rolling_summary_rows=rolling_summary_rows[:8],
         family_summary_rows=family_summary_rows,
@@ -2730,7 +2732,7 @@ def paper_portfolio_page():
     base = DB_PATH.parent / "paper_portfolio"
     allocator_governance_audit = load_allocator_governance_audit(DB_PATH.parent)
     decision_ab = load_decision_ab_artifacts(DB_PATH.parent)
-    failure_analyst_enhancement = load_failure_analyst_enhancement(DB_PATH.parent)
+    diagnostician_enhancement = load_diagnostician_enhancement(DB_PATH.parent)
     current_path = base / "current_portfolio.json"
     history_path = base / "portfolio_history.json"
     change_log_path = base / "portfolio_change_log.md"
@@ -2754,7 +2756,7 @@ def paper_portfolio_page():
         approved_universe=approved_universe,
         allocator_governance_audit=allocator_governance_audit,
         decision_ab=decision_ab,
-        failure_analyst_enhancement=failure_analyst_enhancement,
+        diagnostician_enhancement=diagnostician_enhancement,
         history_text=history_path.read_text(encoding="utf-8") if history_path.exists() else "暂无组合历史。",
         change_log_text=change_log_path.read_text(encoding="utf-8") if change_log_path.exists() else "暂无组合变更日志。",
         retrospective_text=pretty_json_text(retrospective, "暂无组合回溯。"),
@@ -2770,7 +2772,7 @@ def approved_universe_page():
     debug = json.loads(debug_path.read_text(encoding="utf-8")) if debug_path.exists() else {}
     allocator_governance_audit = load_allocator_governance_audit(DB_PATH.parent)
     decision_ab = load_decision_ab_artifacts(DB_PATH.parent)
-    failure_analyst_enhancement = load_failure_analyst_enhancement(DB_PATH.parent)
+    diagnostician_enhancement = load_diagnostician_enhancement(DB_PATH.parent)
     return render(
         "approved_universe.html",
         title="Approved Universe",
@@ -2778,7 +2780,7 @@ def approved_universe_page():
         debug=debug,
         allocator_governance_audit=allocator_governance_audit,
         decision_ab=decision_ab,
-        failure_analyst_enhancement=failure_analyst_enhancement,
+        diagnostician_enhancement=diagnostician_enhancement,
     )
 
 
@@ -2793,7 +2795,7 @@ def settings_page(saved: str | None = None, restart: str | None = None):
         title="大模型设置",
         settings=settings,
         profile_slots=profile_slots,
-        provider_options=["real_llm", "openclaw_gateway", "heuristic", "mock"],
+        provider_options=["direct_model", "hermes_native_gateway", "heuristic", "mock"],
         api_format_options=LLM_API_FORMAT_OPTIONS,
         test_result=None,
         saved=saved == "1",
@@ -2841,7 +2843,7 @@ async def settings_test_model(request: Request):
         title="大模型设置",
         settings=settings,
         profile_slots=profile_slots,
-        provider_options=["real_llm", "openclaw_gateway", "heuristic", "mock"],
+        provider_options=["direct_model", "hermes_native_gateway", "heuristic", "mock"],
         api_format_options=LLM_API_FORMAT_OPTIONS,
         test_result=test_result,
         saved=False,
@@ -2850,12 +2852,12 @@ async def settings_test_model(request: Request):
     )
 
 
-@app.get("/agents", response_class=HTMLResponse)
-def agents_page(saved: str | None = None, restart: str | None = None):
+@app.get("/hermes", response_class=HTMLResponse)
+def hermes_page(saved: str | None = None, restart: str | None = None):
     settings = load_agent_settings()
     llm_settings = load_llm_settings()
     available_profile_names = _enabled_profile_names(list(llm_settings.get("profiles") or []))
-    agent_fallback_warnings = _agent_fallback_warnings(list(settings.get("roles") or []), available_profile_names)
+    agent_fallback_warnings = _hermes_profile_fallback_warnings(list(settings.get("roles") or []), available_profile_names)
     role_slots = list(settings.get("roles") or [])
     while len(role_slots) < 3:
         role_slots.append({
@@ -2872,8 +2874,8 @@ def agents_page(saved: str | None = None, restart: str | None = None):
             "legacy_agent_id": "",
         })
     return render(
-        "agents.html",
-        title="Agent 设置",
+        "hermes.html",
+        title="Hermes 设置",
         settings=settings,
         role_slots=role_slots,
         available_profile_names=available_profile_names,
@@ -2882,6 +2884,51 @@ def agents_page(saved: str | None = None, restart: str | None = None):
         restart_ok=restart == "1",
         restart_failed=restart == "0",
     )
+
+
+@app.post("/hermes")
+async def hermes_save(request: Request):
+    from scripts.enable_hermes_native import desired_env_values
+
+    path = env_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    requested = desired_env_values()
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    updated_lines: list[str] = []
+    seen: set[str] = set()
+    for line in lines:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in line:
+            updated_lines.append(line)
+            continue
+        key, _ = line.split("=", 1)
+        key = key.strip()
+        if key in requested:
+            updated_lines.append(f"{key}={requested[key]}")
+            seen.add(key)
+        else:
+            updated_lines.append(line)
+    for key, value in requested.items():
+        if key not in seen:
+            updated_lines.append(f"{key}={value}")
+        os.environ[key] = value
+    path.write_text("\n".join(updated_lines).rstrip() + "\n", encoding="utf-8")
+    restart_result = restart_research_daemon_after_settings_save()
+    restart_flag = "1" if restart_result.get("ok") else "0"
+    return RedirectResponse(url=f"/hermes?saved=1&restart={restart_flag}", status_code=303)
+
+
+
+
+@app.get("/agents", response_class=HTMLResponse)
+def agents_page(saved: str | None = None, restart: str | None = None):
+    suffix = []
+    if saved is not None:
+        suffix.append(f"saved={saved}")
+    if restart is not None:
+        suffix.append(f"restart={restart}")
+    query = ("?" + "&".join(suffix)) if suffix else ""
+    return RedirectResponse(url=f"/hermes{query}", status_code=307)
 
 
 @app.post("/agents")

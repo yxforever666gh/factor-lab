@@ -50,7 +50,7 @@ def test_candidate_generation_plan_produces_proposals_with_cheap_screen(tmp_path
 
     payload = build_candidate_generation_plan(snapshot_path, memory_path, output_path)
 
-    assert payload["policy_name"] == "openclaw_candidate_generation_policy"
+    assert payload["policy_name"] == "hermes_native_candidate_generation_policy"
     assert len(payload["proposals"]) >= 1
     assert payload["quality_throttle"]["quality_priority_mode"] is False
     assert "cheap_screen" in payload["proposals"][0]

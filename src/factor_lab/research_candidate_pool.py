@@ -92,7 +92,7 @@ def _failure_dossier_map(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 
 def _failure_enhancement_maps(snapshot: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], list[dict[str, Any]]]:
-    payload = snapshot.get('failure_analyst_enhancement') or {}
+    payload = snapshot.get('diagnostician_enhancement') or {}
     stop_map = {
         row.get('candidate_name'): row
         for row in (payload.get('stop_or_continue_recommendation') or [])
@@ -628,7 +628,7 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
         enhanced_cards = [row for row in failure_question_cards_v2 if row.get('candidate_name') in focus_names]
         if enhanced_cards:
             task['priority_hint'] = max(1, int(task.get('priority_hint', 50)) - min(6, len(enhanced_cards) * 2))
-            task['reason'] += f" failure_analyst question card v2 命中 {', '.join([row.get('candidate_name') for row in enhanced_cards if row.get('candidate_name')][:3])}。"
+            task['reason'] += f" diagnostician question card v2 命中 {', '.join([row.get('candidate_name') for row in enhanced_cards if row.get('candidate_name')][:3])}。"
         if focus_names & challenger_queue:
             task['priority_hint'] = max(1, int(task.get('priority_hint', 50)) - 4)
             task['reason'] += f" challenger_queue 命中 {', '.join(sorted(focus_names & challenger_queue))}。"
@@ -639,7 +639,7 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
                 'fingerprint': task.get('fingerprint'),
                 'signature': signature,
                 'worker_note': task.get('worker_note'),
-                'reason': 'failure_analyst_stop_recommendation',
+                'reason': 'diagnostician_stop_recommendation',
                 'branch_id': branch_id,
                 'focus_candidates': sorted(stop_hits),
             })
@@ -649,7 +649,7 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
                 task['priority_hint'] = max(1, int(task.get('priority_hint', 50)) - 5)
             elif task.get('category') == 'exploration':
                 task['priority_hint'] = int(task.get('priority_hint', 50)) + 4
-            task['reason'] += f" failure_analyst reroute 命中 {', '.join(sorted(reroute_hits)[:3])}。"
+            task['reason'] += f" diagnostician reroute 命中 {', '.join(sorted(reroute_hits)[:3])}。"
         approved_focus = sorted(focus_names & set(approved_universe_names))
         novelty_focus = [novelty_map.get(name) or {} for name in sorted(focus_names) if novelty_map.get(name)]
         if novelty_focus:

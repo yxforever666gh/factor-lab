@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from factor_lab.agent_schemas import NOVELTY_SCHEMA_VERSION
+from factor_lab.hermes_research_schemas import NOVELTY_SCHEMA_VERSION
 
 
 SOFT_NOVELTY_CLASSES = {

@@ -907,40 +907,40 @@ def build_strategy_plan(
     proposal_path: str | Path,
     output_path: str | Path,
     branch_plan_path: str | Path | None = None,
-    agent_responses_path: str | Path | None = None,
+    hermes_decision_artifacts_path: str | Path | None = None,
 ) -> dict[str, Any]:
     state_snapshot = _read_json(Path(state_snapshot_path), {})
     proposal = _read_json(Path(proposal_path), {})
     branch_plan = _read_json(Path(branch_plan_path), {}) if branch_plan_path and Path(branch_plan_path).exists() else None
-    agent_responses = _read_json(Path(agent_responses_path), {}) if agent_responses_path and Path(agent_responses_path).exists() else {}
-    planner_agent = agent_responses.get("planner") or {}
-    failure_analyst = agent_responses.get("failure_analyst") or {}
+    hermes_decision_artifacts = _read_json(Path(hermes_decision_artifacts_path), {}) if hermes_decision_artifacts_path and Path(hermes_decision_artifacts_path).exists() else {}
+    researcher_profile = hermes_decision_artifacts.get("planner") or {}
+    diagnostician = hermes_decision_artifacts.get("diagnostician") or {}
     brain = StrategyBrain()
     result = brain.build_plan(state_snapshot, proposal, branch_plan)
-    if planner_agent.get("task_mix"):
-        result["agent_task_mix"] = planner_agent.get("task_mix")
-    if planner_agent.get("recommended_actions"):
-        result["agent_recommended_actions"] = planner_agent.get("recommended_actions")
-    if planner_agent.get("priority_families"):
-        result.setdefault("memory_updates", {})["agent_priority_families"] = planner_agent.get("priority_families")
-    if planner_agent.get("suppress_families"):
-        result.setdefault("memory_updates", {})["agent_suppress_families"] = planner_agent.get("suppress_families")
-    if planner_agent.get("hypothesis_cards"):
-        result.setdefault("memory_updates", {})["agent_hypothesis_cards"] = planner_agent.get("hypothesis_cards")
-    if planner_agent.get("challenger_queue"):
-        result.setdefault("memory_updates", {})["agent_challenger_queue"] = planner_agent.get("challenger_queue")
-    if failure_analyst.get("failure_patterns"):
-        result.setdefault("memory_updates", {})["agent_failure_patterns"] = failure_analyst.get("failure_patterns")
-    if failure_analyst.get("should_stop"):
-        result.setdefault("memory_updates", {})["agent_should_stop"] = failure_analyst.get("should_stop")
-    if failure_analyst.get("should_reroute"):
-        result.setdefault("memory_updates", {})["agent_should_reroute"] = failure_analyst.get("should_reroute")
+    if researcher_profile.get("task_mix"):
+        result["agent_task_mix"] = researcher_profile.get("task_mix")
+    if researcher_profile.get("recommended_actions"):
+        result["agent_recommended_actions"] = researcher_profile.get("recommended_actions")
+    if researcher_profile.get("priority_families"):
+        result.setdefault("memory_updates", {})["agent_priority_families"] = researcher_profile.get("priority_families")
+    if researcher_profile.get("suppress_families"):
+        result.setdefault("memory_updates", {})["agent_suppress_families"] = researcher_profile.get("suppress_families")
+    if researcher_profile.get("hypothesis_cards"):
+        result.setdefault("memory_updates", {})["agent_hypothesis_cards"] = researcher_profile.get("hypothesis_cards")
+    if researcher_profile.get("challenger_queue"):
+        result.setdefault("memory_updates", {})["agent_challenger_queue"] = researcher_profile.get("challenger_queue")
+    if diagnostician.get("failure_patterns"):
+        result.setdefault("memory_updates", {})["agent_failure_patterns"] = diagnostician.get("failure_patterns")
+    if diagnostician.get("should_stop"):
+        result.setdefault("memory_updates", {})["agent_should_stop"] = diagnostician.get("should_stop")
+    if diagnostician.get("should_reroute"):
+        result.setdefault("memory_updates", {})["agent_should_reroute"] = diagnostician.get("should_reroute")
     payload = {
         "updated_at_utc": _iso_now(),
         "generated_from_state_snapshot": str(state_snapshot_path),
         "generated_from_proposal": str(proposal_path),
         "generated_from_branch_plan": str(branch_plan_path) if branch_plan_path else None,
-        "generated_from_agent_responses": str(agent_responses_path) if agent_responses_path else None,
+        "generated_from_hermes_decision_artifacts": str(hermes_decision_artifacts_path) if hermes_decision_artifacts_path else None,
         **result,
     }
     _write_json(Path(output_path), payload)
@@ -1395,7 +1395,7 @@ def apply_strategy_plan(
         memory["high_value_open_questions"] = updates.get("high_value_open_questions")
     memory["agent_control"] = {
         "updated_at_utc": _iso_now(),
-        "planner_mode": strategy_plan.get("agent_task_mix") and ((strategy_plan.get("generated_from_agent_responses") and (_read_json(Path(strategy_plan.get("generated_from_agent_responses")), {}).get("planner") or {}).get("mode")) or None),
+        "planner_mode": strategy_plan.get("agent_task_mix") and ((strategy_plan.get("generated_from_hermes_decision_artifacts") and (_read_json(Path(strategy_plan.get("generated_from_hermes_decision_artifacts")), {}).get("planner") or {}).get("mode")) or None),
         "task_mix": strategy_plan.get("agent_task_mix") or {},
         "recommended_actions": strategy_plan.get("agent_recommended_actions") or [],
         "priority_families": updates.get("agent_priority_families") or [],

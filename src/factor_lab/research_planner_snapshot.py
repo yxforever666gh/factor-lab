@@ -17,7 +17,7 @@ from factor_lab.research_learning import build_research_learning
 from factor_lab.novelty_judge import write_novelty_judgments
 from factor_lab.allocator_governance_auditor import write_allocator_governance_audit
 from factor_lab.decision_ab_judge import write_decision_ab_report
-from factor_lab.failure_analyst_enhancement import write_failure_analyst_enhancement
+from factor_lab.diagnostician_enhancement import write_diagnostician_enhancement
 from factor_lab.factor_pipeline_integration import build_integrated_factor_reports
 
 
@@ -221,7 +221,7 @@ def build_research_planner_snapshot(db_path: str | Path, output_path: str | Path
             artifacts_dir=root,
             current_portfolio=_read_json(root / "paper_portfolio" / "current_portfolio.json", {}),
         )
-        failure_analyst_enhancement = write_failure_analyst_enhancement(
+        diagnostician_enhancement = write_diagnostician_enhancement(
             {
                 "candidate_failure_dossiers": candidate_failure_dossiers,
                 "representative_failure_dossiers": representative_failure_dossiers,
@@ -281,7 +281,7 @@ def build_research_planner_snapshot(db_path: str | Path, output_path: str | Path
             "approved_universe_debug_tail": (approved_universe.get("debug_rows") or [])[:20],
             "novelty_judge": novelty_judge,
             "allocator_governance_audit": allocator_governance_audit,
-            "failure_analyst_enhancement": failure_analyst_enhancement,
+            "diagnostician_enhancement": diagnostician_enhancement,
             "integrated_factor_reports": integrated_factor_reports,
             "recent_research_tasks": [
                 {

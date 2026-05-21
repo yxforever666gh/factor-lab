@@ -21,7 +21,7 @@ def test_write_daemon_heartbeat_writes_required_schema(tmp_path, monkeypatch):
     artifacts.mkdir()
     monkeypatch.setattr(daemon, "_artifacts_path", lambda: artifacts)
     monkeypatch.setattr(daemon, "_root_path", lambda: tmp_path)
-    monkeypatch.setenv("FACTOR_LAB_DECISION_PROVIDER", "real_llm")
+    monkeypatch.setenv("FACTOR_LAB_DECISION_PROVIDER", "direct_model")
 
     daemon.write_daemon_heartbeat(
         "running",
@@ -36,7 +36,7 @@ def test_write_daemon_heartbeat_writes_required_schema(tmp_path, monkeypatch):
     payload = json.loads((artifacts / "research_daemon_heartbeat.json").read_text(encoding="utf-8"))
     assert payload["pid"]
     assert payload["project_root"] == str(tmp_path)
-    assert payload["provider"] == "real_llm"
+    assert payload["provider"] == "direct_model"
     assert payload["state"] == "running"
     assert payload["queue"]["pending"] == 0
     assert payload["queue"]["running"] == 0

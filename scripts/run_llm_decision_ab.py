@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from factor_lab.decision_context_builder import build_failure_decision_context, build_planner_decision_context
 from factor_lab.decision_impact_report import build_decision_impact_report
 from factor_lab.llm_decision_metrics import build_llm_decision_metrics
-from factor_lab.llm_provider_router import DecisionProviderRouter
+from factor_lab.hermes_decision_router import HermesDecisionRouter
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / "artifacts"
@@ -27,17 +27,17 @@ def _read_json(path: Path) -> dict:
 
 
 def _run_arm(name: str, provider: str, planner_brief: dict, failure_brief: dict) -> dict:
-    router = DecisionProviderRouter(provider=provider)
+    router = HermesDecisionRouter(provider=provider)
     planner_context = build_planner_decision_context(planner_brief) if planner_brief else {}
     failure_context = build_failure_decision_context(failure_brief) if failure_brief else {}
     planner = router.generate("planner", planner_context) if planner_context else {}
-    failure = router.generate("failure_analyst", failure_context) if failure_context else {}
+    failure = router.generate("diagnostician", failure_context) if failure_context else {}
     payload = {
         "arm": name,
         "provider": provider,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "planner": planner,
-        "failure_analyst": failure,
+        "diagnostician": failure,
     }
     (OUTPUT_DIR / f"{name}.json").write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return payload
@@ -46,14 +46,14 @@ def _run_arm(name: str, provider: str, planner_brief: dict, failure_brief: dict)
 
 def main() -> int:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    planner_brief = _read_json(ARTIFACTS / "planner_agent_brief.json")
-    failure_brief = _read_json(ARTIFACTS / "failure_analyst_brief.json")
+    planner_brief = _read_json(ARTIFACTS / "researcher_profile_brief.json")
+    failure_brief = _read_json(ARTIFACTS / "diagnostician_brief.json")
     preferred_provider = (os.environ.get("FACTOR_LAB_DECISION_PROVIDER") or os.environ.get("FACTOR_LAB_LLM_PROVIDER") or "auto").strip().lower()
 
     assisted_provider = preferred_provider if preferred_provider != "mock" else "auto"
-    primary_provider = assisted_provider if assisted_provider in {"openclaw_agent", "openclaw_gateway", "real_llm"} else "real_llm"
-    primary_arm_name = "openclaw_session_primary" if primary_provider in {"openclaw_agent", "openclaw_gateway"} else "llm_primary"
-    assisted_arm_name = "openclaw_session_assisted" if assisted_provider in {"openclaw_agent", "openclaw_gateway"} else "llm_assisted"
+    primary_provider = assisted_provider if assisted_provider in {"hermes_native_agent", "hermes_native_gateway", "direct_model"} else "direct_model"
+    primary_arm_name = "hermes_native_session_primary" if primary_provider in {"hermes_native_agent", "hermes_native_gateway"} else "llm_primary"
+    assisted_arm_name = "hermes_native_session_assisted" if assisted_provider in {"hermes_native_agent", "hermes_native_gateway"} else "llm_assisted"
 
     arms = {
         "heuristic_only": _run_arm("heuristic_only", "heuristic", planner_brief, failure_brief),
@@ -67,9 +67,9 @@ def main() -> int:
         "arms": {
             arm: {
                 "planner_source": (((payload.get("planner") or {}).get("decision_metadata") or {}).get("source") or ((payload.get("planner") or {}).get("decision_source"))),
-                "failure_analyst_source": (((payload.get("failure_analyst") or {}).get("decision_metadata") or {}).get("source") or ((payload.get("failure_analyst") or {}).get("decision_source"))),
+                "diagnostician_source": (((payload.get("diagnostician") or {}).get("decision_metadata") or {}).get("source") or ((payload.get("diagnostician") or {}).get("decision_source"))),
                 "planner_schema_valid": (((payload.get("planner") or {}).get("decision_metadata") or {}).get("schema_valid")),
-                "failure_analyst_schema_valid": (((payload.get("failure_analyst") or {}).get("decision_metadata") or {}).get("schema_valid")),
+                "diagnostician_schema_valid": (((payload.get("diagnostician") or {}).get("decision_metadata") or {}).get("schema_valid")),
             }
             for arm, payload in arms.items()
         },

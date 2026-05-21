@@ -6,7 +6,7 @@
 
 **Architecture:** Extract provider-reported usage from real LLM API responses, combine it with existing prompt compaction metadata, attach the result to each decision payload, and append an audit row to an append-only JSONL ledger. This provides both exact provider usage when available and local estimated usage when providers omit usage.
 
-**Tech Stack:** Python stdlib only, existing `DecisionProviderRouter`, pytest.
+**Tech Stack:** Python stdlib only, existing `HermesDecisionRouter`, pytest.
 
 ---
 
@@ -19,9 +19,9 @@
    - OpenAI Responses style: `input_tokens`, `output_tokens`, `total_tokens`
    - Anthropic Messages style: `input_tokens`, `output_tokens`
 2. Attach normalized usage to returned real LLM payload under:
-   - `real_llm_usage`
+   - `direct_model_usage`
 3. Extend existing prompt metadata under:
-   - `real_llm_prompt_meta`
+   - `direct_model_prompt_meta`
 4. Append one JSON object per real LLM attempt to:
    - `artifacts/llm_usage_ledger.jsonl`
 5. Include failed attempts where an HTTP error response has parseable usage, if available.
@@ -45,7 +45,7 @@
 Current compact implementation in:
 
 ```text
-src/factor_lab/llm_provider_router.py
+src/factor_lab/hermes_decision_router.py
 ```
 
 already records prompt metadata like:
@@ -67,12 +67,12 @@ But this only estimates context tokens. It does not capture real provider usage,
 
 ## Data Model
 
-### `real_llm_usage` payload field
+### `direct_model_usage` payload field
 
 Each successful real LLM response should include:
 
 ```json
-"real_llm_usage": {
+"direct_model_usage": {
   "api_format": "openai|openai_responses|anthropic",
   "prompt_tokens": 123,
   "completion_tokens": 45,
@@ -115,7 +115,7 @@ If no usage exists:
 }
 ```
 
-### `real_llm_prompt_meta` extension
+### `direct_model_prompt_meta` extension
 
 Add final prompt-level fields:
 
@@ -148,7 +148,7 @@ Success row example:
   "created_at_utc": "2026-04-28T00:00:00+00:00",
   "success": true,
   "decision_type": "planner",
-  "provider": "real_llm",
+  "provider": "direct_model",
   "profile_name": "ai-continue",
   "model": "gpt-5.5",
   "base_url": "https://rayplus.site",
@@ -177,7 +177,7 @@ Failure row example:
   "created_at_utc": "2026-04-28T00:00:00+00:00",
   "success": false,
   "decision_type": "planner",
-  "provider": "real_llm",
+  "provider": "direct_model",
   "profile_name": "nowcoding",
   "model": "gpt-5.4",
   "base_url": "https://nowcoding.ai/v1",
@@ -209,13 +209,13 @@ Failure row example:
 
 **Files:**
 
-- Modify: `tests/test_llm_provider_router.py`
+- Modify: `tests/test_hermes_decision_router.py`
 
 **Tests to add:**
 
 ```python
 def test_extract_llm_usage_normalizes_openai_chat_usage():
-    router = DecisionProviderRouter(provider="real_llm")
+    router = HermesDecisionRouter(provider="direct_model")
     usage = router._extract_llm_usage(
         {"usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15}},
         "openai",
@@ -228,7 +228,7 @@ def test_extract_llm_usage_normalizes_openai_chat_usage():
 
 ```python
 def test_extract_llm_usage_normalizes_responses_usage():
-    router = DecisionProviderRouter(provider="real_llm")
+    router = HermesDecisionRouter(provider="direct_model")
     usage = router._extract_llm_usage(
         {"usage": {"input_tokens": 20, "output_tokens": 7, "total_tokens": 27}},
         "openai_responses",
@@ -240,7 +240,7 @@ def test_extract_llm_usage_normalizes_responses_usage():
 
 ```python
 def test_extract_llm_usage_normalizes_anthropic_usage_without_total():
-    router = DecisionProviderRouter(provider="real_llm")
+    router = HermesDecisionRouter(provider="direct_model")
     usage = router._extract_llm_usage(
         {"usage": {"input_tokens": 30, "output_tokens": 8}},
         "anthropic",
@@ -252,7 +252,7 @@ def test_extract_llm_usage_normalizes_anthropic_usage_without_total():
 
 ```python
 def test_extract_llm_usage_handles_missing_usage():
-    router = DecisionProviderRouter(provider="real_llm")
+    router = HermesDecisionRouter(provider="direct_model")
     usage = router._extract_llm_usage({}, "openai")
     assert usage["prompt_tokens"] is None
     assert usage["completion_tokens"] is None
@@ -263,7 +263,7 @@ def test_extract_llm_usage_handles_missing_usage():
 **Run RED:**
 
 ```bash
-python -m pytest tests/test_llm_provider_router.py::test_extract_llm_usage_normalizes_openai_chat_usage tests/test_llm_provider_router.py::test_extract_llm_usage_normalizes_responses_usage tests/test_llm_provider_router.py::test_extract_llm_usage_normalizes_anthropic_usage_without_total tests/test_llm_provider_router.py::test_extract_llm_usage_handles_missing_usage -q
+python -m pytest tests/test_hermes_decision_router.py::test_extract_llm_usage_normalizes_openai_chat_usage tests/test_hermes_decision_router.py::test_extract_llm_usage_normalizes_responses_usage tests/test_hermes_decision_router.py::test_extract_llm_usage_normalizes_anthropic_usage_without_total tests/test_hermes_decision_router.py::test_extract_llm_usage_handles_missing_usage -q
 ```
 
 Expected: FAIL because `_extract_llm_usage()` does not exist yet.
@@ -276,7 +276,7 @@ Expected: FAIL because `_extract_llm_usage()` does not exist yet.
 
 **Files:**
 
-- Modify: `src/factor_lab/llm_provider_router.py`
+- Modify: `src/factor_lab/hermes_decision_router.py`
 
 **Implementation:**
 
@@ -322,7 +322,7 @@ def _extract_llm_usage(self, raw: dict[str, Any], api_format: str) -> dict[str, 
 **Run GREEN:**
 
 ```bash
-python -m pytest tests/test_llm_provider_router.py::test_extract_llm_usage_normalizes_openai_chat_usage tests/test_llm_provider_router.py::test_extract_llm_usage_normalizes_responses_usage tests/test_llm_provider_router.py::test_extract_llm_usage_normalizes_anthropic_usage_without_total tests/test_llm_provider_router.py::test_extract_llm_usage_handles_missing_usage -q
+python -m pytest tests/test_hermes_decision_router.py::test_extract_llm_usage_normalizes_openai_chat_usage tests/test_hermes_decision_router.py::test_extract_llm_usage_normalizes_responses_usage tests/test_hermes_decision_router.py::test_extract_llm_usage_normalizes_anthropic_usage_without_total tests/test_hermes_decision_router.py::test_extract_llm_usage_handles_missing_usage -q
 ```
 
 Expected: PASS.
@@ -335,12 +335,12 @@ Expected: PASS.
 
 **Files:**
 
-- Modify: `src/factor_lab/llm_provider_router.py`
-- Modify: `tests/test_llm_provider_router.py`
+- Modify: `src/factor_lab/hermes_decision_router.py`
+- Modify: `tests/test_hermes_decision_router.py`
 
 **Implementation detail:**
 
-In `_call_real_llm_profile()` after building `user_prompt`:
+In `_call_direct_model_profile()` after building `user_prompt`:
 
 ```python
 prompt_meta = dict(prompt_meta)
@@ -353,8 +353,8 @@ prompt_meta.update({
 **Test:** Extend existing compact tests to assert:
 
 ```python
-assert payload["real_llm_prompt_meta"]["user_prompt_chars"] > 0
-assert payload["real_llm_prompt_meta"]["estimated_user_prompt_tokens_4c"] > 0
+assert payload["direct_model_prompt_meta"]["user_prompt_chars"] > 0
+assert payload["direct_model_prompt_meta"]["estimated_user_prompt_tokens_4c"] > 0
 ```
 
 ---
@@ -365,8 +365,8 @@ assert payload["real_llm_prompt_meta"]["estimated_user_prompt_tokens_4c"] > 0
 
 **Files:**
 
-- Modify: `src/factor_lab/llm_provider_router.py`
-- Modify: `tests/test_llm_provider_router.py`
+- Modify: `src/factor_lab/hermes_decision_router.py`
+- Modify: `tests/test_hermes_decision_router.py`
 
 **Implementation:**
 
@@ -375,10 +375,10 @@ After `raw` is loaded and before returning payload:
 ```python
 usage = self._extract_llm_usage(raw, api_format)
 ...
-payload.setdefault("real_llm_usage", usage)
+payload.setdefault("direct_model_usage", usage)
 ```
 
-Because `_call_real_llm_profile()` has three API branches, ensure `raw` remains available after all branches. It already does.
+Because `_call_direct_model_profile()` has three API branches, ensure `raw` remains available after all branches. It already does.
 
 **Tests:**
 
@@ -393,7 +393,7 @@ Update existing fake responses:
 Assert:
 
 ```python
-assert payload["real_llm_usage"]["total_tokens"] == 15
+assert payload["direct_model_usage"]["total_tokens"] == 15
 ```
 
 - Anthropic test returns:
@@ -405,7 +405,7 @@ assert payload["real_llm_usage"]["total_tokens"] == 15
 Assert:
 
 ```python
-assert payload["real_llm_usage"]["total_tokens"] == 27
+assert payload["direct_model_usage"]["total_tokens"] == 27
 ```
 
 - OpenAI Responses test returns:
@@ -417,9 +417,9 @@ assert payload["real_llm_usage"]["total_tokens"] == 27
 Assert:
 
 ```python
-assert payload["real_llm_usage"]["prompt_tokens"] == 31
-assert payload["real_llm_usage"]["completion_tokens"] == 9
-assert payload["real_llm_usage"]["total_tokens"] == 40
+assert payload["direct_model_usage"]["prompt_tokens"] == 31
+assert payload["direct_model_usage"]["completion_tokens"] == 9
+assert payload["direct_model_usage"]["total_tokens"] == 40
 ```
 
 ---
@@ -430,7 +430,7 @@ assert payload["real_llm_usage"]["total_tokens"] == 40
 
 **Files:**
 
-- Modify: `tests/test_llm_provider_router.py`
+- Modify: `tests/test_hermes_decision_router.py`
 
 **Test requirements:**
 
@@ -440,7 +440,7 @@ Test shape:
 
 ```python
 def test_append_llm_usage_ledger_writes_jsonl(monkeypatch, tmp_path):
-    router = DecisionProviderRouter(provider="real_llm")
+    router = HermesDecisionRouter(provider="direct_model")
     ledger_path = tmp_path / "llm_usage_ledger.jsonl"
     monkeypatch.setattr(router, "_llm_usage_ledger_path", lambda: ledger_path)
 
@@ -462,7 +462,7 @@ Run RED first. Expected: FAIL because ledger methods do not exist.
 
 **Files:**
 
-- Modify: `src/factor_lab/llm_provider_router.py`
+- Modify: `src/factor_lab/hermes_decision_router.py`
 
 **Implementation:**
 
@@ -496,7 +496,7 @@ def _try_append_llm_usage_ledger(self, row: dict[str, Any]) -> None:
 
 **Files:**
 
-- Modify: `src/factor_lab/llm_provider_router.py`
+- Modify: `src/factor_lab/hermes_decision_router.py`
 
 **Implementation:**
 
@@ -518,7 +518,7 @@ def _build_llm_usage_ledger_row(
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "success": success,
         "decision_type": decision_type,
-        "provider": "real_llm",
+        "provider": "direct_model",
         "profile_name": profile.get("name") or "default",
         "model": profile.get("model") or self.model,
         "base_url": profile.get("base_url"),
@@ -548,12 +548,12 @@ def _build_llm_usage_ledger_row(
 
 **Files:**
 
-- Modify: `src/factor_lab/llm_provider_router.py`
-- Modify: `tests/test_llm_provider_router.py`
+- Modify: `src/factor_lab/hermes_decision_router.py`
+- Modify: `tests/test_hermes_decision_router.py`
 
 **Implementation approach:**
 
-In `_call_real_llm_profile()`:
+In `_call_direct_model_profile()`:
 
 1. Record start time near the beginning:
 
@@ -582,10 +582,10 @@ self._try_append_llm_usage_ledger(
 3. Attach to payload:
 
 ```python
-payload.setdefault("real_llm_usage", usage)
+payload.setdefault("direct_model_usage", usage)
 ```
 
-**Test:** Use fake `urlopen`, monkeypatch ledger path, call `_call_real_llm_profile()`, read ledger and assert one row.
+**Test:** Use fake `urlopen`, monkeypatch ledger path, call `_call_direct_model_profile()`, read ledger and assert one row.
 
 ---
 
@@ -595,8 +595,8 @@ payload.setdefault("real_llm_usage", usage)
 
 **Files:**
 
-- Modify: `src/factor_lab/llm_provider_router.py`
-- Modify: `tests/test_llm_provider_router.py`
+- Modify: `src/factor_lab/hermes_decision_router.py`
+- Modify: `tests/test_hermes_decision_router.py`
 
 **Implementation detail:**
 
@@ -645,7 +645,7 @@ prompt_tokens=12345 completion_tokens=2345 total_tokens=14690
 estimated_user_prompt_tokens_4c=15000
 by_decision_type:
   planner total_tokens=8000 rows=5
-  failure_analyst total_tokens=6690 rows=5
+  diagnostician total_tokens=6690 rows=5
 by_model:
   gpt-5.5 total_tokens=14690 rows=10
 ```
@@ -661,7 +661,7 @@ This task can be deferred if the first implementation should stay minimal.
 ### Targeted tests
 
 ```bash
-python -m pytest tests/test_llm_provider_router.py -q
+python -m pytest tests/test_hermes_decision_router.py -q
 ```
 
 Expected: all pass.
@@ -669,7 +669,7 @@ Expected: all pass.
 ### Related full test subset
 
 ```bash
-python -m pytest tests/test_llm_provider_router.py tests/test_agent_briefs.py tests/test_decision_ab_judge.py -q
+python -m pytest tests/test_hermes_decision_router.py tests/test_hermes_research_briefings.py tests/test_decision_ab_judge.py -q
 ```
 
 Expected: all pass or only unrelated pre-existing failures.
@@ -690,15 +690,15 @@ Expected: JSONL rows with `usage` and prompt metadata.
 PYTHONPATH=src python - <<'PY'
 from pathlib import Path
 import json
-from factor_lab.llm_provider_router import DecisionProviderRouter
+from factor_lab.hermes_decision_router import HermesDecisionRouter
 root = Path('/home/admin/factor-lab')
-router = DecisionProviderRouter(provider='real_llm')
+router = HermesDecisionRouter(provider='direct_model')
 for rel, dtype in [
     ('artifacts/planner_decision_context.json', 'planner'),
-    ('artifacts/failure_decision_context.json', 'failure_analyst'),
+    ('artifacts/failure_decision_context.json', 'diagnostician'),
 ]:
     ctx = json.loads((root / rel).read_text())
-    payload, meta = router._real_llm_prompt_payload(dtype, ctx)
+    payload, meta = router._direct_model_prompt_payload(dtype, ctx)
     prompt = json.dumps(payload, ensure_ascii=False)
     print(rel, len(prompt), len(prompt)//4, meta)
 PY
@@ -710,12 +710,12 @@ Expected: compact prompt sizes remain small; token tracking does not change comp
 
 ## Acceptance Criteria
 
-- [ ] `real_llm_usage` appears on successful real LLM payloads.
+- [ ] `direct_model_usage` appears on successful real LLM payloads.
 - [ ] OpenAI Chat usage normalizes correctly.
 - [ ] OpenAI Responses usage normalizes correctly.
 - [ ] Anthropic usage normalizes correctly.
 - [ ] Missing usage is represented with null token fields and `usage_source="missing"`.
-- [ ] `real_llm_prompt_meta` includes final `user_prompt_chars` and `estimated_user_prompt_tokens_4c`.
+- [ ] `direct_model_prompt_meta` includes final `user_prompt_chars` and `estimated_user_prompt_tokens_4c`.
 - [ ] `artifacts/llm_usage_ledger.jsonl` is append-only and receives one row per real LLM HTTP attempt.
 - [ ] HTTP failures append failure rows when reachable.
 - [ ] No tokenizer dependencies added.
@@ -727,7 +727,7 @@ Expected: compact prompt sizes remain small; token tracking does not change comp
 ## Operational Notes
 
 1. Provider usage is authoritative when present.
-2. Some proxy providers may omit `usage`; for those calls, use local estimates from `real_llm_prompt_meta` and ledger estimate fields.
+2. Some proxy providers may omit `usage`; for those calls, use local estimates from `direct_model_prompt_meta` and ledger estimate fields.
 3. Fallback attempts should be counted separately because each successful HTTP model attempt can consume tokens.
 4. 403 quota errors often do not consume model tokens, but recording them helps explain latency and fallback behavior.
 5. The ledger may grow over time; rotation or aggregation can be planned later.

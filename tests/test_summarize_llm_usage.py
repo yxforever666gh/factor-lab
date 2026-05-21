@@ -29,7 +29,7 @@ def test_summarize_llm_usage_reports_totals(tmp_path):
                 json.dumps({
                     "created_at_utc": "2026-04-28T00:01:00+00:00",
                     "success": False,
-                    "decision_type": "failure_analyst",
+                    "decision_type": "diagnostician",
                     "profile_name": "nowcoding",
                     "model": "gpt-5.5",
                     "estimated_user_prompt_tokens_4c": 200,

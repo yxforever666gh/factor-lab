@@ -74,7 +74,7 @@ def _governance_payload_defaults(spec: dict[str, Any]) -> dict[str, Any]:
     payload.setdefault("falsification_criteria", ["net sharpe and information gain fail to improve versus recent baseline"])
     if "baseline" in note.lower():
         payload.setdefault("expected_information_gain", ["window_stability_check", "boundary_confirmed"])
-        payload.setdefault("budget_bucket", "data_quality_coverage")
+        payload.setdefault("budget_bucket", "data_steward_coverage")
     else:
         payload.setdefault("expected_information_gain", ["window_stability_check", "candidate_survival_check"])
         payload.setdefault("budget_bucket", "robustness_validation")

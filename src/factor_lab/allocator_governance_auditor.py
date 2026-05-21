@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from factor_lab.agent_schemas import ALLOCATOR_GOVERNANCE_AUDIT_SCHEMA_VERSION
+from factor_lab.hermes_research_schemas import ALLOCATOR_GOVERNANCE_AUDIT_SCHEMA_VERSION
 
 
 _STATE_TO_ACTION = {

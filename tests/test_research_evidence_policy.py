@@ -11,7 +11,7 @@ def test_research_evidence_policy_exists():
     path = REPO_ROOT / "configs" / "research_evidence_policy.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
 
-    assert payload["name"] == "openclaw_research_evidence_policy"
+    assert payload["name"] == "hermes_native_research_evidence_policy"
     assert payload["rules"]["require_acceptance_gate_for_frontier"] is True
 
 

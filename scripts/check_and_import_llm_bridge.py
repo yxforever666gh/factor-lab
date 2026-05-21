@@ -13,12 +13,12 @@ if __name__ == "__main__":
         write_bridge_status(
             "artifacts/llm_status.json",
             {
-                "mode": "openclaw_agent_bridge",
+                "mode": "hermes_native_agent_bridge",
                 "status": "awaiting_response",
                 "updated_at_utc": datetime.now(timezone.utc).isoformat(),
                 "request_path": "artifacts/agent_request.json",
                 "response_path": "artifacts/agent_response.json",
-                "message": "尚未检测到 agent_response.json，请先让 OpenClaw 单 agent 处理请求。",
+                "message": "尚未检测到 agent_response.json，请先让 HermesNative 单 agent 处理请求。",
             },
         )
         print("bridge response not found")
