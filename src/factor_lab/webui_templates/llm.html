@@ -82,7 +82,7 @@
     <table>
       <tbody>
         <tr><th>Schema</th><td>{{ agent_request.schema_version or '-' }}</td></tr>
-        <tr><th>角色</th><td>{{ agent_request.agent_role or '-' }}</td></tr>
+        <tr><th>角色</th><td>{{ agent_request.hermes_profile or '-' }}</td></tr>
         <tr><th>任务</th><td>{{ agent_request.tasks|join('、') if agent_request.tasks else '-' }}</td></tr>
         <tr><th>创建时间</th><td>{{ agent_request.created_at_utc or '-' }}</td></tr>
       </tbody>

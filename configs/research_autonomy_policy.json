@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "name": "openclaw_autonomous_factor_research_constitution",
+  "name": "hermes_native_autonomous_factor_research_constitution",
   "mission": "自主发现、验证、淘汰并进化高质量因子假设；优先提升长期研究能力，而不是追逐单轮高分。",
   "principles": {
     "unit_of_research": "hypothesis_not_factor_name",

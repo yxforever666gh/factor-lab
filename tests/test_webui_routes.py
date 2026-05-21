@@ -12,7 +12,7 @@ from factor_lab import webui_app
 
 def test_dashboard_root_is_lightweight(monkeypatch, tmp_path: Path):
     env_path = tmp_path / ".env"
-    env_path.write_text("FACTOR_LAB_DECISION_PROVIDER=real_llm\n", encoding="utf-8")
+    env_path.write_text("FACTOR_LAB_DECISION_PROVIDER=direct_model\n", encoding="utf-8")
     monkeypatch.setattr(webui_app, "env_file", lambda: env_path)
     monkeypatch.setattr(webui_app, "_quick_daemon_status", lambda: {"active": True, "label": "active", "detail": "test"})
     monkeypatch.setattr(webui_app, "_quick_latest_runs", lambda limit=5: [])
@@ -31,7 +31,7 @@ def test_dashboard_root_is_lightweight(monkeypatch, tmp_path: Path):
     assert elapsed < 1.0
     assert "轻量首页" in response.text
     assert "完整驾驶舱" in response.text
-    assert "real_llm" in response.text
+    assert "direct_model" in response.text
 
 
 def test_llm_usage_page_renders_24h_ledger_summary_and_chart(monkeypatch, tmp_path: Path):
@@ -43,7 +43,7 @@ def test_llm_usage_page_renders_24h_ledger_summary_and_chart(monkeypatch, tmp_pa
     ledger.write_text(
         '\n'.join([
             '{"created_at_utc":"2026-04-28T00:00:00+00:00","success":true,"decision_type":"planner","model":"gpt-5.5","profile_name":"ai-continue","context_mode":"compact","estimated_user_prompt_tokens_4c":100,"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15,"cached_tokens":7,"cache_creation_tokens":2,"uncached_prompt_tokens":3,"usage_source":"provider"}}',
-            '{"created_at_utc":"2026-04-28T00:01:00+00:00","success":false,"decision_type":"failure_analyst","model":"gpt-5.5","profile_name":"nowcoding","context_mode":"compact","estimated_user_prompt_tokens_4c":200,"usage":{"prompt_tokens":null,"completion_tokens":null,"total_tokens":null,"usage_source":"missing"},"error_type":"http_error:403"}',
+            '{"created_at_utc":"2026-04-28T00:01:00+00:00","success":false,"decision_type":"diagnostician","model":"gpt-5.5","profile_name":"nowcoding","context_mode":"compact","estimated_user_prompt_tokens_4c":200,"usage":{"prompt_tokens":null,"completion_tokens":null,"total_tokens":null,"usage_source":"missing"},"error_type":"http_error:403"}',
             '{"created_at_utc":"2026-04-26T00:00:00+00:00","success":true,"decision_type":"old_agent","model":"old-model","profile_name":"old","context_mode":"compact","estimated_user_prompt_tokens_4c":999,"usage":{"prompt_tokens":900,"completion_tokens":99,"total_tokens":999,"usage_source":"provider"}}',
         ]) + '\n',
         encoding="utf-8",
@@ -76,7 +76,7 @@ def test_llm_usage_page_renders_24h_ledger_summary_and_chart(monkeypatch, tmp_pa
     assert "7" in response.text
     assert "15" in response.text
     assert "planner" in response.text
-    assert "failure_analyst" in response.text
+    assert "diagnostician" in response.text
     assert "http_error:403" in response.text
     assert "old_agent" not in response.text
     assert "old-model" not in response.text
@@ -124,7 +124,7 @@ def test_base_template_has_responsive_zoom_and_mobile_layout_rules():
 
 def test_control_page_is_read_only(monkeypatch, tmp_path: Path):
     env_path = tmp_path / ".env"
-    env_path.write_text("FACTOR_LAB_DECISION_PROVIDER=real_llm\n", encoding="utf-8")
+    env_path.write_text("FACTOR_LAB_DECISION_PROVIDER=direct_model\n", encoding="utf-8")
     monkeypatch.setattr(webui_app, "env_file", lambda: env_path)
     monkeypatch.setattr(
         webui_app,
@@ -155,4 +155,4 @@ def test_control_page_is_read_only(monkeypatch, tmp_path: Path):
     assert "Read-only Control" in response.text
     assert "Provider" in response.text
     assert "Queue" in response.text
-    assert "real_llm" in response.text
+    assert "direct_model" in response.text

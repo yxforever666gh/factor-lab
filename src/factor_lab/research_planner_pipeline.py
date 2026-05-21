@@ -8,7 +8,7 @@ import os
 from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor
 
-from factor_lab.agent_runtime_hooks import safe_run_reviewer_review
+from factor_lab.legacy_runtime_review_hooks import safe_run_reviewer_review
 from factor_lab.research_planner_snapshot import build_research_planner_snapshot
 from factor_lab.research_candidate_pool import build_research_candidate_pool
 from factor_lab.research_branch_planner import build_branch_planner_output
@@ -23,10 +23,10 @@ from factor_lab.llm_diagnostics import build_llm_diagnostics
 from factor_lab.opportunity_executor import enqueue_opportunities
 from factor_lab.research_attribution import build_research_attribution
 from factor_lab.research_metrics import build_research_metrics
-from factor_lab.agent_briefs import build_planner_agent_brief, build_failure_analyst_brief
-from factor_lab.agent_responses import load_validated_agent_responses
+from factor_lab.hermes_research_briefing_builders import build_researcher_profile_brief, build_diagnostician_brief
+from factor_lab.hermes_decision_artifact_loader import load_validated_hermes_decision_artifacts
 from factor_lab.decision_impact_report import build_decision_impact_report
-from factor_lab.llm_provider_router import DecisionProviderRouter
+from factor_lab.hermes_decision_router import HermesDecisionRouter
 from factor_lab.paths import artifacts_dir, db_path, project_root
 import subprocess
 import sys
@@ -191,9 +191,9 @@ def run_research_planner_pipeline() -> dict[str, Any]:
     memory_path = artifacts / "research_memory.json"
     validated_path = artifacts / "research_planner_validated.json"
     injected_path = artifacts / "research_planner_injected.json"
-    planner_agent_brief_path = artifacts / "planner_agent_brief.json"
-    failure_analyst_brief_path = artifacts / "failure_analyst_brief.json"
-    agent_responses_path = artifacts / "agent_responses.json"
+    researcher_profile_brief_path = artifacts / "researcher_profile_brief.json"
+    diagnostician_brief_path = artifacts / "diagnostician_brief.json"
+    hermes_decision_artifacts_path = artifacts / "hermes_decision_artifacts.json"
     decision_impact_path = artifacts / "decision_impact_report.json"
     research_flow_state_path = artifacts / "research_flow_state.json"
     research_opportunities_path = artifacts / "research_opportunities.json"
@@ -268,25 +268,25 @@ def run_research_planner_pipeline() -> dict[str, Any]:
         queue_aware=True,
     )
     llm_diagnostics = build_llm_diagnostics(snapshot_path, research_opportunities_path, llm_diagnostics_path)
-    planner_agent_brief = build_planner_agent_brief(
+    researcher_profile_brief = build_researcher_profile_brief(
         snapshot=snapshot,
         candidate_pool=candidate_pool,
         branch_plan=branch_plan,
         state_snapshot=state_snapshot,
         strategy_plan={},
-        output_path=planner_agent_brief_path,
+        output_path=researcher_profile_brief_path,
     )
-    failure_analyst_brief = build_failure_analyst_brief(
+    diagnostician_brief = build_diagnostician_brief(
         snapshot=snapshot,
         state_snapshot=state_snapshot,
         llm_diagnostics=llm_diagnostics,
-        output_path=failure_analyst_brief_path,
+        output_path=diagnostician_brief_path,
     )
-    live_provider_health = DecisionProviderRouter(provider=live_decision_provider).healthcheck(
+    live_provider_health = HermesDecisionRouter(provider=live_decision_provider).healthcheck(
         output_path=live_provider_health_path,
         probe=False,
     )
-    observation_provider_health = DecisionProviderRouter(provider=observation_decision_provider).healthcheck(
+    observation_provider_health = HermesDecisionRouter(provider=observation_decision_provider).healthcheck(
         output_path=observation_provider_health_path
     )
     # Enhance provider_health with explicit diagnostics for gray-mode switching
@@ -305,7 +305,7 @@ def run_research_planner_pipeline() -> dict[str, Any]:
     brief_runner_result: dict[str, Any] = {"enabled": False}
     if os.getenv("FACTOR_LAB_ENABLE_BRIEF_RUNNER", "1").strip().lower() in {"1", "true", "yes", "on"}:
         completed = subprocess.run(
-            [sys.executable, str(root / "scripts" / "run_agent_briefs.py"), "--provider", live_decision_provider],
+            [sys.executable, str(root / "scripts" / "run_hermes_briefings.py"), "--provider", live_decision_provider],
             cwd=root,
             capture_output=True,
             text=True,
@@ -317,8 +317,8 @@ def run_research_planner_pipeline() -> dict[str, Any]:
             "stdout": (completed.stdout or "").strip(),
             "stderr": (completed.stderr or "").strip(),
         }
-    agent_responses_payload = load_validated_agent_responses(artifacts)
-    agent_responses_path.write_text(json.dumps(agent_responses_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    hermes_decision_artifacts_payload = load_validated_hermes_decision_artifacts(artifacts)
+    hermes_decision_artifacts_path.write_text(json.dumps(hermes_decision_artifacts_payload, ensure_ascii=False, indent=2), encoding="utf-8")
     decision_impact = build_decision_impact_report(output_path=decision_impact_path)
     
     # Determine gray_mode marker when providers differ
@@ -327,7 +327,7 @@ def run_research_planner_pipeline() -> dict[str, Any]:
     observation_normalized = provider_health["observation"].get("normalized_provider")
     if live_normalized and observation_normalized and live_normalized != observation_normalized:
         gray_mode = "observation_only"
-    strategy_plan = build_strategy_plan(state_snapshot_path, proposal_path, strategy_plan_path, branch_plan_path, agent_responses_path)
+    strategy_plan = build_strategy_plan(state_snapshot_path, proposal_path, strategy_plan_path, branch_plan_path, hermes_decision_artifacts_path)
     validated = validate_research_planner_proposal(proposal_path, validated_path)
     injected = apply_strategy_plan(validated_path, strategy_plan_path, injected_path, memory_path, db)
     research_flow_state = derive_research_flow_state(
@@ -390,32 +390,32 @@ def run_research_planner_pipeline() -> dict[str, Any]:
         "research_opportunity_count": len(research_opportunities.get("opportunities", [])),
         "opportunity_execution": opportunity_execution,
         "llm_diagnostics": llm_diagnostics,
-        "planner_agent_brief": {
-            "path": str(planner_agent_brief_path),
-            "schema_version": planner_agent_brief.get("schema_version"),
-            "input_open_question_count": len((planner_agent_brief.get("inputs") or {}).get("open_questions") or []),
-            "candidate_task_count": len((planner_agent_brief.get("inputs") or {}).get("candidate_pool_tasks") or []),
+        "researcher_profile_brief": {
+            "path": str(researcher_profile_brief_path),
+            "schema_version": researcher_profile_brief.get("schema_version"),
+            "input_open_question_count": len((researcher_profile_brief.get("inputs") or {}).get("open_questions") or []),
+            "candidate_task_count": len((researcher_profile_brief.get("inputs") or {}).get("candidate_pool_tasks") or []),
         },
-        "agent_responses": {
-            "path": str(agent_responses_path),
-            "planner_present": bool(agent_responses_payload.get("planner")),
-            "failure_analyst_present": bool(agent_responses_payload.get("failure_analyst")),
-            "planner_errors": agent_responses_payload.get("planner_errors") or [],
-            "failure_analyst_errors": agent_responses_payload.get("failure_analyst_errors") or [],
+        "hermes_decision_artifacts": {
+            "path": str(hermes_decision_artifacts_path),
+            "planner_present": bool(hermes_decision_artifacts_payload.get("planner")),
+            "diagnostician_present": bool(hermes_decision_artifacts_payload.get("diagnostician")),
+            "planner_errors": hermes_decision_artifacts_payload.get("planner_errors") or [],
+            "diagnostician_errors": hermes_decision_artifacts_payload.get("diagnostician_errors") or [],
             "configured_live_provider": live_decision_provider,
             "configured_observation_provider": observation_decision_provider,
-            "planner_source": _decision_effective_source(agent_responses_payload.get("planner") or {}),
-            "failure_analyst_source": _decision_effective_source(agent_responses_payload.get("failure_analyst") or {}),
+            "planner_source": _decision_effective_source(hermes_decision_artifacts_payload.get("planner") or {}),
+            "diagnostician_source": _decision_effective_source(hermes_decision_artifacts_payload.get("diagnostician") or {}),
             "brief_runner": brief_runner_result,
             "provider_health": provider_health,
             "gray_mode": gray_mode,
             "decision_impact_path": str(decision_impact_path),
-            "decision_impact_changed": bool((decision_impact.get("planner") or {}).get("changed") or (decision_impact.get("failure_analyst") or {}).get("changed")),
+            "decision_impact_changed": bool((decision_impact.get("planner") or {}).get("changed") or (decision_impact.get("diagnostician") or {}).get("changed")),
         },
-        "failure_analyst_brief": {
-            "path": str(failure_analyst_brief_path),
-            "schema_version": failure_analyst_brief.get("schema_version"),
-            "recent_failed_or_risky_task_count": len((failure_analyst_brief.get("inputs") or {}).get("recent_failed_or_risky_tasks") or []),
+        "diagnostician_brief": {
+            "path": str(diagnostician_brief_path),
+            "schema_version": diagnostician_brief.get("schema_version"),
+            "recent_failed_or_risky_task_count": len((diagnostician_brief.get("inputs") or {}).get("recent_failed_or_risky_tasks") or []),
         },
         "research_metrics": research_metrics,
         "research_attribution": research_attribution,

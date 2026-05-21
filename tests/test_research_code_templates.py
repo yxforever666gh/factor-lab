@@ -26,6 +26,6 @@ def test_portfolio_eval_template_exists():
 def test_workflow_codegen_policy_check_returns_summary():
     result = run_checks()
 
-    assert result["policy_name"] == "openclaw_autonomous_research_coding_policy"
+    assert result["policy_name"] == "hermes_native_autonomous_research_coding_policy"
     assert "summary" in result
     assert "workflow_apply_factor_count" in result["summary"]

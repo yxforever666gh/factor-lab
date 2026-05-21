@@ -16,7 +16,7 @@ def build_agent_request(snapshot: dict[str, Any], output_path: str | Path) -> di
     payload = {
         "schema_version": REQUEST_SCHEMA_VERSION,
         "created_at_utc": datetime.now(timezone.utc).isoformat(),
-        "agent_role": "llm_analyst",
+        "hermes_profile": "llm_analyst",
         "tasks": ["review", "plan"],
         "snapshot": snapshot,
         "instructions": {
@@ -81,7 +81,7 @@ def import_agent_response(
     errors = validate_agent_response(response)
     if errors:
         status = {
-            "mode": "openclaw_agent_bridge",
+            "mode": "hermes_native_agent_bridge",
             "status": "validation_failed",
             "response_path": str(response_path),
             "validated_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -96,7 +96,7 @@ def import_agent_response(
     Path(review_output_path).write_text(review, encoding="utf-8")
     Path(plan_output_path).write_text(json.dumps(plan, ensure_ascii=False, indent=2), encoding="utf-8")
     status = {
-        "mode": "openclaw_agent_bridge",
+        "mode": "hermes_native_agent_bridge",
         "status": "imported",
         "response_path": str(response_path),
         "imported_at_utc": datetime.now(timezone.utc).isoformat(),

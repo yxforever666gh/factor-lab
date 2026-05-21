@@ -4,7 +4,7 @@
 
 **Goal:** 将 Factor Lab 从“可运行的自动化研究原型”收敛为“运行态清晰、结果可信、可维护、可验收”的自动化量化研究系统。
 
-**Architecture:** 本计划不优先扩展新功能，而是先治理边界：源码态与运行态分离、de-OpenClaw 验收、WebUI 性能与控制面、daemon 可观测性、数据/回测可信度审计、Agent role 与 LLM provider 解耦。所有变更必须以小步提交、可验证命令、回滚安全为原则推进。
+**Architecture:** 本计划不优先扩展新功能，而是先治理边界：源码态与运行态分离、de-HermesNative 验收、WebUI 性能与控制面、daemon 可观测性、数据/回测可信度审计、Hermes profile 与 LLM provider 解耦。所有变更必须以小步提交、可验证命令、回滚安全为原则推进。
 
 **Tech Stack:** Python, FastAPI, Uvicorn, SQLite/WAL, systemd user services, Tushare, pandas/parquet, Jinja templates, pytest, shell/systemctl/journalctl.
 
@@ -17,22 +17,22 @@
 - `git status --porcelain` 显示约 1137 个变更项：668 deleted、323 modified、146 untracked。
 - `git ls-files artifacts | wc -l` 显示 `artifacts/` 下约 5739 个文件被 Git 跟踪。
 - WebUI 服务运行于 `/home/admin/factor-lab/scripts/run_web_ui.py`。
-- Research daemon 已运行于 `/home/admin/factor-lab/scripts/run_research_daemon.py`，agent briefs 使用 `--provider real_llm`。
+- Research daemon 已运行于 `/home/admin/factor-lab/scripts/run_research_daemon.py`，agent briefs 使用 `--provider direct_model`。
 - `/health`、`/runs`、`/agents`、`/settings`、`/llm` 可访问。
 - `/` 首页 5 秒超时，存在 dashboard 重查询/重 artifact 读取风险。
 - `/control` 返回 404，控制面不完整。
-- 源码/脚本/文档仍存在 OpenClaw 引用，需要分类为“架构概念保留”或“旧 workspace/CLI 残留”。
+- 源码/脚本/文档仍存在 HermesNative 引用，需要分类为“架构概念保留”或“旧 workspace/CLI 残留”。
 
 ---
 
 ## 总体阶段
 
 1. **Phase A — 仓库与 artifacts 治理**：把源码、配置、测试样例、运行产物分开。
-2. **Phase B — de-OpenClaw 运行态验收**：确认新路径、新 `.env`、新 provider、保留 agent-role 架构。
+2. **Phase B — de-HermesNative 运行态验收**：确认新路径、新 `.env`、新 provider、保留 agent-role 架构。
 3. **Phase C — WebUI 性能与控制面修复**：首页不超时，增加 daemon/control 可观测入口。
 4. **Phase D — Research daemon 可观测性与防空转**：让队列、worker、跳过原因、stale task 可解释。
 5. **Phase E — 数据与回测可信度审计**：未来函数、成本、幸存者偏差、多重检验、因子重复治理。
-6. **Phase F — Agent role/provider 边界硬化**：明确角色、schema、权限、验证方式。
+6. **Phase F — Hermes profile/provider 边界硬化**：明确角色、schema、权限、验证方式。
 7. **Phase G — 验收、文档与持续运行规则**：形成 smoke test、daily check、release checklist。
 
 ---
@@ -190,30 +190,30 @@ git commit -m "chore: stop tracking runtime artifacts"
 
 ---
 
-# Phase B — de-OpenClaw 运行态验收
+# Phase B — de-HermesNative 运行态验收
 
-## Task B1: 建立 de-OpenClaw 验收脚本
+## Task B1: 建立 de-HermesNative 验收脚本
 
 **Objective:** 用机器检查替代主观“迁移完成”。
 
 **Files:**
-- Create: `scripts/verify_de_openclaw_runtime.py`
-- Test: `tests/test_verify_de_openclaw_runtime.py`
+- Create: `scripts/verify_de_hermes_native_runtime.py`
+- Test: `tests/test_verify_de_hermes_native_runtime.py`
 
 **Script requirements:**
 
 - 检查 systemd WebUI ExecStart 是否包含 `/home/admin/factor-lab`。
 - 检查 daemon ExecStart 是否包含 `/home/admin/factor-lab`。
-- 检查运行进程不从 `/home/admin/.openclaw/workspace` 启动。
-- 检查 daemon provider 为 `real_llm` 或配置允许的 provider。
-- 把 OpenClaw 引用分成：
+- 检查运行进程不从 `/home/admin/.hermes_native/workspace` 启动。
+- 检查 daemon provider 为 `direct_model` 或配置允许的 provider。
+- 把 HermesNative 引用分成：
   - allowed: agent-role 文档/兼容层；
-  - blocked: old workspace path、openclaw CLI 硬调用、旧 env 文件。
+  - blocked: old workspace path、hermes_native CLI 硬调用、旧 env 文件。
 
 **Run:**
 
 ```bash
-python3 scripts/verify_de_openclaw_runtime.py
+python3 scripts/verify_de_hermes_native_runtime.py
 ```
 
 **Expected:**
@@ -223,26 +223,26 @@ PASS webui_path
 PASS daemon_path
 PASS provider
 PASS no_old_workspace_process
-WARN allowed_openclaw_concept_refs=N
-PASS no_blocked_openclaw_refs
+WARN allowed_hermes_native_concept_refs=N
+PASS no_blocked_hermes_native_refs
 ```
 
 ---
 
-## Task B2: 整理 OpenClaw 引用分类文档
+## Task B2: 整理 HermesNative 引用分类文档
 
 **Objective:** 避免把 agent 架构和旧 workspace 依赖混为一谈。
 
 **Files:**
-- Create: `docs/openclaw-reference-policy.md`
+- Create: `docs/hermes_native-reference-policy.md`
 
 **Content requirements:**
 
-- `OpenClaw agent-role architecture`：可保留为设计思想。
-- `OpenClaw workspace path`：禁止运行期依赖。
-- `OpenClaw CLI event`：默认禁止，除非显式兼容层开关。
-- `openclaw_agent provider`：迁移期兼容项，默认禁用。
-- `real_llm provider`：当前正式 provider。
+- `HermesNative agent-role architecture`：可保留为设计思想。
+- `HermesNative workspace path`：禁止运行期依赖。
+- `HermesNative CLI event`：默认禁止，除非显式兼容层开关。
+- `hermes_native_agent provider`：迁移期兼容项，默认禁用。
+- `direct_model provider`：当前正式 provider。
 
 ---
 
@@ -355,7 +355,7 @@ curl -fsS http://127.0.0.1:8765/control | grep -E "Daemon|Provider|Queue"
   "timestamp": "2026-04-28T00:00:00+08:00",
   "pid": 12345,
   "project_root": "/home/admin/factor-lab",
-  "provider": "real_llm",
+  "provider": "direct_model",
   "queue": {
     "pending": 0,
     "running": 1,
@@ -486,14 +486,14 @@ python3 -m json.tool artifacts/research_daemon_heartbeat.json
 
 # Phase F — Agent Role / Provider 边界硬化
 
-## Task F1: Agent role registry 固化
+## Task F1: Hermes profile registry 固化
 
 **Objective:** 每个 agent 有固定职责、输入、输出、权限。
 
 **Files:**
-- Modify: `src/factor_lab/agent_roles.py`
+- Modify: `src/factor_lab/hermes_profile_settings.py`
 - Create: `docs/agent-role-registry.md`
-- Test: `tests/test_agent_roles.py`
+- Test: `tests/test_hermes_profile_settings.py`
 
 **Required roles:**
 
@@ -501,7 +501,7 @@ python3 -m json.tool artifacts/research_daemon_heartbeat.json
 - factor_researcher
 - backtest_reviewer
 - risk_reviewer
-- failure_analyst
+- diagnostician
 - planner
 - decision_reviewer
 
@@ -524,9 +524,9 @@ python3 -m json.tool artifacts/research_daemon_heartbeat.json
 **Objective:** 防止 provider 和 agent 混淆。
 
 **Files:**
-- Modify: `src/factor_lab/llm_provider_router.py`
+- Modify: `src/factor_lab/hermes_decision_router.py`
 - Modify: `src/factor_lab/llm_bridge.py`
-- Test: `tests/test_llm_provider_router.py`
+- Test: `tests/test_hermes_decision_router.py`
 
 **Rule:**
 
@@ -541,8 +541,8 @@ python3 -m json.tool artifacts/research_daemon_heartbeat.json
 **Objective:** LLM 输出必须结构化、可拒绝、可审计。
 
 **Files:**
-- Modify: `src/factor_lab/llm_schema_validation.py`
-- Test: `tests/test_llm_schema_validation.py`
+- Modify: `src/factor_lab/hermes_contract_validation.py`
+- Test: `tests/test_hermes_contract_validation.py`
 
 **Minimum validation:**
 
@@ -570,7 +570,7 @@ python3 -m json.tool artifacts/research_daemon_heartbeat.json
 - DB 可打开
 - WebUI routes 可访问
 - daemon heartbeat 可读
-- de-OpenClaw runtime pass
+- de-HermesNative runtime pass
 - LLM provider config 可解析但不泄露 key
 - Tushare cache status 可读
 
@@ -597,7 +597,7 @@ python3 scripts/smoke_test_factor_lab.py
 - WebUI `/` 小于 1 秒；
 - daemon 路径为 `/home/admin/factor-lab`；
 - provider 为预期 provider；
-- no blocked OpenClaw references；
+- no blocked HermesNative references；
 - artifacts policy 没有违反；
 - DB backup 完成；
 - release notes 包含已知问题。
@@ -633,8 +633,8 @@ python3 scripts/smoke_test_factor_lab.py
 1. A1 inventory
 2. A2 artifact policy
 3. A3 分批 untrack runtime artifacts
-4. B1 de-OpenClaw runtime verifier
-5. B2 OpenClaw reference policy
+4. B1 de-HermesNative runtime verifier
+5. B2 HermesNative reference policy
 6. C1 首页超时修复
 7. C2 `/control` 只读页
 8. D1 daemon heartbeat
@@ -655,8 +655,8 @@ python3 scripts/smoke_test_factor_lab.py
 - WebUI `/`、`/health`、`/runs`、`/agents`、`/settings`、`/llm`、`/control` 全部 200。
 - 首页 `/` 在正常机器上 1 秒内返回。
 - daemon heartbeat 可读，且显示 project root、provider、队列状态。
-- de-OpenClaw verifier 通过：无旧 workspace 运行期依赖。
-- OpenClaw agent-role 概念和旧 OpenClaw workspace/CLI 依赖被明确区分。
+- de-HermesNative verifier 通过：无旧 workspace 运行期依赖。
+- HermesNative agent-role 概念和旧 HermesNative workspace/CLI 依赖被明确区分。
 - 队列为空时能解释原因，而不是只显示 empty。
 - 因子晋级必须经过数据可得性、成本、重复性和稳健性检查。
 - LLM/Agent 输出必须结构化并可审计。

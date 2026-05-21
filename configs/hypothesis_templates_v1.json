@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "name": "openclaw_hypothesis_templates_v1",
+  "name": "hermes_native_hypothesis_templates_v1",
   "templates": [
     {
       "template_id": "liquidity_shock_reversal",

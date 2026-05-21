@@ -12,7 +12,7 @@ def test_coding_policy_file_exists_and_has_core_keys():
     path = REPO_ROOT / "configs" / "research_coding_policy.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
 
-    assert payload["name"] == "openclaw_autonomous_research_coding_policy"
+    assert payload["name"] == "hermes_native_autonomous_research_coding_policy"
     assert payload["principles"]["shared_intermediates_first"] is True
     assert "performance_rules" in payload
 

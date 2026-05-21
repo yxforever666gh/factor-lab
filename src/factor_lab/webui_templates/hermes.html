@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+{% block content %}
+{% if saved %}
+<section class="card" style="margin-bottom:18px; border-color: var(--good);">
+  <strong class="good">已保存 Hermes 设置。</strong>
+  <span class="muted">后台 daemon 已自动重启{% if restart_ok %}并生效{% elif restart_failed %}失败，请稍后在操作页检查{% endif %}。</span>
+</section>
+{% endif %}
+
+<section class="card" style="margin-bottom:18px;">
+  <h2>Hermes backend</h2>
+  <div class="muted">
+    Factor Lab 现在以 Hermes profile 作为研究执行抽象；底层模型连接仍在 <a href="/settings">大模型设置</a> 中维护。
+  </div>
+  <div class="muted" style="margin-top:10px;">当前配置文件：<span class="text-break">{{ settings.env_file }}</span></div>
+</section>
+
+<section class="card" style="margin-bottom:18px;">
+  <h2>Hermes profiles</h2>
+  <div class="grid cols-2">
+    <div><strong>factor-lab-researcher</strong><div class="muted">Creates and prioritizes research proposals. 规划 Agent migration slot.</div></div>
+    <div><strong>factor-lab-diagnostician</strong><div class="muted">Diagnoses failed runs and repair direction. 失败诊断 Agent migration slot.</div></div>
+    <div><strong>factor-lab-reviewer</strong><div class="muted">Reviews candidates, risk, duplication, and promotion readiness. 质量复核 Agent migration slot.</div></div>
+    <div><strong>factor-lab-data-steward</strong><div class="muted">Checks data coverage, cache quality, field availability, and blockers. 数据质量 Agent migration slot.</div></div>
+  </div>
+</section>
+
+<section class="card" style="margin-bottom:18px;">
+  <h2>可用大模型 Profiles</h2>
+  <div class="muted">这些是底层模型连接，不是 Hermes profile 职责分工。</div>
+  <div style="margin-top:10px;">
+    {% if available_profile_names %}
+      {% for name in available_profile_names %}<span class="badge">{{ name }}</span>{% endfor %}
+    {% else %}
+      <span class="bad">当前没有已启用的大模型 profile。</span>
+    {% endif %}
+  </div>
+  {% if agent_fallback_warnings %}
+  <div class="bad" style="margin-top:12px;">
+    Agent fallback 引用了不存在或已禁用的 profile：
+    <ul>
+      {% for warning in agent_fallback_warnings %}
+      <li><strong>{{ warning.role }}</strong>: {{ warning.stale_names | join(', ') }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+</section>
+
+<section class="card" style="margin-bottom:18px;">
+  <h2>Hermes sessions</h2>
+  <div class="muted">默认使用 resume 模式：factor-lab-researcher-main、factor-lab-diagnostician-main、factor-lab-reviewer-main、factor-lab-data-steward-main。</div>
+</section>
+
+<section class="card" style="margin-bottom:18px;">
+  <h2>Hermes toolsets</h2>
+  <div>
+    <span class="badge">file</span>
+    <span class="badge">terminal</span>
+    <span class="badge">skills</span>
+    <span class="badge">session_search</span>
+  </div>
+</section>
+
+<section class="card" style="margin-bottom:18px;">
+  <h2>Hermes artifacts</h2>
+  <div class="muted">Briefings and responses are written under <code>artifacts/hermes/</code>.</div>
+</section>
+
+<section class="card">
+  <h2>Hermes health</h2>
+  <form method="post" action="/hermes" style="display:grid; gap:12px;">
+    <input type="hidden" name="FACTOR_LAB_AGENT_BACKEND" value="hermes">
+    <input type="hidden" name="FACTOR_LAB_HERMES_MODE" value="native">
+    <button type="submit" style="padding:11px 16px; border:0; border-radius:12px; background:var(--link); color:#08101f; font-weight:700; cursor:pointer;">保存 Hermes 设置</button>
+    <span class="muted">保存会自动重启后台 research daemon。</span>
+  </form>
+</section>
+{% endblock %}

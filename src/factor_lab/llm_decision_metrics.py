@@ -23,11 +23,11 @@ def _read_json(path: str | Path, default: Any) -> Any:
 
 def build_llm_decision_metrics(
     *,
-    agent_responses_path: str | Path = ARTIFACTS / "agent_responses.json",
+    hermes_decision_artifacts_path: str | Path = ARTIFACTS / "hermes_decision_artifacts.json",
     candidate_generation_plan_path: str | Path = ARTIFACTS / "candidate_generation_plan.json",
     output_path: str | Path = ARTIFACTS / "llm_decision_metrics.json",
 ) -> dict[str, Any]:
-    agent_responses = _read_json(agent_responses_path, {})
+    hermes_decision_artifacts = _read_json(hermes_decision_artifacts_path, {})
     candidate_generation_plan = _read_json(candidate_generation_plan_path, {})
     proposals = list(candidate_generation_plan.get("proposals") or [])
 
@@ -39,12 +39,12 @@ def build_llm_decision_metrics(
     payload = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "decision_sources": {
-            "planner": (((agent_responses.get("planner") or {}).get("decision_metadata") or {}).get("source") or ((agent_responses.get("planner") or {}).get("decision_source"))),
-            "failure_analyst": (((agent_responses.get("failure_analyst") or {}).get("decision_metadata") or {}).get("source") or ((agent_responses.get("failure_analyst") or {}).get("decision_source"))),
+            "planner": (((hermes_decision_artifacts.get("planner") or {}).get("decision_metadata") or {}).get("source") or ((hermes_decision_artifacts.get("planner") or {}).get("decision_source"))),
+            "diagnostician": (((hermes_decision_artifacts.get("diagnostician") or {}).get("decision_metadata") or {}).get("source") or ((hermes_decision_artifacts.get("diagnostician") or {}).get("decision_source"))),
         },
         "decision_validation": {
-            "planner_schema_valid": (((agent_responses.get("planner") or {}).get("decision_metadata") or {}).get("schema_valid")),
-            "failure_analyst_schema_valid": (((agent_responses.get("failure_analyst") or {}).get("decision_metadata") or {}).get("schema_valid")),
+            "planner_schema_valid": (((hermes_decision_artifacts.get("planner") or {}).get("decision_metadata") or {}).get("schema_valid")),
+            "diagnostician_schema_valid": (((hermes_decision_artifacts.get("diagnostician") or {}).get("decision_metadata") or {}).get("schema_valid")),
         },
         "proposal_novelty_sources": novelty_sources,
         "proposal_count": len(proposals),

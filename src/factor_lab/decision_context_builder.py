@@ -44,7 +44,7 @@ def build_planner_decision_context(brief: dict[str, Any]) -> dict[str, Any]:
     payload = {
         "schema_version": "factor_lab.planner_decision_context.v1",
         "decision_type": "planner",
-        "agent_role": brief.get("agent_role") or "planner_agent",
+        "hermes_profile": brief.get("hermes_profile") or "researcher_profile",
         "mission": brief.get("mission") or "planner decision context",
         "constraints": list(brief.get("constraints") or []),
         "summary": summary,
@@ -76,8 +76,8 @@ def build_failure_decision_context(brief: dict[str, Any]) -> dict[str, Any]:
     }
     payload = {
         "schema_version": "factor_lab.failure_decision_context.v1",
-        "decision_type": "failure_analyst",
-        "agent_role": brief.get("agent_role") or "failure_analyst",
+        "decision_type": "diagnostician",
+        "hermes_profile": brief.get("hermes_profile") or "diagnostician",
         "mission": brief.get("mission") or "failure analyst decision context",
         "constraints": list(brief.get("constraints") or []),
         "summary": summary,

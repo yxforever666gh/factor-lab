@@ -13,7 +13,7 @@ if __name__ == "__main__":
     run(["python3", "scripts/run_llm_bridge_prepare.py"])
     response = ROOT / "artifacts/agent_response.json"
     if not response.exists():
-        raise SystemExit("缺少 artifacts/agent_response.json，请先让 OpenClaw agent 处理 request。")
+        raise SystemExit("缺少 artifacts/agent_response.json，请先让 HermesNative agent 处理 request。")
     run(["python3", "scripts/import_llm_bridge_response.py"])
     for path in [
         ROOT / "artifacts/agent_request.json",

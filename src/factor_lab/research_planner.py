@@ -41,8 +41,8 @@ class ResearchPlannerAgent:
         return {name for name in (snapshot.get("approved_universe_names") or []) if name}
 
     @staticmethod
-    def _failure_analyst_maps(snapshot: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
-        payload = snapshot.get("failure_analyst_enhancement") or {}
+    def _diagnostician_maps(snapshot: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+        payload = snapshot.get("diagnostician_enhancement") or {}
         stop_map = {
             row.get("candidate_name"): row
             for row in (payload.get("stop_or_continue_recommendation") or [])
@@ -83,7 +83,7 @@ class ResearchPlannerAgent:
         quality_map = self._quality_row_map(snapshot)
         novelty_map = self._novelty_row_map(snapshot)
         approved_universe_names = self._approved_universe_names(snapshot)
-        failure_stop_map, failure_reroute_map = self._failure_analyst_maps(snapshot)
+        failure_stop_map, failure_reroute_map = self._diagnostician_maps(snapshot)
         analyst_signals = snapshot.get("analyst_signals") or {}
         analyst_focus = set(analyst_signals.get("focus_factors") or [])
         analyst_core = set(analyst_signals.get("keep_as_core_candidates") or [])
@@ -148,13 +148,13 @@ class ResearchPlannerAgent:
                     score -= 22
                 else:
                     score += 4
-                reason_bits.append(f"failure_analyst: stop={','.join(sorted(failure_stop_hits))}。")
+                reason_bits.append(f"diagnostician: stop={','.join(sorted(failure_stop_hits))}。")
             if failure_reroute_hits:
                 if category == "validation":
                     score += 8
                 elif category == "exploration":
                     score -= 8
-                reason_bits.append(f"failure_analyst: reroute={','.join(sorted(failure_reroute_hits))}。")
+                reason_bits.append(f"diagnostician: reroute={','.join(sorted(failure_reroute_hits))}。")
             if dossier_rows:
                 diagnose_needed = len([row for row in dossier_rows if row.get("recommended_action") == "diagnose"])
                 suppress_needed = len([row for row in dossier_rows if row.get("recommended_action") == "suppress"])

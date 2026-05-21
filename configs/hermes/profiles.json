@@ -1,0 +1,24 @@
+{
+  "profiles": {
+    "factor-lab-researcher": {
+      "workdir": "/home/admin/factor-lab",
+      "toolsets": ["file", "terminal", "skills", "session_search"],
+      "skills": ["factor-lab"]
+    },
+    "factor-lab-diagnostician": {
+      "workdir": "/home/admin/factor-lab",
+      "toolsets": ["file", "terminal", "skills", "session_search"],
+      "skills": ["factor-lab"]
+    },
+    "factor-lab-reviewer": {
+      "workdir": "/home/admin/factor-lab",
+      "toolsets": ["file", "terminal", "skills"],
+      "skills": ["factor-lab"]
+    },
+    "factor-lab-data-steward": {
+      "workdir": "/home/admin/factor-lab",
+      "toolsets": ["file", "terminal", "skills"],
+      "skills": ["factor-lab"]
+    }
+  }
+}

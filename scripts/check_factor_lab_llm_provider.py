@@ -6,9 +6,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from factor_lab.paths import project_root
-from factor_lab.llm_provider_router import DecisionProviderRouter
+from factor_lab.hermes_decision_router import HermesDecisionRouter
 
 
 if __name__ == "__main__":
-    payload = DecisionProviderRouter().healthcheck()
+    payload = HermesDecisionRouter().healthcheck()
     print(json.dumps(payload, ensure_ascii=False, indent=2))

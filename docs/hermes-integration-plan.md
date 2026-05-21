@@ -9,17 +9,17 @@
 
 **当前状态**：
 - Factor Lab 是一个完整的自动化量化研究系统（~38,676 行 Python 代码，165 个模块）
-- 已有完整的 agent-role 架构（planner、reviewer、failure_analyst、data_quality）
-- 已有 LLM provider 路由层（支持 real_llm、mock、openclaw_agent 等）
+- 已有完整的 agent-role 架构（planner、reviewer、diagnostician、data_steward）
+- 已有 LLM provider 路由层（支持 direct_model、mock、hermes_native_agent 等）
 - 已有 research daemon、WebUI、workflow 引擎、回测评估、因子生成器
-- 正在进行 de-OpenClaw 迁移和运行态加固
+- 正在进行 de-HermesNative 迁移和运行态加固
 
 **核心发现**：
 Factor Lab **不需要大规模重构**。它已经是一个成熟的自动化研究系统，有清晰的：
 - 数据层（Tushare provider + cache + feature store）
 - 因子层（expression evaluator + factor families）
 - 回测层（workflow engine + evaluation + portfolio）
-- 决策层（agent roles + LLM provider router）
+- 决策层（Hermes profiles + LLM provider router）
 - 调度层（research daemon + task queue）
 
 **Hermes 的定位**：
@@ -94,8 +94,8 @@ Hermes 不应该"替换"Factor Lab 的内部架构，而应该作为：
 ### 方案选择：轻量集成（推荐）
 
 **不做**：
-- ❌ 替换 Factor Lab 的 agent_roles 层
-- ❌ 替换 llm_provider_router
+- ❌ 替换 Factor Lab 的 hermes_profile_settings 层
+- ❌ 替换 hermes_decision_router
 - ❌ 重写 workflow 引擎
 - ❌ 改造 research daemon
 

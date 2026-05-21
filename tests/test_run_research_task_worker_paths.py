@@ -58,7 +58,7 @@ def test_generated_batch_uses_configurable_artifacts_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(worker, 'summarize_generated_batch_run', fake_summarize)
     monkeypatch.setattr(worker, 'write_bridge_status', fake_write_bridge_status)
     calls = []
-    monkeypatch.setattr(worker, '_run_data_quality_hook', lambda **kwargs: calls.append(kwargs))
+    monkeypatch.setattr(worker, '_run_data_steward_hook', lambda **kwargs: calls.append(kwargs))
 
     task = {
         'task_type': 'generated_batch',
@@ -78,7 +78,7 @@ def test_generated_batch_uses_configurable_artifacts_dir(tmp_path, monkeypatch):
     assert calls and calls[0]['task_type'] == 'generated_batch'
 
 
-def test_batch_runs_data_quality_hook_on_failure(tmp_path, monkeypatch):
+def test_batch_runs_data_steward_hook_on_failure(tmp_path, monkeypatch):
     worker = _load_worker_module()
     calls = []
 
@@ -86,7 +86,7 @@ def test_batch_runs_data_quality_hook_on_failure(tmp_path, monkeypatch):
         raise RuntimeError('batch exploded')
 
     monkeypatch.setattr(worker, 'run_batch', fake_run_batch)
-    monkeypatch.setattr(worker, '_run_data_quality_hook', lambda **kwargs: calls.append(kwargs))
+    monkeypatch.setattr(worker, '_run_data_steward_hook', lambda **kwargs: calls.append(kwargs))
     task = {
         'task_id': 'task-1',
         'task_type': 'batch',

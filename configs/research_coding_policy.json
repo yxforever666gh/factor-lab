@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "name": "openclaw_autonomous_research_coding_policy",
+  "name": "hermes_native_autonomous_research_coding_policy",
   "mission": "在不牺牲回测语义与研究自由的前提下，持续产出可复用、可解释、可维护、可优化的研究代码。",
   "principles": {
     "shared_intermediates_first": true,

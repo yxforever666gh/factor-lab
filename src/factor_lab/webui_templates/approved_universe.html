@@ -157,15 +157,15 @@
 
 <section class="card" style="margin-top:18px;">
   <h2>Failure Analyst+</h2>
-  {% if failure_analyst_enhancement and failure_analyst_enhancement.summary %}
+  {% if diagnostician_enhancement and diagnostician_enhancement.summary %}
   <div class="grid cols-4">
-    <div><strong>Reroute</strong><div>{{ failure_analyst_enhancement.summary.reroute_count or 0 }}</div></div>
-    <div><strong>Stop</strong><div>{{ failure_analyst_enhancement.summary.stop_count or 0 }}</div></div>
-    <div><strong>Continue</strong><div>{{ failure_analyst_enhancement.summary.continue_count or 0 }}</div></div>
-    <div><strong>Question Cards v2</strong><div>{{ failure_analyst_enhancement.summary.question_card_count or 0 }}</div></div>
+    <div><strong>Reroute</strong><div>{{ diagnostician_enhancement.summary.reroute_count or 0 }}</div></div>
+    <div><strong>Stop</strong><div>{{ diagnostician_enhancement.summary.stop_count or 0 }}</div></div>
+    <div><strong>Continue</strong><div>{{ diagnostician_enhancement.summary.continue_count or 0 }}</div></div>
+    <div><strong>Question Cards v2</strong><div>{{ diagnostician_enhancement.summary.question_card_count or 0 }}</div></div>
   </div>
-  {% if failure_analyst_enhancement.reroute_proposals %}
-  <div style="margin-top:12px;" class="muted">Top reroute：{% for row in failure_analyst_enhancement.reroute_proposals[:4] %}{{ row.candidate_name }}→{{ row.to_route }}{% if not loop.last %}；{% endif %}{% endfor %}</div>
+  {% if diagnostician_enhancement.reroute_proposals %}
+  <div style="margin-top:12px;" class="muted">Top reroute：{% for row in diagnostician_enhancement.reroute_proposals[:4] %}{{ row.candidate_name }}→{{ row.to_route }}{% if not loop.last %}；{% endif %}{% endfor %}</div>
   {% endif %}
   {% else %}
   <div class="muted">暂无 failure analyst enhancement 信息。</div>

@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from factor_lab import research_queue
-from factor_lab.agent_briefs import build_repair_agent_brief
+from factor_lab.hermes_research_briefing_builders import build_repair_agent_brief
 from factor_lab.repair_agent_engine import build_repair_response
 from factor_lab import repair_playbooks, repair_runtime
 from factor_lab.repair_playbooks import execute_repair_actions, repair_stale_running_tasks

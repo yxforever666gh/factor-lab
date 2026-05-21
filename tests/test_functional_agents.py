@@ -3,7 +3,7 @@ import json
 from factor_lab.novelty_judge import build_novelty_judgments
 from factor_lab.allocator_governance_auditor import build_allocator_governance_audit
 from factor_lab.decision_ab_judge import build_decision_ab_report
-from factor_lab.failure_analyst_enhancement import build_failure_analyst_enhancement
+from factor_lab.diagnostician_enhancement import build_diagnostician_enhancement
 from factor_lab.au_zero_diagnosis import build_au_zero_diagnosis
 from factor_lab.artifact_consistency import build_artifact_consistency_report
 from factor_lab.factor_quality_effect_report import build_factor_quality_effect_report
@@ -127,7 +127,7 @@ def test_decision_ab_judge_recommends_adopt_for_clean_positive_deltas():
     assert report["budget_matched"] is True
 
 
-def test_failure_analyst_enhancement_emits_reroute_and_stop_recommendations():
+def test_diagnostician_enhancement_emits_reroute_and_stop_recommendations():
     snapshot = {
         "candidate_failure_dossiers": [
             {
@@ -151,7 +151,7 @@ def test_failure_analyst_enhancement_emits_reroute_and_stop_recommendations():
             {"card_id": "q2", "candidate_name": "fragile_factor", "priority": 70},
         ],
     }
-    payload = build_failure_analyst_enhancement(snapshot)
+    payload = build_diagnostician_enhancement(snapshot)
     assert payload["summary"]["reroute_count"] >= 1
     stop_map = {row["candidate_name"]: row for row in payload["stop_or_continue_recommendation"]}
     assert stop_map["dup_factor"]["recommendation"] == "stop"
@@ -159,7 +159,7 @@ def test_failure_analyst_enhancement_emits_reroute_and_stop_recommendations():
     assert reroute_map["fragile_factor"]["to_route"] == "neutralization_diagnosis"
 
 
-def test_candidate_pool_uses_failure_analyst_enhancement_to_reroute_validation(tmp_path):
+def test_candidate_pool_uses_diagnostician_enhancement_to_reroute_validation(tmp_path):
     snapshot_path = tmp_path / "snapshot.json"
     output_path = tmp_path / "candidate_pool.json"
     snapshot = {
@@ -179,7 +179,7 @@ def test_candidate_pool_uses_failure_analyst_enhancement_to_reroute_validation(t
         "approved_universe_summary": {"approved_count": 1},
         "candidate_failure_dossiers": [],
         "representative_failure_dossiers": {},
-        "failure_analyst_enhancement": {
+        "diagnostician_enhancement": {
             "stop_or_continue_recommendation": [{"candidate_name": "book_yield", "recommendation": "reroute"}],
             "reroute_proposals": [{"candidate_name": "book_yield", "to_route": "medium_horizon_validation"}],
             "question_cards_v2": [{"candidate_name": "book_yield", "priority": 90}],
@@ -194,7 +194,7 @@ def test_candidate_pool_uses_failure_analyst_enhancement_to_reroute_validation(t
     }
     snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8")
     payload = build_research_candidate_pool(snapshot_path, output_path)
-    assert any("failure_analyst reroute" in (row.get("reason") or "") for row in payload["tasks"])
+    assert any("diagnostician reroute" in (row.get("reason") or "") for row in payload["tasks"])
 
 
 def test_research_planner_uses_novelty_judge_to_penalize_exploration_duplicates():
@@ -301,7 +301,7 @@ def test_au_zero_diagnosis_marks_false_negative_and_effect_report(tmp_path):
     assert effect["final_judgment"]["factor_quality"] in {"not_proven", "improved"}
 
 
-def test_research_planner_uses_failure_analyst_enhancement_to_penalize_exploration():
+def test_research_planner_uses_diagnostician_enhancement_to_penalize_exploration():
     planner = ResearchPlannerAgent()
     snapshot = {
         "exploration_state": {},
@@ -309,7 +309,7 @@ def test_research_planner_uses_failure_analyst_enhancement_to_penalize_explorati
         "knowledge_gain_counter": {},
         "analyst_signals": {},
         "promotion_scorecard": {"rows": []},
-        "failure_analyst_enhancement": {
+        "diagnostician_enhancement": {
             "stop_or_continue_recommendation": [{"candidate_name": "dup_factor", "recommendation": "stop"}],
             "reroute_proposals": [{"candidate_name": "dup_factor", "to_route": "graveyard_diagnosis"}],
         },
@@ -329,4 +329,4 @@ def test_research_planner_uses_failure_analyst_enhancement_to_penalize_explorati
         ]
     }
     result = planner.rank_tasks(snapshot, candidate_pool, None)
-    assert "failure_analyst:" in result["selected_tasks"][0]["planner_reason"]
+    assert "diagnostician:" in result["selected_tasks"][0]["planner_reason"]

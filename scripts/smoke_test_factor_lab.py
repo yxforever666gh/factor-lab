@@ -80,11 +80,11 @@ def check_heartbeat() -> Check:
         return Check("daemon_heartbeat", False, str(exc))
 
 
-def check_de_openclaw() -> Check:
-    proc = subprocess.run([sys.executable, "scripts/verify_de_openclaw_runtime.py"], cwd=PROJECT_ROOT, text=True, capture_output=True, timeout=15, check=False)
+def check_de_hermes_native() -> Check:
+    proc = subprocess.run([sys.executable, "scripts/verify_de_hermes_native_runtime.py"], cwd=PROJECT_ROOT, text=True, capture_output=True, timeout=15, check=False)
     if proc.returncode == 0:
-        return Check("de_openclaw_runtime", True, "verifier passed")
-    return Check("de_openclaw_runtime", False, (proc.stdout + proc.stderr).strip()[-1000:])
+        return Check("de_hermes_native_runtime", True, "verifier passed")
+    return Check("de_hermes_native_runtime", False, (proc.stdout + proc.stderr).strip()[-1000:])
 
 
 def check_llm_config_redacted() -> Check:
@@ -116,7 +116,7 @@ def check_tushare_cache_status() -> Check:
 
 
 def run_checks() -> list[Check]:
-    checks = [check_import(), check_db(), check_heartbeat(), check_de_openclaw(), check_llm_config_redacted(), check_tushare_cache_status()]
+    checks = [check_import(), check_db(), check_heartbeat(), check_de_hermes_native(), check_llm_config_redacted(), check_tushare_cache_status()]
     checks.extend(check_routes())
     return checks
 

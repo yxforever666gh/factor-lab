@@ -11,7 +11,7 @@ The file is designed for WebUI/control pages and smoke tests. It must be cheap t
   "timestamp": "2026-04-28T00:00:00+00:00",
   "pid": 12345,
   "project_root": "/home/admin/factor-lab",
-  "provider": "real_llm",
+  "provider": "direct_model",
   "state": "running",
   "queue": {
     "pending": 0,

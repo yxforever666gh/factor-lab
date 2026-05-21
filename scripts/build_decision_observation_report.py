@@ -34,11 +34,11 @@ if __name__ == "__main__":
         "",
         "## Current Decision Sources",
         f"- planner: {(((attribution.get('current_snapshot') or {}).get('decision_layer') or {}).get('planner_source'))}",
-        f"- failure_analyst: {(((attribution.get('current_snapshot') or {}).get('decision_layer') or {}).get('failure_analyst_source'))}",
+        f"- diagnostician: {(((attribution.get('current_snapshot') or {}).get('decision_layer') or {}).get('diagnostician_source'))}",
         "",
         "## Decision Impact vs Heuristic Baseline",
         f"- planner_changed: {((impact.get('planner') or {}).get('changed'))}",
-        f"- failure_analyst_changed: {((impact.get('failure_analyst') or {}).get('changed'))}",
+        f"- diagnostician_changed: {((impact.get('diagnostician') or {}).get('changed'))}",
         "",
         "## Current Attribution Snapshot",
         f"- proposal_count: {(((attribution.get('current_snapshot') or {}).get('generation') or {}).get('proposal_count'))}",
@@ -58,7 +58,7 @@ if __name__ == "__main__":
         "## A/B Arms",
     ]
     for arm, row in ((ab.get('arms') or {}).items()):
-        lines.append(f"- {arm}: planner={row.get('planner_source')}, failure={row.get('failure_analyst_source')}, planner_schema_valid={row.get('planner_schema_valid')}, failure_schema_valid={row.get('failure_analyst_schema_valid')}")
+        lines.append(f"- {arm}: planner={row.get('planner_source')}, failure={row.get('diagnostician_source')}, planner_schema_valid={row.get('planner_schema_valid')}, failure_schema_valid={row.get('diagnostician_schema_valid')}")
 
     out = ARTIFACTS / "factor_lab_decision_observation_report.md"
     out.write_text("\n".join(lines).strip() + "\n", encoding="utf-8")

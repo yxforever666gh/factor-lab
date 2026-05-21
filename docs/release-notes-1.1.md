@@ -6,7 +6,7 @@ Python package version：`1.1.0`
 
 ## 一句话总结
 
-Factor Lab 1.1 不是一次“扩大自动化”的版本，而是一次把 Factor Lab 从旧 OpenClaw 运行形态迁移到 Hermes 接管后、继续收紧为“小机构化 / simulated paper research”的安全版本：保留 agent-role 架构语义，明确 provider/model/cost/cache 边界；同时把 controlled runtime、bucket-aware OOS、paper portfolio、风险诊断和状态报告串成可审计链路，确保后续每一步都先计划、先 dry-run、先验证，再决定是否写队列或恢复运行。
+Factor Lab 1.1 不是一次“扩大自动化”的版本，而是一次把 Factor Lab 从旧 HermesNative 运行形态迁移到 Hermes 接管后、继续收紧为“小机构化 / simulated paper research”的安全版本：保留 agent-role 架构语义，明确 provider/model/cost/cache 边界；同时把 controlled runtime、bucket-aware OOS、paper portfolio、风险诊断和状态报告串成可审计链路，确保后续每一步都先计划、先 dry-run、先验证，再决定是否写队列或恢复运行。
 
 ## 发布背景
 
@@ -23,15 +23,15 @@ Factor Lab 1.1 不是一次“扩大自动化”的版本，而是一次把 Fact
 
 ## 主要变化
 
-### 1. de-OpenClaw 迁移进入可发布基线
+### 1. de-HermesNative 迁移进入可发布基线
 
-1.1 延续并固化了 de-OpenClaw takeover 的核心目标：Factor Lab 不只是替换 LLM provider 或 model fallback，而是保留旧 OpenClaw 风格的 agent-role 架构语义。
+1.1 延续并固化了 de-HermesNative takeover 的核心目标：Factor Lab 不只是替换 LLM provider 或 model fallback，而是保留旧 HermesNative 风格的 agent-role 架构语义。
 
 本版本重点整理了以下边界：
 
-- agent role 与 provider/profile 分开表达，避免把“谁负责什么任务”和“调用哪个模型服务”混为一谈。
+- Hermes profile 与 provider/profile 分开表达，避免把“谁负责什么任务”和“调用哪个模型服务”混为一谈。
 - base_url、endpoint path、provider profile、model label、pricing label 等术语继续精确化。
-- LLM cost/cache 字段继续向 provider 真实返回能力对齐，避免用错误模型名或旧 OpenClaw 假设污染成本统计。
+- LLM cost/cache 字段继续向 provider 真实返回能力对齐，避免用错误模型名或旧 HermesNative 假设污染成本统计。
 - README、迁移完成文档、systemd、WebUI 与 LLM/provider 配置围绕 Hermes 接管后的运行形态继续收敛。
 
 这意味着 1.1 的迁移完成标准不是“能调模型”这么简单，而是旧的多角色研究系统在 Hermes 语境下仍然能被清晰管理、诊断和审计。

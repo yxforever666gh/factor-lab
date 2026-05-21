@@ -136,7 +136,7 @@ def build_run_summary(db_path: str | Path, output_path: str | Path) -> None:
             f"AU=0 诊断：{(au_zero_diagnosis.get('summary') or {}).get('direct_cause') or '-'}。"
         )
     failure_enhancement = {}
-    failure_enhancement_path = Path(db_path).resolve().parent / 'failure_analyst_enhancement.json'
+    failure_enhancement_path = Path(db_path).resolve().parent / 'diagnostician_enhancement.json'
     if failure_enhancement_path.exists():
         import json
         failure_enhancement = json.loads(failure_enhancement_path.read_text(encoding='utf-8')) or {}

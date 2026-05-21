@@ -22,7 +22,7 @@ class FakeRouter:
         return {
             "configured_provider": self.provider,
             "normalized_provider": self.provider,
-            "provider_class": "generic" if self.provider in {"real_llm", "heuristic", "mock"} else "legacy_openclaw",
+            "provider_class": "generic" if self.provider in {"direct_model", "heuristic", "mock"} else "legacy_hermes_native",
             "recommended_effective_source": self.provider,
             "effective_source": self.provider,
             "degraded_to_heuristic": False,
@@ -78,51 +78,51 @@ def test_pipeline_builds_briefs_before_running_brief_runner(tmp_path, monkeypatc
     monkeypatch.setattr(pipeline, "apply_strategy_plan", lambda *args, **kwargs: {"injected_count": 0, "injected_tasks": []})
     monkeypatch.setattr(pipeline, "build_research_metrics", lambda *args, **kwargs: {"ok": True})
     monkeypatch.setattr(pipeline, "build_research_attribution", lambda *args, **kwargs: {"ok": True})
-    monkeypatch.setattr(pipeline, "DecisionProviderRouter", FakeRouter)
+    monkeypatch.setattr(pipeline, "HermesDecisionRouter", FakeRouter)
 
     def fake_planner_brief(**kwargs):
         output_path = Path(kwargs["output_path"])
-        payload = {"schema_version": "factor_lab.planner_agent_brief.v1", "inputs": {"open_questions": [], "candidate_pool_tasks": []}}
+        payload = {"schema_version": "factor_lab.researcher_profile_brief.v1", "inputs": {"open_questions": [], "candidate_pool_tasks": []}}
         output_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         return payload
 
     def fake_failure_brief(**kwargs):
         output_path = Path(kwargs["output_path"])
-        payload = {"schema_version": "factor_lab.failure_analyst_brief.v1", "inputs": {"recent_failed_or_risky_tasks": []}}
+        payload = {"schema_version": "factor_lab.diagnostician_brief.v1", "inputs": {"recent_failed_or_risky_tasks": []}}
         output_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         return payload
 
-    monkeypatch.setattr(pipeline, "build_planner_agent_brief", fake_planner_brief)
-    monkeypatch.setattr(pipeline, "build_failure_analyst_brief", fake_failure_brief)
+    monkeypatch.setattr(pipeline, "build_researcher_profile_brief", fake_planner_brief)
+    monkeypatch.setattr(pipeline, "build_diagnostician_brief", fake_failure_brief)
 
     def fake_subprocess_run(cmd, cwd, capture_output, text):
-        assert (artifacts / "planner_agent_brief.json").exists()
-        assert (artifacts / "failure_analyst_brief.json").exists()
+        assert (artifacts / "researcher_profile_brief.json").exists()
+        assert (artifacts / "diagnostician_brief.json").exists()
         assert cmd[-2:] == ["--provider", "heuristic"]
         return type("Completed", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
 
     monkeypatch.setattr(pipeline.subprocess, "run", fake_subprocess_run)
     monkeypatch.setattr(
         pipeline,
-        "load_validated_agent_responses",
+        "load_validated_hermes_decision_artifacts",
         lambda *_args, **_kwargs: {
             "loaded_at_utc": "now",
-            "planner": {"schema_version": "factor_lab.planner_agent_response.v1", "mode": "validate", "task_mix": {"baseline": 1, "validation": 1, "exploration": 0}, "priority_families": [], "suppress_families": [], "recommended_actions": []},
+            "planner": {"schema_version": "factor_lab.researcher_profile_response.v1", "mode": "validate", "task_mix": {"baseline": 1, "validation": 1, "exploration": 0}, "priority_families": [], "suppress_families": [], "recommended_actions": []},
             "planner_errors": [],
-            "failure_analyst": {"schema_version": "factor_lab.failure_analyst_response.v1", "failure_patterns": [], "should_stop": [], "should_probe": [], "should_reroute": []},
-            "failure_analyst_errors": [],
+            "diagnostician": {"schema_version": "factor_lab.diagnostician_response.v1", "failure_patterns": [], "should_stop": [], "should_probe": [], "should_reroute": []},
+            "diagnostician_errors": [],
         },
     )
 
     result = pipeline.run_research_planner_pipeline()
 
-    assert result["agent_responses"]["planner_present"] is True
-    assert result["agent_responses"]["failure_analyst_present"] is True
-    assert result["agent_responses"]["configured_live_provider"] == "heuristic"
-    assert result["agent_responses"]["configured_observation_provider"] == "heuristic"
-    assert result["agent_responses"]["brief_runner"]["returncode"] == 0
-    assert result["agent_responses"]["provider_health"]["live"]["configured_provider"] == "heuristic"
-    assert result["agent_responses"]["provider_health"]["observation"]["configured_provider"] == "heuristic"
+    assert result["hermes_decision_artifacts"]["planner_present"] is True
+    assert result["hermes_decision_artifacts"]["diagnostician_present"] is True
+    assert result["hermes_decision_artifacts"]["configured_live_provider"] == "heuristic"
+    assert result["hermes_decision_artifacts"]["configured_observation_provider"] == "heuristic"
+    assert result["hermes_decision_artifacts"]["brief_runner"]["returncode"] == 0
+    assert result["hermes_decision_artifacts"]["provider_health"]["live"]["configured_provider"] == "heuristic"
+    assert result["hermes_decision_artifacts"]["provider_health"]["observation"]["configured_provider"] == "heuristic"
     assert FakeRouter.calls[0]["probe"] is False
     assert FakeRouter.calls[1]["probe"] is True
 
@@ -135,9 +135,9 @@ def test_observation_vs_live_separation_with_explicit_diagnostics(tmp_path, monk
     monkeypatch.setattr(pipeline, "_live_provider_health_path", lambda: tmp_path / "artifacts" / "llm_provider_health_live.json")
     monkeypatch.setattr(pipeline, "_observation_provider_health_path", lambda: tmp_path / "artifacts" / "llm_provider_health.json")
     
-    # Set live to legacy OpenClaw, observation to generic/real_llm
-    monkeypatch.setenv("FACTOR_LAB_LIVE_DECISION_PROVIDER", "legacy_openclaw_gateway")
-    monkeypatch.setenv("FACTOR_LAB_OBSERVATION_DECISION_PROVIDER", "real_llm")
+    # Set live to legacy HermesNative, observation to generic/direct_model
+    monkeypatch.setenv("FACTOR_LAB_LIVE_DECISION_PROVIDER", "legacy_hermes_native_gateway")
+    monkeypatch.setenv("FACTOR_LAB_OBSERVATION_DECISION_PROVIDER", "direct_model")
     monkeypatch.delenv("FACTOR_LAB_DECISION_PROVIDER", raising=False)
 
     artifacts = tmp_path / "artifacts"
@@ -177,36 +177,36 @@ def test_observation_vs_live_separation_with_explicit_diagnostics(tmp_path, monk
     monkeypatch.setattr(pipeline, "apply_strategy_plan", lambda *args, **kwargs: {"injected_count": 0, "injected_tasks": []})
     monkeypatch.setattr(pipeline, "build_research_metrics", lambda *args, **kwargs: {"ok": True})
     monkeypatch.setattr(pipeline, "build_research_attribution", lambda *args, **kwargs: {"ok": True})
-    monkeypatch.setattr(pipeline, "DecisionProviderRouter", FakeRouter)
+    monkeypatch.setattr(pipeline, "HermesDecisionRouter", FakeRouter)
 
     def fake_planner_brief(**kwargs):
         output_path = Path(kwargs["output_path"])
-        payload = {"schema_version": "factor_lab.planner_agent_brief.v1", "inputs": {"open_questions": [], "candidate_pool_tasks": []}}
+        payload = {"schema_version": "factor_lab.researcher_profile_brief.v1", "inputs": {"open_questions": [], "candidate_pool_tasks": []}}
         output_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         return payload
 
     def fake_failure_brief(**kwargs):
         output_path = Path(kwargs["output_path"])
-        payload = {"schema_version": "factor_lab.failure_analyst_brief.v1", "inputs": {"recent_failed_or_risky_tasks": []}}
+        payload = {"schema_version": "factor_lab.diagnostician_brief.v1", "inputs": {"recent_failed_or_risky_tasks": []}}
         output_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         return payload
 
-    monkeypatch.setattr(pipeline, "build_planner_agent_brief", fake_planner_brief)
-    monkeypatch.setattr(pipeline, "build_failure_analyst_brief", fake_failure_brief)
+    monkeypatch.setattr(pipeline, "build_researcher_profile_brief", fake_planner_brief)
+    monkeypatch.setattr(pipeline, "build_diagnostician_brief", fake_failure_brief)
 
     def fake_subprocess_run(cmd, cwd, capture_output, text):
-        assert cmd[-2:] == ["--provider", "legacy_openclaw_gateway"]
+        assert cmd[-2:] == ["--provider", "legacy_hermes_native_gateway"]
         return type("Completed", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
 
     monkeypatch.setattr(pipeline.subprocess, "run", fake_subprocess_run)
     monkeypatch.setattr(
         pipeline,
-        "load_validated_agent_responses",
+        "load_validated_hermes_decision_artifacts",
         lambda *_args, **_kwargs: {
             "loaded_at_utc": "now",
             "planner": {
-                "schema_version": "factor_lab.planner_agent_response.v1",
-                "decision_metadata": {"effective_source": "legacy_openclaw_gateway"},
+                "schema_version": "factor_lab.researcher_profile_response.v1",
+                "decision_metadata": {"effective_source": "legacy_hermes_native_gateway"},
                 "mode": "validate",
                 "task_mix": {"baseline": 1, "validation": 1, "exploration": 0},
                 "priority_families": [],
@@ -214,37 +214,37 @@ def test_observation_vs_live_separation_with_explicit_diagnostics(tmp_path, monk
                 "recommended_actions": [],
             },
             "planner_errors": [],
-            "failure_analyst": {
-                "schema_version": "factor_lab.failure_analyst_response.v1",
-                "decision_metadata": {"effective_source": "legacy_openclaw_gateway"},
+            "diagnostician": {
+                "schema_version": "factor_lab.diagnostician_response.v1",
+                "decision_metadata": {"effective_source": "legacy_hermes_native_gateway"},
                 "failure_patterns": [],
                 "should_stop": [],
                 "should_probe": [],
                 "should_reroute": [],
             },
-            "failure_analyst_errors": [],
+            "diagnostician_errors": [],
         },
     )
 
     result = pipeline.run_research_planner_pipeline()
 
-    # Assert live provider can remain legacy OpenClaw
-    assert result["agent_responses"]["configured_live_provider"] == "legacy_openclaw_gateway"
-    # Assert observation provider can be generic/real_llm independently
-    assert result["agent_responses"]["configured_observation_provider"] == "real_llm"
+    # Assert live provider can remain legacy HermesNative
+    assert result["hermes_decision_artifacts"]["configured_live_provider"] == "legacy_hermes_native_gateway"
+    # Assert observation provider can be generic/direct_model independently
+    assert result["hermes_decision_artifacts"]["configured_observation_provider"] == "direct_model"
     # Assert planner effective source
-    assert result["agent_responses"]["planner_source"] == "legacy_openclaw_gateway"
+    assert result["hermes_decision_artifacts"]["planner_source"] == "legacy_hermes_native_gateway"
     # Assert failure analyst effective source
-    assert result["agent_responses"]["failure_analyst_source"] == "legacy_openclaw_gateway"
+    assert result["hermes_decision_artifacts"]["diagnostician_source"] == "legacy_hermes_native_gateway"
     
     # Assert normalized provider health for both live and observation
-    assert result["agent_responses"]["provider_health"]["live"]["normalized_provider"] == "legacy_openclaw_gateway"
-    assert result["agent_responses"]["provider_health"]["observation"]["normalized_provider"] == "real_llm"
-    assert result["agent_responses"]["provider_health"]["live"]["provider_class"] is not None
-    assert result["agent_responses"]["provider_health"]["observation"]["provider_class"] is not None
+    assert result["hermes_decision_artifacts"]["provider_health"]["live"]["normalized_provider"] == "legacy_hermes_native_gateway"
+    assert result["hermes_decision_artifacts"]["provider_health"]["observation"]["normalized_provider"] == "direct_model"
+    assert result["hermes_decision_artifacts"]["provider_health"]["live"]["provider_class"] is not None
+    assert result["hermes_decision_artifacts"]["provider_health"]["observation"]["provider_class"] is not None
     
     # Assert gray_mode marker when providers differ
-    assert result["agent_responses"].get("gray_mode") == "observation_only"
+    assert result["hermes_decision_artifacts"].get("gray_mode") == "observation_only"
 
 
 def test_gray_mode_not_set_when_providers_match(tmp_path, monkeypatch):
@@ -297,22 +297,22 @@ def test_gray_mode_not_set_when_providers_match(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "apply_strategy_plan", lambda *args, **kwargs: {"injected_count": 0, "injected_tasks": []})
     monkeypatch.setattr(pipeline, "build_research_metrics", lambda *args, **kwargs: {"ok": True})
     monkeypatch.setattr(pipeline, "build_research_attribution", lambda *args, **kwargs: {"ok": True})
-    monkeypatch.setattr(pipeline, "DecisionProviderRouter", FakeRouter)
+    monkeypatch.setattr(pipeline, "HermesDecisionRouter", FakeRouter)
 
     def fake_planner_brief(**kwargs):
         output_path = Path(kwargs["output_path"])
-        payload = {"schema_version": "factor_lab.planner_agent_brief.v1", "inputs": {"open_questions": [], "candidate_pool_tasks": []}}
+        payload = {"schema_version": "factor_lab.researcher_profile_brief.v1", "inputs": {"open_questions": [], "candidate_pool_tasks": []}}
         output_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         return payload
 
     def fake_failure_brief(**kwargs):
         output_path = Path(kwargs["output_path"])
-        payload = {"schema_version": "factor_lab.failure_analyst_brief.v1", "inputs": {"recent_failed_or_risky_tasks": []}}
+        payload = {"schema_version": "factor_lab.diagnostician_brief.v1", "inputs": {"recent_failed_or_risky_tasks": []}}
         output_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         return payload
 
-    monkeypatch.setattr(pipeline, "build_planner_agent_brief", fake_planner_brief)
-    monkeypatch.setattr(pipeline, "build_failure_analyst_brief", fake_failure_brief)
+    monkeypatch.setattr(pipeline, "build_researcher_profile_brief", fake_planner_brief)
+    monkeypatch.setattr(pipeline, "build_diagnostician_brief", fake_failure_brief)
 
     def fake_subprocess_run(cmd, cwd, capture_output, text):
         return type("Completed", (), {"returncode": 0, "stdout": "ok", "stderr": ""})()
@@ -320,11 +320,11 @@ def test_gray_mode_not_set_when_providers_match(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline.subprocess, "run", fake_subprocess_run)
     monkeypatch.setattr(
         pipeline,
-        "load_validated_agent_responses",
+        "load_validated_hermes_decision_artifacts",
         lambda *_args, **_kwargs: {
             "loaded_at_utc": "now",
             "planner": {
-                "schema_version": "factor_lab.planner_agent_response.v1",
+                "schema_version": "factor_lab.researcher_profile_response.v1",
                 "decision_metadata": {"effective_source": "heuristic"},
                 "mode": "validate",
                 "task_mix": {"baseline": 1, "validation": 1, "exploration": 0},
@@ -333,26 +333,26 @@ def test_gray_mode_not_set_when_providers_match(tmp_path, monkeypatch):
                 "recommended_actions": [],
             },
             "planner_errors": [],
-            "failure_analyst": {
-                "schema_version": "factor_lab.failure_analyst_response.v1",
+            "diagnostician": {
+                "schema_version": "factor_lab.diagnostician_response.v1",
                 "decision_metadata": {"effective_source": "heuristic"},
                 "failure_patterns": [],
                 "should_stop": [],
                 "should_probe": [],
                 "should_reroute": [],
             },
-            "failure_analyst_errors": [],
+            "diagnostician_errors": [],
         },
     )
 
     result = pipeline.run_research_planner_pipeline()
 
     # Assert both providers are the same
-    assert result["agent_responses"]["configured_live_provider"] == "heuristic"
-    assert result["agent_responses"]["configured_observation_provider"] == "heuristic"
+    assert result["hermes_decision_artifacts"]["configured_live_provider"] == "heuristic"
+    assert result["hermes_decision_artifacts"]["configured_observation_provider"] == "heuristic"
     
     # Assert gray_mode is None when providers match
-    assert result["agent_responses"].get("gray_mode") is None
+    assert result["hermes_decision_artifacts"].get("gray_mode") is None
 
 
 def test_pipeline_uses_configurable_artifacts_dir_for_runtime_files(tmp_path, monkeypatch):
@@ -396,33 +396,33 @@ def test_pipeline_uses_configurable_artifacts_dir_for_runtime_files(tmp_path, mo
     monkeypatch.setattr(pipeline, "apply_strategy_plan", lambda *args, **kwargs: {"injected_count": 0, "injected_tasks": []})
     monkeypatch.setattr(pipeline, "build_research_metrics", lambda *args, **kwargs: {"ok": True})
     monkeypatch.setattr(pipeline, "build_research_attribution", lambda *args, **kwargs: {"ok": True})
-    monkeypatch.setattr(pipeline, "DecisionProviderRouter", FakeRouter)
+    monkeypatch.setattr(pipeline, "HermesDecisionRouter", FakeRouter)
 
     def fake_planner_brief(**kwargs):
         output_path = Path(kwargs["output_path"])
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"schema_version": "factor_lab.planner_agent_brief.v1", "inputs": {"open_questions": [], "candidate_pool_tasks": []}}
+        payload = {"schema_version": "factor_lab.researcher_profile_brief.v1", "inputs": {"open_questions": [], "candidate_pool_tasks": []}}
         output_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         return payload
 
     def fake_failure_brief(**kwargs):
         output_path = Path(kwargs["output_path"])
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"schema_version": "factor_lab.failure_analyst_brief.v1", "inputs": {"recent_failed_or_risky_tasks": []}}
+        payload = {"schema_version": "factor_lab.diagnostician_brief.v1", "inputs": {"recent_failed_or_risky_tasks": []}}
         output_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
         return payload
 
-    monkeypatch.setattr(pipeline, "build_planner_agent_brief", fake_planner_brief)
-    monkeypatch.setattr(pipeline, "build_failure_analyst_brief", fake_failure_brief)
+    monkeypatch.setattr(pipeline, "build_researcher_profile_brief", fake_planner_brief)
+    monkeypatch.setattr(pipeline, "build_diagnostician_brief", fake_failure_brief)
     monkeypatch.setattr(
         pipeline,
-        "load_validated_agent_responses",
+        "load_validated_hermes_decision_artifacts",
         lambda *_args, **_kwargs: {
             "loaded_at_utc": "now",
-            "planner": {"schema_version": "factor_lab.planner_agent_response.v1", "mode": "validate", "task_mix": {"baseline": 1, "validation": 1, "exploration": 0}, "priority_families": [], "suppress_families": [], "recommended_actions": []},
+            "planner": {"schema_version": "factor_lab.researcher_profile_response.v1", "mode": "validate", "task_mix": {"baseline": 1, "validation": 1, "exploration": 0}, "priority_families": [], "suppress_families": [], "recommended_actions": []},
             "planner_errors": [],
-            "failure_analyst": {"schema_version": "factor_lab.failure_analyst_response.v1", "failure_patterns": [], "should_stop": [], "should_probe": [], "should_reroute": []},
-            "failure_analyst_errors": [],
+            "diagnostician": {"schema_version": "factor_lab.diagnostician_response.v1", "failure_patterns": [], "should_stop": [], "should_probe": [], "should_reroute": []},
+            "diagnostician_errors": [],
         },
     )
 
@@ -434,7 +434,7 @@ def test_pipeline_uses_configurable_artifacts_dir_for_runtime_files(tmp_path, mo
     result = pipeline.run_research_planner_pipeline()
 
     assert (artifacts / "research_flow_state.json").exists()
-    assert (artifacts / "agent_responses.json").exists()
+    assert (artifacts / "hermes_decision_artifacts.json").exists()
     assert FakeRouter.calls[0]["output_path"] == str(artifacts / "llm_provider_health_live.json")
     assert FakeRouter.calls[1]["output_path"] == str(artifacts / "llm_provider_health.json")
-    assert result["agent_responses"]["path"] == str(artifacts / "agent_responses.json")
+    assert result["hermes_decision_artifacts"]["path"] == str(artifacts / "hermes_decision_artifacts.json")

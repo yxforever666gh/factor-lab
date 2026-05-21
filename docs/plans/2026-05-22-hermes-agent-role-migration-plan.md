@@ -6,6 +6,10 @@
 
 **Architecture:** Factor Lab becomes a domain application that asks named Hermes profiles to perform research work. Hermes owns agent identity, profile config, tool access, skills, sessions, and model routing. Factor Lab owns domain data, schemas, artifacts, queue admission, and deterministic validation.
 
+**Model rule:** Factor Lab Hermes profiles and any Factor Lab-spawned Hermes subagents must use the current Hermes main model. Do not pin model/provider/base_url/api_key inside Factor Lab profile configs, bootstrap files, env keys, or role-specific code. When the Hermes main model changes, every Factor Lab profile follows automatically on the next invocation.
+
+**Single source of truth:** the main Hermes config is the only model source. Factor Lab may read it at call time and pass `--provider` / `--model` explicitly to a profile invocation, or rely on Hermes native inheritance if that is supported and probe-verified. It must never maintain separate subagent model settings.
+
 **Tech Stack:** Hermes CLI profiles, Hermes toolsets, Hermes skills, Hermes sessions, Python, pytest, Factor Lab artifacts and validation code.
 
 ---
@@ -58,6 +62,7 @@ FACTOR_LAB_HERMES_MODE=native
 FACTOR_LAB_HERMES_REQUIRE_PROFILE=1
 FACTOR_LAB_HERMES_PROFILE_MAP_JSON={"researcher":"factor-lab-researcher","diagnostician":"factor-lab-diagnostician","reviewer":"factor-lab-reviewer","data_steward":"factor-lab-data-steward"}
 FACTOR_LAB_HERMES_SESSION_MODE=resume
+FACTOR_LAB_HERMES_MODEL_SOURCE=main
 FACTOR_LAB_HERMES_ARTIFACT_DIR=artifacts/hermes
 ```
 
@@ -79,8 +84,16 @@ Hermes session
 Hermes briefing
 Hermes artifact
 Hermes backend
+Hermes main model
 Factor Lab research event
 Factor Lab validation gate
+```
+
+Model vocabulary rule:
+
+```text
+Say: profiles inherit the Hermes main model.
+Do not say: each profile has its own model, fallback model, agent model, role model, or provider fallback.
 ```
 
 Names to remove from public/config/UI/docs paths:
@@ -322,6 +335,9 @@ class HermesRoute:
     session_name: str
     toolsets: tuple[str, ...]
     skills: tuple[str, ...]
+    model_source: str = "main"
+    main_provider: str | None = None
+    main_model: str | None = None
     briefing_path: Path
     response_path: Path
 ```
@@ -391,10 +407,12 @@ Expected: no active source files import the old router.
 **Command shape:**
 
 ```bash
-hermes --profile factor-lab-researcher --resume factor-lab-researcher-main chat -q '<prompt>' --toolsets file,terminal,skills,session_search --quiet
+hermes --profile factor-lab-researcher --resume factor-lab-researcher-main chat -q '<prompt>' --provider '<current-main-provider>' --model '<current-main-model>' --toolsets file,terminal,skills,session_search --quiet
 ```
 
 If named resume behaves differently in the installed Hermes version, the client should select the supported Hermes command shape after probing `hermes --help` and `hermes profile list`.
+
+The provider/model flags must be resolved from the current Hermes main config at call time. They must not come from Factor Lab profile config, old provider settings, role config, or hardcoded defaults.
 
 **Request object:**
 
@@ -407,6 +425,9 @@ class HermesRequest:
     session_name: str
     toolsets: tuple[str, ...]
     skills: tuple[str, ...]
+    model_source: str = "main"
+    main_provider: str | None = None
+    main_model: str | None = None
     briefing_path: Path
     response_path: Path
     timeout_seconds: int = 300
@@ -434,6 +455,15 @@ class HermesResult:
 cd /home/admin/factor-lab
 pytest tests/test_hermes_client.py -q
 python3 -m py_compile src/factor_lab/hermes_client.py
+```
+
+Expected client tests:
+
+```text
+- Hermes command includes --provider and --model from the main Hermes config.
+- Changing the mocked main config changes every profile command.
+- Profile-specific model/provider values are ignored or rejected.
+- Missing main model config fails loudly instead of silently using profile-local defaults.
 ```
 
 ---
@@ -470,6 +500,41 @@ Profile-specific fields can be added in `hermes_contracts.py`, but every respons
 ```bash
 cd /home/admin/factor-lab
 pytest tests/test_hermes_contracts.py tests/test_hermes_artifacts.py -q
+```
+
+---
+
+### Task 3.3: Add main model resolver
+
+**Objective:** Make model inheritance explicit and testable.
+
+**Files:**
+
+- Create: `src/factor_lab/hermes_main_model.py`
+- Create: `tests/test_hermes_main_model.py`
+
+**Implementation:**
+
+Create a small resolver that reads the active Hermes main configuration using supported Hermes CLI/config paths.
+
+Preferred behavior:
+
+```text
+1. Run `hermes config` or read the default Hermes config path.
+2. Extract current main provider and model.
+3. Return a typed `HermesMainModel(provider, model)` object.
+4. Never read Factor Lab old provider keys for this purpose.
+5. Fail loudly if provider or model is missing.
+```
+
+The resolver is used by `HermesClient` immediately before spawning each Hermes profile. This guarantees that if the user changes the main Hermes model, Factor Lab profiles follow without editing profile configs.
+
+**Verification:**
+
+```bash
+cd /home/admin/factor-lab
+pytest tests/test_hermes_main_model.py tests/test_hermes_client.py -q
+python3 -m py_compile src/factor_lab/hermes_main_model.py src/factor_lab/hermes_client.py
 ```
 
 ---
@@ -542,6 +607,7 @@ pytest tests/test_hermes_briefings.py -q
 
 ```json
 {
+  "model_source": "main",
   "profiles": {
     "factor-lab-researcher": {
       "workdir": "/home/admin/factor-lab",
@@ -567,11 +633,15 @@ pytest tests/test_hermes_briefings.py -q
 }
 ```
 
+`configs/hermes/profiles.json` must not contain `model`, `provider`, `base_url`, `api_key`, `fallback_order`, or any profile-local model override. If any of those fields are present, bootstrap must fail instead of silently accepting them.
+
 **Bootstrap behavior:**
 
 - Run `hermes profile list`.
 - Create missing profiles with `hermes profile create <name>`.
-- Set profile workdir and model/tool config using supported Hermes CLI/config paths.
+- Set profile workdir, toolsets, and skills using supported Hermes CLI/config paths.
+- Do not set profile-local model/provider/base_url/api_key. Profiles inherit the main Hermes model.
+- Validate that generated profile configs contain no model override fields.
 - Print exact commands run.
 - Fail loudly if Hermes CLI is unavailable.
 
@@ -581,6 +651,14 @@ pytest tests/test_hermes_briefings.py -q
 cd /home/admin/factor-lab
 python3 scripts/bootstrap_hermes_profiles.py --dry-run
 pytest tests/test_bootstrap_hermes_profiles.py -q
+```
+
+Expected bootstrap tests:
+
+```text
+- Generated profile config has no model/provider/base_url/api_key fields.
+- A forbidden model override in configs/hermes/profiles.json makes bootstrap fail.
+- Creating all four profiles does not pin a model inside any profile.
 ```
 
 ---
@@ -924,6 +1002,91 @@ factor-lab-data-steward
 10. The repo reads as a Hermes-native Factor Lab integration, not as a previous agent framework with a Hermes adapter.
 
 ---
+
+## Implementation status — 2026-05-22
+
+Implemented in this pass:
+
+- Added canonical Hermes profile vocabulary layer:
+  - `src/factor_lab/hermes_profiles.py`
+  - `tests/test_hermes_profiles.py`
+- Added Hermes-first route/request layer:
+  - `src/factor_lab/hermes_router.py`
+  - `tests/test_hermes_router.py`
+- Added profile-backed Hermes CLI client and JSON artifact contract:
+  - `src/factor_lab/hermes_client.py`
+  - `src/factor_lab/hermes_contracts.py`
+  - `src/factor_lab/hermes_artifacts.py`
+  - matching tests
+- Added file-based Hermes briefing writer:
+  - `src/factor_lab/hermes_briefings.py`
+  - `tests/test_hermes_briefings.py`
+- Added Hermes-named runtime hooks:
+  - `src/factor_lab/hermes_runtime_hooks.py`
+  - `tests/test_hermes_runtime_hooks.py`
+- Added Hermes profile bootstrap/config/smoke/audit scripts:
+  - `scripts/bootstrap_hermes_profiles.py`
+  - `scripts/enable_hermes_native.py`
+  - `scripts/smoke_hermes_profiles.py`
+  - `scripts/audit_hermes_vocabulary.py`
+- Added Hermes-facing profile config:
+  - `configs/hermes/profiles.json`
+- Replaced the public WebUI Agents page with `/hermes` and `hermes.html`, leaving `/agents` as a compatibility redirect for existing tests/bookmarks.
+- Bootstrapped the four Hermes profiles in the local Hermes installation:
+  - `factor-lab-researcher`
+  - `factor-lab-diagnostician`
+  - `factor-lab-reviewer`
+  - `factor-lab-data-steward`
+- Wrote Hermes-native Factor Lab env keys via `scripts/enable_hermes_native.py --write --dry-run`.
+
+Verification performed:
+
+```bash
+pytest \
+  tests/test_hermes_profiles.py \
+  tests/test_hermes_router.py \
+  tests/test_hermes_client.py \
+  tests/test_hermes_contracts.py \
+  tests/test_hermes_artifacts.py \
+  tests/test_hermes_briefings.py \
+  tests/test_hermes_runtime_hooks.py \
+  tests/test_webui_hermes_settings.py \
+  tests/test_bootstrap_hermes_profiles.py \
+  tests/test_enable_hermes_native.py \
+  tests/test_smoke_hermes_profiles.py \
+  tests/test_audit_hermes_vocabulary.py \
+  tests/test_hermes_env_settings.py \
+  -q
+# 27 passed
+```
+
+```bash
+python3 -m py_compile \
+  src/factor_lab/hermes_profiles.py \
+  src/factor_lab/hermes_router.py \
+  src/factor_lab/hermes_client.py \
+  src/factor_lab/hermes_contracts.py \
+  src/factor_lab/hermes_artifacts.py \
+  src/factor_lab/hermes_briefings.py \
+  src/factor_lab/hermes_runtime_hooks.py \
+  scripts/bootstrap_hermes_profiles.py \
+  scripts/enable_hermes_native.py \
+  scripts/smoke_hermes_profiles.py \
+  scripts/audit_hermes_vocabulary.py \
+  src/factor_lab/webui_app.py
+```
+
+Live smoke note:
+
+- `hermes profile list` confirms all four profiles exist.
+- Real live smoke reached Hermes profile invocation but provider credentials/subscription are currently not usable:
+  - `nowcoding`: `403 insufficient_user_quota`
+  - `ccvibe`: `403 SUBSCRIPTION_NOT_FOUND`
+- Therefore deterministic smoke/test coverage passes, but live profile JSON smoke requires a working Hermes provider credential before it can pass.
+
+Known follow-up if strict acceptance is required:
+
+- Active legacy decision modules still exist for backward-compatible deterministic routing and older tests. The Hermes-native layer is now present and tested; fully deleting old modules/imports is a larger destructive cleanup and should be done in a separate compatibility-breaking pass.
 
 ## Verification suite
 

@@ -18,7 +18,7 @@ def test_candidate_codegen_gate_templates_exist():
 def test_candidate_codegen_policy_check_returns_clean_summary():
     result = run_checks()
 
-    assert result["policy_name"] == "openclaw_candidate_generation_policy"
+    assert result["policy_name"] == "hermes_native_candidate_generation_policy"
     assert "summary" in result
     assert result["summary"]["generator_mentions_cheap_screen"] is True
     assert result["summary"]["compiler_mentions_generation_context"] is True

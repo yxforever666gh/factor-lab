@@ -1,6 +1,6 @@
 # Factor Lab Small Institutionalization Status
 
-Generated: 2026-05-21T11:32:36.493326+00:00
+Generated: 2026-05-21T19:19:13.487046+00:00
 Phase: A_baseline
 Strategy mode: long_only_equity_enhancement
 Decision: ready_for_portfolio_mvp

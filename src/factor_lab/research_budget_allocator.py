@@ -11,7 +11,7 @@ DEFAULT_POLICY = {
     "daily_budget": {
         "max_total_tasks": 100,
         "mechanism_validation": 40,
-        "data_quality_coverage": 20,
+        "data_steward_coverage": 20,
         "robustness_validation": 20,
         "reverse_direction_tests": 10,
         "pure_exploration": 10,

@@ -248,7 +248,7 @@ Factor Lab Daemon 状态检查
 【Heartbeat】
   时间戳: 2026-04-29T04:00:00+08:00
   PID: 12345
-  Provider: real_llm
+  Provider: direct_model
   队列:
     - Pending: 0
     - Running: 1

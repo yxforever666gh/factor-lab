@@ -151,7 +151,7 @@ def build_planner_response(context: dict[str, Any], *, source_label: str = "heur
         rationale_bits.append(f"已为 {len(hypothesis_cards)} 个候选生成 hypothesis cards，优先验证是否具备真正增量价值。")
 
     return {
-        "schema_version": "factor_lab.planner_agent_response.v1",
+        "schema_version": "factor_lab.researcher_profile_response.v1",
         "generated_at_utc": _iso_now(),
         "agent_name": "planner-decision-engine",
         "mode": mode,

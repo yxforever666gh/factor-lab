@@ -208,7 +208,7 @@ def _build_markdown_report(payload: dict[str, Any]) -> str:
         f"- do_not_promote count: {payload['current_snapshot']['final_conversion'].get('do_not_promote_count')}",
         f"- duplicate_suppress count: {payload['current_snapshot']['final_conversion'].get('duplicate_suppress_count')}",
         f"- planner decision source: {(payload['current_snapshot'].get('decision_layer') or {}).get('planner_source')}",
-        f"- failure analyst decision source: {(payload['current_snapshot'].get('decision_layer') or {}).get('failure_analyst_source')}",
+        f"- failure analyst decision source: {(payload['current_snapshot'].get('decision_layer') or {}).get('diagnostician_source')}",
         "",
         "## Observation windows",
     ]
@@ -242,7 +242,7 @@ def build_research_attribution(
     candidate_generation_plan_path: str | Path = ARTIFACTS / "candidate_generation_plan.json",
     promotion_scorecard_path: str | Path = ARTIFACTS / "promotion_scorecard.json",
     portfolio_stability_path: str | Path = ARTIFACTS / "paper_portfolio" / "portfolio_stability_score.json",
-    agent_responses_path: str | Path = ARTIFACTS / "agent_responses.json",
+    hermes_decision_artifacts_path: str | Path = ARTIFACTS / "hermes_decision_artifacts.json",
     output_path: str | Path = ARTIFACTS / "research_attribution.json",
     report_path: str | Path = ARTIFACTS / "factor_quality_observation_report.md",
 ) -> dict[str, Any]:
@@ -253,7 +253,7 @@ def build_research_attribution(
     candidate_generation_plan = _read_json(candidate_generation_plan_path, {})
     promotion_scorecard = _read_json(promotion_scorecard_path, {})
     portfolio_stability = _read_json(portfolio_stability_path, {})
-    agent_responses = _read_json(agent_responses_path, {})
+    hermes_decision_artifacts = _read_json(hermes_decision_artifacts_path, {})
 
     current_proposals = list(candidate_generation_plan.get("proposals") or [])
     current_generated_tasks = [
@@ -317,10 +317,10 @@ def build_research_attribution(
                 "label": portfolio_stability.get("label"),
             },
             "decision_layer": {
-                "planner_source": (((agent_responses.get("planner") or {}).get("decision_metadata") or {}).get("source") or ((agent_responses.get("planner") or {}).get("decision_source"))),
-                "failure_analyst_source": (((agent_responses.get("failure_analyst") or {}).get("decision_metadata") or {}).get("source") or ((agent_responses.get("failure_analyst") or {}).get("decision_source"))),
-                "planner_schema_valid": (((agent_responses.get("planner") or {}).get("decision_metadata") or {}).get("schema_valid")),
-                "failure_analyst_schema_valid": (((agent_responses.get("failure_analyst") or {}).get("decision_metadata") or {}).get("schema_valid")),
+                "planner_source": (((hermes_decision_artifacts.get("planner") or {}).get("decision_metadata") or {}).get("source") or ((hermes_decision_artifacts.get("planner") or {}).get("decision_source"))),
+                "diagnostician_source": (((hermes_decision_artifacts.get("diagnostician") or {}).get("decision_metadata") or {}).get("source") or ((hermes_decision_artifacts.get("diagnostician") or {}).get("decision_source"))),
+                "planner_schema_valid": (((hermes_decision_artifacts.get("planner") or {}).get("decision_metadata") or {}).get("schema_valid")),
+                "diagnostician_schema_valid": (((hermes_decision_artifacts.get("diagnostician") or {}).get("decision_metadata") or {}).get("schema_valid")),
             },
         },
         "observation_windows": observation_windows,
