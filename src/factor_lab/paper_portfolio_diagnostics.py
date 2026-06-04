@@ -17,7 +17,7 @@ def load_portfolio(path: str | Path) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
-def _latest_previous_portfolio(history_path: str | Path) -> dict[str, Any] | None:
+def _latest_previous_portfolio(history_path: str | Path, current: dict[str, Any] | None = None) -> dict[str, Any] | None:
     p = Path(history_path)
     if not p.exists():
         return None
@@ -28,7 +28,7 @@ def _latest_previous_portfolio(history_path: str | Path) -> dict[str, Any] | Non
     if not isinstance(payload, list) or not payload:
         return None
     for item in reversed(payload):
-        if isinstance(item, dict):
+        if isinstance(item, dict) and item != current:
             return item
     return None
 
@@ -115,7 +115,7 @@ def build_paper_portfolio_diagnostics(
     cost_bps: float,
 ) -> dict[str, Any]:
     current = load_portfolio(current_path)
-    previous = _latest_previous_portfolio(history_path)
+    previous = _latest_previous_portfolio(history_path, current)
     turnover = build_turnover_diagnostics(current, previous)
     cost = build_cost_diagnostics(turnover, cost_bps)
     return {

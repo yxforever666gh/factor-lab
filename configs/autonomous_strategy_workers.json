@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "runtime_binding": "hermes_cli_one_shot",
+  "factor_lab_authority": "deterministic_gate",
+  "model_provider_policy": "inherit_current_hermes_session",
+  "preferred_invocation": {
+    "command": "hermes chat",
+    "quiet": true,
+    "source": "factor-lab-worker",
+    "resume": false,
+    "continue": false,
+    "forbidden_flags": ["--provider", "--model", "--resume", "--continue", "--yolo"],
+    "template": "hermes chat -Q --source factor-lab-worker --skills factor-lab --toolsets <toolsets> --query <self_contained_prompt>"
+  },
+  "notes": [
+    "This file replaces new Factor Lab internal agent/profile/provider settings for Autonomous Strategy Lab.",
+    "Workers are invoked with hermes chat one-shot commands, not delegate_task and not persistent local Hermes CLI agents.",
+    "Do not pass --model, --provider, --resume, --continue, or --yolo; inherit the current Hermes configuration and start a fresh worker session.",
+    "Factor Lab remains the authority for queue writes, controlled execution, promotion, and safety gates."
+  ],
+  "global_forbidden_actions": [
+    "queue_write",
+    "timer_enable",
+    "systemd_change",
+    "broad_daemon_restore",
+    "live_trading",
+    "auto_promotion",
+    "drawdown_limit_relaxation",
+    "provider_model_change",
+    "persistent_local_hermes_agent_creation"
+  ],
+  "workers": [
+    {
+      "worker_key": "factor_lab_diagnostician",
+      "purpose": "Read blocker and run artifacts, classify failure modes, and recommend stop/request-data/switch-route decisions.",
+      "toolsets": ["file", "terminal", "skills", "session_search"],
+      "skills": ["factor-lab"],
+      "input_artifacts": [
+        "artifacts/autonomous_strategy_lab/latest_decision.json",
+        "artifacts/small_institutional_simulation/risk_reduction_repair.json",
+        "artifacts/harvest_agent/v3_status.json"
+      ],
+      "output_artifact_namespace": "diagnostician",
+      "forbidden_actions": [
+        "queue_write",
+        "timer_enable",
+        "systemd_change",
+        "broad_daemon_restore",
+        "live_trading",
+        "auto_promotion",
+        "drawdown_limit_relaxation",
+        "provider_model_change"
+      ],
+      "verification_after": [
+        "validate_response_schema",
+        "check_forbidden_actions_absent",
+        "rerun_autonomous_strategy_lab_dry_run"
+      ]
+    },
+    {
+      "worker_key": "factor_lab_mechanism_researcher",
+      "purpose": "Propose economically distinct mechanism routes with required fields, falsification criteria, and cheap screens.",
+      "toolsets": ["file", "terminal", "skills", "session_search"],
+      "skills": ["factor-lab"],
+      "input_artifacts": [
+        "knowledge/mechanism_lessons.md",
+        "knowledge/data_blockers.json",
+        "artifacts/autonomous_strategy_lab/latest_decision.json"
+      ],
+      "output_artifact_namespace": "mechanism_researcher",
+      "forbidden_actions": [
+        "queue_write",
+        "timer_enable",
+        "systemd_change",
+        "broad_daemon_restore",
+        "live_trading",
+        "auto_promotion",
+        "arbitrary_factor_code_generation",
+        "provider_model_change"
+      ],
+      "verification_after": [
+        "validate_required_fields_declared",
+        "validate_falsification_criteria_declared",
+        "run_route_config_schema_tests"
+      ]
+    },
+    {
+      "worker_key": "factor_lab_data_steward",
+      "purpose": "Classify field coverage and data blockers before any full backtest is considered.",
+      "toolsets": ["file", "terminal", "skills"],
+      "skills": ["factor-lab"],
+      "input_artifacts": [
+        "knowledge/data_blockers.json",
+        "src/factor_lab/feature_schema.py",
+        "artifacts/autonomous_strategy_lab/latest_decision.json"
+      ],
+      "output_artifact_namespace": "data_steward",
+      "forbidden_actions": [
+        "queue_write",
+        "timer_enable",
+        "systemd_change",
+        "broad_daemon_restore",
+        "live_trading",
+        "auto_promotion",
+        "external_data_fetch_without_explicit_approval",
+        "provider_model_change"
+      ],
+      "verification_after": [
+        "validate_blocked_fields_are_not_marked_available",
+        "run_cheap_screen_schema_tests",
+        "rerun_autonomous_strategy_lab_dry_run"
+      ]
+    },
+    {
+      "worker_key": "factor_lab_reviewer",
+      "purpose": "Review worker outputs, safety boundaries, and whether deterministic gates should allow a controlled experiment.",
+      "toolsets": ["file", "terminal", "skills"],
+      "skills": ["factor-lab"],
+      "input_artifacts": [
+        "artifacts/autonomous_strategy_lab/latest_decision.json",
+        "artifacts/autonomous_strategy_lab/workers"
+      ],
+      "output_artifact_namespace": "reviewer",
+      "forbidden_actions": [
+        "queue_write",
+        "timer_enable",
+        "systemd_change",
+        "broad_daemon_restore",
+        "live_trading",
+        "auto_promotion",
+        "drawdown_limit_relaxation",
+        "provider_model_change"
+      ],
+      "verification_after": [
+        "validate_review_verdict_schema",
+        "check_safety_flags_remain_false",
+        "run_targeted_autonomous_strategy_tests"
+      ]
+    }
+  ]
+}

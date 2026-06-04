@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "routes": [
+    {
+      "mechanism_id": "industry_relative_value",
+      "allowed_signals": ["industry_relative_book_yield", "industry_relative_earnings_yield"],
+      "required_fields": ["industry", "book_yield", "earnings_yield"],
+      "default_filters": [],
+      "rationale": "Test within-industry value ranks without adding unsupported data."
+    },
+    {
+      "mechanism_id": "value_quality_no_distress",
+      "allowed_signals": ["industry_relative_earnings_yield", "earnings_yield"],
+      "required_fields": ["earnings_yield", "roe", "pb"],
+      "default_filters": [
+        {"field": "roe", "operator": ">=", "quantile": 0.4},
+        {"field": "pb", "operator": "<=", "quantile": 0.8}
+      ],
+      "rationale": "Prefer cheap companies that are not obvious quality traps."
+    },
+    {
+      "mechanism_id": "value_momentum_confirmation",
+      "allowed_signals": ["industry_relative_earnings_yield", "earnings_yield", "momentum_20"],
+      "required_fields": ["earnings_yield", "momentum_20"],
+      "default_filters": [
+        {"field": "momentum_20", "operator": ">=", "quantile": 0.4}
+      ],
+      "rationale": "Require market confirmation before trusting valuation repair."
+    },
+    {
+      "mechanism_id": "cost_robust_value_quality",
+      "allowed_signals": ["industry_relative_earnings_yield", "earnings_yield"],
+      "required_fields": ["earnings_yield", "roe", "turnover"],
+      "default_filters": [
+        {"field": "turnover", "operator": ">=", "quantile": 0.4}
+      ],
+      "rationale": "Prioritize value-quality evidence that survives non-zero transaction costs."
+    },
+    {
+      "mechanism_id": "low_volatility_value_quality",
+      "allowed_signals": ["industry_relative_earnings_yield", "earnings_yield", "industry_relative_book_yield"],
+      "required_fields": ["earnings_yield", "roe", "volatility_20"],
+      "default_filters": [
+        {"field": "volatility_20", "operator": "<=", "quantile": 0.6}
+      ],
+      "rationale": "Reduce drawdown by avoiding the highest short-term volatility names."
+    }
+  ]
+}

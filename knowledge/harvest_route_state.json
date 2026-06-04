@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "policy": {
+    "max_consecutive_failures_before_hold": 2,
+    "max_consecutive_failures_before_demote": 3,
+    "max_semantic_repeats_before_stop": 3,
+    "near_miss_keeps_route_active": true
+  },
+  "current_route": null,
+  "current_route_status": "active",
+  "routes": {
+    "industry_relative_value": {
+      "attempts": 4,
+      "pass_count": 0,
+      "near_miss_count": 0,
+      "fail_count": 2,
+      "consecutive_failures": 1,
+      "repeated_failure_classes": {
+        "weak_risk_adjusted_return": 3,
+        "zero_cost_best_only": 4,
+        "not_promotion_ready": 4,
+        "drawdown_too_high": 2
+      },
+      "semantic_repeats": {
+        "58fd7e1b30ff2a7333d95b4a": 1,
+        "fcd4f1cd72dc25c4ac96ff1e": 1,
+        "41c4d8b4afbe32f21bbfbfc2": 1,
+        "5962fb4faeb8b54d6c1d4fbe": 1
+      },
+      "latest_best_sharpe": 0.760898,
+      "latest_worst_drawdown": -0.544556,
+      "events": [
+        {
+          "cycle_id": "cycle_0047",
+          "oos_class": "insufficient_data",
+          "failure_classes": [
+            "weak_risk_adjusted_return",
+            "zero_cost_best_only",
+            "not_promotion_ready"
+          ],
+          "semantic_hash": "58fd7e1b30ff2a7333d95b4a",
+          "best_sharpe": 0.0,
+          "worst_drawdown": 0.0
+        },
+        {
+          "cycle_id": "cycle_0048",
+          "oos_class": "fail",
+          "failure_classes": [
+            "drawdown_too_high",
+            "weak_risk_adjusted_return",
+            "zero_cost_best_only",
+            "not_promotion_ready"
+          ],
+          "semantic_hash": "fcd4f1cd72dc25c4ac96ff1e",
+          "best_sharpe": 0.668238,
+          "worst_drawdown": -0.550991
+        },
+        {
+          "cycle_id": "cycle_0049",
+          "oos_class": "insufficient_data",
+          "failure_classes": [
+            "weak_risk_adjusted_return",
+            "zero_cost_best_only",
+            "not_promotion_ready"
+          ],
+          "semantic_hash": "41c4d8b4afbe32f21bbfbfc2",
+          "best_sharpe": 0.0,
+          "worst_drawdown": 0.0
+        },
+        {
+          "cycle_id": "cycle_0050",
+          "oos_class": "fail",
+          "failure_classes": [
+            "drawdown_too_high",
+            "zero_cost_best_only",
+            "not_promotion_ready"
+          ],
+          "semantic_hash": "5962fb4faeb8b54d6c1d4fbe",
+          "best_sharpe": 0.760898,
+          "worst_drawdown": -0.544556
+        }
+      ],
+      "status": "watch"
+    }
+  }
+}

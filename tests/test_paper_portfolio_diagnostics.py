@@ -79,6 +79,28 @@ def test_build_paper_portfolio_diagnostics_reads_current_and_latest_previous_his
     assert payload["cost"]["estimated_round_trip_cost"] == 0.002
 
 
+def test_build_paper_portfolio_diagnostics_skips_current_snapshot_at_end_of_history(tmp_path):
+    current_path = tmp_path / "current_portfolio.json"
+    history_path = tmp_path / "portfolio_history.json"
+    current = _portfolio(["AAA", "BBB", "CCC"])
+    previous = _portfolio(["BBB", "CCC", "DDD"])
+    current_path.write_text(json.dumps(current), encoding="utf-8")
+    history_path.write_text(json.dumps([previous, current]), encoding="utf-8")
+
+    payload = build_paper_portfolio_diagnostics(
+        current_path=current_path,
+        history_path=history_path,
+        benchmark_id="CSI1000",
+        benchmark_name="中证1000",
+        cost_bps=30,
+    )
+
+    assert payload["turnover"]["previous_count"] == 3
+    assert payload["turnover"]["added_tickers"] == ["AAA"]
+    assert payload["turnover"]["removed_tickers"] == ["DDD"]
+    assert payload["turnover"]["turnover_one_way_estimate"] == round(1 / 3, 6)
+
+
 def test_write_paper_portfolio_diagnostics_writes_json_and_markdown(tmp_path):
     current_path = tmp_path / "current_portfolio.json"
     history_path = tmp_path / "portfolio_history.json"

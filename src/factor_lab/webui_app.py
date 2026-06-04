@@ -9,15 +9,12 @@ from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
-from urllib.parse import parse_qs
-import urllib.error
-import urllib.request
 from zoneinfo import ZoneInfo
 
 LOCAL_TZ = ZoneInfo("Asia/Shanghai")
 
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import HTTPException
+from fastapi.responses import HTMLResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from factor_lab.hermes_profile_settings import HermesProfileSetting, hermes_profile_settings_to_json, default_hermes_profile_settings, load_hermes_profile_settings
@@ -36,33 +33,32 @@ from factor_lab.diagnostician_enhancement import load_diagnostician_enhancement
 from factor_lab.paths import env_file
 from factor_lab.llm_pricing import estimate_llm_cost_usd
 from factor_lab.research_quality_summary import build_research_quality_summary
-
-
-LLM_ENV_KEYS = [
-    "FACTOR_LAB_DECISION_PROVIDER",
-    "FACTOR_LAB_LIVE_DECISION_PROVIDER",
-    "FACTOR_LAB_OBSERVATION_DECISION_PROVIDER",
-    "FACTOR_LAB_LLM_BASE_URL",
-    "FACTOR_LAB_LLM_MODEL",
-    "FACTOR_LAB_LLM_API_KEY",
-    "FACTOR_LAB_LLM_API_FORMAT",
-]
-
-LLM_PROFILE_ENV_KEYS = [
-    "FACTOR_LAB_LLM_PROFILES_JSON",
-    "FACTOR_LAB_LLM_FALLBACK_ORDER",
-]
-
-HERMES_PROFILE_SETTING_ENV_KEYS = [
-    "FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON",
-    "FACTOR_LAB_HERMES_PROFILE_ORDER",
-]
-
-LLM_FORM_TO_ENV = {
-    "decision_provider": "FACTOR_LAB_DECISION_PROVIDER",
-    "live_decision_provider": "FACTOR_LAB_LIVE_DECISION_PROVIDER",
-    "observation_decision_provider": "FACTOR_LAB_OBSERVATION_DECISION_PROVIDER",
-}
+from factor_lab.harvest_report import build_harvest_report
+from factor_lab.autonomous_strategy_lab_report import build_autonomous_strategy_lab_report
+from factor_lab.webui.app import create_app, register_startup_cache, render_template
+from factor_lab.webui.routes.settings_data_sources import register_data_source_routes
+from factor_lab.webui.routes.settings_llm import register_llm_settings_routes
+from factor_lab.webui.routes.settings_hermes import register_hermes_settings_routes
+from factor_lab.webui.services.service_restart import restart_research_daemon_after_settings_save as _restart_research_daemon_after_settings_save
+from factor_lab.webui.services.env_settings import (
+    DATA_SOURCE_TYPE_OPTIONS,
+    HERMES_PROFILE_SETTING_ENV_KEYS,
+    LLM_API_FORMAT_OPTIONS,
+    LLM_ENV_KEYS,
+    LLM_PROFILE_ENV_KEYS,
+    enabled_profile_names as _enabled_profile_names,
+    profiles_from_form as _profiles_from_form,
+    data_source_profiles_from_form as _data_source_profiles_from_form,
+    redacted_data_source_profile as _redacted_data_source_profile,
+    load_data_source_settings as _service_load_data_source_settings,
+    save_data_source_settings as _service_save_data_source_settings,
+    test_data_source_connection as _service_test_data_source_connection,
+    load_llm_settings as _service_load_llm_settings,
+    save_llm_settings as _service_save_llm_settings,
+    test_llm_profile_connection as _service_test_llm_profile_connection,
+    read_env_values as _service_read_env_values,
+    split_csv as _split_csv,
+)
 
 
 def pretty_json_text(value: Any, empty_text: str = "暂无数据。") -> str:
@@ -73,180 +69,20 @@ def pretty_json_text(value: Any, empty_text: str = "暂无数据。") -> str:
     return json.dumps(value, ensure_ascii=False, indent=2)
 
 
-def _mask_secret(value: str | None) -> str:
-    secret = (value or "").strip()
-    if not secret:
-        return "未配置"
-    if len(secret) <= 8:
-        return "***"
-    return f"{secret[:4]}...{secret[-4:]}"
-
-
 def _read_env_values(path: Path | None = None) -> dict[str, str]:
-    path = path or env_file()
-    values: dict[str, str] = {}
-    if not path.exists():
-        return values
-    for line in path.read_text(encoding="utf-8").splitlines():
-        raw = line.strip()
-        if not raw or raw.startswith("#") or "=" not in raw:
-            continue
-        key, value = raw.split("=", 1)
-        values[key.strip()] = value.strip()
-    return values
+    return _service_read_env_values(env_file_func=env_file, path=path)
 
 
-def _split_csv(value: Any) -> list[str]:
-    if isinstance(value, list):
-        return [str(item).strip() for item in value if str(item).strip()]
-    return [item.strip() for item in str(value or "").split(",") if item.strip()]
+def load_data_source_settings() -> dict[str, Any]:
+    return _service_load_data_source_settings(env_file_func=env_file, environ=os.environ)
 
 
-def _coerce_boolish(value: Any, default: bool = True) -> bool:
-    if isinstance(value, bool):
-        return value
-    if value is None:
-        return default
-    if isinstance(value, str):
-        lowered = value.strip().lower()
-        if lowered in {"1", "true", "yes", "on", "enabled"}:
-            return True
-        if lowered in {"0", "false", "no", "off", "disabled"}:
-            return False
-    return bool(value)
+def save_data_source_settings(form: dict[str, str]) -> dict[str, Any]:
+    return _service_save_data_source_settings(form, env_file_func=env_file, environ=os.environ)
 
 
-def _ordered_profile_list(profiles: list[dict[str, Any]], fallback_order: str) -> list[dict[str, Any]]:
-    order = _split_csv(fallback_order)
-    if not order:
-        return profiles
-    by_name = {str(profile.get("name") or ""): profile for profile in profiles}
-    ordered = [by_name[name] for name in order if name in by_name]
-    ordered_names = {str(profile.get("name") or "") for profile in ordered}
-    ordered.extend(profile for profile in profiles if str(profile.get("name") or "") not in ordered_names)
-    return ordered
-
-
-def _enabled_profile_names(profiles: list[dict[str, Any]]) -> list[str]:
-    names: list[str] = []
-    for profile in profiles:
-        name = str(profile.get("name") or "").strip()
-        if name and _coerce_boolish(profile.get("enabled", True), default=True):
-            names.append(name)
-    return names
-
-
-def _first_enabled_profile(profiles: list[dict[str, Any]]) -> dict[str, Any]:
-    for profile in profiles:
-        if _coerce_boolish(profile.get("enabled", True), default=True):
-            return profile
-    return profiles[0] if profiles else {}
-
-
-LLM_API_FORMAT_OPTIONS = [
-    {"value": "openai_responses", "label": "OpenAI Responses"},
-    {"value": "openai", "label": "OpenAI Chat Completions"},
-    {"value": "anthropic", "label": "Anthropic Messages"},
-]
-
-
-def _normalize_llm_api_format(value: Any, model: str | None = None) -> str:
-    raw = str(value or "").strip().lower()
-    if raw in {"responses", "openai_response"}:
-        raw = "openai_responses"
-    if raw in {"chat", "chat_completions", "chat_completion", "openai_chat", "openai_chat_completions"}:
-        raw = "openai"
-    if raw in {"messages", "anthropic_messages", "claude"}:
-        raw = "anthropic"
-    if raw in {"openai", "openai_responses", "anthropic"}:
-        return raw
-    model_text = str(model or "").strip().lower()
-    if model_text.startswith("claude") or "opus" in model_text:
-        return "anthropic"
-    if model_text.startswith("gpt-5"):
-        return "openai_responses"
-    return "openai"
-
-
-def _load_llm_profiles(values: dict[str, str]) -> tuple[list[dict[str, Any]], str]:
-    has_legacy_file_profile = bool(values.get("FACTOR_LAB_LLM_BASE_URL") or values.get("FACTOR_LAB_LLM_API_KEY") or values.get("FACTOR_LAB_LLM_MODEL"))
-    raw_profiles = values.get("FACTOR_LAB_LLM_PROFILES_JSON") or ("" if has_legacy_file_profile else os.environ.get("FACTOR_LAB_LLM_PROFILES_JSON")) or ""
-    fallback_order = values.get("FACTOR_LAB_LLM_FALLBACK_ORDER") or ("" if has_legacy_file_profile else os.environ.get("FACTOR_LAB_LLM_FALLBACK_ORDER")) or ""
-    profiles: list[dict[str, Any]] = []
-    if raw_profiles:
-        try:
-            parsed = json.loads(raw_profiles)
-        except Exception:
-            parsed = []
-        if isinstance(parsed, list):
-            for index, item in enumerate(parsed):
-                if not isinstance(item, dict):
-                    continue
-                name = str(item.get("name") or f"profile-{index + 1}").strip()
-                if not name:
-                    continue
-                api_key = str(item.get("api_key") or "")
-                profiles.append({
-                    "name": name,
-                    "base_url": str(item.get("base_url") or ""),
-                    "model": str(item.get("model") or ""),
-                    "api_format": _normalize_llm_api_format(item.get("api_format"), item.get("model")),
-                    "api_key": "",
-                    "api_key_configured": bool(api_key),
-                    "api_key_masked": _mask_secret(api_key),
-                    "enabled": _coerce_boolish(item.get("enabled", True), default=True),
-                })
-    if not profiles:
-        api_key = values.get("FACTOR_LAB_LLM_API_KEY") or os.environ.get("FACTOR_LAB_LLM_API_KEY") or ""
-        profiles.append({
-            "name": values.get("FACTOR_LAB_LLM_PROFILE_NAME") or os.environ.get("FACTOR_LAB_LLM_PROFILE_NAME") or "default",
-            "base_url": values.get("FACTOR_LAB_LLM_BASE_URL") or os.environ.get("FACTOR_LAB_LLM_BASE_URL") or "",
-            "model": values.get("FACTOR_LAB_LLM_MODEL") or os.environ.get("FACTOR_LAB_LLM_MODEL") or "",
-            "api_format": _normalize_llm_api_format(values.get("FACTOR_LAB_LLM_API_FORMAT") or os.environ.get("FACTOR_LAB_LLM_API_FORMAT"), values.get("FACTOR_LAB_LLM_MODEL") or os.environ.get("FACTOR_LAB_LLM_MODEL")),
-            "api_key": "",
-            "api_key_configured": bool(api_key),
-            "api_key_masked": _mask_secret(api_key),
-            "enabled": True,
-        })
-    return _ordered_profile_list(profiles, fallback_order), fallback_order or ",".join(str(profile.get("name")) for profile in profiles if profile.get("name"))
-
-
-def _profiles_from_form(form: dict[str, str], existing_profiles: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], str]:
-    existing_keys = {str(profile.get("name") or ""): str(profile.get("api_key") or "") for profile in existing_profiles}
-    profiles: list[dict[str, Any]] = []
-    for index in range(10):
-        name = (form.get(f"profile_name_{index}") or "").strip()
-        base_url = (form.get(f"profile_base_url_{index}") or "").strip().rstrip("/")
-        model = (form.get(f"profile_model_{index}") or "").strip()
-        api_format = _normalize_llm_api_format(form.get(f"profile_api_format_{index}"), model)
-        api_key = (form.get(f"profile_api_key_{index}") or "").strip()
-        enabled = form.get(f"profile_enabled_{index}") in {"on", "1", "true", "yes"}
-        if not any([name, base_url, model, api_key]):
-            continue
-        if not name:
-            name = f"profile-{index + 1}"
-        if not api_key:
-            api_key = existing_keys.get(name, "")
-        profiles.append({"name": name, "base_url": base_url, "model": model, "api_format": api_format, "api_key": api_key, "enabled": enabled, "order": (form.get(f"profile_order_{index}") or "").strip(), "_index": index})
-    explicit_order = any(str(profile.get("order") or "").strip() for profile in profiles)
-    if explicit_order:
-        def order_key(profile: dict[str, Any]) -> tuple[int, int]:
-            try:
-                return (int(str(profile.get("order") or "9999")), int(profile.get("_index") or 0))
-            except ValueError:
-                return (9999, int(profile.get("_index") or 0))
-        profiles = sorted(profiles, key=order_key)
-        for profile in profiles:
-            profile.pop("order", None)
-            profile.pop("_index", None)
-        fallback_order = ",".join(profile["name"] for profile in profiles if _coerce_boolish(profile.get("enabled", True), default=True))
-    else:
-        fallback_order = (form.get("fallback_order") or ",".join(profile["name"] for profile in profiles if _coerce_boolish(profile.get("enabled", True), default=True))).strip()
-        profiles = _ordered_profile_list(profiles, fallback_order)
-    enabled_names = _enabled_profile_names(profiles)
-    enabled_set = set(enabled_names)
-    fallback_order = ",".join(name for name in _split_csv(fallback_order) if name in enabled_set) or ",".join(enabled_names)
-    return profiles, fallback_order
+def test_data_source_connection(profile: dict[str, Any]) -> dict[str, Any]:
+    return _service_test_data_source_connection(profile)
 
 
 def _role_to_form_dict(role: HermesProfileSetting) -> dict[str, Any]:
@@ -463,174 +299,24 @@ def _hermes_profile_fallback_warnings(roles: list[dict[str, Any]], available_pro
 
 
 def load_llm_settings() -> dict[str, Any]:
-    values = _read_env_values()
-    merged = {key: values.get(key) or os.environ.get(key) or "" for key in [*LLM_ENV_KEYS, *LLM_PROFILE_ENV_KEYS]}
-    profiles, fallback_order = _load_llm_profiles(values)
-    first_profile = _first_enabled_profile(profiles) if profiles else {}
-    api_key_configured = any(bool(profile.get("api_key_configured")) for profile in profiles)
-    return {
-        "decision_provider": merged.get("FACTOR_LAB_DECISION_PROVIDER") or "direct_model",
-        "live_decision_provider": merged.get("FACTOR_LAB_LIVE_DECISION_PROVIDER") or merged.get("FACTOR_LAB_DECISION_PROVIDER") or "direct_model",
-        "observation_decision_provider": merged.get("FACTOR_LAB_OBSERVATION_DECISION_PROVIDER") or merged.get("FACTOR_LAB_DECISION_PROVIDER") or "direct_model",
-        "base_url": first_profile.get("base_url") or merged.get("FACTOR_LAB_LLM_BASE_URL", ""),
-        "model": first_profile.get("model") or merged.get("FACTOR_LAB_LLM_MODEL", ""),
-        "api_key": "",
-        "api_key_configured": api_key_configured,
-        "api_key_masked": first_profile.get("api_key_masked") or _mask_secret(merged.get("FACTOR_LAB_LLM_API_KEY")),
-        "profiles": profiles,
-        "fallback_order": fallback_order,
-        "env_file": str(env_file()),
-    }
+    return _service_load_llm_settings(env_file_func=env_file, environ=os.environ)
 
 
 def save_llm_settings(form: dict[str, str]) -> dict[str, Any]:
-    path = env_file()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    existing_values = _read_env_values(path)
-    old_fallback_order = existing_values.get("FACTOR_LAB_LLM_FALLBACK_ORDER") or os.environ.get("FACTOR_LAB_LLM_FALLBACK_ORDER") or ""
-    raw_existing_profiles = os.environ.get("FACTOR_LAB_LLM_PROFILES_JSON") or existing_values.get("FACTOR_LAB_LLM_PROFILES_JSON", "")
-    try:
-        existing_profiles = json.loads(raw_existing_profiles) if raw_existing_profiles else []
-    except Exception:
-        existing_profiles = []
-    if not isinstance(existing_profiles, list):
-        existing_profiles = []
-    if not existing_profiles:
-        existing_profiles = [{
-            "name": "default",
-            "api_key": os.environ.get("FACTOR_LAB_LLM_API_KEY") or existing_values.get("FACTOR_LAB_LLM_API_KEY", ""),
-        }]
-    if any(key.startswith("profile_") for key in form):
-        profiles, fallback_order = _profiles_from_form(form, existing_profiles)
-    else:
-        current_api_key = os.environ.get("FACTOR_LAB_LLM_API_KEY") or existing_values.get("FACTOR_LAB_LLM_API_KEY", "")
-        profiles = [{
-            "name": "default",
-            "base_url": (form.get("base_url") or "").strip(),
-            "model": (form.get("model") or "").strip(),
-            "api_format": _normalize_llm_api_format(form.get("api_format"), form.get("model")),
-            "api_key": (form.get("api_key") or "").strip() or current_api_key,
-            "enabled": True,
-        }]
-        fallback_order = "default"
-    primary = _first_enabled_profile(profiles) if profiles else {"base_url": "", "model": "", "api_key": ""}
-    requested: dict[str, str] = {}
-    for form_key, env_key in LLM_FORM_TO_ENV.items():
-        requested[env_key] = (form.get(form_key) or "").strip()
-    requested.update({
-        "FACTOR_LAB_LLM_BASE_URL": str(primary.get("base_url") or ""),
-        "FACTOR_LAB_LLM_MODEL": str(primary.get("model") or ""),
-        "FACTOR_LAB_LLM_API_KEY": str(primary.get("api_key") or ""),
-        "FACTOR_LAB_LLM_API_FORMAT": str(primary.get("api_format") or _normalize_llm_api_format(None, primary.get("model"))),
-        "FACTOR_LAB_LLM_PROFILES_JSON": json.dumps(profiles, ensure_ascii=False, separators=(",", ":")),
-        "FACTOR_LAB_LLM_FALLBACK_ORDER": fallback_order,
-    })
-    synced_hermes_profile_values = _sync_hermes_profile_settings_with_llm_profiles(
-        existing_values,
-        profiles,
-        old_fallback_order,
-        fallback_order,
+    return _service_save_llm_settings(
+        form,
+        env_file_func=env_file,
+        environ=os.environ,
+        sync_hermes_profiles_func=_sync_hermes_profile_settings_with_llm_profiles,
     )
-    requested.update(synced_hermes_profile_values)
-
-    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-    seen: set[str] = set()
-    updated_lines: list[str] = []
-    managed_keys = [*LLM_ENV_KEYS, *LLM_PROFILE_ENV_KEYS, *(HERMES_PROFILE_SETTING_ENV_KEYS if synced_hermes_profile_values else [])]
-    for line in lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or "=" not in line:
-            updated_lines.append(line)
-            continue
-        key, _ = line.split("=", 1)
-        key = key.strip()
-        if key in requested:
-            updated_lines.append(f"{key}={requested[key]}")
-            seen.add(key)
-        else:
-            updated_lines.append(line)
-    for key in managed_keys:
-        if key not in seen:
-            updated_lines.append(f"{key}={requested.get(key, '')}")
-    path.write_text("\n".join(updated_lines).rstrip() + "\n", encoding="utf-8")
-    try:
-        path.chmod(0o600)
-    except OSError:
-        pass
-    for key, value in requested.items():
-        os.environ[key] = value
-    return load_llm_settings()
 
 
 def restart_research_daemon_after_settings_save() -> dict[str, Any]:
-    try:
-        completed = subprocess.run(
-            ["systemctl", "--user", "restart", "factor-lab-research-daemon.service"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        return {
-            "ok": completed.returncode == 0,
-            "returncode": completed.returncode,
-            "stdout": completed.stdout.strip(),
-            "stderr": completed.stderr.strip(),
-        }
-    except Exception as exc:
-        return {"ok": False, "returncode": None, "stdout": "", "stderr": str(exc)}
+    return _restart_research_daemon_after_settings_save(subprocess_run=subprocess.run)
 
 
 def test_llm_profile_connection(profile: dict[str, Any]) -> dict[str, Any]:
-    from factor_lab.hermes_decision_router import HermesDecisionRouter
-
-    base_url = str(profile.get("base_url") or "").strip().rstrip("/")
-    model = str(profile.get("model") or "").strip()
-    api_key = str(profile.get("api_key") or "").strip()
-    api_format = _normalize_llm_api_format(profile.get("api_format"), model)
-    if not base_url or not model or not api_key:
-        return {"ok": False, "message": "模型测试失败：Base URL、Model、API Key 必须填写。", "api_format": api_format, "model": model}
-
-    router = HermesDecisionRouter(provider="direct_model", model=model)
-    url = router._direct_model_endpoint_url(base_url, api_format)
-    if api_format == "anthropic":
-        body = {
-            "model": model,
-            "system": "You are a connection test endpoint.",
-            "messages": [{"role": "user", "content": "Reply with OK only."}],
-            "max_tokens": 16,
-            "temperature": 0,
-        }
-        headers = router._direct_model_headers(api_key, auth_scheme="anthropic")
-    elif api_format == "openai_responses":
-        body = {
-            "model": model,
-            "input": [
-                {"role": "system", "content": "You are a connection test endpoint."},
-                {"role": "user", "content": "Reply with OK only."},
-            ],
-            "temperature": 0,
-        }
-        headers = router._direct_model_headers(api_key)
-    else:
-        body = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": "You are a connection test endpoint."},
-                {"role": "user", "content": "Reply with OK only."},
-            ],
-            "temperature": 0,
-        }
-        headers = router._direct_model_headers(api_key)
-    req = urllib.request.Request(url=url, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=20) as response:
-            raw_text = response.read().decode("utf-8", errors="ignore")
-        return {"ok": True, "message": "模型测试成功", "api_format": api_format, "model": model, "endpoint": url, "response_preview": raw_text[:300]}
-    except urllib.error.HTTPError as exc:
-        body_text = exc.read().decode("utf-8", errors="ignore")[:500]
-        return {"ok": False, "message": f"模型测试失败：http_error:{exc.code}", "api_format": api_format, "model": model, "endpoint": url, "error": body_text}
-    except Exception as exc:
-        return {"ok": False, "message": f"模型测试失败：{type(exc).__name__}: {exc}", "api_format": api_format, "model": model, "endpoint": url}
+    return _service_test_llm_profile_connection(profile)
 
 
 def format_bj_time(value: str | None) -> str:
@@ -1794,19 +1480,58 @@ env = Environment(
     autoescape=select_autoescape(["html", "xml"]),
 )
 
-app = FastAPI(title="Factor Lab 中文控制台")
+app = create_app()
 
 
-@app.on_event("startup")
 def warm_dashboard_cache() -> None:
     # Precompute the heaviest homepage payloads once at process startup.
     get_cached_health_metrics()
     get_cached_promotion_scorecard(limit=6)
 
 
+register_startup_cache(app, warm_dashboard_cache)
+
+
 def render(template_name: str, **context) -> HTMLResponse:
-    template = env.get_template(template_name)
-    return HTMLResponse(template.render(**localize_times(context)))
+    return render_template(env, localize_times, template_name, **context)
+
+
+register_data_source_routes(
+    app,
+    render=render,
+    load_data_source_settings=lambda: load_data_source_settings(),
+    save_data_source_settings=lambda form: save_data_source_settings(form),
+    restart_research_daemon_after_settings_save=lambda: restart_research_daemon_after_settings_save(),
+    read_env_values=lambda: _read_env_values(),
+    data_source_profiles_from_form=lambda form, existing_profiles: _data_source_profiles_from_form(form, existing_profiles),
+    redacted_data_source_profile=lambda profile: _redacted_data_source_profile(profile),
+    test_data_source_connection=lambda profile: test_data_source_connection(profile),
+    source_type_options=DATA_SOURCE_TYPE_OPTIONS,
+)
+
+register_llm_settings_routes(
+    app,
+    render=render,
+    load_llm_settings=lambda: load_llm_settings(),
+    save_llm_settings=lambda form: save_llm_settings(form),
+    restart_research_daemon_after_settings_save=lambda: restart_research_daemon_after_settings_save(),
+    read_env_values=lambda: _read_env_values(),
+    profiles_from_form=lambda form, existing_profiles: _profiles_from_form(form, existing_profiles),
+    test_llm_profile_connection=lambda profile: test_llm_profile_connection(profile),
+    api_format_options=LLM_API_FORMAT_OPTIONS,
+)
+
+register_hermes_settings_routes(
+    app,
+    render=render,
+    env_file=lambda: env_file(),
+    load_agent_settings=lambda: load_agent_settings(),
+    save_agent_settings=lambda form: save_agent_settings(form),
+    load_llm_settings=lambda: load_llm_settings(),
+    enabled_profile_names=lambda profiles: _enabled_profile_names(profiles),
+    hermes_profile_fallback_warnings=lambda roles, available_profile_names: _hermes_profile_fallback_warnings(roles, available_profile_names),
+    restart_research_daemon_after_settings_save=lambda: restart_research_daemon_after_settings_save(),
+)
 
 
 def build_candidate_detail_context(store: ExperimentStore, candidate_id: str) -> dict[str, Any]:
@@ -2373,6 +2098,18 @@ def health_page():
     return render("health.html", title="健康度", health=health, weekly=weekly)
 
 
+@app.get("/harvest-agent/status")
+def harvest_agent_status():
+    """Small WebUI/API status hook for Harvest Agent artifacts; no scheduling side effects."""
+    return build_harvest_report()
+
+
+@app.get("/autonomous-strategy-lab/status")
+def autonomous_strategy_lab_status():
+    """Small WebUI/API status hook for Autonomous Strategy Lab artifacts; no scheduling side effects."""
+    return build_autonomous_strategy_lab_report()
+
+
 @app.get("/research", response_class=HTMLResponse)
 def research_page():
     tasks = ExperimentStore(DB_PATH).list_research_tasks(limit=100)
@@ -2782,163 +2519,6 @@ def approved_universe_page():
         decision_ab=decision_ab,
         diagnostician_enhancement=diagnostician_enhancement,
     )
-
-
-@app.get("/settings", response_class=HTMLResponse)
-def settings_page(saved: str | None = None, restart: str | None = None):
-    settings = load_llm_settings()
-    profile_slots = list(settings.get("profiles") or [])
-    while len(profile_slots) < 5:
-        profile_slots.append({"name": "", "base_url": "", "model": "", "api_format": "openai_responses", "api_key_masked": "未配置", "enabled": True})
-    return render(
-        "settings.html",
-        title="大模型设置",
-        settings=settings,
-        profile_slots=profile_slots,
-        provider_options=["direct_model", "hermes_native_gateway", "heuristic", "mock"],
-        api_format_options=LLM_API_FORMAT_OPTIONS,
-        test_result=None,
-        saved=saved == "1",
-        restart_ok=restart == "1",
-        restart_failed=restart == "0",
-    )
-
-
-@app.post("/settings")
-async def settings_save(request: Request):
-    body = (await request.body()).decode("utf-8")
-    parsed = parse_qs(body, keep_blank_values=True)
-    save_llm_settings({key: values[-1] if values else "" for key, values in parsed.items()})
-    restart_result = restart_research_daemon_after_settings_save()
-    restart_flag = "1" if restart_result.get("ok") else "0"
-    return RedirectResponse(url=f"/settings?saved=1&restart={restart_flag}", status_code=303)
-
-
-@app.post("/settings/test-model", response_class=HTMLResponse)
-async def settings_test_model(request: Request):
-    body = (await request.body()).decode("utf-8")
-    parsed = parse_qs(body, keep_blank_values=True)
-    form = {key: values[-1] if values else "" for key, values in parsed.items()}
-    existing_values = _read_env_values()
-    raw_existing_profiles = existing_values.get("FACTOR_LAB_LLM_PROFILES_JSON") or os.environ.get("FACTOR_LAB_LLM_PROFILES_JSON") or ""
-    try:
-        existing_profiles = json.loads(raw_existing_profiles) if raw_existing_profiles else []
-    except Exception:
-        existing_profiles = []
-    if not isinstance(existing_profiles, list):
-        existing_profiles = []
-    profiles, _ = _profiles_from_form(form, existing_profiles)
-    try:
-        profile_index = int(form.get("profile_test_index") or 0)
-    except ValueError:
-        profile_index = 0
-    profile = profiles[profile_index] if 0 <= profile_index < len(profiles) else {}
-    test_result = test_llm_profile_connection(profile)
-    settings = load_llm_settings()
-    profile_slots = list(profiles)
-    while len(profile_slots) < 5:
-        profile_slots.append({"name": "", "base_url": "", "model": "", "api_format": "openai_responses", "api_key_masked": "未配置", "enabled": True})
-    return render(
-        "settings.html",
-        title="大模型设置",
-        settings=settings,
-        profile_slots=profile_slots,
-        provider_options=["direct_model", "hermes_native_gateway", "heuristic", "mock"],
-        api_format_options=LLM_API_FORMAT_OPTIONS,
-        test_result=test_result,
-        saved=False,
-        restart_ok=False,
-        restart_failed=False,
-    )
-
-
-@app.get("/hermes", response_class=HTMLResponse)
-def hermes_page(saved: str | None = None, restart: str | None = None):
-    settings = load_agent_settings()
-    llm_settings = load_llm_settings()
-    available_profile_names = _enabled_profile_names(list(llm_settings.get("profiles") or []))
-    agent_fallback_warnings = _hermes_profile_fallback_warnings(list(settings.get("roles") or []), available_profile_names)
-    role_slots = list(settings.get("roles") or [])
-    while len(role_slots) < 3:
-        role_slots.append({
-            "name": "",
-            "display_name": "",
-            "enabled": True,
-            "decision_types": "",
-            "purpose": "",
-            "system_prompt": "",
-            "llm_fallback_order": "",
-            "timeout_seconds": 90,
-            "max_retries": 1,
-            "strict_schema": True,
-            "legacy_agent_id": "",
-        })
-    return render(
-        "hermes.html",
-        title="Hermes 设置",
-        settings=settings,
-        role_slots=role_slots,
-        available_profile_names=available_profile_names,
-        agent_fallback_warnings=agent_fallback_warnings,
-        saved=saved == "1",
-        restart_ok=restart == "1",
-        restart_failed=restart == "0",
-    )
-
-
-@app.post("/hermes")
-async def hermes_save(request: Request):
-    from scripts.enable_hermes_native import desired_env_values
-
-    path = env_file()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    requested = desired_env_values()
-    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-    updated_lines: list[str] = []
-    seen: set[str] = set()
-    for line in lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or "=" not in line:
-            updated_lines.append(line)
-            continue
-        key, _ = line.split("=", 1)
-        key = key.strip()
-        if key in requested:
-            updated_lines.append(f"{key}={requested[key]}")
-            seen.add(key)
-        else:
-            updated_lines.append(line)
-    for key, value in requested.items():
-        if key not in seen:
-            updated_lines.append(f"{key}={value}")
-        os.environ[key] = value
-    path.write_text("\n".join(updated_lines).rstrip() + "\n", encoding="utf-8")
-    restart_result = restart_research_daemon_after_settings_save()
-    restart_flag = "1" if restart_result.get("ok") else "0"
-    return RedirectResponse(url=f"/hermes?saved=1&restart={restart_flag}", status_code=303)
-
-
-
-
-@app.get("/agents", response_class=HTMLResponse)
-def agents_page(saved: str | None = None, restart: str | None = None):
-    suffix = []
-    if saved is not None:
-        suffix.append(f"saved={saved}")
-    if restart is not None:
-        suffix.append(f"restart={restart}")
-    query = ("?" + "&".join(suffix)) if suffix else ""
-    return RedirectResponse(url=f"/hermes{query}", status_code=307)
-
-
-@app.post("/agents")
-async def agents_save(request: Request):
-    body = (await request.body()).decode("utf-8")
-    parsed = parse_qs(body, keep_blank_values=True)
-    save_agent_settings({key: values[-1] if values else "" for key, values in parsed.items()})
-    restart_result = restart_research_daemon_after_settings_save()
-    restart_flag = "1" if restart_result.get("ok") else "0"
-    return RedirectResponse(url=f"/agents?saved=1&restart={restart_flag}", status_code=303)
 
 
 @app.get("/llm", response_class=HTMLResponse)

@@ -1,19 +1,8 @@
 {
-  "updated_at_utc": "2026-05-10T10:26:27.150196+00:00",
   "blocked_value_routes": [
     {
-      "route_id": "historical_valuation_percentile",
-      "mechanism_id": "historical_valuation_percentile",
-      "target_family": "value",
-      "hypothesis": "股票相对自身历史估值便宜比横截面绝对便宜更可比。",
-      "required_data_fields": [
-        "pb_history_756d",
-        "pe_ttm_history_756d"
-      ],
-      "missing_fields": [
-        "pb_history_756d",
-        "pe_ttm_history_756d"
-      ],
+      "budget_bucket": "data_quality_coverage",
+      "candidate_expressions": [],
       "expected_horizons": [
         "60d",
         "120d"
@@ -21,12 +10,82 @@
       "falsification_criteria": [
         "long valuation history coverage below 60%"
       ],
-      "budget_bucket": "data_quality_coverage",
+      "hypothesis": "股票相对自身历史估值便宜比横截面绝对便宜更可比。",
+      "mechanism_id": "historical_valuation_percentile",
+      "missing_fields": [
+        "pb_history_756d",
+        "pe_ttm_history_756d"
+      ],
+      "required_data_fields": [
+        "pb_history_756d",
+        "pe_ttm_history_756d"
+      ],
+      "route_id": "historical_valuation_percentile",
       "status": "blocked_missing_fields",
-      "candidate_expressions": []
+      "target_family": "value"
+    },
+    {
+      "mechanism_id": "quality_cashflow_value_repair_v1",
+      "missing_fields": [
+        "gross_margin",
+        "current_ratio",
+        "quick_ratio",
+        "interest_coverage"
+      ],
+      "pit_validation_fields": [
+        "roe",
+        "net_profit_yoy",
+        "debt_to_assets"
+      ],
+      "proxy_blocked_fields": [
+        "ocfps",
+        "operating_cashflow_yoy"
+      ],
+      "required_data_fields": [
+        "gross_margin",
+        "current_ratio",
+        "quick_ratio",
+        "interest_coverage",
+        "ocfps",
+        "operating_cashflow_yoy"
+      ],
+      "route_id": "quality_cashflow_value_repair_v1",
+      "source_artifact": "artifacts/autonomous_strategy_lab/quality_cashflow_field_resolution.json",
+      "status": "blocked_request_data",
+      "target_family": "value_repair"
+    },
+    {
+      "low_coverage_fields": [
+        "profit_yoy",
+        "debt_to_asset",
+        "operating_cashflow_to_profit"
+      ],
+      "mechanism_id": "quality_profit_proxy_value_repair_v1",
+      "missing_fields": [],
+      "pit_validation_fields": [
+        "roe"
+      ],
+      "required_data_fields": [
+        "roe",
+        "profit_yoy",
+        "debt_to_asset",
+        "operating_cashflow_to_profit"
+      ],
+      "route_id": "quality_profit_proxy_value_repair_v1",
+      "source_artifact": "artifacts/autonomous_strategy_lab/quality_profit_proxy_field_resolution.json",
+      "status": "blocked_low_coverage",
+      "target_family": "value_repair_proxy"
     }
   ],
+  "blockers": [],
+  "harvest_blockers": [],
   "missing_fields": [
-    "quality_roe"
-  ]
+    "current_ratio",
+    "gross_margin",
+    "interest_coverage",
+    "quality_roe",
+    "quick_ratio"
+  ],
+  "schema_version": 1,
+  "updated_at_utc": "2026-06-02T21:18:37.379291+00:00"
 }

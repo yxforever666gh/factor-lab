@@ -20,6 +20,14 @@ DEFAULT_CONSTRAINT_HARDENING_PATH = ROOT / "artifacts" / "paper_portfolio" / "po
 DEFAULT_PROMOTION_READINESS_PATH = ROOT / "artifacts" / "paper_portfolio" / "paper_live_promotion_readiness.json"
 DEFAULT_SIMULATION_SELF_DIAGNOSIS_PATH = ROOT / "artifacts" / "small_institutional_simulation" / "self_diagnosis.json"
 DEFAULT_SIMULATED_PORTFOLIO_CONSTRUCTION_REPAIR_PATH = ROOT / "artifacts" / "small_institutional_simulation" / "portfolio_construction_repair.json"
+DEFAULT_DRAWDOWN_GROUP_DIAGNOSTIC_PATH = ROOT / "artifacts" / "small_institutional_simulation" / "drawdown_group_diagnostic.json"
+DEFAULT_DRAWDOWN_BLOCKER_EVIDENCE_PATH = ROOT / "artifacts" / "small_institutional_simulation" / "drawdown_blocker_evidence.json"
+DEFAULT_REPAIR_BLOCKER_MANUAL_REVIEW_PATH = ROOT / "artifacts" / "small_institutional_simulation" / "repair_blocker_manual_review.json"
+DEFAULT_MANUAL_APPROVAL_GATE_PATH = ROOT / "artifacts" / "small_institutional_simulation" / "manual_approval_gate.json"
+DEFAULT_OPERATOR_APPROVAL_SUMMARY_PATH = ROOT / "artifacts" / "small_institutional_simulation" / "operator_approval_summary.json"
+DEFAULT_APPROVAL_ARTIFACT_CONSISTENCY_PATH = ROOT / "artifacts" / "small_institutional_simulation" / "approval_artifact_consistency.json"
+DEFAULT_OPERATOR_DECISION_INTAKE_VALIDATION_PATH = ROOT / "artifacts" / "small_institutional_simulation" / "operator_decision_intake_validation.json"
+DEFAULT_OPERATOR_DECISION_HANDOFF_PATH = ROOT / "artifacts" / "small_institutional_simulation" / "operator_decision_handoff.json"
 DEFAULT_STATUS_JSON_PATH = ROOT / "artifacts" / "small_institutionalization" / "status.json"
 DEFAULT_STATUS_MD_PATH = ROOT / "artifacts" / "small_institutionalization" / "status.md"
 DEFAULT_KNOWLEDGE_PATH = ROOT / "knowledge" / "small_institutionalization.md"
@@ -148,6 +156,14 @@ def build_small_institutionalization_status(
     promotion_readiness_path: str | Path = DEFAULT_PROMOTION_READINESS_PATH,
     simulation_self_diagnosis_path: str | Path = DEFAULT_SIMULATION_SELF_DIAGNOSIS_PATH,
     simulated_portfolio_construction_repair_path: str | Path = DEFAULT_SIMULATED_PORTFOLIO_CONSTRUCTION_REPAIR_PATH,
+    drawdown_group_diagnostic_path: str | Path = DEFAULT_DRAWDOWN_GROUP_DIAGNOSTIC_PATH,
+    drawdown_blocker_evidence_path: str | Path = DEFAULT_DRAWDOWN_BLOCKER_EVIDENCE_PATH,
+    repair_blocker_manual_review_path: str | Path = DEFAULT_REPAIR_BLOCKER_MANUAL_REVIEW_PATH,
+    manual_approval_gate_path: str | Path = DEFAULT_MANUAL_APPROVAL_GATE_PATH,
+    operator_approval_summary_path: str | Path = DEFAULT_OPERATOR_APPROVAL_SUMMARY_PATH,
+    approval_artifact_consistency_path: str | Path = DEFAULT_APPROVAL_ARTIFACT_CONSISTENCY_PATH,
+    operator_decision_intake_validation_path: str | Path = DEFAULT_OPERATOR_DECISION_INTAKE_VALIDATION_PATH,
+    operator_decision_handoff_path: str | Path = DEFAULT_OPERATOR_DECISION_HANDOFF_PATH,
     self_diagnosis_path: str | Path | None = None,
 ) -> dict[str, Any]:
     policy = load_json(policy_path)
@@ -163,6 +179,14 @@ def build_small_institutionalization_status(
     promotion_readiness = load_json(promotion_readiness_path)
     simulation_self_diagnosis = load_json(self_diagnosis_path or simulation_self_diagnosis_path)
     simulated_portfolio_construction_repair = load_json(simulated_portfolio_construction_repair_path)
+    drawdown_group_diagnostic = load_json(drawdown_group_diagnostic_path)
+    drawdown_blocker_evidence = load_json(drawdown_blocker_evidence_path)
+    repair_blocker_manual_review = load_json(repair_blocker_manual_review_path)
+    manual_approval_gate = load_json(manual_approval_gate_path)
+    operator_approval_summary = load_json(operator_approval_summary_path)
+    approval_artifact_consistency = load_json(approval_artifact_consistency_path)
+    operator_decision_intake_validation = load_json(operator_decision_intake_validation_path)
+    operator_decision_handoff = load_json(operator_decision_handoff_path)
 
     phase = str(policy.get("phase") or "A_baseline")
     runtime_safety = _runtime_safety_section(policy, dry_run, runtime_audit)
@@ -209,6 +233,14 @@ def build_small_institutionalization_status(
         "small_institutional_simulation": _simulation_self_diagnosis_section(simulation_self_diagnosis),
         "simulation_self_diagnosis": _simulation_self_diagnosis_section(simulation_self_diagnosis),
         "simulated_portfolio_construction_repair": _simulated_portfolio_construction_repair_section(simulated_portfolio_construction_repair),
+        "drawdown_group_diagnostic": _drawdown_group_diagnostic_section(drawdown_group_diagnostic),
+        "drawdown_blocker_evidence": _drawdown_blocker_evidence_section(drawdown_blocker_evidence),
+        "repair_blocker_manual_review": _repair_blocker_manual_review_section(repair_blocker_manual_review),
+        "manual_approval_gate": _manual_approval_gate_section(manual_approval_gate),
+        "operator_approval_summary": _operator_approval_summary_section(operator_approval_summary),
+        "approval_artifact_consistency": _approval_artifact_consistency_section(approval_artifact_consistency),
+        "operator_decision_intake_validation": _operator_decision_intake_validation_section(operator_decision_intake_validation),
+        "operator_decision_handoff": _operator_decision_handoff_section(operator_decision_handoff),
         "next_action": _next_action(
             decision,
             has_portfolio_diagnostics=bool(portfolio_diagnostics),
@@ -218,6 +250,7 @@ def build_small_institutionalization_status(
             promotion_readiness=promotion_readiness,
             simulation_self_diagnosis=simulation_self_diagnosis,
             simulated_portfolio_construction_repair=simulated_portfolio_construction_repair,
+            manual_approval_gate=manual_approval_gate,
         ),
     }
 
@@ -292,6 +325,176 @@ def _simulated_portfolio_construction_repair_section(repair: dict[str, Any]) -> 
     }
 
 
+def _drawdown_group_diagnostic_section(diagnostic: dict[str, Any]) -> dict[str, Any]:
+    if not diagnostic:
+        return {
+            "diagnostic_status": "missing",
+            "recommended_dimension": None,
+            "recommended_value": None,
+            "best_max_drawdown": None,
+            "drawdown_gap_to_limit": None,
+            "automation_allowed": False,
+        }
+    axis = diagnostic.get("recommended_manual_axis") or {}
+    return {
+        "diagnostic_status": diagnostic.get("diagnostic_status") or "missing",
+        "recommended_dimension": axis.get("dimension"),
+        "recommended_value": axis.get("value"),
+        "best_max_drawdown": axis.get("best_max_drawdown"),
+        "drawdown_gap_to_limit": axis.get("drawdown_gap_to_limit"),
+        "automation_allowed": bool(diagnostic.get("automation_allowed")),
+    }
+
+
+def _drawdown_blocker_evidence_section(evidence: dict[str, Any]) -> dict[str, Any]:
+    if not evidence:
+        return {"evidence_status": "missing"}
+    blocker = evidence.get("blocker") or {}
+    repair = evidence.get("repair") or {}
+    manual_review = evidence.get("manual_review") or {}
+    context = evidence.get("paper_portfolio_context") or {}
+    safety = evidence.get("safety") or {}
+    return {
+        "evidence_status": "ready",
+        "primary_issue": blocker.get("primary_issue"),
+        "repair_status": repair.get("repair_status"),
+        "candidate_count": int(repair.get("candidate_count") or 0),
+        "manual_review_dimension": manual_review.get("dimension"),
+        "manual_review_value": manual_review.get("value"),
+        "queue_write_allowed": bool(safety.get("queue_write_allowed")),
+        "broad_daemon_allowed": bool(safety.get("broad_daemon_allowed")),
+        "benchmark_id": context.get("benchmark_id"),
+        "benchmark_name": context.get("benchmark_name"),
+        "tracking_mode": context.get("tracking_mode"),
+        "turnover_one_way_estimate": context.get("turnover_one_way_estimate"),
+        "estimated_round_trip_cost": context.get("estimated_round_trip_cost"),
+    }
+
+
+def _repair_blocker_manual_review_section(review: dict[str, Any]) -> dict[str, Any]:
+    if not review:
+        return {"review_status": "missing"}
+    safety = review.get("safety") or {}
+    decision = review.get("recommended_manual_decision") or {}
+    return {
+        "review_status": review.get("review_status") or "missing",
+        "primary_issue": review.get("primary_issue"),
+        "repair_status": review.get("repair_status"),
+        "candidate_count": int(review.get("candidate_count") or 0),
+        "best_available_max_drawdown": review.get("best_available_max_drawdown"),
+        "drawdown_gap_to_limit": review.get("drawdown_gap_to_limit"),
+        "queue_write_allowed": bool(safety.get("queue_write_allowed")),
+        "broad_daemon_allowed": bool(safety.get("broad_daemon_allowed")),
+        "automation_allowed": bool(safety.get("automation_allowed")),
+        "manual_decision_required": bool(decision.get("decision_required")),
+        "manual_decision_dimension": decision.get("dimension"),
+        "manual_decision_value": decision.get("value"),
+        "automated_rerun_allowed": bool(decision.get("automated_rerun_allowed")),
+    }
+
+
+def _manual_approval_gate_section(gate: dict[str, Any]) -> dict[str, Any]:
+    if not gate:
+        return {"gate_status": "missing"}
+    safety = gate.get("safety") or {}
+    return {
+        "gate_status": gate.get("gate_status") or "missing",
+        "human_approval_present": bool(gate.get("human_approval_present")),
+        "risk_relaxation_allowed": bool(gate.get("risk_relaxation_allowed")),
+        "automated_rerun_allowed": bool(gate.get("automated_rerun_allowed")),
+        "queue_write_allowed": bool(gate.get("queue_write_allowed") or safety.get("queue_write_allowed")),
+        "broad_daemon_allowed": bool(gate.get("broad_daemon_allowed") or safety.get("broad_daemon_allowed")),
+        "automation_allowed": bool(gate.get("automation_allowed") or safety.get("automation_allowed")),
+        "live_trading_enabled": bool(gate.get("live_trading_enabled")),
+    }
+
+
+def _operator_approval_summary_section(summary: dict[str, Any]) -> dict[str, Any]:
+    if not summary:
+        return {"summary_status": "missing"}
+    safety = summary.get("safety") or {}
+    return {
+        "summary_status": summary.get("summary_status") or "missing",
+        "approval_required": bool(summary.get("approval_required")),
+        "human_approval_present": bool(summary.get("human_approval_present")),
+        "required_decision_axis": summary.get("required_decision_axis"),
+        "primary_blocker": summary.get("primary_blocker"),
+        "repair_status": summary.get("repair_status"),
+        "candidate_count": int(summary.get("candidate_count") or 0),
+        "best_available_max_drawdown": summary.get("best_available_max_drawdown"),
+        "drawdown_gap_to_limit": summary.get("drawdown_gap_to_limit"),
+        "queue_write_allowed": bool(safety.get("queue_write_allowed")),
+        "broad_daemon_allowed": bool(safety.get("broad_daemon_allowed")),
+        "automation_allowed": bool(safety.get("automation_allowed")),
+        "automated_rerun_allowed": bool(safety.get("automated_rerun_allowed")),
+        "live_trading_enabled": bool(safety.get("live_trading_enabled")),
+    }
+
+
+def _approval_artifact_consistency_section(payload: dict[str, Any]) -> dict[str, Any]:
+    if not payload:
+        return {"consistency_status": "missing"}
+    matched = payload.get("matched_fields") or {}
+    safety = payload.get("safety_flags") or {}
+    return {
+        "consistency_status": payload.get("consistency_status") or "missing",
+        "primary_blocker": matched.get("primary_blocker"),
+        "decision_axis": matched.get("decision_axis"),
+        "best_available_max_drawdown": matched.get("best_available_max_drawdown"),
+        "drawdown_gap_to_limit": matched.get("drawdown_gap_to_limit"),
+        "queue_write_allowed": bool(safety.get("queue_write_allowed")),
+        "broad_daemon_allowed": bool(safety.get("broad_daemon_allowed")),
+        "automation_allowed": bool(safety.get("automation_allowed")),
+        "automated_rerun_allowed": bool(safety.get("automated_rerun_allowed")),
+        "live_trading_enabled": bool(safety.get("live_trading_enabled")),
+        "inconsistencies": payload.get("inconsistencies") or [],
+        "staleness_warnings": payload.get("staleness_warnings") or [],
+    }
+
+def _operator_decision_intake_validation_section(payload: dict[str, Any]) -> dict[str, Any]:
+    if not payload:
+        return {"intake_status": "missing", "validation_errors": [], "non_mutating": True}
+    safety = payload.get("safety") or {}
+    return {
+        "intake_status": payload.get("intake_status") or "missing",
+        "decision_type": payload.get("decision_type"),
+        "scope": payload.get("scope"),
+        "reason": payload.get("reason"),
+        "validation_errors": payload.get("validation_errors") or [],
+        "non_mutating": bool(payload.get("non_mutating")),
+        "queue_write_allowed": bool(safety.get("queue_write_allowed")),
+        "broad_daemon_allowed": bool(safety.get("broad_daemon_allowed")),
+        "automation_allowed": bool(safety.get("automation_allowed")),
+        "automated_rerun_allowed": bool(safety.get("automated_rerun_allowed")),
+        "live_trading_enabled": bool(safety.get("live_trading_enabled")),
+    }
+
+
+def _operator_decision_handoff_section(payload: dict[str, Any]) -> dict[str, Any]:
+    if not payload:
+        return {"handoff_status": "missing", "validation_errors": [], "non_mutating": True}
+    safety = payload.get("safety") or {}
+    return {
+        "handoff_status": payload.get("handoff_status") or "missing",
+        "intake_status": payload.get("intake_status"),
+        "decision_type": payload.get("decision_type"),
+        "primary_blocker": payload.get("primary_blocker"),
+        "repair_status": payload.get("repair_status"),
+        "candidate_count": int(payload.get("candidate_count") or 0),
+        "decision_axis": payload.get("decision_axis"),
+        "validation_errors": payload.get("validation_errors") or [],
+        "non_mutating": bool(payload.get("non_mutating")),
+        "execution_allowed": bool(payload.get("execution_allowed")),
+        "separate_execution_plan_required": bool(payload.get("separate_execution_plan_required")),
+        "queue_write_allowed": bool(payload.get("queue_write_allowed") or safety.get("queue_write_allowed")),
+        "broad_daemon_allowed": bool(payload.get("broad_daemon_allowed") or safety.get("broad_daemon_allowed")),
+        "automation_allowed": bool(payload.get("automation_allowed") or safety.get("automation_allowed")),
+        "automated_rerun_allowed": bool(payload.get("automated_rerun_allowed") or safety.get("automated_rerun_allowed")),
+        "live_trading_enabled": bool(payload.get("live_trading_enabled") or safety.get("live_trading_enabled")),
+    }
+
+
+
 def _simulation_next_action(
     simulation_self_diagnosis: dict[str, Any] | None,
     simulated_portfolio_construction_repair: dict[str, Any] | None = None,
@@ -322,6 +525,7 @@ def _next_action(
     promotion_readiness: dict[str, Any] | None = None,
     simulation_self_diagnosis: dict[str, Any] | None = None,
     simulated_portfolio_construction_repair: dict[str, Any] | None = None,
+    manual_approval_gate: dict[str, Any] | None = None,
 ) -> str:
     if decision == "ready_for_portfolio_mvp":
         if not has_portfolio_diagnostics:
@@ -363,6 +567,14 @@ def status_to_markdown(status: dict[str, Any]) -> str:
     readiness = status.get("paper_live_promotion_readiness") or {}
     simulation = status.get("small_institutional_simulation") or {}
     repair = status.get("simulated_portfolio_construction_repair") or {}
+    drawdown_group = status.get("drawdown_group_diagnostic") or {}
+    evidence = status.get("drawdown_blocker_evidence") or {}
+    manual_review = status.get("repair_blocker_manual_review") or {}
+    manual_gate = status.get("manual_approval_gate") or {}
+    operator_summary = status.get("operator_approval_summary") or {}
+    approval_consistency = status.get("approval_artifact_consistency") or {}
+    operator_intake = status.get("operator_decision_intake_validation") or {}
+    operator_handoff = status.get("operator_decision_handoff") or {}
     policy = status.get("policy") or {}
     lines.extend(
         [
@@ -424,6 +636,100 @@ def status_to_markdown(status: dict[str, Any]) -> str:
             f"- Best available max drawdown: {repair.get('best_available_max_drawdown')}",
             f"- Drawdown gap to limit: {repair.get('drawdown_gap_to_limit')}",
             f"- Automation allowed: {repair.get('automation_allowed')}",
+            "",
+            "## Drawdown group diagnostic",
+            f"- Diagnostic status: {drawdown_group.get('diagnostic_status')}",
+            f"- Recommended dimension: {drawdown_group.get('recommended_dimension')}",
+            f"- Recommended value: {drawdown_group.get('recommended_value')}",
+            f"- Best max drawdown: {drawdown_group.get('best_max_drawdown')}",
+            f"- Drawdown gap to limit: {drawdown_group.get('drawdown_gap_to_limit')}",
+            f"- Automation allowed: {drawdown_group.get('automation_allowed')}",
+            "",
+            "## Drawdown blocker evidence",
+            f"- Evidence status: {evidence.get('evidence_status')}",
+            f"- Primary issue: {evidence.get('primary_issue')}",
+            f"- Repair status: {evidence.get('repair_status')}",
+            f"- Candidate count: {evidence.get('candidate_count')}",
+            f"- Manual review dimension: {evidence.get('manual_review_dimension')}",
+            f"- Manual review value: {evidence.get('manual_review_value')}",
+            f"- Queue write allowed: {evidence.get('queue_write_allowed')}",
+            f"- Broad daemon allowed: {evidence.get('broad_daemon_allowed')}",
+            f"- Benchmark ID: {evidence.get('benchmark_id')}",
+            f"- Benchmark name: {evidence.get('benchmark_name')}",
+            f"- Tracking mode: {evidence.get('tracking_mode')}",
+            f"- One-way turnover estimate: {evidence.get('turnover_one_way_estimate')}",
+            f"- Estimated round-trip cost: {evidence.get('estimated_round_trip_cost')}",
+            "",
+            "## Repair blocker manual review",
+            f"- Review status: {manual_review.get('review_status')}",
+            f"- Primary issue: {manual_review.get('primary_issue')}",
+            f"- Repair status: {manual_review.get('repair_status')}",
+            f"- Candidate count: {manual_review.get('candidate_count')}",
+            f"- Best available max drawdown: {manual_review.get('best_available_max_drawdown')}",
+            f"- Drawdown gap to limit: {manual_review.get('drawdown_gap_to_limit')}",
+            f"- Queue write allowed: {manual_review.get('queue_write_allowed')}",
+            f"- Broad daemon allowed: {manual_review.get('broad_daemon_allowed')}",
+            f"- Automation allowed: {manual_review.get('automation_allowed')}",
+            f"- Manual decision: {manual_review.get('manual_decision_dimension')}={manual_review.get('manual_decision_value')}",
+            f"- Automated rerun allowed: {manual_review.get('automated_rerun_allowed')}",
+            "",
+            "## Manual approval gate",
+            f"- Gate status: {manual_gate.get('gate_status')}",
+            f"- Human approval present: {manual_gate.get('human_approval_present')}",
+            f"- Risk relaxation allowed: {manual_gate.get('risk_relaxation_allowed')}",
+            f"- Queue write allowed: {manual_gate.get('queue_write_allowed')}",
+            f"- Broad daemon allowed: {manual_gate.get('broad_daemon_allowed')}",
+            f"- Automation allowed: {manual_gate.get('automation_allowed')}",
+            f"- Automated rerun allowed: {manual_gate.get('automated_rerun_allowed')}",
+            "",
+            "## Operator approval summary",
+            f"- Summary status: {operator_summary.get('summary_status')}",
+            f"- Approval required: {operator_summary.get('approval_required')}",
+            f"- Required decision axis: {operator_summary.get('required_decision_axis')}",
+            f"- Primary blocker: {operator_summary.get('primary_blocker')}",
+            f"- Queue write allowed: {operator_summary.get('queue_write_allowed')}",
+            f"- Broad daemon allowed: {operator_summary.get('broad_daemon_allowed')}",
+            f"- Automation allowed: {operator_summary.get('automation_allowed')}",
+            f"- Automated rerun allowed: {operator_summary.get('automated_rerun_allowed')}",
+            f"- Live trading enabled: {operator_summary.get('live_trading_enabled')}",
+            "",
+            "## Approval artifact consistency",
+            f"- Consistency status: {approval_consistency.get('consistency_status')}",
+            f"- Primary blocker: {approval_consistency.get('primary_blocker')}",
+            f"- Decision axis: {approval_consistency.get('decision_axis')}",
+            f"- Queue write allowed: {approval_consistency.get('queue_write_allowed')}",
+            f"- Broad daemon allowed: {approval_consistency.get('broad_daemon_allowed')}",
+            f"- Automation allowed: {approval_consistency.get('automation_allowed')}",
+            f"- Automated rerun allowed: {approval_consistency.get('automated_rerun_allowed')}",
+            f"- Live trading enabled: {approval_consistency.get('live_trading_enabled')}",
+            f"- Inconsistencies: {approval_consistency.get('inconsistencies')}",
+            f"- Staleness warnings: {approval_consistency.get('staleness_warnings')}",
+            "",
+            "## Operator decision intake validation",
+            f"- Intake status: {operator_intake.get('intake_status')}",
+            f"- Decision type: {operator_intake.get('decision_type')}",
+            f"- Non-mutating: {operator_intake.get('non_mutating')}",
+            f"- Validation errors: {operator_intake.get('validation_errors')}",
+            f"- Queue write allowed: {operator_intake.get('queue_write_allowed')}",
+            f"- Broad daemon allowed: {operator_intake.get('broad_daemon_allowed')}",
+            f"- Automation allowed: {operator_intake.get('automation_allowed')}",
+            f"- Automated rerun allowed: {operator_intake.get('automated_rerun_allowed')}",
+            f"- Live trading enabled: {operator_intake.get('live_trading_enabled')}",
+            "",
+            "## Operator decision handoff",
+            f"- Handoff status: {operator_handoff.get('handoff_status')}",
+            f"- Intake status: {operator_handoff.get('intake_status')}",
+            f"- Decision type: {operator_handoff.get('decision_type')}",
+            f"- Decision axis: {operator_handoff.get('decision_axis')}",
+            f"- Primary blocker: {operator_handoff.get('primary_blocker')}",
+            f"- Execution allowed: {operator_handoff.get('execution_allowed')}",
+            f"- Separate execution plan required: {operator_handoff.get('separate_execution_plan_required')}",
+            f"- Validation errors: {operator_handoff.get('validation_errors')}",
+            f"- Queue write allowed: {operator_handoff.get('queue_write_allowed')}",
+            f"- Broad daemon allowed: {operator_handoff.get('broad_daemon_allowed')}",
+            f"- Automation allowed: {operator_handoff.get('automation_allowed')}",
+            f"- Automated rerun allowed: {operator_handoff.get('automated_rerun_allowed')}",
+            f"- Live trading enabled: {operator_handoff.get('live_trading_enabled')}",
             "",
             "## Next phase policy",
             f"- Target holdings: {policy.get('target_holdings_min')}-{policy.get('target_holdings_max')}",

@@ -1,0 +1,104 @@
+{% extends 'base.html' %}
+{% block content %}
+{% if saved %}
+<section class="card" style="margin-bottom:18px; border-color: var(--good);">
+  <strong class="good">已保存数据源设置。</strong>
+  <span class="muted">WebUI 当前进程已立即加载新配置；后台 daemon 已自动重启{% if restart_ok %}并生效{% elif restart_failed %}失败，请稍后在操作页检查{% endif %}。</span>
+</section>
+{% endif %}
+{% if test_result %}
+<section class="card" style="margin-bottom:18px; border-color: {% if test_result.ok %}var(--good){% else %}var(--bad){% endif %};">
+  <strong class="{% if test_result.ok %}good{% else %}bad{% endif %}">{{ test_result.message }}</strong>
+  <div class="muted" style="margin-top:6px;">数据源: {{ test_result.source_type or '-' }} · 名称: {{ test_result.name or '-' }}</div>
+  {% if test_result.error %}<pre class="text-break" style="white-space:pre-wrap;">{{ test_result.error }}</pre>{% endif %}
+</section>
+{% endif %}
+
+<form method="post" action="/data-sources" style="display:grid; gap:18px;">
+  <section class="card">
+    <h2>数据源列表</h2>
+    <div class="muted" style="margin-bottom:12px;">
+      可配置 Tushare 等多个数据源。拖动左侧手柄或修改“顺序”数字调整优先级；Token/API Key 留空会保留同名同类型数据源的原 key。保存不会主动请求外部数据源。
+    </div>
+    <div class="muted" style="margin-bottom:12px;">
+      当前配置文件：<span class="text-break">{{ settings.env_file }}</span><br>
+      当前主数据源：{{ settings.primary_data_source or '-' }} · 当前顺序：{{ settings.order or '-' }}
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>拖动</th><th>顺序</th><th>启用</th><th>类型</th><th>名称</th><th>Token / API Key</th><th>当前 Key</th><th>说明</th><th>测试</th></tr>
+        </thead>
+        <tbody data-source-profile-rows>
+          {% for profile in profile_slots %}
+          <tr draggable="true">
+            <td class="num" title="拖动排序" style="cursor:grab;">☰</td>
+            <td><input type="number" min="1" name="source_order_{{ loop.index0 }}" value="{{ loop.index if profile.name else '' }}" data-order-input style="width:70px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);"></td>
+            <td><input type="checkbox" name="source_enabled_{{ loop.index0 }}" {% if profile.enabled %}checked{% endif %}></td>
+            <td>
+              <select name="source_type_{{ loop.index0 }}" style="width:150px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);">
+                {% for option in source_type_options %}
+                <option value="{{ option.value }}" {% if (profile.source_type or 'tushare') == option.value %}selected{% endif %}>{{ option.label }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td><input name="source_name_{{ loop.index0 }}" value="{{ profile.name }}" placeholder="primary-tushare" style="width:170px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);"></td>
+            <td><input type="password" name="source_api_key_{{ loop.index0 }}" value="" autocomplete="new-password" placeholder="留空保留" style="width:190px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);"></td>
+            <td>{{ profile.api_key_masked or '未配置' }}</td>
+            <td><input name="source_notes_{{ loop.index0 }}" value="{{ profile.notes }}" placeholder="用途/额度/备注" style="width:220px; padding:8px; border-radius:8px; border:1px solid var(--border); background:var(--panel-2); color:var(--text);"></td>
+            <td><button type="submit" formaction="/data-sources/test" formmethod="post" name="source_test_index" value="{{ loop.index0 }}" style="padding:8px 10px; border:0; border-radius:10px; background:var(--panel-2); color:var(--link); border:1px solid var(--border); cursor:pointer;">测试</button></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <button type="submit" style="margin-top:16px; padding:11px 16px; border:0; border-radius:12px; background:var(--link); color:#08101f; font-weight:700; cursor:pointer;">保存数据源设置</button>
+  </section>
+
+  <section class="card">
+    <h2>当前数据源链</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>顺序</th><th>类型</th><th>名称</th><th>启用</th><th>Key</th><th>说明</th></tr></thead>
+        <tbody>
+          {% for profile in settings.profiles %}
+          <tr>
+            <td class="num">{{ loop.index }}</td>
+            <td>{{ profile.source_type }}</td>
+            <td>{{ profile.name }}</td>
+            <td>{{ '是' if profile.enabled else '否' }}</td>
+            <td>{{ profile.api_key_masked }}</td>
+            <td>{{ profile.notes or '-' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</form>
+
+<script>
+(function () {
+  const tbody = document.querySelector('[data-source-profile-rows]');
+  if (!tbody) return;
+  let dragged = null;
+  function renumber() {
+    tbody.querySelectorAll('tr').forEach((row, index) => {
+      const input = row.querySelector('input[data-order-input]');
+      if (input) input.value = String(index + 1);
+    });
+  }
+  tbody.querySelectorAll('tr').forEach((row) => {
+    row.addEventListener('dragstart', () => { dragged = row; row.classList.add('dragging'); });
+    row.addEventListener('dragend', () => { row.classList.remove('dragging'); dragged = null; renumber(); });
+    row.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      if (!dragged || dragged === row) return;
+      const rect = row.getBoundingClientRect();
+      const after = event.clientY > rect.top + rect.height / 2;
+      tbody.insertBefore(dragged, after ? row.nextSibling : row);
+    });
+  });
+})();
+</script>
+{% endblock %}

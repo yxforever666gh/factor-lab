@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "enabled": true,
+  "mode": "dry_run_first",
+  "max_experiments_per_cycle": 2,
+  "max_cycles_per_day": 4,
+  "cooldown_minutes": 180,
+  "allowed_mainlines": [
+    "bucket_aware_oos_followup",
+    "defensive_quality_risk_layer",
+    "mechanism_data_gap_analysis",
+    "direction_sanity_diagnostics"
+  ],
+  "manual_approval_required_for": [
+    "enable_timer",
+    "increase_budget",
+    "external_data_source",
+    "paper_portfolio_promotion",
+    "broad_daemon_restore",
+    "live_trading"
+  ],
+  "hard_gates": {
+    "require_oos": true,
+    "require_cost_adjustment": true,
+    "require_duplicate_check": true,
+    "require_mechanism_id": true,
+    "require_falsification_criteria": true
+  },
+  "promotion_thresholds": {
+    "min_rank_ic_mean": 0.02,
+    "min_rank_ic_ir": 0.15,
+    "min_sharpe_net": 0.5,
+    "max_drawdown_floor": -0.35,
+    "min_coverage": 0.8
+  }
+}

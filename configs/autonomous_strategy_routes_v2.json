@@ -1,0 +1,124 @@
+{
+  "blocked_actions": [
+    "controlled_backtest",
+    "queue_write",
+    "timer_enable",
+    "broad_daemon_restore",
+    "auto_promotion",
+    "live_trading"
+  ],
+  "controlled_execution_allowed": false,
+  "decision_recommendation": "run_field_resolution_for_top_candidate",
+  "generated_at_utc": "2026-06-02T20:00:46.664688+00:00",
+  "queue_write_allowed": false,
+  "routes": [
+    {
+      "cheap_screens": [
+        "industry_cycle_inflection_screen",
+        "industry_neutral_value_anchor_screen",
+        "drawdown_proxy_screen"
+      ],
+      "controlled_execution_allowed": false,
+      "data_status": "derivable_from_available_market_history",
+      "economic_mechanism": "Cheap stocks may work only when their industry cycle is inflecting upward; the catalyst is industry-level recovery, not individual valuation alone.",
+      "falsification_criteria": [
+        "industry inflection does not improve cheap spread",
+        "effect is explained solely by market beta",
+        "drawdown proxy remains below -0.35"
+      ],
+      "max_backtests_before_review": 0,
+      "mechanism_family": "industry_cycle_inflection_with_value_anchor",
+      "priority": 1,
+      "queue_write_allowed": false,
+      "recommended_next_step": "run_field_resolution",
+      "required_fields": [
+        "industry",
+        "industry_return_60d",
+        "industry_relative_pb",
+        "industry_relative_earnings_yield",
+        "date",
+        "ticker",
+        "forward_return_5d"
+      ],
+      "route_id": "industry_cycle_inflection_value_anchor_v1",
+      "route_status": "field_resolution_candidate",
+      "schema_version": 1
+    },
+    {
+      "cheap_screens": [
+        "balance_sheet_improvement_screen",
+        "cashflow_quality_screen",
+        "cheap_recovery_spread_screen",
+        "drawdown_proxy_screen"
+      ],
+      "controlled_execution_allowed": false,
+      "data_status": "proxy_available_requires_review",
+      "economic_mechanism": "Value traps may recover only after leverage or cash conversion improves; the catalyst is balance-sheet repair rather than cheapness alone.",
+      "falsification_criteria": [
+        "debt/cashflow improvement does not reduce drawdown",
+        "spread becomes non-positive after quality overlay",
+        "usable universe shrinks below minimum"
+      ],
+      "max_backtests_before_review": 0,
+      "mechanism_family": "balance_sheet_improvement_recovery",
+      "priority": 2,
+      "queue_write_allowed": false,
+      "recommended_next_step": "run_proxy_field_resolution",
+      "required_fields": [
+        "debt_to_asset",
+        "debt_to_asset_delta",
+        "operating_cashflow_to_profit",
+        "roe",
+        "date",
+        "ticker",
+        "industry",
+        "forward_return_5d"
+      ],
+      "route_id": "balance_sheet_improvement_recovery_v1",
+      "route_status": "proxy_review_candidate",
+      "schema_version": 1
+    },
+    {
+      "cheap_screens": [
+        "pit_alignment_screen",
+        "revision_direction_screen",
+        "cheap_plus_revision_forward_return_screen",
+        "drawdown_proxy_screen"
+      ],
+      "controlled_execution_allowed": false,
+      "data_status": "request_data",
+      "economic_mechanism": "Cheap stocks only become investable when forward earnings expectations or post-announcement revisions improve, adding a catalyst distinct from static cheapness.",
+      "falsification_criteria": [
+        "forecast/revision coverage below threshold",
+        "positive revision among cheap names does not improve spread",
+        "drawdown proxy remains below -0.35"
+      ],
+      "max_backtests_before_review": 0,
+      "mechanism_family": "earnings_revision_valuation_repair",
+      "priority": 3,
+      "queue_write_allowed": false,
+      "recommended_next_step": "write_data_request",
+      "required_fields": [
+        "forecast_ann_date",
+        "forecast_eps",
+        "forecast_net_profit",
+        "forecast_period_end",
+        "actual_report_ann_date",
+        "actual_net_profit",
+        "date",
+        "ticker",
+        "industry",
+        "forward_return_5d"
+      ],
+      "route_id": "earnings_revision_valuation_repair_v2",
+      "route_status": "request_data_candidate",
+      "schema_version": 1
+    }
+  ],
+  "run_id": "worker_preview_next_mechanism",
+  "schema_version": 2,
+  "source_decision_recommendation": "switch_mechanism_route",
+  "source_worker_key": "factor_lab_mechanism_researcher",
+  "timer_enable_allowed": false,
+  "top_route_id": "industry_cycle_inflection_value_anchor_v1"
+}

@@ -6,6 +6,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from factor_lab.simulated_portfolio_drawdown_repair import (
+    build_drawdown_repair_result,
+    is_drawdown_safe_candidate,
+)
 from factor_lab.small_institutional_simulation_policy import load_small_institutional_simulation_policy
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -52,7 +56,7 @@ def _summarize_rows(rows: list[dict[str, Any]], drawdown_limit: float) -> dict[s
         "best_sharpe": round(max(valid_sharpes), 6) if valid_sharpes else None,
         "best_max_drawdown": round(max(valid_drawdowns), 6) if valid_drawdowns else None,
         "median_max_drawdown": round(float(statistics.median(valid_drawdowns)), 6) if valid_drawdowns else None,
-        "pass_count_under_drawdown_limit": sum(1 for value in valid_drawdowns if value >= drawdown_limit),
+        "pass_count_under_drawdown_limit": sum(1 for value in valid_drawdowns if value > drawdown_limit),
     }
 
 
@@ -92,20 +96,12 @@ def _candidate_projection(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _safe_candidates(matrix_payload: dict[str, Any], drawdown_limit: float) -> list[dict[str, Any]]:
-    candidates: list[dict[str, Any]] = []
-    for row in _ok_results(matrix_payload):
-        drawdown = _float_or_none(row.get("max_drawdown"))
-        if drawdown is not None and drawdown >= drawdown_limit:
-            candidates.append(row)
-    return sorted(
-        candidates,
-        key=lambda row: (
-            _float_or_none(row.get("max_drawdown")) or float("-inf"),
-            _float_or_none(row.get("sharpe")) or float("-inf"),
-            _float_or_none(row.get("total_return")) or float("-inf"),
-        ),
-        reverse=True,
+    repair_result = build_drawdown_repair_result(
+        _ok_results(matrix_payload),
+        max_drawdown_limit=drawdown_limit,
     )
+    ranked = repair_result.get("ranked_candidates") or []
+    return [row for row in ranked if is_drawdown_safe_candidate(row, max_drawdown_limit=drawdown_limit)]
 
 
 def _best_available_max_drawdown(matrix_payload: dict[str, Any]) -> float | None:

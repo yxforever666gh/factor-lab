@@ -1,0 +1,146 @@
+{
+  "controlled_execution_allowed": false,
+  "decision_recommendation": "request_new_mechanism_or_external_distress_data",
+  "generated_at_utc": "2026-06-01T03:53:51.591772+00:00",
+  "queue_write_allowed": false,
+  "routes": [
+    {
+      "blocked_fields": [],
+      "cheap_screens": [
+        "coverage_preflight: require at least 60% non-null history for pb_history_756d and pe_ttm_history_756d before any workflow",
+        "information_screen: compare percentile bucket forward-return monotonicity on cached data only, no queue write",
+        "risk_screen: reject if best cheap-screen bucket pair implies max-drawdown worse than the current -0.35 limit proxy"
+      ],
+      "controlled_execution_allowed": false,
+      "economic_mechanism": "A stock that is cheap relative to its own multi-year history may represent a more comparable valuation dislocation than cross-sectional cheapness alone, especially after industry-relative value failed drawdown gates.",
+      "evidence_artifacts": [
+        "artifacts/autonomous_strategy_lab/cheap_screen_result.json",
+        "artifacts/autonomous_strategy_lab/cheap_screen_risk_diagnostic.json",
+        "artifacts/autonomous_strategy_lab/value_trap_risk_filter_probe.json",
+        "artifacts/autonomous_strategy_lab/route_verdict.json"
+      ],
+      "falsification_criteria": [
+        "long valuation history coverage below 60% after data load",
+        "historical cheapness buckets show no positive rank-order relation to forward returns in a cheap screen",
+        "middle or cheap bucket advantage disappears after industry-neutral grouping",
+        "drawdown proxy remains worse than -0.35 even for the best non-extreme bucket pair"
+      ],
+      "final_verdict": "stop_route",
+      "max_backtests_before_review": 0,
+      "mechanism_id": "historical_relative_valuation_repair",
+      "missing_fields": [],
+      "queue_write_allowed": false,
+      "recommended_next_step": "handoff_to_quality_cashflow_distress_filter",
+      "required_fields": [
+        "pb_history_756d",
+        "pe_ttm_history_756d",
+        "date",
+        "ticker",
+        "industry",
+        "forward_return_5d"
+      ],
+      "requires_manual_review": true,
+      "route_id": "historical_relative_valuation_repair",
+      "route_status": "stopped",
+      "stop_reason": "risk_filter_probe_failed"
+    },
+    {
+      "blocked_fields": [],
+      "cheap_screens": [
+        "pit_safety_screen: reject if announcement-date alignment cannot prove data was known before portfolio date",
+        "coverage_preflight: require sufficient forecast coverage by industry and date before factor generation",
+        "event_window_screen: test only post-announcement cached rows for simple revision direction and dispersion, no full backtest"
+      ],
+      "controlled_execution_allowed": false,
+      "economic_mechanism": "Valuation repair is more plausible when cheap stocks also receive improving earnings expectations or positive forecast revisions; this is economically distinct from mechanical value plus price momentum.",
+      "falsification_criteria": [
+        "announcement-date point-in-time alignment is unavailable or ambiguous",
+        "forecast/revision coverage is too sparse by date or industry",
+        "positive revision among cheap names does not improve cheap-screen hit rate versus cheap-only baseline",
+        "revision signal collapses after excluding micro-cap or high-turnover names"
+      ],
+      "max_backtests_before_review": 0,
+      "mechanism_id": "earnings_revision_valuation_repair",
+      "missing_fields": [
+        "actual_net_profit",
+        "actual_report_ann_date",
+        "forecast_ann_date",
+        "forecast_eps",
+        "forecast_net_profit",
+        "forecast_period_end"
+      ],
+      "queue_write_allowed": false,
+      "recommended_next_step": "request_data",
+      "required_fields": [
+        "forecast_ann_date",
+        "forecast_period_end",
+        "forecast_net_profit",
+        "forecast_eps",
+        "actual_report_ann_date",
+        "actual_net_profit",
+        "date",
+        "ticker",
+        "industry",
+        "forward_return_5d"
+      ],
+      "requires_manual_review": true,
+      "route_id": "earnings_revision_valuation_repair",
+      "route_status": "blocked_missing_fields"
+    },
+    {
+      "blocked_fields": [
+        "debt_to_asset"
+      ],
+      "cheap_screens": [
+        "coverage_preflight: verify cashflow and leverage fields exist with point-in-time report dates",
+        "distress_bucket_screen: check whether excluding worst leverage/cashflow buckets reduces drawdown proxy before any full workflow",
+        "neutralization_screen: require improvement not explained solely by size or industry grouping"
+      ],
+      "controlled_execution_allowed": false,
+      "economic_mechanism": "The current value-trap problem may be driven by distressed cheap stocks. Cash conversion, leverage, and profitability stability should separate recoverable value from value traps before any portfolio construction repair is trusted.",
+      "evidence_artifacts": [
+        "artifacts/autonomous_strategy_lab/quality_cashflow_distress_field_resolution.json",
+        "artifacts/autonomous_strategy_lab/quality_cashflow_distress_pit_preflight.json",
+        "artifacts/autonomous_strategy_lab/quality_cashflow_distress_cheap_screen.json",
+        "artifacts/autonomous_strategy_lab/quality_cashflow_distress_route_verdict.json"
+      ],
+      "falsification_criteria": [
+        "cashflow/leverage fields are unavailable or not point-in-time safe",
+        "distress exclusion does not reduce drawdown proxy versus current value-quality route",
+        "screened cheap basket loses all positive IC or bucket-spread evidence",
+        "coverage remains below the route threshold after data enrichment"
+      ],
+      "final_verdict": "stop_route",
+      "max_backtests_before_review": 0,
+      "mechanism_id": "quality_cashflow_distress_filter",
+      "missing_fields": [
+        "interest_coverage",
+        "net_profit_ttm",
+        "operating_cashflow_ttm"
+      ],
+      "predecessor_route": "historical_relative_valuation_repair",
+      "predecessor_stop_reason": "risk_filter_probe_failed",
+      "queue_write_allowed": false,
+      "recommended_next_step": "request_new_mechanism_or_external_distress_data",
+      "required_fields": [
+        "operating_cashflow_ttm",
+        "net_profit_ttm",
+        "debt_to_asset",
+        "interest_coverage",
+        "roe",
+        "date",
+        "ticker",
+        "industry",
+        "forward_return_5d"
+      ],
+      "requires_manual_review": true,
+      "route_id": "quality_cashflow_distress_filter",
+      "route_status": "stopped",
+      "stop_reason": "bounded_proxy_distress_filters_did_not_repair_drawdown"
+    }
+  ],
+  "schema_version": 1,
+  "source_path": "artifacts/autonomous_strategy_lab/workers/worker_preview_final_check/factor_lab_mechanism_researcher_response.json",
+  "source_worker_key": "factor_lab_mechanism_researcher",
+  "updated_at_utc": "2026-06-02T19:21:05.270089+00:00"
+}

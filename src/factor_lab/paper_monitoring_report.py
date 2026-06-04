@@ -34,6 +34,38 @@ def _missing_artifacts(named_paths: dict[str, str | Path]) -> list[str]:
     return missing
 
 
+def _status_blockers(status: dict[str, Any]) -> list[str]:
+    blockers: list[str] = []
+    for item in status.get("blockers") or []:
+        if item and str(item) not in blockers:
+            blockers.append(str(item))
+
+    for section_name in ("small_institutional_simulation", "simulation_self_diagnosis", "drawdown_blocker_evidence"):
+        section = status.get(section_name) or {}
+        primary_issue = section.get("primary_issue")
+        if primary_issue and str(primary_issue) not in blockers:
+            blockers.append(str(primary_issue))
+
+    manual_gate = status.get("manual_approval_gate") or {}
+    if manual_gate.get("gate_status") == "blocked_pending_manual_approval" or manual_gate.get("human_approval_present") is False:
+        if "manual_approval_pending" not in blockers:
+            blockers.append("manual_approval_pending")
+
+    return blockers
+
+
+def _operator_decision(status: dict[str, Any]) -> dict[str, Any]:
+    summary = status.get("operator_approval_summary") or {}
+    gate = status.get("manual_approval_gate") or {}
+    handoff = status.get("operator_decision_handoff") or {}
+    return {
+        "status": summary.get("summary_status") or gate.get("gate_status") or handoff.get("handoff_status"),
+        "required_decision_axis": summary.get("required_decision_axis") or handoff.get("decision_axis"),
+        "human_approval_present": gate.get("human_approval_present"),
+        "live_trading_enabled": bool(gate.get("live_trading_enabled", False)),
+    }
+
+
 def build_paper_monitoring_report(
     *,
     current_portfolio_path: str | Path = DEFAULT_CURRENT_PORTFOLIO_PATH,
@@ -64,6 +96,7 @@ def build_paper_monitoring_report(
     )
 
     safe = bool(status_runtime.get("safe")) and "runtime_takeover_audit" not in missing and "controlled_restart_dry_run" not in missing
+    operator_decision = _operator_decision(status)
     return {
         "schema_version": 1,
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -80,6 +113,7 @@ def build_paper_monitoring_report(
         },
         "trading_friction": {
             "turnover_one_way_estimate": turnover.get("turnover_one_way_estimate"),
+            "estimated_one_way_cost": cost.get("estimated_one_way_cost"),
             "estimated_round_trip_cost": cost.get("estimated_round_trip_cost"),
             "cost_bps": cost.get("cost_bps"),
         },
@@ -89,7 +123,8 @@ def build_paper_monitoring_report(
             "blocked_count": int(dry_run.get("blocked_count") or 0),
             "recommendations": runtime_audit.get("recommendations") or status_runtime.get("recommendations") or [],
         },
-        "blockers": status.get("blockers") or [],
+        "blockers": _status_blockers(status),
+        "operator_decision": operator_decision,
         "next_observation_window": {
             "trading_days": 5,
             "calendar": "one_week_placeholder",
@@ -106,6 +141,7 @@ def paper_monitoring_report_to_markdown(payload: dict[str, Any]) -> str:
     runtime = payload.get("runtime") or {}
     window = payload.get("next_observation_window") or {}
     blockers = payload.get("blockers") or []
+    operator_decision = payload.get("operator_decision") or {}
     missing = payload.get("missing_artifacts") or []
 
     lines = [
@@ -126,6 +162,7 @@ def paper_monitoring_report_to_markdown(payload: dict[str, Any]) -> str:
         "",
         "## Trading friction",
         f"- One-way turnover estimate: {friction.get('turnover_one_way_estimate')}",
+        f"- Estimated one-way cost: {friction.get('estimated_one_way_cost')}",
         f"- Estimated round-trip cost: {friction.get('estimated_round_trip_cost')}",
         f"- Cost bps: {friction.get('cost_bps')}",
         "",
@@ -138,6 +175,16 @@ def paper_monitoring_report_to_markdown(payload: dict[str, Any]) -> str:
         "## Blockers",
     ]
     lines.extend(f"- {item}" for item in blockers) if blockers else lines.append("- none")
+    lines.extend(
+        [
+            "",
+            "## Operator decision",
+            f"- Status: {operator_decision.get('status')}",
+            f"- Required decision axis: {operator_decision.get('required_decision_axis')}",
+            f"- Human approval present: {operator_decision.get('human_approval_present')}",
+            f"- Live trading enabled: {operator_decision.get('live_trading_enabled')}",
+        ]
+    )
     lines.extend(["", "## Missing artifacts"])
     lines.extend(f"- {item}" for item in missing) if missing else lines.append("- none")
     lines.extend(

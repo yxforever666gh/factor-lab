@@ -1,6 +1,6 @@
 # Factor Lab Small Institutionalization Status
 
-Generated: 2026-05-21T19:19:13.487046+00:00
+Generated: 2026-06-04T16:16:02.378563+00:00
 Phase: A_baseline
 Strategy mode: long_only_equity_enhancement
 Decision: ready_for_portfolio_mvp
@@ -25,8 +25,8 @@ Next action: repair_simulated_portfolio_construction
 - As-of date: 2021-12-28
 - Position count: 72
 - Benchmark ID: CSI1000
-- One-way turnover estimate: 0.0
-- Estimated round-trip cost: 0.0
+- One-way turnover estimate: 0.791672
+- Estimated round-trip cost: 0.00475
 
 ## Paper monitoring
 - Weekly report status: ready
@@ -66,6 +66,100 @@ Next action: repair_simulated_portfolio_construction
 - Best available max drawdown: -0.478256
 - Drawdown gap to limit: 0.128256
 - Automation allowed: False
+
+## Drawdown group diagnostic
+- Diagnostic status: blocked_no_group_under_drawdown_limit
+- Recommended dimension: holding_count
+- Recommended value: 50
+- Best max drawdown: -0.478256
+- Drawdown gap to limit: 0.128256
+- Automation allowed: False
+
+## Drawdown blocker evidence
+- Evidence status: ready
+- Primary issue: drawdown_risk_too_high
+- Repair status: blocked_no_drawdown_safe_candidate
+- Candidate count: 0
+- Manual review dimension: holding_count
+- Manual review value: 50
+- Queue write allowed: False
+- Broad daemon allowed: False
+- Benchmark ID: CSI1000
+- Benchmark name: 中证1000
+- Tracking mode: metadata_only
+- One-way turnover estimate: 0.791672
+- Estimated round-trip cost: 0.00475
+
+## Repair blocker manual review
+- Review status: blocked_manual_review_required
+- Primary issue: drawdown_risk_too_high
+- Repair status: blocked_no_drawdown_safe_candidate
+- Candidate count: 0
+- Best available max drawdown: -0.478256
+- Drawdown gap to limit: 0.128256
+- Queue write allowed: False
+- Broad daemon allowed: False
+- Automation allowed: False
+- Manual decision: holding_count=50
+- Automated rerun allowed: False
+
+## Manual approval gate
+- Gate status: blocked_pending_manual_approval
+- Human approval present: False
+- Risk relaxation allowed: False
+- Queue write allowed: False
+- Broad daemon allowed: False
+- Automation allowed: False
+- Automated rerun allowed: False
+
+## Operator approval summary
+- Summary status: blocked_pending_manual_approval
+- Approval required: True
+- Required decision axis: holding_count=50
+- Primary blocker: drawdown_risk_too_high
+- Queue write allowed: False
+- Broad daemon allowed: False
+- Automation allowed: False
+- Automated rerun allowed: False
+- Live trading enabled: False
+
+## Approval artifact consistency
+- Consistency status: ok
+- Primary blocker: drawdown_risk_too_high
+- Decision axis: holding_count=50
+- Queue write allowed: False
+- Broad daemon allowed: False
+- Automation allowed: False
+- Automated rerun allowed: False
+- Live trading enabled: False
+- Inconsistencies: []
+- Staleness warnings: []
+
+## Operator decision intake validation
+- Intake status: missing
+- Decision type: None
+- Non-mutating: True
+- Validation errors: []
+- Queue write allowed: False
+- Broad daemon allowed: False
+- Automation allowed: False
+- Automated rerun allowed: False
+- Live trading enabled: False
+
+## Operator decision handoff
+- Handoff status: awaiting_operator_decision
+- Intake status: missing
+- Decision type: None
+- Decision axis: holding_count=50
+- Primary blocker: drawdown_risk_too_high
+- Execution allowed: False
+- Separate execution plan required: False
+- Validation errors: []
+- Queue write allowed: False
+- Broad daemon allowed: False
+- Automation allowed: False
+- Automated rerun allowed: False
+- Live trading enabled: False
 
 ## Next phase policy
 - Target holdings: 50-100

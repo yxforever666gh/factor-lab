@@ -8,7 +8,7 @@ from factor_lab.simulated_portfolio_construction_repair import (
 )
 
 
-def _row(signal="book", holding=50, freq="monthly", cost=0, sharpe=0.1, drawdown=-0.5, status="ok"):
+def _row(signal="book", holding=50, freq="monthly", cost=0, sharpe=0.1, drawdown=-0.5, status="ok", turnover=0.2):
     return {
         "status": status,
         "signal_column": signal,
@@ -17,6 +17,7 @@ def _row(signal="book", holding=50, freq="monthly", cost=0, sharpe=0.1, drawdown
         "cost_bps": float(cost),
         "sharpe": sharpe,
         "max_drawdown": drawdown,
+        "turnover_mean": turnover,
         "combo_id": f"{signal}-{holding}-{freq}-{cost}-{sharpe}",
     }
 
@@ -44,7 +45,7 @@ def test_group_matrix_results_summarizes_ok_rows_by_repair_dimensions():
     assert grouped["dimension_summaries"]["cost_bps"]["30.0"]["pass_count_under_drawdown_limit"] == 1
 
 
-def test_build_repair_recommends_best_drawdown_safe_candidate_when_present(tmp_path):
+def test_build_repair_recommends_highest_sharpe_drawdown_safe_candidate_when_present(tmp_path):
     matrix_path = tmp_path / "matrix.json"
     policy_path = tmp_path / "policy.json"
     matrix_path.write_text(
@@ -66,24 +67,49 @@ def test_build_repair_recommends_best_drawdown_safe_candidate_when_present(tmp_p
     assert payload["repair_status"] == "candidate_found"
     assert payload["candidate_count"] == 2
     assert payload["automation_allowed"] is False
-    assert payload["recommended_candidate"]["sharpe"] == 0.4
-    assert payload["recommended_candidate"]["max_drawdown"] == -0.30
+    assert payload["recommended_candidate"]["sharpe"] == 0.8
+    assert payload["recommended_candidate"]["max_drawdown"] == -0.34
+    assert {
+        "repair_status",
+        "candidate_count",
+        "recommended_candidate",
+        "best_available_max_drawdown",
+        "drawdown_gap_to_limit",
+        "automation_allowed",
+    }.issubset(payload)
 
 
-def test_build_repair_uses_sharpe_then_return_as_tie_breakers_after_drawdown(tmp_path):
+def test_build_repair_uses_strict_drawdown_gate_from_helper(tmp_path):
+    matrix_path = tmp_path / "matrix.json"
+    policy_path = tmp_path / "policy.json"
+    matrix_path.write_text(json.dumps({"results": [_row(sharpe=1.0, drawdown=-0.35), _row(sharpe=0.4, drawdown=-0.36)]}), encoding="utf-8")
+    policy_path.write_text(json.dumps({"diagnosis_thresholds": {"max_drawdown_limit": -0.35}}), encoding="utf-8")
+
+    payload = build_simulated_portfolio_construction_repair(matrix_path, policy_path)
+
+    assert payload["repair_status"] == "blocked_no_drawdown_safe_candidate"
+    assert payload["candidate_count"] == 0
+    assert payload["recommended_candidate"] is None
+    assert payload["best_available_max_drawdown"] == -0.35
+    assert payload["drawdown_gap_to_limit"] == 0.0
+
+
+def test_build_repair_uses_sharpe_then_turnover_and_cost_after_safe_gate(tmp_path):
     matrix_path = tmp_path / "matrix.json"
     policy_path = tmp_path / "policy.json"
     rows = [
-        {**_row(sharpe=0.6, drawdown=-0.30), "total_return": 0.30, "combo_id": "lower-sharpe"},
-        {**_row(sharpe=0.9, drawdown=-0.30), "total_return": 0.10, "combo_id": "higher-sharpe"},
-        {**_row(sharpe=0.9, drawdown=-0.30), "total_return": 0.25, "combo_id": "higher-return"},
+        {**_row(sharpe=0.6, drawdown=-0.30, turnover=0.10), "combo_id": "lower-sharpe"},
+        {**_row(sharpe=0.9, drawdown=-0.30, turnover=0.30, cost=0), "combo_id": "higher-sharpe-higher-turnover"},
+        {**_row(sharpe=0.9, drawdown=-0.31, turnover=0.20, cost=30), "combo_id": "unsafe-cost"},
+        {**_row(sharpe=0.9, drawdown=-0.32, turnover=0.20, cost=0), "combo_id": "same-sharpe-lower-turnover-cost"},
     ]
     matrix_path.write_text(json.dumps({"results": rows}), encoding="utf-8")
     policy_path.write_text(json.dumps({"diagnosis_thresholds": {"max_drawdown_limit": -0.35}}), encoding="utf-8")
 
     payload = build_simulated_portfolio_construction_repair(matrix_path, policy_path)
 
-    assert payload["recommended_candidate"]["combo_id"] == "higher-return"
+    assert payload["recommended_candidate"]["combo_id"] == "same-sharpe-lower-turnover-cost"
+    assert payload["candidate_count"] == 3
 
 
 def test_build_repair_blocks_without_drawdown_safe_candidate(tmp_path):
