@@ -1,5 +1,8 @@
 import json
+import subprocess
+import sys
 
+from scripts.write_simulated_portfolio_construction_repair import build_cli_summary
 from factor_lab.simulated_portfolio_construction_repair import (
     build_simulated_portfolio_construction_repair,
     group_matrix_results,
@@ -69,6 +72,12 @@ def test_build_repair_recommends_highest_sharpe_drawdown_safe_candidate_when_pre
     assert payload["automation_allowed"] is False
     assert payload["recommended_candidate"]["sharpe"] == 0.8
     assert payload["recommended_candidate"]["max_drawdown"] == -0.34
+    assert payload["queue_write_allowed"] is False
+    assert payload["broad_daemon_allowed"] is False
+    assert payload["automated_rerun_allowed"] is False
+    assert payload["live_trading_enabled"] is False
+    assert "queue_write_allowed" not in payload["recommended_candidate"]
+    assert "live_trading_enabled" not in payload["recommended_candidate"]
     assert {
         "repair_status",
         "candidate_count",
@@ -76,6 +85,10 @@ def test_build_repair_recommends_highest_sharpe_drawdown_safe_candidate_when_pre
         "best_available_max_drawdown",
         "drawdown_gap_to_limit",
         "automation_allowed",
+        "queue_write_allowed",
+        "broad_daemon_allowed",
+        "automated_rerun_allowed",
+        "live_trading_enabled",
     }.issubset(payload)
 
 
@@ -124,6 +137,10 @@ def test_build_repair_blocks_without_drawdown_safe_candidate(tmp_path):
     assert payload["candidate_count"] == 0
     assert payload["recommended_candidate"] is None
     assert payload["automation_allowed"] is False
+    assert payload["queue_write_allowed"] is False
+    assert payload["broad_daemon_allowed"] is False
+    assert payload["automated_rerun_allowed"] is False
+    assert payload["live_trading_enabled"] is False
     assert payload["best_available_max_drawdown"] == -0.36
     assert payload["drawdown_gap_to_limit"] == 0.01
 
@@ -159,6 +176,10 @@ def test_repair_markdown_includes_status_candidate_and_dimension_summary():
             "candidate_count": 0,
             "recommended_candidate": None,
             "automation_allowed": False,
+            "queue_write_allowed": False,
+            "broad_daemon_allowed": False,
+            "automated_rerun_allowed": False,
+            "live_trading_enabled": False,
             "grouped_results": {
                 "ok_result_count": 1,
                 "dimension_summaries": {"signal_column": {"book": {"result_count": 1, "best_sharpe": 0.1, "best_max_drawdown": -0.5, "median_max_drawdown": -0.5, "pass_count_under_drawdown_limit": 0}}},
@@ -168,5 +189,149 @@ def test_repair_markdown_includes_status_candidate_and_dimension_summary():
 
     assert "blocked_no_drawdown_safe_candidate" in markdown
     assert "automation_allowed: False" in markdown
+    assert "queue_write_allowed: False" in markdown
+    assert "broad_daemon_allowed: False" in markdown
+    assert "automated_rerun_allowed: False" in markdown
+    assert "live_trading_enabled: False" in markdown
     assert "drawdown_gap_to_limit" in markdown
     assert "signal_column" in markdown
+
+
+def test_repair_cli_summary_surfaces_non_mutating_safety_flags():
+    summary = build_cli_summary(
+        {
+            "repair_status": "blocked_no_drawdown_safe_candidate",
+            "candidate_count": 0,
+            "recommended_candidate": None,
+            "automation_allowed": False,
+            "queue_write_allowed": False,
+            "broad_daemon_allowed": False,
+            "automated_rerun_allowed": False,
+            "live_trading_enabled": False,
+            "best_available_max_drawdown": -0.36,
+            "drawdown_gap_to_limit": 0.01,
+        }
+    )
+
+    assert summary == {
+        "repair_status": "blocked_no_drawdown_safe_candidate",
+        "candidate_count": 0,
+        "recommended_candidate": None,
+        "automation_allowed": False,
+        "queue_write_allowed": False,
+        "broad_daemon_allowed": False,
+        "automated_rerun_allowed": False,
+        "live_trading_enabled": False,
+        "best_available_max_drawdown": -0.36,
+        "drawdown_gap_to_limit": 0.01,
+    }
+
+
+def test_repair_cli_stdout_surfaces_blocker_fields_from_same_written_artifact(tmp_path):
+    matrix_path = tmp_path / "matrix.json"
+    policy_path = tmp_path / "policy.json"
+    json_path = tmp_path / "repair.json"
+    markdown_path = tmp_path / "repair.md"
+    matrix_path.write_text(
+        json.dumps({"results": [_row(sharpe=1.0, drawdown=-0.50), _row(sharpe=0.4, drawdown=-0.36)]}),
+        encoding="utf-8",
+    )
+    policy_path.write_text(json.dumps({"diagnosis_thresholds": {"max_drawdown_limit": -0.35}}), encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/write_simulated_portfolio_construction_repair.py",
+            "--matrix-path",
+            str(matrix_path),
+            "--policy-path",
+            str(policy_path),
+            "--json-path",
+            str(json_path),
+            "--markdown-path",
+            str(markdown_path),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    stdout_summary = json.loads(result.stdout)
+    artifact = json.loads(json_path.read_text(encoding="utf-8"))
+    expected_key_order = [
+        "repair_status",
+        "candidate_count",
+        "recommended_candidate",
+        "automation_allowed",
+        "queue_write_allowed",
+        "broad_daemon_allowed",
+        "automated_rerun_allowed",
+        "live_trading_enabled",
+        "best_available_max_drawdown",
+        "drawdown_gap_to_limit",
+    ]
+    assert list(stdout_summary.keys()) == expected_key_order
+    assert stdout_summary == {key: artifact[key] for key in expected_key_order}
+    assert stdout_summary["repair_status"] == "blocked_no_drawdown_safe_candidate"
+    assert stdout_summary["candidate_count"] == 0
+    assert stdout_summary["recommended_candidate"] is None
+    assert stdout_summary["queue_write_allowed"] is False
+    assert stdout_summary["broad_daemon_allowed"] is False
+    assert stdout_summary["automation_allowed"] is False
+    assert stdout_summary["automated_rerun_allowed"] is False
+    assert stdout_summary["live_trading_enabled"] is False
+    assert stdout_summary["best_available_max_drawdown"] == -0.36
+    assert stdout_summary["drawdown_gap_to_limit"] == 0.01
+
+
+def test_repair_cli_stdout_matches_same_written_artifact(tmp_path):
+    matrix_path = tmp_path / "matrix.json"
+    policy_path = tmp_path / "policy.json"
+    json_path = tmp_path / "repair.json"
+    markdown_path = tmp_path / "repair.md"
+    matrix_path.write_text(
+        json.dumps({"results": [_row(sharpe=0.5, drawdown=-0.30), _row(sharpe=0.8, drawdown=-0.48)]}),
+        encoding="utf-8",
+    )
+    policy_path.write_text(json.dumps({"diagnosis_thresholds": {"max_drawdown_limit": -0.35}}), encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/write_simulated_portfolio_construction_repair.py",
+            "--matrix-path",
+            str(matrix_path),
+            "--policy-path",
+            str(policy_path),
+            "--json-path",
+            str(json_path),
+            "--markdown-path",
+            str(markdown_path),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    stdout_summary = json.loads(result.stdout)
+    artifact = json.loads(json_path.read_text(encoding="utf-8"))
+    expected_key_order = [
+        "repair_status",
+        "candidate_count",
+        "recommended_candidate",
+        "automation_allowed",
+        "queue_write_allowed",
+        "broad_daemon_allowed",
+        "automated_rerun_allowed",
+        "live_trading_enabled",
+        "best_available_max_drawdown",
+        "drawdown_gap_to_limit",
+    ]
+    assert list(stdout_summary.keys()) == expected_key_order
+    assert stdout_summary == {key: artifact[key] for key in expected_key_order}
+    assert stdout_summary["repair_status"] == "candidate_found"
+    assert stdout_summary["queue_write_allowed"] is False
+    assert stdout_summary["broad_daemon_allowed"] is False
+    assert stdout_summary["automation_allowed"] is False
+    assert stdout_summary["automated_rerun_allowed"] is False
+    assert stdout_summary["live_trading_enabled"] is False

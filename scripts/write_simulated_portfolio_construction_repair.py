@@ -26,6 +26,21 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def build_cli_summary(payload: dict) -> dict:
+    return {
+        "repair_status": payload.get("repair_status"),
+        "candidate_count": payload.get("candidate_count"),
+        "recommended_candidate": payload.get("recommended_candidate"),
+        "automation_allowed": payload.get("automation_allowed"),
+        "queue_write_allowed": payload.get("queue_write_allowed"),
+        "broad_daemon_allowed": payload.get("broad_daemon_allowed"),
+        "automated_rerun_allowed": payload.get("automated_rerun_allowed"),
+        "live_trading_enabled": payload.get("live_trading_enabled"),
+        "best_available_max_drawdown": payload.get("best_available_max_drawdown"),
+        "drawdown_gap_to_limit": payload.get("drawdown_gap_to_limit"),
+    }
+
+
 if __name__ == "__main__":
     args = parse_args()
     payload = write_simulated_portfolio_construction_repair(
@@ -34,14 +49,4 @@ if __name__ == "__main__":
         json_path=args.json_path,
         markdown_path=args.markdown_path,
     )
-    print(
-        json.dumps(
-            {
-                "repair_status": payload.get("repair_status"),
-                "candidate_count": payload.get("candidate_count"),
-                "recommended_candidate": payload.get("recommended_candidate"),
-                "automation_allowed": payload.get("automation_allowed"),
-            },
-            ensure_ascii=False,
-        )
-    )
+    print(json.dumps(build_cli_summary(payload), ensure_ascii=False))

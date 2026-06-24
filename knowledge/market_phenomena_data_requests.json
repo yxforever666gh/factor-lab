@@ -1,0 +1,31 @@
+{
+  "requests": [
+    {
+      "decision": "blocked_missing_data",
+      "low_coverage_fields": [],
+      "missing_fields": [
+        "report_ann_date",
+        "analyst_coverage_proxy"
+      ],
+      "phenomenon_id": "coverage_neglect_post_report_drift_v1",
+      "pit_unaligned_fields": [],
+      "title": "低关注股票财报后的信息漂移",
+      "updated_at_utc": "2026-06-04T17:46:39.865105+00:00"
+    },
+    {
+      "decision": "blocked_missing_data",
+      "low_coverage_fields": [],
+      "missing_fields": [
+        "amihud_illiq_proxy",
+        "spread_proxy",
+        "future_return_20d"
+      ],
+      "phenomenon_id": "liquidity_discount_reversal_after_volume_recovery_v1",
+      "pit_unaligned_fields": [],
+      "title": "流动性折价在成交恢复后的部分修复",
+      "updated_at_utc": "2026-06-04T17:46:39.865114+00:00"
+    }
+  ],
+  "schema_version": 1,
+  "updated_at_utc": "2026-06-04T17:46:39.865117+00:00"
+}

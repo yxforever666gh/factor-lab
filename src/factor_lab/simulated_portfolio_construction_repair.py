@@ -137,6 +137,10 @@ def build_simulated_portfolio_construction_repair(
         "best_available_max_drawdown": best_available_max_drawdown,
         "drawdown_gap_to_limit": drawdown_gap_to_limit,
         "automation_allowed": False,
+        "queue_write_allowed": False,
+        "broad_daemon_allowed": False,
+        "automated_rerun_allowed": False,
+        "live_trading_enabled": False,
         "grouped_results": grouped,
     }
 
@@ -152,6 +156,10 @@ def repair_to_markdown(payload: dict[str, Any]) -> str:
         f"drawdown_gap_to_limit: {payload.get('drawdown_gap_to_limit')}",
         f"candidate_count: {payload.get('candidate_count')}",
         f"automation_allowed: {payload.get('automation_allowed')}",
+        f"queue_write_allowed: {payload.get('queue_write_allowed')}",
+        f"broad_daemon_allowed: {payload.get('broad_daemon_allowed')}",
+        f"automated_rerun_allowed: {payload.get('automated_rerun_allowed')}",
+        f"live_trading_enabled: {payload.get('live_trading_enabled')}",
         "",
         "## Recommended candidate",
     ]
