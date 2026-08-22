@@ -38,13 +38,13 @@ def test_schedule_report_refresh_uses_configurable_project_root(tmp_path, monkey
     assert f"sys.path.insert(0, {str(custom_root / 'src')!r}); " in captured['command'][2]
 
 
-def test_generated_batch_uses_configurable_artifacts_dir(tmp_path, monkeypatch):
+def test_generated_batch_entrypoint_is_retired_without_writing_artifacts(tmp_path, monkeypatch, capsys):
     custom_artifacts = tmp_path / 'custom-artifacts'
     monkeypatch.setenv('FACTOR_LAB_ARTIFACTS_DIR', str(custom_artifacts))
     worker = _load_worker_module()
 
-    captured = {}
-    monkeypatch.setattr(worker, 'run_batch', lambda *args, **kwargs: None)
+    captured = {"run_batch": 0}
+    monkeypatch.setattr(worker, 'run_batch', lambda *args, **kwargs: captured.__setitem__('run_batch', captured['run_batch'] + 1))
     monkeypatch.setattr(worker, 'schedule_report_refresh', lambda source: (False, 'reports_refresh=deferred'))
 
     def fake_summarize(output_dir, feedback_path):
@@ -71,14 +71,15 @@ def test_generated_batch_uses_configurable_artifacts_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(worker, 'validate_generated_batch_payload', lambda task: (True, None))
     monkeypatch.setattr(sys, 'argv', ['run_research_task_worker.py', json.dumps(task, ensure_ascii=False)])
 
-    assert worker.main() == 0
-    assert captured['feedback_path'] == str(custom_artifacts / 'llm_plan_feedback.json')
-    assert captured['status_path'] == str(custom_artifacts / 'llm_status.json')
-    assert captured['payload']['feedback_path'] == str(custom_artifacts / 'llm_plan_feedback.json')
-    assert calls and calls[0]['task_type'] == 'generated_batch'
+    assert worker.main() == 2
+    payload = json.loads(capsys.readouterr().out.strip())
+    assert payload['status'] == 'retired_legacy_entrypoint'
+    assert payload['candidate_written'] is False
+    assert captured['run_batch'] == 0
+    assert not calls
 
 
-def test_batch_runs_data_steward_hook_on_failure(tmp_path, monkeypatch):
+def test_batch_entrypoint_is_retired_before_legacy_failure_hook(tmp_path, monkeypatch, capsys):
     worker = _load_worker_module()
     calls = []
 
@@ -94,13 +95,7 @@ def test_batch_runs_data_steward_hook_on_failure(tmp_path, monkeypatch):
     }
     monkeypatch.setattr(sys, 'argv', ['run_research_task_worker.py', json.dumps(task, ensure_ascii=False)])
 
-    try:
-        worker.main()
-    except RuntimeError:
-        pass
-    else:
-        raise AssertionError('batch failure should be re-raised')
-
-    assert calls
-    assert calls[0]['task_type'] == 'batch'
-    assert calls[0]['last_error'] == 'batch exploded'
+    assert worker.main() == 2
+    payload = json.loads(capsys.readouterr().out.strip())
+    assert payload['status'] == 'retired_legacy_entrypoint'
+    assert calls == []

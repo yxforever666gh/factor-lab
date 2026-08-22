@@ -8,6 +8,8 @@ from urllib.parse import parse_qs
 from fastapi import Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from factor_lab.webui.security import csrf_token, enforce_settings_post
+
 
 RenderFunc = Callable[..., HTMLResponse]
 
@@ -16,6 +18,7 @@ def register_data_source_routes(
     app: Any,
     *,
     render: RenderFunc,
+    load_research_os_read_model: Callable[[], dict[str, Any]],
     load_data_source_settings: Callable[[], dict[str, Any]],
     save_data_source_settings: Callable[[dict[str, str]], dict[str, Any]],
     restart_research_daemon_after_settings_save: Callable[[], dict[str, Any]],
@@ -42,6 +45,7 @@ def register_data_source_routes(
         return render(
             "data_sources.html",
             title="数据源设置",
+            research_os=load_research_os_read_model(),
             settings=settings,
             profile_slots=profile_slots,
             source_type_options=source_type_options,
@@ -49,13 +53,16 @@ def register_data_source_routes(
             saved=saved == "1",
             restart_ok=restart == "1",
             restart_failed=restart == "0",
+            csrf_token=csrf_token(),
         )
 
     @app.post("/data-sources")
     async def data_sources_save(request: Request):
         body = (await request.body()).decode("utf-8")
         parsed = parse_qs(body, keep_blank_values=True)
-        save_data_source_settings({key: values[-1] if values else "" for key, values in parsed.items()})
+        form = {key: values[-1] if values else "" for key, values in parsed.items()}
+        enforce_settings_post(request, form)
+        save_data_source_settings(form)
         restart_result = restart_research_daemon_after_settings_save()
         restart_flag = "1" if restart_result.get("ok") else "0"
         return RedirectResponse(url=f"/data-sources?saved=1&restart={restart_flag}", status_code=303)
@@ -65,6 +72,7 @@ def register_data_source_routes(
         body = (await request.body()).decode("utf-8")
         parsed = parse_qs(body, keep_blank_values=True)
         form = {key: values[-1] if values else "" for key, values in parsed.items()}
+        enforce_settings_post(request, form)
         existing_values = read_env_values()
         raw_existing_profiles = existing_values.get("FACTOR_LAB_DATA_SOURCE_PROFILES_JSON") or os.environ.get("FACTOR_LAB_DATA_SOURCE_PROFILES_JSON") or ""
         try:
@@ -87,11 +95,22 @@ def register_data_source_routes(
         return render(
             "data_sources.html",
             title="数据源设置",
+            research_os=load_research_os_read_model(),
             settings=settings,
-            profile_slots=[redacted_data_source_profile(profile) if profile.get("api_key") else {**profile, "api_key_masked": "未配置", "api_key_configured": False} for profile in profile_slots],
+            profile_slots=[
+                redacted_data_source_profile(profile)
+                if profile.get("name")
+                else {
+                    **profile,
+                    "api_key_masked": "未配置",
+                    "api_key_configured": False,
+                }
+                for profile in profile_slots
+            ],
             source_type_options=source_type_options,
             test_result=test_result,
             saved=False,
             restart_ok=False,
             restart_failed=False,
+            csrf_token=csrf_token(),
         )

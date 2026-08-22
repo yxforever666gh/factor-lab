@@ -1,0 +1,16 @@
+.git
+.pytest_cache
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.env
+.env.*
+!.env.example
+artifacts
+build
+dist
+memory
+.openclaw
+.hermes
+.playwright-mcp

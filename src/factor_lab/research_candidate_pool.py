@@ -487,6 +487,49 @@ def _quality_priority_context(
 
 
 def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | Path, branch_plan_path: str | Path | None = None) -> dict[str, Any]:
+    snapshot_file = Path(snapshot_path)
+    if not snapshot_file.exists():
+        # A candidate pool without a planner snapshot would be unauditable.  A
+        # clean checkout therefore emits a stable, fail-closed schema instead
+        # of manufacturing an empty planner snapshot or consulting stale local
+        # artifacts.
+        quality_priority = {
+            'quality_priority_mode': True,
+            'freeze_exploration': True,
+            'generated_candidate_budget': 0,
+            'generated_candidate_budget_by_pool': {
+                OLD_SPACE_POOL: 0,
+                NEW_MECHANISM_POOL: 0,
+            },
+            'frontier_focus_names': [],
+            'frontier_evidence_missing': [],
+            'frontier_needs_validation': [],
+            'duplicate_pressure': 0,
+            'refinement_pressure': 0,
+            'high_corr_pressure': 0,
+            'research_mode': 'blocked_missing_snapshot',
+            'reasons': ['research_planner_snapshot_missing'],
+        }
+        payload = {
+            'status': 'blocked_missing_snapshot',
+            'generated_from_snapshot': str(snapshot_file),
+            'generated_from_registry': None,
+            'generated_from_space_map': None,
+            'generated_from_branch_plan': str(branch_plan_path) if branch_plan_path else None,
+            'summary': {
+                'candidate_count': 0,
+                'suppressed_candidate_count': 0,
+                'quality_priority': quality_priority,
+            },
+            'representative_selection': [],
+            'suppressed_tasks': [],
+            'tasks': [],
+        }
+        destination = Path(output_path)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
+        return payload
+
     snapshot = read_json(snapshot_path)
     registry_path = ROOT / 'artifacts' / 'research_space_registry.json'
     space_map_path = ROOT / 'artifacts' / 'research_space_map.json'
@@ -1226,5 +1269,7 @@ def build_research_candidate_pool(snapshot_path: str | Path, output_path: str | 
         'suppressed_tasks': suppressed_tasks,
         'tasks': sorted(candidates, key=lambda item: (item['priority_hint'], item['category'])),
     }
-    Path(output_path).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
+    destination = Path(output_path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
     return payload

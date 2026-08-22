@@ -20,6 +20,10 @@ from factor_lab.hermes_contract_validation import validate_decision_payload
 from factor_lab.paths import artifacts_dir, env_file, project_root
 from factor_lab.planner_decision_engine import build_planner_response
 from factor_lab.reviewer_decision_engine import build_reviewer_response
+from factor_lab.research_os.credentials import (
+    CredentialResolutionError,
+    resolve_credential_ref,
+)
 
 DecisionBuilder = Callable[[dict[str, Any]], dict[str, Any]]
 DECISION_SCHEMA_HINTS: dict[str, dict[str, Any]] = {
@@ -1047,6 +1051,25 @@ class HermesDecisionRouter:
                     base_url = str(item.get("base_url") or "").strip().rstrip("/")
                     model = str(item.get("model") or self.model or "").strip()
                     api_key = str(item.get("api_key") or "").strip()
+                    credential_ref = str(item.get("credential_ref") or "").strip()
+                    if not api_key and credential_ref:
+                        secrets_root = (
+                            os.environ.get("FACTOR_LAB_SECRETS_DIR")
+                            or (
+                                r"H:\Program Data\factor-lab-runtime\secrets"
+                                if os.name == "nt"
+                                else "/run/secrets"
+                            )
+                        )
+                        try:
+                            api_key = resolve_credential_ref(
+                                credential_ref,
+                                env=os.environ,
+                                secrets_root=secrets_root,
+                                allow_plain_env=False,
+                            )
+                        except CredentialResolutionError:
+                            api_key = ""
                     enabled = item.get("enabled", True)
                     if isinstance(enabled, str):
                         enabled = enabled.strip().lower() not in {"0", "false", "no", "off"}
@@ -1071,6 +1094,27 @@ class HermesDecisionRouter:
         if not profiles:
             base_url = (os.environ.get("FACTOR_LAB_LLM_BASE_URL") or os.environ.get("OPENAI_BASE_URL") or "").strip().rstrip("/")
             api_key = (os.environ.get("FACTOR_LAB_LLM_API_KEY") or os.environ.get("OPENAI_API_KEY") or "").strip()
+            credential_ref = (
+                os.environ.get("FACTOR_LAB_LLM_API_KEY_REF") or ""
+            ).strip()
+            if not api_key and credential_ref:
+                secrets_root = (
+                    os.environ.get("FACTOR_LAB_SECRETS_DIR")
+                    or (
+                        r"H:\Program Data\factor-lab-runtime\secrets"
+                        if os.name == "nt"
+                        else "/run/secrets"
+                    )
+                )
+                try:
+                    api_key = resolve_credential_ref(
+                        credential_ref,
+                        env=os.environ,
+                        secrets_root=secrets_root,
+                        allow_plain_env=False,
+                    )
+                except CredentialResolutionError:
+                    api_key = ""
             model = (os.environ.get("FACTOR_LAB_LLM_MODEL") or os.environ.get("OPENAI_MODEL") or self.model or "").strip()
             if base_url and api_key:
                 api_format = (

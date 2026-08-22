@@ -11,9 +11,12 @@ from factor_lab.reporting import write_sqlite_report
 from factor_lab.robustness_batch import build_robustness_batch
 from factor_lab.summary import build_run_summary
 from factor_lab.promotion_scorecard import write_promotion_scorecard
+from factor_lab.research_os.legacy_entrypoint import retired_legacy_entrypoint
 
 
 if __name__ == "__main__":
+    raise SystemExit(retired_legacy_entrypoint("scripts/run_robustness_batch.py"))
+
     build_robustness_batch(
         db_path="artifacts/factor_lab.db",
         base_config_path="configs/tushare_workflow.json",

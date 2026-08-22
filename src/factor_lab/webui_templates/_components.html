@@ -1,0 +1,21 @@
+{% macro metric(label, value, note='', tone='', href='') -%}
+{% if href %}<a class="metric-card metric-link {{ tone }}" href="{{ href }}">{% else %}<section class="metric-card {{ tone }}">{% endif %}
+  <span class="metric-label">{{ label }}</span>
+  <strong class="metric-value">{{ value }}</strong>
+  {% if note %}<span class="metric-note">{{ note }}</span>{% endif %}
+{% if href %}</a>{% else %}</section>{% endif %}
+{%- endmacro %}
+
+{% macro empty(title, detail='') -%}
+<div class="empty-state"><strong>{{ title }}</strong>{% if detail %}<p>{{ detail }}</p>{% endif %}</div>
+{%- endmacro %}
+
+{% macro alert(message, tone='info', detail='') -%}
+<div class="alert alert-{{ tone }}" role="status"><strong>{{ message }}</strong>{% if detail %}<span>{{ detail }}</span>{% endif %}</div>
+{%- endmacro %}
+
+{% macro disclosure(title, open=false) -%}
+<details class="disclosure"{% if open %} open{% endif %}>
+  <summary>{{ title }}</summary><div class="disclosure-body">{{ caller() }}</div>
+</details>
+{%- endmacro %}

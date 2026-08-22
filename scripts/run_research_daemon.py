@@ -12,15 +12,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping
 
-import fcntl
-
 SCRIPT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPT_ROOT / "src"))
 
+from factor_lab.cross_platform_lock import try_lock_file
 from factor_lab.adaptive_scheduler import apply_scheduler_env, compute_scheduler_policy, route_status_snapshot, user_idle_snapshot, write_scheduler_state
 from factor_lab.heartbeat import append_heartbeat
 from factor_lab.paths import artifacts_dir, project_root
 from factor_lab.research_queue import process_report_refresh_requests, report_refresh_requested, run_orchestrator
+from factor_lab.research_os.legacy_entrypoint import retired_legacy_entrypoint
 from factor_lab.controlled_restart_audit import dry_run_controlled_restart
 
 
@@ -302,9 +302,7 @@ def acquire_single_instance_lock() -> bool:
     lock_path = _lock_path()
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     LOCK_HANDLE = open(lock_path, "a+", encoding="utf-8")
-    try:
-        fcntl.flock(LOCK_HANDLE.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
+    if not try_lock_file(LOCK_HANDLE):
         return False
     LOCK_HANDLE.seek(0)
     LOCK_HANDLE.truncate()
@@ -716,6 +714,12 @@ def maybe_run_prewarm() -> dict | None:
 
 
 if __name__ == "__main__":
+    # The SQLite/JSON autonomous queue is retained only as importable legacy
+    # regression code.  New research must enter the Research OS ledger through
+    # Dagster or ``factor-lab research cycle``; allowing this daemon to keep
+    # writing candidates would recreate a second, unaudited source of truth.
+    raise SystemExit(retired_legacy_entrypoint("scripts/run_research_daemon.py"))
+
     signal.signal(signal.SIGTERM, handle_stop)
     signal.signal(signal.SIGINT, handle_stop)
 

@@ -1,43 +1,33 @@
 {% extends 'base.html' %}
+{% from '_components.html' import metric, empty, alert %}
 {% block content %}
-<div class="grid cols-2">
-  <section class="card">
-    <h2>策略平均表现</h2>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th class="col-strategy">策略</th><th>平均夏普</th><th>平均收益</th><th>运行次数</th></tr></thead>
-        <tbody>
-          {% for row in strategies %}
-          <tr>
-            <td class="text-break col-strategy">{{ row.strategy_name }}</td>
-            <td class="num">{{ row.avg_sharpe }}</td>
-            <td class="num">{{ row.avg_return }}</td>
-            <td class="num">{{ row.runs }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </section>
-  <section class="card">
-    <h2>最近组合记录</h2>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th class="col-run">运行</th><th class="col-strategy">策略</th><th>收益</th><th>夏普</th><th>回撤</th><th>换手</th></tr></thead>
-        <tbody>
-          {% for row in recent %}
-          <tr>
-            <td class="text-nowrap col-run"><a href="/runs/{{ row.run_id }}">{{ row.run_id[:8] }}</a></td>
-            <td class="text-break col-strategy">{{ row.strategy_name }}</td>
-            <td class="num">{{ row.annual_return }}</td>
-            <td class="num">{{ row.sharpe }}</td>
-            <td class="num">{{ row.max_drawdown }}</td>
-            <td class="num">{{ row.avg_turnover }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </section>
+{% set ros = research_os %}
+{% if not ros.available %}
+  {{ alert('Research OS 组合账本暂不可用', 'warn', ros.reason) }}
+{% elif not ros.authoritative %}
+  {{ alert('当前不是权威事实源', 'bad', '活跃页面只接受 PostgreSQL read-model。') }}
+{% endif %}
+<div class="grid cols-4">
+  {{ metric('Champion', ros.champion.name if ros.champion.published else '未发布', ros.champion.as_of or '等待发布', 'good' if ros.champion.published else 'warn') }}
+  {{ metric('Sleeve', ros.sleeves|length, '有生命周期记录的机制组合') }}
+  {{ metric('降险状态', ros.risk.label, (ros.risk.affected_sleeves|length) ~ ' 个受影响', ros.risk.tone) }}
+  {{ metric('影子 NAV', ros.champion.nav if ros.champion.nav is not none else '-', '基准 NAV ' ~ (ros.champion.benchmark_nav if ros.champion.benchmark_nav is not none else '-')) }}
 </div>
+
+<section class="card section-gap">
+  <div class="section-header"><div><h2>Champion / Sleeve 权重</h2><p>仅展示明确发布到 PostgreSQL Research OS read-model 的组合状态。</p></div></div>
+  {% if ros.champion.sleeve_weights %}
+  <div class="grid cols-3">
+    {{ metric('Sleeve 权重', ros.champion.sleeve_weights|length, '静态核心与受控倾斜') }}
+    {{ metric('基准权重', ros.champion.benchmark_weight if ros.champion.benchmark_weight is not none else '-', '降权部分进入 PIT 等权基准') }}
+    {{ metric('现金权重', ros.champion.cash_weight if ros.champion.cash_weight is not none else '-', '数据冻结时应为 100%') }}
+  </div>
+  <div class="table-wrap section-gap"><table><thead><tr><th>Sleeve</th><th>权重</th><th>生命周期</th><th>最近原因</th></tr></thead><tbody>
+  {% for row in ros.champion.sleeve_weights %}
+    {% set state = (ros.sleeves|selectattr('sleeve_id', 'equalto', row.sleeve_id)|list|first) %}
+    <tr><td><strong>{{ row.name }}</strong><div class="muted">{{ row.sleeve_id }}</div></td><td class="num">{{ row.weight }}</td><td><span class="pill {{ 'good' if state and state.state == 'active' else 'bad' if state and state.state == 'frozen_data' else 'warn' }}">{{ state.state if state else '-' }}</span></td><td>{{ state.cause if state else '-' }}</td></tr>
+  {% endfor %}
+  </tbody></table></div>
+  {% else %}{{ empty('尚未发布 Champion', '静态核心通过验证并进入影子组合后才会出现在这里。') }}{% endif %}
+</section>
 {% endblock %}

@@ -1,0 +1,280 @@
+{
+  "schema_version": "research-os/runtime-service-authority/v1",
+  "runtime_environment": {
+    "AWS_EC2_METADATA_DISABLED": "true",
+    "AWS_ENDPOINT_URL": "http://minio:9000",
+    "AWS_REGION": "us-east-1",
+    "DAGSTER_POSTGRES_URL": "postgresql://factor_lab@postgres:5432/factor_lab?options=-csearch_path%3Ddagster",
+    "DIEMENG_API_KEY_FILE": "/run/secrets/diemeng_api_key",
+    "FACTOR_LAB_DATABASE_URL": "postgresql+psycopg://factor_lab@postgres:5432/factor_lab",
+    "FACTOR_LAB_ENVIRONMENT": "production",
+    "FACTOR_LAB_ENV_FILE": "/opt/factor-lab/runtime/artifacts/settings/webui.env",
+    "FACTOR_LAB_ICEBERG_CATALOG_URI": "postgresql+psycopg2://factor_lab@postgres:5432/factor_lab",
+    "FACTOR_LAB_ICEBERG_WAREHOUSE": "s3://factor-lab/warehouse",
+    "FACTOR_LAB_LAKE_ROOT": "/opt/factor-lab/runtime/artifacts/lake-cache",
+    "FACTOR_LAB_OBJECT_STORE_ACCESS_KEY_FILE": "/run/infra-secrets/minio_root_user",
+    "FACTOR_LAB_OBJECT_STORE_BUCKET": "factor-lab",
+    "FACTOR_LAB_OBJECT_STORE_ENDPOINT": "http://minio:9000",
+    "FACTOR_LAB_OBJECT_STORE_SECRET_KEY_FILE": "/run/infra-secrets/minio_root_password",
+    "FACTOR_LAB_OCI_IMAGE_ID": "",
+    "FACTOR_LAB_ORCHESTRATION_CONFIG": "/opt/factor-lab/configs/research_os_orchestration.production.json",
+    "FACTOR_LAB_ORCHESTRATION_FACTORY": "factor_lab.research_os.application_services:create_services",
+    "FACTOR_LAB_POSTGRES_PASSWORD_FILE": "/run/infra-secrets/postgres_password",
+    "FACTOR_LAB_PRODUCTION_ROLE": "worker",
+    "FACTOR_LAB_RUNTIME_ARTIFACT_ROOT": "/opt/factor-lab/runtime/artifacts",
+    "FACTOR_LAB_RUNTIME_DATA_ROOT": "/opt/factor-lab/runtime/data",
+    "FACTOR_LAB_SECRETS_DIR": "/run/secrets",
+    "FACTOR_LAB_SECRETS_ROOT": "/run/secrets",
+    "FACTOR_LAB_SNAPSHOT_ROOT": "/opt/factor-lab/runtime/artifacts/snapshot-manifests",
+    "PYICEBERG_CATALOG__FACTORLAB__INIT_CATALOG_TABLES": "true",
+    "PYICEBERG_CATALOG__FACTORLAB__S3__ENDPOINT": "http://minio:9000",
+    "PYICEBERG_CATALOG__FACTORLAB__S3__FORCE_VIRTUAL_ADDRESSING": "false",
+    "PYICEBERG_CATALOG__FACTORLAB__S3__REGION": "us-east-1",
+    "PYICEBERG_CATALOG__FACTORLAB__TYPE": "sql",
+    "PYICEBERG_CATALOG__FACTORLAB__URI": "postgresql+psycopg2://factor_lab@postgres:5432/factor_lab",
+    "PYICEBERG_CATALOG__FACTORLAB__WAREHOUSE": "s3://factor-lab/warehouse",
+    "RESEARCH_OS_DATABASE_URL": "postgresql+psycopg://factor_lab@postgres:5432/factor_lab",
+    "RESEARCH_OS_POSTGRES_DB": "factor_lab",
+    "RESEARCH_OS_POSTGRES_HOST": "postgres",
+    "RESEARCH_OS_POSTGRES_PORT_INTERNAL": "5432",
+    "RESEARCH_OS_POSTGRES_USER": "factor_lab",
+    "TUSHARE_TOKEN_FILE": "/run/secrets/tushare_token"
+  },
+  "protected_resources": {
+    "dagster_volume": {"type": "volume", "name": "factor-lab-research-os_research-os-dagster"},
+    "minio_volume": {"type": "volume", "name": "factor-lab-research-os_research-os-minio"},
+    "postgres_volume": {"type": "volume", "name": "factor-lab-research-os_research-os-postgres"},
+    "runtime_data": {"type": "bind", "sources": {"windows": "H:/Program Data/factor-lab-runtime/data", "linux": "/srv/factor-lab-runtime/data"}},
+    "runtime_artifacts": {"type": "bind", "sources": {"windows": "H:/Program Data/factor-lab-runtime/artifacts", "linux": "/srv/factor-lab-runtime/artifacts"}},
+    "settings_secrets": {"type": "bind", "sources": {"windows": "H:/Program Data/factor-lab-runtime/secrets/settings", "linux": "/srv/factor-lab-runtime/secrets/settings"}},
+    "postgres_secret": {"type": "bind", "sources": {"windows": "H:/Program Data/factor-lab-runtime/secrets/postgres_password", "linux": "/srv/factor-lab-runtime/secrets/postgres_password"}},
+    "minio_user_secret": {"type": "bind", "sources": {"windows": "H:/Program Data/factor-lab-runtime/secrets/minio_root_user", "linux": "/srv/factor-lab-runtime/secrets/minio_root_user"}},
+    "minio_password_secret": {"type": "bind", "sources": {"windows": "H:/Program Data/factor-lab-runtime/secrets/minio_root_password", "linux": "/srv/factor-lab-runtime/secrets/minio_root_password"}},
+    "webui_postgres_secret": {"type": "bind", "sources": {"windows": "H:/Program Data/factor-lab-runtime/secrets/webui_postgres_password", "linux": "/srv/factor-lab-runtime/secrets/webui_postgres_password"}}
+  },
+  "application_services": {
+    "dagster-daemon": {
+      "command": ["dagster-daemon", "run", "-w", "/opt/dagster/workspace.yaml"],
+      "entrypoint": ["/usr/local/bin/factor-lab-entrypoint"],
+      "environment_contract": "runtime_environment",
+      "healthcheck": null,
+      "mounts": {
+        "/opt/dagster/home/storage": {"resource": "dagster_volume", "read_write": true},
+        "/opt/factor-lab/runtime/artifacts": {"resource": "runtime_artifacts", "read_write": true},
+        "/opt/factor-lab/runtime/data": {"resource": "runtime_data", "read_write": false},
+        "/run/infra-secrets/minio_root_password": {"resource": "minio_password_secret", "read_write": false},
+        "/run/infra-secrets/minio_root_user": {"resource": "minio_user_secret", "read_write": false},
+        "/run/infra-secrets/postgres_password": {"resource": "postgres_secret", "read_write": false},
+        "/run/secrets": {"resource": "settings_secrets", "read_write": false}
+      },
+      "published_ports": [],
+      "security": {"privileged": false, "read_only_root_filesystem": true, "cap_add": [], "cap_drop": ["ALL"], "security_options": ["no-new-privileges:true"], "tmpfs": {"/tmp": ["mode=1777", "nodev", "noexec", "nosuid", "rw"]}},
+      "user": "dagster",
+      "working_directory": "/opt/factor-lab"
+    },
+    "dagster-webserver": {
+      "command": ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "/opt/dagster/workspace.yaml"],
+      "entrypoint": ["/usr/local/bin/factor-lab-entrypoint"],
+      "environment_contract": "runtime_environment",
+      "healthcheck": {"test": ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:3000/server_info', timeout=2)"], "interval_ns": 10000000000, "timeout_ns": 5000000000, "retries": 20},
+      "mounts": {
+        "/opt/dagster/home/storage": {"resource": "dagster_volume", "read_write": true},
+        "/opt/factor-lab/runtime/artifacts": {"resource": "runtime_artifacts", "read_write": true},
+        "/opt/factor-lab/runtime/data": {"resource": "runtime_data", "read_write": false},
+        "/run/infra-secrets/minio_root_password": {"resource": "minio_password_secret", "read_write": false},
+        "/run/infra-secrets/minio_root_user": {"resource": "minio_user_secret", "read_write": false},
+        "/run/infra-secrets/postgres_password": {"resource": "postgres_secret", "read_write": false},
+        "/run/secrets": {"resource": "settings_secrets", "read_write": false}
+      },
+      "published_ports": [{"container": "3000/tcp", "host_ip": "127.0.0.1", "host_port": "8766"}],
+      "security": {"privileged": false, "read_only_root_filesystem": true, "cap_add": [], "cap_drop": ["ALL"], "security_options": ["no-new-privileges:true"], "tmpfs": {"/tmp": ["mode=1777", "nodev", "noexec", "nosuid", "rw"]}},
+      "user": "dagster",
+      "working_directory": "/opt/factor-lab"
+    },
+    "research-os-webui": {
+      "command": ["uvicorn", "factor_lab.webui_app:app", "--host", "0.0.0.0", "--port", "8765"],
+      "entrypoint": ["/usr/local/bin/factor-lab-entrypoint"],
+      "environment": {
+        "FACTOR_LAB_DATABASE_URL": "postgresql+psycopg://factor_lab_webui@postgres:5432/factor_lab",
+        "FACTOR_LAB_ENVIRONMENT": "production",
+        "FACTOR_LAB_ENV_FILE": "/opt/factor-lab/runtime/artifacts/settings/webui.env",
+        "FACTOR_LAB_POSTGRES_PASSWORD_FILE": "/run/webui-db-secret/password",
+        "FACTOR_LAB_PRODUCTION_ROLE": "webui",
+        "FACTOR_LAB_SECRETS_DIR": "/opt/factor-lab/runtime/secrets-editor",
+        "RESEARCH_OS_POSTGRES_DB": "factor_lab",
+        "RESEARCH_OS_POSTGRES_HOST": "postgres",
+        "RESEARCH_OS_POSTGRES_PORT_INTERNAL": "5432",
+        "RESEARCH_OS_POSTGRES_USER": "factor_lab_webui",
+        "RESEARCH_OS_WEBUI_POSTGRES_USER": "factor_lab_webui"
+      },
+      "healthcheck": {"test": ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/', timeout=2)"], "interval_ns": 10000000000, "timeout_ns": 5000000000, "retries": 20},
+      "mounts": {
+        "/opt/factor-lab/runtime/artifacts": {"resource": "runtime_artifacts", "read_write": false},
+        "/opt/factor-lab/runtime/artifacts/settings": {"resource": "runtime_artifacts", "suffix": "settings", "read_write": true},
+        "/opt/factor-lab/runtime/secrets-editor": {"resource": "settings_secrets", "read_write": true},
+        "/run/webui-db-secret/password": {"resource": "webui_postgres_secret", "read_write": false}
+      },
+      "published_ports": [{"container": "8765/tcp", "host_ip": "127.0.0.1", "host_port": "8765"}],
+      "security": {"privileged": false, "read_only_root_filesystem": true, "cap_add": [], "cap_drop": ["ALL"], "security_options": ["no-new-privileges:true"], "tmpfs": {"/tmp": ["mode=1777", "nodev", "noexec", "nosuid", "rw"]}},
+      "user": "dagster",
+      "working_directory": "/opt/factor-lab"
+    }
+  },
+  "backend_services": {
+    "minio": {
+      "command": ["server", "/data", "--console-address", ":9001"],
+      "entrypoint": ["/usr/bin/docker-entrypoint.sh"],
+      "image_reference": "quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z@sha256:a1ea29fa28355559ef137d71fc570e508a214ec84ff8083e39bc5428980b015e",
+      "environment": {
+        "MINIO_ROOT_PASSWORD_FILE": "/run/secrets/minio_root_password",
+        "MINIO_ROOT_USER_FILE": "/run/secrets/minio_root_user"
+      },
+      "network_aliases": [
+        "factor-lab-research-os-minio-1",
+        "minio"
+      ],
+      "healthcheck": {
+        "interval_ns": 5000000000,
+        "retries": 20,
+        "test": [
+          "CMD",
+          "curl",
+          "--fail",
+          "--silent",
+          "--show-error",
+          "http://127.0.0.1:9000/minio/health/live"
+        ],
+        "timeout_ns": 5000000000
+      },
+      "mounts": {
+        "/data": {
+          "name": "factor-lab-research-os_research-os-minio",
+          "read_write": true,
+          "type": "volume"
+        },
+        "/run/secrets/minio_root_password": {
+          "read_write": false,
+          "sources": {
+            "linux": "/srv/factor-lab-runtime/secrets/minio_root_password",
+            "windows": "H:/Program Data/factor-lab-runtime/secrets/minio_root_password"
+          },
+          "type": "bind"
+        },
+        "/run/secrets/minio_root_user": {
+          "read_write": false,
+          "sources": {
+            "linux": "/srv/factor-lab-runtime/secrets/minio_root_user",
+            "windows": "H:/Program Data/factor-lab-runtime/secrets/minio_root_user"
+          },
+          "type": "bind"
+        }
+      },
+      "published_ports": [
+        {"container": "9000/tcp", "host_ip": "127.0.0.1", "host_port": "9000"},
+        {"container": "9001/tcp", "host_ip": "127.0.0.1", "host_port": "9001"}
+      ],
+      "security": {
+        "cap_add": [],
+        "cap_drop": [],
+        "privileged": false,
+        "read_only_root_filesystem": false,
+        "security_options": []
+      },
+      "user": "",
+      "volume_destination": "/data",
+      "volume_name": "factor-lab-research-os_research-os-minio"
+    },
+    "postgres": {
+      "command": ["postgres"],
+      "entrypoint": ["docker-entrypoint.sh"],
+      "image_reference": "postgres:16.4-alpine@sha256:5660c2cbfea50c7a9127d17dc4e48543eedd3d7a41a595a2dfa572471e37e64c",
+      "environment": {
+        "POSTGRES_DB": "factor_lab",
+        "POSTGRES_PASSWORD_FILE": "/run/secrets/postgres_password",
+        "POSTGRES_USER": "factor_lab"
+      },
+      "network_aliases": [
+        "factor-lab-research-os-postgres-1",
+        "postgres"
+      ],
+      "healthcheck": {
+        "interval_ns": 5000000000,
+        "retries": 20,
+        "test": ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"],
+        "timeout_ns": 5000000000
+      },
+      "mounts": {
+        "/run/secrets/postgres_password": {
+          "read_write": false,
+          "sources": {
+            "linux": "/srv/factor-lab-runtime/secrets/postgres_password",
+            "windows": "H:/Program Data/factor-lab-runtime/secrets/postgres_password"
+          },
+          "type": "bind"
+        },
+        "/var/lib/postgresql/data": {
+          "name": "factor-lab-research-os_research-os-postgres",
+          "read_write": true,
+          "type": "volume"
+        }
+      },
+      "published_ports": [
+        {"container": "5432/tcp", "host_ip": "127.0.0.1", "host_port": "5433"}
+      ],
+      "security": {
+        "cap_add": [],
+        "cap_drop": [],
+        "privileged": false,
+        "read_only_root_filesystem": false,
+        "security_options": []
+      },
+      "user": "",
+      "volume_destination": "/var/lib/postgresql/data",
+      "volume_name": "factor-lab-research-os_research-os-postgres"
+    }
+  },
+  "network": {
+    "name": "factor-lab-research-os_default",
+    "code_server_aliases": [
+      "dagster-code-server",
+      "factor-lab-research-os-dagster-code-server-1"
+    ],
+    "driver": "bridge",
+    "internal": false,
+    "attachable": false,
+    "compose_network": "default",
+    "running_members": {
+      "factor-lab-research-os-dagster-code-server-1": ["dagster-code-server", "factor-lab-research-os-dagster-code-server-1"],
+      "factor-lab-research-os-dagster-daemon-1": ["dagster-daemon", "factor-lab-research-os-dagster-daemon-1"],
+      "factor-lab-research-os-dagster-webserver-1": ["dagster-webserver", "factor-lab-research-os-dagster-webserver-1"],
+      "factor-lab-research-os-minio-1": ["factor-lab-research-os-minio-1", "minio"],
+      "factor-lab-research-os-postgres-1": ["factor-lab-research-os-postgres-1", "postgres"],
+      "factor-lab-research-os-research-os-webui-1": ["factor-lab-research-os-research-os-webui-1", "research-os-webui"]
+    }
+  },
+  "volumes": {
+    "factor-lab-research-os_research-os-dagster": {
+      "compose_volume": "research-os-dagster"
+    },
+    "factor-lab-research-os_research-os-minio": {
+      "compose_volume": "research-os-minio"
+    },
+    "factor-lab-research-os_research-os-postgres": {
+      "compose_volume": "research-os-postgres"
+    }
+  },
+  "storage_profiles": {
+    "windows": {
+      "engine_root": "/var/lib/docker",
+      "host_data_root": "H:/Program Data/Docker/DockerDesktopWSL",
+      "host_root_authority": "docker_desktop_settings_store",
+      "required_disk_images": ["disk/docker_data.vhdx"]
+    },
+    "linux": {
+      "engine_root": "/var/lib/docker",
+      "host_data_root": "/var/lib/docker",
+      "host_root_authority": "docker_engine_info",
+      "required_disk_images": []
+    }
+  }
+}

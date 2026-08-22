@@ -33,6 +33,13 @@ DEFAULT_OPERATOR_PENDING_CONSISTENCY_SNAPSHOT_PATH = ROOT / "artifacts" / "small
 DEFAULT_STATUS_JSON_PATH = ROOT / "artifacts" / "small_institutionalization" / "status.json"
 DEFAULT_STATUS_MD_PATH = ROOT / "artifacts" / "small_institutionalization" / "status.md"
 DEFAULT_KNOWLEDGE_PATH = ROOT / "knowledge" / "small_institutionalization.md"
+DISABLED_RUNTIME_FLAGS = {
+    "queue_write_allowed": False,
+    "broad_daemon_allowed": False,
+    "automation_allowed": False,
+    "automated_rerun_allowed": False,
+    "live_trading_enabled": False,
+}
 
 
 def load_json(path: str | Path) -> dict[str, Any]:
@@ -215,6 +222,7 @@ def _paper_monitoring_section(
             "cadence": None,
             "missing_artifacts": [],
             "runtime_safe": None,
+            **DISABLED_RUNTIME_FLAGS,
         }
         if snapshot_section:
             section["operator_pending_consistency_snapshot"] = snapshot_section
@@ -469,14 +477,12 @@ def _simulation_self_diagnosis_section(simulation_self_diagnosis: dict[str, Any]
 def _simulated_portfolio_construction_repair_section(repair: dict[str, Any]) -> dict[str, Any]:
     if not repair:
         return {
-            "repair_status": "missing",
+            "repair_status": "blocked_missing_repair_evidence",
             "candidate_count": 0,
             "recommended_candidate": None,
-            "automation_allowed": False,
-            "queue_write_allowed": False,
-            "broad_daemon_allowed": False,
-            "automated_rerun_allowed": False,
-            "live_trading_enabled": False,
+            "best_available_max_drawdown": None,
+            "drawdown_gap_to_limit": None,
+            **DISABLED_RUNTIME_FLAGS,
         }
     return {
         "repair_status": repair.get("repair_status") or "missing",
@@ -562,7 +568,12 @@ def _repair_blocker_manual_review_section(review: dict[str, Any]) -> dict[str, A
 
 def _manual_approval_gate_section(gate: dict[str, Any]) -> dict[str, Any]:
     if not gate:
-        return {"gate_status": "missing"}
+        return {
+            "gate_status": "blocked_missing_manual_approval_evidence",
+            "human_approval_present": False,
+            "risk_relaxation_allowed": False,
+            **DISABLED_RUNTIME_FLAGS,
+        }
     safety = gate.get("safety") or {}
     return {
         "gate_status": gate.get("gate_status") or "missing",
@@ -578,7 +589,18 @@ def _manual_approval_gate_section(gate: dict[str, Any]) -> dict[str, Any]:
 
 def _operator_approval_summary_section(summary: dict[str, Any]) -> dict[str, Any]:
     if not summary:
-        return {"summary_status": "missing"}
+        return {
+            "summary_status": "blocked_missing_operator_approval_summary",
+            "approval_required": True,
+            "human_approval_present": False,
+            "required_decision_axis": None,
+            "primary_blocker": "missing_operator_approval_evidence",
+            "repair_status": "blocked_missing_repair_evidence",
+            "candidate_count": 0,
+            "best_available_max_drawdown": None,
+            "drawdown_gap_to_limit": None,
+            **DISABLED_RUNTIME_FLAGS,
+        }
     safety = summary.get("safety") or {}
     return {
         "summary_status": summary.get("summary_status") or "missing",
@@ -600,7 +622,16 @@ def _operator_approval_summary_section(summary: dict[str, Any]) -> dict[str, Any
 
 def _approval_artifact_consistency_section(payload: dict[str, Any]) -> dict[str, Any]:
     if not payload:
-        return {"consistency_status": "missing"}
+        return {
+            "consistency_status": "not_evaluated_missing_approval_evidence",
+            "primary_blocker": "missing_operator_approval_evidence",
+            "decision_axis": None,
+            "best_available_max_drawdown": None,
+            "drawdown_gap_to_limit": None,
+            "inconsistencies": [],
+            "staleness_warnings": [],
+            **DISABLED_RUNTIME_FLAGS,
+        }
     matched = payload.get("matched_fields") or {}
     safety = payload.get("safety_flags") or {}
     return {
@@ -651,7 +682,20 @@ def _operator_decision_intake_validation_section(payload: dict[str, Any]) -> dic
 
 def _operator_decision_handoff_section(payload: dict[str, Any]) -> dict[str, Any]:
     if not payload:
-        return {"handoff_status": "missing", "validation_errors": [], "non_mutating": True}
+        return {
+            "handoff_status": "blocked_missing_operator_handoff",
+            "intake_status": "missing",
+            "decision_type": None,
+            "primary_blocker": "missing_operator_approval_evidence",
+            "repair_status": "blocked_missing_repair_evidence",
+            "candidate_count": 0,
+            "decision_axis": None,
+            "validation_errors": [],
+            "non_mutating": True,
+            "execution_allowed": False,
+            "separate_execution_plan_required": False,
+            **DISABLED_RUNTIME_FLAGS,
+        }
     safety = payload.get("safety") or {}
     return {
         "handoff_status": payload.get("handoff_status") or "missing",

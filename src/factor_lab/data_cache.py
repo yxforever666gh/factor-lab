@@ -13,7 +13,10 @@ from factor_lab.tushare_provider import TushareDataProvider, TushareRequest
 from factor_lab.universe import default_universe_name, ensure_universe_snapshot
 
 
-WARMUP_DAYS = 30
+# 120-day momentum needs roughly six calendar months of history.  Use a
+# conservative calendar buffer so requested research windows do not begin with
+# several months of avoidable feature NaNs.
+WARMUP_DAYS = 200
 FORWARD_LABEL_DAYS = 5
 
 

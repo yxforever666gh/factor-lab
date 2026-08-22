@@ -25,7 +25,9 @@ def load_latest_v3_next_plan(root: str | Path = ".") -> dict[str, Any] | None:
     if not plan_path.exists():
         return None
     plan = json.loads(plan_path.read_text(encoding="utf-8"))
-    plan["_source_path"] = str(plan_path)
+    # Metadata is persisted and compared across Windows/Linux runners.  Use a
+    # platform-neutral representation while retaining a native Path for I/O.
+    plan["_source_path"] = plan_path.as_posix()
     plan["_source_cycle_id"] = str(cycle_id)
     return plan
 

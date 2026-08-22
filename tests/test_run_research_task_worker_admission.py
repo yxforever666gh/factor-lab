@@ -19,8 +19,8 @@ def test_run_research_task_worker_blocks_unadmitted_workflow_before_execution(tm
         check=False,
     )
 
-    assert result.returncode == 1
+    assert result.returncode == 2
     payload = json.loads(result.stdout.strip().splitlines()[-1])
     assert payload["ok"] is False
-    assert payload["error"] == "workflow_admission_blocked"
-    assert "missing_mechanism_id" in payload["reasons"]
+    assert payload["status"] == "retired_legacy_entrypoint"
+    assert payload["candidate_written"] is False

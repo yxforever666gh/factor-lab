@@ -7,25 +7,20 @@ from typing import Any, Callable
 def restart_research_daemon_after_settings_save(
     subprocess_run: Callable[..., subprocess.CompletedProcess[str]] | None = None,
 ) -> dict[str, Any]:
-    """Restart the user-level research daemon after WebUI settings change.
+    """Acknowledge settings without restarting the retired legacy daemon.
 
-    The optional runner keeps this helper testable while preserving compatibility
-    with tests that monkeypatch ``factor_lab.webui_app.subprocess.run`` through
-    the webui_app compatibility wrapper.
+    Research OS workers load their explicit configuration at the next Dagster
+    run.  Keeping this compatibility function avoids changing the form route,
+    while deliberately guaranteeing that a settings POST cannot wake the old
+    SQLite/JSON autonomous queue.
     """
-    runner = subprocess_run or subprocess.run
-    try:
-        completed = runner(
-            ["systemctl", "--user", "restart", "factor-lab-research-daemon.service"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        return {
-            "ok": completed.returncode == 0,
-            "returncode": completed.returncode,
-            "stdout": completed.stdout.strip(),
-            "stderr": completed.stderr.strip(),
-        }
-    except Exception as exc:
-        return {"ok": False, "returncode": None, "stdout": "", "stderr": str(exc)}
+    _ = subprocess_run
+    return {
+        "ok": True,
+        "restarted": False,
+        "reason": "legacy_research_daemon_retired",
+        "applies": "next_research_os_run",
+        "returncode": None,
+        "stdout": "",
+        "stderr": "",
+    }

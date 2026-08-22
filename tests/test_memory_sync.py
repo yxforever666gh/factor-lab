@@ -2,7 +2,7 @@ import importlib.util
 import json
 from pathlib import Path
 
-SCRIPT = Path('/home/admin/.hermes/skills/factor-lab/scripts/sync_memory.py')
+SCRIPT = Path(__file__).resolve().parents[1] / 'scripts' / 'sync_memory.py'
 
 
 def load_module():

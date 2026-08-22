@@ -18,3 +18,5 @@ def test_resolve_factor_definitions_uses_family_config_when_factors_missing():
     lookup = {row["name"]: row for row in rows}
     assert lookup["mom_60_skip_5"]["family"] == "momentum"
     assert lookup["earnings_yield"]["allow_in_portfolio"] is False
+    assert lookup["earnings_yield"]["allow_in_long_only"] is False
+    assert lookup["book_yield"]["direction"] == 1

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 from datetime import datetime, timezone
@@ -13,6 +12,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from factor_lab.controlled_restart_audit import dry_run_controlled_restart
 from factor_lab.research_queue import run_orchestrator
+from factor_lab.research_os.legacy_entrypoint import retired_legacy_entrypoint
 
 
 def _write_outputs(output_dir: Path, payload: dict[str, Any]) -> None:
@@ -85,23 +85,11 @@ def run_controlled_orchestrator_once(
     return payload
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--max-tasks", type=int, default=1)
-    parser.add_argument("--db-path", default="artifacts/factor_lab.db")
-    parser.add_argument("--output-dir", default="artifacts")
-    parser.add_argument("--require-would-run", action="store_true")
-    parser.add_argument("--allow-empty", action="store_true")
-    args = parser.parse_args()
-    result = run_controlled_orchestrator_once(
-        max_tasks=args.max_tasks,
-        require_would_run=args.require_would_run or not args.allow_empty,
-        db_path=args.db_path,
-        output_dir=args.output_dir,
-    )
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    raise SystemExit(0 if result.get("ok") else 2)
+def main() -> int:
+    # Preserve ``run_controlled_orchestrator_once`` for deterministic legacy
+    # tests only.  It is no longer an executable worker path.
+    return retired_legacy_entrypoint("scripts/run_controlled_orchestrator_once.py")
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

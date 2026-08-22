@@ -39,14 +39,17 @@ def test_candidate_generation_avoids_repeating_failed_operator_pair(tmp_path):
     assert "combine_add" not in operators
 
 
-def test_candidate_pool_exposes_quality_priority_summary():
+def test_candidate_pool_exposes_quality_priority_summary_when_snapshot_is_missing(tmp_path):
     payload = build_research_candidate_pool(
-        REPO_ROOT / "artifacts" / "research_planner_snapshot.json",
-        REPO_ROOT / "artifacts" / "research_candidate_pool.json",
-        REPO_ROOT / "artifacts" / "research_branch_plan.json",
+        tmp_path / "missing_research_planner_snapshot.json",
+        tmp_path / "research_candidate_pool.json",
+        tmp_path / "missing_research_branch_plan.json",
     )
     quality_priority = (payload.get("summary") or {}).get("quality_priority") or {}
 
+    assert payload["status"] == "blocked_missing_snapshot"
+    assert payload["tasks"] == []
     assert "quality_priority_mode" in quality_priority
     assert "generated_candidate_budget" in quality_priority
     assert "reasons" in quality_priority
+    assert quality_priority["freeze_exploration"] is True

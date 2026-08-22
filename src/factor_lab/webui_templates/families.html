@@ -1,44 +1,19 @@
 {% extends 'base.html' %}
+{% from '_components.html' import metric, empty, disclosure %}
 {% block content %}
-<div class="grid cols-3" style="margin-bottom:18px;">
-  <section class="card"><h2>Families</h2><div style="font-size:36px; font-weight:700;">{{ summary.family_count }}</div></section>
-  <section class="card"><h2>Promising Candidates</h2><div style="font-size:36px; font-weight:700;">{{ summary.promising_count }}</div></section>
-  <section class="card"><h2>Total Evaluations</h2><div style="font-size:36px; font-weight:700;">{{ summary.evaluation_count }}</div></section>
+<div class="grid cols-4">
+  {{ metric('Family 数量', summary.family_count, '当前研究方向') }}
+  {{ metric('有潜力候选', summary.promising_count, '跨 Family 汇总', 'good') }}
+  {{ metric('建议继续', summary.continue_count, '继续投入样本', 'good') }}
+  {{ metric('累计评估', summary.evaluation_count, '全部研究窗口') }}
 </div>
-<div class="grid cols-4" style="margin-bottom:18px;">
-  <section class="card"><h2>Continue</h2><div style="font-size:30px; font-weight:700;">{{ summary.continue_count }}</div></section>
-  <section class="card"><h2>Refine</h2><div style="font-size:30px; font-weight:700;">{{ summary.refine_count }}</div></section>
-  <section class="card"><h2>Pause</h2><div style="font-size:30px; font-weight:700;">{{ summary.pause_count }}</div></section>
-  <section class="card"><h2>Explore New Branch</h2><div style="font-size:30px; font-weight:700;">{{ summary.explore_count }}</div></section>
-</div>
-<section class="card">
-  <h2>Family 聚合</h2>
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>Family</th><th>候选数</th><th>Promising</th><th>Testing</th><th>Rejected</th><th>评估数</th><th>窗口数</th><th>平均候选分</th><th>平均最新分</th><th>Family Score</th><th>Trial Pressure</th><th>False+ Pressure</th><th>主代表</th><th>重复压力</th><th>建议动作</th><th>主状态</th></tr></thead>
-      <tbody>
-        {% for row in families %}
-        <tr>
-          <td>{{ row.family }}</td>
-          <td class="num">{{ row.candidate_count }}</td>
-          <td class="num good">{{ row.promising_count }}</td>
-          <td class="num warn">{{ row.testing_count }}</td>
-          <td class="num bad">{{ row.rejected_count }}</td>
-          <td class="num">{{ row.evaluation_count }}</td>
-          <td class="num">{{ row.window_count }}</td>
-          <td class="num">{{ row.avg_candidate_score if row.avg_candidate_score is not none else '-' }}</td>
-          <td class="num">{{ row.avg_latest_score if row.avg_latest_score is not none else '-' }}</td>
-          <td class="num">{{ row.family_score if row.family_score is not none else '-' }}</td>
-          <td class="num">{{ row.trial_pressure if row.trial_pressure is not none else '-' }}</td>
-          <td class="num">{{ row.false_positive_pressure if row.false_positive_pressure is not none else '-' }}</td>
-          <td>{{ row.primary_candidate or '-' }}</td>
-          <td class="num">{{ row.duplicate_pressure or 0 }}</td>
-          <td><span class="pill {{ 'good' if row.recommended_action == 'continue' else 'warn' if row.recommended_action in ['refine','explore_new_branch'] else 'bad' }}">{{ row.recommended_action or '-' }}</span></td>
-          <td>{{ row.top_status }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+<section class="card section-gap">
+  <div class="section-header"><div><h2>Family 聚合</h2><p>先看研究方向、代表候选与建议动作。</p></div></div>
+  {% if families %}<div class="table-wrap"><table><thead><tr><th>Family</th><th>候选</th><th>有潜力</th><th>评估</th><th>Family Score</th><th>主代表</th><th>重复压力</th><th>建议动作</th></tr></thead><tbody>
+  {% for row in families %}<tr><td><strong>{{ row.family }}</strong></td><td class="num">{{ row.candidate_count }}</td><td class="num good">{{ row.promising_count }}</td><td class="num">{{ row.evaluation_count }}</td><td class="num">{{ row.family_score if row.family_score is not none else '-' }}</td><td>{{ row.primary_candidate or '-' }}</td><td class="num">{{ row.duplicate_pressure or 0 }}</td><td><span class="pill {{ 'good' if row.recommended_action == 'continue' else 'warn' if row.recommended_action in ['refine','explore_new_branch'] else 'bad' }}">{{ row.recommended_action or '-' }}</span></td></tr>{% endfor %}
+  </tbody></table></div>{% else %}{{ empty('暂无 Family 数据') }}{% endif %}
 </section>
+<div class="section-gap">{% call disclosure('动作分布与说明') %}<div class="grid cols-4">
+  {{ metric('继续', summary.continue_count) }}{{ metric('优化', summary.refine_count) }}{{ metric('暂停', summary.pause_count) }}{{ metric('探索新分支', summary.explore_count) }}
+</div>{% if families %}<div class="table-wrap section-gap"><table><thead><tr><th>Family</th><th>验证中</th><th>已拒绝</th><th>窗口</th><th>平均候选分</th><th>平均最新分</th><th>试验压力</th><th>误报压力</th><th>主状态</th></tr></thead><tbody>{% for row in families %}<tr><td>{{ row.family }}</td><td>{{ row.testing_count or 0 }}</td><td>{{ row.rejected_count or 0 }}</td><td>{{ row.window_count or 0 }}</td><td>{{ row.avg_candidate_score if row.avg_candidate_score is not none else '-' }}</td><td>{{ row.avg_latest_score if row.avg_latest_score is not none else '-' }}</td><td>{{ row.trial_pressure if row.trial_pressure is not none else '-' }}</td><td>{{ row.false_positive_pressure if row.false_positive_pressure is not none else '-' }}</td><td>{{ row.top_status or '-' }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}{% endcall %}</div>
 {% endblock %}

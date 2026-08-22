@@ -76,6 +76,8 @@ def expand_factor_family_config(config_path: str | Path) -> list[dict]:
                     'expression': variant['expression'],
                     'role': variant.get('role') or 'alpha_seed',
                     'allow_in_portfolio': bool(variant.get('allow_in_portfolio', True)),
+                    'allow_in_long_only': bool(variant.get('allow_in_long_only', variant.get('allow_in_portfolio', True))),
+                    'direction': -1 if float(variant.get('direction', 1) or 1) < 0 else 1,
                 }
             )
     return expanded

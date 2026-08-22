@@ -40,5 +40,5 @@ def test_data_blockers_and_latest_verdict_are_included(tmp_path):
 
 def test_write_snapshot_uses_harvest_namespace(tmp_path):
     out = write_harvest_state_snapshot("cycle_0001", root=tmp_path)
-    assert "artifacts/harvest_agent/cycle_0001/state_snapshot.json" in str(out)
+    assert "artifacts/harvest_agent/cycle_0001/state_snapshot.json" in out.as_posix()
     assert out.exists()

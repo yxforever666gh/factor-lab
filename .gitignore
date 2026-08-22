@@ -4,6 +4,9 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 *.egg-info/
+.venv/
+build/
+dist/
 
 # Local secrets / environment files
 .env
@@ -15,7 +18,11 @@ __pycache__/
 .hermes/
 .playwright-mcp/
 memory/
+MEMORY.md
 playwright-network-*.txt
+
+# Generated reports and local operator output
+output/
 
 # Runtime outputs live under artifacts/. This keeps new generated files out of git;
 # already tracked artifacts still need a separate cleanup commit if you want them removed.

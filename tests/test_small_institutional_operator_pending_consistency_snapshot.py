@@ -244,6 +244,7 @@ def test_two_consecutive_guarded_status_refreshes_remain_metadata_only_and_fresh
         "dry_run_path": tmp_path / "missing_dry_run.json",
         "runtime_audit_path": tmp_path / "missing_runtime_audit.json",
         "portfolio_diagnostics_path": tmp_path / "missing_portfolio_diagnostics.json",
+        "simulated_portfolio_construction_repair_path": tmp_path / "missing_repair.json",
         "weekly_monitoring_report_path": weekly_path,
         "operator_pending_observation_path": canonical_path,
     }
@@ -450,10 +451,10 @@ def test_status_writer_cli_main_repeated_refreshes_keep_snapshot_fresh(monkeypat
         assert summary["candidate_count"] == repair["candidate_count"]
         assert summary["best_available_max_drawdown"] == repair["best_available_max_drawdown"]
         assert summary["drawdown_gap_to_limit"] == repair["drawdown_gap_to_limit"]
-        assert summary["repair_status"] == "blocked_no_drawdown_safe_candidate"
+        assert summary["repair_status"] == "blocked_missing_repair_evidence"
         assert summary["candidate_count"] == 0
-        assert summary["best_available_max_drawdown"] == -0.478256
-        assert summary["drawdown_gap_to_limit"] == 0.128256
+        assert summary["best_available_max_drawdown"] is None
+        assert summary["drawdown_gap_to_limit"] is None
         for key in (
             "queue_write_allowed",
             "broad_daemon_allowed",
@@ -533,7 +534,6 @@ def test_status_writer_subprocess_stdout_full_schema_matches_final_artifact():
         "status_generated_at_utc",
         "snapshot_freshness_status",
         "operator_pending_consistency_status",
-        "benchmark_id",
         "repair_status",
     ):
         assert isinstance(summary[key], str)
@@ -548,15 +548,14 @@ def test_status_writer_subprocess_stdout_full_schema_matches_final_artifact():
         "best_available_max_drawdown",
         "drawdown_gap_to_limit",
     ):
-        assert isinstance(summary[key], Number)
+        assert summary[key] is None or isinstance(summary[key], Number)
         assert not isinstance(summary[key], bool)
     parsed_status_generated_at = datetime.fromisoformat(summary["status_generated_at_utc"])
     assert parsed_status_generated_at.tzinfo == timezone.utc
     assert parsed_status_generated_at.utcoffset() == timezone.utc.utcoffset(None)
     assert summary["snapshot_freshness_status"] == "fresh"
-    assert summary["operator_pending_consistency_status"] == "ok"
+    assert summary["operator_pending_consistency_status"] == "missing"
     assert summary["mismatches"] == []
-    assert summary["repair_status"] == "blocked_no_drawdown_safe_candidate"
     assert summary["candidate_count"] == 0
 
     assert summary["decision"] == final_status["decision"]
@@ -585,7 +584,7 @@ def test_status_writer_subprocess_stdout_full_schema_matches_final_artifact():
         assert summary[key] == snapshot[key]
 
 
-def test_status_writer_subprocess_pins_operator_approval_wait_state_contract():
+def test_status_writer_subprocess_fails_closed_without_operator_evidence():
     repo_root = Path(__file__).resolve().parents[1]
     status_path = repo_root / "artifacts" / "small_institutionalization" / "status.json"
     env = os.environ.copy()
@@ -608,18 +607,18 @@ def test_status_writer_subprocess_pins_operator_approval_wait_state_contract():
     handoff = status["operator_decision_handoff"]
     wait_state = status["operator_decision_wait_state"]
 
-    assert gate["gate_status"] == "blocked_pending_manual_approval"
+    assert gate["gate_status"] == "blocked_missing_manual_approval_evidence"
     assert gate["human_approval_present"] is False
     assert gate["risk_relaxation_allowed"] is False
-    assert summary["summary_status"] == gate["gate_status"]
+    assert summary["summary_status"] == "blocked_missing_operator_approval_summary"
     assert summary["approval_required"] is True
     assert summary["human_approval_present"] is False
-    assert summary["primary_blocker"] == "drawdown_risk_too_high"
-    assert summary["repair_status"] == "blocked_no_drawdown_safe_candidate"
+    assert summary["primary_blocker"] == "missing_operator_approval_evidence"
+    assert summary["repair_status"] == "blocked_missing_repair_evidence"
     assert summary["candidate_count"] == 0
-    assert summary["required_decision_axis"] == "holding_count=50"
+    assert summary["required_decision_axis"] is None
 
-    assert consistency["consistency_status"] == "ok"
+    assert consistency["consistency_status"] == "not_evaluated_missing_approval_evidence"
     assert consistency["primary_blocker"] == summary["primary_blocker"]
     assert consistency["decision_axis"] == summary["required_decision_axis"]
     assert consistency["inconsistencies"] == []
@@ -632,7 +631,7 @@ def test_status_writer_subprocess_pins_operator_approval_wait_state_contract():
     assert intake["validation_errors"] == []
     assert intake["non_mutating"] is True
 
-    assert handoff["handoff_status"] == "awaiting_operator_decision"
+    assert handoff["handoff_status"] == "blocked_missing_operator_handoff"
     assert handoff["intake_status"] == intake["intake_status"]
     assert handoff["primary_blocker"] == summary["primary_blocker"]
     assert handoff["repair_status"] == summary["repair_status"]
@@ -643,7 +642,7 @@ def test_status_writer_subprocess_pins_operator_approval_wait_state_contract():
     assert handoff["execution_allowed"] is False
     assert handoff["separate_execution_plan_required"] is False
 
-    assert wait_state["wait_state_status"] == handoff["handoff_status"]
+    assert wait_state["wait_state_status"] == "not_waiting_on_operator_decision"
     assert wait_state["primary_blocker"] == handoff["primary_blocker"]
     assert wait_state["decision_axis"] == handoff["decision_axis"]
     assert wait_state["human_approval_present"] == gate["human_approval_present"]

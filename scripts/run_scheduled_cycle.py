@@ -13,6 +13,7 @@ from factor_lab.summary import build_run_summary
 from factor_lab.approved_universe import write_approved_candidate_universe, resolve_paper_portfolio_inputs
 from factor_lab.paper_portfolio import build_paper_portfolio, append_portfolio_history, build_portfolio_change_log
 from factor_lab.heartbeat import append_heartbeat
+from factor_lab.research_os.legacy_entrypoint import retired_legacy_entrypoint
 
 
 CANDIDATE_POOL_PATH = Path("artifacts/tushare_workflow/candidate_pool.json")
@@ -135,4 +136,4 @@ def run_scheduled_cycle() -> None:
 
 
 if __name__ == "__main__":
-    run_scheduled_cycle()
+    raise SystemExit(retired_legacy_entrypoint("scripts/run_scheduled_cycle.py"))

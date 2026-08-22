@@ -17,7 +17,6 @@ def test_webui_hardening_structure_exists_and_main_app_stays_bounded():
     for route_module in [
         "settings_data_sources.py",
         "settings_llm.py",
-        "settings_hermes.py",
     ]:
         assert (ROOT / "src" / "factor_lab" / "webui" / "routes" / route_module).exists()
 
@@ -58,19 +57,17 @@ def test_retention_and_research_authority_docs_exist():
     assert "VACUUM" in db_policy
 
 
-def test_hardening_audit_artifacts_exist():
-    outdir = ROOT / "artifacts" / "engineering_hardening_2026-06-02"
+def test_hardening_audit_inputs_are_version_controlled():
+    # Generated audit reports live under ignored ``artifacts/`` and are not
+    # fixtures.  A clean checkout must instead retain the generator and the
+    # reviewed policy documents needed to reproduce or interpret an audit.
     required = [
-        "module_inventory.json",
-        "module_inventory.md",
-        "harvest_caller_map.json",
-        "harvest_caller_map.md",
-        "artifact_retention_audit.json",
-        "artifact_retention_audit.md",
-        "db_retention_audit.json",
-        "db_retention_audit.md",
+        "scripts/ops/write_module_inventory.py",
+        "docs/ops/research-lines.md",
+        "docs/ops/artifact-retention.md",
+        "docs/ops/db-retention.md",
     ]
-    for name in required:
-        path = outdir / name
-        assert path.exists(), name
+    for relative_path in required:
+        path = ROOT / relative_path
+        assert path.exists(), relative_path
         assert path.stat().st_size > 0

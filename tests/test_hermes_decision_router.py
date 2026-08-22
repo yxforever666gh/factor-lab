@@ -503,6 +503,35 @@ def test_direct_model_uses_configured_profile_fallback_order(monkeypatch):
     assert payload["direct_model_profile"]["fallback_errors"] == {"primary": "primary down"}
 
 
+def test_direct_model_profile_resolves_secret_reference_without_inline_key(
+    tmp_path, monkeypatch
+):
+    secret_root = tmp_path / "secrets"
+    secret_root.mkdir()
+    (secret_root / "llm-primary").write_text("resolved-secret\n", encoding="utf-8")
+    monkeypatch.setenv("FACTOR_LAB_SECRETS_DIR", str(secret_root))
+    monkeypatch.setenv(
+        "FACTOR_LAB_LLM_PROFILES_JSON",
+        json.dumps(
+            [
+                {
+                    "name": "primary",
+                    "base_url": "https://primary.test/v1",
+                    "model": "primary-model",
+                    "api_key": "",
+                    "credential_ref": "secret://llm-primary",
+                    "enabled": True,
+                }
+            ]
+        ),
+    )
+
+    profiles = HermesDecisionRouter(provider="direct_model")._direct_model_profiles()
+
+    assert len(profiles) == 1
+    assert profiles[0]["api_key"] == "resolved-secret"
+
+
 def test_direct_model_uses_hermes_profile_specific_fallback_order(monkeypatch):
     profiles = [
         {"name": "global-first", "base_url": "https://global.test/v1", "model": "global", "api_key": "***", "enabled": True},

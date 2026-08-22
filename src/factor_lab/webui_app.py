@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 import json
+import hashlib
 import os
 import subprocess
 import time
@@ -13,11 +14,11 @@ from zoneinfo import ZoneInfo
 
 LOCAL_TZ = ZoneInfo("Asia/Shanghai")
 
-from fastapi import HTTPException
-from fastapi.responses import HTMLResponse
+from fastapi import HTTPException, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-from factor_lab.hermes_profile_settings import HermesProfileSetting, hermes_profile_settings_to_json, default_hermes_profile_settings, load_hermes_profile_settings
 from factor_lab.candidate_graph import build_graph_artifacts, build_candidate_graph_context, candidate_clusters, family_rollup
 from factor_lab.factor_candidates import summarize_candidate_status
 from factor_lab.db_views import ensure_views
@@ -38,15 +39,16 @@ from factor_lab.autonomous_strategy_lab_report import build_autonomous_strategy_
 from factor_lab.webui.app import create_app, register_startup_cache, render_template
 from factor_lab.webui.routes.settings_data_sources import register_data_source_routes
 from factor_lab.webui.routes.settings_llm import register_llm_settings_routes
-from factor_lab.webui.routes.settings_hermes import register_hermes_settings_routes
 from factor_lab.webui.services.service_restart import restart_research_daemon_after_settings_save as _restart_research_daemon_after_settings_save
+from factor_lab.webui.services.research_os_read_model import (
+    load_research_os_read_model as _load_research_os_read_model,
+)
 from factor_lab.webui.services.env_settings import (
+    DATA_SOURCE_ENV_KEYS,
     DATA_SOURCE_TYPE_OPTIONS,
-    HERMES_PROFILE_SETTING_ENV_KEYS,
-    LLM_API_FORMAT_OPTIONS,
     LLM_ENV_KEYS,
     LLM_PROFILE_ENV_KEYS,
-    enabled_profile_names as _enabled_profile_names,
+    LLM_API_FORMAT_OPTIONS,
     profiles_from_form as _profiles_from_form,
     data_source_profiles_from_form as _data_source_profiles_from_form,
     redacted_data_source_profile as _redacted_data_source_profile,
@@ -57,7 +59,6 @@ from factor_lab.webui.services.env_settings import (
     save_llm_settings as _service_save_llm_settings,
     test_llm_profile_connection as _service_test_llm_profile_connection,
     read_env_values as _service_read_env_values,
-    split_csv as _split_csv,
 )
 
 
@@ -82,220 +83,7 @@ def save_data_source_settings(form: dict[str, str]) -> dict[str, Any]:
 
 
 def test_data_source_connection(profile: dict[str, Any]) -> dict[str, Any]:
-    return _service_test_data_source_connection(profile)
-
-
-def _role_to_form_dict(role: HermesProfileSetting) -> dict[str, Any]:
-    return {
-        "name": role.name,
-        "display_name": role.display_name,
-        "enabled": role.enabled,
-        "decision_types": ",".join(role.decision_types),
-        "purpose": role.purpose,
-        "system_prompt": role.system_prompt,
-        "llm_fallback_order": ",".join(role.llm_fallback_order),
-        "timeout_seconds": role.timeout_seconds,
-        "max_retries": role.max_retries,
-        "strict_schema": role.strict_schema,
-        "legacy_agent_id": role.legacy_agent_id or "",
-    }
-
-
-def _hermes_profile_settings_from_values(values: dict[str, str]) -> list[HermesProfileSetting]:
-    raw = values.get("FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON") or os.environ.get("FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON") or ""
-    if raw.strip():
-        old = os.environ.get("FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON")
-        os.environ["FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON"] = raw
-        try:
-            return load_hermes_profile_settings()
-        finally:
-            if old is None:
-                os.environ.pop("FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON", None)
-            else:
-                os.environ["FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON"] = old
-    fallback_order = [item.strip() for item in (values.get("FACTOR_LAB_LLM_FALLBACK_ORDER") or os.environ.get("FACTOR_LAB_LLM_FALLBACK_ORDER") or "").split(",") if item.strip()]
-    roles = default_hermes_profile_settings()
-    if not fallback_order:
-        return roles
-    return [
-        HermesProfileSetting(
-            name=role.name,
-            display_name=role.display_name,
-            enabled=role.enabled,
-            decision_types=role.decision_types,
-            purpose=role.purpose,
-            system_prompt=role.system_prompt,
-            llm_fallback_order=fallback_order,
-            timeout_seconds=role.timeout_seconds,
-            max_retries=role.max_retries,
-            strict_schema=role.strict_schema,
-            legacy_agent_id=role.legacy_agent_id,
-        )
-        for role in roles
-    ]
-
-
-def load_agent_settings() -> dict[str, Any]:
-    values = _read_env_values()
-    roles = _hermes_profile_settings_from_values(values)
-    return {
-        "roles": [_role_to_form_dict(role) for role in roles],
-        "env_file": str(env_file()),
-        "role_order": values.get("FACTOR_LAB_HERMES_PROFILE_ORDER") or os.environ.get("FACTOR_LAB_HERMES_PROFILE_ORDER") or ",".join(role.name for role in roles),
-    }
-
-
-def _hermes_profile_settings_from_form(form: dict[str, str]) -> list[HermesProfileSetting]:
-    roles: list[HermesProfileSetting] = []
-    defaults = {role.name: role for role in default_hermes_profile_settings()}
-    for index in range(20):
-        name = (form.get(f"role_name_{index}") or "").strip()
-        if not name:
-            continue
-        default = defaults.get(name)
-        decision_types = [item.strip() for item in (form.get(f"role_decision_types_{index}") or name).split(",") if item.strip()]
-        fallback_order = [item.strip() for item in (form.get(f"role_fallback_order_{index}") or "").split(",") if item.strip()]
-        if not fallback_order and default:
-            fallback_order = default.llm_fallback_order
-        try:
-            timeout_seconds = max(1, int(form.get(f"role_timeout_seconds_{index}") or (default.timeout_seconds if default else 90)))
-        except ValueError:
-            timeout_seconds = default.timeout_seconds if default else 90
-        try:
-            max_retries = max(0, int(form.get(f"role_max_retries_{index}") or (default.max_retries if default else 1)))
-        except ValueError:
-            max_retries = default.max_retries if default else 1
-        roles.append(
-            HermesProfileSetting(
-                name=name,
-                display_name=(form.get(f"role_display_name_{index}") or (default.display_name if default else name)).strip(),
-                enabled=form.get(f"role_enabled_{index}") in {"on", "1", "true", "yes"},
-                decision_types=decision_types or ([name] if not default else default.decision_types),
-                purpose=(form.get(f"role_purpose_{index}") or (default.purpose if default else "")).strip(),
-                system_prompt=(form.get(f"role_system_prompt_{index}") or (default.system_prompt if default else "")).strip(),
-                llm_fallback_order=fallback_order,
-                timeout_seconds=timeout_seconds,
-                max_retries=max_retries,
-                strict_schema=form.get(f"role_strict_schema_{index}") in {"on", "1", "true", "yes"},
-                legacy_agent_id=(form.get(f"role_legacy_agent_id_{index}") or (default.legacy_agent_id if default else "") or "").strip() or None,
-            )
-        )
-    return roles or default_hermes_profile_settings()
-
-
-def save_agent_settings(form: dict[str, str]) -> dict[str, Any]:
-    path = env_file()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    roles = _hermes_profile_settings_from_form(form)
-    requested = {
-        "FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON": hermes_profile_settings_to_json(roles),
-        "FACTOR_LAB_HERMES_PROFILE_ORDER": ",".join(role.name for role in roles),
-    }
-    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-    seen: set[str] = set()
-    updated_lines: list[str] = []
-    for line in lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or "=" not in line:
-            updated_lines.append(line)
-            continue
-        key, _ = line.split("=", 1)
-        key = key.strip()
-        if key in requested:
-            updated_lines.append(f"{key}={requested[key]}")
-            seen.add(key)
-        else:
-            updated_lines.append(line)
-    for key in HERMES_PROFILE_SETTING_ENV_KEYS:
-        if key not in seen:
-            updated_lines.append(f"{key}={requested.get(key, '')}")
-    path.write_text("\n".join(updated_lines).rstrip() + "\n", encoding="utf-8")
-    try:
-        path.chmod(0o600)
-    except OSError:
-        pass
-    for key, value in requested.items():
-        os.environ[key] = value
-    return load_agent_settings()
-
-
-def _reconcile_role_fallback_order(
-    role_order: list[str] | str,
-    old_global_order: list[str] | str,
-    new_global_order: list[str] | str,
-    enabled_names: list[str],
-) -> list[str]:
-    available = [name for name in enabled_names if name]
-    if not available:
-        return _split_csv(role_order)
-    available_set = set(available)
-    old_order = [name for name in _split_csv(old_global_order) if name in available_set or name]
-    new_order = [name for name in _split_csv(new_global_order) if name in available_set]
-    if not new_order:
-        new_order = available
-    current = _split_csv(role_order)
-    current_valid = [name for name in current if name in available_set]
-    current_was_default = (not current) or (current == old_order) or (current_valid == [name for name in old_order if name in available_set])
-    if current_was_default or not current_valid:
-        return new_order
-    return current_valid
-
-
-def _sync_hermes_profile_settings_with_llm_profiles(
-    existing_values: dict[str, str],
-    profiles: list[dict[str, Any]],
-    old_fallback_order: str,
-    new_fallback_order: str,
-) -> dict[str, str]:
-    raw_roles = existing_values.get("FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON") or os.environ.get("FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON") or ""
-    if not raw_roles.strip():
-        return {}
-    roles = _hermes_profile_settings_from_values({**existing_values, "FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON": raw_roles})
-    enabled_names = _enabled_profile_names(profiles)
-    if not enabled_names:
-        return {}
-    updated_roles = [
-        HermesProfileSetting(
-            name=role.name,
-            display_name=role.display_name,
-            enabled=role.enabled,
-            decision_types=role.decision_types,
-            purpose=role.purpose,
-            system_prompt=role.system_prompt,
-            llm_fallback_order=_reconcile_role_fallback_order(
-                role.llm_fallback_order,
-                old_fallback_order,
-                new_fallback_order,
-                enabled_names,
-            ),
-            timeout_seconds=role.timeout_seconds,
-            max_retries=role.max_retries,
-            strict_schema=role.strict_schema,
-            legacy_agent_id=role.legacy_agent_id,
-        )
-        for role in roles
-    ]
-    role_order = existing_values.get("FACTOR_LAB_HERMES_PROFILE_ORDER") or os.environ.get("FACTOR_LAB_HERMES_PROFILE_ORDER") or ",".join(role.name for role in updated_roles)
-    return {
-        "FACTOR_LAB_HERMES_PROFILE_SETTINGS_JSON": hermes_profile_settings_to_json(updated_roles),
-        "FACTOR_LAB_HERMES_PROFILE_ORDER": role_order,
-    }
-
-
-def _hermes_profile_fallback_warnings(roles: list[dict[str, Any]], available_profile_names: list[str]) -> list[dict[str, Any]]:
-    available = set(available_profile_names)
-    warnings: list[dict[str, Any]] = []
-    if not available:
-        return warnings
-    for role in roles:
-        fallback_names = _split_csv(role.get("llm_fallback_order"))
-        stale = [name for name in fallback_names if name not in available]
-        if stale:
-            warnings.append({
-                "role": role.get("name") or role.get("display_name") or "agent",
-                "stale_names": stale,
-            })
-    return warnings
+    return _service_test_data_source_connection(profile, environ=os.environ)
 
 
 def load_llm_settings() -> dict[str, Any]:
@@ -307,7 +95,6 @@ def save_llm_settings(form: dict[str, str]) -> dict[str, Any]:
         form,
         env_file_func=env_file,
         environ=os.environ,
-        sync_hermes_profiles_func=_sync_hermes_profile_settings_with_llm_profiles,
     )
 
 
@@ -1448,7 +1235,70 @@ def compute_health_metrics() -> dict[str, Any]:
 
 BASE_DIR = Path(__file__).resolve().parent
 TEMPLATE_DIR = BASE_DIR / "webui_templates"
+STATIC_DIR = BASE_DIR / "webui_static"
 DB_PATH = Path(__file__).resolve().parents[2] / "artifacts" / "factor_lab.db"
+
+PRIMARY_NAV = [
+    {"id": "overview", "label": "总览", "href": "/", "icon": "01"},
+    {"id": "research", "label": "研究", "href": "/research", "icon": "02"},
+    {"id": "portfolio", "label": "组合", "href": "/portfolios", "icon": "03"},
+    {"id": "runs", "label": "运行", "href": "/runs", "icon": "04"},
+    {"id": "settings", "label": "设置", "href": "/data-sources", "icon": "05"},
+]
+
+SECONDARY_NAV = {
+    "research": [
+        {"id": "research", "label": "研究总览", "href": "/research"},
+        {"id": "hypothesis-lineage", "label": "假设谱系", "href": "/research#hypothesis-lineage"},
+        {"id": "trial-budget", "label": "统计预算", "href": "/research#trial-budget"},
+        {"id": "experiments", "label": "实验与否证", "href": "/research#experiments"},
+        {"id": "recovery", "label": "恢复流程", "href": "/research#recovery"},
+    ],
+    "portfolio": [
+        {"id": "portfolios", "label": "Champion / Sleeve", "href": "/portfolios"},
+    ],
+    "runs": [
+        {"id": "runs", "label": "Research OS 运行", "href": "/runs"},
+    ],
+    "settings": [
+        {"id": "data-sources", "label": "数据源与快照", "href": "/data-sources"},
+        {"id": "settings", "label": "模型配置", "href": "/settings"},
+    ],
+}
+
+TEMPLATE_NAV = {
+    "dashboard_quick.html": ("overview", "overview"),
+    "research.html": ("research", "research"),
+    "factors.html": ("research", "factors"),
+    "candidates.html": ("research", "candidates"),
+    "candidate_detail.html": ("research", "candidates"),
+    "families.html": ("research", "families"),
+    "candidate_clusters.html": ("research", "clusters"),
+    "robustness.html": ("research", "robustness"),
+    "research_quality.html": ("research", "research-quality"),
+    "portfolios.html": ("portfolio", "portfolios"),
+    "paper_portfolio.html": ("portfolio", "paper-portfolio"),
+    "approved_universe.html": ("portfolio", "approved-universe"),
+    "exposure.html": ("portfolio", "exposure"),
+    "runs.html": ("runs", "runs"),
+    "run_detail.html": ("runs", "runs"),
+    "health.html": ("runs", "health"),
+    "weekly.html": ("runs", "weekly"),
+    "ops.html": ("runs", "ops"),
+    "control.html": ("runs", "control"),
+    "data_sources.html": ("settings", "data-sources"),
+    "settings.html": ("settings", "settings"),
+    "llm.html": ("settings", "llm"),
+    "llm_usage.html": ("settings", "llm-usage"),
+}
+
+PAGE_SUBTITLES = {
+    "overview": "先看研究结论，再处理异常与细节。",
+    "research": "跟踪因子从实验到候选的研究过程。",
+    "portfolio": "比较策略表现、风险暴露和模拟组合。",
+    "runs": "查看执行记录、健康状态与本地操作。",
+    "settings": "管理数据连接、模型与使用情况。",
+}
 
 
 def get_conn() -> sqlite3.Connection:
@@ -1481,24 +1331,89 @@ env = Environment(
 )
 
 app = create_app()
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+# Active WebUI requests have one authoritative state boundary: the Research OS
+# PostgreSQL read model.  The handlers below this point are retained as legacy
+# import/regression helpers, but pages without a PostgreSQL projection must not
+# execute them.  Keeping this routing policy in one place makes it auditable and
+# prevents a newly linked secondary page from silently reopening artifact JSON
+# or the old ExperimentStore SQLite database.
+RESEARCH_OS_GET_REDIRECTS = {
+    "/dashboard-full": "/",
+    "/cockpit": "/",
+    "/factors": "/research",
+    "/candidates": "/research",
+    "/families": "/research",
+    "/candidate-clusters": "/research",
+    "/robustness": "/research",
+    "/research-quality": "/research",
+    "/paper-portfolio": "/portfolios",
+    "/approved-universe": "/portfolios",
+    "/exposure": "/portfolios",
+    "/health": "/runs",
+    "/weekly": "/runs",
+    "/ops": "/runs",
+    "/control": "/runs",
+    "/harvest-agent/status": "/runs",
+    "/autonomous-strategy-lab/status": "/runs",
+    "/llm": "/data-sources",
+    "/llm-usage": "/data-sources",
+}
+RESEARCH_OS_GET_PREFIX_REDIRECTS = (
+    ("/runs/", "/runs"),
+    ("/candidates/", "/research"),
+)
+
+
+def research_os_get_redirect_target(path: str) -> str | None:
+    normalized = path.rstrip("/") or "/"
+    exact = RESEARCH_OS_GET_REDIRECTS.get(normalized)
+    if exact is not None:
+        return exact
+    for prefix, target in RESEARCH_OS_GET_PREFIX_REDIRECTS:
+        if normalized.startswith(prefix):
+            return target
+    return None
+
+
+@app.middleware("http")
+async def enforce_research_os_get_boundary(request: Request, call_next):
+    if request.method == "GET":
+        target = research_os_get_redirect_target(request.url.path)
+        if target is not None:
+            return RedirectResponse(url=target, status_code=307)
+    return await call_next(request)
 
 
 def warm_dashboard_cache() -> None:
-    # Precompute the heaviest homepage payloads once at process startup.
-    get_cached_health_metrics()
-    get_cached_promotion_scorecard(limit=6)
+    # Keep startup and the overview lightweight. Heavy health data remains lazy.
+    get_overview_snapshot()
 
 
 register_startup_cache(app, warm_dashboard_cache)
 
 
 def render(template_name: str, **context) -> HTMLResponse:
-    return render_template(env, localize_times, template_name, **context)
+    section, page = TEMPLATE_NAV.get(template_name, ("overview", "overview"))
+    defaults = {
+        "primary_nav": PRIMARY_NAV,
+        "secondary_nav": SECONDARY_NAV.get(section, []),
+        "current_section": section,
+        "current_page": page,
+        "page_subtitle": PAGE_SUBTITLES.get(section),
+        "back_href": "/runs" if template_name == "run_detail.html" else "/candidates" if template_name == "candidate_detail.html" else None,
+        "back_label": "返回运行记录" if template_name == "run_detail.html" else "返回候选榜单" if template_name == "candidate_detail.html" else None,
+    }
+    defaults.update(context)
+    return render_template(env, localize_times, template_name, **defaults)
 
 
 register_data_source_routes(
     app,
     render=render,
+    load_research_os_read_model=lambda: get_research_os_read_model(),
     load_data_source_settings=lambda: load_data_source_settings(),
     save_data_source_settings=lambda form: save_data_source_settings(form),
     restart_research_daemon_after_settings_save=lambda: restart_research_daemon_after_settings_save(),
@@ -1520,19 +1435,6 @@ register_llm_settings_routes(
     test_llm_profile_connection=lambda profile: test_llm_profile_connection(profile),
     api_format_options=LLM_API_FORMAT_OPTIONS,
 )
-
-register_hermes_settings_routes(
-    app,
-    render=render,
-    env_file=lambda: env_file(),
-    load_agent_settings=lambda: load_agent_settings(),
-    save_agent_settings=lambda form: save_agent_settings(form),
-    load_llm_settings=lambda: load_llm_settings(),
-    enabled_profile_names=lambda profiles: _enabled_profile_names(profiles),
-    hermes_profile_fallback_warnings=lambda roles, available_profile_names: _hermes_profile_fallback_warnings(roles, available_profile_names),
-    restart_research_daemon_after_settings_save=lambda: restart_research_daemon_after_settings_save(),
-)
-
 
 def build_candidate_detail_context(store: ExperimentStore, candidate_id: str) -> dict[str, Any]:
     candidates = store.list_factor_candidates(limit=1000)
@@ -1601,6 +1503,200 @@ def _quick_latest_runs(limit: int = 5) -> list[dict[str, Any]]:
             conn.close()
     except Exception:
         return []
+
+
+_OVERVIEW_CACHE: dict[str, Any] = {"key": None, "created_at": 0.0, "payload": None}
+_RESEARCH_OS_READ_MODEL_CACHE: dict[str, Any] = {
+    "key": None,
+    "created_at": 0.0,
+    "payload": None,
+}
+
+
+def _read_json_safely(path: Path, default: Any) -> Any:
+    if not path.exists():
+        return default
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return default
+
+
+def _artifact_run_snapshots(limit: int = 8) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for state_path in DB_PATH.parent.glob("*/task_state.json"):
+        state = _read_json_safely(state_path, {})
+        if not isinstance(state, dict) or state.get("status") != "finished":
+            continue
+        output_dir = Path(str(state.get("output_dir") or state_path.parent))
+        if not output_dir.is_absolute():
+            output_dir = DB_PATH.parent.parent / output_dir
+        if not output_dir.exists():
+            output_dir = state_path.parent
+        config_path = Path(str(state.get("config_path") or ""))
+        if not config_path.is_absolute():
+            config_path = DB_PATH.parent.parent / config_path
+        config = _read_json_safely(config_path, {})
+        rows.append({
+            "run_id": state.get("task_id") or state_path.parent.name,
+            "created_at_utc": state.get("finished_at_utc") or state.get("started_at_utc"),
+            "status": "finished",
+            "config_path": state.get("config_path") or "-",
+            "output_dir": str(output_dir),
+            "data_source": config.get("data_source") or "sample",
+        })
+    rows.sort(key=lambda row: str(row.get("created_at_utc") or ""), reverse=True)
+    return rows[:limit]
+
+
+def _latest_db_run() -> dict[str, Any] | None:
+    if not DB_PATH.exists():
+        return None
+    try:
+        conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, timeout=0.2)
+        conn.row_factory = sqlite3.Row
+        try:
+            row = conn.execute(
+                "SELECT run_id, created_at_utc, status, config_path, output_dir, data_source FROM workflow_runs WHERE status='finished' ORDER BY CASE WHEN data_source='tushare' THEN 0 ELSE 1 END, created_at_utc DESC LIMIT 1"
+            ).fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+    except Exception:
+        return None
+
+
+def _overview_run_dir(run: dict[str, Any]) -> Path | None:
+    raw = str(run.get("output_dir") or "").strip()
+    if not raw:
+        return None
+    path = Path(raw)
+    if not path.is_absolute():
+        path = DB_PATH.parent.parent / path
+    return path if path.exists() else None
+
+
+def _build_legacy_overview_snapshot() -> dict[str, Any]:
+    artifact_runs = _artifact_run_snapshots()
+    latest_artifact = next((row for row in artifact_runs if row.get("data_source") == "tushare"), artifact_runs[0] if artifact_runs else None)
+    latest_run = _latest_db_run() or latest_artifact
+    latest_runs = _quick_latest_runs(limit=5) or artifact_runs[:5]
+    queue_counts, latest_task = _quick_research_queue_snapshot()
+    provider, provider_source = _quick_provider_status()
+    payload: dict[str, Any] = {
+        "latest_run": latest_run,
+        "latest_runs": latest_runs,
+        "factor_results": [],
+        "passed_count": 0,
+        "failed_count": 0,
+        "best_factor": None,
+        "best_portfolio": None,
+        "data_source": "-",
+        "dataset_rows": None,
+        "alerts": [],
+        "daemon_status": _quick_daemon_status(),
+        "queue_counts": queue_counts,
+        "latest_task": latest_task,
+        "provider": provider,
+        "provider_source": provider_source,
+    }
+    if not latest_run:
+        payload["alerts"].append({"tone": "info", "message": "还没有完成的研究运行", "detail": "先运行一次 Workflow，结果会自动出现在这里。"})
+        return payload
+
+    run_dir = _overview_run_dir(latest_run)
+    if run_dir is None:
+        payload["alerts"].append({"tone": "warn", "message": "最新运行缺少本地产物", "detail": "可在运行记录中检查输出目录。"})
+        return payload
+
+    results = _read_json_safely(run_dir / "results.json", [])
+    scores = _read_json_safely(run_dir / "factor_scores.json", [])
+    portfolios = _read_json_safely(run_dir / "portfolio_results.json", [])
+    timing = _read_json_safely(run_dir / "timing.json", {})
+    if not isinstance(results, list):
+        results = []
+    if not isinstance(scores, list):
+        scores = []
+    if not isinstance(portfolios, list):
+        portfolios = []
+    score_by_name = {str(row.get("factor_name") or ""): row for row in scores if isinstance(row, dict)}
+    factor_results = []
+    for row in results:
+        if not isinstance(row, dict):
+            continue
+        score = score_by_name.get(str(row.get("factor_name") or ""), {})
+        factor_results.append({**row, "score": score.get("score") or score.get("composite_score")})
+    factor_results.sort(key=lambda row: float(row.get("score") if row.get("score") is not None else row.get("rank_ic_mean") or -999), reverse=True)
+    passed_count = len([row for row in factor_results if row.get("pass_gate") is True])
+    failed_count = len(factor_results) - passed_count
+    best_portfolio = max(portfolios, key=lambda row: float(row.get("sharpe") or -999), default=None)
+
+    config_path = Path(str(latest_run.get("config_path") or ""))
+    if not config_path.is_absolute():
+        config_path = DB_PATH.parent.parent / config_path
+    config = _read_json_safely(config_path, {})
+    payload.update({
+        "factor_results": factor_results[:5],
+        "passed_count": passed_count,
+        "failed_count": failed_count,
+        "best_factor": factor_results[0] if factor_results else None,
+        "best_portfolio": best_portfolio,
+        "data_source": latest_run.get("data_source") or config.get("data_source") or "sample",
+        "dataset_rows": timing.get("dataset_rows") if isinstance(timing, dict) else None,
+    })
+    if factor_results and passed_count == 0:
+        payload["alerts"].append({"tone": "warn", "message": "本轮没有因子通过门槛", "detail": "运行已成功完成；这是研究结论，不是系统错误。"})
+    return payload
+
+
+def _research_os_read_model_cache_key() -> str:
+    database_url = os.environ.get("FACTOR_LAB_DATABASE_URL", "postgresql-default")
+    return hashlib.sha256(database_url.encode("utf-8")).hexdigest()
+
+
+def get_research_os_read_model(max_age_seconds: float = 30.0) -> dict[str, Any]:
+    """Return a cached, read-only projection of the authoritative catalog."""
+
+    cache_key = _research_os_read_model_cache_key()
+    now = time.monotonic()
+    cached = _RESEARCH_OS_READ_MODEL_CACHE.get("payload")
+    if (
+        cached is not None
+        and _RESEARCH_OS_READ_MODEL_CACHE.get("key") == cache_key
+        and now - float(_RESEARCH_OS_READ_MODEL_CACHE.get("created_at") or 0.0)
+        < max_age_seconds
+    ):
+        return deepcopy(cached)
+    # Active WebUI pages are a PostgreSQL-only boundary.  SQLite remains
+    # available to the read-model service only through an explicit direct test
+    # call; no environment flag can make a live page treat legacy SQLite as
+    # current Research OS state.
+    payload = _load_research_os_read_model(allow_sqlite=False)
+    _RESEARCH_OS_READ_MODEL_CACHE.update(
+        {"key": cache_key, "created_at": now, "payload": deepcopy(payload)}
+    )
+    return payload
+
+
+def _build_overview_snapshot() -> dict[str, Any]:
+    """Build the homepage exclusively from the Research OS read model.
+
+    Legacy SQLite and JSON artifacts remain importable as evidence, but active
+    WebUI requests must never scan them or infer current system state from them.
+    """
+
+    return {"research_os": get_research_os_read_model()}
+
+
+def get_overview_snapshot(max_age_seconds: float = 30.0) -> dict[str, Any]:
+    cache_key = _research_os_read_model_cache_key()
+    now = time.monotonic()
+    cached = _OVERVIEW_CACHE.get("payload")
+    if cached is not None and _OVERVIEW_CACHE.get("key") == cache_key and now - float(_OVERVIEW_CACHE.get("created_at") or 0.0) < max_age_seconds:
+        return deepcopy(cached)
+    payload = _build_overview_snapshot()
+    _OVERVIEW_CACHE.update({"key": cache_key, "created_at": now, "payload": deepcopy(payload)})
+    return payload
 
 
 def _llm_usage_ledger_path() -> Path:
@@ -1875,14 +1971,10 @@ def _quick_heartbeat() -> dict[str, Any] | None:
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard():
-    provider, provider_source = _quick_provider_status()
     return render(
         "dashboard_quick.html",
-        title="总览",
-        daemon_status=_quick_daemon_status(),
-        provider=provider,
-        provider_source=provider_source,
-        latest_runs=_quick_latest_runs(),
+        title="研究总览",
+        overview=get_overview_snapshot(),
     )
 
 
@@ -1907,6 +1999,11 @@ def control_page():
 
 @app.get("/dashboard-full", response_class=HTMLResponse)
 def dashboard_full():
+    return RedirectResponse(url="/", status_code=307)
+
+
+def _legacy_dashboard_full_payload():
+    """Retained temporarily as a compatibility reference for old dashboard queries."""
     health = get_cached_health_metrics()
     latest_runs = fetch_all(
         "SELECT run_id, created_at_utc, status, config_path FROM workflow_runs ORDER BY created_at_utc DESC LIMIT 8"
@@ -2095,7 +2192,13 @@ def dashboard_full():
 def health_page():
     health = get_cached_health_metrics()
     weekly = compute_weekly_report(health)
-    return render("health.html", title="健康度", health=health, weekly=weekly)
+    return render(
+        "health.html",
+        title="健康度",
+        health=health,
+        weekly=weekly,
+        research_os=get_research_os_read_model(),
+    )
 
 
 @app.get("/harvest-agent/status")
@@ -2110,8 +2213,9 @@ def autonomous_strategy_lab_status():
     return build_autonomous_strategy_lab_report()
 
 
-@app.get("/research", response_class=HTMLResponse)
-def research_page():
+def _build_legacy_research_page_context() -> dict[str, Any]:
+    """Compatibility-only projection for legacy import and regression tests."""
+
     tasks = ExperimentStore(DB_PATH).list_research_tasks(limit=100)
     candidate_pool_path = DB_PATH.parent / 'research_candidate_pool.json'
     branch_plan_path = DB_PATH.parent / 'research_branch_plan.json'
@@ -2120,11 +2224,11 @@ def research_page():
     opportunity_store_path = DB_PATH.parent / 'research_opportunity_store.json'
     opportunity_review_path = DB_PATH.parent / 'opportunity_review.json'
     opportunity_metrics_path = DB_PATH.parent / 'opportunity_metrics.json'
-    candidate_pool = json.loads(candidate_pool_path.read_text(encoding='utf-8')) if candidate_pool_path.exists() else {}
-    branch_plan = json.loads(branch_plan_path.read_text(encoding='utf-8')) if branch_plan_path.exists() else {}
-    family_summary = json.loads(family_summary_path.read_text(encoding='utf-8')) if family_summary_path.exists() else []
-    opportunities = json.loads(opportunities_path.read_text(encoding='utf-8')) if opportunities_path.exists() else {}
-    opportunity_store = json.loads(opportunity_store_path.read_text(encoding='utf-8')) if opportunity_store_path.exists() else {}
+    candidate_pool = _read_json_safely(candidate_pool_path, {}) or {}
+    branch_plan = _read_json_safely(branch_plan_path, {}) or {}
+    family_summary = _read_json_safely(family_summary_path, []) or []
+    opportunities = _read_json_safely(opportunities_path, {}) or {}
+    opportunity_store = _read_json_safely(opportunity_store_path, {}) or {}
     opportunity_review = build_opportunity_review() if opportunity_store_path.exists() else {}
     opportunity_metrics = build_opportunity_metrics() if opportunity_store_path.exists() else {}
     opportunity_archive_diagnostics = build_opportunity_archive_diagnostics() if opportunity_store_path.exists() else {}
@@ -2154,19 +2258,26 @@ def research_page():
             task["payload_summary"] = f"{payload.get('diagnostic_type', '-')}: {'; '.join(payload.get('reasons', []))}"
         else:
             task["payload_summary"] = pretty_json_text(payload)
+    return {
+        "tasks": tasks,
+        "summary": summary,
+        "candidate_pool": candidate_pool,
+        "branch_plan": branch_plan,
+        "family_summary": family_summary,
+        "opportunities": opportunities,
+        "opportunity_store": opportunity_store,
+        "opportunity_review": opportunity_review,
+        "opportunity_metrics": opportunity_metrics,
+        "opportunity_archive_diagnostics": opportunity_archive_diagnostics,
+    }
+
+
+@app.get("/research", response_class=HTMLResponse)
+def research_page():
     return render(
         "research.html",
-        title="研究队列",
-        tasks=tasks,
-        summary=summary,
-        candidate_pool=candidate_pool,
-        branch_plan=branch_plan,
-        family_summary=family_summary,
-        opportunities=opportunities,
-        opportunity_store=opportunity_store,
-        opportunity_review=opportunity_review,
-        opportunity_metrics=opportunity_metrics,
-        opportunity_archive_diagnostics=opportunity_archive_diagnostics,
+        title="研究",
+        research_os=get_research_os_read_model(),
     )
 
 
@@ -2185,6 +2296,11 @@ def weekly_page():
 
 @app.get("/cockpit", response_class=HTMLResponse)
 def cockpit_page():
+    return RedirectResponse(url="/", status_code=307)
+
+
+def _legacy_cockpit_payload():
+    """Retained temporarily as a compatibility reference for old cockpit queries."""
     base = DB_PATH.parent
     latest_run = fetch_one(
         "SELECT run_id, created_at_utc, config_path, status, output_dir FROM workflow_runs WHERE status='finished' ORDER BY created_at_utc DESC LIMIT 1"
@@ -2254,9 +2370,10 @@ def exposure_page():
     )
 
 
-@app.get("/runs", response_class=HTMLResponse)
-def runs_page():
-    runs = fetch_all(
+def _load_legacy_runs_page_context() -> dict[str, Any]:
+    """Load old workflow runs for explicit migration/regression consumers only."""
+
+    return {"runs": fetch_all(
         """
         SELECT run_id, created_at_utc, config_path, data_source, start_date, end_date,
                factor_count, dataset_rows, status, rerun_of_run_id
@@ -2264,8 +2381,16 @@ def runs_page():
         ORDER BY created_at_utc DESC
         LIMIT 100
         """
+    )}
+
+
+@app.get("/runs", response_class=HTMLResponse)
+def runs_page():
+    return render(
+        "runs.html",
+        title="运行记录",
+        research_os=get_research_os_read_model(),
     )
-    return render("runs.html", title="运行记录", runs=runs)
 
 
 @app.get("/runs/{run_id}", response_class=HTMLResponse)
@@ -2367,11 +2492,14 @@ def families_page():
     store = ExperimentStore(DB_PATH)
     candidates = store.list_factor_candidates(limit=1000)
     evaluations = store.list_factor_evaluations(limit=5000)
-    families = json.loads((DB_PATH.parent / 'family_risk_profiles.json').read_text(encoding='utf-8')) if (DB_PATH.parent / 'family_risk_profiles.json').exists() else family_rollup(candidates, evaluations)
+    family_profiles_path = DB_PATH.parent / 'family_risk_profiles.json'
+    families = _read_json_safely(family_profiles_path, []) if family_profiles_path.exists() else family_rollup(candidates, evaluations)
+    if not isinstance(families, list):
+        families = []
     summary = {
         'family_count': len(families),
-        'promising_count': sum(int(row['promising_count']) for row in families),
-        'evaluation_count': sum(int(row['evaluation_count']) for row in families),
+        'promising_count': sum(int(row.get('promising_count') or 0) for row in families),
+        'evaluation_count': sum(int(row.get('evaluation_count') or 0) for row in families),
         'continue_count': len([row for row in families if row.get('recommended_action') == 'continue']),
         'refine_count': len([row for row in families if row.get('recommended_action') == 'refine']),
         'pause_count': len([row for row in families if row.get('recommended_action') == 'pause']),
@@ -2447,8 +2575,9 @@ def factors_page():
     return render("factors.html", title="因子", factors=factors)
 
 
-@app.get("/portfolios", response_class=HTMLResponse)
-def portfolios_page():
+def _load_legacy_portfolios_page_context() -> dict[str, Any]:
+    """Load old portfolio aggregates for explicit numerical regression only."""
+
     strategies = fetch_all(
         "SELECT strategy_name, ROUND(avg_sharpe, 6) AS avg_sharpe, ROUND(avg_return, 6) AS avg_return, runs FROM v_portfolio_strategy_avg ORDER BY avg_sharpe DESC"
     )
@@ -2461,7 +2590,16 @@ def portfolios_page():
         LIMIT 30
         """
     )
-    return render("portfolios.html", title="组合", strategies=strategies, recent=recent)
+    return {"strategies": strategies, "recent": recent}
+
+
+@app.get("/portfolios", response_class=HTMLResponse)
+def portfolios_page():
+    return render(
+        "portfolios.html",
+        title="组合",
+        research_os=get_research_os_read_model(),
+    )
 
 
 @app.get("/paper-portfolio", response_class=HTMLResponse)
@@ -2475,13 +2613,13 @@ def paper_portfolio_page():
     change_log_path = base / "portfolio_change_log.md"
     retro_path = base / "portfolio_retrospective.json"
     stability_path = base / "portfolio_stability_score.json"
-    current = json.loads(current_path.read_text(encoding="utf-8")) if current_path.exists() else {}
-    retrospective = json.loads(retro_path.read_text(encoding="utf-8")) if retro_path.exists() else {}
-    stability = json.loads(stability_path.read_text(encoding="utf-8")) if stability_path.exists() else {}
+    current = _read_json_safely(current_path, {}) or {}
+    retrospective = _read_json_safely(retro_path, {}) or {}
+    stability = _read_json_safely(stability_path, {}) or {}
     contribution_path = base / "portfolio_contribution_report.json"
-    contribution = json.loads(contribution_path.read_text(encoding="utf-8")) if contribution_path.exists() else {}
+    contribution = _read_json_safely(contribution_path, {}) or {}
     approved_universe_path = DB_PATH.parent / "approved_candidate_universe.json"
-    approved_universe = json.loads(approved_universe_path.read_text(encoding="utf-8")) if approved_universe_path.exists() else {}
+    approved_universe = _read_json_safely(approved_universe_path, {}) or {}
     return render(
         "paper_portfolio.html",
         title="纸面组合",
@@ -2505,8 +2643,8 @@ def paper_portfolio_page():
 def approved_universe_page():
     universe_path = DB_PATH.parent / "approved_candidate_universe.json"
     debug_path = DB_PATH.parent / "approved_candidate_universe_debug.json"
-    universe = json.loads(universe_path.read_text(encoding="utf-8")) if universe_path.exists() else {}
-    debug = json.loads(debug_path.read_text(encoding="utf-8")) if debug_path.exists() else {}
+    universe = _read_json_safely(universe_path, {}) or {}
+    debug = _read_json_safely(debug_path, {}) or {}
     allocator_governance_audit = load_allocator_governance_audit(DB_PATH.parent)
     decision_ab = load_decision_ab_artifacts(DB_PATH.parent)
     diagnostician_enhancement = load_diagnostician_enhancement(DB_PATH.parent)
@@ -2528,16 +2666,13 @@ def llm_page():
     plan_path = base / "llm_next_batch_proposal.json"
     snapshot_path = base / "llm_input_snapshot.json"
     status_path = base / "llm_status.json"
-    request_path = base / "agent_request.json"
     review_text = review_path.read_text(encoding="utf-8") if review_path.exists() else "暂无 LLM 评审。"
     plan_text = plan_path.read_text(encoding="utf-8") if plan_path.exists() else "暂无 LLM 计划。"
     snapshot_text = snapshot_path.read_text(encoding="utf-8") if snapshot_path.exists() else "暂无 LLM 输入快照。"
     status_text = status_path.read_text(encoding="utf-8") if status_path.exists() else "暂无 LLM 状态。"
-    request_text = request_path.read_text(encoding="utf-8") if request_path.exists() else "暂无 bridge 请求。"
     llm_status = json.loads(status_text) if status_path.exists() else {}
     llm_plan = json.loads(plan_text) if plan_path.exists() else {}
     snapshot = json.loads(snapshot_text) if snapshot_path.exists() else {}
-    agent_request = json.loads(request_text) if request_path.exists() else {}
     generated_batch_path = DB_PATH.parent / "generated_batch_from_llm.json"
     generated_batch_workflow_path = DB_PATH.parent / "generated_workflow_from_llm.json"
     feedback_path = DB_PATH.parent / "llm_plan_feedback.json"
@@ -2560,11 +2695,9 @@ def llm_page():
         plan_text=plan_text,
         snapshot_text=snapshot_text,
         status_text=status_text,
-        request_text=request_text,
         llm_status=llm_status,
         llm_plan=llm_plan,
         snapshot=snapshot,
-        agent_request=agent_request,
         generated_batch=generated_batch,
         generated_batch_text=pretty_json_text(generated_batch, "暂无生成的 batch。"),
         generated_workflow_text=pretty_json_text(generated_workflow, "暂无生成的 workflow。"),
@@ -2580,7 +2713,6 @@ def llm_page():
         recommendation_context_text=pretty_json_text(recommendation_context, "暂无模板优先级摘要与疲劳度。"),
         plan_validation=plan_validation,
         plan_validation_text=pretty_json_text(plan_validation, "暂无计划校验结果。"),
-        agent_settings=load_agent_settings(),
     )
 
 
@@ -2607,7 +2739,7 @@ def ops_page():
     return render("ops.html", title="操作", tasks=tasks, research_tasks=research_tasks, result=None)
 
 
-@app.get("/ops/run/{target}", response_class=HTMLResponse)
+@app.post("/ops/run/{target}", response_class=HTMLResponse)
 def ops_run(target: str):
     mapping = {
         "workflow": "scripts/run_tushare_workflow.py",
@@ -2616,9 +2748,6 @@ def ops_run(target: str):
         "queue-seed": "scripts/seed_research_queue.py",
         "cycle": "scripts/run_scheduled_cycle.py",
         "llm": "scripts/run_llm_cycle.py",
-        "llm-bridge": "scripts/run_llm_bridge_prepare.py",
-        "llm-bridge-import": "scripts/import_llm_bridge_response.py",
-        "llm-bridge-check": "scripts/check_and_import_llm_bridge.py",
         "llm-plan-generate": "scripts/generate_batch_from_llm_plan.py",
         "llm-plan-run": "scripts/run_generated_batch_from_llm.py",
         "llm-retrospective": "scripts/build_llm_retrospective.py",
@@ -2628,7 +2757,10 @@ def ops_run(target: str):
     }
     if target not in mapping:
         raise HTTPException(status_code=404, detail="未知操作目标")
-    result = trigger_script(mapping[target])
-    tasks = latest_task_states(limit=20)
-    research_tasks = ExperimentStore(DB_PATH).list_research_tasks(limit=20)
-    return render("ops.html", title="操作", tasks=tasks, research_tasks=research_tasks, result=result)
+    # Compatibility endpoint only: the scripts above write the retired
+    # SQLite/JSON research state and therefore cannot be launched by the
+    # authoritative WebUI.  Research and retry operations belong in Dagster.
+    raise HTTPException(
+        status_code=410,
+        detail="旧操作入口已停用；请在 Dagster 中运行 Research OS 任务",
+    )

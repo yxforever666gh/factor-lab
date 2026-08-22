@@ -3,12 +3,23 @@ from __future__ import annotations
 import json
 
 import pandas as pd
+import pytest
+
+import factor_lab.autonomous_strategy_cache_extension as cache_extension_module
 
 from factor_lab.autonomous_strategy_cache_extension import (
     build_history_cache_extension_plan,
     cache_extension_plan_to_markdown,
     write_cache_extension_plan,
 )
+
+
+@pytest.fixture(autouse=True)
+def _isolate_workspace_env_file(monkeypatch: pytest.MonkeyPatch) -> None:
+    # These unit tests control the token environment explicitly.  Loading the
+    # developer workspace .env here would leak unrelated production profiles
+    # into later tests through os.environ.setdefault.
+    monkeypatch.setattr(cache_extension_module, "load_env_file", lambda: None)
 
 
 def _write_cache(path, tickers=("000001.SZ", "000002.SZ")):

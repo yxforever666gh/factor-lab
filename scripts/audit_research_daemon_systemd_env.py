@@ -59,6 +59,43 @@ def _env_value(combined: str, name: str) -> str | None:
     return None
 
 
+def _property_value(combined: str, name: str) -> str | None:
+    marker = f"{name}="
+    for line in combined.splitlines():
+        line = line.strip()
+        if line.startswith(marker):
+            return line.split("=", 1)[1].strip().strip('"')
+    return None
+
+
+def _normalized_path(value: str | Path) -> str:
+    return str(value).replace("\\", "/").rstrip("/")
+
+
+def _coherent_deployment_root(combined: str, expected_root: Path) -> tuple[bool, str | None]:
+    """Accept the checkout itself or a coherent Linux systemd deployment.
+
+    Audit fixtures and remote systemd output can legitimately describe a Linux
+    checkout while this audit is being evaluated on Windows.  We therefore do
+    not compare a foreign service path with ``Path(__file__)`` byte-for-byte;
+    the working directory and daemon path must instead agree on the same
+    ``factor-lab`` root.
+    """
+    actual = _property_value(combined, "WorkingDirectory")
+    if not actual:
+        return False, None
+    actual_norm = _normalized_path(actual)
+    expected_norm = _normalized_path(expected_root)
+    combined_norm = combined.replace("\\", "/")
+    if actual_norm == expected_norm:
+        return True, actual
+    coherent_foreign_checkout = (
+        actual_norm.rsplit("/", 1)[-1] == "factor-lab"
+        and f"{actual_norm}/scripts/run_research_daemon.py" in combined_norm
+    )
+    return coherent_foreign_checkout, actual
+
+
 def _controlled_normal_requirements(combined: str) -> dict[str, Any]:
     missing: list[str] = []
     unsafe: list[str] = []
@@ -103,10 +140,17 @@ def audit_systemd_env(*, output_dir: str | Path = "artifacts") -> dict[str, Any]
     expected_daemon = str(ROOT / "scripts" / "run_research_daemon.py")
     expected_workdir = str(ROOT)
     expected_src = str(ROOT / "src")
+    root_matches, deployed_workdir = _coherent_deployment_root(combined, ROOT)
+    pythonpath = _env_value(combined, "PYTHONPATH")
+    deployed_src = f"{_normalized_path(deployed_workdir)}/src" if deployed_workdir else None
     checks = {
         "execstart_mentions_daemon": expected_daemon in combined or "scripts/run_research_daemon.py" in combined,
-        "working_directory_matches": f"WorkingDirectory={expected_workdir}" in combined or expected_workdir in combined,
-        "pythonpath_mentions_src": expected_src in combined or "PYTHONPATH" not in combined,
+        "working_directory_matches": root_matches,
+        "pythonpath_mentions_src": (
+            pythonpath is None
+            or _normalized_path(expected_src) in _normalized_path(pythonpath)
+            or bool(root_matches and deployed_src and deployed_src in _normalized_path(pythonpath))
+        ),
         "fragment_available": bool(show.get("stdout") or cat.get("stdout")),
     }
     controlled_normal = _controlled_normal_requirements(combined)

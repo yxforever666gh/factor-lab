@@ -18,6 +18,22 @@ DEFAULT_JSON_PATH = ROOT / "artifacts" / "small_institutional_simulation" / "dat
 DEFAULT_MARKDOWN_PATH = ROOT / "artifacts" / "small_institutional_simulation" / "dataset_extension.md"
 
 
+class _LazyTushareDataProvider:
+    """Construct the credential-backed provider only when a fetch callback uses it."""
+
+    def __init__(self, factory: Callable[[], TushareDataProvider]) -> None:
+        self._factory = factory
+        self._provider: TushareDataProvider | None = None
+
+    def _resolve(self) -> TushareDataProvider:
+        if self._provider is None:
+            self._provider = self._factory()
+        return self._provider
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._resolve(), name)
+
+
 def _resolve_path(path: str | Path) -> Path:
     p = Path(path)
     return p if p.is_absolute() else ROOT / p
@@ -212,8 +228,8 @@ def extend_small_institutional_dataset(
     elif plan["api_fetch_required"] and not allow_fetch:
         payload = {**plan, "extension_status": "blocked_external_fetch_not_allowed", "next_action": "rerun_with_allow_fetch_or_seed_feature_store", "write_performed": False}
     else:
+        provider = _LazyTushareDataProvider(TushareDataProvider)
         if plan["api_fetch_required"] and allow_fetch:
-            provider = TushareDataProvider()
             ensure_coverage_fn(
                 provider=provider,
                 universe_limit=plan["universe_limit"],
@@ -237,7 +253,6 @@ def extend_small_institutional_dataset(
             # interior hole (for example 2022-2023 missing but 2024+ present). In explicit fetch mode,
             # repair by asking the provider for the full required simulation window through its normal
             # request-cache/covering-cache path, then validate that frame before touching the dataset.
-            provider = TushareDataProvider()
             fetched = direct_fetch_fn(
                 provider=provider,
                 start_date=plan["required_window"]["start_date"],

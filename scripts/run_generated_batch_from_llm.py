@@ -8,9 +8,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from factor_lab.batch import run_batch
 from factor_lab.llm_bridge import write_bridge_status
 from factor_lab.llm_feedback import summarize_generated_batch_run
+from factor_lab.research_os.legacy_entrypoint import retired_legacy_entrypoint
 
 
 if __name__ == "__main__":
+    raise SystemExit(retired_legacy_entrypoint("scripts/run_generated_batch_from_llm.py"))
+
     batch_path = Path("artifacts/generated_batch_from_llm.json")
     if not batch_path.exists():
         print("generated batch not found")

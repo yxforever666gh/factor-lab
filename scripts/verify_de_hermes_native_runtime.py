@@ -87,8 +87,18 @@ def check_service_path(service: str, check_name: str, expected_root: str = EXPEC
     exec_start = data.get("ExecStart", "")
     working_dir = data.get("WorkingDirectory", "")
     combined = "\n".join([fragment, exec_start, working_dir])
-    if expected_root in combined and OLD_WORKSPACE not in combined:
-        return CheckResult("PASS", check_name, f"{service} points at {expected_root}")
+    combined_norm = combined.replace("\\", "/")
+    expected_norm = expected_root.replace("\\", "/").rstrip("/")
+    working_norm = working_dir.replace("\\", "/").rstrip("/")
+    expected_script = "run_web_ui.py" if "web-ui" in service else "run_research_daemon.py"
+    local_checkout = expected_norm in combined_norm
+    coherent_foreign_checkout = (
+        working_norm.rsplit("/", 1)[-1] == "factor-lab"
+        and f"{working_norm}/scripts/{expected_script}" in exec_start.replace("\\", "/")
+    )
+    if (local_checkout or coherent_foreign_checkout) and OLD_WORKSPACE not in combined_norm:
+        effective_root = working_dir or expected_root
+        return CheckResult("PASS", check_name, f"{service} points at {effective_root}")
     return CheckResult(
         "FAIL",
         check_name,
@@ -121,7 +131,7 @@ def provider_from_processes() -> str | None:
 def provider_from_env_file(env_path: Path) -> str | None:
     if not env_path.exists():
         return None
-    for line in env_path.read_text(errors="ignore").splitlines():
+    for line in env_path.read_text(encoding="utf-8", errors="ignore").splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
@@ -160,8 +170,8 @@ def scan_hermes_native_references(root: Path = PROJECT_ROOT) -> tuple[list[tuple
     concept_refs: list[str] = []
     for path in iter_text_files(root):
         try:
-            rel = str(path.relative_to(root))
-            text = path.read_text(errors="ignore")
+            rel = path.relative_to(root).as_posix()
+            text = path.read_text(encoding="utf-8", errors="ignore")
         except OSError:
             continue
         lower = text.lower()

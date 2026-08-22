@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import argparse
 import json
 import sqlite3
 import subprocess
@@ -15,6 +14,7 @@ sys.path.insert(0, str(ROOT / "src"))
 
 from factor_lab.bucket_aware_task_preparer import prepare_bucket_aware_tasks
 from factor_lab.controlled_restart_audit import dry_run_controlled_restart
+from factor_lab.research_os.legacy_entrypoint import retired_legacy_entrypoint
 
 SERVICE_NAME = "factor-lab-research-daemon.service"
 PROCESS_PATTERNS = (
@@ -257,24 +257,11 @@ def run_acceptance(
     return payload
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--rounds", type=int, default=3)
-    parser.add_argument("--db-path", default="artifacts/factor_lab.db")
-    parser.add_argument("--output-dir", default="artifacts/post_h_acceptance")
-    parser.add_argument("--one-shot", action="store_true")
-    parser.add_argument("--command-timeout", type=int, default=600)
-    args = parser.parse_args()
-    result = run_acceptance(
-        rounds=args.rounds,
-        output_dir=args.output_dir,
-        db_path=args.db_path,
-        one_shot=args.one_shot,
-        command_timeout=args.command_timeout,
-    )
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    raise SystemExit(0 if result.get("ok") else 2)
+def main() -> int:
+    # This acceptance harness intentionally enqueued and consumed legacy
+    # SQLite tasks.  Keep its helpers importable, but retire the executable.
+    return retired_legacy_entrypoint("scripts/run_post_h_controlled_restart_acceptance.py")
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

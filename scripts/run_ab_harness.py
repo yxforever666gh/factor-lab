@@ -7,9 +7,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from factor_lab.ab_harness import build_ab_harness_plan, summarize_ab_harness, write_ab_harness_markdown
 from factor_lab.batch import run_batch
+from factor_lab.research_os.legacy_entrypoint import retired_legacy_entrypoint
 
 
 if __name__ == "__main__":
+    raise SystemExit(retired_legacy_entrypoint("scripts/run_ab_harness.py"))
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--db-path", default="artifacts/factor_lab.db")
     parser.add_argument("--base-config", default="configs/tushare_workflow.json")

@@ -12,9 +12,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-import fcntl
-
 from factor_lab.dedup import config_fingerprint, workflow_experiment_fingerprint
+from factor_lab.cross_platform_lock import try_lock_file, unlock_file
 from factor_lab.heartbeat import append_heartbeat
 from factor_lab.storage import ExperimentStore
 from factor_lab.change_detection import build_change_report
@@ -39,6 +38,18 @@ from factor_lab.repair_agent_engine import build_repair_response
 from factor_lab.repair_playbooks import execute_repair_actions
 from factor_lab.repair_verifier import verify_repair_actions
 from datetime import datetime, timezone, timedelta
+
+
+# Keep the legacy worker importable and testable on Windows while it is being
+# replaced by the Dagster Research OS runtime.  ``start_new_session`` creates a
+# distinct process group there, but Python does not expose ``os.killpg``.
+if not hasattr(os, "killpg"):
+    def _windows_killpg(pid: int, sig: int) -> None:
+        os.kill(pid, sig)
+
+    os.killpg = _windows_killpg  # type: ignore[attr-defined]
+if not hasattr(signal, "SIGKILL"):
+    signal.SIGKILL = 9  # type: ignore[attr-defined]
 
 
 BASELINE_PRIORITY = 10
@@ -762,19 +773,12 @@ def _report_refresh_lock():
     REPORT_REFRESH_LOCK_PATH.parent.mkdir(parents=True, exist_ok=True)
     handle = open(REPORT_REFRESH_LOCK_PATH, "a+", encoding="utf-8")
     acquired = False
-    try:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-        acquired = True
-    except BlockingIOError:
-        acquired = False
+    acquired = try_lock_file(handle)
     try:
         yield acquired
     finally:
         if acquired:
-            try:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-            except Exception:
-                pass
+            unlock_file(handle)
         handle.close()
 
 

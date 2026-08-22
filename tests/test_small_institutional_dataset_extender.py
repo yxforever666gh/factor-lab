@@ -2,6 +2,8 @@ import json
 
 import pandas as pd
 
+import factor_lab.small_institutional_dataset_extender as extender_module
+
 from factor_lab.small_institutional_dataset_extender import (
     build_small_institutional_dataset_extension_plan,
     extend_small_institutional_dataset,
@@ -131,7 +133,7 @@ def test_write_rebuilds_dataset_from_feature_store_and_validates(tmp_path):
     assert (tmp_path / "dataset.csv.bak").exists()
 
 
-def test_write_with_allow_fetch_calls_feature_coverage_before_rebuild(tmp_path):
+def test_write_with_allow_fetch_calls_feature_coverage_before_rebuild(tmp_path, monkeypatch):
     dataset_path = tmp_path / "dataset.csv"
     _write_dataset(dataset_path, periods=3)
     policy_path = _policy(tmp_path / "policy.json", dataset_path)
@@ -140,6 +142,12 @@ def test_write_with_allow_fetch_calls_feature_coverage_before_rebuild(tmp_path):
     def ensure_fn(**kwargs):
         calls.append(kwargs)
         return kwargs["universe_name"]
+
+    class UnexpectedProvider:
+        def __init__(self):
+            raise AssertionError("an injected coverage callback must not eagerly construct a provider")
+
+    monkeypatch.setattr(extender_module, "TushareDataProvider", UnexpectedProvider)
 
     result = extend_small_institutional_dataset(
         policy_path=policy_path,
@@ -177,7 +185,7 @@ def test_write_blocks_fetch_without_allow_fetch(tmp_path):
     assert result["next_action"] == "rerun_with_allow_fetch_or_seed_feature_store"
 
 
-def test_allow_fetch_falls_back_to_direct_provider_when_feature_store_has_interior_gap(tmp_path):
+def test_allow_fetch_falls_back_to_direct_provider_when_feature_store_has_interior_gap(tmp_path, monkeypatch):
     dataset_path = tmp_path / "dataset.csv"
     _write_dataset(dataset_path, periods=3)
     policy_path = _policy(tmp_path / "policy.json", dataset_path)
@@ -189,6 +197,12 @@ def test_allow_fetch_falls_back_to_direct_provider_when_feature_store_has_interi
     def direct_fetch_fn(**kwargs):
         direct_fetch_calls.append(kwargs)
         return Dataset()
+
+    class UnexpectedProvider:
+        def __init__(self):
+            raise AssertionError("injected fetch callbacks must not eagerly construct a provider")
+
+    monkeypatch.setattr(extender_module, "TushareDataProvider", UnexpectedProvider)
 
     result = extend_small_institutional_dataset(
         policy_path=policy_path,

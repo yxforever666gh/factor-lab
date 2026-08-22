@@ -1,55 +1,14 @@
-{% extends "base.html" %}
+{% extends 'base.html' %}
+{% from '_components.html' import metric, empty, disclosure %}
 {% block content %}
 <div class="grid cols-3">
-  <section class="card">
-    <h2>Gate decisions</h2>
-    <p class="muted">Proposal → Gate → Budget 审计摘要</p>
-    <p>Total: <strong>{{ summary.gate_decisions.total }}</strong></p>
-    <pre>{{ summary.gate_decisions.by_decision }}</pre>
-  </section>
-  <section class="card">
-    <h2>Data coverage</h2>
-    <p>Ready templates: <strong class="good">{{ summary.data_coverage.summary.ready_template_count }}</strong></p>
-    <p>Blocked templates: <strong class="warn">{{ summary.data_coverage.summary.blocked_template_count }}</strong></p>
-    <pre>{{ summary.data_coverage.summary.missing_fields }}</pre>
-  </section>
-  <section class="card">
-    <h2>Value research routes</h2>
-    <p>Ready candidates: <strong class="good">{{ summary.value_research_routes.ready_count }}</strong></p>
-    <p>Blocked routes: <strong class="warn">{{ summary.value_research_routes.blocked_count }}</strong></p>
-  </section>
+  {{ metric('Gate 决策', summary.gate_decisions.total, 'Proposal → Gate → Budget') }}
+  {{ metric('数据就绪模板', summary.data_coverage.summary.ready_template_count, '阻断 ' ~ summary.data_coverage.summary.blocked_template_count, 'good') }}
+  {{ metric('可运行研究路线', summary.value_research_routes.ready_count, '阻断 ' ~ summary.value_research_routes.blocked_count) }}
 </div>
-
-<div class="grid cols-2" style="margin-top:18px;">
-  <section class="card">
-    <h2>Top blocked reasons</h2>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Reason</th><th>Count</th></tr></thead>
-        <tbody>
-        {% for row in summary.gate_decisions.top_reasons %}
-          <tr><td>{{ row.reason }}</td><td>{{ row.count }}</td></tr>
-        {% else %}
-          <tr><td colspan="2" class="muted">暂无 gate 决策日志。</td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </section>
-  <section class="card">
-    <h2>Blocked value routes</h2>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Route</th><th>Missing fields</th></tr></thead>
-        <tbody>
-        {% for row in summary.value_research_routes.blocked %}
-          <tr><td>{{ row.route_id }}</td><td>{{ row.missing_fields }}</td></tr>
-        {% else %}
-          <tr><td colspan="2" class="muted">没有被字段缺口阻断的 value route。</td></tr>
-        {% endfor %}
-        </tbody>
-      </table>
-    </div>
-  </section>
+<div class="grid cols-2 section-gap">
+  <section class="card"><h2>主要阻断原因</h2>{% if summary.gate_decisions.top_reasons %}<table><thead><tr><th>原因</th><th>次数</th></tr></thead><tbody>{% for row in summary.gate_decisions.top_reasons %}<tr><td>{{ row.reason }}</td><td class="num">{{ row.count }}</td></tr>{% endfor %}</tbody></table>{% else %}{{ empty('暂无 Gate 阻断记录') }}{% endif %}</section>
+  <section class="card"><h2>缺失字段</h2>{% if summary.data_coverage.summary.missing_fields %}<p class="text-break">{{ summary.data_coverage.summary.missing_fields|join('、') }}</p>{% else %}{{ empty('没有已知字段缺口') }}{% endif %}</section>
 </div>
+<div class="section-gap">{% call disclosure('被阻断的研究路线') %}{% if summary.value_research_routes.blocked %}<div class="table-wrap"><table><thead><tr><th>路线</th><th>缺失字段</th></tr></thead><tbody>{% for row in summary.value_research_routes.blocked %}<tr><td>{{ row.route_id }}</td><td>{{ row.missing_fields|join('、') if row.missing_fields else '-' }}</td></tr>{% endfor %}</tbody></table></div>{% else %}{{ empty('没有被字段缺口阻断的路线') }}{% endif %}{% endcall %}</div>
 {% endblock %}

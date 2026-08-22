@@ -15,6 +15,19 @@ CASHFLOW_FIELDS = {
     "reversed_operating_cashflow_to_profit_zscore_by_date_industry",
 }
 DEFAULT_BLOCKED_ROUTE_IDS = {"value_trap_filter_quality_confirmation"}
+DEFAULT_CLOSURE_POLICY: dict[str, Any] = {
+    "schema_version": 1,
+    "decision": "cashflow_monitor_only_closed",
+    "status": "monitor_only",
+    "blocked_route_ids": sorted(DEFAULT_BLOCKED_ROUTE_IDS),
+    "monitor_only_fields": sorted(CASHFLOW_FIELDS),
+    "reopen_requires": [
+        "new_written_mechanism_plan",
+        "positive_read_only_evidence",
+        "explicit_cashflow_reopen_plan_id_in_config",
+    ],
+    "evidence_status": "legacy_evidence_not_required_for_enforcement",
+}
 
 
 @dataclass(frozen=True)
@@ -61,7 +74,17 @@ def closure_policy_active(policy: Mapping[str, Any] | None) -> bool:
 
 
 def load_cashflow_closure_policy(path: str | Path | None = None) -> dict[str, Any]:
-    return _read_json(path or DEFAULT_POLICY_PATH)
+    selected_path = Path(path) if path is not None else DEFAULT_POLICY_PATH
+    payload = _read_json(selected_path)
+    if payload:
+        return payload
+    # The closure is a governance rule, not a generated research conclusion.
+    # Keep it enforceable in clean checkouts where ignored audit artifacts are
+    # intentionally absent. Explicit non-default paths retain missing-file
+    # semantics so callers can test or stage a different policy safely.
+    if path is None or selected_path == DEFAULT_POLICY_PATH:
+        return dict(DEFAULT_CLOSURE_POLICY)
+    return {}
 
 
 def _iter_factor_expressions(config: Mapping[str, Any]) -> Iterable[str]:

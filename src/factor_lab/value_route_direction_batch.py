@@ -60,11 +60,13 @@ def write_value_route_direction_batch(*, output_dir: str | Path = DEFAULT_OUTPUT
         for cfg in batch["configs"]:
             name = f"{cfg['route_id']}_{cfg['direction']}.json"
             path = out / name
-            path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+            # ASCII-safe JSON remains readable by callers that (incorrectly but
+            # commonly) rely on the Windows locale default encoding.
+            path.write_text(json.dumps(cfg, ensure_ascii=True, indent=2), encoding="utf-8")
             cfg_with_path = dict(cfg)
-            cfg_with_path["config_path"] = str(path)
+            cfg_with_path["config_path"] = path.as_posix()
             manifest_configs.append(cfg_with_path)
         manifest = {**batch, "configs": manifest_configs}
-        (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+        (out / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=True, indent=2), encoding="utf-8")
         return manifest
     return batch

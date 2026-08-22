@@ -1,84 +1,59 @@
 # Factor Lab Small Institutionalization Status
 
-Generated: 2026-06-24T15:32:59.047965+00:00
+Generated: 2026-08-23T07:33:52.156533+00:00
 Phase: A_baseline
 Strategy mode: long_only_equity_enhancement
-Decision: ready_for_portfolio_mvp
-Next action: repair_simulated_portfolio_construction
+Decision: blocked_runtime_safety
+Next action: stop_and_repair_runtime_safety_before_any_portfolio_work
 
 ## Blockers
-- none
+- broad_daemon_not_paused
+- controlled_only_not_explicitly_allowed
+- missing_primary_value_sleeve
+- missing_paper_portfolio_baseline
 
 ## Runtime safety
-- Safe: True
-- Recommendations: ['pause_broad_daemon', 'allow_controlled_only_daemon']
+- Safe: False
+- Recommendations: []
 - Would-run count: 0
 
 ## Value sleeve
-- Decision: collapse_to_value_sleeve_with_primary_route
-- Primary route: value_quality_no_distress
-- Confirmation route: value_momentum_confirmation
+- Decision: missing
+- Primary route: None
+- Confirmation route: None
 
 ## Paper portfolio
-- Ready: True
-- Strategy: small_institutional_value_sleeve_mvp
-- As-of date: 2021-12-28
-- Position count: 72
-- Benchmark ID: CSI1000
-- One-way turnover estimate: 0.791672
-- Estimated round-trip cost: 0.00475
+- Ready: False
+- Strategy: None
+- As-of date: None
+- Position count: None
+- Benchmark ID: None
+- One-way turnover estimate: None
+- Estimated round-trip cost: None
 
 ## Paper monitoring
-- Weekly report status: ready
-- Cadence: weekly
-- Runtime safe: True
-- Weekly would-run count: 0
-- Weekly runtime recommendations: ['pause_broad_daemon', 'allow_controlled_only_daemon']
+- Weekly report status: missing
+- Cadence: None
+- Runtime safe: None
+- Weekly would-run count: None
+- Weekly runtime recommendations: None
 - Queue write allowed: False
 - Broad daemon allowed: False
 - Automation allowed: False
 - Automated rerun allowed: False
 - Live trading enabled: False
 - Missing artifacts: []
-- Next observation window: next_weekly_paper_review
-- Weekly blocker context:
-  - Decision: ready_for_portfolio_mvp
-  - Next action: repair_simulated_portfolio_construction
-  - Primary issue: drawdown_risk_too_high
-  - Manual approval gate status: blocked_pending_manual_approval
-  - Human approval present: False
-  - Approval required: True
-  - Required decision axis: holding_count=50
-- Weekly operator-pending observation:
-  - Observation status: operator_pending
-  - Primary issue: drawdown_risk_too_high
-  - Manual approval status: blocked_pending_manual_approval
-  - Benchmark ID: CSI1000
-  - One-way turnover estimate: 0.791672
-  - Estimated round-trip cost: 0.00475
-  - Queue write allowed: False
-  - Broad daemon allowed: False
-  - Automation allowed: False
-  - Automated rerun allowed: False
-  - Live trading enabled: False
-- Weekly/canonical operator-pending consistency:
-  - Consistency status: ok
-  - Mismatches: []
-  - Queue write allowed: False
-  - Broad daemon allowed: False
-  - Automation allowed: False
-  - Automated rerun allowed: False
-  - Live trading enabled: False
+- Next observation window: None
 - Operator-pending consistency snapshot:
-  - Snapshot status: ready
+  - Snapshot status: missing_consistency
   - Snapshot freshness status: fresh
-  - Source status generated: 2026-06-24T15:32:59.047965+00:00
-  - Latest status generated: 2026-06-24T15:32:59.047965+00:00
-  - Consistency status: ok
+  - Source status generated: 2026-08-23T07:33:52.156533+00:00
+  - Latest status generated: 2026-08-23T07:33:52.156533+00:00
+  - Consistency status: missing
   - Mismatches: []
-  - Benchmark ID: CSI1000
-  - One-way turnover estimate: 0.791672
-  - Estimated round-trip cost: 0.00475
+  - Benchmark ID: None
+  - One-way turnover estimate: None
+  - Estimated round-trip cost: None
   - Queue write allowed: False
   - Broad daemon allowed: False
   - Automation allowed: False
@@ -86,36 +61,36 @@ Next action: repair_simulated_portfolio_construction
   - Live trading enabled: False
 
 ## Retrospective tracking
-- Tracking status: ok
-- Portfolio forward return: 0.01842
-- Matched position count: 72
-- Missing position count: 0
+- Tracking status: missing
+- Portfolio forward return: None
+- Matched position count: None
+- Missing position count: None
 
 ## Portfolio constraint hardening
-- Constraint status: pass
+- Constraint status: missing
 - Violations: []
 - Warnings: []
 
 ## Paper/live promotion readiness
-- Readiness status: ready_for_manual_approval
+- Readiness status: missing
 - Blockers: []
 - Warnings: []
-- Manual approval required: True
+- Manual approval required: None
 - Live trading enabled: False
 
 ## Small institutional simulation
-- Diagnosis status: blocked
-- Primary issue: drawdown_risk_too_high
-- Severity: high
-- Recommended run mode: bounded_matrix
+- Diagnosis status: missing
+- Primary issue: None
+- Severity: None
+- Recommended run mode: None
 - Automation allowed: False
 
 ## Simulated portfolio construction repair
-- Repair status: blocked_no_drawdown_safe_candidate
+- Repair status: blocked_missing_repair_evidence
 - Candidate count: 0
 - Recommended candidate: None
-- Best available max drawdown: -0.478256
-- Drawdown gap to limit: 0.128256
+- Best available max drawdown: None
+- Drawdown gap to limit: None
 - Automation allowed: False
 - Queue write allowed: False
 - Broad daemon allowed: False
@@ -123,43 +98,43 @@ Next action: repair_simulated_portfolio_construction
 - Live trading enabled: False
 
 ## Drawdown group diagnostic
-- Diagnostic status: blocked_no_group_under_drawdown_limit
-- Recommended dimension: holding_count
-- Recommended value: 50
-- Best max drawdown: -0.478256
-- Drawdown gap to limit: 0.128256
+- Diagnostic status: missing
+- Recommended dimension: None
+- Recommended value: None
+- Best max drawdown: None
+- Drawdown gap to limit: None
 - Automation allowed: False
 
 ## Drawdown blocker evidence
-- Evidence status: ready
-- Primary issue: drawdown_risk_too_high
-- Repair status: blocked_no_drawdown_safe_candidate
-- Candidate count: 0
-- Manual review dimension: holding_count
-- Manual review value: 50
-- Queue write allowed: False
-- Broad daemon allowed: False
-- Benchmark ID: CSI1000
-- Benchmark name: 中证1000
-- Tracking mode: metadata_only
-- One-way turnover estimate: 0.791672
-- Estimated round-trip cost: 0.00475
+- Evidence status: missing
+- Primary issue: None
+- Repair status: None
+- Candidate count: None
+- Manual review dimension: None
+- Manual review value: None
+- Queue write allowed: None
+- Broad daemon allowed: None
+- Benchmark ID: None
+- Benchmark name: None
+- Tracking mode: None
+- One-way turnover estimate: None
+- Estimated round-trip cost: None
 
 ## Repair blocker manual review
-- Review status: blocked_manual_review_required
-- Primary issue: drawdown_risk_too_high
-- Repair status: blocked_no_drawdown_safe_candidate
-- Candidate count: 0
-- Best available max drawdown: -0.478256
-- Drawdown gap to limit: 0.128256
-- Queue write allowed: False
-- Broad daemon allowed: False
-- Automation allowed: False
-- Manual decision: holding_count=50
-- Automated rerun allowed: False
+- Review status: missing
+- Primary issue: None
+- Repair status: None
+- Candidate count: None
+- Best available max drawdown: None
+- Drawdown gap to limit: None
+- Queue write allowed: None
+- Broad daemon allowed: None
+- Automation allowed: None
+- Manual decision: None=None
+- Automated rerun allowed: None
 
 ## Manual approval gate
-- Gate status: blocked_pending_manual_approval
+- Gate status: blocked_missing_manual_approval_evidence
 - Human approval present: False
 - Risk relaxation allowed: False
 - Queue write allowed: False
@@ -169,12 +144,12 @@ Next action: repair_simulated_portfolio_construction
 - Live trading enabled: False
 
 ## Operator approval summary
-- Summary status: blocked_pending_manual_approval
+- Summary status: blocked_missing_operator_approval_summary
 - Approval required: True
 - Human approval present: False
-- Required decision axis: holding_count=50
-- Primary blocker: drawdown_risk_too_high
-- Repair status: blocked_no_drawdown_safe_candidate
+- Required decision axis: None
+- Primary blocker: missing_operator_approval_evidence
+- Repair status: blocked_missing_repair_evidence
 - Candidate count: 0
 - Queue write allowed: False
 - Broad daemon allowed: False
@@ -183,9 +158,9 @@ Next action: repair_simulated_portfolio_construction
 - Live trading enabled: False
 
 ## Approval artifact consistency
-- Consistency status: ok
-- Primary blocker: drawdown_risk_too_high
-- Decision axis: holding_count=50
+- Consistency status: not_evaluated_missing_approval_evidence
+- Primary blocker: missing_operator_approval_evidence
+- Decision axis: None
 - Queue write allowed: False
 - Broad daemon allowed: False
 - Automation allowed: False
@@ -206,11 +181,11 @@ Next action: repair_simulated_portfolio_construction
 - Live trading enabled: False
 
 ## Operator decision handoff
-- Handoff status: awaiting_operator_decision
+- Handoff status: blocked_missing_operator_handoff
 - Intake status: missing
 - Decision type: None
-- Decision axis: holding_count=50
-- Primary blocker: drawdown_risk_too_high
+- Decision axis: None
+- Primary blocker: missing_operator_approval_evidence
 - Execution allowed: False
 - Separate execution plan required: False
 - Validation errors: []
@@ -221,13 +196,13 @@ Next action: repair_simulated_portfolio_construction
 - Live trading enabled: False
 
 ## Operator decision wait state
-- Wait-state status: awaiting_operator_decision
-- Primary blocker: drawdown_risk_too_high
-- Decision axis: holding_count=50
+- Wait-state status: not_waiting_on_operator_decision
+- Primary blocker: missing_operator_approval_evidence
+- Decision axis: None
 - Human approval present: False
 - Approval required: True
 - Intake status: missing
-- Handoff status: awaiting_operator_decision
+- Handoff status: blocked_missing_operator_handoff
 - Validation errors: []
 - Execution allowed: False
 - Separate execution plan required: False
@@ -238,17 +213,7 @@ Next action: repair_simulated_portfolio_construction
 - Live trading enabled: False
 
 ## Operator pending observation
-- Observation status: operator_pending
-- Primary issue: drawdown_risk_too_high
-- Manual approval status: blocked_pending_manual_approval
-- Benchmark ID: CSI1000
-- One-way turnover estimate: 0.791672
-- Estimated round-trip cost: 0.00475
-- Queue write allowed: False
-- Broad daemon allowed: False
-- Automation allowed: False
-- Automated rerun allowed: False
-- Live trading enabled: False
+- Observation status: missing
 
 ## Next phase policy
 - Target holdings: 50-100

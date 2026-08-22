@@ -1,4 +1,5 @@
 import time
+import re
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,7 @@ def test_dashboard_root_is_lightweight(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(webui_app, "env_file", lambda: env_path)
     monkeypatch.setattr(webui_app, "_quick_daemon_status", lambda: {"active": True, "label": "active", "detail": "test"})
     monkeypatch.setattr(webui_app, "_quick_latest_runs", lambda limit=5: [])
+    webui_app._OVERVIEW_CACHE.update({"key": None, "created_at": 0.0, "payload": None})
     monkeypatch.setattr(
         webui_app,
         "get_cached_health_metrics",
@@ -29,100 +31,60 @@ def test_dashboard_root_is_lightweight(monkeypatch, tmp_path: Path):
 
     assert response.status_code == 200
     assert elapsed < 1.0
-    assert "轻量首页" in response.text
-    assert "完整驾驶舱" in response.text
-    assert "direct_model" in response.text
+    assert "Champion 与当前暴露" in response.text
+    assert "数据健康" in response.text
+    assert "Legacy 研究参考" not in response.text
 
 
-def test_llm_usage_page_renders_24h_ledger_summary_and_chart(monkeypatch, tmp_path: Path):
-    artifacts = tmp_path / "artifacts"
-    artifacts.mkdir()
-    db_path = artifacts / "factor_lab.db"
-    db_path.write_text("", encoding="utf-8")
-    ledger = artifacts / "llm_usage_ledger.jsonl"
-    ledger.write_text(
-        '\n'.join([
-            '{"created_at_utc":"2026-04-28T00:00:00+00:00","success":true,"decision_type":"planner","model":"gpt-5.5","profile_name":"ai-continue","context_mode":"compact","estimated_user_prompt_tokens_4c":100,"usage":{"prompt_tokens":10,"completion_tokens":5,"total_tokens":15,"cached_tokens":7,"cache_creation_tokens":2,"uncached_prompt_tokens":3,"usage_source":"provider"}}',
-            '{"created_at_utc":"2026-04-28T00:01:00+00:00","success":false,"decision_type":"diagnostician","model":"gpt-5.5","profile_name":"nowcoding","context_mode":"compact","estimated_user_prompt_tokens_4c":200,"usage":{"prompt_tokens":null,"completion_tokens":null,"total_tokens":null,"usage_source":"missing"},"error_type":"http_error:403"}',
-            '{"created_at_utc":"2026-04-26T00:00:00+00:00","success":true,"decision_type":"old_agent","model":"old-model","profile_name":"old","context_mode":"compact","estimated_user_prompt_tokens_4c":999,"usage":{"prompt_tokens":900,"completion_tokens":99,"total_tokens":999,"usage_source":"provider"}}',
-        ]) + '\n',
-        encoding="utf-8",
+def test_llm_usage_page_redirects_without_reading_legacy_ledger(monkeypatch):
+    monkeypatch.setattr(
+        webui_app,
+        "_load_llm_usage_rows",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("legacy JSONL ledger must not be read")
+        ),
     )
-    monkeypatch.setattr(webui_app, "DB_PATH", db_path)
-    monkeypatch.setattr(webui_app, "_utcnow", lambda: webui_app.datetime(2026, 4, 28, 1, 0, tzinfo=webui_app.timezone.utc))
+
+    response = TestClient(webui_app.app).get("/llm-usage", follow_redirects=False)
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "/data-sources"
+
+
+def test_redirect_only_llm_usage_page_is_not_linked_from_navigation():
     client = TestClient(webui_app.app)
 
     response = client.get("/llm-usage")
 
     assert response.status_code == 200
-    assert "LLM Token 用量" in response.text
-    assert "最近 24h" in response.text
-    assert "2026-04-28 09:00" in response.text
-    assert "Asia/Shanghai" in response.text
-    assert "Token 趋势图" in response.text
-    assert "llm-usage-chart" in response.text
-    assert "08:00" in response.text
-    assert "total_tokens" in response.text
-    assert "cached_tokens" in response.text
-    assert "cache_creation_tokens" in response.text
-    assert "cached_tokens_missing_rows" in response.text
-    assert "cache_creation_tokens_missing_rows" in response.text
-    assert "uncached_prompt_tokens_missing_rows" in response.text
-    assert "estimated_cost_usd" in response.text
-    assert "cost_usd" in response.text
-    assert "按 Provider / Profile" in response.text
-    assert "ai-continue" in response.text
-    assert "$0.000066" in response.text
-    assert "7" in response.text
-    assert "15" in response.text
-    assert "planner" in response.text
-    assert "diagnostician" in response.text
-    assert "http_error:403" in response.text
-    assert "old_agent" not in response.text
-    assert "old-model" not in response.text
+    assert 'href="/llm-usage"' not in response.text
 
 
-def test_llm_usage_page_is_linked_from_navigation():
-    client = TestClient(webui_app.app)
-
-    response = client.get("/llm-usage")
-
-    assert response.status_code == 200
-    assert 'href="/llm-usage"' in response.text
-
-
-def test_research_quality_page_renders_summary_and_navigation(monkeypatch):
+def test_research_quality_page_redirects_before_legacy_summary(monkeypatch):
     monkeypatch.setattr(
         webui_app,
         "build_research_quality_summary",
-        lambda: {
-            "gate_decisions": {"total": 1, "by_decision": {"allow": 1}, "by_budget_bucket": {}, "top_reasons": []},
-            "data_coverage": {"summary": {"ready_template_count": 2, "blocked_template_count": 1, "missing_fields": ["debt_to_asset"]}},
-            "value_research_routes": {"ready_count": 3, "blocked_count": 1, "blocked": [{"route_id": "value_trap_exclusion", "missing_fields": ["debt_to_asset"]}]},
-        },
+        lambda: (_ for _ in ()).throw(AssertionError("legacy research summary must not run")),
     )
     client = TestClient(webui_app.app)
 
-    response = client.get("/research-quality")
+    response = client.get("/research-quality", follow_redirects=False)
 
-    assert response.status_code == 200
-    assert "研究质量" in response.text
-    assert "Gate decisions" in response.text
-    assert "value_trap_exclusion" in response.text
-    assert 'href="/research-quality"' in response.text
+    assert response.status_code == 307
+    assert response.headers["location"] == "/research"
 
 
 def test_base_template_has_responsive_zoom_and_mobile_layout_rules():
-    template = (Path(__file__).resolve().parents[1] / "src" / "factor_lab" / "webui_templates" / "base.html").read_text(encoding="utf-8")
+    template = (Path(__file__).resolve().parents[1] / "src" / "factor_lab" / "webui_static" / "webui.css").read_text(encoding="utf-8")
 
     assert "@media (max-width: 900px)" in template
     assert "grid-template-columns: 1fr" in template
-    assert "overflow-wrap: anywhere" in template
+    assert "overflow-x: auto" in template
     assert "min-width: 0" in template
-    assert "max-width: 100%" in template
+    assert ".table-wrap" in template
 
 
-def test_control_page_is_read_only(monkeypatch, tmp_path: Path):
+def test_control_page_redirects_before_legacy_runtime_state(monkeypatch, tmp_path: Path):
     env_path = tmp_path / ".env"
     env_path.write_text("FACTOR_LAB_DECISION_PROVIDER=direct_model\n", encoding="utf-8")
     monkeypatch.setattr(webui_app, "env_file", lambda: env_path)
@@ -149,10 +111,77 @@ def test_control_page_is_read_only(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(webui_app, "_quick_heartbeat", lambda: {"timestamp": "now"})
     client = TestClient(webui_app.app)
 
-    response = client.get("/control")
+    response = client.get("/control", follow_redirects=False)
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "/runs"
+
+
+def test_primary_navigation_has_exactly_five_grouped_entries():
+    response = TestClient(webui_app.app).get("/")
+    nav = re.search(r'<nav class="primary-nav"[\s\S]*?</nav>', response.text)
 
     assert response.status_code == 200
-    assert "Read-only Control" in response.text
-    assert "Provider" in response.text
-    assert "Queue" in response.text
+    assert nav is not None
+    assert nav.group(0).count("<a ") == 5
+    for label, href in [("总览", "/"), ("研究", "/research"), ("组合", "/portfolios"), ("运行", "/runs"), ("设置", "/data-sources")]:
+        assert label in nav.group(0)
+        assert f'href="{href}"' in nav.group(0)
+
+
+def test_unprojected_secondary_page_redirects_to_active_primary_group():
+    client = TestClient(webui_app.app)
+    redirect = client.get("/robustness", follow_redirects=False)
+    response = client.get("/robustness")
+
+    assert redirect.status_code == 307
+    assert redirect.headers["location"] == "/research"
+    assert response.status_code == 200
+    assert re.search(r'href="/research" class="nav-item active"', response.text)
+    assert re.search(
+        r'<nav class="mobile-nav"[\s\S]*?href="/research" class="active" aria-current="page"',
+        response.text,
+    )
+    assert 'class="secondary-nav"' in response.text
+    assert "研究总览" in response.text
+    assert 'href="/research#hypothesis-lineage"' in response.text
+    assert 'href="/research#trial-budget"' in response.text
+    assert 'href="/research#experiments"' in response.text
+    assert 'href="/research#recovery"' in response.text
+    assert "实验与否证" in response.text
+    for href in ["/factors", "/candidates", "/families", "/candidate-clusters", "/research-quality"]:
+        assert f'href="{href}"' not in response.text
+
+
+def test_static_css_and_legacy_dashboard_redirects():
+    client = TestClient(webui_app.app)
+
+    css = client.get("/static/webui.css")
+    assert css.status_code == 200
+    assert "text/css" in css.headers["content-type"]
+    for path in ["/cockpit", "/dashboard-full"]:
+        response = client.get(path, follow_redirects=False)
+        assert response.status_code == 307
+        assert response.headers["location"] == "/"
+
+
+def test_ops_actions_are_post_only(monkeypatch):
+    calls = []
+    monkeypatch.setattr(webui_app, "trigger_script", lambda script: calls.append(script) or {"script": script, "returncode": 0, "stdout": "ok", "stderr": ""})
+    client = TestClient(webui_app.app)
+
+    assert client.get("/ops/run/workflow").status_code == 405
+    response = client.post("/ops/run/workflow")
+    assert response.status_code == 410
+    assert calls == []
+    assert client.post("/ops/run/not-a-target").status_code == 404
+
+
+def test_model_settings_excludes_removed_hermes_provider():
+    response = TestClient(webui_app.app).get("/settings")
+
+    assert response.status_code == 200
     assert "direct_model" in response.text
+    assert "heuristic" in response.text
+    assert "mock" in response.text
+    assert "hermes_native_gateway" not in response.text

@@ -135,6 +135,13 @@ def _run_data_steward_hook(*, task_id: str | None, task_type: str, payload: dict
 
 
 def main() -> int:
+    from factor_lab.research_os.legacy_entrypoint import retired_legacy_entrypoint
+
+    # Retained only so old imports and numerical regression fixtures continue
+    # to work.  The SQLite/JSON worker is no longer an executable research
+    # path; all new trials must enter the PostgreSQL lifetime ledger.
+    return retired_legacy_entrypoint("scripts/run_research_task_worker.py")
+
     if len(sys.argv) != 2:
         print(json.dumps({"ok": False, "error": "usage: run_research_task_worker.py <task-json>"}, ensure_ascii=False))
         return 2

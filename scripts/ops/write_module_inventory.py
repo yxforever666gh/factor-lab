@@ -99,11 +99,11 @@ def module_name_for_path(rel: Path) -> str | None:
 
 
 def test_guess_for(rel: Path, root: Path) -> str | None:
-    if not str(rel).startswith("src/factor_lab/") or rel.name == "__init__.py":
+    if not rel.as_posix().startswith("src/factor_lab/") or rel.name == "__init__.py":
         return None
     candidate = root / "tests" / f"test_{rel.stem}.py"
     if candidate.exists():
-        return str(candidate.relative_to(root))
+        return candidate.relative_to(root).as_posix()
     return None
 
 
@@ -111,7 +111,7 @@ def inventory_for_file(root: Path, path: Path) -> dict[str, Any]:
     rel = path.relative_to(root)
     text = path.read_text(encoding="utf-8", errors="ignore")
     return {
-        "path": str(rel),
+        "path": rel.as_posix(),
         "category": categorize_path(rel),
         "line_count": len(text.splitlines()),
         "imports": extract_imports(text),
@@ -142,7 +142,7 @@ def build_inventory(root: str | Path) -> dict[str, Any]:
     categories = Counter(row["category"] for row in rows)
     summary = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "root": str(root),
+        "root": root.as_posix(),
         "file_count": len(rows),
         "total_lines": sum(int(row["line_count"]) for row in rows),
         "categories": dict(sorted(categories.items())),

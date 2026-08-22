@@ -16,7 +16,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = PROJECT_ROOT / "artifacts"
 DB_PATH = ARTIFACTS / "factor_lab.db"
-ROUTES = ["/", "/health", "/runs", "/agents", "/settings", "/llm", "/control"]
+ROUTES = ["/", "/research", "/portfolios", "/runs", "/data-sources", "/health", "/settings", "/llm", "/control"]
 
 
 @dataclass

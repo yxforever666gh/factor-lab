@@ -7,7 +7,8 @@ from typing import Any
 
 from factor_lab.workflow_admission_adapter import enforce_workflow_admission
 
-CONFIG_PATH = Path("artifacts/earnings_event_controlled_probe/high_express_diluted_roe_yoy_probe.json")
+ROOT = Path(__file__).resolve().parents[1]
+CONFIG_PATH = ROOT / "configs" / "earnings_event_controlled_probe.json"
 OUT_JSON = Path("artifacts/earnings_event_controlled_probe/admission_dry_run_after_hardening.json")
 OUT_MD = Path("artifacts/earnings_event_controlled_probe/admission_dry_run_after_hardening.md")
 

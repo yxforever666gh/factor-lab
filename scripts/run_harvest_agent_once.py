@@ -298,14 +298,5 @@ if __name__ == '__main__':
     ap.add_argument('--cycles', type=int, default=1)
     ap.add_argument('--sleep-seconds', type=float, default=0.0)
     args = ap.parse_args()
-    if args.cycles > 1:
-        out = run_harvest_agent_loop(
-            dry_run=args.dry_run,
-            allow_controlled_execution=args.allow_controlled_execution,
-            max_experiments=args.max_experiments,
-            cycles=args.cycles,
-            sleep_seconds=args.sleep_seconds,
-        )
-    else:
-        out = run_harvest_agent_once(dry_run=args.dry_run, allow_controlled_execution=args.allow_controlled_execution, max_experiments=args.max_experiments)
-    print(json.dumps(out, ensure_ascii=False, indent=2))
+    from factor_lab.research_os.legacy_entrypoint import retired_legacy_entrypoint
+    raise SystemExit(retired_legacy_entrypoint("scripts/run_harvest_agent_once.py"))

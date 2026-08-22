@@ -26,9 +26,10 @@ def test_run_harvest_strategy_governor_cli_dry_run_no_pointer(tmp_path):
         stderr=subprocess.PIPE,
     )
 
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 2, result.stderr
     payload = json.loads(result.stdout)
-    assert payload["strategy_status"] == "dry_run"
+    assert payload["status"] == "retired_legacy_entrypoint"
+    assert payload["candidate_written"] is False
     assert not (tmp_path / "artifacts/harvest_agent/latest_strategy_run.json").exists()
 
 
@@ -41,7 +42,8 @@ def test_run_harvest_strategy_governor_cli_write_creates_pointer(tmp_path):
         stderr=subprocess.PIPE,
     )
 
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 2, result.stderr
     payload = json.loads(result.stdout)
-    assert payload["strategy_status"] == "written"
-    assert (tmp_path / "artifacts/harvest_agent/latest_strategy_run.json").exists()
+    assert payload["status"] == "retired_legacy_entrypoint"
+    assert payload["candidate_written"] is False
+    assert not (tmp_path / "artifacts/harvest_agent/latest_strategy_run.json").exists()

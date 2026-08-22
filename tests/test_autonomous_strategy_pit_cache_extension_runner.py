@@ -2,8 +2,18 @@ import os
 from pathlib import Path
 
 import pandas as pd
+import pytest
+
+import factor_lab.autonomous_strategy_pit_cache_extension_runner as pit_runner_module
 
 from factor_lab.autonomous_strategy_pit_cache_extension_runner import run_pit_cache_extension
+
+
+@pytest.fixture(autouse=True)
+def _isolate_workspace_env_file(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Token presence is part of each test input; unrelated values from the
+    # developer workspace .env must not survive into the rest of the suite.
+    monkeypatch.setattr(pit_runner_module, "load_env_file", lambda: None)
 
 
 class FakeProvider:

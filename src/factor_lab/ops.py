@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -24,7 +25,7 @@ def latest_task_states(limit: int = 10) -> list[dict[str, Any]]:
 def trigger_script(script_relative_path: str) -> dict[str, Any]:
     script_path = ROOT / script_relative_path
     result = subprocess.run(
-        ["python3", str(script_path)],
+        [sys.executable, str(script_path)],
         cwd=ROOT,
         capture_output=True,
         text=True,

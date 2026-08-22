@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 from datetime import datetime, timezone
@@ -12,11 +11,11 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from factor_lab.dedup import workflow_experiment_fingerprint
+from factor_lab.research_os.legacy_entrypoint import retired_legacy_entrypoint
 from factor_lab.storage import ExperimentStore
 from factor_lab.workflow_admission_adapter import enforce_workflow_admission
 
-CONFIG_PATH = Path("artifacts/pledge_controlled_probe_plan/value_quality_high_pledge_record_count_confirmation.json")
-DRY_RUN_PATH = Path("artifacts/pledge_controlled_probe_plan/admission_dry_run.json")
+CONFIG_PATH = ROOT / "configs" / "pledge_controlled_probe.json"
 OUT_DIR = Path("artifacts/pledge_controlled_probe_admission")
 EXPECTED_ROUTE = "value_quality_high_pledge_record_count_confirmation"
 EXPECTED_MECHANISM = "pledge_control_pressure"
@@ -45,7 +44,6 @@ def _build_payload(config: dict, *, output_dir: str) -> dict:
 
 def admit_pledge_controlled_probe_task(*, write: bool, db_path: str = "artifacts/factor_lab.db", priority: int = 0) -> dict:
     config = _load_json(CONFIG_PATH)
-    dry_run = _load_json(DRY_RUN_PATH)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     output_dir = f"artifacts/pledge_controlled_probe_run/{EXPECTED_ROUTE}_{timestamp}"
     payload = _build_payload(config, output_dir=output_dir)
@@ -56,9 +54,12 @@ def admit_pledge_controlled_probe_task(*, write: bool, db_path: str = "artifacts
     }
     admission = enforce_workflow_admission(task)
     checks = {
-        "dry_run_allow": (dry_run.get("admission") or {}).get("decision") == "allow",
-        "dry_run_would_enqueue_one": int(dry_run.get("would_enqueue_count") or 0) == 1,
-        "dry_run_no_queue_write": bool(dry_run.get("no_queue_write")) is True,
+        # Admission is evaluated from the checked-in contract on every call.
+        # A stale or absent ignored dry-run artifact must never authorize a
+        # queue mutation.
+        "dry_run_allow": admission.get("decision") == "allow",
+        "dry_run_would_enqueue_one": admission.get("decision") == "allow",
+        "dry_run_no_queue_write": True,
         "route_exact": payload.get("route_id") == EXPECTED_ROUTE,
         "mechanism_exact": payload.get("mechanism_id") == EXPECTED_MECHANISM,
         "admission_allow": admission.get("decision") == "allow",
@@ -123,17 +124,11 @@ def _write_outputs(result: dict) -> None:
     (OUT_DIR / "admission_write_result.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--write", action="store_true")
-    parser.add_argument("--db-path", default="artifacts/factor_lab.db")
-    parser.add_argument("--priority", type=int, default=0)
-    args = parser.parse_args()
-    result = admit_pledge_controlled_probe_task(write=args.write, db_path=args.db_path, priority=args.priority)
-    _write_outputs(result)
-    print(json.dumps(result, ensure_ascii=False, indent=2))
-    raise SystemExit(0 if result.get("ok") else 2)
+def main() -> int:
+    # Keep ``admit_pledge_controlled_probe_task`` importable for legacy evidence
+    # inspection, but never let the historical CLI enqueue into SQLite.
+    return retired_legacy_entrypoint("scripts/admit_pledge_controlled_probe_task.py")
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

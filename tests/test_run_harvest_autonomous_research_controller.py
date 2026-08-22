@@ -37,9 +37,8 @@ def test_run_harvest_autonomous_research_controller_cli_dry_run_json(tmp_path):
         stderr=subprocess.PIPE,
     )
 
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 2, result.stderr
     payload = json.loads(result.stdout)
-    assert payload["controller_status"] == "complete"
-    assert payload["stop_reason"] == "missing_v3_next_cycle_plan"
-    assert payload["started_systemd_daemon"] is False
-    assert payload["scheduled_timer_enabled"] is False
+    assert payload["status"] == "retired_legacy_entrypoint"
+    assert payload["candidate_written"] is False
+    assert not (tmp_path / "artifacts").exists()

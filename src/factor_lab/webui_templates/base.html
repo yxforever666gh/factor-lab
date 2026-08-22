@@ -3,126 +3,56 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Factor Lab 控制台 - {{ title }}</title>
+  <meta name="description" content="Factor Lab 本地量化研究控制台">
+  <title>{{ title }} · Factor Lab</title>
   <link rel="icon" href="data:,">
-  <style>
-    :root {
-      --bg: #0b1020;
-      --panel: #141b34;
-      --panel-2: #1b2444;
-      --text: #ebf0ff;
-      --muted: #9aa7d1;
-      --good: #3ddc97;
-      --bad: #ff6b6b;
-      --warn: #ffd166;
-      --link: #84a8ff;
-      --border: #2b3765;
-    }
-    * { box-sizing: border-box; }
-    html { overflow-x: hidden; }
-    body { margin: 0; font-family: Inter, Arial, sans-serif; background: var(--bg); color: var(--text); overflow-x: hidden; }
-    a { color: var(--link); text-decoration: none; overflow-wrap: anywhere; }
-    input, select, textarea, button { max-width: 100%; }
-    img, svg, canvas { max-width: 100%; }
-    .layout { display: grid; grid-template-columns: minmax(210px, 250px) minmax(0, 1fr); min-height: 100vh; max-width: 100%; }
-    .sidebar { background: #0f1530; border-right: 1px solid var(--border); padding: 24px 18px; min-width: 0; }
-    .sidebar h1 { font-size: 20px; margin: 0 0 20px; overflow-wrap: anywhere; }
-    .nav { min-width: 0; }
-    .nav a { display: block; padding: 10px 12px; border-radius: 10px; color: var(--text); margin-bottom: 8px; background: transparent; overflow-wrap: anywhere; }
-    .nav a:hover { background: var(--panel); }
-    .content { padding: 28px; min-width: 0; max-width: 100%; }
-    .grid { display: grid; gap: 18px; min-width: 0; }
-    .grid.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .grid.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 18px; min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
-    .card h2, .card h3 { margin-top: 0; overflow-wrap: anywhere; }
-    .muted { color: var(--muted); }
-    .good { color: var(--good); }
-    .bad { color: var(--bad); }
-    .warn { color: var(--warn); }
-    table { width: 100%; border-collapse: collapse; font-size: 14px; table-layout: auto; }
-    th, td { padding: 10px 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
-    th { color: var(--muted); font-weight: 600; white-space: nowrap; }
-    tr:last-child td { border-bottom: none; }
-    pre { white-space: pre-wrap; word-break: break-word; background: var(--panel-2); border-radius: 12px; padding: 12px; border: 1px solid var(--border); max-width: 100%; }
-    .table-wrap { width: 100%; max-width: 100%; overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
-    .table-wrap table { min-width: 720px; }
-    .text-break { word-break: break-word; overflow-wrap: anywhere; }
-    .text-nowrap { white-space: nowrap; }
-    .num { white-space: nowrap; font-variant-numeric: tabular-nums; }
-    .col-strategy { min-width: 320px; }
-    .col-run { min-width: 110px; }
-    .pill { display: inline-block; padding: 4px 10px; border-radius: 999px; font-size: 12px; background: var(--panel-2); border: 1px solid var(--border); }
-    .pill.good { color: var(--good); }
-    .pill.bad { color: var(--bad); }
-    .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 20px; min-width: 0; flex-wrap: wrap; }
-    .topbar h1 { overflow-wrap: anywhere; }
-    .segmented { display: inline-flex; gap: 8px; padding: 6px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 14px; max-width: 100%; overflow-x: auto; }
-    .segmented button { border: 0; background: transparent; color: var(--muted); padding: 8px 14px; border-radius: 10px; cursor: pointer; font-weight: 600; white-space: nowrap; }
-    .segmented button.active { background: var(--link); color: #08101f; }
-    .segment-pane { display: none; }
-    .segment-pane.active { display: block; }
-    @media (max-width: 1200px) {
-      .grid.cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    }
-    @media (max-width: 900px) {
-      .layout { grid-template-columns: 1fr; }
-      .sidebar { border-right: 0; border-bottom: 1px solid var(--border); padding: 16px; }
-      .sidebar h1 { margin-bottom: 8px; }
-      .nav { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
-      .nav a { flex: 0 0 auto; margin-bottom: 0; white-space: nowrap; }
-      .content { padding: 18px; }
-      .grid.cols-2, .grid.cols-3 { grid-template-columns: 1fr; }
-      .card { padding: 14px; border-radius: 14px; }
-      table { font-size: 13px; }
-      th, td { padding: 8px 6px; }
-    }
-    @media (max-width: 520px) {
-      .content { padding: 12px; }
-      .topbar h1 { font-size: 22px !important; }
-      .table-wrap table { min-width: 640px; }
-    }
-  </style>
+  <link rel="stylesheet" href="/static/webui.css?v=research-os-v1">
 </head>
 <body>
-  <div class="layout">
+  <div class="app-shell">
     <aside class="sidebar">
-      <h1>Factor Lab</h1>
-      <div class="muted" style="margin-bottom:16px;">本地研究控制台</div>
-      <nav class="nav">
-        <a href="/">总览</a>
-        <a href="/cockpit">驾驶舱</a>
-        <a href="/health">健康度</a>
-        <a href="/research">研究队列</a>
-        <a href="/research-quality">研究质量</a>
-        <a href="/weekly">周报</a>
-        <a href="/runs">运行记录</a>
-        <a href="/exposure">Exposure Track</a>
-        <a href="/factors">因子</a>
-        <a href="/candidates">候选榜单</a>
-        <a href="/families">候选 Family</a>
-        <a href="/candidate-clusters">候选簇</a>
-        <a href="/robustness">稳健性</a>
-        <a href="/portfolios">组合</a>
-        <a href="/paper-portfolio">纸面组合</a>
-        <a href="/approved-universe">Approved Universe</a>
-        <a href="/settings">大模型设置</a>
-        <a href="/data-sources">数据源设置</a>
-        <a href="/agents">Agent 设置</a>
-        <a href="/llm">LLM</a>
-        <a href="/llm-usage">Token 用量</a>
-        <a href="/ops">操作</a>
-        <a href="/control">控制</a>
+      <a class="brand" href="/" aria-label="Factor Lab 首页">
+        <span class="brand-mark">F</span>
+        <span><strong>Factor Lab</strong><small>量化研究工作台</small></span>
+      </a>
+      <nav class="primary-nav" aria-label="主导航">
+        {% for item in primary_nav %}
+        <a href="{{ item.href }}" class="nav-item{% if current_section == item.id %} active{% endif %}"{% if current_section == item.id %} aria-current="page"{% endif %}>
+          <span class="nav-icon" aria-hidden="true">{{ item.icon }}</span><span>{{ item.label }}</span>
+        </a>
+        {% endfor %}
       </nav>
+      <div class="sidebar-foot"><span class="status-dot"></span><span>本地研究环境</span></div>
     </aside>
-    <main class="content">
-      <div class="topbar">
-        <div>
-          <h1 style="margin:0; font-size:28px;">{{ title }}</h1>
-        </div>
-      </div>
-      {% block content %}{% endblock %}
-    </main>
+
+    <div class="workspace">
+      <header class="mobile-header">
+        <a class="brand compact" href="/"><span class="brand-mark">F</span><strong>Factor Lab</strong></a>
+        <nav class="mobile-nav" aria-label="移动端主导航">
+          {% for item in primary_nav %}<a href="{{ item.href }}" class="{% if current_section == item.id %}active{% endif %}"{% if current_section == item.id %} aria-current="page"{% endif %}>{{ item.label }}</a>{% endfor %}
+        </nav>
+      </header>
+
+      <main class="content">
+        <header class="page-header">
+          <div>
+            {% if back_href %}<a class="back-link" href="{{ back_href }}">← {{ back_label or '返回' }}</a>{% endif %}
+            <h1>{{ title }}</h1>
+            {% if page_subtitle %}<p>{{ page_subtitle }}</p>{% endif %}
+          </div>
+        </header>
+
+        {% if secondary_nav %}
+        <nav class="secondary-nav" aria-label="{{ title }}子导航">
+          {% for item in secondary_nav %}
+          <a href="{{ item.href }}" class="{% if current_page == item.id %}active{% endif %}"{% if current_page == item.id %} aria-current="page"{% endif %}>{{ item.label }}</a>
+          {% endfor %}
+        </nav>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+      </main>
+    </div>
   </div>
 </body>
 </html>

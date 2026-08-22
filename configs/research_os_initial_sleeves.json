@@ -1,0 +1,193 @@
+{
+  "schema_version": "research-os/sleeve-roster/v1",
+  "roster_name": "a-share-initial-mechanism-sleeves-v1",
+  "promotion_policy": "authoritative_experiment_only",
+  "entries": [
+    {
+      "representative_priority": 10,
+      "registration_status": "registered_research_only",
+      "sleeve": {
+        "sleeve_id": "value_quality_v1",
+        "name": "价值质量",
+        "mechanism": "低估值提供均值回归空间，并用低波动作为盈利稳定性的保守可交易代理；信号仅使用决策时点可见的估值、价格风险和 PIT 行业/规模暴露。",
+        "factor_ids": ["earnings_yield", "book_to_price", "stability_proxy"],
+        "signal_expression": {
+          "schema_version": "research-os/factor-dsl/v1",
+          "output_id": "final_rank",
+          "nodes": [
+            {"id": "one", "op": "constant", "value": 1.0},
+            {"id": "pe", "op": "field", "field": "pe"},
+            {"id": "earnings_yield", "op": "divide", "left": "one", "right": "pe"},
+            {"id": "ey_winsor", "op": "winsorize", "input": "earnings_yield", "lower_quantile": 0.01, "upper_quantile": 0.99},
+            {"id": "ey_rank", "op": "rank", "input": "ey_winsor"},
+            {"id": "pb", "op": "field", "field": "pb"},
+            {"id": "book_to_price", "op": "divide", "left": "one", "right": "pb"},
+            {"id": "bp_winsor", "op": "winsorize", "input": "book_to_price", "lower_quantile": 0.01, "upper_quantile": 0.99},
+            {"id": "bp_rank", "op": "rank", "input": "bp_winsor"},
+            {"id": "vol", "op": "field", "field": "volatility_20"},
+            {"id": "stable", "op": "negate", "input": "vol"},
+            {"id": "stable_rank", "op": "rank", "input": "stable"},
+            {"id": "value_sum", "op": "add", "left": "ey_rank", "right": "bp_rank"},
+            {"id": "composite", "op": "add", "left": "value_sum", "right": "stable_rank"},
+            {"id": "size", "op": "field", "field": "log_market_cap"},
+            {"id": "industry", "op": "field", "field": "industry"},
+            {"id": "neutral", "op": "neutralize", "input": "composite", "exposures": ["size", "industry"], "categorical_exposures": ["industry"]},
+            {"id": "final_rank", "op": "rank", "input": "neutral"}
+          ]
+        },
+        "signal_field_registry": [
+          {"name": "pe", "value_type": "numeric", "role": "feature", "availability": "close", "minimum_lag_sessions": 0, "available_at_column": "daily_basic_available_at"},
+          {"name": "pb", "value_type": "numeric", "role": "feature", "availability": "close", "minimum_lag_sessions": 0, "available_at_column": "daily_basic_available_at"},
+          {"name": "volatility_20", "value_type": "numeric", "role": "feature", "availability": "close", "minimum_lag_sessions": 0, "available_at_column": "daily_available_at"},
+          {"name": "log_market_cap", "value_type": "numeric", "role": "feature", "availability": "close", "minimum_lag_sessions": 0, "available_at_column": "size_available_at"},
+          {"name": "industry", "value_type": "categorical", "role": "feature", "availability": "close", "minimum_lag_sessions": 0, "available_at_column": "industry_available_at"}
+        ],
+        "cluster_id": "mechanism-value-quality",
+        "maximum_weight": 0.35,
+        "long_only": true,
+        "expected_regimes": ["估值分化较高", "流动性正常", "盈利预期不过度下修"],
+        "falsification_criteria": [
+          "拼接 outer-OOS 成本后主动收益不为正",
+          "估值腿和稳定性腿均不能在至少三个 outer 年度保持方向",
+          "在 PIT 行业和规模中性后信号消失"
+        ]
+      }
+    },
+    {
+      "representative_priority": 20,
+      "registration_status": "registered_research_only",
+      "sleeve": {
+        "sleeve_id": "low_risk_defensive_v1",
+        "name": "低风险防御",
+        "mechanism": "低波动异象与交易流动性缓冲可能在风险厌恶阶段提供更稳定的主动收益；信号对 PIT 行业和规模暴露做横截面中性化。",
+        "factor_ids": ["low_volatility", "liquidity_resilience"],
+        "signal_expression": {
+          "schema_version": "research-os/factor-dsl/v1",
+          "output_id": "final_rank",
+          "nodes": [
+            {"id": "vol", "op": "field", "field": "volatility_20"},
+            {"id": "low_vol", "op": "negate", "input": "vol"},
+            {"id": "low_vol_rank", "op": "rank", "input": "low_vol"},
+            {"id": "amount", "op": "field", "field": "amount_cny"},
+            {"id": "log_amount", "op": "log", "input": "amount"},
+            {"id": "liquidity_rank", "op": "rank", "input": "log_amount"},
+            {"id": "composite", "op": "add", "left": "low_vol_rank", "right": "liquidity_rank"},
+            {"id": "size", "op": "field", "field": "log_market_cap"},
+            {"id": "industry", "op": "field", "field": "industry"},
+            {"id": "neutral", "op": "neutralize", "input": "composite", "exposures": ["size", "industry"], "categorical_exposures": ["industry"]},
+            {"id": "final_rank", "op": "rank", "input": "neutral"}
+          ]
+        },
+        "signal_field_registry": [
+          {"name": "volatility_20", "value_type": "numeric", "role": "feature", "availability": "close", "minimum_lag_sessions": 0, "available_at_column": "daily_available_at"},
+          {"name": "amount_cny", "value_type": "numeric", "role": "feature", "availability": "close", "minimum_lag_sessions": 0, "available_at_column": "daily_available_at"},
+          {"name": "log_market_cap", "value_type": "numeric", "role": "feature", "availability": "close", "minimum_lag_sessions": 0, "available_at_column": "size_available_at"},
+          {"name": "industry", "value_type": "categorical", "role": "feature", "availability": "close", "minimum_lag_sessions": 0, "available_at_column": "industry_available_at"}
+        ],
+        "cluster_id": "mechanism-low-risk-defensive",
+        "maximum_weight": 0.35,
+        "long_only": true,
+        "expected_regimes": ["高波动", "风险偏好下降", "市场宽度收缩"],
+        "falsification_criteria": [
+          "拼接 outer-OOS 净 Sharpe 低于硬门槛",
+          "主动回撤超过 25% 或容量违规不为零",
+          "低波动腿在三个以上 outer 年度方向不稳定"
+        ]
+      }
+    },
+    {
+      "representative_priority": 30,
+      "registration_status": "registered_research_only",
+      "sleeve": {
+        "sleeve_id": "medium_term_trend_v1",
+        "name": "中期趋势",
+        "mechanism": "信息扩散与机构调仓可能令 12-1 和 6-1 月价格趋势延续；跳过最近约一个交易月以降低短期反转污染，并对 PIT 行业和规模暴露中性化。",
+        "factor_ids": ["momentum_12_1", "momentum_6_1"],
+        "signal_expression": {
+          "schema_version": "research-os/factor-dsl/v1",
+          "output_id": "final_rank",
+          "nodes": [
+            {"id": "close", "op": "field", "field": "close_adj"},
+            {"id": "close_21", "op": "lag", "input": "close", "periods": 21},
+            {"id": "close_126", "op": "lag", "input": "close", "periods": 126},
+            {"id": "close_252", "op": "lag", "input": "close", "periods": 252},
+            {"id": "one", "op": "constant", "value": 1.0},
+            {"id": "ratio_12_1", "op": "divide", "left": "close_21", "right": "close_252"},
+            {"id": "momentum_12_1", "op": "subtract", "left": "ratio_12_1", "right": "one"},
+            {"id": "rank_12_1", "op": "rank", "input": "momentum_12_1"},
+            {"id": "ratio_6_1", "op": "divide", "left": "close_21", "right": "close_126"},
+            {"id": "momentum_6_1", "op": "subtract", "left": "ratio_6_1", "right": "one"},
+            {"id": "rank_6_1", "op": "rank", "input": "momentum_6_1"},
+            {"id": "composite", "op": "add", "left": "rank_12_1", "right": "rank_6_1"},
+            {"id": "size", "op": "field", "field": "log_market_cap"},
+            {"id": "industry", "op": "field", "field": "industry"},
+            {"id": "neutral", "op": "neutralize", "input": "composite", "exposures": ["size", "industry"], "categorical_exposures": ["industry"]},
+            {"id": "final_rank", "op": "rank", "input": "neutral"}
+          ]
+        },
+        "signal_field_registry": [
+          {"name": "close_adj", "value_type": "numeric", "role": "feature", "availability": "close", "minimum_lag_sessions": 0, "available_at_column": "daily_available_at"},
+          {"name": "log_market_cap", "value_type": "numeric", "role": "feature", "availability": "close", "minimum_lag_sessions": 0, "available_at_column": "size_available_at"},
+          {"name": "industry", "value_type": "categorical", "role": "feature", "availability": "close", "minimum_lag_sessions": 0, "available_at_column": "industry_available_at"}
+        ],
+        "cluster_id": "mechanism-medium-term-trend",
+        "maximum_weight": 0.35,
+        "long_only": true,
+        "expected_regimes": ["趋势扩散", "横截面离散度较高", "流动性正常"],
+        "falsification_criteria": [
+          "12-1 与 6-1 两条预注册腿在 outer-OOS 均不能提供正主动收益",
+          "成本后主动 IR 低于 0.5",
+          "至少三个 outer 年度为正的要求未满足"
+        ]
+      }
+    },
+    {
+      "representative_priority": 40,
+      "registration_status": "registered_research_only",
+      "sleeve": {
+        "sleeve_id": "reversal_liquidity_v1",
+        "name": "反转/流动性",
+        "mechanism": "短期价格冲击在换手回落时可能过度反应并均值回归；组合使用滞后一日到六日的反转和 20 日换手均值，且对 PIT 行业和规模暴露中性化。",
+        "factor_ids": ["short_term_reversal", "turnover_reversal"],
+        "signal_expression": {
+          "schema_version": "research-os/factor-dsl/v1",
+          "output_id": "final_rank",
+          "nodes": [
+            {"id": "close", "op": "field", "field": "close_adj"},
+            {"id": "close_1", "op": "lag", "input": "close", "periods": 1},
+            {"id": "close_6", "op": "lag", "input": "close", "periods": 6},
+            {"id": "one", "op": "constant", "value": 1.0},
+            {"id": "ratio_5d", "op": "divide", "left": "close_1", "right": "close_6"},
+            {"id": "return_5d", "op": "subtract", "left": "ratio_5d", "right": "one"},
+            {"id": "reversal", "op": "negate", "input": "return_5d"},
+            {"id": "reversal_rank", "op": "rank", "input": "reversal"},
+            {"id": "turnover", "op": "field", "field": "turnover_rate"},
+            {"id": "turnover_20", "op": "rolling_mean", "input": "turnover", "window": 20, "min_periods": 15},
+            {"id": "low_turnover", "op": "negate", "input": "turnover_20"},
+            {"id": "low_turnover_rank", "op": "rank", "input": "low_turnover"},
+            {"id": "composite", "op": "add", "left": "reversal_rank", "right": "low_turnover_rank"},
+            {"id": "size", "op": "field", "field": "log_market_cap"},
+            {"id": "industry", "op": "field", "field": "industry"},
+            {"id": "neutral", "op": "neutralize", "input": "composite", "exposures": ["size", "industry"], "categorical_exposures": ["industry"]},
+            {"id": "final_rank", "op": "rank", "input": "neutral"}
+          ]
+        },
+        "signal_field_registry": [
+          {"name": "close_adj", "value_type": "numeric", "role": "feature", "availability": "close", "minimum_lag_sessions": 0, "available_at_column": "daily_available_at"},
+          {"name": "turnover_rate", "value_type": "numeric", "role": "feature", "availability": "close", "minimum_lag_sessions": 0, "available_at_column": "daily_basic_available_at"},
+          {"name": "log_market_cap", "value_type": "numeric", "role": "feature", "availability": "close", "minimum_lag_sessions": 0, "available_at_column": "size_available_at"},
+          {"name": "industry", "value_type": "categorical", "role": "feature", "availability": "close", "minimum_lag_sessions": 0, "available_at_column": "industry_available_at"}
+        ],
+        "cluster_id": "mechanism-reversal-liquidity",
+        "maximum_weight": 0.35,
+        "long_only": true,
+        "expected_regimes": ["短期冲击", "非趋势主导", "流动性未冻结"],
+        "falsification_criteria": [
+          "反转与低换手两条腿在 outer-OOS 均不能保持预注册方向",
+          "实际换手或冲击成本超过基线 1.5 倍并使净主动收益转负",
+          "半年窗口正主动收益占比低于 60%"
+        ]
+      }
+    }
+  ]
+}

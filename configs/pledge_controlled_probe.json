@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "seed": 42,
+  "data_source": "tushare",
+  "cache_dir": "artifacts/tushare_cache",
+  "universe_limit": 80,
+  "start_date": "2020-06-01",
+  "end_date": "2023-12-31",
+  "route_id": "value_quality_high_pledge_record_count_confirmation",
+  "mechanism_id": "pledge_control_pressure",
+  "source": "controlled_pledge_probe",
+  "expected_new_evidence": "pledge_record_count_readonly_spread_above_value_quality_benchmark",
+  "feature_overlay_csv": "artifacts/pledge_source_mvp/pledge_daily_asof_features.csv",
+  "feature_overlay_columns": [
+    "high_pledge_record_count",
+    "pledge_record_count",
+    "pledge_ratio_mean",
+    "pledge_ratio_max",
+    "pledge_amount_sum"
+  ],
+  "required_data_fields": [
+    "high_pledge_record_count",
+    "forward_return_5d"
+  ],
+  "factors": [
+    {
+      "name": "high_pledge_record_count",
+      "expression": "high_pledge_record_count",
+      "family": "pledge_control_pressure",
+      "role": "controlled_probe",
+      "required_data_fields": [
+        "high_pledge_record_count"
+      ]
+    }
+  ],
+  "portfolio_construction": {
+    "mode": "bucket_pair",
+    "quantiles": 5,
+    "long_quantile": 3,
+    "short_quantile": 0
+  },
+  "benchmark": {
+    "route_id": "value_quality_no_distress",
+    "bucket_spread": 0.0062253011
+  },
+  "write_dataset_csv": true,
+  "no_broad_daemon": true
+}
