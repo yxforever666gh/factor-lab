@@ -26,6 +26,7 @@ from .catalog import ResearchCatalog, RunRecord
 from .docker_attestation import (
     COMPOSE_PROJECT as HOST_DOCKER_COMPOSE_PROJECT,
     COMPOSE_SERVICE as HOST_DOCKER_COMPOSE_SERVICE,
+    KERNEL_PROCESS_IDENTITY_SCHEME,
     persisted_attestation_binding_errors,
 )
 from .fingerprint import content_fingerprint
@@ -72,7 +73,6 @@ class LocalCodeServerRuntimeIdentity:
 
     container_identity: str
     process_identity: str
-    init_started_at: datetime
 
 
 @dataclass(frozen=True)
@@ -97,18 +97,18 @@ def local_code_server_runtime_identity() -> LocalCodeServerRuntimeIdentity:
     recreated container even if an external runtime were to reuse a hostname.
     The root check prevents a nested/chrooted child from borrowing the init
     process evidence.
+
+    The identity deliberately contains no reconstructed wall-clock timestamp.
+    In particular, ``/proc/stat``'s ``btime`` must not be added to PID start
+    ticks: Docker Desktop/WSL may correct that wall-clock anchor while the same
+    kernel and PID-1 continue running.  The kernel boot ID plus the monotonic
+    PID start tick are the stable lifecycle authority.
     """
 
     proc_stat = Path("/proc/1/stat")
     boot_id = Path("/proc/sys/kernel/random/boot_id")
     hostname_file = Path("/etc/hostname")
-    system_stat = Path("/proc/stat")
-    if not (
-        proc_stat.is_file()
-        and boot_id.is_file()
-        and hostname_file.is_file()
-        and system_stat.is_file()
-    ):
+    if not (proc_stat.is_file() and boot_id.is_file() and hostname_file.is_file()):
         raise DagsterSoakError(
             "physical code-server process identity requires Linux /proc evidence"
         )
@@ -121,21 +121,12 @@ def local_code_server_runtime_identity() -> LocalCodeServerRuntimeIdentity:
         stat_suffix = proc_stat.read_text(encoding="utf-8").rsplit(")", 1)[1]
         stat_fields = stat_suffix.split()
         start_ticks = int(stat_fields[19])
-        boot_time = int(
-            next(
-                line.split()[1]
-                for line in system_stat.read_text(encoding="utf-8").splitlines()
-                if line.startswith("btime ")
-            )
-        )
-        clock_ticks = int(os.sysconf("SC_CLK_TCK"))
         current_root = os.stat("/")
         init_root = os.stat("/proc/1/root")
         boot_id_bytes = boot_id.read_bytes().strip()
     except (
         IndexError,
         OSError,
-        StopIteration,
         TypeError,
         UnicodeError,
         ValueError,
@@ -146,17 +137,13 @@ def local_code_server_runtime_identity() -> LocalCodeServerRuntimeIdentity:
         or socket_identity != container_identity
     ):
         raise DagsterSoakError("code-server container identity is non-canonical")
-    if clock_ticks <= 0 or not boot_id_bytes:
+    if start_ticks < 0 or not boot_id_bytes:
         raise DagsterSoakError("Linux PID-1 timing evidence is malformed")
     if (current_root.st_dev, current_root.st_ino) != (
         init_root.st_dev,
         init_root.st_ino,
     ):
         raise DagsterSoakError("code server does not share the PID-1 root filesystem")
-    init_started_at = datetime.fromtimestamp(
-        boot_time + start_ticks / clock_ticks,
-        tz=timezone.utc,
-    )
     process_identity = content_fingerprint(
         {
             "container_hostname_hash": hashlib.sha256(
@@ -170,7 +157,6 @@ def local_code_server_runtime_identity() -> LocalCodeServerRuntimeIdentity:
     return LocalCodeServerRuntimeIdentity(
         container_identity=container_identity,
         process_identity=process_identity,
-        init_started_at=init_started_at,
     )
 
 
@@ -247,21 +233,14 @@ def bind_current_code_server_to_host_attestation(
             oci_repo_digests=repo_digests,
             oci_base_digests=(base_digest,),
         )
-        attested_container_started_at = _parse_time(
-            metadata.get("container_started_at")
-        )
     except (SourceBundleProvenanceError, TypeError, ValueError):
         raise DagsterSoakError("host attestation build binding is invalid") from None
     if (
         not bound.formal_epoch_eligible
         or not _HASH.fullmatch(str(bound.build_identity_hash or ""))
-        or abs(
-            (local.init_started_at - attested_container_started_at).total_seconds()
-        )
-        > 5.0
     ):
         raise DagsterSoakError(
-            "current code-server process does not match the attested container start"
+            "current code-server process does not match the attested deployment"
         )
     deployment_identity_hash = content_fingerprint(
         {
@@ -297,7 +276,8 @@ def bind_current_code_server_to_host_attestation(
         "oci_repo_digests": list(repo_digests),
         "oci_base_digests": [base_digest],
         "executing_container_identity": local.container_identity,
-        "executing_container_started_at": local.init_started_at.isoformat(),
+        "executing_process_identity_scheme": KERNEL_PROCESS_IDENTITY_SCHEME,
+        "executing_process_identity": local.process_identity,
         "executing_root_matches_init_root": True,
     }
     binding_errors = persisted_attestation_binding_errors(

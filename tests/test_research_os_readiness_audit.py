@@ -1652,6 +1652,46 @@ def test_all_persisted_physical_facts_reach_formal_ready_and_are_idempotent(
         system.close()
 
 
+def test_dagster_postgresql_naive_heartbeat_timestamp_is_utc_only_for_dagster(
+    tmp_path: Path,
+) -> None:
+    """Mirror PostgreSQL TIMESTAMP WITHOUT TIME ZONE result processing."""
+
+    system = AuditSystem(tmp_path)
+    completed_at = NOW - timedelta(minutes=21)
+    try:
+        with system.engine.begin() as connection:
+            connection.execute(text("DROP TABLE daemon_heartbeats"))
+            connection.execute(
+                text(
+                    "CREATE TABLE daemon_heartbeats ("
+                    "daemon_type TEXT PRIMARY KEY, timestamp TIMESTAMP NOT NULL)"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO daemon_heartbeats(daemon_type,timestamp) "
+                    "VALUES ('SENSOR',:timestamp)"
+                ),
+                # PostgreSQL/Dagster returns this UTC value without tzinfo.
+                {"timestamp": completed_at.replace(tzinfo=None)},
+            )
+
+        assert system.auditor()._dagster_heartbeat_matches(
+            daemon_type="SENSOR",
+            completed_at=completed_at,
+            maximum_gap_seconds=1.0,
+        )
+
+        # The exception is not generalized to Research OS evidence parsing.
+        from factor_lab.research_os import readiness_audit as readiness_module
+
+        with pytest.raises(ValueError, match="timezone"):
+            readiness_module._parse_time(completed_at.replace(tzinfo=None))
+    finally:
+        system.close()
+
+
 def test_latest_readiness_audit_fails_closed_on_equal_database_timestamps(
     tmp_path: Path,
 ) -> None:

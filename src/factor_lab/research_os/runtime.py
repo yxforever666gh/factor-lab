@@ -12,9 +12,10 @@ from datetime import datetime, timezone
 import importlib.util
 import os
 from pathlib import Path
+import re
 import socket
 from typing import Any, Callable, Mapping, TypeVar
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlparse
 
 from .catalog import ResearchCatalog, RunRecord
 from .credentials import (
@@ -28,17 +29,109 @@ from .fingerprint import content_fingerprint
 T = TypeVar("T")
 
 
+_DATABASE_CREDENTIAL_QUERY_MARKERS = (
+    "password",
+    "passwd",
+    "passfile",
+    "secret",
+    "token",
+    "credential",
+    "apikey",
+    "accesskey",
+    "privatekey",
+)
+_DATABASE_CREDENTIAL_QUERY_NAMES = frozenset(
+    {
+        "auth",
+        "authorization",
+        "key",
+        "pgpass",
+        "pwd",
+        "service",
+        "servicefile",
+        "sslcert",
+        "sslkey",
+    }
+)
+
+
+def _database_url_has_credential_query(database_url: str) -> bool:
+    """Return whether a connection URL query can carry credential material.
+
+    PostgreSQL/libpq accepts credentials and credential-file locations in the
+    query component as well as in URL userinfo.  Checking only
+    ``ParseResult.password`` would therefore let values such as
+    ``?password=...`` or ``?passfile=...`` bypass the production password-file
+    boundary and later appear in diagnostics.
+    """
+
+    parsed = urlparse(str(database_url or ""))
+    if not parsed.query:
+        return False
+    malformed_query = False
+    try:
+        pairs = parse_qsl(
+            parsed.query,
+            keep_blank_values=True,
+            strict_parsing=True,
+            errors="strict",
+        )
+    except (UnicodeDecodeError, ValueError):
+        # Raise outside the handler so a credential-bearing parser exception
+        # is not retained as ``__context__`` for a structured logger to walk.
+        malformed_query = True
+        pairs = ()
+    if malformed_query:
+        raise CredentialResolutionError(
+            "database connection URL query is malformed"
+        )
+    for key, _value in pairs:
+        normalized = re.sub(r"[^a-z0-9]", "", str(key).casefold())
+        if normalized in _DATABASE_CREDENTIAL_QUERY_NAMES or any(
+            marker in normalized for marker in _DATABASE_CREDENTIAL_QUERY_MARKERS
+        ):
+            return True
+    return False
+
+
+def _redact_connection_url(database_url: str) -> str:
+    """Return a diagnostic-safe connection URL without query/fragment values."""
+
+    value = str(database_url or "")
+    try:
+        parsed = urlparse(value)
+        password = parsed.password
+    except ValueError:
+        return "<invalid-connection-url>"
+    netloc = parsed.netloc
+    if password:
+        # Rebuild only the userinfo portion.  Replacing the password as a raw
+        # substring can hit an equal username/hostname/path first and leave the
+        # actual credential visible.  Preserve the original host spelling,
+        # including bracketed IPv6 and an explicit port.
+        userinfo, separator, hostinfo = netloc.rpartition("@")
+        username, password_separator, _raw_password = userinfo.partition(":")
+        if not separator or not password_separator:
+            return "<invalid-connection-url>"
+        netloc = f"{username}:***@{hostinfo}"
+    return parsed._replace(
+        netloc=netloc,
+        query="***" if parsed.query else "",
+        fragment="***" if parsed.fragment else "",
+    ).geturl()
+
+
 @dataclass(frozen=True)
 class ResearchOSSettings:
     """Process-level settings shared by CLI, Dagster and WebUI read models."""
 
-    database_url: str = "postgresql+psycopg://127.0.0.1:5433/factor_lab"
+    database_url: str = "postgresql+psycopg://127.0.0.1:15432/factor_lab"
     database_password_file: Path | None = field(default=None, repr=False, compare=False)
     object_store_endpoint: str = "http://127.0.0.1:9000"
     object_store_bucket: str = "factor-lab"
     object_store_access_key: str = ""
     object_store_secret_key: str = ""
-    iceberg_catalog_uri: str = "postgresql+psycopg2://127.0.0.1:5433/factor_lab"
+    iceberg_catalog_uri: str = "postgresql+psycopg2://127.0.0.1:15432/factor_lab"
     lake_root: Path = Path("artifacts/research_os/lake")
     snapshot_root: Path = Path("artifacts/research_os/snapshots")
     legacy_sqlite_path: Path = Path("artifacts/factor_lab.db")
@@ -58,10 +151,19 @@ class ResearchOSSettings:
                 ("FACTOR_LAB_DATABASE_URL", database_url),
                 ("FACTOR_LAB_ICEBERG_CATALOG_URI", iceberg_catalog_uri),
             ):
-                if urlparse(uri).password:
+                parsed_uri = urlparse(uri)
+                if parsed_uri.password:
                     raise CredentialResolutionError(
                         f"{label} must not embed a password in production; "
                         "use a PostgreSQL password-file credential"
+                    )
+                if parsed_uri.scheme.startswith(
+                    "postgresql"
+                ) and _database_url_has_credential_query(uri):
+                    raise CredentialResolutionError(
+                        f"{label} must not carry credentials or credential-file "
+                        "locations in its query; use a PostgreSQL password-file "
+                        "credential"
                     )
         canonical_password_file = str(
             values.get("FACTOR_LAB_POSTGRES_PASSWORD_FILE") or ""
@@ -148,14 +250,10 @@ class ResearchOSSettings:
             "***" if self.object_store_access_key else ""
         )
         payload["object_store_secret_key"] = "***"
-        parsed = urlparse(self.database_url)
-        if parsed.password:
-            payload["database_url"] = self.database_url.replace(parsed.password, "***")
-        parsed_iceberg = urlparse(self.iceberg_catalog_uri)
-        if parsed_iceberg.password:
-            payload["iceberg_catalog_uri"] = self.iceberg_catalog_uri.replace(
-                parsed_iceberg.password, "***"
-            )
+        payload["database_url"] = _redact_connection_url(self.database_url)
+        payload["iceberg_catalog_uri"] = _redact_connection_url(
+            self.iceberg_catalog_uri
+        )
         return payload
 
     def database_connect_args(self, *, timeout: float | None = None) -> dict[str, Any]:

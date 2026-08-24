@@ -19,7 +19,7 @@ def test_research_os_compose_is_loopback_only_and_has_no_secret_defaults() -> No
     text = COMPOSE.read_text(encoding="utf-8")
     alembic = ALEMBIC.read_text(encoding="utf-8")
 
-    assert '127.0.0.1:${RESEARCH_OS_POSTGRES_PORT:-5433}:5432' in text
+    assert '127.0.0.1:${RESEARCH_OS_POSTGRES_PORT:-15432}:5432' in text
     assert '127.0.0.1:${RESEARCH_OS_MINIO_API_PORT:-9000}:9000' in text
     assert '127.0.0.1:${RESEARCH_OS_MINIO_CONSOLE_PORT:-9001}:9001' in text
     assert '127.0.0.1:${RESEARCH_OS_DAGSTER_PORT:-8766}:3000' in text
@@ -44,6 +44,32 @@ def test_research_os_compose_is_loopback_only_and_has_no_secret_defaults() -> No
     ):
         assert image in text
     assert text.count("image: factor-lab-research-os:${RESEARCH_OS_IMAGE_TAG:-local}") == 6
+
+
+def test_host_postgres_port_contract_is_consistent() -> None:
+    authority = json.loads(
+        Path("configs/research_os_runtime_authority.production.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    postgres_ports = authority["backend_services"]["postgres"]["published_ports"]
+
+    assert postgres_ports == [
+        {"container": "5432/tcp", "host_ip": "127.0.0.1", "host_port": "15432"}
+    ]
+    assert ResearchOSSettings().database_url == (
+        "postgresql+psycopg://127.0.0.1:15432/factor_lab"
+    )
+    assert ResearchOSSettings().iceberg_catalog_uri == (
+        "postgresql+psycopg2://127.0.0.1:15432/factor_lab"
+    )
+    for path in (
+        Path(".env.example"),
+        Path("README.md"),
+        Path("docs/research-os-architecture.md"),
+        ENV_EXAMPLE,
+    ):
+        assert "127.0.0.1:5433" not in path.read_text(encoding="utf-8")
 
 
 def test_dagster_uses_one_compose_managed_external_code_server() -> None:

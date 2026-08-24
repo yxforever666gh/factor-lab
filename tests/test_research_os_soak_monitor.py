@@ -80,11 +80,14 @@ def _provenance() -> SimpleNamespace:
     )
 
 
-def _mock_attestation_dependencies(monkeypatch, *, init_delta=timedelta(0)):
+def _mock_attestation_dependencies(
+    monkeypatch,
+    *,
+    process_identity: str = PROCESS_A,
+):
     local = LocalCodeServerRuntimeIdentity(
         container_identity=CONTAINER_IDENTITY,
-        process_identity=PROCESS_A,
-        init_started_at=CONTAINER_STARTED_AT + init_delta,
+        process_identity=process_identity,
     )
     monkeypatch.setattr(
         soak_monitor, "local_code_server_runtime_identity", lambda: local
@@ -128,14 +131,16 @@ def test_host_attestation_binds_to_current_container_pid1_and_source(
     proof = captured["proof"]
     assert isinstance(proof, dict)
     assert proof["executing_container_identity"] == CONTAINER_IDENTITY
-    assert proof["executing_container_started_at"] == (
-        CONTAINER_STARTED_AT.isoformat()
+    assert proof["executing_process_identity_scheme"] == (
+        "linux-boot-id-pid1-start-ticks-v1"
     )
+    assert proof["executing_process_identity"] == PROCESS_A
+    assert "executing_container_started_at" not in proof
     assert proof["executing_root_matches_init_root"] is True
     assert captured["run"] == run
 
 
-def test_host_attestation_rejects_container_pid1_or_source_change(
+def test_host_attestation_rejects_container_or_source_change(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _mock_attestation_dependencies(monkeypatch)
@@ -147,19 +152,99 @@ def test_host_attestation_rejects_container_pid1_or_source_change(
             provenance=_provenance(),
         )
 
-    _mock_attestation_dependencies(monkeypatch, init_delta=timedelta(seconds=6))
-    with pytest.raises(DagsterSoakError, match="container start"):
-        bind_current_code_server_to_host_attestation(
-            _host_attestation_run(),
-            provenance=_provenance(),
-        )
-
     _mock_attestation_dependencies(monkeypatch)
     with pytest.raises(DagsterSoakError, match="source bundle differs"):
         bind_current_code_server_to_host_attestation(
             _host_attestation_run(source_tree_hash="c" * 64),
             provenance=_provenance(),
         )
+
+
+def test_host_binding_uses_kernel_process_identity_not_reconstructed_wall_clock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first_capture = _mock_attestation_dependencies(
+        monkeypatch,
+        process_identity=PROCESS_A,
+    )
+    first = bind_current_code_server_to_host_attestation(
+        _host_attestation_run(),
+        provenance=_provenance(),
+    )
+
+    # A real PID-1 restart produces another boot-id/start-tick identity even
+    # when Docker keeps the same container ID.  Binding may start a new soak,
+    # but the monitor's process-identity filter must never join the old span.
+    second_capture = _mock_attestation_dependencies(
+        monkeypatch,
+        process_identity=PROCESS_B,
+    )
+    second = bind_current_code_server_to_host_attestation(
+        _host_attestation_run(),
+        provenance=_provenance(),
+    )
+
+    assert first.process_identity == PROCESS_A
+    assert second.process_identity == PROCESS_B
+    assert first.deployment_identity_hash == second.deployment_identity_hash
+    assert first_capture["proof"]["executing_process_identity"] == PROCESS_A
+    assert second_capture["proof"]["executing_process_identity"] == PROCESS_B
+
+
+def test_local_process_identity_is_stable_across_btime_correction_and_changes_on_restart(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = {
+        "start_ticks": 123_456,
+        "boot_id": b"11111111-2222-3333-4444-555555555555",
+        "btime": 1_700_000_000,
+    }
+    reads: list[str] = []
+
+    class FakePath:
+        def __init__(self, value: str) -> None:
+            self.value = value
+
+        def is_file(self) -> bool:
+            return self.value in {
+                "/proc/1/stat",
+                "/proc/sys/kernel/random/boot_id",
+                "/etc/hostname",
+                "/proc/stat",
+            }
+
+        def read_text(self, *, encoding: str) -> str:
+            assert encoding == "utf-8"
+            reads.append(self.value)
+            if self.value == "/proc/1/stat":
+                fields = ["S", *("0" for _ in range(18)), str(state["start_ticks"])]
+                return "1 (python init) " + " ".join(fields)
+            if self.value == "/etc/hostname":
+                return CONTAINER_IDENTITY
+            if self.value == "/proc/stat":
+                return f"btime {state['btime']}\n"
+            raise AssertionError(self.value)
+
+        def read_bytes(self) -> bytes:
+            reads.append(self.value)
+            assert self.value == "/proc/sys/kernel/random/boot_id"
+            return state["boot_id"]
+
+    root_stat = SimpleNamespace(st_dev=10, st_ino=20)
+    monkeypatch.setattr(soak_monitor, "Path", FakePath)
+    monkeypatch.setattr(soak_monitor.socket, "gethostname", lambda: CONTAINER_IDENTITY)
+    monkeypatch.setattr(soak_monitor.os, "stat", lambda _path: root_stat)
+
+    first = soak_monitor.local_code_server_runtime_identity()
+    state["btime"] += 3_600  # Simulate a WSL/Linux wall-clock anchor correction.
+    second = soak_monitor.local_code_server_runtime_identity()
+
+    assert first == second
+    assert "/proc/stat" not in reads
+
+    state["start_ticks"] += 1
+    restarted = soak_monitor.local_code_server_runtime_identity()
+    assert restarted.process_identity != first.process_identity
 
 
 def test_host_attestation_rejects_failed_content_addressed_binding(
@@ -307,9 +392,13 @@ def test_process_restart_resets_the_soak_window(tmp_path, monkeypatch) -> None:
         oci_image_id=OCI_IMAGE_ID,
         process_identity=PROCESS_A,
     )
-    heartbeat(clock["now"])
-    first.record_sample()
-    clock["now"] += timedelta(minutes=5)
+    # The pre-restart segment is deliberately one sample short of a valid
+    # soak.  Adding the first post-restart sample would yield 145 rows over 24
+    # hours if process identities were accidentally stitched together.
+    for _index in range(144):
+        heartbeat(clock["now"])
+        first.record_sample()
+        clock["now"] += timedelta(minutes=10)
     heartbeat(clock["now"])
     restarted = DagsterCodeLocationSoakMonitor(
         catalog,
@@ -328,6 +417,12 @@ def test_process_restart_resets_the_soak_window(tmp_path, monkeypatch) -> None:
                 oci_image_id=OCI_IMAGE_ID,
             )
         )
+    assert len(
+        catalog.list_runs(
+            limit=1_000,
+            run_type=DAGSTER_CODE_LOCATION_HEALTH_SAMPLE_RUN_TYPE,
+        )
+    ) == 145
     catalog.close()
     ledger.close()
 

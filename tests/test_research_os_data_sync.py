@@ -1,17 +1,25 @@
 from pathlib import Path
 import json
+from types import SimpleNamespace
+import traceback
 
 import pandas as pd
 import pytest
 
 from factor_lab.research_os import data_sync as data_sync_module
 from factor_lab.research_os.data_sync import (
+    BronzeObservationError,
     resolve_credential,
     source_adapter_from_mapping,
     sync_bronze,
 )
 from factor_lab.research_os.data_sources import DiemengSourceAdapter, LocalFileSourceAdapter
-from factor_lab.research_os.data_sources import FetchRequest, SourceContractError
+from factor_lab.research_os.data_sources import (
+    FetchRequest,
+    SourceContractError,
+    SourceHealth,
+    SourceObservationError,
+)
 from factor_lab.research_os.object_store import S3ImmutableArchive
 
 
@@ -377,6 +385,133 @@ def test_local_source_sync_writes_immutable_bronze_and_lineage(tmp_path: Path) -
     assert Path(result.data_path).is_file()
     assert Path(result.metadata_path).is_file()
     assert "bronze" in Path(result.data_path).parts
+
+
+@pytest.mark.parametrize("failure_type", [ValueError, RuntimeError])
+def test_optional_bronze_probe_raised_failures_are_not_provider_degradation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_type: type[Exception],
+) -> None:
+    marker = "injected-local-programming-failure"
+
+    def fail_probe():
+        raise failure_type(marker)
+
+    adapter = SimpleNamespace(source_id="optional-fixture", probe=fail_probe)
+    monkeypatch.setattr(
+        data_sync_module,
+        "source_adapter_from_mapping",
+        lambda *_args, **_kwargs: adapter,
+    )
+
+    with pytest.raises(failure_type, match=marker):
+        sync_bronze(
+            _local_spec(tmp_path),
+            lake_root=tmp_path / "lake",
+            classify_observation_failures=True,
+        )
+
+
+def test_optional_bronze_explicit_unhealthy_probe_is_sanitized_degradation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    marker = "provider-message-containing-private-token"
+    adapter = SimpleNamespace(
+        source_id="optional-fixture",
+        probe=lambda: SimpleNamespace(
+            health=SourceHealth.UNAVAILABLE,
+            message=marker,
+        ),
+    )
+    monkeypatch.setattr(
+        data_sync_module,
+        "source_adapter_from_mapping",
+        lambda *_args, **_kwargs: adapter,
+    )
+
+    with pytest.raises(BronzeObservationError) as caught:
+        sync_bronze(
+            _local_spec(tmp_path),
+            lake_root=tmp_path / "lake",
+            classify_observation_failures=True,
+        )
+
+    assert caught.value.failure_type == "probe_unavailable"
+    assert caught.value.__cause__ is None
+    assert marker not in str(caught.value)
+
+
+@pytest.mark.parametrize("failure_type", [ValueError, RuntimeError])
+def test_optional_bronze_fetch_programming_failures_remain_fail_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_type: type[Exception],
+) -> None:
+    marker = "injected-fetch-programming-failure"
+
+    def fail_fetch(_request):
+        raise failure_type(marker)
+
+    adapter = SimpleNamespace(
+        source_id="optional-fixture",
+        probe=lambda: SimpleNamespace(
+            health=SourceHealth.HEALTHY,
+            message="healthy",
+        ),
+        fetch=fail_fetch,
+    )
+    monkeypatch.setattr(
+        data_sync_module,
+        "source_adapter_from_mapping",
+        lambda *_args, **_kwargs: adapter,
+    )
+
+    with pytest.raises(failure_type, match=marker):
+        sync_bronze(
+            _local_spec(tmp_path),
+            lake_root=tmp_path / "lake",
+            classify_observation_failures=True,
+        )
+
+
+def test_optional_bronze_typed_provider_failure_drops_sensitive_cause(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    marker = "provider-private-token-must-not-enter-traceback"
+
+    def fail_fetch(_request):
+        raise SourceObservationError(marker, failure_kind="provider_error")
+
+    adapter = SimpleNamespace(
+        source_id="optional-fixture",
+        probe=lambda: SimpleNamespace(
+            health=SourceHealth.HEALTHY,
+            message="healthy",
+        ),
+        fetch=fail_fetch,
+    )
+    monkeypatch.setattr(
+        data_sync_module,
+        "source_adapter_from_mapping",
+        lambda *_args, **_kwargs: adapter,
+    )
+
+    with pytest.raises(BronzeObservationError) as caught:
+        sync_bronze(
+            _local_spec(tmp_path),
+            lake_root=tmp_path / "lake",
+            classify_observation_failures=True,
+        )
+
+    rendered = "".join(
+        traceback.format_exception(caught.type, caught.value, caught.tb)
+    )
+    assert caught.value.failure_type == "provider_error"
+    assert caught.value.__cause__ is None
+    assert marker not in rendered
 
 
 def test_bronze_sync_rejects_nested_credential_request_before_adapter_or_metadata(

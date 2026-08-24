@@ -62,7 +62,9 @@ docker compose --env-file infra/research_os/.env `
 ```
 
 Published ports are loopback-only: WebUI `8765`, Dagster `8766`, PostgreSQL
-`5433`, MinIO API `9000`, and MinIO console `9001`.
+`15432`, MinIO API `9000`, and MinIO console `9001`. Port `15432` replaces
+`5433`, which was observed inside an active Windows Hyper-V exclusion range;
+Compose still fails closed if the replacement host port cannot be bound.
 
 Changing PostgreSQL or MinIO credentials requires coordinated server rotation
 and service recreation. Record PostgreSQL logical hashes and the MinIO object

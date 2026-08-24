@@ -348,8 +348,9 @@ Compose 服务包括：
 `catalog-migrate` 等待 PostgreSQL healthcheck 后执行 Alembic `upgrade head`。手工迁移/核对时，先在宿主设置与 Compose 一致的 URL：
 
 ```powershell
-$env:RESEARCH_OS_DATABASE_URL = "postgresql+psycopg://factor_lab:your-password@127.0.0.1:5433/factor_lab"
+$env:RESEARCH_OS_DATABASE_URL = "postgresql+psycopg://factor_lab@127.0.0.1:15432/factor_lab"
 $env:FACTOR_LAB_DATABASE_URL = $env:RESEARCH_OS_DATABASE_URL
+$env:FACTOR_LAB_POSTGRES_PASSWORD_FILE = "H:/Program Data/factor-lab-runtime/secrets/postgres_password"
 
 python -m alembic -c infra/research_os/alembic.ini upgrade head
 python -m alembic -c infra/research_os/alembic.ini current

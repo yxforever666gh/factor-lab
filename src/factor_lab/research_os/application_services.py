@@ -62,6 +62,7 @@ from .cycle import HistoricalResearchCycle, field_specs_from_mapping
 from .data_quality import DataQualityGate, QualityReport, QualitySeverity, sha256_path
 from .data_sources import FetchRequest, SourceBatch
 from .data_sync import (
+    BronzeObservationError,
     BronzeSyncResult,
     dataset_contract_from_mapping,
     read_frame,
@@ -81,6 +82,7 @@ from .gold_panel import (
     DEFAULT_REQUIRED_DATASETS,
     DEFAULT_SILVER_SNAPSHOT_DISCOVERY_CAP,
     GoldPanelError,
+    RESEARCH_SILVER_PARTITION_LABEL,
     ResearchGoldPanelService,
     load_gold_research_panel,
 )
@@ -122,6 +124,8 @@ from .production_config import (
     validate_production_config,
 )
 from .production_ledger import (
+    CapabilityRecord,
+    CapabilityStatus,
     IncidentStage,
     IncidentStatus,
     PartitionIdentity,
@@ -1898,10 +1902,16 @@ class ApplicationServices(ResearchOSServices):
             raise ServiceNotConfigured("daily.sources must contain at least one real adapter")
         outputs: list[dict[str, Any]] = []
         snapshot_ids: list[str] = []
+        non_blocking_samples: list[dict[str, Any]] = []
+        degraded_sources: list[dict[str, Any]] = []
         for index, raw in enumerate(sources):
             if not isinstance(raw, Mapping):
                 raise ValueError(f"daily.sources[{index}] must be an object")
             source = dict(raw)
+            non_blocking_sample = bool(
+                source.get("non_blocking") is True
+                and source.get("evidence_role") == "non_blocking_sample"
+            )
             if source.get("source") == "local_file":
                 if not source.get("root"):
                     raise ServiceNotConfigured(f"daily.sources[{index}].root is required")
@@ -1971,8 +1981,11 @@ class ApplicationServices(ResearchOSServices):
                             "successful source partition lacks immutable source_output"
                         )
                     row = dict(cached_output)
-                    outputs.append(row)
-                    snapshot_ids.append(str(row["bronze_snapshot_id"]))
+                    if non_blocking_sample:
+                        non_blocking_samples.append(row)
+                    else:
+                        outputs.append(row)
+                        snapshot_ids.append(str(row["bronze_snapshot_id"]))
                     continue
                 if source_record.status in {
                     PartitionStatus.DISPUTED,
@@ -1997,6 +2010,7 @@ class ApplicationServices(ResearchOSServices):
                     lake_root=self.settings.lake_root,
                     env=self.env,
                     object_store_archive=self.object_store_archive,
+                    classify_observation_failures=non_blocking_sample,
                 )
                 manifest, manifest_path, manifest_object = self._manifest(
                     paths=(result.data_path, result.metadata_path),
@@ -2004,7 +2018,15 @@ class ApplicationServices(ResearchOSServices):
                     as_of=result.ingested_at,
                     parent_snapshot_ids=(),
                     quality_report={"status": "pass"},
-                    trust_labels=("raw_vendor_response", f"source:{result.source_id}"),
+                    trust_labels=(
+                        "raw_vendor_response",
+                        f"source:{result.source_id}",
+                        *(
+                            ("gold_promotion_forbidden", "non_blocking_sample")
+                            if non_blocking_sample
+                            else ()
+                        ),
+                    ),
                 )
                 self.catalog.register_snapshot(
                     manifest.to_snapshot_ref(
@@ -2018,12 +2040,75 @@ class ApplicationServices(ResearchOSServices):
                 output = {
                     **result.to_dict(),
                     "source_config_index": index,
+                    # A non-blocking sample may be retained as accepted Bronze
+                    # evidence when it succeeds, but it is never a formal
+                    # reconciliation parent.  Its contract is observational,
+                    # not an alternate authority for production fields.
+                    "reconciliation_eligible": not non_blocking_sample,
                     "bronze_snapshot_id": manifest.snapshot_id,
                     "bronze_manifest_path": str(manifest_path.resolve()),
                     "bronze_manifest_object": (
                         None if manifest_object is None else manifest_object.to_dict()
                     ),
                 }
+                if non_blocking_sample and self.production_ledger is not None:
+                    if source_identity is None:
+                        raise OrchestrationFailure(
+                            "non-blocking source acceptance requires a durable partition identity"
+                        )
+                    contract_payload = source.get("contract")
+                    if not isinstance(contract_payload, Mapping):
+                        raise OrchestrationFailure(
+                            "non-blocking source acceptance lacks its reviewed contract"
+                        )
+                    contract = dataset_contract_from_mapping(contract_payload)
+                    contract_hash = content_fingerprint(
+                        contract_payload,
+                        domain=(
+                            "factor-lab/research-os/v1/"
+                            "non-blocking-source-contract"
+                        ),
+                    )
+                    capability_evidence = {
+                        "schema_version": (
+                            "research-os/non-blocking-source-capability/v1"
+                        ),
+                        "decision": "accepted_sample",
+                        "blocking": False,
+                        "evidence_role": "non_blocking_sample",
+                        "source_id": source_identity.source_id,
+                        "provider_source": str(source.get("source") or ""),
+                        "dataset": source_identity.dataset,
+                        "partition_key": request.partition_key,
+                        "partition_run_id": source_identity.partition_run_id,
+                        "bronze_snapshot_id": manifest.snapshot_id,
+                        "accepted_bronze_published": True,
+                        "reconciliation_eligible": False,
+                        "contract_hash": contract_hash,
+                    }
+                    probe_hash = content_fingerprint(
+                        capability_evidence,
+                        domain=(
+                            "factor-lab/research-os/v1/"
+                            "non-blocking-source-capability-probe"
+                        ),
+                    )
+                    capability = self.production_ledger.upsert_capability(
+                        CapabilityRecord(
+                            source_id=source_identity.source_id,
+                            dataset=source_identity.dataset,
+                            status=CapabilityStatus.ACCEPTED,
+                            contract_hash=contract_hash,
+                            probe_hash=probe_hash,
+                            fields=tuple(contract.field_map),
+                            detail=canonical_json(capability_evidence),
+                            probed_at=self._now(),
+                        )
+                    )
+                    output.update(
+                        capability_status=capability.status.value,
+                        capability_probe_hash=capability.probe_hash,
+                    )
                 if source_lease is not None:
                     assert self.production_ledger is not None
                     self.production_ledger.finish(
@@ -2043,9 +2128,17 @@ class ApplicationServices(ResearchOSServices):
                             "source_output": output,
                         },
                     )
-                outputs.append(output)
-                snapshot_ids.append(manifest.snapshot_id)
+                if non_blocking_sample:
+                    non_blocking_samples.append(output)
+                else:
+                    outputs.append(output)
+                    snapshot_ids.append(manifest.snapshot_id)
             except Exception as exc:
+                accepted_non_blocking_degradation = bool(
+                    non_blocking_sample
+                    and isinstance(exc, BronzeObservationError)
+                )
+                failure_persisted = False
                 if source_lease is not None:
                     assert self.production_ledger is not None
                     try:
@@ -2055,16 +2148,133 @@ class ApplicationServices(ResearchOSServices):
                             completed_at=self._now(),
                             run_id=self._operation_run_id(request),
                             error_code="source_sync_failed",
-                            error=f"{type(exc).__name__}: {exc}",
+                            error=(
+                                "BronzeObservationError: optional source "
+                                "probe/fetch/contract failed"
+                                if accepted_non_blocking_degradation
+                                else f"{type(exc).__name__}: {exc}"
+                            ),
                         )
+                        failure_persisted = True
                     except ProductionLedgerError:
-                        pass
+                        if non_blocking_sample:
+                            raise OrchestrationFailure(
+                                "non-blocking source failure could not be persisted"
+                            ) from None
+                if accepted_non_blocking_degradation:
+                    if (
+                        self.production_ledger is None
+                        or source_identity is None
+                        or not failure_persisted
+                    ):
+                        raise OrchestrationFailure(
+                            "non-blocking source degradation requires a durable partition ledger"
+                        ) from None
+                    dataset = source_identity.dataset
+                    source_id = source_identity.source_id
+                    contract_payload = source.get("contract")
+                    if not isinstance(contract_payload, Mapping):
+                        raise OrchestrationFailure(
+                            "non-blocking source degradation lacks its reviewed contract"
+                        ) from None
+                    contract = dataset_contract_from_mapping(contract_payload)
+                    contract_hash = content_fingerprint(
+                        contract_payload,
+                        domain=(
+                            "factor-lab/research-os/v1/"
+                            "non-blocking-source-contract"
+                        ),
+                    )
+                    occurred_at = self._now()
+                    evidence = {
+                        "schema_version": (
+                            "research-os/non-blocking-source-degradation/v1"
+                        ),
+                        "decision": "degraded",
+                        "blocking": False,
+                        "evidence_role": "non_blocking_sample",
+                        "source_id": source_id,
+                        "provider_source": str(source.get("source") or ""),
+                        "dataset": dataset,
+                        "partition_key": request.partition_key,
+                        "partition_run_id": source_identity.partition_run_id,
+                        "failure_type": exc.failure_type,
+                        "accepted_bronze_published": False,
+                        "reconciliation_eligible": False,
+                        "contract_hash": contract_hash,
+                    }
+                    probe_hash = content_fingerprint(
+                        evidence,
+                        domain=(
+                            "factor-lab/research-os/v1/"
+                            "non-blocking-source-degradation-probe"
+                        ),
+                    )
+                    capability = self.production_ledger.upsert_capability(
+                        CapabilityRecord(
+                            source_id=source_id,
+                            dataset=dataset,
+                            status=CapabilityStatus.DEGRADED,
+                            contract_hash=contract_hash,
+                            probe_hash=probe_hash,
+                            fields=tuple(contract.field_map),
+                            detail=canonical_json(evidence),
+                            probed_at=occurred_at,
+                        )
+                    )
+                    incident = self.production_ledger.record_incident(
+                        partition_key=request.partition_key,
+                        stage=IncidentStage.SOURCE,
+                        error_code="non_blocking_source_degraded",
+                        message=(
+                            f"optional source {source_id}/{dataset} degraded; "
+                            "formal source evidence was not published"
+                        ),
+                        occurred_at=occurred_at,
+                        partition_run_id=source_identity.partition_run_id,
+                        source_ids=(source_id,),
+                        evidence_hashes=(contract_hash, probe_hash),
+                        payload=evidence,
+                    )
+                    resolved = self.production_ledger.resolve_incident(
+                        incident.incident_id,
+                        resolved_at=occurred_at,
+                        evidence={
+                            "classification": "accepted_non_blocking_degradation",
+                            "blocking": False,
+                            "capability_probe_hash": capability.probe_hash,
+                            "accepted_bronze_published": False,
+                            "reconciliation_eligible": False,
+                        },
+                    )
+                    degraded_sources.append(
+                        {
+                            **evidence,
+                            "capability_status": capability.status.value,
+                            "capability_probe_hash": capability.probe_hash,
+                            "incident_id": resolved.incident_id,
+                            "incident_status": resolved.status.value,
+                        }
+                    )
+                    continue
                 raise
         return OperationResult(
             operation=request.operation,
             status="completed",
-            summary=f"persisted {len(outputs)} immutable Bronze source responses",
-            outputs={"sources": outputs, "bronze_snapshot_ids": snapshot_ids},
+            summary=(
+                f"persisted {len(outputs)} immutable Bronze source responses"
+                + (
+                    f"; recorded {len(degraded_sources)} non-blocking degradation(s)"
+                    if degraded_sources
+                    else ""
+                )
+            ),
+            outputs={
+                "sources": outputs,
+                "bronze_snapshot_ids": snapshot_ids,
+                "non_blocking_samples": non_blocking_samples,
+                "degraded_sources": degraded_sources,
+            },
         )
 
     @staticmethod
@@ -2177,7 +2387,64 @@ class ApplicationServices(ResearchOSServices):
         sync = self._dependency(request, OperationName.SOURCE_SYNC)
         daily = self._section("daily", request)
         configured_sources = daily["sources"]
-        bronze_parent_ids = tuple(map(str, sync.outputs["bronze_snapshot_ids"]))
+        raw_reconciliation_sources = sync.outputs.get("sources")
+        if not isinstance(raw_reconciliation_sources, list):
+            raise OrchestrationFailure(
+                "source synchronization formal sources are malformed"
+            )
+        reconciliation_sources: list[Mapping[str, Any]] = []
+        for row in raw_reconciliation_sources:
+            if not isinstance(row, Mapping):
+                raise OrchestrationFailure(
+                    "source synchronization formal source row is malformed"
+                )
+            raw_index = row.get("source_config_index")
+            if (
+                type(raw_index) is not int
+                or raw_index < 0
+                or raw_index >= len(configured_sources)
+                or not isinstance(configured_sources[raw_index], Mapping)
+            ):
+                raise OrchestrationFailure(
+                    "formal source row has no reviewed source configuration"
+                )
+            source_config = configured_sources[raw_index]
+            configured_non_blocking = bool(
+                source_config.get("non_blocking") is True
+                and source_config.get("evidence_role")
+                == "non_blocking_sample"
+            )
+            if configured_non_blocking:
+                # Code upgrades must not reinterpret an older cached SOURCE_SYNC
+                # result that pre-dates the non-blocking output split.  Expose
+                # the stale cache instead of silently laundering that Bronze
+                # sample into an authoritative Silver parent.
+                raise OrchestrationFailure(
+                    "non-blocking source evidence appeared in formal source outputs"
+                )
+            if (
+                "reconciliation_eligible" in row
+                and row.get("reconciliation_eligible") is not True
+            ):
+                raise OrchestrationFailure(
+                    "formal source explicitly forbids reconciliation"
+                )
+            reconciliation_sources.append(row)
+        if not reconciliation_sources:
+            raise OrchestrationFailure(
+                "source synchronization produced no reconciliation-eligible evidence"
+            )
+        bronze_parent_ids = tuple(
+            str(row["bronze_snapshot_id"])
+            for row in reconciliation_sources
+        )
+        declared_parent_ids = tuple(
+            map(str, sync.outputs.get("bronze_snapshot_ids") or ())
+        )
+        if bronze_parent_ids != declared_parent_ids:
+            raise OrchestrationFailure(
+                "formal Bronze source outputs and parent closure disagree"
+            )
         try:
             assert_snapshot_promotion_allowed(self.catalog, bronze_parent_ids)
         except SnapshotPromotionBlocked as exc:
@@ -2185,7 +2452,7 @@ class ApplicationServices(ResearchOSServices):
                 f"Bronze trust labels block Silver promotion: {exc}"
             ) from exc
         canonical_parts: list[pd.DataFrame] = []
-        for row in sync.outputs["sources"]:
+        for row in reconciliation_sources:
             index = int(row["source_config_index"])
             source_config = configured_sources[index]
             batch = self._batch_from_sync(row)
@@ -2260,7 +2527,7 @@ class ApplicationServices(ResearchOSServices):
         parent_ids = bronze_parent_ids
         as_of = max(
             _parse_aware(row["ingested_at"], name="ingested_at")
-            for row in sync.outputs["sources"]
+            for row in reconciliation_sources
         )
         manifest, manifest_path, manifest_object = self._manifest(
             paths=(silver_path, audit_path),
@@ -2268,7 +2535,11 @@ class ApplicationServices(ResearchOSServices):
             as_of=as_of,
             parent_snapshot_ids=parent_ids,
             quality_report={"status": "pass"},
-            trust_labels=("point_in_time", "field_reconciled"),
+            trust_labels=(
+                "point_in_time",
+                "field_reconciled",
+                RESEARCH_SILVER_PARTITION_LABEL,
+            ),
         )
         self.catalog.register_snapshot(
             manifest.to_snapshot_ref(

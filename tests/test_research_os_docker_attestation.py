@@ -368,7 +368,7 @@ class _FakeDockerRunner:
                 "5432/tcp": [
                     {
                         "HostIp": self.backend_host_ip[service],
-                        "HostPort": "5433",
+                        "HostPort": "15432",
                     }
                 ]
             }
@@ -1357,6 +1357,54 @@ def test_persisted_runtime_proof_binds_historical_run_to_stable_deployment(
             proof=proof,
             stable_deployment=stable,
         ) == ()
+        kernel_process_proof = dict(proof)
+        kernel_process_proof.pop("executing_container_started_at")
+        kernel_process_proof.update(
+            executing_process_identity_scheme=(
+                "linux-boot-id-pid1-start-ticks-v1"
+            ),
+            executing_process_identity="b" * 64,
+        )
+        assert persisted_attestation_binding_errors(
+            run=physical,
+            proof=kernel_process_proof,
+            stable_deployment=stable,
+        ) == ()
+        hybrid_process_proof = {
+            **kernel_process_proof,
+            "executing_container_started_at": proof[
+                "executing_container_started_at"
+            ],
+        }
+        assert {
+            "runtime_process_continuity_ambiguous",
+            "runtime_attestation_stable_binding_invalid",
+        }.issubset(
+            set(
+                persisted_attestation_binding_errors(
+                    run=physical,
+                    proof=hybrid_process_proof,
+                    stable_deployment=stable,
+                )
+            )
+        )
+        malformed_process_proof = {
+            **kernel_process_proof,
+            "executing_process_identity": "not-a-hash",
+        }
+        assert {
+            "runtime_process_continuity_missing",
+            "runtime_process_identity_invalid",
+            "runtime_attestation_stable_binding_invalid",
+        }.issubset(
+            set(
+                persisted_attestation_binding_errors(
+                    run=physical,
+                    proof=malformed_process_proof,
+                    stable_deployment=stable,
+                )
+            )
+        )
         assert "runtime_attestation_run_invalid" in persisted_attestation_binding_errors(
             run=physical,
             proof={**proof, "host_attestation_hash": "9" * 64},

@@ -136,7 +136,7 @@ services:
     secrets:
       - postgres_password
     ports:
-      - "127.0.0.1:${RESEARCH_OS_POSTGRES_PORT:-5433}:5432"
+      - "127.0.0.1:${RESEARCH_OS_POSTGRES_PORT:-15432}:5432"
     volumes:
       - research-os-postgres:/var/lib/postgresql/data
     healthcheck:

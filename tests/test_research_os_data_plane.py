@@ -47,6 +47,7 @@ from factor_lab.research_os.data_sources import (
     SourceBatch,
     SourceContractError,
     SourceHealth,
+    SourceObservationError,
     TokenBucketRateLimiter,
     TushareSourceAdapter,
     normalize_diemeng_base_url,
@@ -256,6 +257,178 @@ def test_source_adapters_probe_real_endpoints_and_enforce_contracts(tmp_path: Pa
         escaping.fetch(FetchRequest("daily"))
 
 
+def test_local_missing_file_is_a_typed_observation_failure(tmp_path: Path) -> None:
+    adapter = LocalFileSourceAdapter(
+        tmp_path,
+        contracts=[_daily_contract()],
+        path_templates={"daily": "missing.parquet"},
+    )
+
+    probe = adapter.probe()
+    assert probe.health is SourceHealth.UNAVAILABLE
+    with pytest.raises(SourceObservationError) as caught:
+        adapter.fetch(FetchRequest("daily"))
+
+    assert caught.value.failure_kind == "source_missing"
+    assert "missing.parquet" not in str(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+def test_akshare_raw_provider_failure_is_sanitized_at_call_boundary() -> None:
+    marker = "akshare-provider-secret-must-not-escape"
+
+    class LeakingProvider:
+        @staticmethod
+        def bounded_history(**_kwargs):
+            raise RuntimeError(marker)
+
+    adapter = AkShareSourceAdapter(
+        LeakingProvider(),
+        contracts=[_daily_contract()],
+        endpoint_map={"daily": "bounded_history"},
+        probe_endpoint="bounded_history",
+    )
+
+    probe = adapter.probe()
+    assert probe.health is SourceHealth.UNAVAILABLE
+    assert probe.message == "AkShare probe failed (provider_error)"
+    assert marker not in json.dumps(asdict(probe), default=str, sort_keys=True)
+    with pytest.raises(SourceObservationError) as caught:
+        adapter.fetch(FetchRequest("daily"))
+
+    assert caught.value.failure_kind == "provider_error"
+    assert marker not in str(caught.value)
+    assert marker not in repr(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+def test_akshare_programming_error_after_provider_call_remains_fail_closed() -> None:
+    class ExplodingFrame(pd.DataFrame):
+        def copy(self, *args, **kwargs):
+            raise AssertionError("post-provider programming failure")
+
+    class Provider:
+        @staticmethod
+        def bounded_history(**_kwargs):
+            return ExplodingFrame(_daily_frame())
+
+    adapter = AkShareSourceAdapter(
+        Provider(),
+        contracts=[_daily_contract()],
+        endpoint_map={"daily": "bounded_history"},
+        probe_endpoint="bounded_history",
+    )
+
+    with pytest.raises(AssertionError, match="post-provider programming failure"):
+        adapter.fetch(FetchRequest("daily"))
+
+
+def test_provider_return_contract_violation_is_a_typed_observation() -> None:
+    class IncompleteProvider:
+        @staticmethod
+        def bounded_history(**_kwargs):
+            return _daily_frame().drop(columns=["close"])
+
+    adapter = AkShareSourceAdapter(
+        IncompleteProvider(),
+        contracts=[_daily_contract()],
+        endpoint_map={"daily": "bounded_history"},
+        probe_endpoint="bounded_history",
+    )
+
+    with pytest.raises(SourceObservationError) as caught:
+        adapter.fetch(FetchRequest("daily"))
+    assert caught.value.failure_kind == "response_contract"
+    assert "missing contracted fields" in str(caught.value)
+
+
+def test_akshare_missing_endpoint_and_rate_limit_fault_are_not_observations() -> None:
+    class Provider:
+        pass
+
+    adapter = AkShareSourceAdapter(
+        Provider(),
+        contracts=[_daily_contract()],
+        endpoint_map={"daily": "not_configured"},
+        probe_endpoint="not_configured",
+    )
+    with pytest.raises(TypeError, match="no callable endpoint") as endpoint_error:
+        adapter.fetch(FetchRequest("daily"))
+    assert not isinstance(endpoint_error.value, SourceObservationError)
+
+    class ContractFaultProvider:
+        @staticmethod
+        def bounded_history(**_kwargs):
+            raise SourceContractError("reviewed adapter configuration is invalid")
+
+    contract_fault = AkShareSourceAdapter(
+        ContractFaultProvider(),
+        contracts=[_daily_contract()],
+        endpoint_map={"daily": "bounded_history"},
+        probe_endpoint="bounded_history",
+    )
+    with pytest.raises(
+        SourceContractError, match="reviewed adapter configuration is invalid"
+    ) as contract_error:
+        contract_fault.fetch(FetchRequest("daily"))
+    assert not isinstance(contract_error.value, SourceObservationError)
+    with pytest.raises(
+        SourceContractError, match="reviewed adapter configuration is invalid"
+    ) as probe_contract_error:
+        contract_fault.probe()
+    assert not isinstance(probe_contract_error.value, SourceObservationError)
+
+    class BrokenLimiter:
+        @staticmethod
+        def acquire(*_args, **_kwargs):
+            raise ValueError("conflicting reviewed rate limit")
+
+    rate_limited = AkShareSourceAdapter(
+        Provider(),
+        contracts=[_daily_contract()],
+        endpoint_map={"daily": "not_configured"},
+        probe_endpoint="not_configured",
+        rate_limits={"not_configured": RateLimit(1, 60.0)},
+        rate_limiter=BrokenLimiter(),
+    )
+    with pytest.raises(ValueError, match="conflicting reviewed rate limit") as rate_error:
+        rate_limited.probe()
+    assert not isinstance(rate_error.value, SourceObservationError)
+
+
+def test_diemeng_raw_transport_failure_is_sanitized_observation() -> None:
+    marker = "diemeng-transport-secret-must-not-escape"
+
+    class LeakingSession:
+        @staticmethod
+        def request(_method, _url, **_kwargs):
+            raise RuntimeError(marker)
+
+    adapter = DiemengSourceAdapter(
+        base_url="https://data.diemeng.chat/api",
+        api_key=marker,
+        contracts=[_daily_contract()],
+        endpoint_map={"daily": "/stock/history"},
+        session=LeakingSession(),
+        max_attempts=1,
+    )
+
+    probe = adapter.probe()
+    assert probe.health is SourceHealth.UNAVAILABLE
+    assert probe.message == "Diemeng probe failed (transport_error)"
+    assert marker not in json.dumps(asdict(probe), default=str, sort_keys=True)
+    with pytest.raises(SourceObservationError) as caught:
+        adapter.fetch(FetchRequest("daily"))
+
+    assert caught.value.failure_kind == "transport_error"
+    assert marker not in str(caught.value)
+    assert marker not in repr(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
 def test_diemeng_adapter_uses_verified_contract_without_leaking_key() -> None:
     session = _DiemengSession()
     adapter = DiemengSourceAdapter(
@@ -332,6 +505,20 @@ def test_current_http_tushare_sdk_is_rejected_without_constructing_session() -> 
 
     assert "private-token-must-not-leak" not in str(caught.value)
     assert "_factor_lab_direct_http_session" not in vars(client)
+
+
+def test_tushare_transport_seal_fault_is_not_an_observation() -> None:
+    import tushare as ts
+
+    client = ts.pro_api("private-token-must-not-leak")
+    client._DataApi__http_url = "https://api.waditu.com/dataapi"
+    adapter = TushareSourceAdapter(client, contracts=[_daily_contract()])
+    delattr(client, "_factor_lab_direct_transport_seal")
+
+    with pytest.raises(SourceContractError, match="transport is not sealed") as caught:
+        adapter.fetch(FetchRequest("daily"))
+    assert not isinstance(caught.value, SourceObservationError)
+    assert "private-token-must-not-leak" not in str(caught.value)
 
 
 def test_https_tushare_sdk_uses_sealed_non_environment_session(

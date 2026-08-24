@@ -25,12 +25,14 @@ from factor_lab.research_os.data_sources import (
 from factor_lab.research_os.gold_panel import (
     DEFAULT_SILVER_SNAPSHOT_DISCOVERY_CAP,
     GoldPanelError,
+    RESEARCH_SILVER_REQUIRED_TRUST_LABELS,
     ResearchGoldPanelService,
     SilverSnapshotInput,
     build_research_gold_panel,
     discover_cataloged_silver_inputs,
     load_gold_research_panel,
     read_verified_silver_inputs,
+    verify_silver_snapshot_input,
     _normalise_silver,
 )
 from factor_lab.research_os.iceberg_service import PyIcebergGoldPublisher
@@ -62,6 +64,7 @@ def _register_cataloged_silver_snapshots(
                 uri=f"s3://factor-lab/silver/{snapshot_id}",
                 content_hash=f"{index + 1:064x}",
                 as_of=freeze + timedelta(days=index // 20),
+                trust_labels=tuple(sorted(RESEARCH_SILVER_REQUIRED_TRUST_LABELS)),
                 manifest={
                     "files": [
                         {
@@ -540,6 +543,7 @@ def test_verified_silver_inputs_require_complete_cataloged_bronze_parent_closure
         parent_snapshot_ids=(bronze.snapshot_id,),
         environment_hashes=hashes,
         quality_report={"status": "pass"},
+        trust_labels=tuple(sorted(RESEARCH_SILVER_REQUIRED_TRUST_LABELS)),
     )
     catalog = ResearchCatalog(tmp_path / "catalog.sqlite")
     try:
@@ -603,6 +607,7 @@ def test_verified_silver_inputs_reject_non_promotable_bronze_ancestor(
         parent_snapshot_ids=(bronze.snapshot_id,),
         environment_hashes=hashes,
         quality_report={"status": "pass"},
+        trust_labels=tuple(sorted(RESEARCH_SILVER_REQUIRED_TRUST_LABELS)),
     )
     with ResearchCatalog(tmp_path / "catalog.sqlite") as catalog:
         catalog.initialize_schema()
@@ -614,6 +619,88 @@ def test_verified_silver_inputs_reject_non_promotable_bronze_ancestor(
 
         with pytest.raises(
             GoldPanelError, match="Bronze ancestor carries non-promotable"
+        ):
+            read_verified_silver_inputs(
+                (SilverSnapshotInput(silver_ref, silver_path),),
+                catalog=catalog,
+                lake_root=lake,
+            )
+
+
+@pytest.mark.parametrize(
+    "tampering",
+    ("stripped_trust_labels", "changed_manifest_quality", "changed_reference_parents"),
+)
+def test_verified_silver_inputs_reject_tampered_bronze_manifest_reference_binding(
+    tmp_path: Path,
+    tampering: str,
+) -> None:
+    lake = tmp_path / "lake"
+    lake.mkdir()
+    hashes = {
+        "config_hash": _EMPTY_HASH,
+        "code_hash": _EMPTY_HASH,
+        "dirty_patch_hash": _EMPTY_HASH,
+        "dependency_lock_hash": _EMPTY_HASH,
+    }
+    bronze_path = lake / "non-promotable-bronze.parquet"
+    pd.DataFrame({"raw": [1]}).to_parquet(bronze_path, index=False)
+    bronze = build_immutable_snapshot_manifest(
+        (bronze_path,),
+        base_dir=lake,
+        tier="bronze",
+        as_of="2024-01-01T00:00:00+00:00",
+        parent_snapshot_ids=(),
+        environment_hashes=hashes,
+        quality_report={"status": "pass"},
+        trust_labels=("gold_promotion_forbidden", "non_blocking_sample"),
+    )
+    original = bronze.to_snapshot_ref(uri=bronze_path.resolve().as_uri())
+    manifest = dict(original.manifest)
+    reference_parents = original.parent_snapshot_ids
+    reference_labels = original.trust_labels
+    if tampering == "stripped_trust_labels":
+        reference_labels = ()
+    elif tampering == "changed_manifest_quality":
+        manifest["quality_status"] = "warning"
+    elif tampering == "changed_reference_parents":
+        reference_parents = ("f" * 64,)
+    else:  # pragma: no cover - parametrization invariant
+        raise AssertionError(tampering)
+    tampered_bronze_ref = DataSnapshotRef(
+        snapshot_id=original.snapshot_id,
+        tier=original.tier,
+        uri=original.uri,
+        content_hash=original.content_hash,
+        parent_snapshot_ids=reference_parents,
+        as_of=original.as_of,
+        quality_status=original.quality_status,
+        trust_labels=reference_labels,
+        manifest=manifest,
+    )
+
+    silver_path = lake / "accepted-silver-over-tampered-bronze.parquet"
+    pd.DataFrame({"dataset": ["fixture"]}).to_parquet(silver_path, index=False)
+    silver = build_immutable_snapshot_manifest(
+        (silver_path,),
+        base_dir=lake,
+        tier="silver",
+        as_of="2024-01-02T00:00:00+00:00",
+        parent_snapshot_ids=(original.snapshot_id,),
+        environment_hashes=hashes,
+        quality_report={"status": "pass"},
+        trust_labels=tuple(sorted(RESEARCH_SILVER_REQUIRED_TRUST_LABELS)),
+    )
+    silver_ref = silver.to_snapshot_ref(uri=silver_path.resolve().as_uri())
+
+    with ResearchCatalog(tmp_path / "catalog.sqlite") as catalog:
+        catalog.initialize_schema()
+        catalog.register_snapshot(tampered_bronze_ref)
+        catalog.register_snapshot(silver_ref)
+
+        with pytest.raises(
+            GoldPanelError,
+            match="Bronze ancestor manifest/reference binding is invalid",
         ):
             read_verified_silver_inputs(
                 (SilverSnapshotInput(silver_ref, silver_path),),
@@ -757,6 +844,7 @@ def test_catalog_backed_gold_service_writes_manifest_bindable_history(tmp_path: 
         parent_snapshot_ids=(bronze.snapshot_id,),
         environment_hashes=hashes,
         quality_report={"status": "pass"},
+        trust_labels=tuple(sorted(RESEARCH_SILVER_REQUIRED_TRUST_LABELS)),
     )
     catalog = ResearchCatalog(tmp_path / "catalog.sqlite")
     try:
@@ -815,6 +903,93 @@ def test_default_silver_discovery_reads_every_snapshot_beyond_catalog_page_limit
 
     assert len(discovered) == 1_005
     assert {item.reference.snapshot_id for item in discovered} == expected
+
+
+def test_silver_discovery_excludes_accepted_non_forward_canary_from_formal_gold_parents(
+    tmp_path: Path,
+) -> None:
+    lake = tmp_path / "lake"
+    lake.mkdir()
+    hashes = {
+        "config_hash": _EMPTY_HASH,
+        "code_hash": _EMPTY_HASH,
+        "dirty_patch_hash": _EMPTY_HASH,
+        "dependency_lock_hash": _EMPTY_HASH,
+    }
+    formal_path = lake / "formal-silver.parquet"
+    canary_path = lake / "canary-silver.parquet"
+    pd.DataFrame({"dataset": ["daily"]}).to_parquet(formal_path, index=False)
+    pd.DataFrame({"dataset": ["daily"]}).to_parquet(canary_path, index=False)
+    formal = build_immutable_snapshot_manifest(
+        (formal_path,),
+        base_dir=lake,
+        tier="silver",
+        as_of="2024-01-02T00:00:00+00:00",
+        parent_snapshot_ids=("a" * 64,),
+        environment_hashes=hashes,
+        quality_report={"status": "pass"},
+        trust_labels=tuple(sorted(RESEARCH_SILVER_REQUIRED_TRUST_LABELS)),
+    )
+    canary = build_immutable_snapshot_manifest(
+        (canary_path,),
+        base_dir=lake,
+        tier="silver",
+        as_of="2024-01-02T00:01:00+00:00",
+        parent_snapshot_ids=("b" * 64,),
+        environment_hashes=hashes,
+        quality_report={"status": "pass"},
+        trust_labels=(
+            "physical_engineering_canary",
+            "non_forward",
+            "retrospective_physical_replay",
+        ),
+    )
+    with ResearchCatalog(tmp_path / "catalog.sqlite") as catalog:
+        catalog.initialize_schema()
+        formal_ref = formal.to_snapshot_ref(uri=formal_path.resolve().as_uri())
+        canary_ref = canary.to_snapshot_ref(uri=canary_path.resolve().as_uri())
+        catalog.register_snapshot(formal_ref)
+        catalog.register_snapshot(canary_ref)
+
+        discovered = discover_cataloged_silver_inputs(catalog, lake_root=lake)
+        all_silver = catalog.list_snapshots(tier="silver", limit=10)
+
+        assert [item.reference.snapshot_id for item in discovered] == [
+            formal.snapshot_id
+        ]
+        assert {item.reference.snapshot_id for item in all_silver} == {
+            formal.snapshot_id,
+            canary.snapshot_id,
+        }
+        with pytest.raises(
+            GoldPanelError,
+            match="formal research-promotion trust contract",
+        ):
+            read_verified_silver_inputs(
+                (SilverSnapshotInput(canary_ref, canary_path),),
+                catalog=catalog,
+                lake_root=lake,
+            )
+
+        forged_formal_ref = DataSnapshotRef(
+            snapshot_id=canary.snapshot_id,
+            tier="silver",
+            uri=canary_path.resolve().as_uri(),
+            content_hash=canary.snapshot_id,
+            parent_snapshot_ids=canary.parent_snapshot_ids,
+            as_of=canary.as_of,
+            quality_status="accepted",
+            trust_labels=tuple(sorted(RESEARCH_SILVER_REQUIRED_TRUST_LABELS)),
+            manifest=canary.to_dict(),
+        )
+        with pytest.raises(
+            GoldPanelError,
+            match="manifest/reference binding is invalid",
+        ):
+            verify_silver_snapshot_input(
+                SilverSnapshotInput(forged_formal_ref, canary_path),
+                lake_root=lake,
+            )
 
 
 def test_silver_discovery_fails_closed_when_total_safety_cap_has_more_rows(

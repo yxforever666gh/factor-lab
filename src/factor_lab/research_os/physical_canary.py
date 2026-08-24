@@ -55,7 +55,10 @@ from .data_sources import (
     validate_source_frame,
 )
 from .data_sync import source_adapter_from_mapping
-from .docker_attestation import persisted_attestation_binding_errors
+from .docker_attestation import (
+    KERNEL_PROCESS_IDENTITY_SCHEME,
+    persisted_attestation_binding_errors,
+)
 from .fingerprint import content_fingerprint
 from .execution_open_sources import diemeng_opening_session_request_template
 from .object_store import ArchivedObject, S3ImmutableArchive
@@ -90,6 +93,7 @@ from .shadow_authority import (
     ShadowSessionProjection,
 )
 from .shadow_catalog import ShadowStepAlreadyApplied, ShadowStepService
+from .soak_monitor import DagsterSoakError, local_code_server_runtime_identity
 
 
 EVIDENCE_SCHEMA = "research-os/physical-engineering-canary/v1"
@@ -908,30 +912,16 @@ class PhysicalEngineeringCanaryService:
         return identity
 
     @staticmethod
-    def _workload_container_started_at() -> datetime:
+    def _workload_process_identity() -> str:
+        """Return a wall-clock-independent kernel/PID-1 lifecycle hash."""
+
         try:
-            process_stat = Path("/proc/1/stat").read_text(encoding="utf-8")
-            stat_fields = process_stat.rsplit(")", 1)[1].split()
-            start_ticks = int(stat_fields[19])
-            boot_time = int(
-                next(
-                    line.split()[1]
-                    for line in Path("/proc/stat")
-                    .read_text(encoding="utf-8")
-                    .splitlines()
-                    if line.startswith("btime ")
-                )
-            )
-            clock_ticks = int(os.sysconf("SC_CLK_TCK"))
-            started_at = datetime.fromtimestamp(
-                boot_time + start_ticks / clock_ticks,
-                tz=timezone.utc,
-            )
-        except (OSError, UnicodeError, ValueError, IndexError, StopIteration):
+            process_identity = local_code_server_runtime_identity().process_identity
+        except DagsterSoakError:
             raise PhysicalCanaryAdmissionError(
-                "physical canary cannot measure its container init time"
+                "physical canary cannot measure its container process identity"
             ) from None
-        return started_at
+        return process_identity
 
     @staticmethod
     def _assert_workload_root_matches_init() -> None:
@@ -1025,38 +1015,13 @@ class PhysicalEngineeringCanaryService:
                     "physical canary has no verified current OCI deployment"
                 ) from exc
             workload_container_identity = self._workload_container_identity()
-            workload_container_started_at = self._workload_container_started_at()
+            workload_process_identity = self._workload_process_identity()
             self._assert_workload_root_matches_init()
             if not str(deployment.get("container_id") or "").startswith(
                 workload_container_identity
             ):
                 raise PhysicalCanaryAdmissionError(
                     "physical canary is not running in the attested code-server container"
-                )
-            try:
-                attested_container_started_at = _aware(
-                    datetime.fromisoformat(
-                        str(deployment.get("container_started_at") or "").replace(
-                            "Z", "+00:00"
-                        )
-                    ),
-                    name="attested container started_at",
-                )
-            except (TypeError, ValueError, PhysicalCanaryError):
-                raise PhysicalCanaryAdmissionError(
-                    "attested code-server start time is invalid"
-                ) from None
-            if (
-                abs(
-                    (
-                        workload_container_started_at
-                        - attested_container_started_at
-                    ).total_seconds()
-                )
-                > 5.0
-            ):
-                raise PhysicalCanaryAdmissionError(
-                    "physical canary process start does not match the attested container"
                 )
             epoch_fields = deployment.get("epoch_fields")
             if not isinstance(epoch_fields, Mapping):
@@ -1116,8 +1081,11 @@ class PhysicalEngineeringCanaryService:
             runtime_attestation["executing_container_identity"] = (
                 workload_container_identity
             )
-            runtime_attestation["executing_container_started_at"] = (
-                workload_container_started_at.isoformat()
+            runtime_attestation["executing_process_identity_scheme"] = (
+                KERNEL_PROCESS_IDENTITY_SCHEME
+            )
+            runtime_attestation["executing_process_identity"] = (
+                workload_process_identity
             )
             runtime_attestation["executing_root_matches_init_root"] = True
         identity = {

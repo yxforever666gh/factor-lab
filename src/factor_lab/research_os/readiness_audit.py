@@ -363,6 +363,23 @@ def _parse_time(value: Any) -> datetime:
     return parsed.astimezone(timezone.utc)
 
 
+def _parse_dagster_heartbeat_time(value: Any) -> datetime:
+    """Parse the storage shape owned by Dagster's heartbeat table.
+
+    Dagster's PostgreSQL schema stores ``daemon_heartbeats.timestamp`` as a
+    ``TIMESTAMP WITHOUT TIME ZONE`` even though its value is UTC.  SQLAlchemy
+    therefore returns a naive ``datetime``.  That storage exception must stay
+    local to this table: all Research OS evidence continues to require an
+    explicit timezone through :func:`_parse_time`.
+    """
+
+    if isinstance(value, datetime):
+        if value.tzinfo is None or value.utcoffset() is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
+    return datetime.fromtimestamp(float(value), tz=timezone.utc)
+
+
 def _valid_hash(value: Any) -> bool:
     return bool(_SHA256.fullmatch(str(value or "")))
 
@@ -2883,13 +2900,10 @@ class ProductionReadinessAuditor:
         with self.ledger.engine.connect() as connection:
             values = tuple(row[0] for row in connection.execute(statement))
         for value in values:
-            if isinstance(value, datetime):
-                heartbeat = _parse_time(value)
-            else:
-                try:
-                    heartbeat = datetime.fromtimestamp(float(value), tz=timezone.utc)
-                except (TypeError, ValueError, OSError):
-                    continue
+            try:
+                heartbeat = _parse_dagster_heartbeat_time(value)
+            except (TypeError, ValueError, OSError, OverflowError):
+                continue
             if abs((heartbeat - completed_at).total_seconds()) <= maximum_gap_seconds:
                 return True
         return False

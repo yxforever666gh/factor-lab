@@ -25,6 +25,7 @@ from .data_sources import (
     RateLimit,
     SourceAdapter,
     SourceHealth,
+    SourceObservationError,
     TushareSourceAdapter,
     assert_credential_free_request_parameters,
     require_tushare_sdk_https_transport,
@@ -40,6 +41,20 @@ SUPPORTED_PROFILE_TYPES = frozenset(
 )
 SECRETS_DIR_ENV = "FACTOR_LAB_SECRETS_DIR"
 _SECRET_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+
+
+class BronzeObservationError(RuntimeError):
+    """A provider probe/fetch or returned-data contract failure.
+
+    This narrow type lets an explicitly reviewed non-blocking sample degrade
+    without also swallowing lake, object-store, manifest, catalog or ledger
+    persistence failures.  The original message is deliberately not copied:
+    provider exceptions may contain request details or credential material.
+    """
+
+    def __init__(self, failure_type: str) -> None:
+        self.failure_type = str(failure_type or "provider_error")
+        super().__init__("source provider observation failed")
 
 
 @dataclass(frozen=True)
@@ -472,6 +487,7 @@ def sync_bronze(
     env: Mapping[str, str] | None = None,
     now: datetime | None = None,
     object_store_archive: S3ImmutableArchive | None = None,
+    classify_observation_failures: bool = False,
 ) -> BronzeSyncResult:
     request_payload = payload.get("request") or {}
     if not isinstance(request_payload, Mapping):
@@ -485,18 +501,46 @@ def sync_bronze(
         request_parameters,
         context="Bronze request.parameters",
     )
+    # Adapter/configuration construction is deployment authority, not a
+    # provider observation.  Missing dependencies, credentials or malformed
+    # reviewed configuration therefore remain fail-closed even for a
+    # non-blocking sample.
     adapter = source_adapter_from_mapping(payload, env=env)
-    probe = adapter.probe()
-    if probe.health is not SourceHealth.HEALTHY:
-        raise RuntimeError(
-            f"source {adapter.source_id} probe failed closed: {probe.message}"
-        )
     request = FetchRequest(
         dataset=str(request_payload.get("dataset") or payload["contract"]["dataset"]),
         parameters=request_parameters,
         fields=tuple(map(str, request_payload.get("fields") or ())),
     )
-    batch = adapter.fetch(request)
+
+    # Calling ``probe`` may itself expose a rate-limiter, configuration or
+    # programming defect.  Such raised exceptions are infrastructure failures
+    # and must remain fail-closed.  Only the adapter's explicit, sanitized
+    # non-healthy result is an optional-source observation failure.
+    probe = adapter.probe()
+    if probe.health is not SourceHealth.HEALTHY:
+        if classify_observation_failures:
+            raise BronzeObservationError(
+                f"probe_{probe.health.value}"
+            ) from None
+        raise RuntimeError(
+            f"source {adapter.source_id} probe failed closed: {probe.message}"
+        )
+
+    if classify_observation_failures:
+        try:
+            batch = adapter.fetch(request)
+        except SourceObservationError as exc:
+            # The narrow adapter type proves this arose at the reviewed
+            # provider observation/response boundary.  Drop the original
+            # traceback because SDK exceptions can retain request objects or
+            # credential material in their cause chain.
+            raise BronzeObservationError(exc.failure_kind) from None
+    else:
+        batch = adapter.fetch(request)
+
+    # These guards intentionally sit outside the optional observation catch.
+    # A mutated request or malformed clock/batch is a local correctness defect,
+    # not evidence that a secondary provider is merely unavailable.
     assert_credential_free_request_parameters(
         request.parameters,
         context="Bronze request.parameters",
@@ -664,6 +708,7 @@ def read_frame(path: str | Path) -> pd.DataFrame:
 
 
 __all__ = [
+    "BronzeObservationError",
     "BronzeSyncResult",
     "configured_source_profiles",
     "dataset_contract_from_mapping",

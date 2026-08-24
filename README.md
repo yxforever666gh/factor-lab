@@ -81,13 +81,14 @@ docker compose --env-file infra/research_os/.env `
   -f infra/research_os/docker-compose.yml up --build -d
 ```
 
-Compose 会启动 PostgreSQL、MinIO、Alembic migration job、Dagster webserver 和 daemon。默认端口为 PostgreSQL `5433`、MinIO API `9000`、MinIO Console `9001`、Dagster `8766`（容器内仍为 `3000`，避开部分 Windows 保留端口）。`catalog-migrate` 会自动执行 `upgrade head`。
+Compose 会启动 PostgreSQL、MinIO、Alembic migration job、Dagster webserver 和 daemon。默认端口为 PostgreSQL `15432`、MinIO API `9000`、MinIO Console `9001`、Dagster `8766`（容器内仍为 `3000`，避开本机保留端口）。`catalog-migrate` 会自动执行 `upgrade head`。
 
 宿主进程需要把以下两个数据库变量设置为与 `infra/research_os/.env` 相同的 PostgreSQL URL：
 
 ```powershell
-$env:RESEARCH_OS_DATABASE_URL = "postgresql+psycopg://factor_lab:your-password@127.0.0.1:5433/factor_lab"
+$env:RESEARCH_OS_DATABASE_URL = "postgresql+psycopg://factor_lab@127.0.0.1:15432/factor_lab"
 $env:FACTOR_LAB_DATABASE_URL = $env:RESEARCH_OS_DATABASE_URL
+$env:FACTOR_LAB_POSTGRES_PASSWORD_FILE = "H:/Program Data/factor-lab-runtime/secrets/postgres_password"
 ```
 
 手工检查迁移并运行环境诊断：

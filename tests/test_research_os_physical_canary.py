@@ -1400,6 +1400,7 @@ def test_refreshed_host_proof_keeps_stable_plan_but_changed_build_does_not(
             "dirty_patch_hash": "4" * 64,
         },
     }
+    process_identity = {"value": "1" * 64}
 
     monkeypatch.setattr(
         "factor_lab.research_os.physical_canary.load_production_config",
@@ -1427,8 +1428,8 @@ def test_refreshed_host_proof_keeps_stable_plan_but_changed_build_does_not(
         )
         monkeypatch.setattr(
             runtime.service,
-            "_workload_container_started_at",
-            lambda: datetime.fromisoformat(str(current["container_started_at"])),
+            "_workload_process_identity",
+            lambda: process_identity["value"],
         )
         monkeypatch.setattr(
             runtime.service,
@@ -1447,9 +1448,6 @@ def test_refreshed_host_proof_keeps_stable_plan_but_changed_build_does_not(
             host_attestation_run_id="docker_attestation_" + "e" * 64,
             host_attestation_hash="e" * 64,
             attested_at="2026-08-23T10:05:00+00:00",
-            container_started_at="2026-08-23T10:04:00+00:00",
-            container_id="f" * 64,
-            deployment_identity_hash="0" * 64,
         )
         runtime.service.__dict__.pop("_cached_evaluator_identity", None)
         runtime.service.__dict__.pop("_runtime_attestation_proof", None)
@@ -1467,6 +1465,43 @@ def test_refreshed_host_proof_keeps_stable_plan_but_changed_build_does_not(
         assert first_proof["host_attestation_hash"] != second_proof[
             "host_attestation_hash"
         ]
+        assert first_proof["executing_process_identity"] == "1" * 64
+        assert second_proof["executing_process_identity"] == "1" * 64
+        assert "executing_container_started_at" not in first_proof
+        assert "executing_container_started_at" not in second_proof
+
+        # Docker can restart PID 1 while retaining the container ID.  A WSL
+        # wall-clock/btime correction is no longer an identity input, while a
+        # genuinely different boot-id/start-tick hash is preserved in the
+        # runtime proof and starts a distinct continuity segment.
+        current.update(
+            host_attestation_run_id="docker_attestation_" + "f" * 64,
+            host_attestation_hash="f" * 64,
+            attested_at="2026-08-23T10:10:00+00:00",
+            container_started_at="2026-08-23T10:09:00+00:00",
+            deployment_identity_hash="0" * 64,
+        )
+        process_identity["value"] = "2" * 64
+        runtime.service.__dict__.pop("_cached_evaluator_identity", None)
+        runtime.service.__dict__.pop("_runtime_attestation_proof", None)
+        restarted_plan = runtime.service._plan_fingerprint(
+            sessions=sessions,
+            calendar_records=calendar_records,
+        )
+        restarted_stage = runtime.service._stage_source()
+        restarted_source = runtime.service._partition_source(
+            runtime.service.bindings[0]
+        )
+        restarted_proof = runtime.service._runtime_attestation_evidence()
+
+        assert restarted_plan == second_plan
+        assert restarted_stage == second_stage
+        assert restarted_source == second_source
+        assert restarted_proof["executing_process_identity"] == "2" * 64
+        assert restarted_proof["executing_process_identity"] != second_proof[
+            "executing_process_identity"
+        ]
+        assert "executing_container_started_at" not in restarted_proof
 
         current.update(
             oci_image_id="sha256:" + "3" * 64,
@@ -1481,9 +1516,9 @@ def test_refreshed_host_proof_keeps_stable_plan_but_changed_build_does_not(
         third_stage = runtime.service._stage_source()
         third_source = runtime.service._partition_source(runtime.service.bindings[0])
 
-        assert third_plan != second_plan
-        assert third_stage != second_stage
-        assert third_source != second_source
+        assert third_plan != restarted_plan
+        assert third_stage != restarted_stage
+        assert third_source != restarted_source
     finally:
         runtime.ledger.engine.dialect.name = original_dialect_name
         _close(runtime)

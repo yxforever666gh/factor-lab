@@ -11,7 +11,9 @@ from types import SimpleNamespace
 import pandas as pd
 import pytest
 from sqlalchemy import create_engine, event
+from sqlalchemy.orm import Session
 
+from factor_lab.research_os import application_services as application_services_module
 from factor_lab.research_os import orm
 from factor_lab.research_os.application_services import (
     APPLICATION_SERVICES_SCHEMA_VERSION,
@@ -37,7 +39,11 @@ from factor_lab.research_os.contracts import (
     ValidationProtocol,
 )
 from factor_lab.research_os.governance import HISTORICAL_HOLDOUT_ID
-from factor_lab.research_os.legacy_bronze_seed import LEGACY_SEED_TRUST_LABELS
+from factor_lab.research_os.legacy_bronze_seed import (
+    LEGACY_SEED_TRUST_LABELS,
+    SnapshotPromotionBlocked,
+    assert_snapshot_promotion_allowed,
+)
 from factor_lab.research_os.iceberg_service import (
     IcebergCommit,
     IcebergPublicationError,
@@ -54,9 +60,12 @@ from factor_lab.research_os.orchestration import (
 )
 from factor_lab.research_os.object_store import ArchivedObject, S3ImmutableArchive
 from factor_lab.research_os.production_ledger import (
+    CapabilityStatus,
+    IncidentStatus,
     PartitionIdentity,
     PartitionStatus,
     ProductionLedger,
+    ProductionLedgerError,
 )
 from factor_lab.research_os.runtime import ResearchOSSettings
 from factor_lab.research_os.snapshots import build_immutable_snapshot_manifest
@@ -312,6 +321,369 @@ def test_daily_bronze_and_silver_are_archived_outside_local_cache(tmp_path: Path
     assert any(logical.startswith("silver/") for _, logical in archive.calls)
 
 
+def _configure_non_blocking_sample(
+    config: dict,
+    root: Path,
+    *,
+    sample_available: bool,
+) -> None:
+    config["daily"]["sources"][0]["partition_cadence"] = {
+        "kind": "trading_session",
+        "ledger_identity": "required_daily",
+    }
+    config["daily"]["sources"].append(
+        {
+            "source": "local_file",
+            "profile_name": "optional_akshare",
+            "root": str(root / "source"),
+            "priority": 20,
+            "path_templates": {
+                "daily_sample_crosscheck": "missing-optional.parquet"
+            },
+            "partition_cadence": {
+                "kind": "trading_session",
+                "ledger_identity": "optional_akshare",
+            },
+            "request": {"dataset": "daily_sample_crosscheck"},
+            "contract": {
+                "dataset": "daily_sample_crosscheck",
+                "key_fields": ["ticker", "date"],
+                "event_time_field": "date",
+                "release_timing": "session close plus one day",
+                "fields": [
+                    {"name": "ticker", "dtype": "string", "nullable": False},
+                    {"name": "date", "dtype": "date", "nullable": False},
+                ],
+            },
+            "canonicalization": {
+                "entity_columns": ["ticker"],
+                "event_time_column": "date",
+                "value_columns": ["ticker"],
+                "availability": {
+                    "mode": "session_release_time",
+                    "time": "15:30:00",
+                    "timezone": "Asia/Shanghai",
+                    "lag_days": 1,
+                },
+            },
+            "evidence_role": "non_blocking_sample",
+            "non_blocking": True,
+        }
+    )
+    if sample_available:
+        pd.DataFrame(
+            [{"ticker": "000001.SZ", "date": "2024-01-03"}]
+        ).to_parquet(root / "source" / "missing-optional.parquet", index=False)
+
+
+@pytest.mark.parametrize("sample_available", [False, True])
+def test_explicit_non_blocking_source_is_audited_but_never_promoted(
+    tmp_path: Path,
+    sample_available: bool,
+) -> None:
+    config = _config(tmp_path)
+    _configure_non_blocking_sample(
+        config,
+        tmp_path,
+        sample_available=sample_available,
+    )
+    catalog, engine, ledger = _sqlite_fk_authority(tmp_path)
+    try:
+        service = _services(
+            tmp_path,
+            config,
+            FakeGoldPublisher([]),
+            catalog=catalog,
+        )
+        service.production_ledger = ledger
+
+        source = service.execute(_request(OperationName.SOURCE_SYNC))
+        silver = service.execute(_request(OperationName.SOURCE_RECONCILIATION))
+
+        assert source.status == "completed"
+        assert len(source.outputs["sources"]) == 1
+        assert len(source.outputs["bronze_snapshot_ids"]) == 1
+        assert len(source.outputs["non_blocking_samples"]) == int(sample_available)
+        assert len(source.outputs["degraded_sources"]) == int(not sample_available)
+        if sample_available:
+            sample = source.outputs["non_blocking_samples"][0]
+            assert sample["reconciliation_eligible"] is False
+            assert sample["capability_status"] == "accepted"
+        else:
+            degradation = source.outputs["degraded_sources"][0]
+            assert degradation["capability_status"] == "degraded"
+            assert degradation["incident_status"] == "resolved"
+            assert degradation["accepted_bronze_published"] is False
+            assert degradation["reconciliation_eligible"] is False
+            assert "missing-optional.parquet" not in json.dumps(degradation)
+
+        required = ledger.get_partition(
+            PartitionIdentity("required_daily", "daily", "2024-01-03")
+        )
+        optional = ledger.get_partition(
+            PartitionIdentity(
+                "optional_akshare", "daily_sample_crosscheck", "2024-01-03"
+            )
+        )
+        stage = ledger.get_partition(
+            PartitionIdentity("research_os", "stage_source", "2024-01-03")
+        )
+        assert required is not None and required.status is PartitionStatus.SUCCEEDED
+        assert optional is not None
+        assert optional.status is (
+            PartitionStatus.SUCCEEDED if sample_available else PartitionStatus.FAILED
+        )
+        assert (optional.output_snapshot_id is not None) is sample_available
+        assert stage is not None and stage.status is PartitionStatus.SUCCEEDED
+
+        with Session(engine) as session:
+            capability = session.get(
+                orm.SourceCapabilityModel,
+                ("optional_akshare", "daily_sample_crosscheck"),
+            )
+        assert capability is not None
+        assert capability.status == (
+            CapabilityStatus.ACCEPTED.value
+            if sample_available
+            else CapabilityStatus.DEGRADED.value
+        )
+        assert "missing-optional.parquet" not in capability.detail
+        incidents = ledger.list_incidents(limit=10)
+        assert len(incidents) == int(not sample_available)
+        if not sample_available:
+            assert incidents[0].status is IncidentStatus.RESOLVED
+            assert incidents[0].error_code == "non_blocking_source_degraded"
+
+        assert silver.status == "completed"
+        silver_frame = pd.read_parquet(silver.outputs["silver_path"])
+        assert set(silver_frame["dataset"].astype(str)) == {"daily"}
+        bronze = catalog.list_snapshots(tier="bronze", limit=10)
+        assert len(bronze) == (2 if sample_available else 1)
+        silver_record = catalog.get_snapshot(silver.outputs["silver_snapshot_id"])
+        assert silver_record is not None
+        assert silver_record.reference.parent_snapshot_ids == (
+            source.outputs["bronze_snapshot_ids"][0],
+        )
+        if sample_available:
+            sample_snapshot_id = source.outputs["non_blocking_samples"][0][
+                "bronze_snapshot_id"
+            ]
+            sample_record = catalog.get_snapshot(sample_snapshot_id)
+            assert sample_record is not None
+            assert {
+                "gold_promotion_forbidden",
+                "non_blocking_sample",
+            }.issubset(sample_record.reference.trust_labels)
+            with pytest.raises(SnapshotPromotionBlocked):
+                assert_snapshot_promotion_allowed(catalog, (sample_snapshot_id,))
+    finally:
+        ledger.close()
+        engine.dispose()
+        catalog.close()
+
+
+def test_non_blocking_archive_failure_still_fails_the_source_stage(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _config(tmp_path)
+    _configure_non_blocking_sample(config, tmp_path, sample_available=True)
+    archive = FakeObjectStoreArchive([])
+    archive_file = archive.archive_file
+
+    def fail_optional_archive(path, *, logical_path: str):
+        if "daily_sample_crosscheck" in logical_path:
+            raise RuntimeError("injected object-store archive failure")
+        return archive_file(path, logical_path=logical_path)
+
+    monkeypatch.setattr(archive, "archive_file", fail_optional_archive)
+    catalog, engine, ledger = _sqlite_fk_authority(tmp_path)
+    try:
+        service = _services(
+            tmp_path,
+            config,
+            FakeGoldPublisher([]),
+            catalog=catalog,
+            object_store_archive=archive,
+        )
+        service.production_ledger = ledger
+
+        result = service.execute(_request(OperationName.SOURCE_SYNC))
+
+        assert result.status == "failed"
+        assert result.outputs["error_type"] == "RuntimeError"
+        required = ledger.get_partition(
+            PartitionIdentity("required_daily", "daily", "2024-01-03")
+        )
+        optional = ledger.get_partition(
+            PartitionIdentity(
+                "optional_akshare", "daily_sample_crosscheck", "2024-01-03"
+            )
+        )
+        stage = ledger.get_partition(
+            PartitionIdentity("research_os", "stage_source", "2024-01-03")
+        )
+        assert required is not None and required.status is PartitionStatus.SUCCEEDED
+        assert optional is not None and optional.status is PartitionStatus.FAILED
+        assert stage is not None and stage.status is PartitionStatus.FAILED
+        assert ledger.list_incidents(limit=10) == ()
+        with Session(engine) as session:
+            capabilities = session.query(orm.SourceCapabilityModel).all()
+        assert capabilities == []
+        assert len(catalog.list_snapshots(tier="bronze", limit=10)) == 1
+    finally:
+        ledger.close()
+        engine.dispose()
+        catalog.close()
+
+
+@pytest.mark.parametrize("failure_type", [ValueError, RuntimeError])
+def test_non_blocking_programming_failure_is_not_provider_degradation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_type: type[Exception],
+) -> None:
+    config = _config(tmp_path)
+    _configure_non_blocking_sample(config, tmp_path, sample_available=True)
+    original_sync = application_services_module.sync_bronze
+
+    def fail_optional(source, *args, **kwargs):
+        if source.get("non_blocking") is True:
+            raise failure_type("injected optional-source programming failure")
+        return original_sync(source, *args, **kwargs)
+
+    monkeypatch.setattr(application_services_module, "sync_bronze", fail_optional)
+    catalog, engine, ledger = _sqlite_fk_authority(tmp_path)
+    try:
+        service = _services(
+            tmp_path,
+            config,
+            FakeGoldPublisher([]),
+            catalog=catalog,
+        )
+        service.production_ledger = ledger
+
+        result = service.execute(_request(OperationName.SOURCE_SYNC))
+
+        assert result.status == "failed"
+        assert result.outputs["error_type"] == failure_type.__name__
+        optional = ledger.get_partition(
+            PartitionIdentity(
+                "optional_akshare", "daily_sample_crosscheck", "2024-01-03"
+            )
+        )
+        stage = ledger.get_partition(
+            PartitionIdentity("research_os", "stage_source", "2024-01-03")
+        )
+        assert optional is not None and optional.status is PartitionStatus.FAILED
+        assert stage is not None and stage.status is PartitionStatus.FAILED
+        assert ledger.list_incidents(limit=10) == ()
+        with Session(engine) as session:
+            capabilities = session.query(orm.SourceCapabilityModel).all()
+        assert capabilities == []
+        assert len(catalog.list_snapshots(tier="bronze", limit=10)) == 1
+    finally:
+        ledger.close()
+        engine.dispose()
+        catalog.close()
+
+
+def test_non_blocking_capability_persistence_failure_is_not_provider_degradation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _config(tmp_path)
+    _configure_non_blocking_sample(config, tmp_path, sample_available=True)
+    catalog, engine, ledger = _sqlite_fk_authority(tmp_path)
+
+    def fail_capability(_record):
+        raise ProductionLedgerError("injected capability persistence failure")
+
+    monkeypatch.setattr(ledger, "upsert_capability", fail_capability)
+    try:
+        service = _services(
+            tmp_path,
+            config,
+            FakeGoldPublisher([]),
+            catalog=catalog,
+        )
+        service.production_ledger = ledger
+
+        result = service.execute(_request(OperationName.SOURCE_SYNC))
+
+        assert result.status == "failed"
+        assert result.outputs["error_type"] == "ProductionLedgerError"
+        optional = ledger.get_partition(
+            PartitionIdentity(
+                "optional_akshare", "daily_sample_crosscheck", "2024-01-03"
+            )
+        )
+        stage = ledger.get_partition(
+            PartitionIdentity("research_os", "stage_source", "2024-01-03")
+        )
+        assert optional is not None and optional.status is PartitionStatus.FAILED
+        assert stage is not None and stage.status is PartitionStatus.FAILED
+        assert ledger.list_incidents(limit=10) == ()
+        with Session(engine) as session:
+            capabilities = session.query(orm.SourceCapabilityModel).all()
+        assert capabilities == []
+        bronze = catalog.list_snapshots(tier="bronze", limit=10)
+        assert len(bronze) == 2
+        optional_bronze = next(
+            record
+            for record in bronze
+            if "non_blocking_sample" in record.reference.trust_labels
+        )
+        assert "gold_promotion_forbidden" in optional_bronze.reference.trust_labels
+    finally:
+        ledger.close()
+        engine.dispose()
+        catalog.close()
+
+
+def test_required_source_failure_remains_fail_closed(
+    tmp_path: Path,
+) -> None:
+    config = _config(tmp_path)
+    config["daily"]["sources"][0]["partition_cadence"] = {
+        "kind": "trading_session",
+        "ledger_identity": "required_daily",
+    }
+    missing_root = tmp_path / "missing-required-source"
+    missing_root.mkdir()
+    config["daily"]["sources"][0]["root"] = str(missing_root)
+    catalog, engine, ledger = _sqlite_fk_authority(tmp_path)
+    try:
+        service = _services(
+            tmp_path,
+            config,
+            FakeGoldPublisher([]),
+            catalog=catalog,
+        )
+        service.production_ledger = ledger
+
+        result = service.execute(_request(OperationName.SOURCE_SYNC))
+        assert result.status == "failed"
+        assert result.outputs["error_type"] == "RuntimeError"
+
+        required = ledger.get_partition(
+            PartitionIdentity("required_daily", "daily", "2024-01-03")
+        )
+        stage = ledger.get_partition(
+            PartitionIdentity("research_os", "stage_source", "2024-01-03")
+        )
+        assert required is not None and required.status is PartitionStatus.FAILED
+        assert stage is not None and stage.status is PartitionStatus.FAILED
+        assert ledger.list_incidents(limit=10) == ()
+        with Session(engine) as session:
+            capabilities = session.query(orm.SourceCapabilityModel).all()
+        assert capabilities == []
+    finally:
+        ledger.close()
+        engine.dispose()
+        catalog.close()
+
+
 def test_legacy_seed_trust_labels_block_silver_before_file_reconciliation(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -337,7 +709,12 @@ def test_legacy_seed_trust_labels_block_silver_before_file_reconciliation(
         status="completed",
         summary="injected legacy seed",
         outputs={
-            "sources": source.outputs["sources"],
+            "sources": [
+                {
+                    **source.outputs["sources"][0],
+                    "bronze_snapshot_id": blocked.snapshot_id,
+                }
+            ],
             "bronze_snapshot_ids": [blocked.snapshot_id],
         },
     )
@@ -352,6 +729,91 @@ def test_legacy_seed_trust_labels_block_silver_before_file_reconciliation(
     )
 
     with pytest.raises(OrchestrationFailure, match="block Silver promotion"):
+        service._source_reconciliation(_request(OperationName.SOURCE_RECONCILIATION))
+
+
+def test_stale_cached_non_blocking_source_cannot_enter_formal_silver(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _config(tmp_path)
+    service = _services(tmp_path, config, FakeGoldPublisher([]))
+    source = execute_operation(service, _request(OperationName.SOURCE_SYNC))
+    service.config["daily"]["sources"].append(
+        {
+            "source": "local_file",
+            "profile_name": "optional_akshare",
+            "non_blocking": True,
+            "evidence_role": "non_blocking_sample",
+        }
+    )
+    stale_row = {
+        key: value
+        for key, value in source.outputs["sources"][0].items()
+        if key != "reconciliation_eligible"
+    }
+    stale_row["source_config_index"] = 1
+    poisoned = OperationResult(
+        operation=OperationName.SOURCE_SYNC,
+        status="completed",
+        summary="cached by a pre-split source implementation",
+        outputs={
+            "sources": [source.outputs["sources"][0], stale_row],
+            "bronze_snapshot_ids": [
+                source.outputs["bronze_snapshot_ids"][0],
+                stale_row["bronze_snapshot_id"],
+            ],
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "_dependency",
+        lambda _request, operation, **_kwargs: (
+            poisoned
+            if operation is OperationName.SOURCE_SYNC
+            else pytest.fail("unexpected dependency")
+        ),
+    )
+
+    with pytest.raises(
+        OrchestrationFailure,
+        match="non-blocking source evidence appeared in formal source outputs",
+    ):
+        service._source_reconciliation(_request(OperationName.SOURCE_RECONCILIATION))
+
+
+def test_formal_source_cannot_disclaim_reconciliation_in_dependency_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _config(tmp_path)
+    service = _services(tmp_path, config, FakeGoldPublisher([]))
+    source = execute_operation(service, _request(OperationName.SOURCE_SYNC))
+    row = {
+        **source.outputs["sources"][0],
+        "reconciliation_eligible": False,
+    }
+    poisoned = OperationResult(
+        operation=OperationName.SOURCE_SYNC,
+        status="completed",
+        summary="injected contradictory role marker",
+        outputs={
+            "sources": [row],
+            "bronze_snapshot_ids": [row["bronze_snapshot_id"]],
+        },
+    )
+    monkeypatch.setattr(
+        service,
+        "_dependency",
+        lambda _request, operation, **_kwargs: (
+            poisoned
+            if operation is OperationName.SOURCE_SYNC
+            else pytest.fail("unexpected dependency")
+        ),
+    )
+
+    with pytest.raises(
+        OrchestrationFailure,
+        match="formal source explicitly forbids reconciliation",
+    ):
         service._source_reconciliation(_request(OperationName.SOURCE_RECONCILIATION))
 
 

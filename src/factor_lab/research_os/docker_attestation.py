@@ -137,6 +137,7 @@ _DANGEROUS_ENVIRONMENT_NAMES = frozenset(
 _RUNTIME_CONTRACT_DOMAIN = "research-os/host-docker-runtime-contract/v1"
 _DOCKER_AUTHORITY_DOMAIN = "research-os/host-docker-local-authority/v1"
 _ATTEMPT_DOMAIN = "research-os/host-docker-runtime-attestation-attempt-identity/v1"
+KERNEL_PROCESS_IDENTITY_SCHEME = "linux-boot-id-pid1-start-ticks-v1"
 _BACKEND_SERVICES = ("minio", "postgres")
 _BUSINESS_ENVIRONMENT_PREFIXES = (
     "AWS_",
@@ -579,18 +580,22 @@ def persisted_attestation_binding_errors(
             ),
             name="proof container_started_at",
         )
-        executing_container_started_at = _aware(
-            datetime.fromisoformat(
-                str(proof.get("executing_container_started_at") or "").replace(
-                    "Z", "+00:00"
-                )
-            ),
-            name="executing container_started_at",
+        raw_executing_started_at = proof.get("executing_container_started_at")
+        executing_container_started_at = (
+            _aware(
+                datetime.fromisoformat(
+                    str(raw_executing_started_at).replace("Z", "+00:00")
+                ),
+                name="executing container_started_at",
+            )
+            if raw_executing_started_at not in {None, ""}
+            else None
         )
     except (TypeError, ValueError, DockerAttestationError):
         inspected_at = verified_at = proof_attested_at = container_started_at = (
             proof_container_started_at
-        ) = executing_container_started_at = datetime.min.replace(tzinfo=timezone.utc)
+        ) = datetime.min.replace(tzinfo=timezone.utc)
+        executing_container_started_at = None
         errors.append("runtime_attestation_time_invalid")
 
     service_labels = metadata.get("service_labels")
@@ -618,6 +623,34 @@ def persisted_attestation_binding_errors(
     executing_container_identity = str(
         proof.get("executing_container_identity") or ""
     )
+    executing_process_identity = str(
+        proof.get("executing_process_identity") or ""
+    )
+    executing_process_identity_scheme = str(
+        proof.get("executing_process_identity_scheme") or ""
+    )
+    process_identity_fields_declared = bool(
+        executing_process_identity or executing_process_identity_scheme
+    )
+    has_kernel_process_identity = bool(
+        executing_process_identity_scheme
+        == KERNEL_PROCESS_IDENTITY_SCHEME
+        and re.fullmatch(r"[0-9a-f]{64}", executing_process_identity)
+    )
+    has_legacy_started_at = executing_container_started_at is not None
+    ambiguous_process_continuity = bool(
+        process_identity_fields_declared and has_legacy_started_at
+    )
+    if process_identity_fields_declared and not has_kernel_process_identity:
+        errors.append("runtime_process_identity_invalid")
+    if ambiguous_process_continuity:
+        errors.append("runtime_process_continuity_ambiguous")
+    valid_process_continuity = bool(
+        (has_kernel_process_identity and not has_legacy_started_at)
+        or (has_legacy_started_at and not process_identity_fields_declared)
+    )
+    if not valid_process_continuity and not ambiguous_process_continuity:
+        errors.append("runtime_process_continuity_missing")
     repo_digests = tuple(map(str, metadata.get("oci_repo_digests") or ()))
     base_digest = str(metadata.get("oci_base_digest") or "")
     stable_repo_digests = tuple(
@@ -738,10 +771,21 @@ def persisted_attestation_binding_errors(
         and container_id.startswith(executing_container_identity)
         and proof_container_started_at == container_started_at
         and container_started_at <= inspected_at
-        and abs(
-            (executing_container_started_at - container_started_at).total_seconds()
+        and valid_process_continuity
+        and (
+            (has_kernel_process_identity and not has_legacy_started_at)
+            or (
+                not process_identity_fields_declared
+                and executing_container_started_at is not None
+                and abs(
+                    (
+                        executing_container_started_at
+                        - container_started_at
+                    ).total_seconds()
+                )
+                <= 5.0
+            )
         )
-        <= 5.0
         and proof.get("executing_root_matches_init_root") is True
         and proof.get("deployment_identity_hash") == deployment_identity_hash
         and proof.get("runtime_contract_hash") == runtime_contract_hash
@@ -3014,6 +3058,7 @@ __all__ = [
     "DockerRuntimeEvidence",
     "HostDockerAttestationResult",
     "HostDockerRuntimeAttestor",
+    "KERNEL_PROCESS_IDENTITY_SCHEME",
     "host_docker_attempt_fingerprint",
     "persisted_attestation_binding_errors",
     "READINESS_ADMISSION",

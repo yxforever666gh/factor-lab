@@ -834,6 +834,80 @@ def test_production_rejects_missing_static_source_cadence(
         )
 
 
+@pytest.mark.parametrize(
+    "source_update",
+    [
+        {"non_blocking": True},
+        {"evidence_role": "non_blocking_sample"},
+    ],
+)
+def test_production_non_blocking_sample_requires_both_reviewed_markers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source_update: dict[str, object],
+) -> None:
+    config = _minimal_config(tmp_path)
+    payload = json.loads(config.read_text(encoding="utf-8"))
+    payload["daily"]["sources"][0].update(source_update)
+    config.write_text(json.dumps(payload), encoding="utf-8")
+    secret = tmp_path / "secret"
+    secret.write_text("credential", encoding="utf-8")
+    monkeypatch.setattr(module, "capture_epoch_provenance", lambda **_kwargs: object())
+
+    with pytest.raises(ProductionConfigurationError, match="must declare both"):
+        validate_production_config(
+            config, env=_environment(config, secret), require_mounts=False
+        )
+
+
+@pytest.mark.parametrize("value", [None, "false", "true", 0, 1])
+def test_production_non_blocking_rejects_json_type_confusion(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    value: object,
+) -> None:
+    config = _minimal_config(tmp_path)
+    payload = json.loads(config.read_text(encoding="utf-8"))
+    payload["daily"]["sources"][0]["non_blocking"] = value
+    config.write_text(json.dumps(payload), encoding="utf-8")
+    secret = tmp_path / "secret"
+    secret.write_text("credential", encoding="utf-8")
+    monkeypatch.setattr(module, "capture_epoch_provenance", lambda **_kwargs: object())
+
+    with pytest.raises(ProductionConfigurationError, match="JSON boolean"):
+        validate_production_config(
+            config, env=_environment(config, secret), require_mounts=False
+        )
+
+
+def test_production_required_gold_dataset_cannot_be_non_blocking(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = _minimal_config(tmp_path)
+    payload = json.loads(config.read_text(encoding="utf-8"))
+    payload["daily"]["sources"][0].update(
+        {
+            "non_blocking": True,
+            "evidence_role": "non_blocking_sample",
+        }
+    )
+    payload["daily"]["gold"] = {
+        "research_panel": {"required_datasets": ["daily"]}
+    }
+    config.write_text(json.dumps(payload), encoding="utf-8")
+    secret = tmp_path / "secret"
+    secret.write_text("credential", encoding="utf-8")
+    monkeypatch.setattr(module, "capture_epoch_provenance", lambda **_kwargs: object())
+
+    with pytest.raises(
+        ProductionConfigurationError,
+        match="required Gold dataset 'daily' cannot be non-blocking",
+    ):
+        validate_production_config(
+            config, env=_environment(config, secret), require_mounts=False
+        )
+
+
 def test_production_rejects_inline_llm_profile_credentials(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

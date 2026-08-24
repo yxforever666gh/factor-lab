@@ -407,12 +407,57 @@ def validate_production_config(
         raise ProductionConfigurationError(
             "production data evidence cannot depend on local_file sources"
         )
+    gold = daily.get("gold")
+    research_panel = gold.get("research_panel") if isinstance(gold, Mapping) else None
+    required_gold_datasets = set(
+        map(
+            str,
+            (
+                research_panel.get("required_datasets") or ()
+                if isinstance(research_panel, Mapping)
+                else ()
+            ),
+        )
+    )
     reviewed_diemeng_urls: dict[str, str] = {}
     for index, source in enumerate(sources):
         if not isinstance(source, Mapping):
             raise ProductionConfigurationError(f"$.daily.sources[{index}] must be an object")
         request = source.get("request")
         dataset = request.get("dataset") if isinstance(request, Mapping) else None
+        raw_non_blocking = source.get("non_blocking")
+        if "non_blocking" in source and type(raw_non_blocking) is not bool:
+            raise ProductionConfigurationError(
+                f"$.daily.sources[{index}].non_blocking must be a JSON boolean"
+            )
+        raw_evidence_role = source.get("evidence_role")
+        if (
+            "evidence_role" in source
+            and raw_evidence_role != "non_blocking_sample"
+        ):
+            raise ProductionConfigurationError(
+                f"$.daily.sources[{index}].evidence_role is unsupported"
+            )
+        declared_non_blocking = raw_non_blocking is True
+        non_blocking_role = raw_evidence_role == "non_blocking_sample"
+        if declared_non_blocking != non_blocking_role:
+            raise ProductionConfigurationError(
+                f"$.daily.sources[{index}] must declare both "
+                "non_blocking=true and evidence_role=non_blocking_sample"
+            )
+        if declared_non_blocking and str(dataset or "") in required_gold_datasets:
+            raise ProductionConfigurationError(
+                f"required Gold dataset {dataset!r} cannot be non-blocking"
+            )
+        if declared_non_blocking:
+            coverage_scope = source.get("coverage_scope")
+            if not isinstance(coverage_scope, Mapping) or (
+                coverage_scope.get("eligible_for_reconciliation") is not False
+            ):
+                raise ProductionConfigurationError(
+                    f"$.daily.sources[{index}] non-blocking sample must declare "
+                    "coverage_scope.eligible_for_reconciliation=false"
+                )
         cadence = source.get("partition_cadence")
         if not isinstance(cadence, Mapping):
             raise ProductionConfigurationError(
@@ -464,7 +509,7 @@ def validate_production_config(
                     f"Diemeng profile {profile_name!r} has inconsistent reviewed base_url values"
                 )
         if source.get("source") == "akshare" and (
-            dataset == "daily" or not bool(source.get("non_blocking"))
+            dataset == "daily" or not declared_non_blocking
         ):
             raise ProductionConfigurationError(
                 "AkShare single-symbol data must be a non-blocking sample dataset"

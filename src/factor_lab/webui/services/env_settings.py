@@ -15,7 +15,11 @@ from factor_lab.research_os.data_sources import (
     DiemengSourceAdapter,
     FieldContract,
     SourceHealth,
+    harden_tushare_client_transport,
     normalize_diemeng_base_url,
+    require_tushare_sdk_https_transport,
+    tushare_client_uses_direct_transport,
+    validate_production_diemeng_base_url,
 )
 from factor_lab.research_os.data_sync import resolve_credential
 from factor_lab.research_os.credentials import (
@@ -730,6 +734,64 @@ def test_data_source_connection(
     active_environ = environ if environ is not None else os.environ
     source_type = normalize_data_source_type(profile.get("source_type"))
     name = str(profile.get("name") or source_type or "data-source")
+    environment = (
+        str(active_environ.get("FACTOR_LAB_ENVIRONMENT") or "")
+        .strip()
+        .casefold()
+    )
+    production_role = (
+        str(active_environ.get("FACTOR_LAB_PRODUCTION_ROLE") or "")
+        .strip()
+        .casefold()
+    )
+    if production_role and production_role != "webui":
+        # This helper is a WebUI-only credential-bearing operation.  An
+        # unknown/misrouted production role must not downgrade it to the local
+        # transport path merely because the exact ``webui`` marker is absent.
+        return {
+            "ok": False,
+            "message": "数据源测试失败：生产 WebUI 角色配置无效。",
+            "source_type": source_type,
+            "name": name,
+        }
+    strict_webui_transport = bool(
+        environment == "production" or production_role == "webui"
+    )
+
+    # A test button is still a credential-bearing provider request.  The
+    # production WebUI must inspect the public route contract before resolving
+    # a secret reference, otherwise the pinned HTTP-only Tushare SDK (or an
+    # attacker-controlled Diemeng form URL) can exfiltrate a credential before
+    # the worker-side production validator ever sees the profile.
+    diemeng_base_url: str | None = None
+    if source_type == "tushare" and strict_webui_transport:
+        try:
+            require_tushare_sdk_https_transport()
+        except Exception:
+            return {
+                "ok": False,
+                "message": "数据源测试失败：生产环境尚未确认 Tushare HTTPS 传输。",
+                "source_type": source_type,
+                "name": name,
+            }
+    if source_type == "diemeng":
+        extra = _data_source_extra(profile.get("extra"))
+        candidate_url = extra["base_url"] or "https://mg.diemeng.chat"
+        if strict_webui_transport:
+            try:
+                diemeng_base_url = validate_production_diemeng_base_url(
+                    candidate_url
+                )
+            except Exception:
+                return {
+                    "ok": False,
+                    "message": "数据源测试失败：生产环境仅允许已审查的梦蝶 HTTPS 地址。",
+                    "source_type": source_type,
+                    "name": name,
+                }
+        else:
+            diemeng_base_url = candidate_url
+
     api_key = _profile_credential(profile, active_environ)
     if source_type == "tushare":
         if not api_key:
@@ -737,6 +799,12 @@ def test_data_source_connection(
         try:
             import tushare as ts
             pro = ts.pro_api(api_key)
+            if strict_webui_transport:
+                pro = harden_tushare_client_transport(pro)
+                if not tushare_client_uses_direct_transport(pro):
+                    raise RuntimeError(
+                        "Tushare production client transport is not sealed"
+                    )
             frame = pro.query("trade_cal", exchange="SSE", start_date="20240102", end_date="20240103", fields="cal_date,is_open")
             if frame is None or not hasattr(frame, "empty") or frame.empty:
                 raise RuntimeError("trade_cal 返回空结果")
@@ -746,8 +814,7 @@ def test_data_source_connection(
     if source_type == "diemeng":
         if not api_key:
             return {"ok": False, "message": "数据源测试失败：API Key 未填写。", "source_type": source_type, "name": name}
-        extra = _data_source_extra(profile.get("extra"))
-        base_url = extra["base_url"] or "https://mg.diemeng.chat"
+        assert diemeng_base_url is not None
         try:
             contract = DatasetContract(
                 dataset="trade_calendar",
@@ -760,7 +827,7 @@ def test_data_source_connection(
                 release_timing="provider calendar endpoint",
             )
             adapter = DiemengSourceAdapter(
-                base_url=base_url,
+                base_url=diemeng_base_url,
                 api_key=api_key,
                 contracts=(contract,),
                 endpoint_map={"trade_calendar": "/basic/calendar"},

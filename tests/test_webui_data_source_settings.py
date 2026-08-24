@@ -403,6 +403,147 @@ def test_tushare_probe_error_never_echoes_secret(monkeypatch) -> None:
     assert "***" in result["message"]
 
 
+def test_production_tushare_probe_blocks_before_secret_or_network(
+    monkeypatch,
+) -> None:
+    events: list[str] = []
+
+    def blocked_transport() -> str:
+        events.append("transport_preflight")
+        raise RuntimeError("installed SDK declares plaintext HTTP")
+
+    def forbidden_secret(*_args, **_kwargs) -> str:
+        events.append("secret_read")
+        raise AssertionError("secret must not be read before transport approval")
+
+    monkeypatch.setattr(
+        env_settings_service,
+        "require_tushare_sdk_https_transport",
+        blocked_transport,
+    )
+    monkeypatch.setattr(env_settings_service, "_profile_credential", forbidden_secret)
+    monkeypatch.setitem(
+        sys.modules,
+        "tushare",
+        SimpleNamespace(
+            pro_api=lambda _token: (_ for _ in ()).throw(
+                AssertionError("network client must not be constructed")
+            )
+        ),
+    )
+
+    result = env_settings_service.test_data_source_connection(
+        {
+            "name": "primary-tushare",
+            "source_type": "tushare",
+            "credential_ref": "secret://tushare_token",
+        },
+        environ={"FACTOR_LAB_PRODUCTION_ROLE": "webui"},
+    )
+
+    assert result == {
+        "ok": False,
+        "message": "数据源测试失败：生产环境尚未确认 Tushare HTTPS 传输。",
+        "source_type": "tushare",
+        "name": "primary-tushare",
+    }
+    assert events == ["transport_preflight"]
+
+
+def test_production_tushare_probe_seals_transport_after_preflight_and_secret(
+    monkeypatch,
+) -> None:
+    events: list[str] = []
+
+    class Client:
+        def query(self, *_args, **_kwargs):
+            events.append("provider_request")
+            return pd.DataFrame({"cal_date": ["20240102"], "is_open": [1]})
+
+    client = Client()
+    monkeypatch.setattr(
+        env_settings_service,
+        "require_tushare_sdk_https_transport",
+        lambda: events.append("transport_preflight")
+        or "https://api.waditu.com/dataapi",
+    )
+    monkeypatch.setattr(
+        env_settings_service,
+        "_profile_credential",
+        lambda *_args, **_kwargs: events.append("secret_read") or "private-token",
+    )
+    monkeypatch.setattr(
+        env_settings_service,
+        "harden_tushare_client_transport",
+        lambda value: events.append("transport_sealed") or value,
+    )
+    monkeypatch.setattr(
+        env_settings_service,
+        "tushare_client_uses_direct_transport",
+        lambda value: value is client,
+    )
+    monkeypatch.setitem(
+        sys.modules, "tushare", SimpleNamespace(pro_api=lambda _token: client)
+    )
+
+    result = env_settings_service.test_data_source_connection(
+        {"name": "primary-tushare", "source_type": "tushare"},
+        environ={"FACTOR_LAB_PRODUCTION_ROLE": "webui"},
+    )
+
+    assert result["ok"] is True
+    assert events == [
+        "transport_preflight",
+        "secret_read",
+        "transport_sealed",
+        "provider_request",
+    ]
+
+
+def test_production_tushare_probe_rejects_sdk_shape_drift_before_network(
+    monkeypatch,
+) -> None:
+    events: list[str] = []
+
+    class UnexpectedClientWrapper:
+        def query(self, *_args, **_kwargs):
+            events.append("provider_request")
+            raise AssertionError("an unsealed client must never reach the network")
+
+    wrapper = UnexpectedClientWrapper()
+    monkeypatch.setattr(
+        env_settings_service,
+        "require_tushare_sdk_https_transport",
+        lambda: events.append("transport_preflight")
+        or "https://api.waditu.com/dataapi",
+    )
+    monkeypatch.setattr(
+        env_settings_service,
+        "_profile_credential",
+        lambda *_args, **_kwargs: events.append("secret_read") or "private-token",
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "tushare",
+        SimpleNamespace(
+            pro_api=lambda _token: events.append("client_constructed") or wrapper
+        ),
+    )
+
+    result = env_settings_service.test_data_source_connection(
+        {"name": "primary-tushare", "source_type": "tushare"},
+        environ={"FACTOR_LAB_PRODUCTION_ROLE": "webui"},
+    )
+
+    assert result["ok"] is False
+    assert "transport is not sealed" in result["message"]
+    assert events == [
+        "transport_preflight",
+        "secret_read",
+        "client_constructed",
+    ]
+
+
 def test_diemeng_probe_resolves_secret_reference_without_exposing_key(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -435,3 +576,160 @@ def test_diemeng_probe_resolves_secret_reference_without_exposing_key(
     assert captured["api_key"] == "diemeng-private-key"
     assert captured["base_url"] == "https://mg.diemeng.chat"
     assert "diemeng-private-key" not in str(result)
+
+
+def test_production_diemeng_probe_rejects_unreviewed_route_before_secret(
+    monkeypatch,
+) -> None:
+    events: list[str] = []
+
+    def forbidden_secret(*_args, **_kwargs) -> str:
+        events.append("secret_read")
+        raise AssertionError("secret must not be read before route approval")
+
+    monkeypatch.setattr(env_settings_service, "_profile_credential", forbidden_secret)
+    monkeypatch.setattr(
+        env_settings_service,
+        "DiemengSourceAdapter",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("provider adapter must not be constructed")
+        ),
+    )
+
+    result = env_settings_service.test_data_source_connection(
+        {
+            "name": "primary-diemeng",
+            "source_type": "diemeng",
+            "credential_ref": "secret://diemeng_api_key",
+            "extra": {"base_url": "https://attacker.invalid/api"},
+        },
+        environ={"FACTOR_LAB_PRODUCTION_ROLE": "webui"},
+    )
+
+    assert result == {
+        "ok": False,
+        "message": "数据源测试失败：生产环境仅允许已审查的梦蝶 HTTPS 地址。",
+        "source_type": "diemeng",
+        "name": "primary-diemeng",
+    }
+    assert events == []
+
+
+def test_production_diemeng_probe_uses_canonical_reviewed_route(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class Adapter:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        def probe(self):
+            return SimpleNamespace(health=env_settings_service.SourceHealth.HEALTHY)
+
+    monkeypatch.setattr(env_settings_service, "DiemengSourceAdapter", Adapter)
+    monkeypatch.setattr(
+        env_settings_service,
+        "_profile_credential",
+        lambda *_args, **_kwargs: "private-diemeng-key",
+    )
+
+    result = env_settings_service.test_data_source_connection(
+        {
+            "name": "primary-diemeng",
+            "source_type": "diemeng",
+            "extra": {"base_url": "https://mg.diemeng.chat/api"},
+        },
+        environ={"FACTOR_LAB_PRODUCTION_ROLE": "webui"},
+    )
+
+    assert result["ok"] is True
+    assert captured["base_url"] == "https://data.diemeng.chat/api"
+
+
+def test_production_environment_without_role_still_blocks_tushare_before_secret(
+    monkeypatch,
+) -> None:
+    events: list[str] = []
+
+    def blocked_transport() -> str:
+        events.append("transport_preflight")
+        raise RuntimeError("installed SDK declares plaintext HTTP")
+
+    monkeypatch.setattr(
+        env_settings_service,
+        "require_tushare_sdk_https_transport",
+        blocked_transport,
+    )
+    monkeypatch.setattr(
+        env_settings_service,
+        "_profile_credential",
+        lambda *_args, **_kwargs: events.append("secret_read") or "private-token",
+    )
+
+    result = env_settings_service.test_data_source_connection(
+        {
+            "name": "primary-tushare",
+            "source_type": "tushare",
+            "credential_ref": "secret://tushare_token",
+        },
+        environ={"FACTOR_LAB_ENVIRONMENT": "production"},
+    )
+
+    assert result["ok"] is False
+    assert result["message"] == (
+        "数据源测试失败：生产环境尚未确认 Tushare HTTPS 传输。"
+    )
+    assert events == ["transport_preflight"]
+
+
+def test_production_environment_without_role_rejects_diemeng_route_before_secret(
+    monkeypatch,
+) -> None:
+    events: list[str] = []
+    monkeypatch.setattr(
+        env_settings_service,
+        "_profile_credential",
+        lambda *_args, **_kwargs: events.append("secret_read")
+        or "private-diemeng-key",
+    )
+
+    result = env_settings_service.test_data_source_connection(
+        {
+            "name": "primary-diemeng",
+            "source_type": "diemeng",
+            "credential_ref": "secret://diemeng_api_key",
+            "extra": {"base_url": "https://attacker.invalid/api"},
+        },
+        environ={"FACTOR_LAB_ENVIRONMENT": "production"},
+    )
+
+    assert result["ok"] is False
+    assert result["message"] == (
+        "数据源测试失败：生产环境仅允许已审查的梦蝶 HTTPS 地址。"
+    )
+    assert events == []
+
+
+@pytest.mark.parametrize("role", ("worker", "web-ui", "unknown"))
+def test_data_source_probe_rejects_non_webui_role_before_secret_or_network(
+    monkeypatch,
+    role: str,
+) -> None:
+    events: list[str] = []
+    monkeypatch.setattr(
+        env_settings_service,
+        "_profile_credential",
+        lambda *_args, **_kwargs: events.append("secret_read") or "private-token",
+    )
+
+    result = env_settings_service.test_data_source_connection(
+        {"name": "primary-akshare", "source_type": "akshare"},
+        environ={"FACTOR_LAB_PRODUCTION_ROLE": role},
+    )
+
+    assert result == {
+        "ok": False,
+        "message": "数据源测试失败：生产 WebUI 角色配置无效。",
+        "source_type": "akshare",
+        "name": "primary-akshare",
+    }
+    assert events == []

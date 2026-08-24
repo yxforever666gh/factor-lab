@@ -43,6 +43,31 @@ SHANGHAI = ZoneInfo("Asia/Shanghai")
 DEFAULT_SILVER_SNAPSHOT_DISCOVERY_CAP = 50_000
 _CATALOG_SNAPSHOT_PAGE_SIZE = 1_000
 
+# Formal Gold must be assembled only from Silver partitions emitted by the
+# authoritative Source -> reconciliation chain.  Catalog quality alone is not
+# a role boundary: engineering canaries intentionally persist accepted Silver
+# objects so their physical bytes remain auditable, but those objects are
+# non-forward evidence and must never become research parents.
+RESEARCH_SILVER_PARTITION_LABEL = "research_silver_partition"
+RESEARCH_SILVER_REQUIRED_TRUST_LABELS = frozenset(
+    {
+        "point_in_time",
+        "field_reconciled",
+        RESEARCH_SILVER_PARTITION_LABEL,
+    }
+)
+NON_RESEARCH_SILVER_TRUST_LABELS = frozenset(
+    {
+        "engineering_canary",
+        "physical_engineering_canary",
+        "non_forward",
+        "retrospective_physical_replay",
+        "legacy_execution_regression_only",
+        "st_history_unverified",
+        *FORBIDDEN_PROMOTION_TRUST_LABELS,
+    }
+)
+
 CORE_DAILY_DATASETS = ("daily", "daily_basic", "adj_factor", "trade_status")
 REFERENCE_DATASETS = (
     "trade_calendar",
@@ -161,15 +186,48 @@ def verify_silver_snapshot_input(
     """Verify identity, quality and exact file membership for a Silver input."""
 
     reference = item.reference
+    manifest = dict(reference.manifest or {})
     if reference.tier is not SnapshotTier.SILVER:
         raise GoldPanelError(f"Gold parent is not Silver: {reference.snapshot_id}")
     if reference.quality_status is not DataQualityStatus.ACCEPTED:
         raise GoldPanelError(f"Silver parent is not accepted: {reference.snapshot_id}")
-    forbidden = sorted(
-        set(map(str, reference.trust_labels)).intersection(
-            FORBIDDEN_PROMOTION_TRUST_LABELS
+    quality_by_manifest = {
+        "pass": DataQualityStatus.ACCEPTED,
+        "warning": DataQualityStatus.DISPUTED,
+        "blocked": DataQualityStatus.QUARANTINED,
+    }
+    try:
+        manifest_as_of = _parse_aware(
+            manifest.get("as_of"), name="Silver manifest as_of"
         )
+        reference_as_of = _parse_aware(
+            reference.as_of, name="Silver reference as_of"
+        )
+    except GoldPanelError:
+        raise GoldPanelError("Silver manifest/reference binding is invalid") from None
+    if not (
+        str(manifest.get("snapshot_id") or "") == reference.snapshot_id
+        and str(manifest.get("tier") or "") == reference.tier.value
+        and tuple(map(str, manifest.get("parent_snapshot_ids") or ()))
+        == tuple(reference.parent_snapshot_ids)
+        and tuple(map(str, manifest.get("trust_labels") or ()))
+        == tuple(reference.trust_labels)
+        and quality_by_manifest.get(str(manifest.get("quality_status") or ""))
+        is reference.quality_status
+        and manifest_as_of == reference_as_of
+        and reference.content_hash == reference.snapshot_id
+    ):
+        raise GoldPanelError("Silver manifest/reference binding is invalid")
+    trust_labels = set(map(str, reference.trust_labels))
+    missing_contract = sorted(
+        RESEARCH_SILVER_REQUIRED_TRUST_LABELS.difference(trust_labels)
     )
+    if missing_contract:
+        raise GoldPanelError(
+            "Silver parent lacks the formal research-promotion trust contract: "
+            f"{missing_contract}"
+        )
+    forbidden = sorted(trust_labels.intersection(NON_RESEARCH_SILVER_TRUST_LABELS))
     if forbidden:
         raise GoldPanelError(
             f"Silver parent carries non-promotable trust labels: {forbidden}"
@@ -238,12 +296,60 @@ def verify_parent_snapshot_closure(
             parent = catalog.get_snapshot(parent_id)
             if parent is None:
                 raise GoldPanelError(f"missing Bronze ancestor: {parent_id}")
-            if parent.reference.tier is not SnapshotTier.BRONZE:
+            ancestor = parent.reference
+            ancestor_manifest = dict(ancestor.manifest or {})
+            quality_by_manifest = {
+                "pass": DataQualityStatus.ACCEPTED,
+                "warning": DataQualityStatus.DISPUTED,
+                "blocked": DataQualityStatus.QUARANTINED,
+            }
+            try:
+                manifest_as_of = _parse_aware(
+                    ancestor_manifest.get("as_of"),
+                    name="Bronze manifest as_of",
+                )
+                reference_as_of = _parse_aware(
+                    ancestor.as_of,
+                    name="Bronze reference as_of",
+                )
+                manifest_identity = _manifest_identity(ancestor)
+            except (GoldPanelError, TypeError, ValueError):
+                raise GoldPanelError(
+                    "Bronze ancestor manifest/reference binding is invalid: "
+                    f"{parent_id}"
+                ) from None
+            if not (
+                parent_id
+                == ancestor.snapshot_id
+                == ancestor.content_hash
+                == str(ancestor_manifest.get("snapshot_id") or "")
+                == manifest_identity
+                and ancestor_manifest.get("schema_version")
+                == SNAPSHOT_SCHEMA_VERSION
+                and str(ancestor_manifest.get("tier") or "")
+                == ancestor.tier.value
+                and tuple(
+                    map(str, ancestor_manifest.get("parent_snapshot_ids") or ())
+                )
+                == tuple(ancestor.parent_snapshot_ids)
+                and tuple(map(str, ancestor_manifest.get("trust_labels") or ()))
+                == tuple(ancestor.trust_labels)
+                and quality_by_manifest.get(
+                    str(ancestor_manifest.get("quality_status") or "")
+                )
+                is ancestor.quality_status
+                and manifest_as_of == reference_as_of
+            ):
+                raise GoldPanelError(
+                    "Bronze ancestor manifest/reference binding is invalid: "
+                    f"{parent_id}"
+                )
+            if ancestor.tier is not SnapshotTier.BRONZE:
                 raise GoldPanelError(f"Silver ancestor is not Bronze: {parent_id}")
-            if parent.reference.quality_status is not DataQualityStatus.ACCEPTED:
+            if ancestor.quality_status is not DataQualityStatus.ACCEPTED:
                 raise GoldPanelError(f"Bronze ancestor is not accepted: {parent_id}")
             forbidden = sorted(
-                set(map(str, parent.reference.trust_labels)).intersection(
+                set(map(str, ancestor.trust_labels)).intersection(
                     FORBIDDEN_PROMOTION_TRUST_LABELS
                 )
             )
@@ -252,12 +358,6 @@ def verify_parent_snapshot_closure(
                     "Bronze ancestor carries non-promotable trust labels: "
                     f"{forbidden}"
                 )
-            if not (
-                parent.reference.snapshot_id
-                == parent.reference.content_hash
-                == _manifest_identity(parent.reference)
-            ):
-                raise GoldPanelError(f"Bronze ancestor identity is invalid: {parent_id}")
     return tuple(sorted(snapshot_ids))
 
 
@@ -311,6 +411,14 @@ def discover_cataloged_silver_inputs(
     root = Path(lake_root).resolve()
     result: list[SilverSnapshotInput] = []
     for record in records:
+        trust_labels = set(map(str, record.reference.trust_labels))
+        if not RESEARCH_SILVER_REQUIRED_TRUST_LABELS.issubset(trust_labels):
+            # Accepted calendar/bootstrap/canary Silver remains in the catalog
+            # for audit, but only an explicit authoritative research role may
+            # enter the formal Gold parent set.
+            continue
+        if trust_labels.intersection(NON_RESEARCH_SILVER_TRUST_LABELS):
+            continue
         entries = list(record.reference.manifest.get("files") or ())
         parquet_entries = [
             row
@@ -1439,6 +1547,9 @@ __all__ = [
     "GoldPanelArtifacts",
     "GoldPanelBuildResult",
     "GoldPanelError",
+    "NON_RESEARCH_SILVER_TRUST_LABELS",
+    "RESEARCH_SILVER_PARTITION_LABEL",
+    "RESEARCH_SILVER_REQUIRED_TRUST_LABELS",
     "ResearchGoldPanelService",
     "SilverSnapshotInput",
     "build_research_gold_panel",

@@ -36,7 +36,39 @@ class SourceHealth(str, Enum):
 
 
 class SourceContractError(ValueError):
-    """Raised when a provider response violates its declared Bronze contract."""
+    """A fail-closed source configuration, security or contract violation."""
+
+
+class SourceObservationError(SourceContractError):
+    """A safe, typed failure caused by one concrete source observation.
+
+    Only failures that occur at a provider call or returned-data boundary use
+    this type.  Reviewed configuration, credentials, transport sealing, rate
+    limits and internal invariants continue to raise their original fail-closed
+    exceptions.  ``failure_kind`` is deliberately drawn from a small public
+    vocabulary and messages must never contain provider-controlled prose.
+    """
+
+    _FAILURE_KINDS = frozenset(
+        {
+            "provider_error",
+            "provider_rejected",
+            "response_contract",
+            "source_missing",
+            "transport_error",
+        }
+    )
+
+    def __init__(self, message: str, *, failure_kind: str) -> None:
+        kind = str(failure_kind or "").strip()
+        if kind not in self._FAILURE_KINDS:
+            raise ValueError("source observation failure_kind is invalid")
+        self.failure_kind = kind
+        super().__init__(str(message))
+
+
+class _ProviderEndpointConfigurationError(TypeError):
+    """An adapter endpoint is absent; this is configuration, not availability."""
 
 
 _CREDENTIAL_KEY_PUBLIC_METADATA = frozenset(
@@ -129,7 +161,7 @@ def assert_credential_free_request_parameters(
     walk(value)
 
 
-class _ProviderResponseStatusError(SourceContractError):
+class _ProviderResponseStatusError(SourceObservationError):
     """A persistable provider rejection containing only reviewed numeric data.
 
     Provider response prose is untrusted: vendors have echoed credentials and
@@ -167,7 +199,7 @@ class _ProviderResponseStatusError(SourceContractError):
                 f"{self.provider} API rejected request "
                 f"(code={self.numeric_code})"
             )
-        super().__init__(message)
+        super().__init__(message, failure_kind="provider_rejected")
 
 
 def _safe_probe_failure_message(provider: str, exc: Exception) -> str:
@@ -178,8 +210,8 @@ def _safe_probe_failure_message(provider: str, exc: Exception) -> str:
             f"{provider} probe failed "
             f"({exc.classification}={exc.numeric_code})"
         )
-    if isinstance(exc, SourceContractError):
-        classification = "contract_error"
+    if isinstance(exc, SourceObservationError):
+        classification = exc.failure_kind
     elif isinstance(exc, requests.RequestException):
         classification = "transport_error"
     else:
@@ -349,18 +381,25 @@ def _tushare_query_with_direct_session(
         # normal traceback.
         request_failed = True
     if request_failed:
-        raise SourceContractError(
-            "Tushare direct request failed (transport_or_response_error)"
+        raise SourceObservationError(
+            "Tushare direct request failed (transport_or_response_error)",
+            failure_kind="transport_error",
         )
     if not isinstance(payload, Mapping):
-        raise SourceContractError("Tushare response must be an object")
+        raise SourceObservationError(
+            "Tushare response must be an object",
+            failure_kind="response_contract",
+        )
     invalid_code = False
     try:
         code = int(payload.get("code", -1))
     except (TypeError, ValueError):
         invalid_code = True
     if invalid_code:
-        raise SourceContractError("Tushare response code is invalid")
+        raise SourceObservationError(
+            "Tushare response code is invalid",
+            failure_kind="response_contract",
+        )
     if code != 0:
         raise _ProviderResponseStatusError(
             provider="Tushare",
@@ -369,18 +408,27 @@ def _tushare_query_with_direct_session(
         )
     data = payload.get("data")
     if not isinstance(data, Mapping):
-        raise SourceContractError("Tushare response data is invalid")
+        raise SourceObservationError(
+            "Tushare response data is invalid",
+            failure_kind="response_contract",
+        )
     columns = data.get("fields")
     items = data.get("items")
     if not isinstance(columns, list) or not isinstance(items, list):
-        raise SourceContractError("Tushare response table is invalid")
+        raise SourceObservationError(
+            "Tushare response table is invalid",
+            failure_kind="response_contract",
+        )
     malformed_table = False
     try:
         return pd.DataFrame(items, columns=list(map(str, columns)))
     except (TypeError, ValueError):
         malformed_table = True
     if malformed_table:  # pragma: no branch - the except path cannot return
-        raise SourceContractError("Tushare response table is malformed")
+        raise SourceObservationError(
+            "Tushare response table is malformed",
+            failure_kind="response_contract",
+        )
     raise AssertionError("unreachable Tushare response table state")  # pragma: no cover
 
 
@@ -621,20 +669,31 @@ def validate_source_frame(frame: pd.DataFrame, contract: DatasetContract) -> Non
     declared = set(contract.field_map)
     missing = sorted(declared - set(frame.columns))
     if missing:
-        raise SourceContractError(f"{contract.dataset} missing contracted fields: {missing}")
+        raise SourceObservationError(
+            f"{contract.dataset} missing contracted fields: {missing}",
+            failure_kind="response_contract",
+        )
     if frame.empty and not contract.allows_empty:
-        raise SourceContractError(f"{contract.dataset} returned no rows")
+        raise SourceObservationError(
+            f"{contract.dataset} returned no rows",
+            failure_kind="response_contract",
+        )
     null_key_fields = [name for name in contract.key_fields if frame[name].isna().any()]
     if null_key_fields:
-        raise SourceContractError(
-            f"{contract.dataset} has null key fields: {sorted(null_key_fields)}"
+        raise SourceObservationError(
+            f"{contract.dataset} has null key fields: {sorted(null_key_fields)}",
+            failure_kind="response_contract",
         )
     if not frame.empty and frame.duplicated(list(contract.key_fields)).any():
-        raise SourceContractError(f"{contract.dataset} has duplicate keys")
+        raise SourceObservationError(
+            f"{contract.dataset} has duplicate keys",
+            failure_kind="response_contract",
+        )
     for item in contract.fields:
         if not item.nullable and frame[item.name].isna().any():
-            raise SourceContractError(
-                f"{contract.dataset}.{item.name} is non-nullable but contains nulls"
+            raise SourceObservationError(
+                f"{contract.dataset}.{item.name} is non-nullable but contains nulls",
+                failure_kind="response_contract",
             )
 
 
@@ -719,13 +778,18 @@ class SourceAdapter(ABC):
         self._acquire_rate_limit(request.dataset)
         frame = self._fetch_frame(request)
         if not isinstance(frame, pd.DataFrame):
-            raise SourceContractError(
-                f"source {self.source_id!r} returned {type(frame).__name__}, expected DataFrame"
+            raise SourceObservationError(
+                f"source {self.source_id!r} returned "
+                f"{type(frame).__name__}, expected DataFrame",
+                failure_kind="response_contract",
             )
         if request.fields:
             omitted = sorted(set(request.fields) - set(frame.columns))
             if omitted:
-                raise SourceContractError(f"requested fields missing from response: {omitted}")
+                raise SourceObservationError(
+                    f"requested fields missing from response: {omitted}",
+                    failure_kind="response_contract",
+                )
         validate_source_frame(frame, contract)
         ingested_at = datetime.now(timezone.utc)
         # A vendor revision identifies the response bytes/semantics, not the
@@ -779,7 +843,9 @@ def _call_provider(client: Any, endpoint: str, parameters: Mapping[str, Any]) ->
         query = getattr(pro, "query", None)
         if callable(query):
             return query(endpoint, **dict(parameters))
-    raise TypeError(f"provider client has no callable endpoint {endpoint!r}")
+    raise _ProviderEndpointConfigurationError(
+        f"provider client has no callable endpoint {endpoint!r}"
+    )
 
 
 class TushareSourceAdapter(SourceAdapter):
@@ -841,8 +907,9 @@ class TushareSourceAdapter(SourceAdapter):
 
     def probe(self) -> ProbeResult:
         started = time.perf_counter()
+        self._acquire_rate_limit("trade_cal")
+        failure_message: str | None = None
         try:
-            self._acquire_rate_limit("trade_cal")
             value = _call_provider(
                 self.client,
                 "trade_cal",
@@ -853,13 +920,28 @@ class TushareSourceAdapter(SourceAdapter):
                     "fields": "exchange,cal_date,is_open",
                 },
             )
-            if not isinstance(value, pd.DataFrame):
-                raise TypeError("trade_cal probe did not return a DataFrame")
+        except _ProviderEndpointConfigurationError:
+            raise
+        except SourceObservationError as exc:
+            failure_message = _safe_probe_failure_message("Tushare", exc)
+        except SourceContractError:
+            # The sealed Tushare transport uses plain SourceContractError for
+            # credential, endpoint, timeout and transport-seal invariants.
+            # Those are deployment/configuration faults, not observations.
+            raise
+        except Exception:
+            # The provider-call boundary is the only place where an unknown
+            # SDK exception is classified as availability.  Never retain the
+            # raw exception: it may embed the request token or response body.
+            failure_message = "Tushare probe failed (provider_error)"
+        if failure_message is None and not isinstance(value, pd.DataFrame):
+            failure_message = "Tushare probe failed (response_contract)"
+        if failure_message is None:
             health = SourceHealth.HEALTHY
             message = "trade_cal endpoint reachable"
-        except Exception as exc:
+        else:
             health = SourceHealth.UNAVAILABLE
-            message = _safe_probe_failure_message("Tushare", exc)
+            message = failure_message
         return ProbeResult(
             source_id=self.source_id,
             health=health,
@@ -877,7 +959,11 @@ class TushareSourceAdapter(SourceAdapter):
         provider_failed = False
         try:
             value = _call_provider(self.client, endpoint, parameters)
-        except _ProviderResponseStatusError:
+        except _ProviderEndpointConfigurationError:
+            raise
+        except SourceObservationError:
+            raise
+        except SourceContractError:
             raise
         except Exception:
             # SDK/provider exceptions can embed response bodies, request
@@ -885,8 +971,9 @@ class TushareSourceAdapter(SourceAdapter):
             # a public adapter error or traceback cause.
             provider_failed = True
         if provider_failed:
-            raise SourceContractError(
-                "Tushare provider request failed (provider_error)"
+            raise SourceObservationError(
+                "Tushare provider request failed (provider_error)",
+                failure_kind="provider_error",
             )
         return value.copy() if isinstance(value, pd.DataFrame) else value
 
@@ -957,18 +1044,33 @@ class AkShareSourceAdapter(SourceAdapter):
 
     def probe(self) -> ProbeResult:
         started = time.perf_counter()
+        self._acquire_rate_limit(self.probe_endpoint)
+        failure_message: str | None = None
         try:
-            self._acquire_rate_limit(self.probe_endpoint)
             value = _call_provider(
                 self.client, self.probe_endpoint, self.probe_parameters
             )
-            if not isinstance(value, pd.DataFrame) or value.empty:
-                raise SourceContractError("AkShare probe returned no rows")
+        except _ProviderEndpointConfigurationError:
+            raise
+        except SourceObservationError as exc:
+            failure_message = _safe_probe_failure_message("AkShare", exc)
+        except SourceContractError:
+            raise
+        except Exception:
+            # AkShare exposes no stable provider exception hierarchy.  Keep
+            # normalization exactly at the SDK call so later programming and
+            # transformation errors remain fail-closed.
+            failure_message = "AkShare probe failed (provider_error)"
+        if failure_message is None and (
+            not isinstance(value, pd.DataFrame) or value.empty
+        ):
+            failure_message = "AkShare probe failed (response_contract)"
+        if failure_message is None:
             health = SourceHealth.HEALTHY
             message = f"{self.probe_endpoint} endpoint reachable"
-        except Exception as exc:
+        else:
             health = SourceHealth.UNAVAILABLE
-            message = f"{type(exc).__name__}: {exc}"
+            message = failure_message
         return ProbeResult(
             source_id=self.source_id,
             health=health,
@@ -985,7 +1087,22 @@ class AkShareSourceAdapter(SourceAdapter):
             raise SourceContractError(
                 f"no AkShare endpoint configured for {request.dataset!r}"
             ) from exc
-        value = _call_provider(self.client, endpoint, request.parameters)
+        provider_failed = False
+        try:
+            value = _call_provider(self.client, endpoint, request.parameters)
+        except _ProviderEndpointConfigurationError:
+            raise
+        except SourceObservationError:
+            raise
+        except SourceContractError:
+            raise
+        except Exception:
+            provider_failed = True
+        if provider_failed:
+            raise SourceObservationError(
+                "AkShare provider request failed (provider_error)",
+                failure_kind="provider_error",
+            )
         if not isinstance(value, pd.DataFrame):
             return value
         # Preserve the provider's raw columns and add only aliases explicitly
@@ -995,19 +1112,22 @@ class AkShareSourceAdapter(SourceAdapter):
         frame = value.copy()
         missing_sources = sorted(set(self.column_mapping) - set(frame.columns))
         if missing_sources:
-            raise SourceContractError(
-                f"AkShare response_field_mapping sources missing: {missing_sources}"
+            raise SourceObservationError(
+                f"AkShare response_field_mapping sources missing: {missing_sources}",
+                failure_kind="response_contract",
             )
         for source, target in self.column_mapping.items():
             if target in frame.columns and not frame[target].equals(frame[source]):
-                raise SourceContractError(
-                    f"AkShare mapped field {target!r} collides with provider response"
+                raise SourceObservationError(
+                    f"AkShare mapped field {target!r} collides with provider response",
+                    failure_kind="response_contract",
                 )
             frame[target] = frame[source]
         for target, value in self.constant_fields.items():
             if target in frame.columns and not frame[target].eq(value).all():
-                raise SourceContractError(
-                    f"AkShare constant field {target!r} collides with provider response"
+                raise SourceObservationError(
+                    f"AkShare constant field {target!r} collides with provider response",
+                    failure_kind="response_contract",
                 )
             frame[target] = value
         return frame
@@ -1079,7 +1199,10 @@ def _mapping_path(value: Any, path: str) -> Any:
     current = value
     for part in (item for item in str(path).split(".") if item):
         if not isinstance(current, Mapping) or part not in current:
-            raise SourceContractError(f"Diemeng response path {path!r} is missing")
+            raise SourceObservationError(
+                f"Diemeng response path {path!r} is missing",
+                failure_kind="response_contract",
+            )
         current = current[part]
     return current
 
@@ -1236,67 +1359,104 @@ class DiemengSourceAdapter(SourceAdapter):
         method = self.method_map.get(dataset, "GET")
         url = f"{self.base_url}{endpoint}"
         last_status_error: tuple[str, int] | None = None
-        had_unclassified_failure = False
+        last_observation_kind: str | None = None
         for attempt in range(1, self.max_attempts + 1):
+            kwargs: dict[str, Any] = {
+                "headers": {"apiKey": self._api_key},
+                "timeout": self.timeout_seconds,
+                # Never let requests carry the custom apiKey header to a
+                # redirect target.  Provider routing is part of the reviewed
+                # source contract and redirects fail closed.
+                "allow_redirects": False,
+            }
+            if method == "POST":
+                kwargs["json"] = dict(parameters)
+            else:
+                kwargs["params"] = dict(parameters)
+            request_failed = False
             try:
-                kwargs: dict[str, Any] = {
-                    "headers": {"apiKey": self._api_key},
-                    "timeout": self.timeout_seconds,
-                    # Never let requests carry the custom apiKey header to a
-                    # redirect target.  Provider routing is part of the
-                    # reviewed source contract and redirects fail closed.
-                    "allow_redirects": False,
-                }
-                if method == "POST":
-                    kwargs["json"] = dict(parameters)
-                else:
-                    kwargs["params"] = dict(parameters)
                 response = self.session.request(method, url, **kwargs)
-                status = int(response.status_code)
-                if 300 <= status < 400:
-                    raise _ProviderResponseStatusError(
-                        provider="Diemeng",
-                        classification="redirect_status",
-                        numeric_code=status,
-                    )
-                if status == 429 or status >= 500:
-                    last_status_error = ("http_status", status)
-                    had_unclassified_failure = False
-                    if attempt >= self.max_attempts:
-                        break
-                    self._retry_sleep(min(8.0, 0.5 * (2 ** (attempt - 1))))
-                    continue
-                if status >= 400:
-                    raise _ProviderResponseStatusError(
-                        provider="Diemeng",
-                        classification="http_status",
-                        numeric_code=status,
-                    )
-                payload = response.json()
-                if not isinstance(payload, Mapping):
-                    raise SourceContractError("Diemeng response must be an object")
-                invalid_code = False
-                try:
-                    code = int(payload.get("code", 0))
-                except (TypeError, ValueError):
-                    invalid_code = True
-                if invalid_code:
-                    raise SourceContractError("Diemeng response code is invalid")
-                if code != 200:
-                    raise _ProviderResponseStatusError(
-                        provider="Diemeng",
-                        classification="api_code",
-                        numeric_code=code,
-                    )
-                return payload
-            except SourceContractError:
-                raise
-            except Exception:  # network/JSON failures; never retain raw error
+            except Exception:
+                # The request call is the provider boundary.  Drop the raw
+                # exception before raising anything persistent because SDKs
+                # may echo headers, URLs or credentials in their errors.
+                request_failed = True
+            if request_failed:
                 last_status_error = None
-                had_unclassified_failure = True
+                last_observation_kind = "transport_error"
                 if attempt >= self.max_attempts:
                     break
                 self._retry_sleep(min(8.0, 0.5 * (2 ** (attempt - 1))))
+                continue
+
+            invalid_status = False
+            try:
+                status = int(response.status_code)
+            except (AttributeError, TypeError, ValueError):
+                invalid_status = True
+            if invalid_status:
+                last_status_error = None
+                last_observation_kind = "response_contract"
+                if attempt >= self.max_attempts:
+                    break
+                self._retry_sleep(min(8.0, 0.5 * (2 ** (attempt - 1))))
+                continue
+            if 300 <= status < 400:
+                raise _ProviderResponseStatusError(
+                    provider="Diemeng",
+                    classification="redirect_status",
+                    numeric_code=status,
+                )
+            if status == 429 or status >= 500:
+                last_status_error = ("http_status", status)
+                last_observation_kind = None
+                if attempt >= self.max_attempts:
+                    break
+                self._retry_sleep(min(8.0, 0.5 * (2 ** (attempt - 1))))
+                continue
+            if status >= 400:
+                raise _ProviderResponseStatusError(
+                    provider="Diemeng",
+                    classification="http_status",
+                    numeric_code=status,
+                )
+
+            response_failed = False
+            try:
+                payload = response.json()
+            except Exception:
+                # JSON decoding belongs to the returned-response boundary, not
+                # to application logic.  As above, do not retain the exception.
+                response_failed = True
+            if response_failed:
+                last_status_error = None
+                last_observation_kind = "response_contract"
+                if attempt >= self.max_attempts:
+                    break
+                self._retry_sleep(min(8.0, 0.5 * (2 ** (attempt - 1))))
+                continue
+            if not isinstance(payload, Mapping):
+                raise SourceObservationError(
+                    "Diemeng response must be an object",
+                    failure_kind="response_contract",
+                )
+            invalid_code = False
+            try:
+                code = int(payload.get("code", 0))
+            except (TypeError, ValueError):
+                invalid_code = True
+            if invalid_code:
+                raise SourceObservationError(
+                    "Diemeng response code is invalid",
+                    failure_kind="response_contract",
+                )
+            if code != 200:
+                raise _ProviderResponseStatusError(
+                    provider="Diemeng",
+                    classification="api_code",
+                    numeric_code=code,
+                )
+            return payload
         if last_status_error is not None:
             classification, numeric_code = last_status_error
             raise _ProviderResponseStatusError(
@@ -1304,10 +1464,12 @@ class DiemengSourceAdapter(SourceAdapter):
                 classification=classification,
                 numeric_code=numeric_code,
             )
-        assert had_unclassified_failure
-        raise SourceContractError(
+        if last_observation_kind is None:  # pragma: no cover - loop invariant
+            raise AssertionError("Diemeng retry loop ended without a failure")
+        raise SourceObservationError(
             "Diemeng request failed "
-            f"(transport_or_response_error; attempts={self.max_attempts})"
+            f"(transport_or_response_error; attempts={self.max_attempts})",
+            failure_kind=last_observation_kind,
         )
 
     def _rows(self, dataset: str, payload: Mapping[str, Any]) -> Any:
@@ -1328,24 +1490,28 @@ class DiemengSourceAdapter(SourceAdapter):
         elif isinstance(rows, Mapping):
             frame = pd.DataFrame([dict(rows)])
         else:
-            raise SourceContractError(
-                f"Diemeng {dataset!r} response contains no tabular data"
+            raise SourceObservationError(
+                f"Diemeng {dataset!r} response contains no tabular data",
+                failure_kind="response_contract",
             )
         missing_sources = sorted(set(self.column_mapping) - set(frame.columns))
         if missing_sources:
-            raise SourceContractError(
-                f"Diemeng response_field_mapping sources missing: {missing_sources}"
+            raise SourceObservationError(
+                f"Diemeng response_field_mapping sources missing: {missing_sources}",
+                failure_kind="response_contract",
             )
         for source, target in self.column_mapping.items():
             if target in frame.columns and not frame[target].equals(frame[source]):
-                raise SourceContractError(
-                    f"Diemeng mapped field {target!r} collides with response"
+                raise SourceObservationError(
+                    f"Diemeng mapped field {target!r} collides with response",
+                    failure_kind="response_contract",
                 )
             frame[target] = frame[source]
         for target, value in self.constant_fields.items():
             if target in frame.columns and not frame[target].eq(value).all():
-                raise SourceContractError(
-                    f"Diemeng constant field {target!r} collides with response"
+                raise SourceObservationError(
+                    f"Diemeng constant field {target!r} collides with response",
+                    failure_kind="response_contract",
                 )
             frame[target] = value
         return frame
@@ -1377,17 +1543,20 @@ class DiemengSourceAdapter(SourceAdapter):
                 "start_time": "2024-01-02",
                 "end_time": "2024-01-03",
             }
+        self._acquire_rate_limit(probe_dataset)
         try:
-            self._acquire_rate_limit(probe_dataset)
             frame = self._frame(
                 probe_dataset,
                 self._request_json(probe_dataset, request_parameters),
             )
             if frame.empty and not self.contracts[probe_dataset].allows_empty:
-                raise SourceContractError("Diemeng probe returned no rows")
+                raise SourceObservationError(
+                    "Diemeng probe returned no rows",
+                    failure_kind="response_contract",
+                )
             health = SourceHealth.HEALTHY
             message = f"{probe_dataset} endpoint reachable"
-        except Exception as exc:
+        except SourceObservationError as exc:
             health = SourceHealth.UNAVAILABLE
             message = _safe_probe_failure_message("Diemeng", exc)
         return ProbeResult(
@@ -1488,20 +1657,32 @@ class LocalFileSourceAdapter(SourceAdapter):
     def _fetch_frame(self, request: FetchRequest) -> pd.DataFrame:
         path = self._path_for(request)
         if not path.is_file():
-            raise FileNotFoundError(path)
+            raise SourceObservationError(
+                "local source file is missing",
+                failure_kind="source_missing",
+            )
         suffix = path.suffix.lower()
-        if suffix in self.readers:
-            frame = self.readers[suffix](path)
-        elif suffix in {".parquet", ".pq"}:
-            frame = pd.read_parquet(path, columns=list(request.fields) or None)
-        elif suffix == ".csv":
-            frame = pd.read_csv(path, usecols=list(request.fields) or None)
-        elif suffix in {".json", ".jsonl", ".ndjson"}:
-            frame = pd.read_json(path, lines=suffix in {".jsonl", ".ndjson"})
-            if request.fields:
-                frame = frame.loc[:, list(request.fields)]
-        else:
-            raise SourceContractError(f"unsupported local data format: {suffix}")
+        missing_during_read = False
+        try:
+            if suffix in self.readers:
+                frame = self.readers[suffix](path)
+            elif suffix in {".parquet", ".pq"}:
+                frame = pd.read_parquet(path, columns=list(request.fields) or None)
+            elif suffix == ".csv":
+                frame = pd.read_csv(path, usecols=list(request.fields) or None)
+            elif suffix in {".json", ".jsonl", ".ndjson"}:
+                frame = pd.read_json(path, lines=suffix in {".jsonl", ".ndjson"})
+                if request.fields:
+                    frame = frame.loc[:, list(request.fields)]
+            else:
+                raise SourceContractError(f"unsupported local data format: {suffix}")
+        except FileNotFoundError:
+            missing_during_read = True
+        if missing_during_read:
+            raise SourceObservationError(
+                "local source file disappeared during read",
+                failure_kind="source_missing",
+            )
         return frame
 
 
@@ -1766,6 +1947,7 @@ __all__ = [
     "SourceBatch",
     "SourceContractError",
     "SourceHealth",
+    "SourceObservationError",
     "TushareSourceAdapter",
     "TokenBucketRateLimiter",
     "assert_credential_free_request_parameters",

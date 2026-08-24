@@ -219,7 +219,7 @@
         }
       },
       "published_ports": [
-        {"container": "5432/tcp", "host_ip": "127.0.0.1", "host_port": "5433"}
+        {"container": "5432/tcp", "host_ip": "127.0.0.1", "host_port": "15432"}
       ],
       "security": {
         "cap_add": [],
