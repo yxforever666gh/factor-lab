@@ -83,16 +83,41 @@ Production readiness is intentionally separate from container health:
 - after source credentials have moved to reviewed `secret://` file bindings,
   the non-forward physical engineering canary and its dual-source calendar
   capability probe may temporarily use the currently valid credentials;
-- authoritative historical backfill requires verified vendor-side rotation of
-  both Tushare and Diemeng credentials exposed by old containers/repositories;
+- authoritative historical backfill normally requires verified vendor-side
+  rotation of credentials exposed by old containers/repositories. For this
+  local research-only deployment, the operator may instead record the closed
+  `retained_unrotated_operator_accepted` waiver. The waiver explicitly remains
+  `not_rotated`, binds the exact reviewed `secret://` reference, records an
+  aware acceptance time and fixed local-only reason, and is ineffective unless
+  that provider's reviewed HTTPS transport is also verified. The checked-in
+  records bind Tushare to `https://api.tushare.pro/dataapi` and Diemeng to
+  `https://data.diemeng.chat/api`;
 - formal forward activation additionally requires daemon-inspected OCI proof
   and an accepted open-execution adapter, followed by a PostgreSQL-persisted
   readiness audit covering the real capability probe, accepted Gold/full
   matrix, restore drill and soak;
-- the current Diemeng minute-history contract is explicitly insufficient for
-  formal opening-auction evidence. Static validation therefore reports only
-  `config_valid_canary_pending`; configuration JSON can never self-approve a
-  formal epoch.
+- formal opening collection uses Tushare `rt_min` through the reviewed direct
+  HTTPS route. The static contract is structurally capable but remains
+  `runtime_probe_gated`; only a live 09:30--09:35 session-bound observation can
+  create accepted execution capability. Configuration JSON can never
+  self-approve a formal epoch.
+
+Credential retention is a recorded operator risk decision, not vendor rotation
+evidence. It does not make a key private again, weaken field/data-quality gates,
+or admit an unencrypted source route. Removing the exact secret binding or the
+HTTPS transport proof automatically restores the rotation/readiness blocker.
+
+After deploying a validated release, persist the selected credential decision
+once from inside the worker environment:
+
+```powershell
+docker exec factor-lab-research-os-dagster-code-server-1 `
+  /usr/local/bin/factor-lab-entrypoint factor-lab readiness attest-credential-use
+```
+
+The emitted and persisted record contains only the credential name, decision
+kind and hashes; it never contains credential material. Run the live execution
+probe separately during the next accepted 09:30--09:35 trading window.
 
 No evidence epoch or true forward evidence is created by starting the stack.
 The first forward session must come from the accepted Gold trading calendar

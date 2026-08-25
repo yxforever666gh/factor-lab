@@ -825,6 +825,37 @@ def _production_readiness_status(args: argparse.Namespace) -> int:
     return 0 if audit.ready else 2
 
 
+def _production_credential_use_attestation(args: argparse.Namespace) -> int:
+    """Persist the validated execution credential decision without exposing it."""
+
+    settings = _settings(args)
+    _require_production(settings, "execution credential-use attestation")
+    if args.database_url:
+        raise ValueError(
+            "execution credential-use attestation rejects --database-url overrides; "
+            "use the configured production PostgreSQL authority"
+        )
+    services = _authoritative_services()
+    try:
+        authority = services._production_execution_snapshot_authority()
+        attestation = authority.migrate_credential_use_evidence()
+        source_id, dataset = authority.rotation_capability_identity
+    finally:
+        _close_services(services)
+    _emit(
+        {
+            "status": "completed",
+            "credential": attestation.credential,
+            "disposition": attestation.disposition,
+            "evidence_hash": attestation.evidence_hash,
+            "recorded_at": attestation.confirmed_at.isoformat(),
+            "capability": {"source_id": source_id, "dataset": dataset},
+            "credential_material_recorded": False,
+        }
+    )
+    return 0
+
+
 def _host_runtime_attestation(args: argparse.Namespace) -> int:
     """Persist Docker facts selected only by the host daemon and fixed labels."""
 
@@ -1601,6 +1632,8 @@ def build_parser() -> argparse.ArgumentParser:
     readiness_status.set_defaults(handler=_production_readiness_status)
     readiness_attest = readiness_commands.add_parser("attest-runtime")
     readiness_attest.set_defaults(handler=_host_runtime_attestation)
+    readiness_credential = readiness_commands.add_parser("attest-credential-use")
+    readiness_credential.set_defaults(handler=_production_credential_use_attestation)
 
     canary = commands.add_parser("canary")
     canary_commands = canary.add_subparsers(dest="canary_command", required=True)

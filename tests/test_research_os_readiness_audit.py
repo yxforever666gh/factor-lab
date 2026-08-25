@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 import hashlib
 import json
@@ -32,6 +33,11 @@ from factor_lab.research_os.execution_snapshot_authority import (
     OPEN_DATASET as TYPED_OPEN_DATASET,
     OUTPUT_CONTRACT_HASH as TYPED_EXECUTION_CONTRACT_HASH,
     OUTPUT_DATASET as TYPED_EXECUTION_OUTPUT_DATASET,
+)
+from factor_lab.research_os.execution_open_sources import (
+    diemeng_engineering_canary_execution_mapping,
+    diemeng_engineering_canary_opening_contract_hash,
+    engineering_canary_execution_contract_hash,
 )
 from factor_lab.research_os.docker_attestation import (
     ATTEMPT_AUTHORITY as HOST_DOCKER_ATTEMPT_AUTHORITY,
@@ -100,6 +106,16 @@ REQUIRED_DATASETS = (
     "stock_limit",
     "company_action",
 )
+ENGINEERING_CANARY_CONFIG = {
+    "evidence_scope": "retrospective_non_forward",
+    "execution_market_data": diemeng_engineering_canary_execution_mapping(),
+}
+CANARY_EXECUTION_CONTRACT_HASH = engineering_canary_execution_contract_hash(
+    ENGINEERING_CANARY_CONFIG
+)
+CANARY_OPENING_CONTRACT_HASH = diemeng_engineering_canary_opening_contract_hash(
+    ENGINEERING_CANARY_CONFIG
+)
 
 
 class FrozenCatalog:
@@ -118,6 +134,7 @@ def _config() -> dict:
     return {
         "daily": {
             "bootstrap": {"source_start": "2016-06-01"},
+            "engineering_canary": ENGINEERING_CANARY_CONFIG,
             "gold": {
                 "research_panel": {
                     "required_datasets": list(REQUIRED_DATASETS),
@@ -205,6 +222,9 @@ def _evidence(*, rotation_blocked: bool = False) -> ProductionConfigEvidence:
             "persisted_production_readiness_audit_missing",
         ),
         credential_rotation_blockers=rotation,
+        engineering_canary_execution_contract_hash=(
+            CANARY_EXECUTION_CONTRACT_HASH
+        ),
     )
 
 
@@ -322,7 +342,8 @@ def _physical_canary_snapshot(
     manifest = {
         "evidence_schema": PHYSICAL_CANARY_SCHEMA_VERSION,
         "evidence_class": "engineering_canary",
-        "evidence_scope": "non_forward",
+        "evidence_scope": "retrospective_non_forward",
+        "canary_execution_contract_hash": CANARY_EXECUTION_CONTRACT_HASH,
         "formal_epoch_eligible": False,
         "physical_source_attested": True,
         "controlled_test_adapter": False,
@@ -406,7 +427,7 @@ def _physical_canary_snapshot(
         quality_status=DataQualityStatus.ACCEPTED,
         trust_labels=(
             "physical_engineering_canary",
-            "non_forward",
+            "retrospective_non_forward",
             "retrospective_physical_replay",
         ),
         manifest=manifest,
@@ -771,6 +792,9 @@ class AuditSystem:
                 {
                     "deletion_challenge": deletion_challenge,
                     "source_canary_evidence_hash": source_canary_hash,
+                    "source_canary_execution_contract_hash": (
+                        CANARY_EXECUTION_CONTRACT_HASH
+                    ),
                     "source_snapshot_id": restored_evidence["snapshot_id"],
                     "object_sha256": restored_evidence["object_sha256"],
                     "size_bytes": restored_evidence["size_bytes"],
@@ -810,6 +834,9 @@ class AuditSystem:
                     )
                 ),
                 "source_canary_evidence_hash": source_canary_hash,
+                "source_canary_execution_contract_hash": (
+                    CANARY_EXECUTION_CONTRACT_HASH
+                ),
                 "source_snapshot_id": restored_evidence["snapshot_id"],
                 "source_snapshot_role": "mark",
                 "source_snapshot_trade_date": restored_evidence["trade_date"],
@@ -1153,7 +1180,7 @@ class AuditSystem:
                     completed_at=NOW - timedelta(hours=1),
                     metadata={
                         "evidence_class": "engineering_canary",
-                        "evidence_scope": "non_forward",
+                        "evidence_scope": "retrospective_non_forward",
                         "formal_epoch_eligible": False,
                     },
                 )
@@ -1438,6 +1465,11 @@ class AuditSystem:
                     "run_id": run_id,
                     "stage": stage,
                     "role": partition_role,
+                    "canary_execution_contract_hash": (
+                        CANARY_EXECUTION_CONTRACT_HASH
+                        if stage == "gold"
+                        else None
+                    ),
                     "opening_cross_check": partition_opening_audit,
                     "quality_status": (
                         "accepted" if stage == "data_quality" else None
@@ -1482,6 +1514,9 @@ class AuditSystem:
                         "run_id": run_id,
                         "stage": stage,
                         "role": role,
+                        "canary_execution_contract_hash": (
+                            CANARY_EXECUTION_CONTRACT_HASH
+                        ),
                         "opening_cross_check": opening_audit,
                     },
                 )
@@ -1516,6 +1551,23 @@ class AuditSystem:
                 probed_at=NOW - timedelta(hours=1),
             )
         )
+        opening_probe_hash = "d" * 64
+        self.ledger.upsert_capability(
+            CapabilityRecord(
+                source_id="diemeng",
+                dataset="opening_execution",
+                status=CapabilityStatus.ACCEPTED,
+                contract_hash=(
+                    "e" * 64
+                    if variant == "wrong_opening_probe_contract"
+                    else CANARY_OPENING_CONTRACT_HASH
+                ),
+                probe_hash=opening_probe_hash,
+                fields=("stock_code", "trade_time", "open"),
+                detail="bounded real SourceAdapter probe passed",
+                probed_at=NOW - timedelta(hours=1),
+            )
+        )
         claimed_session_hashes = [
             str(item["session_hash"]) for item in session_rows
         ]
@@ -1535,11 +1587,15 @@ class AuditSystem:
                 ),
                 "physical_canary_schema": PHYSICAL_CANARY_SCHEMA_VERSION,
                 "reconciliation_schema": "research-os/data-reconciliation/v1",
+                "canary_execution_contract_hash": (
+                    CANARY_EXECUTION_CONTRACT_HASH
+                ),
                 "mode": "production_image",
                 "build_provenance": evaluator_build,
             },
             "evidence_class": "engineering_canary",
-            "evidence_scope": "non_forward",
+            "evidence_scope": "retrospective_non_forward",
+            "canary_execution_contract_hash": CANARY_EXECUTION_CONTRACT_HASH,
             "formal_epoch_eligible": False,
             "physical_source_attested": True,
             "controlled_test_adapter": False,
@@ -1559,7 +1615,12 @@ class AuditSystem:
             "projected_session_count": 20,
             "partition_run_ids": sorted(canary_partition_ids),
             "source_probe_hashes": {
-                "official-canary:daily": canary_probe_hash
+                "official-canary:daily": canary_probe_hash,
+                **(
+                    {}
+                    if variant == "missing_opening_probe"
+                    else {"diemeng:opening_execution": opening_probe_hash}
+                ),
             },
             "snapshot_evidence": self.canary_object_evidence,
             "shadow_session_hashes": claimed_session_hashes,
@@ -1648,6 +1709,31 @@ def test_all_persisted_physical_facts_reach_formal_ready_and_are_idempotent(
         assert len(
             system.catalog.list_runs(run_type="production_readiness_audit")
         ) == 2
+    finally:
+        system.close()
+
+
+def test_credential_check_discloses_operator_retention_without_claiming_rotation(
+    tmp_path: Path,
+) -> None:
+    system = AuditSystem(tmp_path)
+    try:
+        system.evidence = replace(
+            system.evidence,
+            credential_retention_waivers=("tushare_token", "diemeng_api_key"),
+        )
+
+        check = system.auditor()._credential_rotation_check()
+
+        assert check.passed
+        assert check.evidence["credential_retention_waivers"] == [
+            "tushare_token",
+            "diemeng_api_key",
+        ]
+        assert check.evidence["all_required_credentials_vendor_rotated"] is False
+        assert check.evidence["credential_use_decision"] == (
+            "retained_unrotated_operator_accepted"
+        )
     finally:
         system.close()
 
@@ -2176,6 +2262,8 @@ def test_tushare_runtime_probe_chain_uses_dynamic_source_partition_and_honest_ti
         "tampered_dq_report",
         "invalid_dq_status",
         "invalid_dq_reconciliation",
+        "missing_opening_probe",
+        "wrong_opening_probe_contract",
     ),
 )
 def test_synthetic_stale_or_forged_canary_never_counts_as_physical(
@@ -2225,7 +2313,10 @@ def test_newer_current_window_failed_attempt_blocks_older_success(
                     "evidence_schema": PHYSICAL_CANARY_SCHEMA_VERSION,
                     "evaluator_identity": older.metadata["evaluator_identity"],
                     "evidence_class": "engineering_canary",
-                    "evidence_scope": "non_forward",
+                    "evidence_scope": "retrospective_non_forward",
+                    "canary_execution_contract_hash": (
+                        CANARY_EXECUTION_CONTRACT_HASH
+                    ),
                     "formal_epoch_eligible": False,
                     "physical_source_attested": True,
                     "controlled_test_adapter": False,

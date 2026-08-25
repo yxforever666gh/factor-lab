@@ -40,8 +40,10 @@ from .data_sources import (
     SourceHealth,
     harden_tushare_client_transport,
     tushare_client_uses_direct_transport,
+    validate_production_diemeng_base_url,
 )
 from .field_safety import is_forward_derived_field
+from .fingerprint import content_fingerprint
 
 
 TUSHARE_RT_MIN = "rt_min"
@@ -94,6 +96,159 @@ def diemeng_opening_session_request_template() -> dict[str, Any]:
         "page": 0,
         "page_size": 10000,
     }
+
+
+def diemeng_engineering_canary_execution_mapping(
+    base_url: str = "https://data.diemeng.chat/api",
+) -> dict[str, Any]:
+    """Return the closed retrospective execution source used only by canary.
+
+    Formal shadow collection deliberately uses Tushare's current-session
+    realtime endpoint. A 20-session engineering replay cannot use that
+    endpoint as historical evidence, so the canary has a separate, explicitly
+    non-formal Diemeng minute-history contract. Keeping the whole mapping
+    code-owned prevents configuration from widening the time range, paging,
+    endpoint, response shape, or credential binding.
+    """
+
+    reviewed_url = validate_production_diemeng_base_url(base_url)
+    return {
+        "source": "diemeng",
+        "profile_name": "primary-diemeng",
+        "credential_ref": "secret://diemeng_api_key",
+        "base_url": reviewed_url,
+        "dataset": "minute_history",
+        "endpoint": "/stock/history",
+        "method": "POST",
+        "response_path": "data.list",
+        "request": diemeng_opening_session_request_template(),
+        "contract": {
+            "key_fields": ["stock_code", "trade_time"],
+            "event_time_field": "trade_time",
+            "fields": [
+                "stock_code",
+                "trade_time",
+                "open",
+                "high",
+                "low",
+                "close",
+                "vol",
+                "amount",
+            ],
+            "execution_observation": {
+                "required_local_time": "09:30:00",
+                "timezone": "Asia/Shanghai",
+                "event_time_source": "trade_time",
+                "available_at_source": "trade_time",
+                "price_field": "open",
+            },
+        },
+        "availability": {
+            "mode": "event_timestamp",
+            "event_time_field": "trade_time",
+            "available_at_field": "trade_time",
+        },
+        "formal_capability": {
+            "status": "insufficient",
+            "reason": (
+                "minute history is retrospective engineering evidence and "
+                "cannot prove live opening execution"
+            ),
+            "formal_shadow_projection": "blocked",
+            "engineering_canary": True,
+        },
+        "end_of_day_mark": {
+            "source": "accepted_gold_close_snapshot",
+            "event_time": "15:00:00",
+            "available_at": "accepted_snapshot_time",
+        },
+    }
+
+
+def validate_diemeng_engineering_canary_execution_mapping(
+    value: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Validate and canonicalize the exact non-formal canary source mapping."""
+
+    if not isinstance(value, Mapping):
+        raise ValueError("engineering canary execution source must be an object")
+    try:
+        candidate = dict(value)
+        candidate["base_url"] = validate_production_diemeng_base_url(
+            str(candidate.get("base_url") or "")
+        )
+    except ValueError:
+        raise ValueError(
+            "engineering canary Diemeng source requires the reviewed HTTPS origin"
+        ) from None
+    expected = diemeng_engineering_canary_execution_mapping(candidate["base_url"])
+    if candidate != expected:
+        raise ValueError(
+            "engineering canary execution source must match the closed retrospective contract"
+        )
+    return expected
+
+
+def engineering_canary_execution_contract_hash(
+    canary: Mapping[str, Any],
+) -> str:
+    """Hash the exact retrospective source contract, excluding no fields."""
+
+    if not isinstance(canary, Mapping):
+        raise ValueError("engineering canary must be an object")
+    expected_fields = {"evidence_scope", "execution_market_data"}
+    if set(canary) != expected_fields:
+        raise ValueError(
+            "engineering canary must contain exactly evidence_scope and "
+            "execution_market_data"
+        )
+    if canary.get("evidence_scope") != "retrospective_non_forward":
+        raise ValueError(
+            "engineering canary must declare retrospective_non_forward evidence"
+        )
+    execution = validate_diemeng_engineering_canary_execution_mapping(
+        canary.get("execution_market_data")
+    )
+    return content_fingerprint(
+        {
+            "evidence_scope": "retrospective_non_forward",
+            "execution_market_data": execution,
+        },
+        domain="factor-lab/research-os/v1/engineering-canary-execution-contract",
+    )
+
+
+def diemeng_engineering_canary_opening_contract_hash(
+    canary: Mapping[str, Any],
+) -> str:
+    """Return the exact DatasetContract hash persisted by the canary probe."""
+
+    engineering_canary_execution_contract_hash(canary)
+    execution = validate_diemeng_engineering_canary_execution_mapping(
+        canary.get("execution_market_data")
+    )
+    contract = execution["contract"]
+    fields = tuple(map(str, contract["fields"]))
+    dtypes = {"stock_code": "string", "trade_time": "datetime"}
+    opening_contract = DatasetContract(
+        dataset="opening_execution",
+        key_fields=tuple(map(str, contract["key_fields"])),
+        fields=tuple(
+            FieldContract(
+                name=name,
+                dtype=dtypes.get(name, "float64"),
+                nullable=False,
+            )
+            for name in fields
+        ),
+        event_time_field=str(contract["event_time_field"]),
+        release_timing="provider event timestamp at the observed minute",
+        allows_empty=False,
+    )
+    return content_fingerprint(
+        opening_contract,
+        domain="factor-lab/research-os/v1/physical-canary-source-contract",
+    )
 
 
 def normalized_open_contract() -> DatasetContract:
@@ -541,6 +696,10 @@ __all__ = [
     "TUSHARE_RT_MIN_DAILY",
     "TUSHARE_RT_MIN_MAX_SYMBOLS_PER_REQUEST",
     "TushareRealtimeOpenAdapter",
+    "diemeng_engineering_canary_execution_mapping",
+    "diemeng_engineering_canary_opening_contract_hash",
     "diemeng_opening_session_request_template",
+    "engineering_canary_execution_contract_hash",
     "normalized_open_contract",
+    "validate_diemeng_engineering_canary_execution_mapping",
 ]

@@ -8,6 +8,10 @@ import pytest
 
 from factor_lab.research_os import production_config as module
 from factor_lab.research_os.data_sources import SourceContractError
+from factor_lab.research_os.execution_open_sources import (
+    diemeng_engineering_canary_execution_mapping,
+    engineering_canary_execution_contract_hash,
+)
 from factor_lab.research_os.production_config import (
     ProductionOperation,
     ProductionConfigurationError,
@@ -51,6 +55,12 @@ def _minimal_config(tmp_path: Path, **updates) -> Path:
                     "promotion_policy": "bronze_only_fail_closed",
                 },
             },
+            "engineering_canary": {
+                "evidence_scope": "retrospective_non_forward",
+                "execution_market_data": (
+                    diemeng_engineering_canary_execution_mapping()
+                ),
+            },
         },
         "sensors": {
             "partition_source": "postgresql_accepted_gold_calendar",
@@ -71,7 +81,96 @@ def _environment(path: Path, secret: Path) -> dict[str, str]:
         "FACTOR_LAB_SECRETS_ROOT": "/run/secrets",
         "FACTOR_LAB_SOURCE_BUNDLE_MANIFEST": "/opt/factor-lab/manifest.json",
         "TUSHARE_TOKEN_FILE": str(secret),
+        "DIEMENG_API_KEY_FILE": str(secret),
     }
+
+
+def _retention_waiver(credential_ref: str) -> dict[str, str]:
+    return {
+        "status": "retained_unrotated_operator_accepted",
+        "vendor_confirmation": "not_rotated",
+        "credential_ref": credential_ref,
+        "accepted_at": datetime.now().astimezone().isoformat(),
+        "reason": "operator_declined_rotation_for_local_research_only_runtime",
+    }
+
+
+def _verified_tushare_transport() -> dict[str, str]:
+    return {
+        "status": "verified_vendor_https",
+        "vendor_confirmation": "recorded",
+        "api_origin": "https://api.tushare.pro/dataapi",
+    }
+
+
+def _verified_diemeng_transport() -> dict[str, str]:
+    return {
+        "status": "verified_vendor_https",
+        "vendor_confirmation": "recorded",
+        "api_origin": "https://data.diemeng.chat/api",
+    }
+
+
+def _add_diemeng_source(payload: dict) -> None:
+    payload["daily"]["sources"].append(
+        {
+            "source": "diemeng",
+            "profile_name": "primary-diemeng",
+            "credential_ref": "secret://diemeng_api_key",
+            "base_url": "https://data.diemeng.chat/api",
+            "partition_cadence": {"kind": "trading_session"},
+            "request": {"dataset": "trade_calendar"},
+        }
+    )
+
+
+def _add_engineering_canary(payload: dict) -> None:
+    payload["daily"]["engineering_canary"] = {
+        "evidence_scope": "retrospective_non_forward",
+        "execution_market_data": diemeng_engineering_canary_execution_mapping(),
+    }
+
+
+def test_production_requires_engineering_canary_without_shadow_execution(
+    tmp_path: Path,
+) -> None:
+    config = _minimal_config(tmp_path)
+    payload = json.loads(config.read_text(encoding="utf-8"))
+    payload["daily"].pop("engineering_canary")
+    config.write_text(json.dumps(payload), encoding="utf-8")
+    secret = tmp_path / "secret"
+    secret.write_text("credential", encoding="utf-8")
+
+    with pytest.raises(
+        ProductionConfigurationError,
+        match="engineering_canary must explicitly declare",
+    ):
+        validate_production_config(
+            config,
+            env=_environment(config, secret),
+            require_mounts=False,
+        )
+
+
+def test_engineering_canary_contract_rejects_extra_top_level_fields(
+    tmp_path: Path,
+) -> None:
+    config = _minimal_config(tmp_path)
+    payload = json.loads(config.read_text(encoding="utf-8"))
+    canary = payload["daily"]["engineering_canary"]
+    canary["operator_note"] = "must-not-escape-contract-hash"
+    config.write_text(json.dumps(payload), encoding="utf-8")
+    secret = tmp_path / "secret"
+    secret.write_text("credential", encoding="utf-8")
+
+    with pytest.raises(ProductionConfigurationError, match="contain exactly"):
+        validate_production_config(
+            config,
+            env=_environment(config, secret),
+            require_mounts=False,
+        )
+    with pytest.raises(ValueError, match="contain exactly"):
+        engineering_canary_execution_contract_hash(canary)
 
 
 def _replace_primary_source_with_diemeng(path: Path, base_url: str) -> None:
@@ -219,7 +318,10 @@ def test_production_rejects_credential_ref_alias_but_accepts_public_security_met
         env=_environment(config, secret),
         require_mounts=False,
     )
-    assert evidence.credential_refs == ("secret://tushare_token",)
+    assert evidence.credential_refs == (
+        "secret://diemeng_api_key",
+        "secret://tushare_token",
+    )
 
 
 def test_credential_rotation_status_object_cannot_tunnel_unreviewed_material(
@@ -233,7 +335,7 @@ def test_credential_rotation_status_object_cannot_tunnel_unreviewed_material(
             "tushare_token": {
                 "status": "pending_vendor_rotation",
                 "vendor_confirmation": "pending",
-                "value": marker,
+                "reason": marker,
             }
         }
     }
@@ -383,7 +485,10 @@ def test_production_bootstrap_accepts_only_measured_bundle(
     )
 
     assert evidence.provenance is sentinel
-    assert evidence.credential_refs == ("secret://tushare_token",)
+    assert evidence.credential_refs == (
+        "secret://diemeng_api_key",
+        "secret://tushare_token",
+    )
     assert evidence.status == "config_valid_canary_pending"
     assert evidence.formal_execution_capable is False
     assert evidence.historical_backfill_allowed is False
@@ -393,6 +498,7 @@ def test_production_bootstrap_accepts_only_measured_bundle(
         "formal_execution_adapter_insufficient",
         "tushare_token_post_exposure_rotation_pending",
         "diemeng_api_key_post_exposure_rotation_pending",
+        "diemeng_https_transport_unverified",
         "tushare_https_transport_unverified",
         "persisted_production_readiness_audit_missing",
     }
@@ -403,6 +509,7 @@ def test_production_bootstrap_accepts_only_measured_bundle(
     assert set(canary.blockers) == {
         "tushare_token_post_exposure_rotation_pending",
         "diemeng_api_key_post_exposure_rotation_pending",
+        "diemeng_https_transport_unverified",
         "tushare_https_transport_unverified",
     }
     probe = admit_production_operation(
@@ -417,6 +524,7 @@ def test_production_bootstrap_accepts_only_measured_bundle(
     assert set(backfill.blockers) == {
         "tushare_token_post_exposure_rotation_pending",
         "diemeng_api_key_post_exposure_rotation_pending",
+        "diemeng_https_transport_unverified",
         "tushare_https_transport_unverified",
     }
     forward = admit_production_operation(
@@ -436,14 +544,16 @@ def test_unverified_tushare_transport_never_reads_exposed_token_file(
     monkeypatch.setattr(module, "capture_epoch_provenance", lambda **_kwargs: object())
     monkeypatch.setattr(
         module,
-        "require_tushare_sdk_https_transport",
-        lambda: (_ for _ in ()).throw(SourceContractError("HTTP blocked")),
+        "validate_tushare_https_origin",
+        lambda _origin: (_ for _ in ()).throw(SourceContractError("HTTP blocked")),
     )
     reads: list[str] = []
 
     def forbidden_resolution(reference: str, **_kwargs):
         reads.append(reference)
-        raise AssertionError("blocked Tushare credential was read")
+        if reference == "secret://tushare_token":
+            raise AssertionError("blocked Tushare credential was read")
+        return "reviewed-diemeng-key"
 
     monkeypatch.setattr(module, "resolve_credential_ref", forbidden_resolution)
     evidence = validate_production_config(
@@ -452,10 +562,222 @@ def test_unverified_tushare_transport_never_reads_exposed_token_file(
         require_mounts=False,
     )
 
-    assert reads == []
+    assert reads == ["secret://diemeng_api_key"]
+    assert evidence.source_transport_blockers == (
+        "tushare_https_transport_unverified",
+        "diemeng_https_transport_unverified",
+    )
+
+
+def test_operator_retention_waivers_admit_backfill_without_claiming_rotation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _minimal_config(tmp_path)
+    payload = json.loads(config.read_text(encoding="utf-8"))
+    _add_diemeng_source(payload)
+    payload["security"] = {
+        "source_transport": {
+            "tushare": _verified_tushare_transport(),
+            "diemeng": _verified_diemeng_transport(),
+        },
+        "credential_rotation": {
+            "tushare_token": _retention_waiver("secret://tushare_token"),
+            "diemeng_api_key": _retention_waiver("secret://diemeng_api_key"),
+        },
+    }
+    config.write_text(json.dumps(payload), encoding="utf-8")
+    secret = tmp_path / "secret"
+    secret.write_text("credential", encoding="utf-8")
+    env = _environment(config, secret)
+    env["DIEMENG_API_KEY_FILE"] = str(secret)
+    monkeypatch.setattr(module, "capture_epoch_provenance", lambda **_kwargs: object())
+
+    evidence = validate_production_config(
+        config,
+        env=env,
+        require_mounts=False,
+    )
+
+    assert evidence.historical_backfill_allowed is True
+    assert evidence.credential_rotation_blockers == ()
+    assert evidence.source_transport_blockers == ()
+    assert evidence.credential_retention_waivers == (
+        "tushare_token",
+        "diemeng_api_key",
+    )
+    assert not any("rotation_pending" in item for item in evidence.readiness_blockers)
+    assert admit_production_operation(
+        evidence,
+        ProductionOperation.AUTHORITATIVE_HISTORICAL_BACKFILL,
+    ).allowed
+    formal = admit_production_operation(
+        evidence,
+        ProductionOperation.FORMAL_FORWARD_ACTIVATION,
+    )
+    assert not any("rotation_pending" in item for item in formal.blockers)
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("vendor_confirmation", "recorded", "not rotated"),
+        ("credential_ref", "secret://other", "exact reviewed secret reference"),
+        ("reason", "operator accepts risk", "reviewed local-only reason"),
+        ("accepted_at", "2026-08-25T18:05:00", "aware, non-future"),
+        ("accepted_at", "2999-01-01T00:00:00+00:00", "aware, non-future"),
+    ],
+)
+def test_operator_retention_waiver_rejects_unreviewed_claims(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    field: str,
+    value: str,
+    message: str,
+) -> None:
+    config = _minimal_config(tmp_path)
+    payload = json.loads(config.read_text(encoding="utf-8"))
+    _add_diemeng_source(payload)
+    tushare_waiver = _retention_waiver("secret://tushare_token")
+    tushare_waiver[field] = value
+    payload["security"] = {
+        "source_transport": {
+            "tushare": _verified_tushare_transport(),
+            "diemeng": _verified_diemeng_transport(),
+        },
+        "credential_rotation": {
+            "tushare_token": tushare_waiver,
+            "diemeng_api_key": _retention_waiver("secret://diemeng_api_key"),
+        },
+    }
+    config.write_text(json.dumps(payload), encoding="utf-8")
+    secret = tmp_path / "secret"
+    secret.write_text("credential", encoding="utf-8")
+    env = _environment(config, secret)
+    env["DIEMENG_API_KEY_FILE"] = str(secret)
+    monkeypatch.setattr(module, "capture_epoch_provenance", lambda **_kwargs: object())
+
+    with pytest.raises(ProductionConfigurationError, match=message):
+        validate_production_config(config, env=env, require_mounts=False)
+
+
+def test_operator_retention_waiver_is_inactive_without_reviewed_https(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _minimal_config(tmp_path)
+    payload = json.loads(config.read_text(encoding="utf-8"))
+    _add_diemeng_source(payload)
+    alternate_tushare_transport = _verified_tushare_transport()
+    alternate_tushare_transport["api_origin"] = (
+        "https://api.waditu.com/dataapi"
+    )
+    payload["security"] = {
+        "source_transport": {
+            "tushare": alternate_tushare_transport,
+            "diemeng": _verified_diemeng_transport(),
+        },
+        "credential_rotation": {
+            "tushare_token": _retention_waiver("secret://tushare_token"),
+            "diemeng_api_key": _retention_waiver("secret://diemeng_api_key"),
+        },
+    }
+    config.write_text(json.dumps(payload), encoding="utf-8")
+    secret = tmp_path / "secret"
+    secret.write_text("credential", encoding="utf-8")
+    env = _environment(config, secret)
+    env["DIEMENG_API_KEY_FILE"] = str(secret)
+    monkeypatch.setattr(module, "capture_epoch_provenance", lambda **_kwargs: object())
+
+    evidence = validate_production_config(config, env=env, require_mounts=False)
+
+    assert evidence.historical_backfill_allowed is False
+    assert evidence.credential_retention_waivers == ("diemeng_api_key",)
+    assert evidence.credential_rotation_blockers == (
+        "tushare_token_post_exposure_rotation_pending",
+    )
     assert evidence.source_transport_blockers == (
         "tushare_https_transport_unverified",
     )
+
+
+def test_diemeng_retention_waiver_requires_its_exact_reviewed_https_record(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _minimal_config(tmp_path)
+    payload = json.loads(config.read_text(encoding="utf-8"))
+    _add_diemeng_source(payload)
+    payload["security"] = {
+        "source_transport": {"tushare": _verified_tushare_transport()},
+        "credential_rotation": {
+            "tushare_token": _retention_waiver("secret://tushare_token"),
+            "diemeng_api_key": _retention_waiver("secret://diemeng_api_key"),
+        },
+    }
+    config.write_text(json.dumps(payload), encoding="utf-8")
+    secret = tmp_path / "secret"
+    secret.write_text("credential", encoding="utf-8")
+    env = _environment(config, secret)
+    env["DIEMENG_API_KEY_FILE"] = str(secret)
+    monkeypatch.setattr(module, "capture_epoch_provenance", lambda **_kwargs: object())
+
+    evidence = validate_production_config(config, env=env, require_mounts=False)
+
+    assert evidence.historical_backfill_allowed is False
+    assert evidence.credential_retention_waivers == ("tushare_token",)
+    assert evidence.credential_rotation_blockers == (
+        "diemeng_api_key_post_exposure_rotation_pending",
+    )
+    assert evidence.source_transport_blockers == (
+        "diemeng_https_transport_unverified",
+    )
+
+
+def test_vendor_rotated_diemeng_still_requires_reviewed_https_transport(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _minimal_config(tmp_path)
+    payload = json.loads(config.read_text(encoding="utf-8"))
+    _add_diemeng_source(payload)
+    payload["security"] = {
+        "source_transport": {"tushare": _verified_tushare_transport()},
+        "credential_rotation": {
+            "tushare_token": {
+                "status": "verified_post_exposure",
+                "vendor_confirmation": "recorded",
+            },
+            "diemeng_api_key": {
+                "status": "verified_post_exposure",
+                "vendor_confirmation": "recorded",
+            },
+        },
+    }
+    config.write_text(json.dumps(payload), encoding="utf-8")
+    secret = tmp_path / "secret"
+    secret.write_text("credential", encoding="utf-8")
+    env = _environment(config, secret)
+    env["DIEMENG_API_KEY_FILE"] = str(secret)
+    monkeypatch.setattr(module, "capture_epoch_provenance", lambda **_kwargs: object())
+
+    evidence = validate_production_config(
+        config,
+        env=env,
+        require_mounts=False,
+    )
+
+    assert evidence.historical_backfill_allowed is False
+    assert evidence.credential_rotation_blockers == ()
+    assert evidence.source_transport_blockers == (
+        "diemeng_https_transport_unverified",
+    )
+    admission = admit_production_operation(
+        evidence,
+        ProductionOperation.AUTHORITATIVE_HISTORICAL_BACKFILL,
+    )
+    assert admission.allowed is False
+    assert admission.blockers == ("diemeng_https_transport_unverified",)
 
 
 def test_static_config_never_self_approves_formal_epoch_readiness(
@@ -473,6 +795,7 @@ def test_static_config_never_self_approves_formal_epoch_readiness(
             },
         }
     }
+    _add_engineering_canary(payload)
     payload["security"] = {
         "credential_rotation": {
             "tushare_token": {
@@ -558,18 +881,26 @@ def test_tushare_realtime_open_is_structurally_capable_but_runtime_probe_gated(
             },
         }
     }
+    _add_engineering_canary(payload)
     config.write_text(json.dumps(payload), encoding="utf-8")
     secret = tmp_path / "secret"
     secret.write_text("credential", encoding="utf-8")
     monkeypatch.setattr(module, "capture_epoch_provenance", lambda **_kwargs: object())
+    env = _environment(config, secret)
+    env["DIEMENG_API_KEY_FILE"] = str(secret)
 
     evidence = validate_production_config(
         config,
-        env=_environment(config, secret),
+        env=env,
         require_mounts=False,
     )
 
     assert evidence.formal_execution_capable is True
+    assert evidence.engineering_canary_execution_contract_hash == (
+        engineering_canary_execution_contract_hash(
+            payload["daily"]["engineering_canary"]
+        )
+    )
     assert "formal_execution_adapter_insufficient" not in evidence.readiness_blockers
     assert "persisted_production_readiness_audit_missing" in evidence.readiness_blockers
 
@@ -672,23 +1003,36 @@ def test_checked_in_production_config_has_no_self_reported_secrets_or_ids() -> N
         "promotion_policy": "bronze_only_fail_closed",
     }
     assert payload["sensors"]["partition_source"] == "postgresql_accepted_gold_calendar"
+    assert payload["security"]["source_transport"] == {
+        "tushare": {
+            "status": "verified_vendor_https",
+            "vendor_confirmation": "recorded",
+            "api_origin": "https://api.tushare.pro/dataapi",
+        },
+        "diemeng": {
+            "status": "verified_vendor_https",
+            "vendor_confirmation": "recorded",
+            "api_origin": "https://data.diemeng.chat/api",
+        },
+    }
     assert payload["security"]["credential_rotation"]["tushare_token"] == {
-        "status": "pending_vendor_rotation",
-        "vendor_confirmation": "pending",
-        "required_before": [
-            "historical_backfill",
-            "formal_forward_epoch_activation",
-        ],
+        "status": "retained_unrotated_operator_accepted",
+        "vendor_confirmation": "not_rotated",
+        "credential_ref": "secret://tushare_token",
+        "accepted_at": "2026-08-25T18:05:00+08:00",
+        "reason": "operator_declined_rotation_for_local_research_only_runtime",
     }
     assert payload["security"]["credential_rotation"]["diemeng_api_key"] == {
-        "status": "pending_vendor_rotation",
-        "vendor_confirmation": "pending",
-        "required_before": [
-            "authoritative_calendar_bootstrap",
-            "historical_backfill",
-            "formal_forward_epoch_activation",
-        ],
+        "status": "retained_unrotated_operator_accepted",
+        "vendor_confirmation": "not_rotated",
+        "credential_ref": "secret://diemeng_api_key",
+        "accepted_at": "2026-08-25T18:05:00+08:00",
+        "reason": "operator_declined_rotation_for_local_research_only_runtime",
     }
+    assert "verified_post_exposure" not in json.dumps(
+        payload["security"]["credential_rotation"],
+        sort_keys=True,
+    )
 
     for source in payload["daily"]["sources"]:
         assert source["partition_cadence"]["kind"] in {
@@ -718,25 +1062,51 @@ def test_checked_in_production_config_has_no_self_reported_secrets_or_ids() -> N
             assert released < next_session_open
     assert (
         payload["daily"]["shadow"]["execution_market_data"]["profile_name"]
-        == "primary-diemeng"
+        == "primary-tushare"
     )
     execution = payload["daily"]["shadow"]["execution_market_data"]
     assert execution["request"] == {
-        "stock_code": "${ticker}",
-        "level": "1min",
-        "start_time": "${partition_key} 09:30:00",
-        "end_time": "${partition_key} 15:00:00",
-        "page": 0,
-        "page_size": 10000,
+        "ts_code": "${decision_universe_csv}",
+        "freq": "1MIN",
+    }
+    assert execution["batching"] == {
+        "mode": "sorted_deterministic_chunks",
+        "maximum_symbols_per_request": 300,
     }
     assert execution["availability"] == {
-        "mode": "event_timestamp",
-        "event_time_field": "trade_time",
-        "available_at_field": "trade_time",
+        "mode": "collector_ingested_at",
+        "event_time_field": "time",
+        "available_at_field": "ingested_at",
+        "maximum_delay_minutes": 5,
     }
-    assert execution["contract"]["execution_observation"]["required_local_time"] == "09:30:00"
-    assert execution["formal_capability"]["formal_shadow_projection"] == "blocked"
+    assert execution["source"] == "tushare"
+    assert execution["dataset"] == execution["endpoint"] == "rt_min"
+    assert execution["method"] == "SDK"
+    assert execution["credential_ref"] == "secret://tushare_token"
+    assert execution["contract"] == {
+        "key_fields": ["ts_code", "time"],
+        "event_time_field": "time",
+        "fields": [
+            "ts_code",
+            "time",
+            "open",
+            "close",
+            "high",
+            "low",
+            "vol",
+            "amount",
+        ],
+    }
+    assert execution["formal_capability"] == {
+        "status": "runtime_probe_required",
+        "formal_shadow_projection": "runtime_probe_gated",
+    }
     assert execution["end_of_day_mark"]["source"] == "accepted_gold_close_snapshot"
+    canary = payload["daily"]["engineering_canary"]
+    assert canary["evidence_scope"] == "retrospective_non_forward"
+    assert canary["execution_market_data"] == (
+        diemeng_engineering_canary_execution_mapping()
+    )
     stock_limit = next(
         source
         for source in payload["daily"]["sources"]
@@ -761,14 +1131,21 @@ def test_production_profile_ledger_is_exact_and_never_contains_raw_keys(
 
     env["FACTOR_LAB_DATA_SOURCE_PROFILES_JSON"] = json.dumps(
         [
-            {
-                "name": "primary-tushare",
+                {
+                    "name": "primary-tushare",
                 "source_type": "tushare",
                 "credential_ref": "secret://tushare_token",
                 "api_key": "",
-                "enabled": True,
-            }
-        ]
+                    "enabled": True,
+                },
+                {
+                    "name": "primary-diemeng",
+                    "source_type": "diemeng",
+                    "credential_ref": "secret://diemeng_api_key",
+                    "api_key": "",
+                    "enabled": True,
+                },
+            ]
     )
     validate_production_config(config, env=env, require_mounts=False)
 

@@ -6,28 +6,30 @@
   "security": {
     "source_transport": {
       "tushare": {
-        "status": "pending_vendor_https_confirmation",
-        "vendor_confirmation": "pending",
-        "api_origin": ""
+        "status": "verified_vendor_https",
+        "vendor_confirmation": "recorded",
+        "api_origin": "https://api.tushare.pro/dataapi"
+      },
+      "diemeng": {
+        "status": "verified_vendor_https",
+        "vendor_confirmation": "recorded",
+        "api_origin": "https://data.diemeng.chat/api"
       }
     },
     "credential_rotation": {
       "tushare_token": {
-        "status": "pending_vendor_rotation",
-        "vendor_confirmation": "pending",
-        "required_before": [
-          "historical_backfill",
-          "formal_forward_epoch_activation"
-        ]
+        "status": "retained_unrotated_operator_accepted",
+        "vendor_confirmation": "not_rotated",
+        "credential_ref": "secret://tushare_token",
+        "accepted_at": "2026-08-25T18:05:00+08:00",
+        "reason": "operator_declined_rotation_for_local_research_only_runtime"
       },
       "diemeng_api_key": {
-        "status": "pending_vendor_rotation",
-        "vendor_confirmation": "pending",
-        "required_before": [
-          "authoritative_calendar_bootstrap",
-          "historical_backfill",
-          "formal_forward_epoch_activation"
-        ]
+        "status": "retained_unrotated_operator_accepted",
+        "vendor_confirmation": "not_rotated",
+        "credential_ref": "secret://diemeng_api_key",
+        "accepted_at": "2026-08-25T18:05:00+08:00",
+        "reason": "operator_declined_rotation_for_local_research_only_runtime"
       }
     }
   },
@@ -1949,20 +1951,13 @@
         }
       }
     },
-    "shadow": {
-      "input_mode": "authoritative_pg",
-      "account": {
-        "account_id": "champion-shadow",
-        "name": "Factor Lab Champion Shadow",
-        "initial_capital": 50000000,
-        "opened_at": "2026-08-22T15:00:00+08:00",
-        "currency": "CNY"
-      },
+    "engineering_canary": {
+      "evidence_scope": "retrospective_non_forward",
       "execution_market_data": {
         "source": "diemeng",
         "profile_name": "primary-diemeng",
         "credential_ref": "secret://diemeng_api_key",
-        "base_url": "https://diemeng.chat/api",
+        "base_url": "https://data.diemeng.chat/api",
         "dataset": "minute_history",
         "endpoint": "/stock/history",
         "method": "POST",
@@ -2006,9 +2001,67 @@
         },
         "formal_capability": {
           "status": "insufficient",
-          "reason": "minute history does not prove opening-auction tradability or exact auction execution state",
+          "reason": "minute history is retrospective engineering evidence and cannot prove live opening execution",
           "formal_shadow_projection": "blocked",
           "engineering_canary": true
+        },
+        "end_of_day_mark": {
+          "source": "accepted_gold_close_snapshot",
+          "event_time": "15:00:00",
+          "available_at": "accepted_snapshot_time"
+        }
+      }
+    },
+    "shadow": {
+      "input_mode": "authoritative_pg",
+      "account": {
+        "account_id": "champion-shadow",
+        "name": "Factor Lab Champion Shadow",
+        "initial_capital": 50000000,
+        "opened_at": "2026-08-22T15:00:00+08:00",
+        "currency": "CNY"
+      },
+      "execution_market_data": {
+        "source": "tushare",
+        "profile_name": "primary-tushare",
+        "credential_ref": "secret://tushare_token",
+        "dataset": "rt_min",
+        "endpoint": "rt_min",
+        "method": "SDK",
+        "request": {
+          "ts_code": "${decision_universe_csv}",
+          "freq": "1MIN"
+        },
+        "batching": {
+          "mode": "sorted_deterministic_chunks",
+          "maximum_symbols_per_request": 300
+        },
+        "contract": {
+          "key_fields": [
+            "ts_code",
+            "time"
+          ],
+          "event_time_field": "time",
+          "fields": [
+            "ts_code",
+            "time",
+            "open",
+            "close",
+            "high",
+            "low",
+            "vol",
+            "amount"
+          ]
+        },
+        "availability": {
+          "mode": "collector_ingested_at",
+          "event_time_field": "time",
+          "available_at_field": "ingested_at",
+          "maximum_delay_minutes": 5
+        },
+        "formal_capability": {
+          "status": "runtime_probe_required",
+          "formal_shadow_projection": "runtime_probe_gated"
         },
         "end_of_day_mark": {
           "source": "accepted_gold_close_snapshot",

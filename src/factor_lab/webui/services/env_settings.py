@@ -17,9 +17,9 @@ from factor_lab.research_os.data_sources import (
     SourceHealth,
     harden_tushare_client_transport,
     normalize_diemeng_base_url,
-    require_tushare_sdk_https_transport,
     tushare_client_uses_direct_transport,
     validate_production_diemeng_base_url,
+    validate_tushare_https_origin,
 )
 from factor_lab.research_os.data_sync import resolve_credential
 from factor_lab.research_os.credentials import (
@@ -764,13 +764,16 @@ def test_data_source_connection(
     # attacker-controlled Diemeng form URL) can exfiltrate a credential before
     # the worker-side production validator ever sees the profile.
     diemeng_base_url: str | None = None
-    if source_type == "tushare" and strict_webui_transport:
+    tushare_origin: str | None = None
+    if source_type == "tushare":
         try:
-            require_tushare_sdk_https_transport()
+            tushare_origin = validate_tushare_https_origin(
+                "https://api.tushare.pro/dataapi"
+            )
         except Exception:
             return {
                 "ok": False,
-                "message": "数据源测试失败：生产环境尚未确认 Tushare HTTPS 传输。",
+                "message": "数据源测试失败：Tushare HTTPS 传输配置无效。",
                 "source_type": source_type,
                 "name": name,
             }
@@ -799,12 +802,12 @@ def test_data_source_connection(
         try:
             import tushare as ts
             pro = ts.pro_api(api_key)
-            if strict_webui_transport:
-                pro = harden_tushare_client_transport(pro)
-                if not tushare_client_uses_direct_transport(pro):
-                    raise RuntimeError(
-                        "Tushare production client transport is not sealed"
-                    )
+            setattr(pro, "_DataApi__http_url", tushare_origin)
+            pro = harden_tushare_client_transport(pro)
+            if strict_webui_transport and not tushare_client_uses_direct_transport(pro):
+                raise RuntimeError(
+                    "Tushare production client transport is not sealed"
+                )
             frame = pro.query("trade_cal", exchange="SSE", start_date="20240102", end_date="20240103", fields="cal_date,is_open")
             if frame is None or not hasattr(frame, "empty") or frame.empty:
                 raise RuntimeError("trade_cal 返回空结果")

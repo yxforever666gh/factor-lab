@@ -586,11 +586,46 @@ def _production_tushare_execution_payload() -> dict[str, Any]:
     }
 
 
+def _operator_retention_waiver(
+    credential_ref: str = "secret://tushare_token",
+    *,
+    accepted_at: str = "2026-08-20T00:00:00+00:00",
+) -> dict[str, str]:
+    return {
+        "status": "retained_unrotated_operator_accepted",
+        "vendor_confirmation": "not_rotated",
+        "credential_ref": credential_ref,
+        "accepted_at": accepted_at,
+        "reason": "operator_declined_rotation_for_local_research_only_runtime",
+    }
+
+
+def _production_tushare_retention_payload() -> dict[str, Any]:
+    payload = _production_tushare_execution_payload()
+    payload["security"] = {
+        "source_transport": {
+            "tushare": {
+                "status": "verified_vendor_https",
+                "vendor_confirmation": "recorded",
+                "api_origin": "https://api.waditu.com/dataapi",
+            },
+        },
+        "credential_rotation": {
+            "tushare_token": _operator_retention_waiver(),
+        },
+    }
+    return payload
+
+
 @pytest.fixture
 def production_factory(authority_factory, tmp_path: Path, monkeypatch):
     count = 0
 
-    def factory():
+    def factory(
+        *,
+        payload: Mapping[str, Any] | None = None,
+        credential_retention_waivers: tuple[str, ...] = (),
+    ):
         nonlocal count
         _, catalog, ledger, filesystem, *_ = authority_factory()
         root = tmp_path / f"production-factory-{count}"
@@ -602,13 +637,20 @@ def production_factory(authority_factory, tmp_path: Path, monkeypatch):
         (secrets_root / "diemeng_api_key").write_text(
             "fixture-new-diemeng-key-0001\n", encoding="utf-8"
         )
+        (secrets_root / "tushare_token").write_text(
+            "fixture-new-tushare-token-0001\n", encoding="utf-8"
+        )
         config_path = root / "research_os_orchestration.production.json"
         config_path.write_text(
-            json.dumps(_production_execution_payload()), encoding="utf-8"
+            json.dumps(
+                _production_execution_payload() if payload is None else payload
+            ),
+            encoding="utf-8",
         )
         evidence = SimpleNamespace(
             path=config_path.resolve(),
             runtime_artifact_root=artifact_root.resolve(),
+            credential_retention_waivers=credential_retention_waivers,
         )
         monkeypatch.setattr(
             execution_authority_module,
@@ -1109,7 +1151,9 @@ def test_production_pending_rotation_blocks_before_probe_or_network(
     )
     authority, *_ = authority_factory(adapter=adapter, runtime_mode="production")
 
-    with pytest.raises(ExecutionNetworkBlocked, match="vendor-confirmed rotation"):
+    with pytest.raises(
+        ExecutionNetworkBlocked, match="persisted accepted-use evidence"
+    ):
         authority.observe_open(SESSION)
 
     assert adapter.probe_calls == 0
@@ -1199,16 +1243,32 @@ def test_production_factory_has_no_market_payload_seams_and_normalizes_host(
     assert authority.formal_open_collection_capable is False
 
 
-def test_http_only_tushare_factory_blocks_before_secret_or_client_creation(
-    production_factory, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize(
+    "configured_origin",
+    [
+        None,
+        "http://api.tushare.pro/dataapi",
+        "https://attacker.invalid/dataapi",
+        "https://api.tushare.pro/dataapi?redirect=attacker",
+    ],
+)
+def test_missing_or_unsafe_tushare_origin_blocks_before_secret_or_client_creation(
+    production_factory,
+    monkeypatch: pytest.MonkeyPatch,
+    configured_origin: str | None,
 ) -> None:
     base, ledger, secrets_root, config_path = production_factory()
     (secrets_root / "tushare_token").write_text(
         "fixture-new-tushare-token-0001\n", encoding="utf-8"
     )
-    config_path.write_text(
-        json.dumps(_production_tushare_execution_payload()), encoding="utf-8"
-    )
+    payload = _production_tushare_execution_payload()
+    if configured_origin is not None:
+        payload["security"] = {
+            "source_transport": {
+                "tushare": {"api_origin": configured_origin},
+            }
+        }
+    config_path.write_text(json.dumps(payload), encoding="utf-8")
     import tushare as ts
 
     credential_reads = 0
@@ -1241,7 +1301,7 @@ def test_http_only_tushare_factory_blocks_before_secret_or_client_creation(
     monkeypatch.setattr(ts, "pro_api", forbidden_client_creation)
     with pytest.raises(
         ProductionConfigurationError,
-        match="HTTPS transport is pending vendor/SDK confirmation",
+        match="reviewed direct HTTPS origin",
     ):
         ExecutionSnapshotAuthority.from_production_config(
             config_path=config_path,
@@ -1258,6 +1318,189 @@ def test_http_only_tushare_factory_blocks_before_secret_or_client_creation(
     assert credential_reads == 0
     assert client_creations == 0
     assert production_validations == 0
+
+
+def test_reviewed_tushare_origin_is_bound_and_transport_is_sealed(
+    production_factory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    base, ledger, secrets_root, config_path = production_factory()
+    (secrets_root / "tushare_token").write_text(
+        "fixture-new-tushare-token-0001\n", encoding="utf-8"
+    )
+    reviewed_origin = "https://api.waditu.com/dataapi"
+    payload = _production_tushare_execution_payload()
+    payload["security"] = {
+        "source_transport": {
+            "tushare": {"api_origin": reviewed_origin},
+        }
+    }
+    config_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    import tushare as ts
+
+    events: list[str] = []
+    observed_origins: list[str] = []
+    clients: list[Any] = []
+    original_validator = execution_authority_module.validate_tushare_https_origin
+    original_secret_reader = execution_authority_module._fixed_secret_line
+    original_pro_api = ts.pro_api
+
+    def validate_origin(value: str) -> str:
+        events.append("transport_preflight")
+        observed_origins.append(value)
+        return original_validator(value)
+
+    def read_secret(*args, **kwargs) -> str:
+        events.append("secret_read")
+        return original_secret_reader(*args, **kwargs)
+
+    def create_client(token: str):
+        events.append("client_constructed")
+        client = original_pro_api(token)
+        clients.append(client)
+        return client
+
+    monkeypatch.setattr(
+        execution_authority_module, "validate_tushare_https_origin", validate_origin
+    )
+    monkeypatch.setattr(execution_authority_module, "_fixed_secret_line", read_secret)
+    monkeypatch.setattr(ts, "pro_api", create_client)
+
+    authority = ExecutionSnapshotAuthority.from_production_config(
+        config_path=config_path,
+        env={
+            "FACTOR_LAB_PRODUCTION_ROLE": "worker",
+            "FACTOR_LAB_SECRETS_ROOT": str(secrets_root),
+        },
+        catalog=base.catalog,
+        ledger=ledger,
+        archive=base.archive,
+        cache_root=base.cache_root / "tushare",
+    )
+
+    assert observed_origins == [reviewed_origin]
+    assert events == ["transport_preflight", "secret_read", "client_constructed"]
+    assert len(clients) == 1
+    assert authority.open_adapter.client is clients[0]
+    assert authority.open_adapter.client._DataApi__http_url == reviewed_origin
+    assert execution_authority_module.tushare_client_uses_direct_transport(
+        authority.open_adapter.client
+    )
+    session = getattr(
+        authority.open_adapter.client, "_factor_lab_direct_http_session"
+    )
+    assert session.trust_env is False
+    assert session.proxies == {}
+    assert session.verify is True
+
+
+def test_operator_retention_authority_is_idempotent_secret_free_and_admitted(
+    production_factory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    authority, ledger, secrets_root, _ = production_factory(
+        payload=_production_tushare_retention_payload(),
+        credential_retention_waivers=("tushare_token",),
+    )
+
+    assert authority.rotation_capability_identity == (
+        "security",
+        "tushare_token_retention",
+    )
+    first = authority.migrate_credential_use_evidence()
+    second = authority.migrate_credential_use_evidence()
+
+    assert first == second
+    assert first.credential == "tushare_token"
+    assert first.disposition == "operator_accepted_unrotated_retention"
+    assert authority.persisted_rotation_attestation() == first
+    with ledger.engine.connect() as connection:
+        rows = connection.execute(
+            select(orm.SourceCapabilityModel).where(
+                orm.SourceCapabilityModel.source_id == "security",
+                orm.SourceCapabilityModel.dataset == "tushare_token_retention",
+            )
+        ).mappings().all()
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["status"] == "accepted"
+    assert row["detail"] == "operator_accepted_unrotated_retention"
+    assert row["probe_hash"] == first.evidence_hash
+    serialized_row = json.dumps(dict(row), default=str, sort_keys=True)
+    secret = (secrets_root / "tushare_token").read_text(encoding="utf-8").strip()
+    assert secret not in serialized_row
+    assert "secret://tushare_token" not in serialized_row
+
+    network_calls = 0
+
+    def forbidden_network(*_args, **_kwargs):
+        nonlocal network_calls
+        network_calls += 1
+        raise AssertionError("retention precondition must not trigger the provider here")
+
+    monkeypatch.setattr(authority.open_adapter, "fetch_open_batch", forbidden_network)
+    with pytest.raises(ExecutionNetworkBlocked, match="live-only") as caught:
+        authority.observe_open(SESSION)
+    assert "accepted-use evidence" not in str(caught.value)
+    assert network_calls == 0
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["configuration", "accepted_at", "credential_ref", "transport_origin"],
+)
+def test_operator_retention_authority_fails_closed_after_bound_input_changes(
+    production_factory,
+    mutation: str,
+) -> None:
+    initial_payload = _production_tushare_retention_payload()
+    authority, ledger, secrets_root, config_path = production_factory(
+        payload=initial_payload,
+        credential_retention_waivers=("tushare_token",),
+    )
+    authority.migrate_credential_use_evidence()
+
+    changed_payload = json.loads(json.dumps(initial_payload))
+    waiver = changed_payload["security"]["credential_rotation"]["tushare_token"]
+    if mutation == "configuration":
+        changed_payload["operator_policy_revision"] = "changed-after-acceptance"
+    elif mutation == "accepted_at":
+        waiver["accepted_at"] = "2026-08-19T00:00:00+00:00"
+    elif mutation == "credential_ref":
+        waiver["credential_ref"] = "secret://diemeng_api_key"
+    elif mutation == "transport_origin":
+        changed_payload["security"]["source_transport"]["tushare"][
+            "api_origin"
+        ] = "https://api.tushare.pro/dataapi"
+    else:  # pragma: no cover - the parameter list is closed above
+        raise AssertionError(mutation)
+    config_path.write_text(json.dumps(changed_payload), encoding="utf-8")
+
+    construction = lambda: ExecutionSnapshotAuthority.from_production_config(
+        config_path=config_path,
+        env={
+            "FACTOR_LAB_PRODUCTION_ROLE": "worker",
+            "FACTOR_LAB_SECRETS_ROOT": str(secrets_root),
+        },
+        catalog=authority.catalog,
+        ledger=ledger,
+        archive=authority.archive,
+        cache_root=authority.cache_root / f"changed-{mutation}",
+    )
+    if mutation == "credential_ref":
+        with pytest.raises(
+            ProductionConfigurationError,
+            match="retention waiver differs from the reviewed unrotated contract",
+        ):
+            construction()
+        return
+
+    changed = construction()
+    assert changed.persisted_rotation_attestation() is None
+    with pytest.raises(
+        ExecutionEvidenceConflict,
+        match="credential-retention authority is immutable and differs",
+    ):
+        changed.migrate_credential_use_evidence()
 
 
 def test_rotation_capability_can_only_migrate_fixed_local_secret_evidence(

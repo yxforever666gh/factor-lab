@@ -102,6 +102,9 @@ def test_cli_exposes_exact_research_os_commands() -> None:
         ["readiness", "audit", "--config", "production.json"]
     ).readiness_command == "audit"
     assert parser.parse_args(
+        ["readiness", "attest-credential-use"]
+    ).readiness_command == "attest-credential-use"
+    assert parser.parse_args(
         ["canary", "run", "--as-of", "2026-08-21"]
     ).canary_command == "run"
     assert parser.parse_args(["canary", "restore"]).canary_command == "restore"
@@ -188,6 +191,65 @@ def test_read_only_readiness_status_honors_database_production_marker(
     payload = json.loads(capsys.readouterr().out)
     assert payload["ready"] is False
     assert payload["blockers"] == ["persisted_production_readiness_audit_missing"]
+
+
+def test_credential_use_attestation_emits_only_public_persisted_evidence(
+    monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    monkeypatch.setenv("FACTOR_LAB_ENVIRONMENT", "production")
+    authority = SimpleNamespace(
+        rotation_capability_identity=("security", "tushare_token_retention"),
+        migrate_credential_use_evidence=lambda: SimpleNamespace(
+            credential="tushare_token",
+            disposition="operator_accepted_unrotated_retention",
+            evidence_hash="a" * 64,
+            confirmed_at=datetime(2026, 8, 25, 10, 30, tzinfo=timezone.utc),
+        ),
+    )
+    services = SimpleNamespace(
+        _production_execution_snapshot_authority=lambda: authority
+    )
+    closed: list[object] = []
+    monkeypatch.setattr(cli_module, "_authoritative_services", lambda: services)
+    monkeypatch.setattr(cli_module, "_close_services", closed.append)
+
+    assert main(["readiness", "attest-credential-use"]) == 0
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload == {
+        "status": "completed",
+        "credential": "tushare_token",
+        "disposition": "operator_accepted_unrotated_retention",
+        "evidence_hash": "a" * 64,
+        "recorded_at": "2026-08-25T10:30:00+00:00",
+        "capability": {
+            "source_id": "security",
+            "dataset": "tushare_token_retention",
+        },
+        "credential_material_recorded": False,
+    }
+    assert closed == [services]
+
+
+def test_credential_use_attestation_rejects_database_override_before_services(
+    monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    monkeypatch.setenv("FACTOR_LAB_ENVIRONMENT", "production")
+    monkeypatch.setattr(
+        cli_module,
+        "_authoritative_services",
+        lambda: pytest.fail("database override reached authoritative services"),
+    )
+
+    assert main(
+        [
+            "--database-url",
+            "postgresql+psycopg://other.invalid/factor_lab",
+            "readiness",
+            "attest-credential-use",
+        ]
+    ) == 1
+    assert "rejects --database-url overrides" in capsys.readouterr().err
 
 
 def test_authoritative_backfill_is_rejected_before_services_when_rotation_pending(

@@ -31,6 +31,8 @@ from factor_lab.research_os.restore_drill import (
     RestoreDrillEvidenceUnavailable,
 )
 
+CANARY_EXECUTION_CONTRACT_HASH = "e" * 64
+
 
 class _MemoryWriter(io.BytesIO):
     def __init__(self, filesystem: "_MemoryFileSystem", path: str) -> None:
@@ -87,11 +89,12 @@ def _seed_physical_canary(
     labels = {
         "evidence_schema": PHYSICAL_CANARY_SCHEMA_VERSION,
         "evidence_class": "engineering_canary",
-        "evidence_scope": "non_forward",
+        "evidence_scope": "retrospective_non_forward",
         "formal_epoch_eligible": False,
         "physical_source_attested": True,
         "controlled_test_adapter": False,
         "readiness_admission": "physical_engineering_prerequisite",
+        "canary_execution_contract_hash": CANARY_EXECUTION_CONTRACT_HASH,
     }
     manifest = {
         **labels,
@@ -116,7 +119,7 @@ def _seed_physical_canary(
             quality_status="accepted",
             trust_labels=(
                 "physical_engineering_canary",
-                "non_forward",
+                "retrospective_non_forward",
                 "retrospective_physical_replay",
             ),
             manifest=manifest,
@@ -231,6 +234,9 @@ def test_controlled_restore_downloads_deletes_and_downloads_again_without_formal
         assert stored.metadata["cache_deleted_before_second_restore"] is True
         assert stored.metadata["second_restore_downloaded"] is True
         assert stored.metadata["local_cache_retained"] is False
+        assert stored.metadata["source_canary_execution_contract_hash"] == (
+            CANARY_EXECUTION_CONTRACT_HASH
+        )
         assert catalog.list_runs(
             limit=100, status=None, run_type=RESTORE_DRILL_RUN_TYPE
         ) == []
@@ -336,7 +342,11 @@ def test_production_mode_rejects_sqlite_and_memory_object_store_before_reads(
         service = PhysicalMinioRestoreDrillService(
             catalog=catalog,
             object_store_archive=archive,
-            production_evidence=object(),  # type: ignore[arg-type]
+            production_evidence=SimpleNamespace(
+                engineering_canary_execution_contract_hash=(
+                    CANARY_EXECUTION_CONTRACT_HASH
+                )
+            ),  # type: ignore[arg-type]
             controlled_test=False,
         )
         reads_before = filesystem.read_count

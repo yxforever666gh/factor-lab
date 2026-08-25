@@ -52,6 +52,8 @@ from factor_lab.research_os.data_sources import (
     TushareSourceAdapter,
     normalize_diemeng_base_url,
     source_adapter_public_contract_identity,
+    tushare_client_uses_direct_transport,
+    validate_tushare_https_origin,
 )
 from factor_lab.research_os.reconciliation import (
     ComparisonPolicy,
@@ -98,6 +100,51 @@ class _TushareFixture:
             return pd.DataFrame({"exchange": ["SSE"], "cal_date": ["20240102"], "is_open": [1]})
         assert endpoint == "daily"
         return _daily_frame()
+
+
+@pytest.mark.parametrize(
+    ("configured", "expected"),
+    [
+        (
+            "https://api.tushare.pro/dataapi",
+            "https://api.tushare.pro/dataapi",
+        ),
+        (
+            "https://api.waditu.com:443/dataapi/",
+            "https://api.waditu.com/dataapi",
+        ),
+        (
+            "HTTPS://API.TUSHARE.PRO:443/dataapi/",
+            "https://api.tushare.pro/dataapi",
+        ),
+    ],
+)
+def test_reviewed_tushare_https_origin_accepts_only_exact_dataapi_routes(
+    configured: str,
+    expected: str,
+) -> None:
+    assert validate_tushare_https_origin(configured) == expected
+
+
+@pytest.mark.parametrize(
+    "configured",
+    [
+        "",
+        "http://api.tushare.pro/dataapi",
+        "https://attacker.invalid/dataapi",
+        "https://user:password@api.tushare.pro/dataapi",
+        "https://api.tushare.pro:444/dataapi",
+        "https://api.tushare.pro/other",
+        "https://api.tushare.pro/dataapi?",
+        "https://api.tushare.pro/dataapi?route=other",
+        "https://api.tushare.pro/dataapi#fragment",
+    ],
+)
+def test_reviewed_tushare_https_origin_rejects_unsafe_routes(
+    configured: str,
+) -> None:
+    with pytest.raises(SourceContractError, match="HTTPS origin"):
+        validate_tushare_https_origin(configured)
 
 
 class _AkShareFixture:
@@ -521,6 +568,33 @@ def test_tushare_transport_seal_fault_is_not_an_observation() -> None:
     assert "private-token-must-not-leak" not in str(caught.value)
 
 
+@pytest.mark.parametrize(
+    "mutated_origin",
+    [
+        "https://api.tushare.pro/dataapi",
+        "https://api.waditu.com:443/dataapi",
+        "https://attacker.invalid/dataapi",
+    ],
+)
+def test_tushare_sealed_origin_rejects_any_sdk_url_mutation(
+    mutated_origin: str,
+) -> None:
+    import tushare as ts
+
+    client = ts.pro_api("private-token-must-not-leak")
+    client._DataApi__http_url = "https://api.waditu.com/dataapi"
+    adapter = TushareSourceAdapter(client, contracts=[_daily_contract()])
+    sealed_identity = adapter.public_contract_identity()
+    client._DataApi__http_url = mutated_origin
+
+    assert tushare_client_uses_direct_transport(client) is False
+    with pytest.raises(SourceContractError, match="transport is not sealed") as caught:
+        adapter.fetch(FetchRequest("daily"))
+
+    assert adapter.public_contract_identity() == sealed_identity
+    assert "private-token-must-not-leak" not in str(caught.value)
+
+
 def test_https_tushare_sdk_uses_sealed_non_environment_session(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -584,6 +658,60 @@ def test_https_tushare_sdk_uses_sealed_non_environment_session(
     )
     assert alternate_adapter.public_contract_identity()["public_contract_hash"] != (
         identity["public_contract_hash"]
+    )
+
+
+def test_real_tushare_calls_only_the_sealed_query_with_expected_endpoint(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import tushare as ts
+
+    client = ts.pro_api("private-token-must-not-leak")
+    client._DataApi__http_url = "HTTPS://API.WADITU.COM:443/dataapi/"
+    adapter = TushareSourceAdapter(client, contracts=[_daily_contract()])
+    session = getattr(client, "_factor_lab_direct_http_session")
+    dynamic_attribute_reads: list[str] = []
+
+    def reject_sdk_attribute(_self, name: str):
+        dynamic_attribute_reads.append(name)
+        raise AssertionError("real adapter must not dispatch through SDK attributes")
+
+    class Response:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            frame = _daily_frame()
+            return {
+                "code": 0,
+                "data": {
+                    "fields": list(frame.columns),
+                    "items": frame.values.tolist(),
+                },
+            }
+
+    calls: list[tuple[str, dict]] = []
+    monkeypatch.setattr(type(client), "__getattr__", reject_sdk_attribute)
+    monkeypatch.setattr(
+        session,
+        "post",
+        lambda url, **kwargs: (calls.append((url, kwargs)) or Response()),
+    )
+
+    result = adapter.fetch(
+        FetchRequest(
+            "daily",
+            parameters={"ts_type_name": "https://attacker.invalid/dataapi"},
+        )
+    )
+
+    assert result.frame.iloc[0]["close"] == pytest.approx(10.0)
+    assert dynamic_attribute_reads == []
+    assert client._DataApi__http_url == "https://api.waditu.com/dataapi"
+    assert calls[0][0] == "https://api.waditu.com/dataapi/daily"
+    assert calls[0][1]["json"]["api_name"] == "daily"
+    assert calls[0][1]["json"]["params"]["ts_type_name"] == (
+        "https://api.waditu.com/dataapi"
     )
 
 

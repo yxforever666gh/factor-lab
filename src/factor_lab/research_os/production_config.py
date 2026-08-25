@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import Enum
 import json
 import os
@@ -21,8 +22,12 @@ from .credentials import CredentialResolutionError, resolve_credential_ref
 from .data_sources import (
     SourceContractError,
     is_credential_shaped_key,
-    require_tushare_sdk_https_transport,
+    validate_tushare_https_origin,
     validate_production_diemeng_base_url,
+)
+from .execution_open_sources import (
+    engineering_canary_execution_contract_hash,
+    validate_diemeng_engineering_canary_execution_mapping,
 )
 
 
@@ -99,7 +104,14 @@ _PUBLIC_CREDENTIAL_ROTATION_SUBJECTS = frozenset(
     }
 )
 _PUBLIC_CREDENTIAL_ROTATION_FIELDS = frozenset(
-    {"status", "vendor_confirmation", "required_before"}
+    {
+        "accepted_at",
+        "credential_ref",
+        "reason",
+        "required_before",
+        "status",
+        "vendor_confirmation",
+    }
 )
 _PUBLIC_CREDENTIAL_ROTATION_OPERATIONS = frozenset(
     {
@@ -108,6 +120,26 @@ _PUBLIC_CREDENTIAL_ROTATION_OPERATIONS = frozenset(
         "formal_forward_epoch_activation",
     }
 )
+_OPERATOR_RETENTION_STATUS = "retained_unrotated_operator_accepted"
+_OPERATOR_RETENTION_CONFIRMATION = "not_rotated"
+_OPERATOR_RETENTION_REASON = (
+    "operator_declined_rotation_for_local_research_only_runtime"
+)
+_OPERATOR_RETENTION_REFS = {
+    "tushare_token": "secret://tushare_token",
+    "diemeng_api_key": "secret://diemeng_api_key",
+}
+_OPERATOR_RETENTION_FIELDS = frozenset(
+    {
+        "accepted_at",
+        "credential_ref",
+        "reason",
+        "status",
+        "vendor_confirmation",
+    }
+)
+_TUSHARE_REVIEWED_HTTPS_ORIGIN = "https://api.tushare.pro/dataapi"
+_DIEMENG_REVIEWED_HTTPS_ORIGIN = "https://data.diemeng.chat/api"
 
 
 def _is_public_credential_rotation_subject(item_path: str, value: Any) -> bool:
@@ -122,12 +154,22 @@ def _is_public_credential_rotation_subject(item_path: str, value: Any) -> bool:
         value, Mapping
     ):
         return False
-    if not set(map(str, value)).issubset(_PUBLIC_CREDENTIAL_ROTATION_FIELDS):
+    fields = set(map(str, value))
+    if not fields.issubset(_PUBLIC_CREDENTIAL_ROTATION_FIELDS):
         return False
-    if value.get("status") not in {
+    status = value.get("status")
+    confirmation = value.get("vendor_confirmation")
+    if status == _OPERATOR_RETENTION_STATUS:
+        return fields == _OPERATOR_RETENTION_FIELDS and confirmation in {
+            "recorded",
+            _OPERATOR_RETENTION_CONFIRMATION,
+        }
+    if status not in {
         "pending_vendor_rotation",
         "verified_post_exposure",
-    } or value.get("vendor_confirmation") not in {"pending", "recorded"}:
+    } or confirmation not in {"pending", "recorded"}:
+        return False
+    if fields.difference({"status", "vendor_confirmation", "required_before"}):
         return False
     if "required_before" not in value:
         return True
@@ -135,6 +177,63 @@ def _is_public_credential_rotation_subject(item_path: str, value: Any) -> bool:
     return isinstance(required_before, list) and set(
         map(str, required_before)
     ).issubset(_PUBLIC_CREDENTIAL_ROTATION_OPERATIONS)
+
+
+def _operator_retention_waiver(
+    value: Any,
+    *,
+    credential: str,
+    credential_refs: set[str],
+    https_transport_verified: bool,
+) -> bool:
+    """Validate an explicit decision to retain, not rotate, one credential.
+
+    The waiver is deliberately a small closed schema.  It cannot claim vendor
+    rotation, cannot carry arbitrary operator prose or secret material, and is
+    useful only while the exact reviewed ``secret://`` binding and HTTPS
+    transport remain active.  The acceptance timestamp is public provenance,
+    not a credential or a replacement for vendor evidence.
+    """
+
+    if not isinstance(value, Mapping) or value.get("status") != (
+        _OPERATOR_RETENTION_STATUS
+    ):
+        return False
+    expected_ref = _OPERATOR_RETENTION_REFS[credential]
+    if set(map(str, value)) != _OPERATOR_RETENTION_FIELDS:
+        raise ProductionConfigurationError(
+            f"{credential} operator retention waiver has an invalid field set"
+        )
+    if value.get("vendor_confirmation") != _OPERATOR_RETENTION_CONFIRMATION:
+        raise ProductionConfigurationError(
+            f"{credential} retention waiver must state that it was not rotated"
+        )
+    if (
+        value.get("credential_ref") != expected_ref
+        or expected_ref not in credential_refs
+    ):
+        raise ProductionConfigurationError(
+            f"{credential} retention waiver must bind the exact reviewed secret reference"
+        )
+    if value.get("reason") != _OPERATOR_RETENTION_REASON:
+        raise ProductionConfigurationError(
+            f"{credential} retention waiver reason is not the reviewed local-only reason"
+        )
+    raw_accepted_at = value.get("accepted_at")
+    try:
+        accepted_at = datetime.fromisoformat(str(raw_accepted_at))
+    except ValueError:
+        accepted_at = None
+    if (
+        accepted_at is None
+        or accepted_at.tzinfo is None
+        or accepted_at.utcoffset() is None
+        or accepted_at.astimezone(timezone.utc) > datetime.now(timezone.utc)
+    ):
+        raise ProductionConfigurationError(
+            f"{credential} retention waiver accepted_at must be an aware, non-future time"
+        )
+    return bool(https_transport_verified)
 
 
 class ProductionConfigurationError(RuntimeError):
@@ -168,6 +267,8 @@ class ProductionConfigEvidence:
     readiness_blockers: tuple[str, ...]
     credential_rotation_blockers: tuple[str, ...]
     source_transport_blockers: tuple[str, ...] = ()
+    credential_retention_waivers: tuple[str, ...] = ()
+    engineering_canary_execution_contract_hash: str = ""
 
     @property
     def status(self) -> str:
@@ -189,14 +290,18 @@ def admit_production_operation(
     rotation_blockers = tuple(
         getattr(evidence, "credential_rotation_blockers", ()) or ()
     )
-    if not rotation_blockers and not evidence.historical_backfill_allowed:
+    transport_blockers = tuple(
+        getattr(evidence, "source_transport_blockers", ()) or ()
+    )
+    if (
+        not rotation_blockers
+        and not transport_blockers
+        and not evidence.historical_backfill_allowed
+    ):
         # Compatibility for callers/tests constructing the earlier evidence
         # shape. Validated production evidence always carries the exact vendor
         # blocker set.
         rotation_blockers = ("tushare_token_post_exposure_rotation_pending",)
-    transport_blockers = tuple(
-        getattr(evidence, "source_transport_blockers", ()) or ()
-    )
     if selected in {
         ProductionOperation.ENGINEERING_CANARY,
         ProductionOperation.CALENDAR_CAPABILITY_PROBE,
@@ -710,6 +815,32 @@ def validate_production_config(
                     "shadow EOD marks must come from an accepted Gold close snapshot"
                 )
 
+    engineering_canary = daily.get("engineering_canary")
+    canary_execution_market_data: Mapping[str, Any] | None = None
+    canary_execution_contract_hash = ""
+    if not isinstance(engineering_canary, Mapping):
+        raise ProductionConfigurationError(
+            "$.daily.engineering_canary must explicitly declare retrospective_non_forward evidence"
+        )
+    try:
+        canary_execution_market_data = (
+            validate_diemeng_engineering_canary_execution_mapping(
+                engineering_canary.get("execution_market_data")
+            )
+        )
+        canary_execution_contract_hash = engineering_canary_execution_contract_hash(
+            engineering_canary
+        )
+    except ValueError as exc:
+        raise ProductionConfigurationError(str(exc)) from None
+    profile_name = str(canary_execution_market_data["profile_name"])
+    reviewed_url = str(canary_execution_market_data["base_url"])
+    prior = reviewed_diemeng_urls.setdefault(profile_name, reviewed_url)
+    if prior != reviewed_url:
+        raise ProductionConfigurationError(
+            f"Diemeng profile {profile_name!r} has inconsistent reviewed base_url values"
+        )
+
     formal_capability = (
         execution_market_data.get("formal_capability")
         if isinstance(execution_market_data, Mapping)
@@ -767,15 +898,71 @@ def validate_production_config(
         else ""
     ).strip().rstrip("/")
     try:
-        sdk_tushare_origin = require_tushare_sdk_https_transport()
-    except SourceContractError:
-        sdk_tushare_origin = ""
+        reviewed_tushare_origin = validate_tushare_https_origin(
+            configured_tushare_origin
+        )
+    except (SourceContractError, ValueError):
+        reviewed_tushare_origin = ""
     tushare_transport_verified = bool(
         isinstance(tushare_transport, Mapping)
         and tushare_transport.get("status") == "verified_vendor_https"
         and tushare_transport.get("vendor_confirmation") == "recorded"
-        and configured_tushare_origin
-        and configured_tushare_origin == sdk_tushare_origin
+        and configured_tushare_origin == _TUSHARE_REVIEWED_HTTPS_ORIGIN
+        and reviewed_tushare_origin == _TUSHARE_REVIEWED_HTTPS_ORIGIN
+    )
+    diemeng_transport = (
+        source_transport.get("diemeng")
+        if isinstance(source_transport, Mapping)
+        else None
+    )
+    configured_diemeng_origin = str(
+        diemeng_transport.get("api_origin")
+        if isinstance(diemeng_transport, Mapping)
+        else ""
+    ).strip().rstrip("/")
+    try:
+        reviewed_diemeng_origin = validate_production_diemeng_base_url(
+            configured_diemeng_origin
+        )
+    except ValueError:
+        reviewed_diemeng_origin = ""
+    operational_credential_refs = {
+        str(source.get("credential_ref") or "")
+        for source in sources
+        if isinstance(source, Mapping) and source.get("credential_ref")
+    }
+    if isinstance(execution_market_data, Mapping) and execution_market_data.get(
+        "credential_ref"
+    ):
+        operational_credential_refs.add(
+            str(execution_market_data.get("credential_ref"))
+        )
+    if canary_execution_market_data is not None:
+        operational_credential_refs.add(
+            str(canary_execution_market_data["credential_ref"])
+        )
+    reviewed_diemeng_origins = set(reviewed_diemeng_urls.values())
+    diemeng_transport_verified = bool(
+        isinstance(diemeng_transport, Mapping)
+        and diemeng_transport.get("status") == "verified_vendor_https"
+        and diemeng_transport.get("vendor_confirmation") == "recorded"
+        and configured_diemeng_origin == _DIEMENG_REVIEWED_HTTPS_ORIGIN
+        and reviewed_diemeng_origin == _DIEMENG_REVIEWED_HTTPS_ORIGIN
+        and reviewed_diemeng_origins == {_DIEMENG_REVIEWED_HTTPS_ORIGIN}
+        and _OPERATOR_RETENTION_REFS["diemeng_api_key"]
+        in operational_credential_refs
+    )
+    tushare_retention_waived = _operator_retention_waiver(
+        tushare_rotation,
+        credential="tushare_token",
+        credential_refs=operational_credential_refs,
+        https_transport_verified=tushare_transport_verified,
+    )
+    diemeng_retention_waived = _operator_retention_waiver(
+        diemeng_rotation,
+        credential="diemeng_api_key",
+        credential_refs=operational_credential_refs,
+        https_transport_verified=diemeng_transport_verified,
     )
 
     # When the WebUI profile ledger is mounted into a worker it becomes an
@@ -846,6 +1033,10 @@ def validate_production_config(
             "profile_name"
         ):
             required_profiles.add(str(execution_market_data["profile_name"]))
+        if canary_execution_market_data is not None:
+            required_profiles.add(
+                str(canary_execution_market_data["profile_name"])
+            )
         missing = sorted(
             name
             for name in required_profiles
@@ -990,17 +1181,28 @@ def validate_production_config(
     if not formal_execution_capable:
         readiness_blockers.append("formal_execution_adapter_insufficient")
     credential_rotation_blockers: list[str] = []
-    if not tushare_rotation_verified:
+    credential_retention_waivers: list[str] = []
+    if tushare_retention_waived:
+        credential_retention_waivers.append("tushare_token")
+    if diemeng_retention_waived:
+        credential_retention_waivers.append("diemeng_api_key")
+    if not (tushare_rotation_verified or tushare_retention_waived):
         credential_rotation_blockers.append(
             "tushare_token_post_exposure_rotation_pending"
         )
-    if not diemeng_rotation_verified:
+    if not (diemeng_rotation_verified or diemeng_retention_waived):
         credential_rotation_blockers.append(
             "diemeng_api_key_post_exposure_rotation_pending"
         )
     source_transport_blockers: list[str] = []
     if not tushare_transport_verified:
         source_transport_blockers.append("tushare_https_transport_unverified")
+    if (
+        _OPERATOR_RETENTION_REFS["diemeng_api_key"]
+        in operational_credential_refs
+        and not diemeng_transport_verified
+    ):
+        source_transport_blockers.append("diemeng_https_transport_unverified")
     readiness_blockers.extend(credential_rotation_blockers)
     readiness_blockers.extend(source_transport_blockers)
     # This validator proves only that the static production contract and image
@@ -1017,14 +1219,19 @@ def validate_production_config(
         provenance=provenance,
         formal_execution_capable=formal_execution_capable,
         historical_backfill_allowed=(
-            tushare_rotation_verified
-            and diemeng_rotation_verified
+            (tushare_rotation_verified or tushare_retention_waived)
+            and (diemeng_rotation_verified or diemeng_retention_waived)
             and tushare_transport_verified
+            and diemeng_transport_verified
         ),
         formal_forward_evidence=formal_forward_evidence,
         readiness_blockers=tuple(readiness_blockers),
         credential_rotation_blockers=tuple(credential_rotation_blockers),
         source_transport_blockers=tuple(source_transport_blockers),
+        credential_retention_waivers=tuple(credential_retention_waivers),
+        engineering_canary_execution_contract_hash=(
+            canary_execution_contract_hash
+        ),
     )
 
 
@@ -1049,6 +1256,9 @@ def _main(argv: list[str] | None = None) -> int:
                 "runtime_data_root": str(evidence.runtime_data_root),
                 "runtime_artifact_root": str(evidence.runtime_artifact_root),
                 "credential_refs": list(evidence.credential_refs),
+                "credential_retention_waivers": list(
+                    evidence.credential_retention_waivers
+                ),
                 "provenance": evidence.provenance.public_dict(),
             },
             ensure_ascii=False,

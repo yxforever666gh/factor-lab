@@ -9,11 +9,17 @@ import pytest
 from factor_lab.research_os import data_sync as data_sync_module
 from factor_lab.research_os.data_sync import (
     BronzeObservationError,
+    bind_production_source_transport,
     resolve_credential,
     source_adapter_from_mapping,
     sync_bronze,
 )
-from factor_lab.research_os.data_sources import DiemengSourceAdapter, LocalFileSourceAdapter
+from factor_lab.research_os.data_sources import (
+    DiemengSourceAdapter,
+    LocalFileSourceAdapter,
+    TushareSourceAdapter,
+    tushare_client_uses_direct_transport,
+)
 from factor_lab.research_os.data_sources import (
     FetchRequest,
     SourceContractError,
@@ -21,6 +27,7 @@ from factor_lab.research_os.data_sources import (
     SourceObservationError,
 )
 from factor_lab.research_os.object_store import S3ImmutableArchive
+from factor_lab.research_os.fingerprint import content_fingerprint
 
 
 class _MemoryWriter(__import__("io").BytesIO):
@@ -98,6 +105,7 @@ def _tushare_spec() -> dict:
         "source": "tushare",
         "profile_name": "primary-tushare",
         "credential_ref": "secret://tushare_token",
+        "api_origin": "https://api.tushare.pro/dataapi",
         "endpoint_map": {"daily": "daily"},
         "contract": {
             "dataset": "daily",
@@ -298,22 +306,41 @@ def test_diemeng_profile_base_url_cannot_supply_missing_reviewed_route(
         source_adapter_from_mapping(spec, env=env)
 
 
-def test_http_only_tushare_sdk_blocks_before_credential_resolution(
+@pytest.mark.parametrize(
+    "configured_origin",
+    [
+        None,
+        "http://api.tushare.pro/dataapi",
+        "https://attacker.invalid/dataapi",
+        "https://user:password@api.tushare.pro/dataapi",
+        "https://api.tushare.pro:444/dataapi",
+        "https://api.tushare.pro/other",
+        "https://api.tushare.pro/dataapi?route=other",
+        "https://api.tushare.pro/dataapi#fragment",
+    ],
+)
+def test_unsafe_tushare_route_blocks_before_credential_resolution(
     monkeypatch: pytest.MonkeyPatch,
+    configured_origin: str | None,
 ) -> None:
     credential_reads = 0
 
     def forbidden_credential_read(**_kwargs):
         nonlocal credential_reads
         credential_reads += 1
-        raise AssertionError("HTTP-only SDK reached credential resolution")
+        raise AssertionError("unsafe Tushare route reached credential resolution")
 
     monkeypatch.setattr(
         data_sync_module, "resolve_credential", forbidden_credential_read
     )
-    with pytest.raises(ValueError, match="HTTPS transport") as caught:
+    spec = _tushare_spec()
+    if configured_origin is None:
+        spec.pop("api_origin")
+    else:
+        spec["api_origin"] = configured_origin
+    with pytest.raises(ValueError, match="HTTPS origin") as caught:
         source_adapter_from_mapping(
-            _tushare_spec(),
+            spec,
             env={
                 "FACTOR_LAB_ENVIRONMENT": "production",
                 "FACTOR_LAB_DATA_SOURCE_PROFILES_JSON": json.dumps(
@@ -331,6 +358,192 @@ def test_http_only_tushare_sdk_blocks_before_credential_resolution(
 
     assert credential_reads == 0
     assert "tushare_token" not in str(caught.value)
+
+
+def test_tushare_profile_origin_cannot_replace_reviewed_route_before_secret(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spec = _tushare_spec()
+    spec.pop("api_origin")
+    monkeypatch.setattr(
+        data_sync_module,
+        "resolve_credential",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            AssertionError("profile route reached credential resolution")
+        ),
+    )
+    with pytest.raises(ValueError, match="cannot replace reviewed"):
+        source_adapter_from_mapping(
+            spec,
+            env={
+                "FACTOR_LAB_DATA_SOURCE_PROFILES_JSON": json.dumps(
+                    [
+                        {
+                            "name": "primary-tushare",
+                            "source_type": "tushare",
+                            "enabled": True,
+                            "credential_ref": "secret://tushare_token",
+                            "extra": {
+                                "api_origin": "https://api.tushare.pro/dataapi"
+                            },
+                        }
+                    ]
+                )
+            },
+        )
+
+
+def test_production_transport_authority_injects_one_canonical_tushare_origin() -> None:
+    source = _tushare_spec()
+    source.pop("api_origin")
+    production_config = {
+        "security": {
+            "source_transport": {
+                "tushare": {
+                    "api_origin": "HTTPS://API.TUSHARE.PRO:443/dataapi/"
+                }
+            }
+        }
+    }
+
+    bound = bind_production_source_transport(
+        source,
+        production_config=production_config,
+    )
+
+    assert "api_origin" not in source
+    assert bound["api_origin"] == "https://api.tushare.pro/dataapi"
+
+
+def test_production_source_fingerprint_uses_canonical_tushare_origin() -> None:
+    source = _tushare_spec()
+    source.pop("api_origin")
+
+    def bind(origin: str) -> dict:
+        return bind_production_source_transport(
+            source,
+            production_config={
+                "security": {
+                    "source_transport": {"tushare": {"api_origin": origin}}
+                }
+            },
+        )
+
+    canonical = bind("https://api.tushare.pro/dataapi")
+    equivalent = bind("HTTPS://API.TUSHARE.PRO:443/dataapi/")
+    alternate = bind("https://api.waditu.com/dataapi")
+    domain = "factor-lab/research-os/v1/source-partition-input"
+
+    assert content_fingerprint(canonical, domain=domain) == content_fingerprint(
+        equivalent,
+        domain=domain,
+    )
+    assert content_fingerprint(canonical, domain=domain) != content_fingerprint(
+        alternate,
+        domain=domain,
+    )
+
+
+def test_production_transport_authority_rejects_source_route_conflict() -> None:
+    source = _tushare_spec()
+    source["api_origin"] = "https://api.waditu.com/dataapi"
+
+    with pytest.raises(ValueError, match="conflicts"):
+        bind_production_source_transport(
+            source,
+            production_config={
+                "security": {
+                    "source_transport": {
+                        "tushare": {
+                            "api_origin": "https://api.tushare.pro/dataapi"
+                        }
+                    }
+                }
+            },
+        )
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    ["query", "Query", "_DataApi__token"],
+)
+def test_reserved_tushare_endpoints_fail_before_credential_resolution(
+    monkeypatch: pytest.MonkeyPatch,
+    endpoint: str,
+) -> None:
+    credential_reads = 0
+
+    def forbidden_credential_read(**_kwargs):
+        nonlocal credential_reads
+        credential_reads += 1
+        raise AssertionError("reserved endpoint reached credential resolution")
+
+    monkeypatch.setattr(
+        data_sync_module,
+        "resolve_credential",
+        forbidden_credential_read,
+    )
+    spec = _tushare_spec()
+    spec["endpoint_map"] = {"daily": endpoint}
+
+    with pytest.raises(SourceContractError, match="invalid or reserved"):
+        source_adapter_from_mapping(
+            spec,
+            env={
+                "FACTOR_LAB_DATA_SOURCE_PROFILES_JSON": json.dumps(
+                    [
+                        {
+                            "name": "primary-tushare",
+                            "source_type": "tushare",
+                            "enabled": True,
+                            "credential_ref": "secret://tushare_token",
+                        }
+                    ]
+                )
+            },
+        )
+
+    assert credential_reads == 0
+
+
+def test_reviewed_tushare_origin_rebinds_http_sdk_default_and_seals_transport(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    marker = "private-token-must-not-leak"
+    credential_reads = 0
+
+    def resolve_once(**_kwargs):
+        nonlocal credential_reads
+        credential_reads += 1
+        return marker
+
+    monkeypatch.setattr(data_sync_module, "resolve_credential", resolve_once)
+    adapter = source_adapter_from_mapping(
+        _tushare_spec(),
+        env={
+            "FACTOR_LAB_DATA_SOURCE_PROFILES_JSON": json.dumps(
+                [
+                    {
+                        "name": "primary-tushare",
+                        "source_type": "tushare",
+                        "enabled": True,
+                        "credential_ref": "secret://tushare_token",
+                    }
+                ]
+            )
+        },
+    )
+
+    assert isinstance(adapter, TushareSourceAdapter)
+    assert credential_reads == 1
+    assert adapter.base_url == "https://api.tushare.pro/dataapi"
+    assert adapter.client._DataApi__http_url == adapter.base_url
+    assert tushare_client_uses_direct_transport(adapter.client)
+    session = getattr(adapter.client, "_factor_lab_direct_http_session")
+    assert session.trust_env is False
+    assert session.proxies == {}
+    assert session.verify is True
+    assert marker not in repr(adapter.lineage)
 
 
 def test_credential_file_and_secret_traversal_rules(tmp_path: Path) -> None:

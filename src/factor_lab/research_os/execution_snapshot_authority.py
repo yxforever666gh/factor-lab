@@ -48,7 +48,9 @@ from .data_sources import (
     SourceAdapter,
     SourceBatch,
     SourceHealth,
-    require_tushare_sdk_https_transport,
+    tushare_client_uses_direct_transport,
+    validate_production_diemeng_base_url,
+    validate_tushare_https_origin,
 )
 from .execution_open_sources import (
     diemeng_opening_session_request_template,
@@ -114,6 +116,11 @@ _ROTATION_SPECS = {
     "diemeng_api_key": ("diemeng", "diemeng_api_key_rotation"),
     "tushare_token": ("tushare", "tushare_token_rotation"),
 }
+_RETENTION_STATUS = "retained_unrotated_operator_accepted"
+_RETENTION_CONFIRMATION = "not_rotated"
+_RETENTION_REASON = "operator_declined_rotation_for_local_research_only_runtime"
+_RETENTION_DETAIL = "operator_accepted_unrotated_retention"
+_RETENTION_SCHEMA = "research-os/operator-credential-retention/v1"
 
 
 def _add_cleanup_note(error: BaseException, message: str) -> None:
@@ -301,6 +308,7 @@ class CredentialRotationAttestation:
     credential: str
     evidence_hash: str
     confirmed_at: datetime
+    disposition: str = _ROTATION_DETAIL
 
 
 @dataclass(frozen=True)
@@ -487,6 +495,7 @@ class _OpenEvidence:
     partition: PartitionRecord
     physical_source_attested: bool
     rotation_evidence_hash: str | None
+    credential_use_disposition: str | None
     decision_session: date
     decision_snapshot_id: str
     decision_gold_partition_hash: str
@@ -695,6 +704,10 @@ class DiemengRotationEvidenceAuthority:
     workflow payload cannot manufacture the accepted capability row.
     """
 
+    detail = _ROTATION_DETAIL
+    expected_fields = ("credential_ref", "vendor_confirmation_id")
+    disposition = _ROTATION_DETAIL
+
     def __init__(
         self,
         *,
@@ -895,6 +908,195 @@ class DiemengRotationEvidenceAuthority:
             credential=self.credential,
             evidence_hash=local.evidence_hash,
             confirmed_at=probed_at,
+            disposition=self.disposition,
+        )
+
+
+class OperatorCredentialRetentionAuthority:
+    """Persist one config-bound decision to retain an unrotated credential.
+
+    This is intentionally not rotation evidence.  It exists only because the
+    operator explicitly chose to retain the current local-research credential.
+    The immutable capability row binds the reviewed configuration, HTTPS
+    destination, exact ``secret://`` reference and acceptance timestamp, while
+    never reading or hashing the credential itself.
+    """
+
+    detail = _RETENTION_DETAIL
+    expected_fields = (
+        "accepted_at",
+        "credential_ref",
+        "operator_decision",
+        "transport_origin",
+    )
+    disposition = _RETENTION_DETAIL
+
+    def __init__(
+        self,
+        *,
+        ledger: ProductionLedger,
+        credential_ref: str,
+        execution_contract_hash: str,
+        configuration_hash: str,
+        transport_origin: str,
+        waiver: Mapping[str, Any],
+        _factory_seal: object,
+    ) -> None:
+        if _factory_seal is not _ROTATION_FACTORY_SEAL:
+            raise TypeError(
+                "retention authority can only be created by the production factory"
+            )
+        credential = str(credential_ref).removeprefix("secret://")
+        if credential_ref != f"secret://{credential}" or credential not in _ROTATION_SPECS:
+            raise ProductionConfigurationError(
+                "retention authority requires a supported fixed credential reference"
+            )
+        if not _HASH.fullmatch(execution_contract_hash) or not _HASH.fullmatch(
+            configuration_hash
+        ):
+            raise ValueError("retention authority hashes must be SHA-256 digests")
+        vendor, _ = _ROTATION_SPECS[credential]
+        expected_fields = {
+            "accepted_at",
+            "credential_ref",
+            "reason",
+            "status",
+            "vendor_confirmation",
+        }
+        if set(map(str, waiver)) != expected_fields:
+            raise ProductionConfigurationError(
+                "operator retention waiver has an invalid field set"
+            )
+        if (
+            waiver.get("status") != _RETENTION_STATUS
+            or waiver.get("vendor_confirmation") != _RETENTION_CONFIRMATION
+            or waiver.get("credential_ref") != credential_ref
+            or waiver.get("reason") != _RETENTION_REASON
+        ):
+            raise ProductionConfigurationError(
+                "operator retention waiver differs from the reviewed unrotated contract"
+            )
+        accepted_at = _parse_evidence_time(
+            waiver.get("accepted_at"), label="operator retention accepted_at"
+        )
+        database_now = _database_now(ledger)
+        if accepted_at > database_now + timedelta(minutes=5):
+            raise ProductionConfigurationError(
+                "operator retention acceptance time is in the future"
+            )
+        raw_origin = str(transport_origin or "").strip().rstrip("/")
+        try:
+            origin = (
+                validate_tushare_https_origin(raw_origin)
+                if vendor == "tushare"
+                else validate_production_diemeng_base_url(raw_origin)
+            )
+        except (ValueError, RuntimeError):
+            raise ProductionConfigurationError(
+                "operator retention requires a reviewed HTTPS transport origin"
+            ) from None
+        self.ledger = ledger
+        self.credential_ref = credential_ref
+        self.credential = credential
+        self.vendor = vendor
+        self.dataset = f"{credential}_retention"
+        self.execution_contract_hash = execution_contract_hash
+        self.configuration_hash = configuration_hash
+        self.transport_origin = origin
+        self.accepted_at = accepted_at
+        self.contract_hash = content_fingerprint(
+            {
+                "schema_version": _RETENTION_SCHEMA,
+                "credential": credential,
+                "vendor": vendor,
+                "authority": "validated_production_config_operator_decision",
+                "status": _RETENTION_STATUS,
+                "vendor_confirmation": _RETENTION_CONFIRMATION,
+                "fields": list(self.expected_fields),
+                "raw_secret_forbidden": True,
+            },
+            domain="factor-lab/research-os/v1/operator-credential-retention-contract",
+        )
+        self._evidence_hash = content_fingerprint(
+            {
+                "schema_version": _RETENTION_SCHEMA,
+                "credential": credential,
+                "vendor": vendor,
+                "credential_ref": credential_ref,
+                "status": _RETENTION_STATUS,
+                "vendor_confirmation": _RETENTION_CONFIRMATION,
+                "reason": _RETENTION_REASON,
+                "accepted_at": accepted_at,
+                "transport_origin": origin,
+                "configuration_hash": configuration_hash,
+                "execution_contract_hash": execution_contract_hash,
+            },
+            domain="factor-lab/research-os/v1/operator-credential-retention-evidence",
+        )
+
+    def expected_evidence_hash(self) -> str:
+        return self._evidence_hash
+
+    def migrate(self) -> CredentialRotationAttestation:
+        """Persist the exact validated decision; accepts no caller payload."""
+
+        probed_at = _database_now(self.ledger)
+        try:
+            from sqlalchemy import select
+        except ImportError as exc:  # pragma: no cover
+            raise ExecutionEvidenceUnavailable("SQLAlchemy is required") from exc
+        with self.ledger.engine.begin() as connection:
+            query = select(orm.SourceCapabilityModel).where(
+                orm.SourceCapabilityModel.source_id == _ROTATION_SOURCE_ID,
+                orm.SourceCapabilityModel.dataset == self.dataset,
+            )
+            if self.ledger.engine.dialect.name == "postgresql":
+                query = query.with_for_update()
+            existing = connection.execute(query).mappings().one_or_none()
+            expected_fields = list(self.expected_fields)
+            if existing is not None:
+                if not (
+                    str(existing.get("status")) == CapabilityStatus.ACCEPTED.value
+                    and str(existing.get("contract_hash")) == self.contract_hash
+                    and str(existing.get("probe_hash")) == self._evidence_hash
+                    and sorted(map(str, existing.get("fields_json") or ()))
+                    == sorted(expected_fields)
+                    and str(existing.get("detail") or "") == self.detail
+                ):
+                    raise ExecutionEvidenceConflict(
+                        "persisted credential-retention authority is immutable and differs"
+                    )
+                persisted_at = existing.get("probed_at")
+                if not isinstance(persisted_at, datetime):
+                    raise ExecutionEvidenceConflict(
+                        "persisted credential-retention timestamp is malformed"
+                    )
+                if persisted_at.tzinfo is None or persisted_at.utcoffset() is None:
+                    persisted_at = persisted_at.replace(tzinfo=timezone.utc)
+                return CredentialRotationAttestation(
+                    credential=self.credential,
+                    evidence_hash=self._evidence_hash,
+                    confirmed_at=persisted_at.astimezone(timezone.utc),
+                    disposition=self.disposition,
+                )
+            connection.execute(
+                orm.SourceCapabilityModel.__table__.insert().values(
+                    source_id=_ROTATION_SOURCE_ID,
+                    dataset=self.dataset,
+                    status=CapabilityStatus.ACCEPTED.value,
+                    contract_hash=self.contract_hash,
+                    probe_hash=self._evidence_hash,
+                    fields_json=expected_fields,
+                    detail=self.detail,
+                    probed_at=probed_at,
+                    updated_at=probed_at,
+                )
+            )
+        return CredentialRotationAttestation(
+            credential=self.credential,
+            evidence_hash=self._evidence_hash,
+            confirmed_at=probed_at,
+            disposition=self.disposition,
         )
 
 
@@ -1103,7 +1305,11 @@ class ExecutionSnapshotAuthority:
         # production admission additionally requires the validated factory,
         # which seals the exact config, adapter, PG ledger and Iceberg catalog.
         self._production_binding: _ProductionBinding | None = None
-        self._rotation_evidence_authority: DiemengRotationEvidenceAuthority | None = None
+        self._rotation_evidence_authority: (
+            DiemengRotationEvidenceAuthority
+            | OperatorCredentialRetentionAuthority
+            | None
+        ) = None
 
     @classmethod
     def from_production_config(
@@ -1145,12 +1351,30 @@ class ExecutionSnapshotAuthority:
         resolved_config = Path(config_path).resolve()
         preflight_payload = load_production_config(resolved_config)
         preflight_execution = _validated_execution_mapping(preflight_payload)
+        reviewed_tushare_origin: str | None = None
         if str(preflight_execution["source"]) == "tushare":
             try:
-                require_tushare_sdk_https_transport()
+                security = preflight_payload.get("security")
+                source_transport = (
+                    security.get("source_transport")
+                    if isinstance(security, Mapping)
+                    else None
+                )
+                tushare_transport = (
+                    source_transport.get("tushare")
+                    if isinstance(source_transport, Mapping)
+                    else None
+                )
+                reviewed_tushare_origin = validate_tushare_https_origin(
+                    str(
+                        tushare_transport.get("api_origin")
+                        if isinstance(tushare_transport, Mapping)
+                        else ""
+                    )
+                )
             except Exception:
                 raise ProductionConfigurationError(
-                    "Tushare HTTPS transport is pending vendor/SDK confirmation"
+                    "Tushare execution requires a reviewed direct HTTPS origin"
                 ) from None
         preflight_hash = content_fingerprint(
             preflight_payload,
@@ -1177,6 +1401,7 @@ class ExecutionSnapshotAuthority:
                 "profile_name": execution["profile_name"],
                 "credential_ref": execution["credential_ref"],
                 "base_url": execution.get("base_url"),
+                "api_origin": reviewed_tushare_origin,
                 "dataset": execution["dataset"],
                 "endpoint": execution["endpoint"],
                 "method": execution["method"],
@@ -1236,8 +1461,15 @@ class ExecutionSnapshotAuthority:
                 raise ProductionConfigurationError(
                     "Tushare SDK is required for realtime opening collection"
                 ) from exc
+            client = ts.pro_api(api_key)
+            try:
+                setattr(client, "_DataApi__http_url", reviewed_tushare_origin)
+            except Exception:
+                raise ProductionConfigurationError(
+                    "Tushare reviewed HTTPS origin could not be bound"
+                ) from None
             adapter = TushareRealtimeOpenAdapter(
-                ts.pro_api(api_key),
+                client,
                 endpoint=str(execution["endpoint"]),
                 priority=10,
                 collection_window_minutes=5,
@@ -1252,6 +1484,14 @@ class ExecutionSnapshotAuthority:
                     "execution_contract_hash": execution_contract_hash,
                 },
             )
+            if not (
+                tushare_client_uses_direct_transport(adapter.client)
+                and str(getattr(adapter.client, "_DataApi__http_url", "") or "")
+                == reviewed_tushare_origin
+            ):
+                raise ProductionConfigurationError(
+                    "Tushare reviewed HTTPS transport could not be sealed"
+                )
         iceberg = payload.get("iceberg")
         catalog_name = (
             str(iceberg.get("catalog_name") or "").strip()
@@ -1287,13 +1527,55 @@ class ExecutionSnapshotAuthority:
             credential_name=credential_name,
             provider_endpoint=str(execution["endpoint"]),
         )
-        authority._rotation_evidence_authority = DiemengRotationEvidenceAuthority(
-            ledger=ledger,
-            secrets_root=secrets_root,
-            credential_ref=str(execution["credential_ref"]),
-            execution_contract_hash=execution_contract_hash,
-            _factory_seal=_ROTATION_FACTORY_SEAL,
+        retained = set(
+            map(str, getattr(evidence, "credential_retention_waivers", ()) or ())
         )
+        security = payload.get("security")
+        rotation_config = (
+            security.get("credential_rotation")
+            if isinstance(security, Mapping)
+            else None
+        )
+        selected_waiver = (
+            rotation_config.get(credential_name)
+            if isinstance(rotation_config, Mapping)
+            else None
+        )
+        if credential_name in retained and isinstance(selected_waiver, Mapping):
+            source_transport = (
+                security.get("source_transport")
+                if isinstance(security, Mapping)
+                else None
+            )
+            provider_transport = (
+                source_transport.get(selected_source)
+                if isinstance(source_transport, Mapping)
+                else None
+            )
+            transport_origin = str(
+                provider_transport.get("api_origin")
+                if isinstance(provider_transport, Mapping)
+                else ""
+            )
+            authority._rotation_evidence_authority = (
+                OperatorCredentialRetentionAuthority(
+                    ledger=ledger,
+                    credential_ref=str(execution["credential_ref"]),
+                    execution_contract_hash=execution_contract_hash,
+                    configuration_hash=configuration_hash,
+                    transport_origin=transport_origin,
+                    waiver=selected_waiver,
+                    _factory_seal=_ROTATION_FACTORY_SEAL,
+                )
+            )
+        else:
+            authority._rotation_evidence_authority = DiemengRotationEvidenceAuthority(
+                ledger=ledger,
+                secrets_root=secrets_root,
+                credential_ref=str(execution["credential_ref"]),
+                execution_contract_hash=execution_contract_hash,
+                _factory_seal=_ROTATION_FACTORY_SEAL,
+            )
         return authority
 
     @property
@@ -1329,7 +1611,12 @@ class ExecutionSnapshotAuthority:
         )
 
     def migrate_rotation_evidence(self) -> CredentialRotationAttestation:
-        """Migrate fixed local secret evidence; accepts no caller assertion."""
+        """Migrate the factory-bound credential-use evidence.
+
+        The compatibility name is retained.  The returned disposition states
+        whether the immutable row proves vendor rotation or the operator's
+        explicit decision to retain an unrotated credential.
+        """
 
         authority = self._rotation_evidence_authority
         if authority is None:
@@ -1337,6 +1624,11 @@ class ExecutionSnapshotAuthority:
                 "credential rotation migration requires the validated production factory"
             )
         return authority.migrate()
+
+    def migrate_credential_use_evidence(self) -> CredentialRotationAttestation:
+        """Persist the selected credential-use decision without caller input."""
+
+        return self.migrate_rotation_evidence()
 
     def persisted_rotation_attestation(self) -> CredentialRotationAttestation | None:
         """Return only a fully verified persisted rotation attestation."""
@@ -1364,6 +1656,21 @@ class ExecutionSnapshotAuthority:
             if local_authority is None
             else local_authority.credential
         )
+        detail = (
+            _ROTATION_DETAIL if local_authority is None else local_authority.detail
+        )
+        expected_fields = tuple(
+            sorted(
+                ("credential_ref", "vendor_confirmation_id")
+                if local_authority is None
+                else local_authority.expected_fields
+            )
+        )
+        disposition = (
+            _ROTATION_DETAIL
+            if local_authority is None
+            else local_authority.disposition
+        )
         with self.ledger.engine.connect() as connection:
             row = connection.execute(
                 select(orm.SourceCapabilityModel).where(
@@ -1379,8 +1686,8 @@ class ExecutionSnapshotAuthority:
             str(row.get("status")) == CapabilityStatus.ACCEPTED.value
             and str(row.get("contract_hash")) == contract_hash
             and _HASH.fullmatch(probe_hash)
-            and str(row.get("detail") or "") == _ROTATION_DETAIL
-            and fields == ("credential_ref", "vendor_confirmation_id")
+            and str(row.get("detail") or "") == detail
+            and fields == expected_fields
         ):
             return None
         if local_authority is not None:
@@ -1402,6 +1709,7 @@ class ExecutionSnapshotAuthority:
             credential=credential,
             evidence_hash=probe_hash,
             confirmed_at=_aware(confirmed, name="credential rotation probed_at"),
+            disposition=disposition,
         )
 
     def _real_diemeng_adapter(self) -> bool:
@@ -1998,6 +2306,9 @@ class ExecutionSnapshotAuthority:
             "probe": dict(probe),
             "physical_source_attested": physical_source_attested,
             "rotation_evidence_hash": None if rotation is None else rotation.evidence_hash,
+            "credential_use_disposition": (
+                None if rotation is None else rotation.disposition
+            ),
             "production_configuration_hash": self.production_configuration_hash,
         }
         content_hash = content_fingerprint(
@@ -2095,12 +2406,23 @@ class ExecutionSnapshotAuthority:
         frame = self._load_ref_frame(reference, expected_role=self.open_source_role)
         attested = bool(reference.manifest.get("physical_source_attested"))
         rotation_hash = str(reference.manifest.get("rotation_evidence_hash") or "") or None
+        credential_use_disposition = (
+            str(reference.manifest.get("credential_use_disposition") or "") or None
+        )
         if attested and (
             reference.quality_status is not DataQualityStatus.ACCEPTED
             or not rotation_hash
             or not _HASH.fullmatch(rotation_hash)
+            or credential_use_disposition
+            not in {_ROTATION_DETAIL, _RETENTION_DETAIL}
         ):
             raise ExecutionEvidenceConflict("opening physical attestation is incomplete")
+        if str(details.get("credential_use_disposition") or "") != str(
+            credential_use_disposition or ""
+        ):
+            raise ExecutionEvidenceConflict(
+                "opening partition credential-use disposition differs"
+            )
         if attested and (
             self._production_binding is None
             or str(reference.manifest.get("production_configuration_hash") or "")
@@ -2115,6 +2437,7 @@ class ExecutionSnapshotAuthority:
             partition=partition,
             physical_source_attested=attested,
             rotation_evidence_hash=rotation_hash,
+            credential_use_disposition=credential_use_disposition,
             decision_session=decision.session,
             decision_snapshot_id=decision.reference.snapshot_id,
             decision_gold_partition_hash=str(decision.gold_partition.output_hash),
@@ -2156,10 +2479,11 @@ class ExecutionSnapshotAuthority:
     def observe_open(self, trade_date: date | str) -> DataSnapshotRef:
         """Fetch and persist one 09:30 observation partition.
 
-        In production the credential-rotation row is checked *before* probe or
-        fetch, so a pending/old credential cannot cause an accidental network
-        call.  Engineering/test adapters can exercise the path but always
-        publish quarantined, non-forward evidence.
+        In production the persisted credential-use row is checked *before*
+        probe or fetch.  It proves either vendor-confirmed rotation or the
+        operator's explicit, config-bound decision to retain an unrotated key.
+        Engineering/test adapters can exercise the path but always publish
+        quarantined, non-forward evidence.
         """
 
         session = _session(trade_date)
@@ -2174,7 +2498,7 @@ class ExecutionSnapshotAuthority:
         rotation = self._rotation_attestation()
         if self.runtime_mode == "production" and rotation is None:
             raise ExecutionNetworkBlocked(
-                f"{self.open_source_id} credential lacks persisted vendor-confirmed rotation"
+                f"{self.open_source_id} credential lacks persisted accepted-use evidence"
             )
         real_adapter = self._real_diemeng_adapter()
         if self.runtime_mode == "production" and not real_adapter:
@@ -2504,6 +2828,9 @@ class ExecutionSnapshotAuthority:
                 "complete_observed_universe": bool(complete_observed_universe),
                 "rotation_evidence_hash": (
                     None if rotation is None else rotation.evidence_hash
+                ),
+                "credential_use_disposition": (
+                    None if rotation is None else rotation.disposition
                 ),
                 "ingested_at_max": (
                     None
@@ -3005,7 +3332,11 @@ class ExecutionSnapshotAuthority:
         if not opening.physical_source_attested:
             reasons.append("opening_source_not_physically_attested")
         rotation = self._rotation_attestation()
-        if rotation is None or rotation.evidence_hash != opening.rotation_evidence_hash:
+        if (
+            rotation is None
+            or rotation.evidence_hash != opening.rotation_evidence_hash
+            or rotation.disposition != opening.credential_use_disposition
+        ):
             reasons.append("credential_rotation_not_persisted_or_changed")
         if opening.reference.quality_status is not DataQualityStatus.ACCEPTED:
             reasons.append("opening_snapshot_not_accepted")
@@ -3737,6 +4068,7 @@ __all__ = [
     "FORMAL_EXECUTION_SOURCE_ID",
     "OPEN_DATASET",
     "OPEN_SOURCE_DATASET",
+    "OperatorCredentialRetentionAuthority",
     "OUTPUT_DATASET",
     "OUTPUT_CONTRACT_HASH",
     "PyIcebergRegisteredGoldReader",

@@ -50,6 +50,10 @@ from .execution_snapshot_authority import (
     OUTPUT_DATASET as TYPED_EXECUTION_OUTPUT_DATASET,
     formal_execution_capability_probe_hash,
 )
+from .execution_open_sources import (
+    diemeng_engineering_canary_opening_contract_hash,
+    engineering_canary_execution_contract_hash,
+)
 from .production_config import ProductionConfigEvidence
 from .production_ledger import (
     IncidentRecord,
@@ -97,6 +101,7 @@ _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _BLOCKING_TRUST_LABELS = {
     "engineering_canary",
     "non_forward",
+    "retrospective_non_forward",
     "legacy_untrusted_data",
     "legacy_execution_regression_only",
     "st_history_unverified",
@@ -504,6 +509,27 @@ class ProductionReadinessAuditor:
         self.config = dict(config)
         self.config_evidence = config_evidence
         self._snapshot_cache: dict[str, tuple[str, ...]] = {}
+
+    def _current_canary_execution_contract_hash(self) -> str:
+        """Return the validated config-bound retrospective canary contract."""
+
+        daily = self.config.get("daily")
+        canary = daily.get("engineering_canary") if isinstance(daily, Mapping) else None
+        if not isinstance(canary, Mapping):
+            return ""
+        try:
+            recomputed = engineering_canary_execution_contract_hash(canary)
+        except (TypeError, ValueError):
+            return ""
+        validated = str(
+            getattr(
+                self.config_evidence,
+                "engineering_canary_execution_contract_hash",
+                "",
+            )
+            or ""
+        )
+        return recomputed if _valid_hash(validated) and recomputed == validated else ""
 
     def _check(self, code: str, blockers: Sequence[str], **evidence: Any) -> ReadinessCheck:
         normalized = tuple(sorted(set(map(str, blockers))))
@@ -1383,6 +1409,10 @@ class ProductionReadinessAuditor:
         metadata = run.metadata
         expected = restore_drill_evidence_hash(metadata)
         expected_sha = str(metadata.get("expected_sha256") or "")
+        current_canary_contract = self._current_canary_execution_contract_hash()
+        source_canary_contract = str(
+            metadata.get("source_canary_execution_contract_hash") or ""
+        )
         try:
             verified_at = _parse_time(metadata.get("verified_at"))
             expected_size = int(metadata.get("expected_size_bytes") or 0)
@@ -1395,6 +1425,7 @@ class ProductionReadinessAuditor:
                 "source_canary_evidence_hash": metadata.get(
                     "source_canary_evidence_hash"
                 ),
+                "source_canary_execution_contract_hash": source_canary_contract,
                 "source_snapshot_id": metadata.get("source_snapshot_id"),
                 "object_sha256": expected_sha,
                 "size_bytes": expected_size,
@@ -1437,6 +1468,8 @@ class ProductionReadinessAuditor:
             and metadata.get("deleted_cache_proof") == deleted_cache_proof
             and str(metadata.get("source_canary_run_id") or "")
             and _valid_hash(metadata.get("source_canary_evidence_hash"))
+            and _valid_hash(current_canary_contract)
+            and source_canary_contract == current_canary_contract
             and str(metadata.get("source_snapshot_id") or "")
             and metadata.get("source_snapshot_role") == "mark"
             and str(metadata.get("source_snapshot_trade_date") or "")
@@ -1478,6 +1511,7 @@ class ProductionReadinessAuditor:
         evidence_by_snapshot: Mapping[str, Mapping[str, Any]],
         bound_partitions: Sequence[PartitionRecord],
         sessions: Sequence[date],
+        expected_canary_execution_contract_hash: str,
         visiting: frozenset[str] = frozenset(),
     ) -> tuple[str, ...]:
         snapshot_id = str(evidence.get("snapshot_id") or "")
@@ -1550,7 +1584,9 @@ class ProductionReadinessAuditor:
             and manifest.get("run_id") == run_id
             and manifest.get("evidence_schema") == PHYSICAL_CANARY_SCHEMA_VERSION
             and manifest.get("evidence_class") == "engineering_canary"
-            and manifest.get("evidence_scope") == "non_forward"
+            and manifest.get("evidence_scope") == "retrospective_non_forward"
+            and manifest.get("canary_execution_contract_hash")
+            == expected_canary_execution_contract_hash
             and manifest.get("formal_epoch_eligible") is False
             and manifest.get("physical_source_attested") is True
             and manifest.get("controlled_test_adapter") is False
@@ -1566,7 +1602,7 @@ class ProductionReadinessAuditor:
             and set(reference.trust_labels)
             == {
                 "physical_engineering_canary",
-                "non_forward",
+                "retrospective_non_forward",
                 "retrospective_physical_replay",
             }
         ):
@@ -1575,6 +1611,12 @@ class ProductionReadinessAuditor:
         if reference.tier is SnapshotTier.GOLD:
             opening_audit = manifest.get("opening_cross_check")
             formal_ready = manifest.get("opening_execution_formal_ready")
+            if (
+                bound_partition is None
+                or bound_partition.details.get("canary_execution_contract_hash")
+                != expected_canary_execution_contract_hash
+            ):
+                errors.append("physical_gold_execution_contract_binding_invalid")
             if formal_ready is not False:
                 errors.append("physical_gold_formal_execution_scope_invalid")
             if evidence_role == "execution":
@@ -1706,6 +1748,9 @@ class ProductionReadinessAuditor:
                     evidence_by_snapshot=evidence_by_snapshot,
                     bound_partitions=bound_partitions,
                     sessions=sessions,
+                    expected_canary_execution_contract_hash=(
+                        expected_canary_execution_contract_hash
+                    ),
                     visiting=next_visiting,
                 )
             )
@@ -1745,13 +1790,14 @@ class ProductionReadinessAuditor:
 
         metadata = run.metadata
         reasons: list[str] = []
+        current_canary_contract = self._current_canary_execution_contract_hash()
         raw_sessions = tuple(map(str, metadata.get("calendar_sessions") or ()))
         if not calendar_window or raw_sessions != tuple(calendar_window):
             reasons.append("calendar_window_not_current")
         if not (
             metadata.get("evidence_schema") == PHYSICAL_CANARY_SCHEMA_VERSION
             and metadata.get("evidence_class") == "engineering_canary"
-            and metadata.get("evidence_scope") == "non_forward"
+            and metadata.get("evidence_scope") == "retrospective_non_forward"
             and metadata.get("formal_epoch_eligible") is False
             and metadata.get("physical_source_attested") is True
             and metadata.get("controlled_test_adapter") is False
@@ -1760,6 +1806,15 @@ class ProductionReadinessAuditor:
         ):
             reasons.append("attempt_admission_labels_invalid")
         evaluator_identity = metadata.get("evaluator_identity")
+        if not (
+            _valid_hash(current_canary_contract)
+            and metadata.get("canary_execution_contract_hash")
+            == current_canary_contract
+            and isinstance(evaluator_identity, Mapping)
+            and evaluator_identity.get("canary_execution_contract_hash")
+            == current_canary_contract
+        ):
+            reasons.append("attempt_canary_execution_contract_not_current")
         build_provenance = (
             evaluator_identity.get("build_provenance")
             if isinstance(evaluator_identity, Mapping)
@@ -1955,6 +2010,7 @@ class ProductionReadinessAuditor:
             if len(accepted_sessions) >= 21
             else ()
         )
+        current_canary_contract = self._current_canary_execution_contract_hash()
         eligible_attempts: list[RunRecord] = []
         rejected_attempts: list[dict[str, Any]] = []
         for candidate in all_runs:
@@ -2009,7 +2065,9 @@ class ProductionReadinessAuditor:
             if not (
                 metadata.get("evidence_schema") == PHYSICAL_CANARY_SCHEMA_VERSION
                 and metadata.get("evidence_class") == "engineering_canary"
-                and metadata.get("evidence_scope") == "non_forward"
+                and metadata.get("evidence_scope") == "retrospective_non_forward"
+                and metadata.get("canary_execution_contract_hash")
+                == current_canary_contract
                 and metadata.get("formal_epoch_eligible") is False
                 and metadata.get("physical_source_attested") is True
                 and metadata.get("controlled_test_adapter") is False
@@ -2090,6 +2148,9 @@ class ProductionReadinessAuditor:
                 and evaluator_identity.get("reconciliation_schema")
                 == RECONCILIATION_EVALUATOR_SCHEMA
                 and evaluator_identity.get("mode") == "production_image"
+                and _valid_hash(current_canary_contract)
+                and evaluator_identity.get("canary_execution_contract_hash")
+                == current_canary_contract
                 and isinstance(build_provenance, Mapping)
                 and _valid_hash(build_provenance.get("build_identity_hash"))
                 and expected_build_identity
@@ -2108,6 +2169,32 @@ class ProductionReadinessAuditor:
             if not isinstance(source_probe_hashes, Mapping) or not source_probe_hashes:
                 reasons.append("physical_source_probe_binding_missing")
             else:
+                opening_probe_identity = "diemeng:opening_execution"
+                opening_probe_hash = source_probe_hashes.get(opening_probe_identity)
+                try:
+                    expected_opening_contract_hash = (
+                        diemeng_engineering_canary_opening_contract_hash(
+                            self.config["daily"]["engineering_canary"]
+                        )
+                    )
+                except (KeyError, TypeError, ValueError):
+                    expected_opening_contract_hash = ""
+                opening_capability = capability_rows.get(
+                    ("diemeng", "opening_execution")
+                )
+                if opening_probe_hash is None:
+                    reasons.append("physical_diemeng_opening_probe_binding_missing")
+                elif not (
+                    _valid_hash(opening_probe_hash)
+                    and opening_capability is not None
+                    and str(opening_capability.get("status") or "") == "accepted"
+                    and str(opening_capability.get("probe_hash") or "")
+                    == str(opening_probe_hash)
+                    and _valid_hash(expected_opening_contract_hash)
+                    and str(opening_capability.get("contract_hash") or "")
+                    == expected_opening_contract_hash
+                ):
+                    reasons.append("physical_diemeng_opening_probe_binding_invalid")
                 for raw_identity, raw_probe_hash in source_probe_hashes.items():
                     source_id, separator, dataset = str(raw_identity).rpartition(":")
                     capability = capability_rows.get((source_id, dataset))
@@ -2264,6 +2351,9 @@ class ProductionReadinessAuditor:
                     evidence_by_snapshot=evidence_by_snapshot,
                     bound_partitions=bound_partitions,
                     sessions=sessions,
+                    expected_canary_execution_contract_hash=(
+                        current_canary_contract
+                    ),
                 )
             )
             tier_counts = {
@@ -2299,6 +2389,10 @@ class ProductionReadinessAuditor:
                     and restore_metadata.get("source_canary_run_id") == run.run_id
                     and restore_metadata.get("source_canary_evidence_hash")
                     == expected_hash
+                    and restore_metadata.get(
+                        "source_canary_execution_contract_hash"
+                    )
+                    == current_canary_contract
                     and selected is not None
                     and str(selected.get("tier") or "") == "gold"
                     and str(selected.get("role") or "") == "mark"
@@ -3131,10 +3225,30 @@ class ProductionReadinessAuditor:
         blockers = tuple(map(str, self.config_evidence.credential_rotation_blockers))
         if not blockers and not self.config_evidence.historical_backfill_allowed:
             blockers = ("credential_rotation_not_verified",)
+        retained = tuple(
+            map(
+                str,
+                getattr(
+                    self.config_evidence,
+                    "credential_retention_waivers",
+                    (),
+                )
+                or (),
+            )
+        )
         return self._check(
             "credential_rotation",
             blockers,
             historical_backfill_allowed=self.config_evidence.historical_backfill_allowed,
+            credential_retention_waivers=list(retained),
+            all_required_credentials_vendor_rotated=bool(
+                self.config_evidence.historical_backfill_allowed and not retained
+            ),
+            credential_use_decision=(
+                "retained_unrotated_operator_accepted"
+                if retained
+                else "vendor_rotation_or_pending"
+            ),
         )
 
     @staticmethod

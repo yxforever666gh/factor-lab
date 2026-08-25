@@ -407,10 +407,12 @@ def test_production_tushare_probe_blocks_before_secret_or_network(
     monkeypatch,
 ) -> None:
     events: list[str] = []
+    reviewed: list[str] = []
 
-    def blocked_transport() -> str:
+    def blocked_transport(value: str) -> str:
         events.append("transport_preflight")
-        raise RuntimeError("installed SDK declares plaintext HTTP")
+        reviewed.append(value)
+        raise RuntimeError("configured origin is unsafe")
 
     def forbidden_secret(*_args, **_kwargs) -> str:
         events.append("secret_read")
@@ -418,7 +420,7 @@ def test_production_tushare_probe_blocks_before_secret_or_network(
 
     monkeypatch.setattr(
         env_settings_service,
-        "require_tushare_sdk_https_transport",
+        "validate_tushare_https_origin",
         blocked_transport,
     )
     monkeypatch.setattr(env_settings_service, "_profile_credential", forbidden_secret)
@@ -443,17 +445,20 @@ def test_production_tushare_probe_blocks_before_secret_or_network(
 
     assert result == {
         "ok": False,
-        "message": "数据源测试失败：生产环境尚未确认 Tushare HTTPS 传输。",
+        "message": "数据源测试失败：Tushare HTTPS 传输配置无效。",
         "source_type": "tushare",
         "name": "primary-tushare",
     }
     assert events == ["transport_preflight"]
+    assert reviewed == ["https://api.tushare.pro/dataapi"]
 
 
 def test_production_tushare_probe_seals_transport_after_preflight_and_secret(
     monkeypatch,
 ) -> None:
     events: list[str] = []
+    reviewed_inputs: list[str] = []
+    reviewed_origin = "https://api.waditu.com:443/dataapi"
 
     class Client:
         def query(self, *_args, **_kwargs):
@@ -461,11 +466,30 @@ def test_production_tushare_probe_seals_transport_after_preflight_and_secret(
             return pd.DataFrame({"cal_date": ["20240102"], "is_open": [1]})
 
     client = Client()
+
+    def validate_origin(value: str) -> str:
+        events.append("transport_preflight")
+        reviewed_inputs.append(value)
+        return reviewed_origin
+
+    def create_client(_token: str) -> Client:
+        events.append("client_constructed")
+        return client
+
+    def seal_transport(value: Client) -> Client:
+        assert value._DataApi__http_url == reviewed_origin
+        events.append("transport_sealed")
+        return value
+
+    def verify_transport(value: Client) -> bool:
+        assert value._DataApi__http_url == reviewed_origin
+        events.append("transport_verified")
+        return value is client
+
     monkeypatch.setattr(
         env_settings_service,
-        "require_tushare_sdk_https_transport",
-        lambda: events.append("transport_preflight")
-        or "https://api.waditu.com/dataapi",
+        "validate_tushare_https_origin",
+        validate_origin,
     )
     monkeypatch.setattr(
         env_settings_service,
@@ -475,15 +499,15 @@ def test_production_tushare_probe_seals_transport_after_preflight_and_secret(
     monkeypatch.setattr(
         env_settings_service,
         "harden_tushare_client_transport",
-        lambda value: events.append("transport_sealed") or value,
+        seal_transport,
     )
     monkeypatch.setattr(
         env_settings_service,
         "tushare_client_uses_direct_transport",
-        lambda value: value is client,
+        verify_transport,
     )
     monkeypatch.setitem(
-        sys.modules, "tushare", SimpleNamespace(pro_api=lambda _token: client)
+        sys.modules, "tushare", SimpleNamespace(pro_api=create_client)
     )
 
     result = env_settings_service.test_data_source_connection(
@@ -492,10 +516,14 @@ def test_production_tushare_probe_seals_transport_after_preflight_and_secret(
     )
 
     assert result["ok"] is True
+    assert reviewed_inputs == ["https://api.tushare.pro/dataapi"]
+    assert client._DataApi__http_url == reviewed_origin
     assert events == [
         "transport_preflight",
         "secret_read",
+        "client_constructed",
         "transport_sealed",
+        "transport_verified",
         "provider_request",
     ]
 
@@ -513,8 +541,8 @@ def test_production_tushare_probe_rejects_sdk_shape_drift_before_network(
     wrapper = UnexpectedClientWrapper()
     monkeypatch.setattr(
         env_settings_service,
-        "require_tushare_sdk_https_transport",
-        lambda: events.append("transport_preflight")
+        "validate_tushare_https_origin",
+        lambda value: events.append("transport_preflight")
         or "https://api.waditu.com/dataapi",
     )
     monkeypatch.setattr(
@@ -650,13 +678,13 @@ def test_production_environment_without_role_still_blocks_tushare_before_secret(
 ) -> None:
     events: list[str] = []
 
-    def blocked_transport() -> str:
+    def blocked_transport(_value: str) -> str:
         events.append("transport_preflight")
-        raise RuntimeError("installed SDK declares plaintext HTTP")
+        raise RuntimeError("configured origin is unsafe")
 
     monkeypatch.setattr(
         env_settings_service,
-        "require_tushare_sdk_https_transport",
+        "validate_tushare_https_origin",
         blocked_transport,
     )
     monkeypatch.setattr(
@@ -676,7 +704,7 @@ def test_production_environment_without_role_still_blocks_tushare_before_secret(
 
     assert result["ok"] is False
     assert result["message"] == (
-        "数据源测试失败：生产环境尚未确认 Tushare HTTPS 传输。"
+        "数据源测试失败：Tushare HTTPS 传输配置无效。"
     )
     assert events == ["transport_preflight"]
 

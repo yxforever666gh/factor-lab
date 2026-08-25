@@ -26,6 +26,9 @@ from factor_lab.research_os.data_sources import (
     SourceHealth,
 )
 from factor_lab.research_os.fingerprint import content_fingerprint
+from factor_lab.research_os.execution_open_sources import (
+    diemeng_engineering_canary_execution_mapping,
+)
 from factor_lab.research_os.object_store import S3ImmutableArchive
 from factor_lab.research_os.orm import (
     Base,
@@ -68,31 +71,10 @@ TICKERS = tuple(f"{index:06d}.SZ" for index in range(1, 61))
 
 
 def _opening_shadow(request: dict[str, object]) -> dict[str, object]:
+    execution = diemeng_engineering_canary_execution_mapping()
+    execution["request"] = request
     return {
-        "execution_market_data": {
-            "source": "diemeng",
-            "profile_name": "primary-diemeng",
-            "credential_ref": "secret://diemeng_api_key",
-            "base_url": "https://diemeng.chat/api",
-            "endpoint": "/stock/history",
-            "method": "POST",
-            "response_path": "data.list",
-            "request": request,
-            "contract": {
-                "key_fields": ["stock_code", "trade_time"],
-                "event_time_field": "trade_time",
-                "fields": [
-                    "stock_code",
-                    "trade_time",
-                    "open",
-                    "high",
-                    "low",
-                    "close",
-                    "vol",
-                    "amount",
-                ],
-            },
-        }
+        "execution_market_data": execution,
     }
 
 
@@ -109,6 +91,57 @@ def test_opening_payload_keeps_provider_required_level_and_bounded_paging() -> N
     payload = _opening_source_payload(_opening_shadow(request))
 
     assert payload["request"]["parameters"] == request
+    assert payload["source"] == "diemeng"
+    assert payload["base_url"] == "https://data.diemeng.chat/api"
+
+
+def test_opening_payload_never_replays_formal_tushare_realtime_source() -> None:
+    realtime = {
+        "execution_market_data": {
+            "source": "tushare",
+            "profile_name": "primary-tushare",
+            "credential_ref": "secret://tushare_token",
+            "dataset": "rt_min",
+            "endpoint": "rt_min",
+            "method": "SDK",
+            "request": {
+                "ts_code": "${decision_universe_csv}",
+                "freq": "1MIN",
+            },
+        }
+    }
+
+    with pytest.raises(
+        PhysicalCanaryAdmissionError,
+        match="Diemeng source|closed retrospective contract",
+    ):
+        _opening_source_payload(realtime)
+
+
+def test_physical_canary_scope_is_explicitly_retrospective_and_never_formal(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime(tmp_path)
+    try:
+        with pytest.raises(
+            PhysicalCanaryAdmissionError,
+            match="never formal-ready",
+        ):
+            PhysicalEngineeringCanaryService(
+                catalog=runtime.catalog,
+                production_ledger=runtime.ledger,
+                shadow_authority=runtime.authority,
+                object_store_archive=runtime.archive,
+                local_root=tmp_path / "rejected-runtime",
+                bindings=runtime.service.bindings,
+                production_evidence=None,
+                controlled_test=True,
+                opening_execution_formal_ready=True,
+                now=lambda: NOW,
+            )
+    finally:
+        _close(runtime)
+    runtime.engine.dispose()
 
 
 @pytest.mark.parametrize(
@@ -1997,6 +2030,7 @@ def test_controlled_physical_path_closes_objects_partitions_shadow_and_rejects_r
         assert result.physical_source_attested is False
         assert result.controlled_test_adapter is True
         assert result.readiness_admission == "rejected_controlled_test_adapter"
+        assert result.evidence_scope == "retrospective_non_forward"
         assert result.formal_epoch_eligible is False
         assert result.security_count == 50
         assert result.projected_session_count == 20
@@ -2028,6 +2062,17 @@ def test_controlled_physical_path_closes_objects_partitions_shadow_and_rejects_r
         persisted = runtime.catalog.get_run(result.run_id)
         assert persisted is not None
         assert persisted.metadata["canary_evidence_hash"] == result.canary_evidence_hash
+        assert persisted.metadata["opening_execution_formal_ready"] is False
+        assert persisted.metadata["canary_execution_contract_hash"] == (
+            runtime.service.canary_execution_contract_hash
+        )
+        assert all(
+            runtime.catalog.get_snapshot(item.snapshot_id).reference.manifest[
+                "canary_execution_contract_hash"
+            ]
+            == runtime.service.canary_execution_contract_hash
+            for item in result.object_evidence
+        )
         assert physical_canary_evidence_hash(persisted.metadata) == result.canary_evidence_hash
         assert persisted.metadata["physical_object_count"] == len(result.object_evidence)
         with pytest.raises(PhysicalCanaryFormalEpochDenied):

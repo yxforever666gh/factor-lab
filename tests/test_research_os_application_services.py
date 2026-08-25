@@ -301,6 +301,26 @@ def _sqlite_fk_authority(root: Path):
     return catalog, engine, ProductionLedger(engine)
 
 
+def test_production_source_loader_injects_top_level_canonical_origin() -> None:
+    service = object.__new__(ApplicationServices)
+    service._production_authority = True
+    service.config = {
+        "security": {
+            "source_transport": {
+                "tushare": {
+                    "api_origin": "HTTPS://API.TUSHARE.PRO:443/dataapi/"
+                }
+            }
+        }
+    }
+    raw = {"source": "tushare", "request": {"dataset": "daily"}}
+
+    bound = service._bind_source_transport_authority(raw)
+
+    assert "api_origin" not in raw
+    assert bound["api_origin"] == "https://api.tushare.pro/dataapi"
+
+
 def test_daily_bronze_and_silver_are_archived_outside_local_cache(tmp_path: Path) -> None:
     config = _config(tmp_path)
     archive = FakeObjectStoreArchive([])

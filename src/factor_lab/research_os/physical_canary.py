@@ -7,9 +7,9 @@ fetches every observation through reviewed ``SourceAdapter`` contracts, stores
 real Bronze/Silver/Gold bytes under an isolated MinIO prefix, and derives daily
 shadow authority rows from the event ledger.
 
-Every result remains ``engineering_canary/non_forward``.  Historical replay,
-including replay backed by real provider bytes, is never formal forward
-evidence and can never be admitted to an evidence epoch.
+Every result remains ``engineering_canary/retrospective_non_forward``.
+Historical replay, including replay backed by real provider bytes, is never
+formal forward evidence and can never be admitted to an evidence epoch.
 """
 
 from __future__ import annotations
@@ -60,7 +60,10 @@ from .docker_attestation import (
     persisted_attestation_binding_errors,
 )
 from .fingerprint import content_fingerprint
-from .execution_open_sources import diemeng_opening_session_request_template
+from .execution_open_sources import (
+    engineering_canary_execution_contract_hash,
+    validate_diemeng_engineering_canary_execution_mapping,
+)
 from .object_store import ArchivedObject, S3ImmutableArchive
 from .production_config import (
     ProductionConfigEvidence,
@@ -98,7 +101,7 @@ from .soak_monitor import DagsterSoakError, local_code_server_runtime_identity
 
 EVIDENCE_SCHEMA = "research-os/physical-engineering-canary/v1"
 EVIDENCE_CLASS = "engineering_canary"
-EVIDENCE_SCOPE = "non_forward"
+EVIDENCE_SCOPE = "retrospective_non_forward"
 PHYSICAL_RUN_TYPE = "physical_engineering_canary"
 CONTROLLED_TEST_RUN_TYPE = "physical_engineering_canary_test"
 CANARY_OBJECT_PREFIX = "research-os/engineering-canary/physical/v1"
@@ -487,26 +490,29 @@ def _production_binding(payload: Mapping[str, Any], env: Mapping[str, str]) -> _
     )
 
 
-def _opening_source_payload(shadow: Mapping[str, Any]) -> dict[str, Any]:
-    execution = shadow.get("execution_market_data")
+def _opening_source_payload(canary: Mapping[str, Any]) -> dict[str, Any]:
+    """Build only the reviewed retrospective Diemeng canary source.
+
+    The formal shadow source may be Tushare ``rt_min``, but that endpoint is
+    current-session only and must never be replayed across the canary's 20
+    historical sessions.  This seam therefore reads the independent canary
+    mapping and validates its entire closed schema before adapter construction.
+    """
+
+    execution = canary.get("execution_market_data")
     if not isinstance(execution, Mapping):
-        raise PhysicalCanaryAdmissionError("shadow execution market data is absent")
+        raise PhysicalCanaryAdmissionError(
+            "engineering canary execution market data is absent"
+        )
+    try:
+        execution = validate_diemeng_engineering_canary_execution_mapping(execution)
+    except ValueError as exc:
+        raise PhysicalCanaryAdmissionError(str(exc)) from None
     contract = execution.get("contract")
-    if not isinstance(contract, Mapping):
-        raise PhysicalCanaryAdmissionError("opening execution contract is absent")
+    assert isinstance(contract, Mapping)  # closed validator invariant
     fields = tuple(map(str, contract.get("fields") or ()))
-    required = {"stock_code", "trade_time", "open", "high", "low", "close", "vol", "amount"}
-    if not required.issubset(fields):
-        raise PhysicalCanaryAdmissionError(
-            "opening execution contract omits required minute fields"
-        )
     request = execution.get("request")
-    if not isinstance(request, Mapping):
-        raise PhysicalCanaryAdmissionError("opening execution request is absent")
-    if dict(request) != diemeng_opening_session_request_template():
-        raise PhysicalCanaryAdmissionError(
-            "opening execution request must match the reviewed bounded session template"
-        )
+    assert isinstance(request, Mapping)  # closed validator invariant
     dtype = {
         "stock_code": "string",
         "trade_time": "datetime",
@@ -635,7 +641,40 @@ class PhysicalEngineeringCanaryService:
         self.production_evidence = production_evidence
         self.controlled_test = bool(controlled_test)
         self.physical_source_attested = not self.controlled_test
-        self.opening_execution_formal_ready = bool(opening_execution_formal_ready)
+        if bool(opening_execution_formal_ready):
+            raise PhysicalCanaryAdmissionError(
+                "retrospective engineering canary execution is never formal-ready"
+            )
+        self.opening_execution_formal_ready = False
+        if self.controlled_test:
+            self.canary_execution_contract_hash = content_fingerprint(
+                {
+                    "evidence_scope": EVIDENCE_SCOPE,
+                    "mode": "controlled_test",
+                    "bindings": [item.descriptor() for item in self.bindings],
+                },
+                domain=(
+                    "factor-lab/research-os/v1/"
+                    "controlled-physical-canary-execution-contract"
+                ),
+            )
+        else:
+            contract_hash = str(
+                getattr(
+                    production_evidence,
+                    "engineering_canary_execution_contract_hash",
+                    "",
+                )
+                or ""
+            )
+            if len(contract_hash) != 64 or any(
+                character not in "0123456789abcdef"
+                for character in contract_hash
+            ):
+                raise PhysicalCanaryAdmissionError(
+                    "validated engineering canary execution contract hash is absent"
+                )
+            self.canary_execution_contract_hash = contract_hash
         self._now = now
         self.shadow = ShadowStepService(
             catalog,
@@ -729,9 +768,22 @@ class PhysicalEngineeringCanaryService:
                 "physical canary requires two calendars and one reviewed market source per dataset"
             )
         bindings = [_production_binding(source, env) for source in selected]
-        opening_payload = with_reviewed_transport(
-            _opening_source_payload(daily.get("shadow") or {})
+        engineering_canary = daily.get("engineering_canary")
+        if not isinstance(engineering_canary, Mapping) or (
+            engineering_canary.get("evidence_scope")
+            != "retrospective_non_forward"
+        ):
+            raise PhysicalCanaryAdmissionError(
+                "production engineering canary must be explicitly retrospective and non-forward"
+            )
+        opening_payload = _opening_source_payload(engineering_canary)
+        contract_hash = engineering_canary_execution_contract_hash(
+            engineering_canary
         )
+        if contract_hash != evidence.engineering_canary_execution_contract_hash:
+            raise PhysicalCanaryAdmissionError(
+                "validated engineering canary execution contract changed"
+            )
         opening_binding = _production_binding(opening_payload, env)
         bindings.append(
             _SourceBinding(
@@ -744,12 +796,6 @@ class PhysicalEngineeringCanaryService:
                 per_ticker=True,
             )
         )
-        execution_config = (daily.get("shadow") or {}).get("execution_market_data")
-        formal = (
-            execution_config.get("formal_capability")
-            if isinstance(execution_config, Mapping)
-            else None
-        )
         return cls(
             catalog=catalog,
             production_ledger=production_ledger,
@@ -759,9 +805,7 @@ class PhysicalEngineeringCanaryService:
             bindings=bindings,
             production_evidence=evidence,
             controlled_test=False,
-            opening_execution_formal_ready=(
-                isinstance(formal, Mapping) and formal.get("status") == "accepted"
-            ),
+            opening_execution_formal_ready=False,
             now=now,
         )
 
@@ -953,6 +997,9 @@ class PhysicalEngineeringCanaryService:
             "identity_schema": _EVALUATOR_IDENTITY_SCHEMA,
             "physical_canary_schema": EVIDENCE_SCHEMA,
             "reconciliation_schema": RECONCILIATION_EVALUATOR_SCHEMA,
+            "canary_execution_contract_hash": (
+                self.canary_execution_contract_hash
+            ),
         }
         if self.controlled_test:
             return {
@@ -1766,6 +1813,9 @@ class PhysicalEngineeringCanaryService:
                 controlled_test=self.controlled_test,
             ),
             "run_id": run_id,
+            "canary_execution_contract_hash": (
+                self.canary_execution_contract_hash
+            ),
             "tier": tier.value,
             "role": role,
             "trade_date": session.isoformat(),
@@ -2812,6 +2862,9 @@ class PhysicalEngineeringCanaryService:
                 "role": role,
                 "calendar_hash": calendar_hash,
                 "attempted_gold_input_hash": attempted_gold_input_hash,
+                "canary_execution_contract_hash": (
+                    self.canary_execution_contract_hash
+                ),
             },
             domain="factor-lab/research-os/v1/physical-canary-gold-input",
         )
@@ -2829,6 +2882,9 @@ class PhysicalEngineeringCanaryService:
                 "frame_digest": frame_digest,
                 "calendar_hash": calendar_hash,
                 "attempted_gold_input_hash": attempted_gold_input_hash,
+                "canary_execution_contract_hash": (
+                    self.canary_execution_contract_hash
+                ),
             },
             evidence_hashes=(silver.content_hash,),
         )
@@ -2882,6 +2938,9 @@ class PhysicalEngineeringCanaryService:
                         "content_hash": _calendar_hash(sessions),
                     },
                     "opening_execution_formal_ready": self.opening_execution_formal_ready,
+                    "canary_execution_contract_hash": (
+                        self.canary_execution_contract_hash
+                    ),
                     "opening_cross_check": opening_audit,
                 },
             )
@@ -2905,6 +2964,9 @@ class PhysicalEngineeringCanaryService:
                     "silver_snapshot_id": silver.snapshot_id,
                     "calendar_hash": calendar_hash,
                     "attempted_gold_input_hash": attempted_gold_input_hash,
+                    "canary_execution_contract_hash": (
+                        self.canary_execution_contract_hash
+                    ),
                     "opening_cross_check": opening_audit,
                     "physical_object": self._archived_object(reference).to_dict(),
                 },
@@ -3118,6 +3180,9 @@ class PhysicalEngineeringCanaryService:
         expected_identity: Mapping[str, Any] = {
             **dict(labels),
             "evaluator_identity": self._evaluator_identity(),
+            "canary_execution_contract_hash": (
+                self.canary_execution_contract_hash
+            ),
             "run_id": run_id,
             "run_type": run_type,
             "input_fingerprint": plan_fingerprint,
@@ -3228,7 +3293,14 @@ class PhysicalEngineeringCanaryService:
             )
         for item in objects:
             snapshot = self.catalog.get_snapshot(item.snapshot_id)
-            if snapshot is None or self._object_evidence(snapshot.reference) != item:
+            if (
+                snapshot is None
+                or self._object_evidence(snapshot.reference) != item
+                or snapshot.reference.manifest.get(
+                    "canary_execution_contract_hash"
+                )
+                != self.canary_execution_contract_hash
+            ):
                 raise PhysicalCanaryDataRejected(
                     "completed physical canary snapshot authority differs"
                 )
@@ -3443,6 +3515,9 @@ class PhysicalEngineeringCanaryService:
                 metadata={
                     **dict(labels),
                     "evaluator_identity": self._evaluator_identity(),
+                    "canary_execution_contract_hash": (
+                        self.canary_execution_contract_hash
+                    ),
                     "runtime_attestation_evidence": dict(
                         runtime_attestation_evidence
                     ),
@@ -3465,6 +3540,9 @@ class PhysicalEngineeringCanaryService:
             {
                 "evidence_schema": EVIDENCE_SCHEMA,
                 "evaluator_identity": self._evaluator_identity(),
+                "canary_execution_contract_hash": (
+                    self.canary_execution_contract_hash
+                ),
                 "controlled_test": self.controlled_test,
                 "calendar_sessions": [item.isoformat() for item in sessions],
                 "calendar_partition_evidence": [
@@ -3529,6 +3607,9 @@ class PhysicalEngineeringCanaryService:
             metadata={
                 **labels,
                 "evaluator_identity": evaluator_identity,
+                "canary_execution_contract_hash": (
+                    self.canary_execution_contract_hash
+                ),
                 "runtime_attestation_evidence": runtime_attestation_evidence,
                 "calendar_sessions": [item.isoformat() for item in sessions],
                 "security_count": SECURITY_COUNT,
@@ -3594,6 +3675,9 @@ class PhysicalEngineeringCanaryService:
                 details={
                     **labels,
                     "evaluator_identity": evaluator_identity,
+                    "canary_execution_contract_hash": (
+                        self.canary_execution_contract_hash
+                    ),
                     "runtime_attestation_evidence": runtime_attestation_evidence,
                     "run_id": run_id,
                     "run_type": run_type,
@@ -3724,6 +3808,9 @@ class PhysicalEngineeringCanaryService:
                         metadata={
                             **labels,
                             "evaluator_identity": evaluator_identity,
+                            "canary_execution_contract_hash": (
+                                self.canary_execution_contract_hash
+                            ),
                             "runtime_attestation_evidence": runtime_attestation_evidence,
                             "calendar_sessions": [
                                 item.isoformat() for item in sessions
@@ -4022,6 +4109,9 @@ class PhysicalEngineeringCanaryService:
             evidence_payload = {
                 **labels,
                 "evaluator_identity": evaluator_identity,
+                "canary_execution_contract_hash": (
+                    self.canary_execution_contract_hash
+                ),
                 "runtime_attestation_evidence": runtime_attestation_evidence,
                 "run_id": run_id,
                 "run_type": run_type,

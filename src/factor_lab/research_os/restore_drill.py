@@ -46,7 +46,7 @@ _MAXIMUM_CANARY_AGE = timedelta(hours=24)
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _PHYSICAL_TRUST_LABELS = {
     "physical_engineering_canary",
-    "non_forward",
+    "retrospective_non_forward",
     "retrospective_physical_replay",
 }
 
@@ -72,6 +72,7 @@ class RestoreDrillResult:
     restore_evidence_hash: str
     source_canary_run_id: str
     source_canary_evidence_hash: str
+    source_canary_execution_contract_hash: str
     source_snapshot_id: str
     object_uri: str
     sha256: str
@@ -86,6 +87,7 @@ class RestoreDrillResult:
 class _SelectedObject:
     canary_run_id: str
     canary_evidence_hash: str
+    canary_execution_contract_hash: str
     snapshot_id: str
     object_uri: str
     sha256: str
@@ -131,6 +133,18 @@ class PhysicalMinioRestoreDrillService:
         )
         self.production_evidence = production_evidence
         self.controlled_test = bool(controlled_test)
+        self.expected_canary_execution_contract_hash = (
+            None
+            if self.controlled_test
+            else str(
+                getattr(
+                    production_evidence,
+                    "engineering_canary_execution_contract_hash",
+                    "",
+                )
+                or ""
+            )
+        )
 
     @classmethod
     def from_production_config(
@@ -188,6 +202,10 @@ class PhysicalMinioRestoreDrillService:
             raise RestoreDrillAdmissionError(
                 "validated production configuration evidence is absent"
             )
+        if not _valid_hash(self.expected_canary_execution_contract_hash):
+            raise RestoreDrillAdmissionError(
+                "validated engineering canary execution contract hash is absent"
+            )
         backend = getattr(self.catalog, "_backend", None)
         engine = getattr(backend, "_engine", None)
         if getattr(getattr(engine, "dialect", None), "name", None) != "postgresql":
@@ -220,6 +238,15 @@ class PhysicalMinioRestoreDrillService:
         }
         sessions = tuple(map(str, _as_sequence(metadata.get("calendar_sessions"))))
         source_probe_hashes = metadata.get("source_probe_hashes")
+        canary_execution_contract_hash = str(
+            metadata.get("canary_execution_contract_hash") or ""
+        )
+        evaluator_identity = metadata.get("evaluator_identity")
+        current_contract_matches = bool(
+            self.controlled_test
+            or canary_execution_contract_hash
+            == self.expected_canary_execution_contract_hash
+        )
         shadow_session_hashes = tuple(
             map(str, _as_sequence(metadata.get("shadow_session_hashes")))
         )
@@ -248,7 +275,17 @@ class PhysicalMinioRestoreDrillService:
             and timedelta(0) <= age <= _MAXIMUM_CANARY_AGE
             and metadata.get("evidence_schema") == PHYSICAL_CANARY_SCHEMA_VERSION
             and metadata.get("evidence_class") == "engineering_canary"
-            and metadata.get("evidence_scope") == "non_forward"
+            and metadata.get("evidence_scope") == "retrospective_non_forward"
+            and _valid_hash(canary_execution_contract_hash)
+            and current_contract_matches
+            and (
+                self.controlled_test
+                or (
+                    isinstance(evaluator_identity, Mapping)
+                    and evaluator_identity.get("canary_execution_contract_hash")
+                    == canary_execution_contract_hash
+                )
+            )
             and metadata.get("formal_epoch_eligible") is False
             and metadata.get("physical_source_attested") is True
             and metadata.get("controlled_test_adapter") is False
@@ -304,6 +341,9 @@ class PhysicalMinioRestoreDrillService:
             )
         reference = record.reference
         manifest = reference.manifest
+        canary_execution_contract_hash = str(
+            run.metadata.get("canary_execution_contract_hash") or ""
+        )
         physical_object = manifest.get("physical_object")
         if not isinstance(physical_object, Mapping):
             raise RestoreDrillEvidenceUnavailable(
@@ -341,7 +381,15 @@ class PhysicalMinioRestoreDrillService:
             and manifest.get("run_id") == run.run_id
             and manifest.get("evidence_schema") == PHYSICAL_CANARY_SCHEMA_VERSION
             and manifest.get("evidence_class") == "engineering_canary"
-            and manifest.get("evidence_scope") == "non_forward"
+            and manifest.get("evidence_scope") == "retrospective_non_forward"
+            and manifest.get("canary_execution_contract_hash")
+            == canary_execution_contract_hash
+            and _valid_hash(canary_execution_contract_hash)
+            and (
+                self.controlled_test
+                or canary_execution_contract_hash
+                == self.expected_canary_execution_contract_hash
+            )
             and manifest.get("formal_epoch_eligible") is False
             and manifest.get("physical_source_attested") is True
             and manifest.get("controlled_test_adapter") is False
@@ -358,6 +406,7 @@ class PhysicalMinioRestoreDrillService:
         return _SelectedObject(
             canary_run_id=run.run_id,
             canary_evidence_hash=str(run.metadata["canary_evidence_hash"]),
+            canary_execution_contract_hash=canary_execution_contract_hash,
             snapshot_id=snapshot_id,
             object_uri=object_uri,
             sha256=object_sha,
@@ -434,6 +483,9 @@ class PhysicalMinioRestoreDrillService:
         challenge = content_fingerprint(
             {
                 "source_canary_run_id": selected.canary_run_id,
+                "source_canary_execution_contract_hash": (
+                    selected.canary_execution_contract_hash
+                ),
                 "source_snapshot_id": selected.snapshot_id,
                 "object_sha256": selected.sha256,
                 "started_at": started_at,
@@ -467,6 +519,9 @@ class PhysicalMinioRestoreDrillService:
                 {
                     "deletion_challenge": challenge,
                     "source_canary_evidence_hash": selected.canary_evidence_hash,
+                    "source_canary_execution_contract_hash": (
+                        selected.canary_execution_contract_hash
+                    ),
                     "source_snapshot_id": selected.snapshot_id,
                     "object_sha256": selected.sha256,
                     "size_bytes": selected.size_bytes,
@@ -519,6 +574,9 @@ class PhysicalMinioRestoreDrillService:
             "local_cache_retained": False,
             "source_canary_run_id": selected.canary_run_id,
             "source_canary_evidence_hash": selected.canary_evidence_hash,
+            "source_canary_execution_contract_hash": (
+                selected.canary_execution_contract_hash
+            ),
             "source_snapshot_id": selected.snapshot_id,
             "source_snapshot_role": selected.role,
             "source_snapshot_trade_date": selected.trade_date,
@@ -548,6 +606,9 @@ class PhysicalMinioRestoreDrillService:
             restore_evidence_hash=evidence_hash,
             source_canary_run_id=selected.canary_run_id,
             source_canary_evidence_hash=selected.canary_evidence_hash,
+            source_canary_execution_contract_hash=(
+                selected.canary_execution_contract_hash
+            ),
             source_snapshot_id=selected.snapshot_id,
             object_uri=selected.object_uri,
             sha256=selected.sha256,

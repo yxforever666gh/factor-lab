@@ -64,6 +64,7 @@ from .data_sources import FetchRequest, SourceBatch
 from .data_sync import (
     BronzeObservationError,
     BronzeSyncResult,
+    bind_production_source_transport,
     dataset_contract_from_mapping,
     read_frame,
     source_adapter_from_mapping,
@@ -735,6 +736,17 @@ class ApplicationServices(ResearchOSServices):
         if hasattr(self, "_production_authority"):
             return bool(self._production_authority)
         return _effective_production_authority(self.settings)
+
+    def _bind_source_transport_authority(
+        self,
+        source: Mapping[str, Any],
+    ) -> dict[str, Any]:
+        if not self._is_production_runtime():
+            return dict(source)
+        return bind_production_source_transport(
+            source,
+            production_config=self.config,
+        )
 
     def _production_readiness_auditor(self) -> ProductionReadinessAuditor:
         if self.production_ledger is None or self.production_config_evidence is None:
@@ -1907,7 +1919,7 @@ class ApplicationServices(ResearchOSServices):
         for index, raw in enumerate(sources):
             if not isinstance(raw, Mapping):
                 raise ValueError(f"daily.sources[{index}] must be an object")
-            source = dict(raw)
+            source = self._bind_source_transport_authority(raw)
             non_blocking_sample = bool(
                 source.get("non_blocking") is True
                 and source.get("evidence_role") == "non_blocking_sample"
@@ -6011,6 +6023,7 @@ class ApplicationServices(ResearchOSServices):
             and str((row.get("request") or {}).get("dataset") or "")
             in {"trade_calendar", "trade_cal"}
         ]
+        selected = [self._bind_source_transport_authority(row) for row in selected]
         source_types = {str(row.get("source") or "").lower() for row in selected}
         if not {"tushare", "diemeng"}.issubset(source_types):
             raise ServiceNotConfigured(

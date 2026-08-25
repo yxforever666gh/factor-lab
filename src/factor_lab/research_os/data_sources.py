@@ -223,9 +223,17 @@ _TUSHARE_DATA_API_MODULE = "tushare.pro.client"
 _TUSHARE_DATA_API_NAME = "DataApi"
 _TUSHARE_DIRECT_SESSION_ATTRIBUTE = "_factor_lab_direct_http_session"
 _TUSHARE_DIRECT_TRANSPORT_ATTRIBUTE = "_factor_lab_direct_transport_seal"
-_TUSHARE_DIRECT_TRANSPORT_SEAL = object()
 _TUSHARE_API_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,127}$")
 _TUSHARE_API_HOSTS = frozenset({"api.waditu.com", "api.tushare.pro"})
+_TUSHARE_RESERVED_API_NAMES = frozenset({"query"})
+
+
+@dataclass(frozen=True)
+class _TushareDirectTransportSeal:
+    """Immutable authority bound to one concrete SDK client and Session."""
+
+    origin: str
+    session: requests.Session
 
 
 def _requests_session_is_direct(session: Any) -> bool:
@@ -255,19 +263,19 @@ def _tushare_sdk_client(value: Any) -> bool:
 
 
 def _tushare_base_url(client: Any) -> str:
-    raw = str(getattr(client, "_DataApi__http_url", "") or "").strip().rstrip("/")
-    return _validated_tushare_https_origin(raw)
+    raw = str(getattr(client, "_DataApi__http_url", "") or "").strip()
+    return validate_tushare_https_origin(raw)
 
 
 def _validated_tushare_https_origin(raw: str) -> str:
-    raw = str(raw or "").strip().rstrip("/")
+    raw = str(raw or "").strip()
     parsed = urlparse(raw)
     try:
         port = parsed.port
     except ValueError as exc:
         raise SourceContractError("Tushare SDK HTTPS origin is invalid") from exc
     if not (
-        parsed.scheme == "https"
+        parsed.scheme.casefold() == "https"
         and parsed.hostname is not None
         and parsed.hostname.casefold() in _TUSHARE_API_HOSTS
         and parsed.username is None
@@ -277,15 +285,74 @@ def _validated_tushare_https_origin(raw: str) -> str:
         and not parsed.params
         and not parsed.query
         and not parsed.fragment
+        and "?" not in raw
+        and "#" not in raw
     ):
-        # The pinned SDK currently declares a plaintext HTTP endpoint.  Do not
-        # silently rewrite it to a guessed HTTPS URL: production remains
-        # blocked until the vendor/SDK itself supplies a confirmed HTTPS
-        # origin, and the already exposed credential must be rotated.
         raise SourceContractError(
-            "Tushare SDK HTTPS transport is unavailable or unverified"
+            "Tushare HTTPS origin is unavailable or unverified (HTTPS transport)"
         )
-    return raw
+    # One route has one public identity regardless of harmless URL spelling.
+    # The canonical form also becomes the exact value sealed on the SDK client.
+    return urlunparse(
+        (
+            "https",
+            str(parsed.hostname).casefold(),
+            "/dataapi",
+            "",
+            "",
+            "",
+        )
+    )
+
+
+def validate_tushare_https_origin(value: str) -> str:
+    """Validate one reviewed, credential-free Tushare Data API origin.
+
+    This helper deliberately accepts configuration rather than inspecting an
+    SDK client.  Production factories can therefore reject an unsafe route
+    before resolving a token, then bind the validated origin to the newly
+    constructed SDK instance before its transport is sealed.
+    """
+
+    return _validated_tushare_https_origin(value)
+
+
+def validate_tushare_api_name(value: str, *, client: Any | None = None) -> str:
+    """Reject reserved SDK attributes and non-endpoint names fail-closed."""
+
+    api_name = str(value or "").strip()
+    if (
+        not _TUSHARE_API_NAME.fullmatch(api_name)
+        or api_name.casefold() in _TUSHARE_RESERVED_API_NAMES
+    ):
+        raise SourceContractError("Tushare API endpoint name is invalid or reserved")
+    if client is not None and _tushare_sdk_client(client):
+        # A future SDK may grow public methods beyond ``query``.  Never let an
+        # endpoint binding select those implementation attributes instead of a
+        # vendor API name.
+        if any(api_name in vars(owner) for owner in type(client).__mro__):
+            raise SourceContractError(
+                "Tushare API endpoint name is invalid or reserved"
+            )
+    return api_name
+
+
+def _sealed_tushare_transport(client: Any) -> _TushareDirectTransportSeal | None:
+    seal = vars(client).get(_TUSHARE_DIRECT_TRANSPORT_ATTRIBUTE)
+    if not isinstance(seal, _TushareDirectTransportSeal):
+        return None
+    try:
+        current_raw = str(
+            getattr(client, "_DataApi__http_url", "") or ""
+        ).strip()
+        current_origin = validate_tushare_https_origin(current_raw)
+    except SourceContractError:
+        return None
+    if current_raw != seal.origin or current_origin != seal.origin:
+        return None
+    if vars(client).get(_TUSHARE_DIRECT_SESSION_ATTRIBUTE) is not seal.session:
+        return None
+    return seal
 
 
 def require_tushare_sdk_https_transport() -> str:
@@ -304,7 +371,7 @@ def require_tushare_sdk_https_transport() -> str:
         raise SourceContractError(
             "Tushare SDK HTTPS transport cannot be verified"
         ) from exc
-    return _validated_tushare_https_origin(str(raw or ""))
+    return validate_tushare_https_origin(str(raw or ""))
 
 
 def _tushare_query_with_direct_session(
@@ -321,17 +388,13 @@ def _tushare_query_with_direct_session(
     making the transport explicit and fail-closed.
     """
 
-    if not _TUSHARE_API_NAME.fullmatch(str(api_name or "")):
-        raise SourceContractError("Tushare API name is invalid")
+    expected_endpoint = validate_tushare_api_name(api_name, client=client)
     client_state = vars(client)
     session = client_state.get(_TUSHARE_DIRECT_SESSION_ATTRIBUTE)
-    if not (
-        client_state.get(_TUSHARE_DIRECT_TRANSPORT_ATTRIBUTE)
-        is _TUSHARE_DIRECT_TRANSPORT_SEAL
-        and _requests_session_is_direct(session)
-    ):
+    seal = _sealed_tushare_transport(client)
+    if seal is None or not _requests_session_is_direct(session):
         raise SourceContractError("Tushare direct HTTPS transport is not sealed")
-    base_url = _tushare_base_url(client)
+    base_url = seal.origin
     token = str(getattr(client, "_DataApi__token", "") or "")
     timeout = getattr(client, "_DataApi__timeout", 30)
     if not token:
@@ -344,13 +407,15 @@ def _tushare_query_with_direct_session(
         raise SourceContractError("Tushare SDK timeout is invalid")
 
     request_parameters = dict(parameters)
-    request_parameters.setdefault("ts_type_name", base_url)
+    # This SDK parameter is route-shaped.  A request cannot override the
+    # authority sealed by the production factory.
+    request_parameters["ts_type_name"] = base_url
     request_failed = False
     try:
         response = session.post(
-            f"{base_url}/{api_name}",
+            f"{base_url}/{expected_endpoint}",
             json={
-                "api_name": str(api_name),
+                "api_name": expected_endpoint,
                 "token": token,
                 "params": request_parameters,
                 "fields": str(fields or ""),
@@ -444,9 +509,21 @@ def harden_tushare_client_transport(client: Any) -> Any:
         return client
     if tushare_client_uses_direct_transport(client):
         return client
+    state = vars(client)
+    if (
+        _TUSHARE_DIRECT_TRANSPORT_ATTRIBUTE in state
+        or _TUSHARE_DIRECT_SESSION_ATTRIBUTE in state
+    ):
+        raise SourceContractError("Tushare direct HTTPS transport seal was mutated")
     # Validate the immutable public destination before constructing any
     # network client or reading the private token.
-    _tushare_base_url(client)
+    canonical_origin = _tushare_base_url(client)
+    try:
+        setattr(client, "_DataApi__http_url", canonical_origin)
+    except Exception as exc:  # pragma: no cover - ordinary DataApi is mutable
+        raise SourceContractError(
+            "Tushare canonical HTTPS origin could not be bound"
+        ) from exc
     session = requests.Session()
     session.trust_env = False
     if not _requests_session_is_direct(session):  # pragma: no cover - requests invariant
@@ -456,7 +533,10 @@ def harden_tushare_client_transport(client: Any) -> Any:
     setattr(
         client,
         _TUSHARE_DIRECT_TRANSPORT_ATTRIBUTE,
-        _TUSHARE_DIRECT_TRANSPORT_SEAL,
+        _TushareDirectTransportSeal(
+            origin=canonical_origin,
+            session=session,
+        ),
     )
     setattr(client, "query", MethodType(_tushare_query_with_direct_session, client))
     if not tushare_client_uses_direct_transport(client):  # pragma: no cover
@@ -470,10 +550,10 @@ def tushare_client_uses_direct_transport(client: Any) -> bool:
 
     state = vars(client)
     query = state.get("query")
+    seal = _sealed_tushare_transport(client) if _tushare_sdk_client(client) else None
     return bool(
         _tushare_sdk_client(client)
-        and state.get(_TUSHARE_DIRECT_TRANSPORT_ATTRIBUTE)
-        is _TUSHARE_DIRECT_TRANSPORT_SEAL
+        and seal is not None
         and _requests_session_is_direct(
             state.get(_TUSHARE_DIRECT_SESSION_ATTRIBUTE)
         )
@@ -848,6 +928,22 @@ def _call_provider(client: Any, endpoint: str, parameters: Mapping[str, Any]) ->
     )
 
 
+def _call_tushare_provider(
+    client: Any,
+    endpoint: str,
+    parameters: Mapping[str, Any],
+) -> Any:
+    expected_endpoint = validate_tushare_api_name(endpoint, client=client)
+    if not _tushare_sdk_client(client):
+        return _call_provider(client, expected_endpoint, parameters)
+    if not tushare_client_uses_direct_transport(client):
+        raise SourceContractError("Tushare direct HTTPS transport is not sealed")
+    query = vars(client).get("query")
+    if not callable(query):  # pragma: no cover - covered by the seal predicate
+        raise SourceContractError("Tushare sealed query endpoint is unavailable")
+    return query(expected_endpoint, **dict(parameters))
+
+
 class TushareSourceAdapter(SourceAdapter):
     def __init__(
         self,
@@ -862,16 +958,17 @@ class TushareSourceAdapter(SourceAdapter):
         monotonic_clock: Callable[[], float] | None = None,
         sleeper: Callable[[float], None] | None = None,
     ) -> None:
+        reviewed_endpoint_map = {
+            str(key): validate_tushare_api_name(str(value), client=client)
+            for key, value in (endpoint_map or {}).items()
+        }
         super().__init__(
             source_id="tushare",
             priority=priority,
             contracts=contracts,
             lineage={
                 **dict(lineage or {}),
-                "endpoint_map": {
-                    str(key): str(value)
-                    for key, value in (endpoint_map or {}).items()
-                },
+                "endpoint_map": reviewed_endpoint_map,
             },
             rate_limits=rate_limits,
             rate_limiter=rate_limiter,
@@ -895,7 +992,7 @@ class TushareSourceAdapter(SourceAdapter):
                 "schema_version": "research-os/tushare-injected-fixture/v1",
                 "formal_production_transport": False,
             })
-        self.endpoint_map = dict(endpoint_map or {})
+        self.endpoint_map = reviewed_endpoint_map
 
     @property
     def base_url(self) -> str | None:
@@ -910,7 +1007,7 @@ class TushareSourceAdapter(SourceAdapter):
         self._acquire_rate_limit("trade_cal")
         failure_message: str | None = None
         try:
-            value = _call_provider(
+            value = _call_tushare_provider(
                 self.client,
                 "trade_cal",
                 {
@@ -952,13 +1049,16 @@ class TushareSourceAdapter(SourceAdapter):
         )
 
     def _fetch_frame(self, request: FetchRequest) -> pd.DataFrame:
-        endpoint = self.endpoint_map.get(request.dataset, request.dataset)
+        endpoint = validate_tushare_api_name(
+            self.endpoint_map.get(request.dataset, request.dataset),
+            client=self.client,
+        )
         parameters = dict(request.parameters)
         if request.fields:
             parameters["fields"] = ",".join(request.fields)
         provider_failed = False
         try:
-            value = _call_provider(self.client, endpoint, parameters)
+            value = _call_tushare_provider(self.client, endpoint, parameters)
         except _ProviderEndpointConfigurationError:
             raise
         except SourceObservationError:
@@ -1958,5 +2058,7 @@ __all__ = [
     "validate_production_diemeng_base_url",
     "source_adapter_public_contract_identity",
     "tushare_client_uses_direct_transport",
+    "validate_tushare_api_name",
+    "validate_tushare_https_origin",
     "validate_source_frame",
 ]

@@ -28,7 +28,9 @@ from .data_sources import (
     SourceObservationError,
     TushareSourceAdapter,
     assert_credential_free_request_parameters,
-    require_tushare_sdk_https_transport,
+    tushare_client_uses_direct_transport,
+    validate_tushare_api_name,
+    validate_tushare_https_origin,
     validate_production_diemeng_base_url,
 )
 from .object_store import S3ImmutableArchive
@@ -332,6 +334,66 @@ def _reviewed_diemeng_base_url(
     return reviewed
 
 
+def _reviewed_tushare_api_origin(
+    payload: Mapping[str, Any],
+    profile_extra: Mapping[str, Any],
+) -> str:
+    """Resolve the exact secret-independent Tushare production destination."""
+
+    profile_value = str(profile_extra.get("api_origin") or "").strip()
+    configured = str(payload.get("api_origin") or "").strip()
+    if profile_value and not configured:
+        raise ValueError(
+            "Tushare profile extra.api_origin cannot replace reviewed configuration"
+        )
+    reviewed = validate_tushare_https_origin(configured)
+    if profile_value:
+        profile_origin = validate_tushare_https_origin(profile_value)
+        if profile_origin != reviewed:
+            raise ValueError(
+                "Tushare profile extra.api_origin must match reviewed configuration"
+            )
+    return reviewed
+
+
+def bind_production_source_transport(
+    payload: Mapping[str, Any],
+    *,
+    production_config: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Bind one source to the single reviewed production transport authority.
+
+    Per-dataset JSON declarations intentionally do not duplicate the Tushare
+    origin.  The canonical route is injected at runtime before the source input
+    is fingerprinted or any credential is resolved.
+    """
+
+    bound = dict(payload)
+    if str(bound.get("source") or "").strip().casefold() != "tushare":
+        return bound
+    security = production_config.get("security")
+    if not isinstance(security, Mapping):
+        raise ValueError("production security.source_transport is required")
+    source_transport = security.get("source_transport")
+    if not isinstance(source_transport, Mapping):
+        raise ValueError("production security.source_transport is required")
+    tushare_transport = source_transport.get("tushare")
+    if not isinstance(tushare_transport, Mapping):
+        raise ValueError(
+            "production security.source_transport.tushare is required"
+        )
+    reviewed = validate_tushare_https_origin(
+        str(tushare_transport.get("api_origin") or "")
+    )
+    duplicate = str(bound.get("api_origin") or "").strip()
+    if duplicate and validate_tushare_https_origin(duplicate) != reviewed:
+        raise ValueError(
+            "Tushare source api_origin conflicts with production transport authority"
+        )
+    bound["api_origin"] = reviewed
+    return bound
+
+
 def source_adapter_from_mapping(
     payload: Mapping[str, Any],
     *,
@@ -372,15 +434,20 @@ def source_adapter_from_mapping(
             lineage=safe_lineage,
         )
     if source == "tushare":
-        # The installed SDK's transport contract must be HTTPS before a token
-        # file/reference is touched.  The currently pinned HTTP-only SDK is an
-        # explicit production blocker, not a reason to reuse the exposed key.
-        sdk_origin = require_tushare_sdk_https_transport()
-        reviewed_origin = str(payload.get("api_origin") or "").strip().rstrip("/")
-        if not reviewed_origin or reviewed_origin != sdk_origin:
-            raise ValueError(
-                "Tushare SDK HTTPS origin must exactly match reviewed configuration"
-            )
+        # Validate the immutable route before a token file/reference is
+        # touched.  The SDK's historical class default is not route authority;
+        # the exact reviewed origin below is bound to this one client instance.
+        reviewed_origin = _reviewed_tushare_api_origin(payload, profile_extra)
+        endpoint_map = {
+            str(key): validate_tushare_api_name(str(value))
+            for key, value in (payload.get("endpoint_map") or {}).items()
+        }
+        request_payload = payload.get("request") or {}
+        request_dataset = str(
+            (request_payload.get("dataset") if isinstance(request_payload, Mapping) else "")
+            or contract.dataset
+        )
+        validate_tushare_api_name(endpoint_map.get(request_dataset, request_dataset))
         token_env = str(payload.get("token_env") or "TUSHARE_TOKEN")
         token = resolve_credential(
             credential_ref=str(
@@ -395,17 +462,27 @@ def source_adapter_from_mapping(
         )
         tushare = importlib.import_module("tushare")
         client = tushare.pro_api(token)
-        return TushareSourceAdapter(
+        bind_failed = False
+        try:
+            setattr(client, "_DataApi__http_url", reviewed_origin)
+        except Exception:
+            bind_failed = True
+        if bind_failed:
+            raise ValueError("Tushare reviewed HTTPS origin could not be bound")
+        adapter = TushareSourceAdapter(
             client,
             contracts=(contract,),
-            endpoint_map={
-                str(key): str(value)
-                for key, value in (payload.get("endpoint_map") or {}).items()
-            },
+            endpoint_map=endpoint_map,
             priority=priority,
             lineage=safe_lineage,
             rate_limits=rate_limits,
         )
+        if (
+            adapter.base_url != reviewed_origin
+            or not tushare_client_uses_direct_transport(client)
+        ):
+            raise ValueError("Tushare reviewed HTTPS transport could not be sealed")
+        return adapter
     if source == "diemeng":
         base_url = _reviewed_diemeng_base_url(payload, profile_extra, values)
         key_env = str(payload.get("token_env") or "DIEMENG_API_KEY")
@@ -710,6 +787,7 @@ def read_frame(path: str | Path) -> pd.DataFrame:
 __all__ = [
     "BronzeObservationError",
     "BronzeSyncResult",
+    "bind_production_source_transport",
     "configured_source_profiles",
     "dataset_contract_from_mapping",
     "read_frame",
