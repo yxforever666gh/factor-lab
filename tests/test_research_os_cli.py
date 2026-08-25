@@ -197,8 +197,9 @@ def test_credential_use_attestation_emits_only_public_persisted_evidence(
     monkeypatch: pytest.MonkeyPatch, capsys
 ) -> None:
     monkeypatch.setenv("FACTOR_LAB_ENVIRONMENT", "production")
+    dataset = "tushare_token_retention_" + "a" * 52
     authority = SimpleNamespace(
-        rotation_capability_identity=("security", "tushare_token_retention"),
+        rotation_capability_identity=("security", dataset),
         migrate_credential_use_evidence=lambda: SimpleNamespace(
             credential="tushare_token",
             disposition="operator_accepted_unrotated_retention",
@@ -224,7 +225,7 @@ def test_credential_use_attestation_emits_only_public_persisted_evidence(
         "recorded_at": "2026-08-25T10:30:00+00:00",
         "capability": {
             "source_id": "security",
-            "dataset": "tushare_token_retention",
+            "dataset": dataset,
         },
         "credential_material_recorded": False,
     }

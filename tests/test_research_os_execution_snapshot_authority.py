@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import base64
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta, timezone
 import hashlib
 import inspect
 import io
 import json
 from pathlib import Path
+from threading import Barrier
 from types import SimpleNamespace
 from typing import Any, Mapping
 
@@ -617,6 +620,15 @@ def _operator_retention_waiver(
         "accepted_at": accepted_at,
         "reason": "operator_declined_rotation_for_local_research_only_runtime",
     }
+
+
+def _versioned_retention_dataset(
+    evidence_hash: str, *, credential: str = "tushare_token"
+) -> str:
+    identity = base64.b32encode(bytes.fromhex(evidence_hash)).decode(
+        "ascii"
+    ).rstrip("=").lower()
+    return f"{credential}_retention_{identity}"
 
 
 def _production_tushare_retention_payload() -> dict[str, Any]:
@@ -1560,22 +1572,29 @@ def test_operator_retention_authority_is_idempotent_secret_free_and_admitted(
         credential_retention_waivers=("tushare_token",),
     )
 
-    assert authority.rotation_capability_identity == (
-        "security",
-        "tushare_token_retention",
-    )
     first = authority.migrate_credential_use_evidence()
     second = authority.migrate_credential_use_evidence()
+    expected_dataset = _versioned_retention_dataset(first.evidence_hash)
 
     assert first == second
     assert first.credential == "tushare_token"
     assert first.disposition == "operator_accepted_unrotated_retention"
+    assert authority.rotation_capability_identity == (
+        "security",
+        expected_dataset,
+    )
+    assert len(expected_dataset) == 76
+    assert len(
+        _versioned_retention_dataset(
+            "a" * 64, credential="diemeng_api_key"
+        )
+    ) == 78
     assert authority.persisted_rotation_attestation() == first
     with ledger.engine.connect() as connection:
         rows = connection.execute(
             select(orm.SourceCapabilityModel).where(
                 orm.SourceCapabilityModel.source_id == "security",
-                orm.SourceCapabilityModel.dataset == "tushare_token_retention",
+                orm.SourceCapabilityModel.dataset == expected_dataset,
             )
         ).mappings().all()
     assert len(rows) == 1
@@ -1606,7 +1625,7 @@ def test_operator_retention_authority_is_idempotent_secret_free_and_admitted(
     "mutation",
     ["configuration", "accepted_at", "credential_ref", "transport_origin"],
 )
-def test_operator_retention_authority_fails_closed_after_bound_input_changes(
+def test_operator_retention_authority_versions_bound_input_changes(
     production_factory,
     mutation: str,
 ) -> None:
@@ -1615,7 +1634,17 @@ def test_operator_retention_authority_fails_closed_after_bound_input_changes(
         payload=initial_payload,
         credential_retention_waivers=("tushare_token",),
     )
-    authority.migrate_credential_use_evidence()
+    first = authority.migrate_credential_use_evidence()
+    first_identity = authority.rotation_capability_identity
+    with ledger.engine.connect() as connection:
+        first_row = dict(
+            connection.execute(
+                select(orm.SourceCapabilityModel).where(
+                    orm.SourceCapabilityModel.source_id == first_identity[0],
+                    orm.SourceCapabilityModel.dataset == first_identity[1],
+                )
+            ).mappings().one()
+        )
 
     changed_payload = json.loads(json.dumps(initial_payload))
     waiver = changed_payload["security"]["credential_rotation"]["tushare_token"]
@@ -1654,11 +1683,153 @@ def test_operator_retention_authority_fails_closed_after_bound_input_changes(
 
     changed = construction()
     assert changed.persisted_rotation_attestation() is None
+    second = changed.migrate_credential_use_evidence()
+    second_identity = changed.rotation_capability_identity
+
+    assert second.evidence_hash != first.evidence_hash
+    assert second_identity != first_identity
+    assert changed.persisted_rotation_attestation() == second
+    with ledger.engine.connect() as connection:
+        rows = connection.execute(
+            select(orm.SourceCapabilityModel).where(
+                orm.SourceCapabilityModel.source_id == "security",
+                orm.SourceCapabilityModel.dataset.like(
+                    "tushare_token_retention_%"
+                ),
+            )
+        ).mappings().all()
+        preserved = dict(
+            connection.execute(
+                select(orm.SourceCapabilityModel).where(
+                    orm.SourceCapabilityModel.source_id == first_identity[0],
+                    orm.SourceCapabilityModel.dataset == first_identity[1],
+                )
+            ).mappings().one()
+        )
+    assert len(rows) == 2
+    assert preserved == first_row
+
+
+def test_operator_retention_versioning_preserves_fixed_legacy_row(
+    production_factory,
+) -> None:
+    authority, ledger, _, _ = production_factory(
+        payload=_production_tushare_retention_payload(),
+        credential_retention_waivers=("tushare_token",),
+    )
+    legacy_values = {
+        "source_id": "security",
+        "dataset": "tushare_token_retention",
+        "status": CapabilityStatus.ACCEPTED.value,
+        "contract_hash": "1" * 64,
+        "probe_hash": "2" * 64,
+        "fields_json": ["legacy_field"],
+        "detail": "legacy-retention-row",
+        "probed_at": NOW,
+        "updated_at": NOW,
+    }
+    table = orm.SourceCapabilityModel.__table__
+    with ledger.engine.begin() as connection:
+        connection.execute(table.insert().values(**legacy_values))
+        before = dict(
+            connection.execute(
+                select(table).where(
+                    table.c.source_id == "security",
+                    table.c.dataset == "tushare_token_retention",
+                )
+            ).mappings().one()
+        )
+
+    attestation = authority.migrate_credential_use_evidence()
+    current_dataset = _versioned_retention_dataset(attestation.evidence_hash)
+
+    with ledger.engine.connect() as connection:
+        after = dict(
+            connection.execute(
+                select(table).where(
+                    table.c.source_id == "security",
+                    table.c.dataset == "tushare_token_retention",
+                )
+            ).mappings().one()
+        )
+        current = connection.execute(
+            select(table).where(
+                table.c.source_id == "security",
+                table.c.dataset == current_dataset,
+            )
+        ).mappings().one()
+    assert after == before
+    assert current["probe_hash"] == attestation.evidence_hash
+
+
+def test_operator_retention_concurrent_first_write_is_idempotent(
+    production_factory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    authority, ledger, _, _ = production_factory(
+        payload=_production_tushare_retention_payload(),
+        credential_retention_waivers=("tushare_token",),
+    )
+
+    original_database_now = execution_authority_module._database_now
+    ready = Barrier(8)
+
+    def synchronized_database_now(target_ledger):
+        value = original_database_now(target_ledger)
+        ready.wait(timeout=10)
+        return value
+
+    monkeypatch.setattr(
+        execution_authority_module,
+        "_database_now",
+        synchronized_database_now,
+    )
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = tuple(
+            pool.map(
+                lambda _index: authority.migrate_credential_use_evidence(),
+                range(8),
+            )
+        )
+
+    assert len(set(results)) == 1
+    source_id, dataset = authority.rotation_capability_identity
+    with ledger.engine.connect() as connection:
+        rows = connection.execute(
+            select(orm.SourceCapabilityModel).where(
+                orm.SourceCapabilityModel.source_id == source_id,
+                orm.SourceCapabilityModel.dataset == dataset,
+            )
+        ).mappings().all()
+    assert len(rows) == 1
+
+
+def test_operator_retention_tampered_current_version_fails_closed(
+    production_factory,
+) -> None:
+    authority, ledger, _, _ = production_factory(
+        payload=_production_tushare_retention_payload(),
+        credential_retention_waivers=("tushare_token",),
+    )
+    authority.migrate_credential_use_evidence()
+    source_id, dataset = authority.rotation_capability_identity
+    table = orm.SourceCapabilityModel.__table__
+    with ledger.engine.begin() as connection:
+        connection.execute(
+            table.update()
+            .where(
+                table.c.source_id == source_id,
+                table.c.dataset == dataset,
+            )
+            .values(detail="tampered-retention-row")
+        )
+
+    assert authority.persisted_rotation_attestation() is None
     with pytest.raises(
         ExecutionEvidenceConflict,
         match="credential-retention authority is immutable and differs",
     ):
-        changed.migrate_credential_use_evidence()
+        authority.migrate_credential_use_evidence()
 
 
 def test_rotation_capability_can_only_migrate_fixed_local_secret_evidence(

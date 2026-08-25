@@ -15,6 +15,7 @@ the shadow engine.  Separating the roles is important: a close observed after
 
 from __future__ import annotations
 
+import base64
 from dataclasses import asdict, dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from enum import Enum
@@ -131,6 +132,7 @@ _RETENTION_CONFIRMATION = "not_rotated"
 _RETENTION_REASON = "operator_declined_rotation_for_local_research_only_runtime"
 _RETENTION_DETAIL = "operator_accepted_unrotated_retention"
 _RETENTION_SCHEMA = "research-os/operator-credential-retention/v1"
+_RETENTION_DATASET_MAX_LENGTH = 80
 
 
 def _add_cleanup_note(error: BaseException, message: str) -> None:
@@ -1010,7 +1012,6 @@ class OperatorCredentialRetentionAuthority:
         self.credential_ref = credential_ref
         self.credential = credential
         self.vendor = vendor
-        self.dataset = f"{credential}_retention"
         self.execution_contract_hash = execution_contract_hash
         self.configuration_hash = configuration_hash
         self.transport_origin = origin
@@ -1044,6 +1045,18 @@ class OperatorCredentialRetentionAuthority:
             },
             domain="factor-lab/research-os/v1/operator-credential-retention-evidence",
         )
+        # ``ros_source_capabilities`` is immutable for this authority.  The
+        # former fixed dataset made a legitimate configuration/contract
+        # upgrade collide with the prior accepted decision forever.  Encode
+        # the complete 256-bit evidence identity (not credential material) as
+        # unpadded Base32 so each reviewed scope gets its own immutable row.
+        # Both supported names remain below the existing VARCHAR(80) limit.
+        identity = base64.b32encode(bytes.fromhex(self._evidence_hash)).decode(
+            "ascii"
+        ).rstrip("=").lower()
+        self.dataset = f"{credential}_retention_{identity}"
+        if len(self.dataset) > _RETENTION_DATASET_MAX_LENGTH:
+            raise AssertionError("credential-retention dataset exceeds schema limit")
 
     def expected_evidence_hash(self) -> str:
         return self._evidence_hash
@@ -1056,57 +1069,69 @@ class OperatorCredentialRetentionAuthority:
             from sqlalchemy import select
         except ImportError as exc:  # pragma: no cover
             raise ExecutionEvidenceUnavailable("SQLAlchemy is required") from exc
-        with self.ledger.engine.begin() as connection:
-            query = select(orm.SourceCapabilityModel).where(
-                orm.SourceCapabilityModel.source_id == _ROTATION_SOURCE_ID,
-                orm.SourceCapabilityModel.dataset == self.dataset,
+        table = orm.SourceCapabilityModel.__table__
+        values = {
+            "source_id": _ROTATION_SOURCE_ID,
+            "dataset": self.dataset,
+            "status": CapabilityStatus.ACCEPTED.value,
+            "contract_hash": self.contract_hash,
+            "probe_hash": self._evidence_hash,
+            "fields_json": list(self.expected_fields),
+            "detail": self.detail,
+            "probed_at": probed_at,
+            "updated_at": probed_at,
+        }
+        dialect_module = type(self.ledger.engine.dialect).__module__
+        if dialect_module.startswith("sqlalchemy.dialects.postgresql"):
+            from sqlalchemy.dialects.postgresql import insert
+        elif dialect_module.startswith("sqlalchemy.dialects.sqlite"):
+            from sqlalchemy.dialects.sqlite import insert
+        else:  # pragma: no cover - production and controlled tests are closed.
+            raise ExecutionEvidenceUnavailable(
+                "credential-retention migration requires PostgreSQL or SQLite"
             )
-            if self.ledger.engine.dialect.name == "postgresql":
+
+        with self.ledger.engine.begin() as connection:
+            # SELECT ... FOR UPDATE cannot lock an absent key.  A conflict-free
+            # insert followed by an exact read makes concurrent first writers
+            # converge without granting overwrite authority.
+            connection.execute(
+                insert(table)
+                .values(**values)
+                .on_conflict_do_nothing(
+                    index_elements=[table.c.source_id, table.c.dataset]
+                )
+            )
+            query = select(table).where(
+                table.c.source_id == _ROTATION_SOURCE_ID,
+                table.c.dataset == self.dataset,
+            )
+            if dialect_module.startswith("sqlalchemy.dialects.postgresql"):
                 query = query.with_for_update()
             existing = connection.execute(query).mappings().one_or_none()
             expected_fields = list(self.expected_fields)
-            if existing is not None:
-                if not (
-                    str(existing.get("status")) == CapabilityStatus.ACCEPTED.value
-                    and str(existing.get("contract_hash")) == self.contract_hash
-                    and str(existing.get("probe_hash")) == self._evidence_hash
-                    and sorted(map(str, existing.get("fields_json") or ()))
-                    == sorted(expected_fields)
-                    and str(existing.get("detail") or "") == self.detail
-                ):
-                    raise ExecutionEvidenceConflict(
-                        "persisted credential-retention authority is immutable and differs"
-                    )
-                persisted_at = existing.get("probed_at")
-                if not isinstance(persisted_at, datetime):
-                    raise ExecutionEvidenceConflict(
-                        "persisted credential-retention timestamp is malformed"
-                    )
-                if persisted_at.tzinfo is None or persisted_at.utcoffset() is None:
-                    persisted_at = persisted_at.replace(tzinfo=timezone.utc)
-                return CredentialRotationAttestation(
-                    credential=self.credential,
-                    evidence_hash=self._evidence_hash,
-                    confirmed_at=persisted_at.astimezone(timezone.utc),
-                    disposition=self.disposition,
+            if existing is None or not (
+                str(existing.get("status")) == CapabilityStatus.ACCEPTED.value
+                and str(existing.get("contract_hash")) == self.contract_hash
+                and str(existing.get("probe_hash")) == self._evidence_hash
+                and sorted(map(str, existing.get("fields_json") or ()))
+                == sorted(expected_fields)
+                and str(existing.get("detail") or "") == self.detail
+            ):
+                raise ExecutionEvidenceConflict(
+                    "persisted credential-retention authority is immutable and differs"
                 )
-            connection.execute(
-                orm.SourceCapabilityModel.__table__.insert().values(
-                    source_id=_ROTATION_SOURCE_ID,
-                    dataset=self.dataset,
-                    status=CapabilityStatus.ACCEPTED.value,
-                    contract_hash=self.contract_hash,
-                    probe_hash=self._evidence_hash,
-                    fields_json=expected_fields,
-                    detail=self.detail,
-                    probed_at=probed_at,
-                    updated_at=probed_at,
+            persisted_at = existing.get("probed_at")
+            if not isinstance(persisted_at, datetime):
+                raise ExecutionEvidenceConflict(
+                    "persisted credential-retention timestamp is malformed"
                 )
-            )
+            if persisted_at.tzinfo is None or persisted_at.utcoffset() is None:
+                persisted_at = persisted_at.replace(tzinfo=timezone.utc)
         return CredentialRotationAttestation(
             credential=self.credential,
             evidence_hash=self._evidence_hash,
-            confirmed_at=probed_at,
+            confirmed_at=persisted_at.astimezone(timezone.utc),
             disposition=self.disposition,
         )
 
@@ -1715,7 +1740,7 @@ class ExecutionSnapshotAuthority:
 
     @property
     def rotation_capability_identity(self) -> tuple[str, str]:
-        """Stable ``ros_source_capabilities`` key for vendor confirmation."""
+        """Current content-addressed key for credential-use evidence."""
 
         authority = self._rotation_evidence_authority
         dataset = _ROTATION_DATASET if authority is None else authority.dataset
