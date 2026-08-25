@@ -1260,6 +1260,48 @@ def test_formal_attestation_attempt_binds_new_success_to_authoritative_proof(
     finally:
         catalog.close()
 
+
+def test_formal_attempt_completion_covers_later_bound_attestation_timestamp(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    catalog, runner, _controlled = _runtime(tmp_path)
+    deployment_verified_at = NOW + timedelta(milliseconds=5)
+    clock_times = iter((NOW, deployment_verified_at))
+    service = HostDockerRuntimeAttestor(
+        catalog=catalog,
+        runner=runner,
+        clock=lambda: next(clock_times),
+        controlled_test=False,
+    )
+    monkeypatch.setattr(service, "_assert_admission", lambda: None)
+    canonical = attestation_module._canonical_bind_source
+    monkeypatch.setattr(
+        attestation_module,
+        "_canonical_bind_source",
+        lambda value, *, require_physical: canonical(value, require_physical=False),
+    )
+    # PostgreSQL transaction_timestamp() can be sampled just before the
+    # separately clocked deployment result is completed.  The attempt must
+    # still cover the proof it claims to bind.
+    database_times = iter((NOW - timedelta(seconds=1), NOW))
+    monkeypatch.setattr(catalog, "database_now", lambda: next(database_times))
+    try:
+        result = service.attest()
+        bound = catalog.get_run(result.run_id)
+        attempt = catalog.list_runs(limit=10, run_type=ATTEMPT_RUN_TYPE)[0]
+
+        assert bound is not None and bound.completed_at is not None
+        assert bound.completed_at == deployment_verified_at
+        assert result.deployment.verified_at == deployment_verified_at
+        assert attempt.completed_at == deployment_verified_at
+        assert attempt.completed_at >= bound.completed_at
+        assert attempt.completed_at >= result.deployment.verified_at
+        assert attempt.completed_at >= attempt.started_at
+    finally:
+        catalog.close()
+
+
 def test_running_container_bundle_overlay_is_rejected_and_temp_removed(
     tmp_path: Path,
 ) -> None:

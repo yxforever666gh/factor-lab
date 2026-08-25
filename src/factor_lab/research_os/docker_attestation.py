@@ -2989,6 +2989,23 @@ class HostDockerRuntimeAttestor:
             )
         try:
             result = self._attest_once()
+            bound_run = self.catalog.get_run(result.run_id)
+            if (
+                bound_run is None
+                or bound_run.status != "succeeded"
+                or bound_run.completed_at is None
+            ):
+                raise DockerAttestationError(
+                    "host Docker attestation binding run is incomplete"
+                )
+            bound_completed_at = _aware(
+                bound_run.completed_at,
+                name="bound_attestation_completed_at",
+            )
+            deployment_verified_at = _aware(
+                result.deployment.verified_at,
+                name="deployment_verified_at",
+            )
         except BaseException as exc:
             error_type = _safe_attempt_error(exc)
             completed_at = max(
@@ -3018,6 +3035,8 @@ class HostDockerRuntimeAttestor:
             raise
         completed_at = max(
             attempt_started_at,
+            bound_completed_at,
+            deployment_verified_at,
             _aware(
                 self.catalog.database_now(),
                 name="attempt_completed_at",
