@@ -223,9 +223,37 @@ _TUSHARE_DATA_API_MODULE = "tushare.pro.client"
 _TUSHARE_DATA_API_NAME = "DataApi"
 _TUSHARE_DIRECT_SESSION_ATTRIBUTE = "_factor_lab_direct_http_session"
 _TUSHARE_DIRECT_TRANSPORT_ATTRIBUTE = "_factor_lab_direct_transport_seal"
+_TUSHARE_INTERNAL_RETRY_PARAMETER = "_factor_lab_before_wire_retry"
+TUSHARE_ACCOUNT_RATE_LIMIT_KEY = "__account__"
 _TUSHARE_API_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,127}$")
 _TUSHARE_API_HOSTS = frozenset({"api.waditu.com", "api.tushare.pro"})
 _TUSHARE_RESERVED_API_NAMES = frozenset({"query"})
+_TUSHARE_REQUEST_ATTEMPTS = 3
+_TUSHARE_RETRY_DELAYS_SECONDS = (0.5, 1.0)
+_TUSHARE_RETRYABLE_HTTP_STATUSES = frozenset({408, 425, 429})
+_TUSHARE_RETRY_SLEEP: Callable[[float], None] = time.sleep
+TUSHARE_SEALED_TRANSPORT_POLICY: Mapping[str, Any] = MappingProxyType(
+    {
+        "schema_version": "research-os/tushare-sealed-https/v2",
+        "https_only": True,
+        "redirects_allowed": False,
+        "trust_environment": False,
+        "retry_max_attempts": _TUSHARE_REQUEST_ATTEMPTS,
+        "retry_backoff_seconds": _TUSHARE_RETRY_DELAYS_SECONDS,
+        "retryable_transport_errors": ("requests.RequestException",),
+        "retryable_http_statuses": tuple(sorted(_TUSHARE_RETRYABLE_HTTP_STATUSES)),
+        "retryable_http_status_ranges": ((500, 599),),
+        "redirects_retryable": False,
+        "api_codes_retryable": False,
+        "response_contract_errors_retryable": False,
+        "retry_repeats_configured_rate_limit_admission": True,
+        "rate_limit_coordination_scope": "process",
+        "rate_limit_admission_order": (
+            TUSHARE_ACCOUNT_RATE_LIMIT_KEY,
+            "requested_dataset",
+        ),
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -269,17 +297,31 @@ def _tushare_base_url(client: Any) -> str:
 
 def _validated_tushare_https_origin(raw: str) -> str:
     raw = str(raw or "").strip()
-    parsed = urlparse(raw)
+    invalid_authority = False
     try:
+        parsed = urlparse(raw)
         port = parsed.port
-    except ValueError as exc:
-        raise SourceContractError("Tushare SDK HTTPS origin is invalid") from exc
+        hostname = parsed.hostname
+        username = parsed.username
+        password = parsed.password
+    except ValueError:
+        # ``urllib`` includes the original authority in this exception.  Raise
+        # after leaving the handler so provider-controlled URL text cannot be
+        # retained in ``__context__`` by structured loggers.
+        invalid_authority = True
+        parsed = None
+        port = None
+        hostname = None
+        username = None
+        password = None
+    if invalid_authority or parsed is None:
+        raise SourceContractError("Tushare SDK HTTPS origin is invalid")
     if not (
         parsed.scheme.casefold() == "https"
-        and parsed.hostname is not None
-        and parsed.hostname.casefold() in _TUSHARE_API_HOSTS
-        and parsed.username is None
-        and parsed.password is None
+        and hostname is not None
+        and hostname.casefold() in _TUSHARE_API_HOSTS
+        and username is None
+        and password is None
         and port in {None, 443}
         and parsed.path.rstrip("/") == "/dataapi"
         and not parsed.params
@@ -296,7 +338,7 @@ def _validated_tushare_https_origin(raw: str) -> str:
     return urlunparse(
         (
             "https",
-            str(parsed.hostname).casefold(),
+            str(hostname).casefold(),
             "/dataapi",
             "",
             "",
@@ -374,10 +416,182 @@ def require_tushare_sdk_https_transport() -> str:
     return validate_tushare_https_origin(str(raw or ""))
 
 
+def _tushare_retryable_http_status(status: int) -> bool:
+    return status in _TUSHARE_RETRYABLE_HTTP_STATUSES or 500 <= status <= 599
+
+
+def _run_tushare_wire_admission(
+    callback: Callable[[], Any], *, failure_message: str
+) -> None:
+    admission_failed = False
+    try:
+        callback()
+    except Exception:
+        # Token-bucket/configuration failures are internal admission faults,
+        # not source observations.  Discard their potentially sensitive text
+        # and raise outside the except block so neither a cause nor context can
+        # cross the provider boundary.
+        admission_failed = True
+    if admission_failed:
+        raise SourceContractError(failure_message)
+
+
+def _prepare_sealed_tushare_retry(
+    *,
+    client: Any,
+    seal: _TushareDirectTransportSeal,
+    delay_seconds: float,
+    before_wire_retry: Callable[[], Any] | None,
+) -> None:
+    _TUSHARE_RETRY_SLEEP(delay_seconds)
+    if (
+        _sealed_tushare_transport(client) is not seal
+        or not _requests_session_is_direct(seal.session)
+    ):
+        raise SourceContractError("Tushare direct HTTPS transport is not sealed")
+    if before_wire_retry is not None:
+        _run_tushare_wire_admission(
+            before_wire_retry,
+            failure_message="Tushare retry rate-limit admission failed",
+        )
+
+
+def _sealed_tushare_post_json(
+    *,
+    client: Any,
+    seal: _TushareDirectTransportSeal,
+    endpoint: str,
+    token: str,
+    parameters: Mapping[str, Any],
+    fields: str,
+    timeout: float,
+    before_wire_retry: Callable[[], Any] | None,
+) -> Any:
+    """POST through the sealed transport with a narrow, sanitized retry policy.
+
+    Only Requests transport exceptions and explicitly temporary HTTP statuses
+    are retried.  Redirects, other HTTP errors and every response/API contract
+    failure remain single-attempt fail-closed outcomes.  Raw exceptions and
+    response bodies are deliberately discarded before a public error is raised.
+    """
+
+    last_retryable_status: int | None = None
+    transport_exhausted = False
+    for attempt in range(1, _TUSHARE_REQUEST_ATTEMPTS + 1):
+        session = seal.session
+        if (
+            _sealed_tushare_transport(client) is not seal
+            or not _requests_session_is_direct(session)
+        ):
+            raise SourceContractError("Tushare direct HTTPS transport is not sealed")
+
+        transport_failed = False
+        unexpected_request_failure = False
+        try:
+            response = session.post(
+                f"{seal.origin}/{endpoint}",
+                json={
+                    "api_name": endpoint,
+                    "token": token,
+                    "params": dict(parameters),
+                    "fields": fields,
+                },
+                timeout=timeout,
+                allow_redirects=False,
+            )
+        except requests.RequestException:
+            transport_failed = True
+        except Exception:
+            # Unknown failures at the request boundary are sanitized but are
+            # not classified as transient transport failures and are not
+            # retried.  Raising outside the except block prevents retaining
+            # the provider exception in __context__.
+            unexpected_request_failure = True
+
+        if unexpected_request_failure:
+            raise SourceObservationError(
+                "Tushare direct request failed (provider_error)",
+                failure_kind="provider_error",
+            )
+        if transport_failed:
+            last_retryable_status = None
+            if attempt >= _TUSHARE_REQUEST_ATTEMPTS:
+                transport_exhausted = True
+                break
+            _prepare_sealed_tushare_retry(
+                client=client,
+                seal=seal,
+                delay_seconds=_TUSHARE_RETRY_DELAYS_SECONDS[attempt - 1],
+                before_wire_retry=before_wire_retry,
+            )
+            continue
+
+        invalid_status = False
+        try:
+            status = int(response.status_code)
+        except Exception:
+            invalid_status = True
+        if invalid_status:
+            raise SourceObservationError(
+                "Tushare response status is invalid",
+                failure_kind="response_contract",
+            )
+        if 300 <= status < 400:
+            raise _ProviderResponseStatusError(
+                provider="Tushare",
+                classification="redirect_status",
+                numeric_code=status,
+            )
+        if _tushare_retryable_http_status(status):
+            last_retryable_status = status
+            if attempt >= _TUSHARE_REQUEST_ATTEMPTS:
+                break
+            _prepare_sealed_tushare_retry(
+                client=client,
+                seal=seal,
+                delay_seconds=_TUSHARE_RETRY_DELAYS_SECONDS[attempt - 1],
+                before_wire_retry=before_wire_retry,
+            )
+            continue
+        if status < 200 or status >= 300:
+            raise _ProviderResponseStatusError(
+                provider="Tushare",
+                classification="http_status",
+                numeric_code=status,
+            )
+
+        response_failed = False
+        try:
+            payload = response.json()
+        except Exception:
+            response_failed = True
+        if response_failed:
+            raise SourceObservationError(
+                "Tushare response JSON is invalid",
+                failure_kind="response_contract",
+            )
+        return payload
+
+    if last_retryable_status is not None:
+        raise _ProviderResponseStatusError(
+            provider="Tushare",
+            classification="http_status",
+            numeric_code=last_retryable_status,
+        )
+    if not transport_exhausted:  # pragma: no cover - retry-loop invariant
+        raise AssertionError("Tushare retry loop ended without a failure")
+    raise SourceObservationError(
+        "Tushare direct request failed "
+        f"(transport_error; attempts={_TUSHARE_REQUEST_ATTEMPTS})",
+        failure_kind="transport_error",
+    )
+
+
 def _tushare_query_with_direct_session(
     client: Any,
     api_name: str,
     fields: str = "",
+    _factor_lab_before_wire_retry: Callable[[], Any] | None = None,
     **parameters: Any,
 ) -> pd.DataFrame:
     """Execute the documented SDK wire contract through a sealed Session.
@@ -389,6 +603,11 @@ def _tushare_query_with_direct_session(
     """
 
     expected_endpoint = validate_tushare_api_name(api_name, client=client)
+    if not callable(_factor_lab_before_wire_retry):
+        # The patched SDK query is an internal transport seam, not a public
+        # bypass around SourceAdapter admission.  Supported callers must bind
+        # the same callback that is used for every retry attempt.
+        raise SourceContractError("Tushare wire rate-limit admission is required")
     client_state = vars(client)
     session = client_state.get(_TUSHARE_DIRECT_SESSION_ATTRIBUTE)
     seal = _sealed_tushare_transport(client)
@@ -399,10 +618,16 @@ def _tushare_query_with_direct_session(
     timeout = getattr(client, "_DataApi__timeout", 30)
     if not token:
         raise SourceContractError("Tushare SDK credential is unavailable")
+    invalid_timeout = False
     try:
         timeout_value = float(timeout)
-    except (TypeError, ValueError) as exc:
-        raise SourceContractError("Tushare SDK timeout is invalid") from exc
+    except (TypeError, ValueError):
+        # A hostile object/value can place its representation in the conversion
+        # exception.  Do not retain that exception graph across this boundary.
+        invalid_timeout = True
+        timeout_value = 0.0
+    if invalid_timeout:
+        raise SourceContractError("Tushare SDK timeout is invalid")
     if not math.isfinite(timeout_value) or timeout_value <= 0:
         raise SourceContractError("Tushare SDK timeout is invalid")
 
@@ -410,46 +635,16 @@ def _tushare_query_with_direct_session(
     # This SDK parameter is route-shaped.  A request cannot override the
     # authority sealed by the production factory.
     request_parameters["ts_type_name"] = base_url
-    request_failed = False
-    try:
-        response = session.post(
-            f"{base_url}/{expected_endpoint}",
-            json={
-                "api_name": expected_endpoint,
-                "token": token,
-                "params": request_parameters,
-                "fields": str(fields or ""),
-            },
-            timeout=timeout_value,
-            allow_redirects=False,
-        )
-        status = int(response.status_code)
-        if 300 <= status < 400:
-            raise _ProviderResponseStatusError(
-                provider="Tushare",
-                classification="redirect_status",
-                numeric_code=status,
-            )
-        if status < 200 or status >= 300:
-            raise _ProviderResponseStatusError(
-                provider="Tushare",
-                classification="http_status",
-                numeric_code=status,
-            )
-        payload = response.json()
-    except SourceContractError:
-        raise
-    except Exception:
-        # SDK/network exceptions can include request bodies. Do not retain the
-        # exception as a cause/context: structured loggers may traverse the
-        # exception graph even when ``raise ... from None`` hides it in a
-        # normal traceback.
-        request_failed = True
-    if request_failed:
-        raise SourceObservationError(
-            "Tushare direct request failed (transport_or_response_error)",
-            failure_kind="transport_error",
-        )
+    payload = _sealed_tushare_post_json(
+        client=client,
+        seal=seal,
+        endpoint=expected_endpoint,
+        token=token,
+        parameters=request_parameters,
+        fields=str(fields or ""),
+        timeout=timeout_value,
+        before_wire_retry=_factor_lab_before_wire_retry,
+    )
     if not isinstance(payload, Mapping):
         raise SourceObservationError(
             "Tushare response must be an object",
@@ -573,6 +768,16 @@ class RateLimit:
             raise ValueError("rate-limit values must be positive")
 
 
+# The reviewed production account boundary is deliberately a typed immutable
+# value rather than an operator-tunable default.  Production validators and
+# formal execution adapters compare against this exact contract.
+TUSHARE_PRODUCTION_ACCOUNT_RATE_LIMIT = RateLimit(
+    requests=60,
+    per_seconds=60.0,
+    burst=1,
+)
+
+
 @dataclass
 class _TokenBucketState:
     limit: RateLimit
@@ -581,12 +786,14 @@ class _TokenBucketState:
 
 
 class TokenBucketRateLimiter:
-    """Thread-safe, reserving token bucket shared by adapter instances.
+    """Thread-safe, reserving token bucket shared by in-process adapters.
 
     Reservations are recorded before sleeping.  Concurrent adapters therefore
     queue behind the same ``(source_id, dataset)`` bucket instead of waking at
     the same instant and exceeding the provider contract.  The clock and sleep
     functions are injectable so tests can advance virtual time without waiting.
+    This class does not coordinate separate OS processes; the production
+    Dagster deployment serializes runs until a distributed limiter is added.
     """
 
     def __init__(
@@ -803,7 +1010,9 @@ class SourceAdapter(ABC):
         self.priority = int(priority)
         self.contracts = by_name
         self.lineage = dict(lineage or {})
-        self.rate_limits = dict(rate_limits or {})
+        # Rate contracts are part of the public routing fingerprint and must
+        # not be mutable after attestation.
+        self.rate_limits = MappingProxyType(dict(rate_limits or {}))
         self.rate_limiter = rate_limiter or _PROCESS_RATE_LIMITER
         self._monotonic_clock = monotonic_clock
         self._sleeper = sleeper
@@ -819,6 +1028,21 @@ class SourceAdapter(ABC):
             monotonic_clock=self._monotonic_clock,
             sleeper=self._sleeper,
         )
+
+    @property
+    def process_rate_limit_runtime_attested(self) -> bool:
+        """Whether admission uses the unmodified process runtime primitives."""
+
+        return bool(
+            self.rate_limiter is _PROCESS_RATE_LIMITER
+            and self._monotonic_clock is None
+            and self._sleeper is None
+        )
+
+    def _acquire_wire_rate_limits(self, dataset: str) -> float:
+        """Apply the configured admission policy for one provider wire call."""
+
+        return self._acquire_rate_limit(dataset)
 
     def contract_for(self, dataset: str) -> DatasetContract:
         try:
@@ -855,7 +1079,7 @@ class SourceAdapter(ABC):
         # validation and constructed ``FetchRequest`` directly.
         assert_credential_free_request_parameters(request.parameters)
         contract = self.contract_for(request.dataset)
-        self._acquire_rate_limit(request.dataset)
+        self._acquire_wire_rate_limits(request.dataset)
         frame = self._fetch_frame(request)
         if not isinstance(frame, pd.DataFrame):
             raise SourceObservationError(
@@ -928,12 +1152,22 @@ def _call_provider(client: Any, endpoint: str, parameters: Mapping[str, Any]) ->
     )
 
 
+def _validate_tushare_request_parameters(parameters: Mapping[str, Any]) -> None:
+    if _TUSHARE_INTERNAL_RETRY_PARAMETER in parameters:
+        raise SourceContractError(
+            "Tushare request parameters contain a reserved internal field"
+        )
+
+
 def _call_tushare_provider(
     client: Any,
     endpoint: str,
     parameters: Mapping[str, Any],
+    *,
+    before_wire_retry: Callable[[], Any] | None = None,
 ) -> Any:
     expected_endpoint = validate_tushare_api_name(endpoint, client=client)
+    _validate_tushare_request_parameters(parameters)
     if not _tushare_sdk_client(client):
         return _call_provider(client, expected_endpoint, parameters)
     if not tushare_client_uses_direct_transport(client):
@@ -941,7 +1175,49 @@ def _call_tushare_provider(
     query = vars(client).get("query")
     if not callable(query):  # pragma: no cover - covered by the seal predicate
         raise SourceContractError("Tushare sealed query endpoint is unavailable")
-    return query(expected_endpoint, **dict(parameters))
+    return query(
+        expected_endpoint,
+        _factor_lab_before_wire_retry=before_wire_retry,
+        **dict(parameters),
+    )
+
+
+def call_sealed_tushare_query(
+    client: Any,
+    endpoint: str,
+    parameters: Mapping[str, Any],
+    *,
+    before_wire_attempt: Callable[[], Any],
+) -> pd.DataFrame:
+    """Call one real SDK endpoint with sealed transport and per-wire admission.
+
+    The callback is invoked before the initial HTTPS request and is passed into
+    the sealed retry boundary for every later attempt.  This is the narrow
+    production seam used by realtime execution collectors that cannot use the
+    ordinary dataset adapter while still sharing the account TokenBucket.
+    """
+
+    if not callable(before_wire_attempt):
+        raise SourceContractError("Tushare wire rate-limit admission is required")
+    if not tushare_client_uses_direct_transport(client):
+        raise SourceContractError("Tushare direct HTTPS transport is not sealed")
+    _validate_tushare_request_parameters(parameters)
+    _run_tushare_wire_admission(
+        before_wire_attempt,
+        failure_message="Tushare wire rate-limit admission failed",
+    )
+    value = _call_tushare_provider(
+        client,
+        endpoint,
+        parameters,
+        before_wire_retry=before_wire_attempt,
+    )
+    if not isinstance(value, pd.DataFrame):
+        raise SourceObservationError(
+            "Tushare sealed query did not return a DataFrame",
+            failure_kind="response_contract",
+        )
+    return value
 
 
 class TushareSourceAdapter(SourceAdapter):
@@ -978,12 +1254,7 @@ class TushareSourceAdapter(SourceAdapter):
         self.client = harden_tushare_client_transport(client)
         if _tushare_sdk_client(self.client):
             self._base_url: str | None = _tushare_base_url(self.client)
-            self._transport_policy = MappingProxyType({
-                "schema_version": "research-os/tushare-sealed-https/v1",
-                "https_only": True,
-                "redirects_allowed": False,
-                "trust_environment": False,
-            })
+            self._transport_policy = TUSHARE_SEALED_TRANSPORT_POLICY
         else:
             # Unit/provider fixtures have no network authority.  Their public
             # identity remains deterministic and visibly non-production.
@@ -1002,9 +1273,31 @@ class TushareSourceAdapter(SourceAdapter):
     def transport_policy(self) -> Mapping[str, Any]:
         return self._transport_policy
 
+    def _acquire_wire_rate_limits(self, dataset: str) -> float:
+        """Reserve the shared account bucket before an optional dataset bucket.
+
+        The process-local limiter keys buckets by ``(source_id, dataset)``.
+        Every Tushare adapter therefore shares the public account key while
+        retaining an optional endpoint/dataset-specific policy. Tests and
+        non-production adapters remain usable when no account policy exists:
+        that reservation is then an explicit no-op.
+        """
+
+        waited = self._acquire_rate_limit(TUSHARE_ACCOUNT_RATE_LIMIT_KEY)
+        if dataset != TUSHARE_ACCOUNT_RATE_LIMIT_KEY:
+            waited += self._acquire_rate_limit(dataset)
+        return waited
+
+    def fetch(self, request: FetchRequest) -> SourceBatch:
+        # Reject our private callback namespace before rate-limit reservation
+        # or any provider call.  The lower provider boundary repeats this
+        # validation as defense in depth for internal direct callers.
+        _validate_tushare_request_parameters(request.parameters)
+        return super().fetch(request)
+
     def probe(self) -> ProbeResult:
         started = time.perf_counter()
-        self._acquire_rate_limit("trade_cal")
+        self._acquire_wire_rate_limits("trade_cal")
         failure_message: str | None = None
         try:
             value = _call_tushare_provider(
@@ -1016,6 +1309,9 @@ class TushareSourceAdapter(SourceAdapter):
                     "end_date": "20240102",
                     "fields": "exchange,cal_date,is_open",
                 },
+                before_wire_retry=lambda: self._acquire_wire_rate_limits(
+                    "trade_cal"
+                ),
             )
         except _ProviderEndpointConfigurationError:
             raise
@@ -1058,7 +1354,14 @@ class TushareSourceAdapter(SourceAdapter):
             parameters["fields"] = ",".join(request.fields)
         provider_failed = False
         try:
-            value = _call_tushare_provider(self.client, endpoint, parameters)
+            value = _call_tushare_provider(
+                self.client,
+                endpoint,
+                parameters,
+                before_wire_retry=lambda: self._acquire_wire_rate_limits(
+                    request.dataset
+                ),
+            )
         except _ProviderEndpointConfigurationError:
             raise
         except SourceObservationError:
@@ -1926,6 +2229,19 @@ def _public_url_without_userinfo(value: str) -> str:
     )
 
 
+def _public_rate_limits(adapter: SourceAdapter) -> dict[str, dict[str, float | int]]:
+    """Return the credential-free, deterministic wire-admission contract."""
+
+    return {
+        dataset: {
+            "requests": int(limit.requests),
+            "per_seconds": float(limit.per_seconds),
+            "burst": int(limit.burst),
+        }
+        for dataset, limit in sorted(adapter.rate_limits.items())
+    }
+
+
 def _adapter_public_routing(adapter: SourceAdapter) -> dict[str, Any]:
     datasets = tuple(sorted(adapter.contracts))
     if isinstance(adapter, DiemengSourceAdapter):
@@ -1954,6 +2270,7 @@ def _adapter_public_routing(adapter: SourceAdapter) -> dict[str, Any]:
             "transport_policy": _public_contract_value(
                 adapter.transport_policy
             ),
+            "rate_limits": _public_rate_limits(adapter),
             "datasets": {
                 dataset: {
                     "endpoint": adapter.endpoint_map.get(dataset, dataset),
@@ -2048,9 +2365,13 @@ __all__ = [
     "SourceContractError",
     "SourceHealth",
     "SourceObservationError",
+    "TUSHARE_ACCOUNT_RATE_LIMIT_KEY",
+    "TUSHARE_PRODUCTION_ACCOUNT_RATE_LIMIT",
+    "TUSHARE_SEALED_TRANSPORT_POLICY",
     "TushareSourceAdapter",
     "TokenBucketRateLimiter",
     "assert_credential_free_request_parameters",
+    "call_sealed_tushare_query",
     "harden_tushare_client_transport",
     "is_credential_shaped_key",
     "normalize_diemeng_base_url",

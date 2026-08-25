@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 import json
+import math
 import os
 from pathlib import Path, PurePosixPath
 import re
@@ -21,6 +22,8 @@ from .build_provenance import capture_epoch_provenance
 from .credentials import CredentialResolutionError, resolve_credential_ref
 from .data_sources import (
     SourceContractError,
+    TUSHARE_ACCOUNT_RATE_LIMIT_KEY,
+    TUSHARE_PRODUCTION_ACCOUNT_RATE_LIMIT,
     is_credential_shaped_key,
     validate_tushare_https_origin,
     validate_production_diemeng_base_url,
@@ -140,6 +143,9 @@ _OPERATOR_RETENTION_FIELDS = frozenset(
 )
 _TUSHARE_REVIEWED_HTTPS_ORIGIN = "https://api.tushare.pro/dataapi"
 _DIEMENG_REVIEWED_HTTPS_ORIGIN = "https://data.diemeng.chat/api"
+_TUSHARE_ACCOUNT_RATE_LIMIT_FIELDS = frozenset(
+    {"requests", "per_seconds", "burst"}
+)
 
 
 def _is_public_credential_rotation_subject(item_path: str, value: Any) -> bool:
@@ -238,6 +244,47 @@ def _operator_retention_waiver(
 
 class ProductionConfigurationError(RuntimeError):
     """Raised when a production process would start with an unsafe contract."""
+
+
+def _validated_tushare_account_rate_limit(
+    source: Mapping[str, Any], *, path: str
+) -> tuple[int, float, int]:
+    """Validate one closed, public account-level Tushare rate contract."""
+
+    rate_limits = source.get("rate_limits")
+    account = (
+        rate_limits.get(TUSHARE_ACCOUNT_RATE_LIMIT_KEY)
+        if isinstance(rate_limits, Mapping)
+        else None
+    )
+    account_path = f"{path}.rate_limits.{TUSHARE_ACCOUNT_RATE_LIMIT_KEY}"
+    if not isinstance(account, Mapping):
+        raise ProductionConfigurationError(
+            f"{account_path} is required for every production Tushare source"
+        )
+    if set(map(str, account)) != _TUSHARE_ACCOUNT_RATE_LIMIT_FIELDS:
+        raise ProductionConfigurationError(
+            f"{account_path} must contain exactly requests, per_seconds, burst"
+        )
+    requests_value = account.get("requests")
+    per_seconds_value = account.get("per_seconds")
+    burst_value = account.get("burst")
+    if (
+        isinstance(requests_value, bool)
+        or not isinstance(requests_value, int)
+        or requests_value <= 0
+        or isinstance(per_seconds_value, bool)
+        or not isinstance(per_seconds_value, (int, float))
+        or not math.isfinite(float(per_seconds_value))
+        or float(per_seconds_value) <= 0
+        or isinstance(burst_value, bool)
+        or not isinstance(burst_value, int)
+        or burst_value <= 0
+    ):
+        raise ProductionConfigurationError(
+            f"{account_path} values must be finite positive numbers with integer requests/burst"
+        )
+    return int(requests_value), float(per_seconds_value), int(burst_value)
 
 
 class ProductionOperation(str, Enum):
@@ -525,6 +572,7 @@ def validate_production_config(
         )
     )
     reviewed_diemeng_urls: dict[str, str] = {}
+    tushare_account_rate_limit: tuple[int, float, int] | None = None
     for index, source in enumerate(sources):
         if not isinstance(source, Mapping):
             raise ProductionConfigurationError(f"$.daily.sources[{index}] must be an object")
@@ -598,6 +646,17 @@ def validate_production_config(
             raise ProductionConfigurationError(
                 f"$.daily.sources[{index}].profile_name must be {expected_profile}"
             )
+        if source_type == "tushare":
+            account_limit = _validated_tushare_account_rate_limit(
+                source, path=f"$.daily.sources[{index}]"
+            )
+            if tushare_account_rate_limit is None:
+                tushare_account_rate_limit = account_limit
+            elif account_limit != tushare_account_rate_limit:
+                raise ProductionConfigurationError(
+                    "all production Tushare sources must use the same "
+                    f"{TUSHARE_ACCOUNT_RATE_LIMIT_KEY} rate limit"
+                )
         if source_type == "diemeng":
             try:
                 reviewed_url = validate_production_diemeng_base_url(
@@ -619,6 +678,19 @@ def validate_production_config(
             raise ProductionConfigurationError(
                 "AkShare single-symbol data must be a non-blocking sample dataset"
             )
+    reviewed_tushare_account_limit = (
+        int(TUSHARE_PRODUCTION_ACCOUNT_RATE_LIMIT.requests),
+        float(TUSHARE_PRODUCTION_ACCOUNT_RATE_LIMIT.per_seconds),
+        int(TUSHARE_PRODUCTION_ACCOUNT_RATE_LIMIT.burst),
+    )
+    if (
+        tushare_account_rate_limit is not None
+        and tushare_account_rate_limit != reviewed_tushare_account_limit
+    ):
+        raise ProductionConfigurationError(
+            "all production Tushare sources must use the reviewed account rate "
+            "limit: 60 requests per 60 seconds with burst 1"
+        )
     bootstrap = daily.get("bootstrap")
     if not isinstance(bootstrap, Mapping) or (
         bootstrap.get("source_start") != "2016-06-01"
@@ -686,7 +758,6 @@ def validate_production_config(
         allowed_execution_pairs = {
             ("diemeng", "minute_history"),
             ("tushare", "rt_min"),
-            ("tushare", "rt_min_daily"),
         }
         if execution_pair not in allowed_execution_pairs:
             raise ProductionConfigurationError(
@@ -731,10 +802,7 @@ def validate_production_config(
                 raise ProductionConfigurationError(
                     "shadow EOD marks must come from an accepted Gold close snapshot"
                 )
-        elif execution_pair in {
-            ("tushare", "rt_min"),
-            ("tushare", "rt_min_daily"),
-        }:
+        elif execution_pair == ("tushare", "rt_min"):
             endpoint = str(execution_market_data.get("endpoint") or "")
             dataset = str(execution_market_data.get("dataset") or "")
             contract = execution_market_data.get("contract")
@@ -742,21 +810,36 @@ def validate_production_config(
             capability = execution_market_data.get("formal_capability")
             mark = execution_market_data.get("end_of_day_mark")
             batching = execution_market_data.get("batching")
-            expected_fields = (
-                ["ts_code", "time", "open", "close", "high", "low", "vol", "amount"]
-                if dataset == "rt_min"
-                else [
-                    "ts_code",
-                    "freq",
-                    "time",
-                    "open",
-                    "close",
-                    "high",
-                    "low",
-                    "vol",
-                    "amount",
-                ]
+            execution_rate_limits = execution_market_data.get("rate_limits")
+            if not isinstance(execution_rate_limits, Mapping) or set(
+                map(str, execution_rate_limits)
+            ) != {TUSHARE_ACCOUNT_RATE_LIMIT_KEY}:
+                raise ProductionConfigurationError(
+                    "Tushare realtime execution rate_limits must contain only "
+                    f"{TUSHARE_ACCOUNT_RATE_LIMIT_KEY}"
+                )
+            execution_account_rate_limit = _validated_tushare_account_rate_limit(
+                execution_market_data,
+                path="$.daily.shadow.execution_market_data",
             )
+            if (
+                tushare_account_rate_limit is None
+                or execution_account_rate_limit != tushare_account_rate_limit
+            ):
+                raise ProductionConfigurationError(
+                    "Tushare realtime execution must use the same "
+                    f"{TUSHARE_ACCOUNT_RATE_LIMIT_KEY} rate limit as every daily source"
+                )
+            expected_fields = [
+                "ts_code",
+                "time",
+                "open",
+                "close",
+                "high",
+                "low",
+                "vol",
+                "amount",
+            ]
             if not (
                 source_type == "tushare"
                 and endpoint == dataset
@@ -767,17 +850,10 @@ def validate_production_config(
                 raise ProductionConfigurationError(
                     "realtime execution must bind the selected official Tushare SDK endpoint"
                 )
-            expected_batching = (
-                {
-                    "mode": "sorted_deterministic_chunks",
-                    "maximum_symbols_per_request": 300,
-                }
-                if dataset == "rt_min"
-                else {
-                    "mode": "one_ticker_per_request",
-                    "maximum_symbols_per_request": 1,
-                }
-            )
+            expected_batching = {
+                "mode": "sorted_deterministic_chunks",
+                "maximum_symbols_per_request": 300,
+            }
             if not isinstance(batching, Mapping) or batching != expected_batching:
                 raise ProductionConfigurationError(
                     "Tushare realtime request batching exceeds the official capacity"
@@ -854,7 +930,7 @@ def validate_production_config(
     formal_execution_capable = bool(
         isinstance(execution_market_data, Mapping)
         and str(execution_market_data.get("source") or "").lower() == "tushare"
-        and execution_market_data.get("dataset") in {"rt_min", "rt_min_daily"}
+        and execution_market_data.get("dataset") == "rt_min"
         and isinstance(formal_capability, Mapping)
         and formal_capability.get("status") == "runtime_probe_required"
         and formal_capability.get("formal_shadow_projection")

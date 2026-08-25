@@ -7,7 +7,10 @@ run_coordinator:
   module: dagster.core.run_coordinator
   class: QueuedRunCoordinator
   config:
-    max_concurrent_runs: 4
+    # SourceAdapter token buckets coordinate only inside one Python process.
+    # Keep all provider-bearing runs globally serial until account admission
+    # is backed by a distributed limiter shared by Dagster worker processes.
+    max_concurrent_runs: 1
     dequeue_use_threads: true
 
 run_launcher:

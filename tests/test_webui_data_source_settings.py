@@ -4,12 +4,14 @@ from types import SimpleNamespace
 
 import pandas as pd
 import pytest
+import requests
 
 pytest.importorskip("fastapi")
 pytest.importorskip("jinja2")
 from fastapi.testclient import TestClient
 
 from factor_lab import webui_app
+import factor_lab.research_os.data_sources as data_sources_module
 from factor_lab.webui.services import env_settings as env_settings_service
 
 
@@ -526,6 +528,66 @@ def test_production_tushare_probe_seals_transport_after_preflight_and_secret(
         "transport_verified",
         "provider_request",
     ]
+
+
+def test_production_tushare_probe_retry_repeats_account_admission_and_sanitizes(
+    monkeypatch,
+) -> None:
+    marker = "private-token-and-provider-body-must-not-escape"
+    wire_calls: list[dict] = []
+    admissions: list[tuple[str, str, object]] = []
+    retry_sleeps: list[float] = []
+
+    def acquire(
+        _self,
+        source_id,
+        dataset,
+        limit,
+        *,
+        monotonic_clock=None,
+        sleeper=None,
+    ):
+        admissions.append((source_id, dataset, limit))
+        return 0.0
+
+    def post(_self, _url, **kwargs):
+        wire_calls.append(kwargs)
+        raise requests.ConnectionError(f"provider repeated {marker}")
+
+    monkeypatch.setattr(
+        data_sources_module.TokenBucketRateLimiter,
+        "acquire",
+        acquire,
+    )
+    monkeypatch.setattr(
+        data_sources_module,
+        "_TUSHARE_RETRY_SLEEP",
+        retry_sleeps.append,
+    )
+    monkeypatch.setattr(requests.Session, "post", post)
+    monkeypatch.setattr(
+        env_settings_service,
+        "_profile_credential",
+        lambda *_args, **_kwargs: marker,
+    )
+
+    result = env_settings_service.test_data_source_connection(
+        {"name": "primary-tushare", "source_type": "tushare"},
+        environ={"FACTOR_LAB_PRODUCTION_ROLE": "webui"},
+    )
+
+    assert result["ok"] is False
+    assert marker not in result["message"]
+    assert len(wire_calls) == 3
+    assert all(call["allow_redirects"] is False for call in wire_calls)
+    assert retry_sleeps == [0.5, 1.0]
+    assert admissions == [
+        (
+            "tushare",
+            data_sources_module.TUSHARE_ACCOUNT_RATE_LIMIT_KEY,
+            data_sources_module.TUSHARE_PRODUCTION_ACCOUNT_RATE_LIMIT,
+        )
+    ] * 3
 
 
 def test_production_tushare_probe_rejects_sdk_shape_drift_before_network(

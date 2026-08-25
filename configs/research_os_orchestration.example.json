@@ -18,6 +18,11 @@
           "daily": "daily"
         },
         "rate_limits": {
+          "__account__": {
+            "requests": 60,
+            "per_seconds": 60,
+            "burst": 1
+          },
           "daily": {
             "requests": 100,
             "per_seconds": 60,
@@ -183,6 +188,9 @@
         "token_env": "TUSHARE_TOKEN",
         "priority": 10,
         "endpoint_map": {"daily_basic": "daily_basic"},
+        "rate_limits": {
+          "__account__": {"requests": 60, "per_seconds": 60, "burst": 1}
+        },
         "request": {
           "dataset": "daily_basic",
           "parameters": {"trade_date": "${partition_yyyymmdd}"},
@@ -223,6 +231,9 @@
         "token_env": "TUSHARE_TOKEN",
         "priority": 10,
         "endpoint_map": {"adj_factor": "adj_factor"},
+        "rate_limits": {
+          "__account__": {"requests": 60, "per_seconds": 60, "burst": 1}
+        },
         "request": {
           "dataset": "adj_factor",
           "parameters": {"trade_date": "${partition_yyyymmdd}"},
@@ -291,6 +302,9 @@
         "token_env": "TUSHARE_TOKEN",
         "priority": 10,
         "endpoint_map": {"trade_calendar": "trade_cal"},
+        "rate_limits": {
+          "__account__": {"requests": 60, "per_seconds": 60, "burst": 1}
+        },
         "request": {
           "dataset": "trade_calendar",
           "parameters": {

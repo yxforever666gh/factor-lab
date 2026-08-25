@@ -7,7 +7,11 @@ from pathlib import Path
 import pytest
 
 from factor_lab.research_os import production_config as module
-from factor_lab.research_os.data_sources import SourceContractError
+from factor_lab.research_os.data_sources import (
+    SourceContractError,
+    TUSHARE_ACCOUNT_RATE_LIMIT_KEY,
+    TUSHARE_PRODUCTION_ACCOUNT_RATE_LIMIT,
+)
 from factor_lab.research_os.execution_open_sources import (
     diemeng_engineering_canary_execution_mapping,
     engineering_canary_execution_contract_hash,
@@ -24,6 +28,7 @@ from factor_lab.research_os.production_config import (
 
 ROOT = Path(__file__).resolve().parents[1]
 PRODUCTION = ROOT / "configs" / "research_os_orchestration.production.json"
+EXAMPLE = ROOT / "configs" / "research_os_orchestration.example.json"
 
 
 def _minimal_config(tmp_path: Path, **updates) -> Path:
@@ -39,6 +44,13 @@ def _minimal_config(tmp_path: Path, **updates) -> Path:
                     "source": "tushare",
                     "profile_name": "primary-tushare",
                     "credential_ref": "secret://tushare_token",
+                    "rate_limits": {
+                        TUSHARE_ACCOUNT_RATE_LIMIT_KEY: {
+                            "requests": 60,
+                            "per_seconds": 60,
+                            "burst": 1,
+                        }
+                    },
                     "partition_cadence": {"kind": "trading_session"},
                     "request": {"dataset": "daily"},
                 }
@@ -82,6 +94,16 @@ def _environment(path: Path, secret: Path) -> dict[str, str]:
         "FACTOR_LAB_SOURCE_BUNDLE_MANIFEST": "/opt/factor-lab/manifest.json",
         "TUSHARE_TOKEN_FILE": str(secret),
         "DIEMENG_API_KEY_FILE": str(secret),
+    }
+
+
+def _execution_account_rate_limits(requests: int = 60) -> dict[str, dict[str, int]]:
+    return {
+        TUSHARE_ACCOUNT_RATE_LIMIT_KEY: {
+            "requests": requests,
+            "per_seconds": 60,
+            "burst": 1,
+        }
     }
 
 
@@ -186,6 +208,168 @@ def _replace_primary_source_with_diemeng(path: Path, base_url: str) -> None:
         }
     ]
     path.write_text(json.dumps(payload), encoding="utf-8")
+
+
+def test_production_tushare_source_requires_account_rate_limit(
+    tmp_path: Path,
+) -> None:
+    config = _minimal_config(tmp_path)
+    payload = json.loads(config.read_text(encoding="utf-8"))
+    payload["daily"]["sources"][0].pop("rate_limits")
+    config.write_text(json.dumps(payload), encoding="utf-8")
+    secret = tmp_path / "secret"
+    secret.write_text("credential", encoding="utf-8")
+
+    with pytest.raises(
+        ProductionConfigurationError,
+        match=r"rate_limits\.__account__ is required",
+    ):
+        validate_production_config(
+            config,
+            env=_environment(config, secret),
+            require_mounts=False,
+        )
+
+
+def test_production_tushare_sources_require_identical_account_rate_limits(
+    tmp_path: Path,
+) -> None:
+    config = _minimal_config(tmp_path)
+    payload = json.loads(config.read_text(encoding="utf-8"))
+    payload["daily"]["sources"].append(
+        {
+            "source": "tushare",
+            "profile_name": "primary-tushare",
+            "credential_ref": "secret://tushare_token",
+            "rate_limits": {
+                TUSHARE_ACCOUNT_RATE_LIMIT_KEY: {
+                    "requests": 59,
+                    "per_seconds": 60,
+                    "burst": 1,
+                }
+            },
+            "partition_cadence": {"kind": "trading_session"},
+            "request": {"dataset": "daily_basic"},
+        }
+    )
+    config.write_text(json.dumps(payload), encoding="utf-8")
+    secret = tmp_path / "secret"
+    secret.write_text("credential", encoding="utf-8")
+
+    with pytest.raises(
+        ProductionConfigurationError,
+        match=r"same __account__ rate limit",
+    ):
+        validate_production_config(
+            config,
+            env=_environment(config, secret),
+            require_mounts=False,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("requests", 61),
+        ("per_seconds", 59),
+        ("burst", 2),
+        ("requests", 1_000_000_000),
+    ],
+)
+def test_production_tushare_account_rate_limit_is_pinned_to_reviewed_contract(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    field: str,
+    value: object,
+) -> None:
+    config = _minimal_config(tmp_path)
+    payload = json.loads(config.read_text(encoding="utf-8"))
+    payload["daily"]["sources"][0]["rate_limits"][
+        TUSHARE_ACCOUNT_RATE_LIMIT_KEY
+    ][field] = value
+    config.write_text(json.dumps(payload), encoding="utf-8")
+    secret = tmp_path / "secret"
+    secret.write_text("credential", encoding="utf-8")
+    monkeypatch.setattr(
+        module,
+        "resolve_credential_ref",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("credential must not be resolved for an unreviewed rate limit")
+        ),
+    )
+
+    with pytest.raises(
+        ProductionConfigurationError,
+        match="reviewed account rate limit",
+    ):
+        validate_production_config(
+            config,
+            env=_environment(config, secret),
+            require_mounts=False,
+        )
+
+    assert TUSHARE_PRODUCTION_ACCOUNT_RATE_LIMIT.requests == 60
+    assert TUSHARE_PRODUCTION_ACCOUNT_RATE_LIMIT.per_seconds == 60.0
+    assert TUSHARE_PRODUCTION_ACCOUNT_RATE_LIMIT.burst == 1
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        {"requests": 60, "per_seconds": 60},
+        {"requests": 60, "per_seconds": 60, "burst": 1, "note": "extra"},
+    ],
+)
+def test_production_tushare_account_rate_limit_schema_is_closed(
+    tmp_path: Path,
+    mutation: dict[str, object],
+) -> None:
+    config = _minimal_config(tmp_path)
+    payload = json.loads(config.read_text(encoding="utf-8"))
+    payload["daily"]["sources"][0]["rate_limits"][
+        TUSHARE_ACCOUNT_RATE_LIMIT_KEY
+    ] = mutation
+    config.write_text(json.dumps(payload), encoding="utf-8")
+    secret = tmp_path / "secret"
+    secret.write_text("credential", encoding="utf-8")
+
+    with pytest.raises(ProductionConfigurationError, match="contain exactly"):
+        validate_production_config(
+            config,
+            env=_environment(config, secret),
+            require_mounts=False,
+        )
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("requests", 0),
+        ("requests", True),
+        ("per_seconds", -1),
+        ("burst", 0),
+    ],
+)
+def test_production_tushare_account_rate_limit_values_are_positive(
+    tmp_path: Path,
+    field: str,
+    value: object,
+) -> None:
+    config = _minimal_config(tmp_path)
+    payload = json.loads(config.read_text(encoding="utf-8"))
+    payload["daily"]["sources"][0]["rate_limits"][
+        TUSHARE_ACCOUNT_RATE_LIMIT_KEY
+    ][field] = value
+    config.write_text(json.dumps(payload), encoding="utf-8")
+    secret = tmp_path / "secret"
+    secret.write_text("credential", encoding="utf-8")
+
+    with pytest.raises(ProductionConfigurationError, match="positive numbers"):
+        validate_production_config(
+            config,
+            env=_environment(config, secret),
+            require_mounts=False,
+        )
 
 
 def test_production_bootstrap_rejects_example_placeholder_windows_and_raw_secret(
@@ -844,6 +1028,7 @@ def test_tushare_realtime_open_is_structurally_capable_but_runtime_probe_gated(
             "dataset": "rt_min",
             "endpoint": "rt_min",
             "method": "SDK",
+            "rate_limits": _execution_account_rate_limits(),
             "request": {
                 "ts_code": "${decision_universe_csv}",
                 "freq": "1MIN",
@@ -905,6 +1090,86 @@ def test_tushare_realtime_open_is_structurally_capable_but_runtime_probe_gated(
     assert "persisted_production_readiness_audit_missing" in evidence.readiness_blockers
 
 
+def test_production_formal_execution_rejects_rt_min_daily_before_secret_resolution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _minimal_config(tmp_path)
+    payload = json.loads(config.read_text(encoding="utf-8"))
+    production = json.loads(PRODUCTION.read_text(encoding="utf-8"))
+    execution = json.loads(
+        json.dumps(production["daily"]["shadow"]["execution_market_data"])
+    )
+    execution["dataset"] = "rt_min_daily"
+    execution["endpoint"] = "rt_min_daily"
+    payload["daily"]["shadow"] = {"execution_market_data": execution}
+    config.write_text(json.dumps(payload), encoding="utf-8")
+    secret = tmp_path / "secret"
+    secret.write_text("credential", encoding="utf-8")
+    monkeypatch.setattr(
+        module,
+        "resolve_credential_ref",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("rejected execution contracts must not resolve credentials")
+        ),
+    )
+
+    with pytest.raises(
+        ProductionConfigurationError,
+        match="reviewed closed-set adapter",
+    ):
+        validate_production_config(
+            config,
+            env=_environment(config, secret),
+            require_mounts=False,
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ("missing", "rate_limits must contain only"),
+        ("conflict", "same __account__ rate limit"),
+        ("unclosed", "must contain exactly requests, per_seconds, burst"),
+    ],
+)
+def test_tushare_realtime_account_rate_limit_is_closed_and_matches_daily_sources(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+    message: str,
+) -> None:
+    config = _minimal_config(tmp_path)
+    payload = json.loads(config.read_text(encoding="utf-8"))
+    production = json.loads(PRODUCTION.read_text(encoding="utf-8"))
+    execution = json.loads(
+        json.dumps(production["daily"]["shadow"]["execution_market_data"])
+    )
+    marker = "private-rate-limit-value-must-not-escape"
+    if mutation == "missing":
+        execution.pop("rate_limits")
+    elif mutation == "conflict":
+        execution["rate_limits"][TUSHARE_ACCOUNT_RATE_LIMIT_KEY]["requests"] = 59
+    else:
+        execution["rate_limits"][TUSHARE_ACCOUNT_RATE_LIMIT_KEY]["unexpected"] = marker
+    payload["daily"]["shadow"] = {"execution_market_data": execution}
+    config.write_text(json.dumps(payload), encoding="utf-8")
+    secret = tmp_path / "secret"
+    secret.write_text("credential", encoding="utf-8")
+    monkeypatch.setattr(module, "capture_epoch_provenance", lambda **_kwargs: object())
+
+    with pytest.raises(ProductionConfigurationError, match=message) as caught:
+        validate_production_config(
+            config,
+            env=_environment(config, secret),
+            require_mounts=False,
+        )
+
+    assert marker not in str(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
 def test_tushare_realtime_open_rejects_event_time_as_fake_availability(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -918,6 +1183,7 @@ def test_tushare_realtime_open_rejects_event_time_as_fake_availability(
             "dataset": "rt_min",
             "endpoint": "rt_min",
             "method": "SDK",
+            "rate_limits": _execution_account_rate_limits(),
             "request": {
                 "ts_code": "${decision_universe_csv}",
                 "freq": "1MIN",
@@ -1034,6 +1300,7 @@ def test_checked_in_production_config_has_no_self_reported_secrets_or_ids() -> N
         sort_keys=True,
     )
 
+    tushare_source_count = 0
     for source in payload["daily"]["sources"]:
         assert source["partition_cadence"]["kind"] in {
             "trading_session",
@@ -1043,7 +1310,13 @@ def test_checked_in_production_config_has_no_self_reported_secrets_or_ids() -> N
         if source["source"] in {"tushare", "diemeng"}:
             assert source["credential_ref"].startswith("secret://")
         if source["source"] == "tushare":
+            tushare_source_count += 1
             assert source["profile_name"] == "primary-tushare"
+            assert source["rate_limits"][TUSHARE_ACCOUNT_RATE_LIMIT_KEY] == {
+                "requests": 60,
+                "per_seconds": 60,
+                "burst": 1,
+            }
         if source["source"] == "diemeng":
             assert source["profile_name"] == "primary-diemeng"
         availability = source.get("canonicalization", {}).get("availability")
@@ -1060,6 +1333,7 @@ def test_checked_in_production_config_has_no_self_reported_secrets_or_ids() -> N
             )
             next_session_open = datetime.fromisoformat("2026-08-24T09:30:00+08:00")
             assert released < next_session_open
+    assert tushare_source_count == 13
     assert (
         payload["daily"]["shadow"]["execution_market_data"]["profile_name"]
         == "primary-tushare"
@@ -1083,6 +1357,7 @@ def test_checked_in_production_config_has_no_self_reported_secrets_or_ids() -> N
     assert execution["dataset"] == execution["endpoint"] == "rt_min"
     assert execution["method"] == "SDK"
     assert execution["credential_ref"] == "secret://tushare_token"
+    assert execution["rate_limits"] == _execution_account_rate_limits()
     assert execution["contract"] == {
         "key_fields": ["ts_code", "time"],
         "event_time_field": "time",
@@ -1118,6 +1393,22 @@ def test_checked_in_production_config_has_no_self_reported_secrets_or_ids() -> N
     assert stock_limit_fields["pre_close"]["nullable"] is True
     assert stock_limit_fields["up_limit"]["nullable"] is False
     assert stock_limit_fields["down_limit"]["nullable"] is False
+
+
+def test_example_tushare_sources_share_the_production_account_limit() -> None:
+    payload = json.loads(EXAMPLE.read_text(encoding="utf-8"))
+    tushare_sources = [
+        source
+        for source in payload["daily"]["sources"]
+        if source["source"] == "tushare"
+    ]
+
+    assert len(tushare_sources) == 4
+    assert all(
+        source["rate_limits"][TUSHARE_ACCOUNT_RATE_LIMIT_KEY]
+        == {"requests": 60, "per_seconds": 60, "burst": 1}
+        for source in tushare_sources
+    )
 
 
 def test_production_profile_ledger_is_exact_and_never_contains_raw_keys(

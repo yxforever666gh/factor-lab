@@ -11,6 +11,7 @@ import pandas as pd
 import pytest
 import requests
 
+import factor_lab.research_os.data_sources as data_sources_module
 import factor_lab.research_os.reconciliation as reconciliation_module
 
 from factor_lab.expanded_market_data import (
@@ -48,6 +49,7 @@ from factor_lab.research_os.data_sources import (
     SourceContractError,
     SourceHealth,
     SourceObservationError,
+    TUSHARE_ACCOUNT_RATE_LIMIT_KEY,
     TokenBucketRateLimiter,
     TushareSourceAdapter,
     normalize_diemeng_base_url,
@@ -92,6 +94,43 @@ def _daily_frame(close: float = 10.0) -> pd.DataFrame:
             "close": [close],
         }
     )
+
+
+class _TushareWireResponse:
+    def __init__(
+        self,
+        *,
+        status_code: int = 200,
+        payload: object | None = None,
+        json_failure: type[Exception] | None = None,
+    ) -> None:
+        self.status_code = status_code
+        self._payload = payload
+        self._json_failure = json_failure
+
+    def json(self):
+        if self._json_failure is not None:
+            raise self._json_failure("provider-response-body-must-not-escape")
+        if self._payload is not None:
+            return self._payload
+        frame = _daily_frame()
+        return {
+            "code": 0,
+            "data": {
+                "fields": list(frame.columns),
+                "items": frame.values.tolist(),
+            },
+        }
+
+
+def _sealed_tushare_test_adapter(token: str):
+    import tushare as ts
+
+    client = ts.pro_api(token)
+    client._DataApi__http_url = "https://api.waditu.com/dataapi"
+    adapter = TushareSourceAdapter(client, contracts=[_daily_contract()])
+    session = getattr(client, "_factor_lab_direct_http_session")
+    return client, adapter, session
 
 
 class _TushareFixture:
@@ -220,6 +259,65 @@ def test_provider_rate_limiter_enforces_shared_burst_and_refill() -> None:
     second.fetch(FetchRequest("daily"))
     first.fetch(FetchRequest("daily"))
     assert clock.waits == [pytest.approx(0.5)]
+
+
+def test_tushare_account_rate_limit_is_shared_across_adapter_datasets(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = _VirtualClock()
+    limiter = TokenBucketRateLimiter(monotonic_clock=clock, sleeper=clock.sleep)
+    monkeypatch.setattr(data_sources_module, "_PROCESS_RATE_LIMITER", limiter)
+    account_limit = RateLimit(requests=1, per_seconds=2.0, burst=1)
+    daily_basic = replace(_daily_contract(), dataset="daily_basic")
+
+    class DailyBasicFixture(_TushareFixture):
+        def query(self, endpoint: str, **kwargs):
+            assert endpoint == "daily_basic"
+            return _daily_frame()
+
+    daily_adapter = TushareSourceAdapter(
+        _TushareFixture(),
+        contracts=[_daily_contract()],
+        rate_limits={TUSHARE_ACCOUNT_RATE_LIMIT_KEY: account_limit},
+    )
+    daily_basic_adapter = TushareSourceAdapter(
+        DailyBasicFixture(),
+        contracts=[daily_basic],
+        rate_limits={TUSHARE_ACCOUNT_RATE_LIMIT_KEY: account_limit},
+    )
+
+    daily_adapter.fetch(FetchRequest("daily"))
+    daily_basic_adapter.fetch(FetchRequest("daily_basic"))
+
+    assert clock.waits == [pytest.approx(2.0)]
+
+
+def test_tushare_wire_attempt_admits_account_before_dataset_bucket() -> None:
+    calls: list[tuple[str, str, RateLimit]] = []
+
+    class RecordingLimiter:
+        def acquire(self, source_id: str, dataset: str, limit: RateLimit, **_kwargs):
+            calls.append((source_id, dataset, limit))
+            return 0.0
+
+    account_limit = RateLimit(requests=60, per_seconds=60.0, burst=1)
+    dataset_limit = RateLimit(requests=100, per_seconds=60.0, burst=2)
+    adapter = TushareSourceAdapter(
+        _TushareFixture(),
+        contracts=[_daily_contract()],
+        rate_limits={
+            TUSHARE_ACCOUNT_RATE_LIMIT_KEY: account_limit,
+            "daily": dataset_limit,
+        },
+        rate_limiter=RecordingLimiter(),
+    )
+
+    adapter.fetch(FetchRequest("daily"))
+
+    assert calls == [
+        ("tushare", TUSHARE_ACCOUNT_RATE_LIMIT_KEY, account_limit),
+        ("tushare", "daily", dataset_limit),
+    ]
 
 
 def test_provider_rate_limits_are_per_dataset_and_probe_endpoint() -> None:
@@ -568,6 +666,63 @@ def test_tushare_transport_seal_fault_is_not_an_observation() -> None:
     assert "private-token-must-not-leak" not in str(caught.value)
 
 
+def test_tushare_invalid_origin_and_timeout_do_not_retain_raw_values(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    marker = "PRIVATE_TRANSPORT_MARKER_MUST_NOT_ESCAPE"
+    with pytest.raises(SourceContractError) as invalid_origin:
+        validate_tushare_https_origin(
+            f"https://api.waditu.com:{marker}/dataapi"
+        )
+    assert marker not in str(invalid_origin.value)
+    assert invalid_origin.value.__cause__ is None
+    assert invalid_origin.value.__context__ is None
+
+    import tushare as ts
+
+    client = ts.pro_api("private-token-must-not-leak")
+    client._DataApi__http_url = "https://api.waditu.com/dataapi"
+    adapter = TushareSourceAdapter(client, contracts=[_daily_contract()])
+    client._DataApi__timeout = marker
+    session = getattr(client, "_factor_lab_direct_http_session")
+    wire_calls = 0
+
+    def post(_url: str, **_kwargs):
+        nonlocal wire_calls
+        wire_calls += 1
+        raise AssertionError("wire must not be reached")
+
+    monkeypatch.setattr(session, "post", post)
+    with pytest.raises(SourceContractError, match="timeout is invalid") as invalid_timeout:
+        adapter.fetch(FetchRequest("daily"))
+    assert wire_calls == 0
+    assert marker not in str(invalid_timeout.value)
+    assert invalid_timeout.value.__cause__ is None
+    assert invalid_timeout.value.__context__ is None
+
+
+def test_direct_sealed_sdk_query_cannot_bypass_adapter_admission(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import tushare as ts
+
+    client = ts.pro_api("private-token-must-not-leak")
+    client._DataApi__http_url = "https://api.waditu.com/dataapi"
+    TushareSourceAdapter(client, contracts=[_daily_contract()])
+    session = getattr(client, "_factor_lab_direct_http_session")
+    wire_calls = 0
+
+    def post(_url: str, **_kwargs):
+        nonlocal wire_calls
+        wire_calls += 1
+        raise AssertionError("wire must not be reached")
+
+    monkeypatch.setattr(session, "post", post)
+    with pytest.raises(SourceContractError, match="rate-limit admission is required"):
+        client.query("daily")
+    assert wire_calls == 0
+
+
 @pytest.mark.parametrize(
     "mutated_origin",
     [
@@ -645,11 +800,23 @@ def test_https_tushare_sdk_uses_sealed_non_environment_session(
         "https://api.waditu.com/dataapi"
     )
     assert identity["routing_contract"]["transport_policy"] == {
-        "schema_version": "research-os/tushare-sealed-https/v1",
+        "schema_version": "research-os/tushare-sealed-https/v2",
         "https_only": True,
         "redirects_allowed": False,
         "trust_environment": False,
+        "retry_max_attempts": 3,
+        "retry_backoff_seconds": [0.5, 1.0],
+        "retryable_transport_errors": ["requests.RequestException"],
+        "retryable_http_statuses": [408, 425, 429],
+        "retryable_http_status_ranges": [[500, 599]],
+        "redirects_retryable": False,
+        "api_codes_retryable": False,
+        "response_contract_errors_retryable": False,
+        "retry_repeats_configured_rate_limit_admission": True,
+        "rate_limit_coordination_scope": "process",
+        "rate_limit_admission_order": ["__account__", "requested_dataset"],
     }
+    assert identity["routing_contract"]["rate_limits"] == {}
 
     alternate = ts.pro_api("another-private-token")
     alternate._DataApi__http_url = "https://api.tushare.pro/dataapi"
@@ -659,6 +826,432 @@ def test_https_tushare_sdk_uses_sealed_non_environment_session(
     assert alternate_adapter.public_contract_identity()["public_contract_hash"] != (
         identity["public_contract_hash"]
     )
+
+
+@pytest.mark.parametrize("failures_before_success", [1, 2])
+def test_https_tushare_retries_transport_failure_then_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+    failures_before_success: int,
+) -> None:
+    marker = "private-token-in-transport-error-must-not-escape"
+    client, adapter, session = _sealed_tushare_test_adapter(marker)
+    calls: list[tuple[str, dict]] = []
+    sleeps: list[float] = []
+    rate_limit_calls: list[str] = []
+
+    def post(url: str, **kwargs):
+        calls.append((url, kwargs))
+        if len(calls) <= failures_before_success:
+            raise requests.ConnectionError(f"transport included {marker}")
+        return _TushareWireResponse()
+
+    monkeypatch.setattr(session, "post", post)
+    monkeypatch.setattr(data_sources_module, "_TUSHARE_RETRY_SLEEP", sleeps.append)
+    monkeypatch.setattr(
+        adapter,
+        "_acquire_rate_limit",
+        lambda dataset: (rate_limit_calls.append(dataset) or 0.0),
+    )
+
+    batch = adapter.fetch(FetchRequest("daily"))
+
+    assert batch.frame.iloc[0]["close"] == pytest.approx(10.0)
+    assert len(calls) == failures_before_success + 1
+    assert sleeps == [0.5, 1.0][:failures_before_success]
+    assert rate_limit_calls == [
+        item
+        for _ in range(failures_before_success + 1)
+        for item in (TUSHARE_ACCOUNT_RATE_LIMIT_KEY, "daily")
+    ]
+    assert all(
+        url == "https://api.waditu.com/dataapi/daily"
+        and kwargs["allow_redirects"] is False
+        for url, kwargs in calls
+    )
+    assert all(kwargs["json"]["api_name"] == "daily" for _, kwargs in calls)
+    assert tushare_client_uses_direct_transport(client)
+    assert type(session) is requests.Session
+    assert session.trust_env is False
+    assert session.proxies == {}
+    assert session.verify is True
+    assert marker not in repr(batch.lineage)
+
+
+def test_https_tushare_probe_reapplies_rate_limits_for_each_wire_attempt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _client, adapter, session = _sealed_tushare_test_adapter("private-token")
+    wire_calls = 0
+    rate_limit_calls: list[str] = []
+    sleeps: list[float] = []
+
+    def post(_url: str, **_kwargs):
+        nonlocal wire_calls
+        wire_calls += 1
+        if wire_calls == 1:
+            raise requests.ConnectionError("transient")
+        return _TushareWireResponse()
+
+    monkeypatch.setattr(session, "post", post)
+    monkeypatch.setattr(data_sources_module, "_TUSHARE_RETRY_SLEEP", sleeps.append)
+    monkeypatch.setattr(
+        adapter,
+        "_acquire_rate_limit",
+        lambda dataset: (rate_limit_calls.append(dataset) or 0.0),
+    )
+
+    result = adapter.probe()
+
+    assert result.health is SourceHealth.HEALTHY
+    assert wire_calls == 2
+    assert sleeps == [0.5]
+    assert rate_limit_calls == [
+        TUSHARE_ACCOUNT_RATE_LIMIT_KEY,
+        "trade_cal",
+        TUSHARE_ACCOUNT_RATE_LIMIT_KEY,
+        "trade_cal",
+    ]
+
+
+def test_https_tushare_transport_retry_exhaustion_is_sanitized(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    marker = "private-token-and-raw-error-must-not-escape"
+    _client, adapter, session = _sealed_tushare_test_adapter(marker)
+    calls: list[dict] = []
+    sleeps: list[float] = []
+
+    def post(_url: str, **kwargs):
+        calls.append(kwargs)
+        raise requests.Timeout(f"timeout echoed {marker} and response body")
+
+    monkeypatch.setattr(session, "post", post)
+    monkeypatch.setattr(data_sources_module, "_TUSHARE_RETRY_SLEEP", sleeps.append)
+
+    with pytest.raises(SourceObservationError, match=r"attempts=3") as caught:
+        adapter.fetch(FetchRequest("daily"))
+
+    assert caught.value.failure_kind == "transport_error"
+    assert len(calls) == 3
+    assert sleeps == [0.5, 1.0]
+    assert all(call["allow_redirects"] is False for call in calls)
+    assert marker not in str(caught.value)
+    assert marker not in repr(caught.value)
+    assert marker not in json.dumps(vars(caught.value), default=str, sort_keys=True)
+    assert "response body" not in str(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+@pytest.mark.parametrize("status", [408, 425, 429, 500, 503, 599])
+def test_https_tushare_retries_only_reviewed_temporary_http_statuses(
+    monkeypatch: pytest.MonkeyPatch,
+    status: int,
+) -> None:
+    _client, adapter, session = _sealed_tushare_test_adapter("private-token")
+    responses = [
+        _TushareWireResponse(status_code=status, json_failure=AssertionError),
+        _TushareWireResponse(),
+    ]
+    calls: list[dict] = []
+    sleeps: list[float] = []
+
+    def post(_url: str, **kwargs):
+        calls.append(kwargs)
+        return responses.pop(0)
+
+    monkeypatch.setattr(session, "post", post)
+    monkeypatch.setattr(data_sources_module, "_TUSHARE_RETRY_SLEEP", sleeps.append)
+
+    batch = adapter.fetch(FetchRequest("daily"))
+
+    assert batch.frame.iloc[0]["close"] == pytest.approx(10.0)
+    assert len(calls) == 2
+    assert sleeps == [0.5]
+    assert all(call["allow_redirects"] is False for call in calls)
+
+
+def test_https_tushare_retryable_http_exhaustion_keeps_only_numeric_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    marker = "private-token-and-response-body-must-not-escape"
+    _client, adapter, session = _sealed_tushare_test_adapter(marker)
+    calls: list[dict] = []
+    sleeps: list[float] = []
+
+    def post(_url: str, **kwargs):
+        calls.append(kwargs)
+        return _TushareWireResponse(status_code=503, json_failure=AssertionError)
+
+    monkeypatch.setattr(session, "post", post)
+    monkeypatch.setattr(data_sources_module, "_TUSHARE_RETRY_SLEEP", sleeps.append)
+
+    with pytest.raises(SourceObservationError, match=r"status=503") as caught:
+        adapter.fetch(FetchRequest("daily"))
+
+    assert caught.value.failure_kind == "provider_rejected"
+    assert len(calls) == 3
+    assert sleeps == [0.5, 1.0]
+    assert marker not in str(caught.value)
+    assert marker not in repr(caught.value)
+    assert marker not in json.dumps(vars(caught.value), default=str, sort_keys=True)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+@pytest.mark.parametrize("status", [400, 401, 403, 404, 409, 422, 600])
+def test_https_tushare_nonretryable_http_status_fails_once(
+    monkeypatch: pytest.MonkeyPatch,
+    status: int,
+) -> None:
+    _client, adapter, session = _sealed_tushare_test_adapter("private-token")
+    calls: list[dict] = []
+    sleeps: list[float] = []
+
+    def post(_url: str, **kwargs):
+        calls.append(kwargs)
+        return _TushareWireResponse(status_code=status, json_failure=AssertionError)
+
+    monkeypatch.setattr(session, "post", post)
+    monkeypatch.setattr(data_sources_module, "_TUSHARE_RETRY_SLEEP", sleeps.append)
+
+    with pytest.raises(SourceObservationError, match=rf"status={status}") as caught:
+        adapter.fetch(FetchRequest("daily"))
+
+    assert caught.value.failure_kind == "provider_rejected"
+    assert len(calls) == 1
+    assert sleeps == []
+    assert calls[0]["allow_redirects"] is False
+
+
+@pytest.mark.parametrize("failure_case", ["json", "shape", "api_code"])
+def test_https_tushare_response_and_api_contract_failures_are_not_retried(
+    monkeypatch: pytest.MonkeyPatch,
+    failure_case: str,
+) -> None:
+    marker = "private-token-or-response-must-not-escape"
+    _client, adapter, session = _sealed_tushare_test_adapter(marker)
+    if failure_case == "json":
+        response = _TushareWireResponse(json_failure=ValueError)
+        expected_kind = "response_contract"
+    elif failure_case == "shape":
+        response = _TushareWireResponse(payload=[marker])
+        expected_kind = "response_contract"
+    else:
+        response = _TushareWireResponse(
+            payload={"code": 40203, "msg": marker, "data": None}
+        )
+        expected_kind = "provider_rejected"
+    calls: list[dict] = []
+    sleeps: list[float] = []
+
+    def post(_url: str, **kwargs):
+        calls.append(kwargs)
+        return response
+
+    monkeypatch.setattr(session, "post", post)
+    monkeypatch.setattr(data_sources_module, "_TUSHARE_RETRY_SLEEP", sleeps.append)
+
+    with pytest.raises(SourceObservationError) as caught:
+        adapter.fetch(FetchRequest("daily"))
+
+    assert caught.value.failure_kind == expected_kind
+    assert len(calls) == 1
+    assert sleeps == []
+    assert marker not in str(caught.value)
+    assert marker not in repr(caught.value)
+    assert marker not in json.dumps(vars(caught.value), default=str, sort_keys=True)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+def test_https_tushare_unknown_request_failure_is_sanitized_without_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    marker = "private-token-in-unexpected-error-must-not-escape"
+    _client, adapter, session = _sealed_tushare_test_adapter(marker)
+    calls = 0
+    sleeps: list[float] = []
+
+    def post(_url: str, **_kwargs):
+        nonlocal calls
+        calls += 1
+        raise RuntimeError(marker)
+
+    monkeypatch.setattr(session, "post", post)
+    monkeypatch.setattr(data_sources_module, "_TUSHARE_RETRY_SLEEP", sleeps.append)
+
+    with pytest.raises(SourceObservationError) as caught:
+        adapter.fetch(FetchRequest("daily"))
+
+    assert caught.value.failure_kind == "provider_error"
+    assert calls == 1
+    assert sleeps == []
+    assert marker not in str(caught.value)
+    assert marker not in repr(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+def test_https_tushare_revalidates_seal_after_retry_sleep_before_second_wire_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    marker = "private-token-must-not-escape"
+    _client, adapter, session = _sealed_tushare_test_adapter(marker)
+    wire_calls = 0
+    rate_limit_calls: list[str] = []
+
+    def post(_url: str, **_kwargs):
+        nonlocal wire_calls
+        wire_calls += 1
+        raise requests.ConnectionError(marker)
+
+    def mutate_during_sleep(_delay: float) -> None:
+        session.trust_env = True
+
+    monkeypatch.setattr(session, "post", post)
+    monkeypatch.setattr(
+        adapter,
+        "_acquire_rate_limit",
+        lambda dataset: (rate_limit_calls.append(dataset) or 0.0),
+    )
+    monkeypatch.setattr(
+        data_sources_module,
+        "_TUSHARE_RETRY_SLEEP",
+        mutate_during_sleep,
+    )
+
+    with pytest.raises(SourceContractError, match="transport is not sealed") as caught:
+        adapter.fetch(FetchRequest("daily"))
+
+    assert wire_calls == 1
+    assert rate_limit_calls == [TUSHARE_ACCOUNT_RATE_LIMIT_KEY, "daily"]
+    assert marker not in str(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+def test_https_tushare_fetch_preserves_retry_rate_limit_failure_as_contract_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    marker = "private-rate-limit-config-must-not-escape"
+    _client, adapter, session = _sealed_tushare_test_adapter(marker)
+    wire_calls = 0
+    rate_limit_calls: list[str] = []
+    sleeps: list[float] = []
+
+    def post(_url: str, **_kwargs):
+        nonlocal wire_calls
+        wire_calls += 1
+        raise requests.ConnectionError(marker)
+
+    def acquire(dataset: str) -> float:
+        rate_limit_calls.append(dataset)
+        if len(rate_limit_calls) == 3:
+            raise ValueError(marker)
+        return 0.0
+
+    monkeypatch.setattr(session, "post", post)
+    monkeypatch.setattr(adapter, "_acquire_rate_limit", acquire)
+    monkeypatch.setattr(data_sources_module, "_TUSHARE_RETRY_SLEEP", sleeps.append)
+
+    with pytest.raises(
+        SourceContractError, match="retry rate-limit admission failed"
+    ) as caught:
+        adapter.fetch(FetchRequest("daily"))
+
+    assert not isinstance(caught.value, SourceObservationError)
+    assert wire_calls == 1
+    assert rate_limit_calls == [
+        TUSHARE_ACCOUNT_RATE_LIMIT_KEY,
+        "daily",
+        TUSHARE_ACCOUNT_RATE_LIMIT_KEY,
+    ]
+    assert sleeps == [0.5]
+    assert marker not in str(caught.value)
+    assert marker not in repr(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+def test_https_tushare_probe_preserves_retry_rate_limit_failure_as_contract_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    marker = "private-probe-rate-limit-config-must-not-escape"
+    _client, adapter, session = _sealed_tushare_test_adapter(marker)
+    wire_calls = 0
+    rate_limit_calls: list[str] = []
+    sleeps: list[float] = []
+
+    def post(_url: str, **_kwargs):
+        nonlocal wire_calls
+        wire_calls += 1
+        raise requests.Timeout(marker)
+
+    def acquire(dataset: str) -> float:
+        rate_limit_calls.append(dataset)
+        if len(rate_limit_calls) == 3:
+            raise RuntimeError(marker)
+        return 0.0
+
+    monkeypatch.setattr(session, "post", post)
+    monkeypatch.setattr(adapter, "_acquire_rate_limit", acquire)
+    monkeypatch.setattr(data_sources_module, "_TUSHARE_RETRY_SLEEP", sleeps.append)
+
+    with pytest.raises(
+        SourceContractError, match="retry rate-limit admission failed"
+    ) as caught:
+        adapter.probe()
+
+    assert not isinstance(caught.value, SourceObservationError)
+    assert wire_calls == 1
+    assert rate_limit_calls == [
+        TUSHARE_ACCOUNT_RATE_LIMIT_KEY,
+        "trade_cal",
+        TUSHARE_ACCOUNT_RATE_LIMIT_KEY,
+    ]
+    assert sleeps == [0.5]
+    assert marker not in str(caught.value)
+    assert marker not in repr(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+def test_tushare_reserved_retry_parameter_is_rejected_before_rate_limit_or_wire(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    marker = "private-reserved-parameter-value-must-not-escape"
+    _client, adapter, session = _sealed_tushare_test_adapter("private-token")
+    wire_calls = 0
+    rate_limit_calls: list[str] = []
+
+    def post(_url: str, **_kwargs):
+        nonlocal wire_calls
+        wire_calls += 1
+        return _TushareWireResponse()
+
+    monkeypatch.setattr(session, "post", post)
+    monkeypatch.setattr(
+        adapter,
+        "_acquire_rate_limit",
+        lambda dataset: (rate_limit_calls.append(dataset) or 0.0),
+    )
+
+    with pytest.raises(SourceContractError, match="reserved internal field") as caught:
+        adapter.fetch(
+            FetchRequest(
+                "daily",
+                parameters={"_factor_lab_before_wire_retry": marker},
+            )
+        )
+
+    assert not isinstance(caught.value, SourceObservationError)
+    assert wire_calls == 0
+    assert rate_limit_calls == []
+    assert marker not in str(caught.value)
+    assert marker not in repr(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
 
 
 def test_real_tushare_calls_only_the_sealed_query_with_expected_endpoint(
@@ -1105,6 +1698,7 @@ def test_tushare_and_akshare_public_identity_captures_routing_and_parsing() -> N
         "schema_version": "research-os/tushare-injected-fixture/v1",
         "formal_production_transport": False,
     }
+    assert tushare_identity["routing_contract"]["rate_limits"] == {}
     assert tushare_identity["routing_contract"]["datasets"]["daily"] == {
         "endpoint": "daily_v2"
     }
@@ -1125,6 +1719,33 @@ def test_tushare_and_akshare_public_identity_captures_routing_and_parsing() -> N
         tushare_identity["public_contract_hash"]
     )
     assert "secret://" not in repr(tushare_identity)
+
+    account_limited = TushareSourceAdapter(
+        _TushareFixture(),
+        contracts=[contract],
+        endpoint_map={"daily": "daily_v2"},
+        lineage={
+            "profile_name": "primary-tushare",
+            "profile_source_type": "tushare",
+            "credential_binding": "secret://tushare/original/path",
+        },
+        rate_limits={
+            TUSHARE_ACCOUNT_RATE_LIMIT_KEY: RateLimit(60, 60.0, burst=1)
+        },
+    )
+    assert account_limited.public_contract_identity()["routing_contract"][
+        "rate_limits"
+    ] == {
+        TUSHARE_ACCOUNT_RATE_LIMIT_KEY: {
+            "requests": 60,
+            "per_seconds": 60.0,
+            "burst": 1,
+        }
+    }
+    assert account_limited.public_contract_identity()["public_contract_hash"] != (
+        tushare_identity["public_contract_hash"]
+    )
+    assert "secret://" not in repr(account_limited.public_contract_identity())
 
     akshare = AkShareSourceAdapter(
         _AkShareFixture(),

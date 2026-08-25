@@ -540,6 +540,18 @@ def _production_tushare_execution_payload() -> dict[str, Any]:
     return {
         "iceberg": {"catalog_name": "factorlab"},
         "daily": {
+            "sources": [
+                {
+                    "source": "tushare",
+                    "rate_limits": {
+                        "__account__": {
+                            "requests": 60,
+                            "per_seconds": 60,
+                            "burst": 1,
+                        }
+                    },
+                }
+            ],
             "shadow": {
                 "execution_market_data": {
                     "source": "tushare",
@@ -548,6 +560,13 @@ def _production_tushare_execution_payload() -> dict[str, Any]:
                     "dataset": "rt_min",
                     "endpoint": "rt_min",
                     "method": "SDK",
+                    "rate_limits": {
+                        "__account__": {
+                            "requests": 60,
+                            "per_seconds": 60,
+                            "burst": 1,
+                        }
+                    },
                     "request": {
                         "ts_code": "${decision_universe_csv}",
                         "freq": "1MIN",
@@ -1320,6 +1339,125 @@ def test_missing_or_unsafe_tushare_origin_blocks_before_secret_or_client_creatio
     assert production_validations == 0
 
 
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ("missing", "rate_limits must contain only the account bucket"),
+        ("conflict", "account rate limit must match every daily source"),
+    ],
+)
+def test_tushare_execution_rate_limit_blocks_before_secret_or_client_creation(
+    production_factory,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+    message: str,
+) -> None:
+    base, ledger, secrets_root, config_path = production_factory()
+    payload = _production_tushare_execution_payload()
+    execution = payload["daily"]["shadow"]["execution_market_data"]
+    if mutation == "missing":
+        execution.pop("rate_limits")
+    else:
+        execution["rate_limits"]["__account__"]["requests"] = 59
+    config_path.write_text(json.dumps(payload), encoding="utf-8")
+    import tushare as ts
+
+    credential_reads = 0
+    client_creations = 0
+    production_validations = 0
+
+    def forbidden_secret_read(*_args, **_kwargs):
+        nonlocal credential_reads
+        credential_reads += 1
+        raise AssertionError("rate-limit failure reached the credential")
+
+    def forbidden_client_creation(*_args, **_kwargs):
+        nonlocal client_creations
+        client_creations += 1
+        raise AssertionError("rate-limit failure created a client")
+
+    def forbidden_production_validation(*_args, **_kwargs):
+        nonlocal production_validations
+        production_validations += 1
+        raise AssertionError("rate-limit failure reached secret validation")
+
+    monkeypatch.setattr(
+        execution_authority_module, "_fixed_secret_line", forbidden_secret_read
+    )
+    monkeypatch.setattr(
+        execution_authority_module,
+        "validate_production_config",
+        forbidden_production_validation,
+    )
+    monkeypatch.setattr(ts, "pro_api", forbidden_client_creation)
+
+    with pytest.raises(ProductionConfigurationError, match=message) as caught:
+        ExecutionSnapshotAuthority.from_production_config(
+            config_path=config_path,
+            env={
+                "FACTOR_LAB_PRODUCTION_ROLE": "worker",
+                "FACTOR_LAB_SECRETS_ROOT": str(secrets_root),
+            },
+            catalog=base.catalog,
+            ledger=ledger,
+            archive=base.archive,
+            cache_root=base.cache_root / "tushare-rate-limit",
+        )
+
+    assert "credential" not in str(caught.value)
+    assert credential_reads == 0
+    assert client_creations == 0
+    assert production_validations == 0
+
+
+def test_formal_factory_rejects_rt_min_daily_before_secret_or_client_creation(
+    production_factory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base, ledger, secrets_root, config_path = production_factory()
+    payload = _production_tushare_execution_payload()
+    execution = payload["daily"]["shadow"]["execution_market_data"]
+    execution["dataset"] = "rt_min_daily"
+    execution["endpoint"] = "rt_min_daily"
+    config_path.write_text(json.dumps(payload), encoding="utf-8")
+    import tushare as ts
+
+    events: list[str] = []
+    monkeypatch.setattr(
+        execution_authority_module,
+        "_fixed_secret_line",
+        lambda *_args, **_kwargs: events.append("secret_read"),
+    )
+    monkeypatch.setattr(
+        execution_authority_module,
+        "validate_production_config",
+        lambda *_args, **_kwargs: events.append("production_validation"),
+    )
+    monkeypatch.setattr(
+        ts,
+        "pro_api",
+        lambda *_args, **_kwargs: events.append("client_constructed"),
+    )
+
+    with pytest.raises(
+        ProductionConfigurationError,
+        match="endpoint must be rt_min",
+    ):
+        ExecutionSnapshotAuthority.from_production_config(
+            config_path=config_path,
+            env={
+                "FACTOR_LAB_PRODUCTION_ROLE": "worker",
+                "FACTOR_LAB_SECRETS_ROOT": str(secrets_root),
+            },
+            catalog=base.catalog,
+            ledger=ledger,
+            archive=base.archive,
+            cache_root=base.cache_root / "tushare-rt-min-daily",
+        )
+
+    assert events == []
+
+
 def test_reviewed_tushare_origin_is_bound_and_transport_is_sealed(
     production_factory, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1378,8 +1516,13 @@ def test_reviewed_tushare_origin_is_bound_and_transport_is_sealed(
         cache_root=base.cache_root / "tushare",
     )
 
-    assert observed_origins == [reviewed_origin]
-    assert events == ["transport_preflight", "secret_read", "client_constructed"]
+    assert observed_origins == [reviewed_origin, reviewed_origin]
+    assert events == [
+        "transport_preflight",
+        "transport_preflight",
+        "secret_read",
+        "client_constructed",
+    ]
     assert len(clients) == 1
     assert authority.open_adapter.client is clients[0]
     assert authority.open_adapter.client._DataApi__http_url == reviewed_origin
@@ -1392,6 +1535,21 @@ def test_reviewed_tushare_origin_is_bound_and_transport_is_sealed(
     assert session.trust_env is False
     assert session.proxies == {}
     assert session.verify is True
+    assert authority.open_adapter.production_attested is True
+    assert authority.open_adapter.public_execution_contract["rate_limits"] == {
+        "__account__": {"requests": 60, "per_seconds": 60.0, "burst": 1}
+    }
+    assert authority._real_diemeng_adapter() is True
+
+    authority.open_adapter.collection_window_minutes = 6
+    assert authority.open_adapter.production_attested is True
+    assert authority._real_diemeng_adapter() is False
+    authority.open_adapter.collection_window_minutes = 5
+    assert authority._real_diemeng_adapter() is True
+
+    authority.open_adapter.rate_limiter = object()
+    assert authority.open_adapter.production_attested is False
+    assert authority._real_diemeng_adapter() is False
 
 
 def test_operator_retention_authority_is_idempotent_secret_free_and_admitted(

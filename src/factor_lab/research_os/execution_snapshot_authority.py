@@ -48,22 +48,25 @@ from .data_sources import (
     SourceAdapter,
     SourceBatch,
     SourceHealth,
+    TUSHARE_ACCOUNT_RATE_LIMIT_KEY,
+    TUSHARE_PRODUCTION_ACCOUNT_RATE_LIMIT,
     tushare_client_uses_direct_transport,
     validate_production_diemeng_base_url,
     validate_tushare_https_origin,
 )
 from .execution_open_sources import (
     diemeng_opening_session_request_template,
-    TUSHARE_REALTIME_ENDPOINTS,
     TUSHARE_RT_MIN,
     TUSHARE_RT_MIN_MAX_SYMBOLS_PER_REQUEST,
     TushareRealtimeOpenAdapter,
     normalized_open_contract,
+    tushare_realtime_open_routing_contract,
 )
 from .fingerprint import content_fingerprint
 from .object_store import ArchivedObject, S3ImmutableArchive
 from .production_config import (
     ProductionConfigurationError,
+    _validated_tushare_account_rate_limit,
     load_production_config,
     validate_production_config,
 )
@@ -88,6 +91,13 @@ FORMAL_EXECUTION_CAPABILITY_SCHEMA_VERSION = (
     "research-os/formal-execution-capability/v1"
 )
 FORMAL_EXECUTION_SOURCE_ID = "research_os"
+
+_PRODUCTION_EXECUTION_CONFIGURATION_HASH_DOMAIN = (
+    "factor-lab/research-os/v1/production-execution-configuration"
+)
+_PRODUCTION_OPEN_ADAPTER_BINDING_HASH_DOMAIN = (
+    "factor-lab/research-os/v1/production-open-adapter-binding"
+)
 
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
 _HASH = re.compile(r"^[0-9a-f]{64}$")
@@ -583,6 +593,7 @@ class _ProductionBinding:
     source_role: str = "diemeng_open_observation"
     credential_name: str = "diemeng_api_key"
     provider_endpoint: str = "/stock/history"
+    adapter_public_contract_hash: str = ""
 
 
 @dataclass(frozen=True)
@@ -1130,9 +1141,9 @@ def _validated_execution_mapping(payload: Mapping[str, Any]) -> Mapping[str, Any
         }
     elif source_id == "tushare":
         endpoint = str(execution.get("endpoint") or "").strip()
-        if endpoint not in TUSHARE_REALTIME_ENDPOINTS:
+        if endpoint != TUSHARE_RT_MIN:
             raise ProductionConfigurationError(
-                "Tushare execution endpoint must be rt_min or rt_min_daily"
+                "formal Tushare execution endpoint must be rt_min"
             )
         required_identity = {
             "source": "tushare",
@@ -1161,19 +1172,14 @@ def _validated_execution_mapping(payload: Mapping[str, Any]) -> Mapping[str, Any
     else:
         expected_keys = ("ts_code", "time")
         expected_fields = (
-            ("ts_code", "time", "open", "close", "high", "low", "vol", "amount")
-            if execution["endpoint"] == "rt_min"
-            else (
-                "ts_code",
-                "freq",
-                "time",
-                "open",
-                "close",
-                "high",
-                "low",
-                "vol",
-                "amount",
-            )
+            "ts_code",
+            "time",
+            "open",
+            "close",
+            "high",
+            "low",
+            "vol",
+            "amount",
         )
         event_field = "time"
     if tuple(map(str, contract.get("key_fields") or ())) != expected_keys:
@@ -1193,11 +1199,7 @@ def _validated_execution_mapping(payload: Mapping[str, Any]) -> Mapping[str, Any
         diemeng_opening_session_request_template()
         if source_id == "diemeng"
         else {
-            "ts_code": (
-                "${decision_universe_csv}"
-                if execution["endpoint"] == "rt_min"
-                else "${ticker}"
-            ),
+            "ts_code": "${decision_universe_csv}",
             "freq": "1MIN",
         }
     )
@@ -1206,20 +1208,50 @@ def _validated_execution_mapping(payload: Mapping[str, Any]) -> Mapping[str, Any
             f"{source_id} execution request must be the bounded session template"
         )
     if source_id == "tushare":
-        batching = execution.get("batching")
-        expected_batching = (
-            {
-                "mode": "sorted_deterministic_chunks",
-                "maximum_symbols_per_request": (
-                    TUSHARE_RT_MIN_MAX_SYMBOLS_PER_REQUEST
-                ),
-            }
-            if execution["endpoint"] == TUSHARE_RT_MIN
-            else {
-                "mode": "one_ticker_per_request",
-                "maximum_symbols_per_request": 1,
-            }
+        execution_rate_limits = execution.get("rate_limits")
+        if not isinstance(execution_rate_limits, Mapping) or set(
+            map(str, execution_rate_limits)
+        ) != {TUSHARE_ACCOUNT_RATE_LIMIT_KEY}:
+            raise ProductionConfigurationError(
+                "Tushare execution rate_limits must contain only the account bucket"
+            )
+        execution_account_limit = _validated_tushare_account_rate_limit(
+            execution,
+            path="$.daily.shadow.execution_market_data",
         )
+        daily_sources = daily.get("sources") if isinstance(daily, Mapping) else None
+        source_account_limits = tuple(
+            _validated_tushare_account_rate_limit(
+                source,
+                path=f"$.daily.sources[{index}]",
+            )
+            for index, source in enumerate(
+                daily_sources if isinstance(daily_sources, list) else ()
+            )
+            if isinstance(source, Mapping)
+            and str(source.get("source") or "").strip().lower() == "tushare"
+        )
+        if not source_account_limits or any(
+            item != execution_account_limit for item in source_account_limits
+        ):
+            raise ProductionConfigurationError(
+                "Tushare execution account rate limit must match every daily source"
+            )
+        reviewed_account_limit = (
+            int(TUSHARE_PRODUCTION_ACCOUNT_RATE_LIMIT.requests),
+            float(TUSHARE_PRODUCTION_ACCOUNT_RATE_LIMIT.per_seconds),
+            int(TUSHARE_PRODUCTION_ACCOUNT_RATE_LIMIT.burst),
+        )
+        if execution_account_limit != reviewed_account_limit:
+            raise ProductionConfigurationError(
+                "formal Tushare execution must use the reviewed account rate "
+                "limit: 60 requests per 60 seconds with burst 1"
+            )
+        batching = execution.get("batching")
+        expected_batching = {
+            "mode": "sorted_deterministic_chunks",
+            "maximum_symbols_per_request": TUSHARE_RT_MIN_MAX_SYMBOLS_PER_REQUEST,
+        }
         if not isinstance(batching, Mapping) or batching != expected_batching:
             raise ProductionConfigurationError(
                 "Tushare realtime request batching exceeds the official capacity"
@@ -1243,6 +1275,122 @@ def _validated_execution_mapping(payload: Mapping[str, Any]) -> Mapping[str, Any
                 "Tushare realtime capability must remain runtime-probe gated"
             )
     return execution
+
+
+def production_execution_configuration_hash(payload: Mapping[str, Any]) -> str:
+    """Hash the exact production document sealed by the execution factory."""
+
+    return content_fingerprint(
+        dict(payload),
+        domain=_PRODUCTION_EXECUTION_CONFIGURATION_HASH_DOMAIN,
+    )
+
+
+def _reviewed_tushare_execution_origin(
+    payload: Mapping[str, Any],
+    execution: Mapping[str, Any],
+) -> str | None:
+    if str(execution.get("source") or "") != "tushare":
+        return None
+    security = payload.get("security")
+    source_transport = (
+        security.get("source_transport")
+        if isinstance(security, Mapping)
+        else None
+    )
+    tushare_transport = (
+        source_transport.get("tushare")
+        if isinstance(source_transport, Mapping)
+        else None
+    )
+    try:
+        return validate_tushare_https_origin(
+            str(
+                tushare_transport.get("api_origin")
+                if isinstance(tushare_transport, Mapping)
+                else ""
+            )
+        )
+    except Exception:
+        raise ProductionConfigurationError(
+            "Tushare execution requires a reviewed direct HTTPS origin"
+        ) from None
+
+
+def production_formal_source_contract_hash(payload: Mapping[str, Any]) -> str:
+    """Hash the current formal source mapping and concrete adapter contract.
+
+    The Tushare component includes the same pure routing descriptor exposed by
+    ``TushareRealtimeOpenAdapter``.  Retry policy, endpoint, origin, batching,
+    collection window and the reviewed account limit therefore all invalidate
+    stale capability evidence without resolving a credential.
+    """
+
+    execution = _validated_execution_mapping(payload)
+    reviewed_tushare_origin = _reviewed_tushare_execution_origin(
+        payload, execution
+    )
+    adapter_contract: Mapping[str, Any]
+    if str(execution.get("source") or "") == "tushare":
+        routing_contract = tushare_realtime_open_routing_contract(
+            endpoint=str(execution["endpoint"]),
+            api_origin=reviewed_tushare_origin,
+            collection_window_minutes=5,
+            max_universe_size=500,
+            max_symbols_per_request=int(
+                execution["batching"]["maximum_symbols_per_request"]
+            ),
+            account_rate_limit=TUSHARE_PRODUCTION_ACCOUNT_RATE_LIMIT,
+            production_transport=True,
+        )
+        adapter_contract = {
+            "adapter_class": (
+                f"{TushareRealtimeOpenAdapter.__module__}."
+                f"{TushareRealtimeOpenAdapter.__qualname__}"
+            ),
+            "source_id": "tushare",
+            "priority": 10,
+            "normalized_dataset_contract": asdict(normalized_open_contract()),
+            "routing_contract": routing_contract,
+        }
+    else:
+        adapter_contract = {
+            "adapter_class": (
+                f"{DiemengSourceAdapter.__module__}."
+                f"{DiemengSourceAdapter.__qualname__}"
+            ),
+            "source_id": "diemeng",
+            "priority": 20,
+            "normalized_dataset_contract": asdict(_fixed_open_contract()),
+            "routing_contract": {
+                "base_url": execution.get("base_url"),
+                "dataset": execution["dataset"],
+                "endpoint": execution["endpoint"],
+                "method": execution["method"],
+                "response_path": execution.get("response_path"),
+                "probe_dataset": OPEN_SOURCE_DATASET,
+            },
+        }
+    return content_fingerprint(
+        {
+            "source": execution["source"],
+            "profile_name": execution["profile_name"],
+            "credential_ref": execution["credential_ref"],
+            "base_url": execution.get("base_url"),
+            "api_origin": reviewed_tushare_origin,
+            "dataset": execution["dataset"],
+            "endpoint": execution["endpoint"],
+            "method": execution["method"],
+            "rate_limits": execution.get("rate_limits"),
+            "response_path": execution.get("response_path"),
+            "request": execution["request"],
+            "batching": execution.get("batching"),
+            "contract": execution["contract"],
+            "availability": execution.get("availability"),
+            "adapter_contract": adapter_contract,
+        },
+        domain=_PRODUCTION_OPEN_ADAPTER_BINDING_HASH_DOMAIN,
+    )
 
 
 def _production_archive_attested(archive: S3ImmutableArchive) -> bool:
@@ -1351,35 +1499,11 @@ class ExecutionSnapshotAuthority:
         resolved_config = Path(config_path).resolve()
         preflight_payload = load_production_config(resolved_config)
         preflight_execution = _validated_execution_mapping(preflight_payload)
-        reviewed_tushare_origin: str | None = None
-        if str(preflight_execution["source"]) == "tushare":
-            try:
-                security = preflight_payload.get("security")
-                source_transport = (
-                    security.get("source_transport")
-                    if isinstance(security, Mapping)
-                    else None
-                )
-                tushare_transport = (
-                    source_transport.get("tushare")
-                    if isinstance(source_transport, Mapping)
-                    else None
-                )
-                reviewed_tushare_origin = validate_tushare_https_origin(
-                    str(
-                        tushare_transport.get("api_origin")
-                        if isinstance(tushare_transport, Mapping)
-                        else ""
-                    )
-                )
-            except Exception:
-                raise ProductionConfigurationError(
-                    "Tushare execution requires a reviewed direct HTTPS origin"
-                ) from None
-        preflight_hash = content_fingerprint(
+        reviewed_tushare_origin = _reviewed_tushare_execution_origin(
             preflight_payload,
-            domain="factor-lab/research-os/v1/production-execution-configuration",
+            preflight_execution,
         )
+        preflight_hash = production_execution_configuration_hash(preflight_payload)
         evidence = validate_production_config(config_path, env=values)
         if Path(evidence.path).resolve() != resolved_config:
             raise ProductionConfigurationError(
@@ -1387,32 +1511,12 @@ class ExecutionSnapshotAuthority:
             )
         payload = load_production_config(evidence.path)
         execution = _validated_execution_mapping(payload)
-        configuration_hash = content_fingerprint(
-            payload,
-            domain="factor-lab/research-os/v1/production-execution-configuration",
-        )
+        configuration_hash = production_execution_configuration_hash(payload)
         if configuration_hash != preflight_hash:
             raise ProductionConfigurationError(
                 "production execution configuration changed after transport preflight"
             )
-        execution_contract_hash = content_fingerprint(
-            {
-                "source": execution["source"],
-                "profile_name": execution["profile_name"],
-                "credential_ref": execution["credential_ref"],
-                "base_url": execution.get("base_url"),
-                "api_origin": reviewed_tushare_origin,
-                "dataset": execution["dataset"],
-                "endpoint": execution["endpoint"],
-                "method": execution["method"],
-                "response_path": execution.get("response_path"),
-                "request": execution["request"],
-                "batching": execution.get("batching"),
-                "contract": execution["contract"],
-                "availability": execution.get("availability"),
-            },
-            domain="factor-lab/research-os/v1/production-open-adapter-binding",
-        )
+        execution_contract_hash = production_formal_source_contract_hash(payload)
         artifact_root = Path(evidence.runtime_artifact_root).resolve()
         selected_cache = Path(cache_root).resolve()
         try:
@@ -1477,6 +1581,11 @@ class ExecutionSnapshotAuthority:
                 max_symbols_per_request=int(
                     execution["batching"]["maximum_symbols_per_request"]
                 ),
+                rate_limits={
+                    TUSHARE_ACCOUNT_RATE_LIMIT_KEY: (
+                        TUSHARE_PRODUCTION_ACCOUNT_RATE_LIMIT
+                    )
+                },
                 lineage={
                     "profile_name": "primary-tushare",
                     "credential_binding": "secret://tushare_token",
@@ -1484,10 +1593,23 @@ class ExecutionSnapshotAuthority:
                     "execution_contract_hash": execution_contract_hash,
                 },
             )
+            expected_routing_contract = tushare_realtime_open_routing_contract(
+                endpoint=str(execution["endpoint"]),
+                api_origin=reviewed_tushare_origin,
+                collection_window_minutes=5,
+                max_universe_size=500,
+                max_symbols_per_request=int(
+                    execution["batching"]["maximum_symbols_per_request"]
+                ),
+                account_rate_limit=TUSHARE_PRODUCTION_ACCOUNT_RATE_LIMIT,
+                production_transport=True,
+            )
             if not (
                 tushare_client_uses_direct_transport(adapter.client)
                 and str(getattr(adapter.client, "_DataApi__http_url", "") or "")
                 == reviewed_tushare_origin
+                and adapter.public_execution_contract
+                == expected_routing_contract
             ):
                 raise ProductionConfigurationError(
                     "Tushare reviewed HTTPS transport could not be sealed"
@@ -1513,6 +1635,11 @@ class ExecutionSnapshotAuthority:
             policy=ExecutionSnapshotPolicy(),
             worker_id="execution-snapshot-authority",
         )
+        adapter_public_contract_hash = (
+            str(adapter.public_contract_identity()["public_contract_hash"])
+            if type(adapter) is TushareRealtimeOpenAdapter
+            else ""
+        )
         authority._production_binding = _ProductionBinding(
             configuration_hash=configuration_hash,
             execution_contract_hash=execution_contract_hash,
@@ -1526,6 +1653,7 @@ class ExecutionSnapshotAuthority:
             source_role=f"{selected_source}_open_observation",
             credential_name=credential_name,
             provider_endpoint=str(execution["endpoint"]),
+            adapter_public_contract_hash=adapter_public_contract_hash,
         )
         retained = set(
             map(str, getattr(evidence, "credential_retention_waivers", ()) or ())
@@ -1745,6 +1873,8 @@ class ExecutionSnapshotAuthority:
             and type(adapter) is TushareRealtimeOpenAdapter
             and adapter.production_attested
             and adapter.endpoint == binding.provider_endpoint
+            and adapter.public_contract_identity()["public_contract_hash"]
+            == binding.adapter_public_contract_hash
         )
 
     @property
@@ -4076,4 +4206,6 @@ __all__ = [
     "SCHEMA_VERSION",
     "TypedExecutionSession",
     "formal_execution_capability_probe_hash",
+    "production_execution_configuration_hash",
+    "production_formal_source_contract_hash",
 ]

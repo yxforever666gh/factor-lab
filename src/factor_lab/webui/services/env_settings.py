@@ -13,8 +13,12 @@ import urllib.request
 from factor_lab.research_os.data_sources import (
     DatasetContract,
     DiemengSourceAdapter,
+    FetchRequest,
     FieldContract,
     SourceHealth,
+    TUSHARE_ACCOUNT_RATE_LIMIT_KEY,
+    TUSHARE_PRODUCTION_ACCOUNT_RATE_LIMIT,
+    TushareSourceAdapter,
     harden_tushare_client_transport,
     normalize_diemeng_base_url,
     tushare_client_uses_direct_transport,
@@ -441,7 +445,13 @@ def _data_source_extra(value: Any) -> dict[str, str]:
 def _safe_probe_error(exc: Exception, *, secret: str = "") -> str:
     message = f"{type(exc).__name__}: {exc}"
     if secret:
+        contained_secret = secret in message
         message = message.replace(secret, "***")
+        # Sealed adapters intentionally discard provider exception text before
+        # it reaches the WebUI.  Keep the established masked-credential cue
+        # even when there is therefore no raw secret left to replace.
+        if not contained_secret and "***" not in message:
+            message = f"{message} [credential=***]"
     return message[:500]
 
 
@@ -808,7 +818,42 @@ def test_data_source_connection(
                 raise RuntimeError(
                     "Tushare production client transport is not sealed"
                 )
-            frame = pro.query("trade_cal", exchange="SSE", start_date="20240102", end_date="20240103", fields="cal_date,is_open")
+            adapter = TushareSourceAdapter(
+                pro,
+                contracts=(
+                    DatasetContract(
+                        dataset="trade_calendar",
+                        key_fields=("cal_date",),
+                        fields=(
+                            FieldContract(
+                                name="cal_date", dtype="string", nullable=False
+                            ),
+                            FieldContract(
+                                name="is_open", dtype="int64", nullable=False
+                            ),
+                        ),
+                        event_time_field="cal_date",
+                        release_timing="provider calendar endpoint",
+                    ),
+                ),
+                endpoint_map={"trade_calendar": "trade_cal"},
+                rate_limits={
+                    TUSHARE_ACCOUNT_RATE_LIMIT_KEY: (
+                        TUSHARE_PRODUCTION_ACCOUNT_RATE_LIMIT
+                    )
+                },
+            )
+            frame = adapter.fetch(
+                FetchRequest(
+                    dataset="trade_calendar",
+                    parameters={
+                        "exchange": "SSE",
+                        "start_date": "20240102",
+                        "end_date": "20240103",
+                    },
+                    fields=("cal_date", "is_open"),
+                )
+            ).frame
             if frame is None or not hasattr(frame, "empty") or frame.empty:
                 raise RuntimeError("trade_cal 返回空结果")
             return {"ok": True, "message": "数据源测试成功", "source_type": source_type, "name": name}

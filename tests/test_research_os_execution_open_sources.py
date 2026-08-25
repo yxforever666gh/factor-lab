@@ -5,8 +5,14 @@ from typing import Any
 
 import pandas as pd
 import pytest
+import requests
 
-from factor_lab.research_os.data_sources import SourceContractError
+import factor_lab.research_os.data_sources as data_sources_module
+from factor_lab.research_os.data_sources import (
+    RateLimit,
+    SourceContractError,
+    TUSHARE_ACCOUNT_RATE_LIMIT_KEY,
+)
 from factor_lab.research_os.execution_open_sources import (
     TUSHARE_RT_MIN,
     TUSHARE_RT_MIN_DAILY,
@@ -17,6 +23,34 @@ from factor_lab.research_os.execution_open_sources import (
 SESSION = date(2026, 8, 24)
 RECEIVED = datetime(2026, 8, 24, 1, 31, tzinfo=timezone.utc)
 TICKERS = ("000001.SZ", "000002.SZ", "600000.SH")
+
+
+def _account_rate_limits(requests_per_minute: int = 60) -> dict[str, RateLimit]:
+    return {
+        TUSHARE_ACCOUNT_RATE_LIMIT_KEY: RateLimit(
+            requests=requests_per_minute,
+            per_seconds=60.0,
+            burst=1,
+        )
+    }
+
+
+class _RecordingLimiter:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str, RateLimit, float | None]] = []
+
+    def acquire(
+        self,
+        source_id: str,
+        dataset: str,
+        limit: RateLimit,
+        *,
+        monotonic_clock=None,
+        sleeper=None,
+    ) -> float:
+        now = None if monotonic_clock is None else float(monotonic_clock())
+        self.calls.append((source_id, dataset, limit, now))
+        return 0.0
 
 
 def _rows(*, tickers=TICKERS, event="2026-08-24 09:30:00") -> pd.DataFrame:
@@ -83,13 +117,108 @@ def test_https_sdk_client_is_attested_only_after_direct_transport_binding() -> N
 
     client = ts.pro_api("private-token-must-not-leak")
     client._DataApi__http_url = "https://api.waditu.com/dataapi"
-    adapter = TushareRealtimeOpenAdapter(client)
+    adapter = TushareRealtimeOpenAdapter(
+        client,
+        rate_limits=_account_rate_limits(),
+    )
     session = getattr(client, "_factor_lab_direct_http_session")
 
     assert adapter.production_attested is True
     assert type(session) is requests.Session
     assert session.trust_env is False
     assert session.proxies == {}
+    assert adapter.public_execution_contract["rate_limits"] == {
+        TUSHARE_ACCOUNT_RATE_LIMIT_KEY: {
+            "requests": 60,
+            "per_seconds": 60.0,
+            "burst": 1,
+        }
+    }
+    assert adapter.public_execution_contract["transport_policy"][
+        "rate_limit_admission_order"
+    ] == (TUSHARE_ACCOUNT_RATE_LIMIT_KEY,)
+
+
+def test_https_sdk_attestation_rejects_injected_runtime_and_freezes_rate_contract() -> None:
+    import tushare as ts
+
+    client = ts.pro_api("private-token-must-not-leak")
+    client._DataApi__http_url = "https://api.waditu.com/dataapi"
+    adapter = TushareRealtimeOpenAdapter(
+        client,
+        rate_limits=_account_rate_limits(),
+        rate_limiter=_RecordingLimiter(),
+        monotonic_clock=lambda: 0.0,
+        sleeper=lambda _seconds: None,
+    )
+
+    assert adapter.production_attested is False
+    with pytest.raises(TypeError):
+        adapter.rate_limits[TUSHARE_ACCOUNT_RATE_LIMIT_KEY] = RateLimit(
+            requests=1_000_000,
+            per_seconds=1.0,
+            burst=1_000_000,
+        )
+
+
+def test_https_sdk_client_without_closed_account_limit_fails_before_wire() -> None:
+    import tushare as ts
+
+    marker = "private-token-must-not-leak"
+    client = ts.pro_api(marker)
+    client._DataApi__http_url = "https://api.waditu.com/dataapi"
+
+    with pytest.raises(SourceContractError, match="closed account rate limit") as caught:
+        TushareRealtimeOpenAdapter(client)
+
+    assert marker not in str(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+@pytest.mark.parametrize(
+    "account_limit",
+    [
+        RateLimit(requests=61, per_seconds=60.0, burst=1),
+        RateLimit(requests=60, per_seconds=59.0, burst=1),
+        RateLimit(requests=60, per_seconds=60.0, burst=2),
+        RateLimit(requests=1_000_000_000, per_seconds=1.0, burst=1_000_000_000),
+    ],
+)
+def test_https_sdk_client_rejects_unreviewed_account_limit_before_wire(
+    account_limit: RateLimit,
+) -> None:
+    import tushare as ts
+
+    client = ts.pro_api("private-token-must-not-leak")
+    client._DataApi__http_url = "https://api.waditu.com/dataapi"
+
+    with pytest.raises(
+        SourceContractError,
+        match="reviewed closed account rate limit",
+    ) as caught:
+        TushareRealtimeOpenAdapter(
+            client,
+            rate_limits={TUSHARE_ACCOUNT_RATE_LIMIT_KEY: account_limit},
+        )
+
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+
+
+def test_https_sdk_formal_adapter_rejects_rt_min_daily_before_wire() -> None:
+    import tushare as ts
+
+    client = ts.pro_api("private-token-must-not-leak")
+    client._DataApi__http_url = "https://api.waditu.com/dataapi"
+
+    with pytest.raises(SourceContractError, match="requires the rt_min endpoint"):
+        TushareRealtimeOpenAdapter(
+            client,
+            endpoint=TUSHARE_RT_MIN_DAILY,
+            max_symbols_per_request=1,
+            rate_limits=_account_rate_limits(),
+        )
 
 
 def test_permission_failure_is_fail_closed_and_vendor_message_is_not_repeated() -> None:
@@ -99,6 +228,9 @@ def test_permission_failure_is_fail_closed_and_vendor_message_is_not_repeated() 
         adapter.fetch_open_batch(TICKERS, SESSION)
 
     assert "do-not-persist" not in str(caught.value)
+    assert "do-not-persist" not in repr(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
 
 
 @pytest.mark.parametrize(
@@ -150,6 +282,25 @@ def test_extra_fields_are_rejected_even_when_they_look_benign() -> None:
 
     with pytest.raises(SourceContractError, match="schema must match exactly"):
         _adapter(_Client(frame)).fetch_open_batch(TICKERS, SESSION)
+
+
+@pytest.mark.parametrize("failure_kind", ["time", "column", "ticker"])
+def test_provider_response_errors_never_repeat_raw_values(failure_kind: str) -> None:
+    marker = "PRIVATE_PROVIDER_MARKER_MUST_NOT_ESCAPE"
+    if failure_kind == "time":
+        frame = _rows(event=f"2026-08-24 {marker}")
+    elif failure_kind == "column":
+        frame = _rows().assign(**{marker: "value"})
+    else:
+        frame = _rows(tickers=(*TICKERS, marker))
+
+    with pytest.raises(SourceContractError) as caught:
+        _adapter(_Client(frame)).fetch_open_batch(TICKERS, SESSION)
+
+    assert marker not in str(caught.value)
+    assert marker not in repr(caught.value)
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
 
 
 def test_rt_min_daily_filters_current_day_history_but_requires_exact_contract() -> None:
@@ -214,11 +365,17 @@ def test_rt_min_chunks_500_symbols_into_two_hashed_requests() -> None:
             datetime(2026, 8, 24, 1, 32, tzinfo=timezone.utc),
         )
     )
-    result = TushareRealtimeOpenAdapter(
+    limiter = _RecordingLimiter()
+    monotonic_values = iter((10.0, 11.0))
+    adapter = TushareRealtimeOpenAdapter(
         client,
         receive_clock=lambda: next(receipts),
         max_universe_size=500,
-    ).fetch_open_batch(tickers, SESSION)
+        rate_limits=_account_rate_limits(),
+        rate_limiter=limiter,
+        monotonic_clock=lambda: next(monotonic_values),
+    )
+    result = adapter.fetch_open_batch(tickers, SESSION)
 
     assert [len(call[1]["ts_code"].split(",")) for call in client.calls] == [300, 200]
     assert result.received_at == datetime(
@@ -233,6 +390,165 @@ def test_rt_min_chunks_500_symbols_into_two_hashed_requests() -> None:
     assert [
         item["ticker_count"] for item in result.batch.lineage["request_batches"]
     ] == [300, 200]
+    assert [(item[0], item[1], item[3]) for item in limiter.calls] == [
+        ("tushare", TUSHARE_ACCOUNT_RATE_LIMIT_KEY, 10.0),
+        ("tushare", TUSHARE_ACCOUNT_RATE_LIMIT_KEY, 11.0),
+    ]
+    identity = adapter.public_contract_identity()
+    assert identity["routing_contract"]["rate_limits"] == {
+        TUSHARE_ACCOUNT_RATE_LIMIT_KEY: {
+            "requests": 60,
+            "per_seconds": 60.0,
+            "burst": 1,
+        }
+    }
+    changed = TushareRealtimeOpenAdapter(
+        _ChunkClient(),
+        receive_clock=lambda: RECEIVED,
+        max_universe_size=500,
+        rate_limits=_account_rate_limits(59),
+    )
+    assert changed.public_contract_identity()["public_contract_hash"] != identity[
+        "public_contract_hash"
+    ]
+    changed_window = TushareRealtimeOpenAdapter(
+        _ChunkClient(),
+        receive_clock=lambda: RECEIVED,
+        collection_window_minutes=6,
+        max_universe_size=500,
+        rate_limits=_account_rate_limits(),
+    )
+    changed_universe = TushareRealtimeOpenAdapter(
+        _ChunkClient(),
+        receive_clock=lambda: RECEIVED,
+        max_universe_size=499,
+        rate_limits=_account_rate_limits(),
+    )
+    assert changed_window.public_contract_identity()["public_contract_hash"] != identity[
+        "public_contract_hash"
+    ]
+    assert changed_universe.public_contract_identity()["public_contract_hash"] != identity[
+        "public_contract_hash"
+    ]
+
+
+def test_rt_min_daily_each_ticker_uses_the_same_account_bucket() -> None:
+    tickers = TICKERS[:2]
+
+    class DailyClient:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, dict[str, Any]]] = []
+
+        def query(self, endpoint: str, **parameters: Any) -> pd.DataFrame:
+            self.calls.append((endpoint, dict(parameters)))
+            frame = _rows(tickers=(str(parameters["ts_code"]),)).assign(freq="1MIN")
+            return frame[
+                [
+                    "ts_code",
+                    "freq",
+                    "time",
+                    "open",
+                    "close",
+                    "high",
+                    "low",
+                    "vol",
+                    "amount",
+                ]
+            ]
+
+    client = DailyClient()
+    limiter = _RecordingLimiter()
+    times = iter((20.0, 21.0))
+    result = TushareRealtimeOpenAdapter(
+        client,
+        endpoint=TUSHARE_RT_MIN_DAILY,
+        receive_clock=lambda: RECEIVED,
+        max_universe_size=2,
+        max_symbols_per_request=1,
+        rate_limits=_account_rate_limits(),
+        rate_limiter=limiter,
+        monotonic_clock=lambda: next(times),
+    ).fetch_open_batch(tickers, SESSION)
+
+    assert [call[1]["ts_code"] for call in client.calls] == list(tickers)
+    assert len(result.batch.frame) == 2
+    assert [(call[1], call[3]) for call in limiter.calls] == [
+        (TUSHARE_ACCOUNT_RATE_LIMIT_KEY, 20.0),
+        (TUSHARE_ACCOUNT_RATE_LIMIT_KEY, 21.0),
+    ]
+
+
+def test_sealed_rt_min_retry_and_second_chunk_each_use_account_bucket(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import tushare as ts
+
+    marker = "private-token-and-transport-body-must-not-escape"
+    client = ts.pro_api(marker)
+    client._DataApi__http_url = "https://api.waditu.com/dataapi"
+    limiter = _RecordingLimiter()
+    monotonic_values = iter((30.0, 31.0, 32.0))
+    receipts = iter(
+        (
+            datetime(2026, 8, 24, 1, 31, tzinfo=timezone.utc),
+            datetime(2026, 8, 24, 1, 32, tzinfo=timezone.utc),
+        )
+    )
+    adapter = TushareRealtimeOpenAdapter(
+        client,
+        receive_clock=lambda: next(receipts),
+        max_universe_size=500,
+        rate_limits=_account_rate_limits(),
+        rate_limiter=limiter,
+        monotonic_clock=lambda: next(monotonic_values),
+    )
+    session = getattr(client, "_factor_lab_direct_http_session")
+    wire_calls: list[dict[str, Any]] = []
+    retry_sleeps: list[float] = []
+
+    class Response:
+        status_code = 200
+
+        def __init__(self, frame: pd.DataFrame) -> None:
+            self.frame = frame
+
+        def json(self):
+            return {
+                "code": 0,
+                "data": {
+                    "fields": list(self.frame.columns),
+                    "items": self.frame.values.tolist(),
+                },
+            }
+
+    def post(_url: str, **kwargs):
+        wire_calls.append(kwargs)
+        if len(wire_calls) == 1:
+            raise requests.ConnectionError(f"transport echoed {marker}")
+        requested = tuple(str(kwargs["json"]["params"]["ts_code"]).split(","))
+        return Response(_rows(tickers=requested))
+
+    monkeypatch.setattr(session, "post", post)
+    monkeypatch.setattr(
+        data_sources_module,
+        "_TUSHARE_RETRY_SLEEP",
+        retry_sleeps.append,
+    )
+
+    result = adapter.fetch_open_batch(_large_universe(), SESSION)
+
+    assert len(result.batch.frame) == 500
+    assert len(wire_calls) == 3
+    assert all(call["allow_redirects"] is False for call in wire_calls)
+    assert retry_sleeps == [0.5]
+    assert [(call[1], call[3]) for call in limiter.calls] == [
+        (TUSHARE_ACCOUNT_RATE_LIMIT_KEY, 30.0),
+        (TUSHARE_ACCOUNT_RATE_LIMIT_KEY, 31.0),
+        (TUSHARE_ACCOUNT_RATE_LIMIT_KEY, 32.0),
+    ]
+    serialized = repr(result.batch.lineage)
+    assert marker not in serialized
+    assert "token" not in adapter.public_execution_contract["rate_limits"]
 
 
 def test_rt_min_second_chunk_failure_and_late_receipt_fail_closed() -> None:

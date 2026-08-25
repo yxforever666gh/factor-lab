@@ -49,12 +49,14 @@ from .execution_snapshot_authority import (
     OUTPUT_CONTRACT_HASH as TYPED_EXECUTION_CONTRACT_HASH,
     OUTPUT_DATASET as TYPED_EXECUTION_OUTPUT_DATASET,
     formal_execution_capability_probe_hash,
+    production_execution_configuration_hash,
+    production_formal_source_contract_hash,
 )
 from .execution_open_sources import (
     diemeng_engineering_canary_opening_contract_hash,
     engineering_canary_execution_contract_hash,
 )
-from .production_config import ProductionConfigEvidence
+from .production_config import ProductionConfigEvidence, ProductionConfigurationError
 from .production_ledger import (
     IncidentRecord,
     IncidentStatus,
@@ -2455,10 +2457,10 @@ class ProductionReadinessAuditor:
         execution = (
             shadow.get("execution_market_data") if isinstance(shadow, Mapping) else None
         )
-        # Configuration is diagnostic only.  The versioned contract, source
-        # identity and event semantics are fixed in execution_snapshot_authority;
-        # renaming a configured dataset can neither grant nor revoke formal
-        # capability without the exact persisted typed chain below.
+        # Configuration cannot self-declare capability, but its validated
+        # source/adapter identity is authoritative.  A persisted typed chain
+        # is accepted only when its two binding hashes still match this exact
+        # current production document and formal adapter contract.
         if not isinstance(execution, Mapping):
             execution = {}
         return (
@@ -2655,6 +2657,21 @@ class ProductionReadinessAuditor:
         evidence: dict[str, Any] = {}
         try:
             source_id, dataset, execution, required_fields = self._execution_contract()
+            expected_configuration_hash = production_execution_configuration_hash(
+                self.config
+            )
+            expected_source_contract_hash = ""
+            try:
+                expected_source_contract_hash = (
+                    production_formal_source_contract_hash(self.config)
+                )
+            except (
+                KeyError,
+                ProductionConfigurationError,
+                TypeError,
+                ValueError,
+            ):
+                blockers.append("formal_execution_current_source_contract_invalid")
             rows = self._capability_rows()
             row = next(
                 (
@@ -2672,9 +2689,15 @@ class ProductionReadinessAuditor:
                 configured_source=execution.get("source"),
                 configured_source_dataset=execution.get("dataset"),
                 configured_collection_mode=execution.get("collection_mode"),
-                configured_declaration_is_authoritative=False,
+                configured_binding_is_authoritative=True,
                 required_fields=list(required_fields),
                 expected_contract_hash=expected_contract_hash,
+                expected_production_configuration_hash=(
+                    expected_configuration_hash
+                ),
+                expected_source_contract_hash=(
+                    expected_source_contract_hash or None
+                ),
             )
             if row is None:
                 blockers.append("formal_execution_pg_probe_missing")
@@ -2705,6 +2728,13 @@ class ProductionReadinessAuditor:
                     probe_hash=probe_hash or None,
                     observed_fields=list(observed_fields),
                     probed_at=row.get("probed_at"),
+                    observed_production_configuration_hash=(
+                        str(detail.get("production_configuration_hash") or "")
+                        or None
+                    ),
+                    observed_source_contract_hash=(
+                        str(detail.get("source_contract_hash") or "") or None
+                    ),
                 )
                 if str(row.get("status")) != "accepted":
                     blockers.append("formal_execution_capability_not_accepted")
@@ -2718,6 +2748,20 @@ class ProductionReadinessAuditor:
                     and probe_hash == recomputed
                 ):
                     blockers.append("formal_execution_real_probe_hash_invalid")
+                if str(detail.get("production_configuration_hash") or "") != (
+                    expected_configuration_hash
+                ):
+                    blockers.append(
+                        "formal_execution_production_configuration_hash_mismatch"
+                    )
+                if (
+                    not expected_source_contract_hash
+                    or str(detail.get("source_contract_hash") or "")
+                    != expected_source_contract_hash
+                ):
+                    blockers.append(
+                        "formal_execution_source_contract_hash_mismatch"
+                    )
                 common_semantics = bool(
                     detail.get("schema_version")
                     == FORMAL_EXECUTION_CAPABILITY_SCHEMA_VERSION
@@ -2750,8 +2794,7 @@ class ProductionReadinessAuditor:
                     detail.get("open_source_id") == "tushare"
                     and detail.get("open_source_role")
                     == "tushare_open_observation"
-                    and detail.get("provider_endpoint")
-                    in {"rt_min", "rt_min_daily"}
+                    and detail.get("provider_endpoint") == "rt_min"
                     and detail.get("event_semantics")
                     == "official_realtime_current_session_1min_open_09_30"
                     and detail.get("server_available_at_verified") is False
@@ -2785,20 +2828,51 @@ class ProductionReadinessAuditor:
                 )
                 configured_source = str(execution.get("source") or "")
                 configured_endpoint = str(execution.get("endpoint") or "")
-                configured_binding_matches = bool(
-                    not detail.get("open_source_id")
-                    or (
-                        configured_source == str(detail.get("open_source_id"))
+                observed_source_id = detail.get("open_source_id")
+                observed_source_role = detail.get("open_source_role")
+                observed_provider_endpoint = detail.get("provider_endpoint")
+                legacy_identity_compatibility_used = bool(
+                    configured_source == "diemeng"
+                    and observed_source_id is None
+                )
+                if configured_source == "tushare":
+                    selected_source_semantics = tushare_semantics
+                    configured_binding_matches = bool(
+                        observed_source_id == "tushare"
+                        and observed_source_role
+                        == "tushare_open_observation"
+                        and configured_endpoint == "rt_min"
+                        and observed_provider_endpoint == "rt_min"
+                    )
+                elif configured_source == "diemeng":
+                    selected_source_semantics = legacy_semantics
+                    configured_binding_matches = bool(
+                        (
+                            observed_source_id is None
+                            or (
+                                observed_source_id == "diemeng"
+                                and observed_source_role
+                                == "diemeng_open_observation"
+                            )
+                        )
                         and (
-                            not detail.get("provider_endpoint")
+                            observed_provider_endpoint in {None, ""}
                             or configured_endpoint
-                            == str(detail.get("provider_endpoint"))
+                            == str(observed_provider_endpoint)
                         )
                     )
+                else:
+                    selected_source_semantics = False
+                    configured_binding_matches = False
+                evidence.update(
+                    configured_semantics_source=configured_source or None,
+                    legacy_identity_compatibility_used=(
+                        legacy_identity_compatibility_used
+                    ),
                 )
                 if not (
                     common_semantics
-                    and (legacy_semantics or tushare_semantics)
+                    and selected_source_semantics
                     and configured_binding_matches
                 ):
                     blockers.append("formal_execution_semantics_unverified")

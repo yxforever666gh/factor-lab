@@ -48,6 +48,11 @@
           "daily": "daily"
         },
         "rate_limits": {
+          "__account__": {
+            "requests": 60,
+            "per_seconds": 60,
+            "burst": 1
+          },
           "daily": {
             "requests": 100,
             "per_seconds": 60,
@@ -465,6 +470,13 @@
         "endpoint_map": {
           "daily_basic": "daily_basic"
         },
+        "rate_limits": {
+          "__account__": {
+            "requests": 60,
+            "per_seconds": 60,
+            "burst": 1
+          }
+        },
         "partition_cadence": {
           "kind": "trading_session"
         },
@@ -568,6 +580,13 @@
         "endpoint_map": {
           "adj_factor": "adj_factor"
         },
+        "rate_limits": {
+          "__account__": {
+            "requests": 60,
+            "per_seconds": 60,
+            "burst": 1
+          }
+        },
         "partition_cadence": {
           "kind": "trading_session"
         },
@@ -633,6 +652,13 @@
         "priority": 10,
         "endpoint_map": {
           "trade_calendar": "trade_cal"
+        },
+        "rate_limits": {
+          "__account__": {
+            "requests": 60,
+            "per_seconds": 60,
+            "burst": 1
+          }
         },
         "partition_cadence": {
           "kind": "trading_session"
@@ -707,6 +733,13 @@
         "priority": 10,
         "endpoint_map": {
           "stock_basic_l": "stock_basic"
+        },
+        "rate_limits": {
+          "__account__": {
+            "requests": 60,
+            "per_seconds": 60,
+            "burst": 1
+          }
         },
         "partition_cadence": {
           "kind": "static_snapshot",
@@ -877,6 +910,13 @@
         "endpoint_map": {
           "stock_basic_p": "stock_basic"
         },
+        "rate_limits": {
+          "__account__": {
+            "requests": 60,
+            "per_seconds": 60,
+            "burst": 1
+          }
+        },
         "partition_cadence": {
           "kind": "static_snapshot",
           "ledger_identity": "security_master:list_status:P",
@@ -1045,6 +1085,13 @@
         "priority": 10,
         "endpoint_map": {
           "stock_basic_d": "stock_basic"
+        },
+        "rate_limits": {
+          "__account__": {
+            "requests": 60,
+            "per_seconds": 60,
+            "burst": 1
+          }
         },
         "partition_cadence": {
           "kind": "static_snapshot",
@@ -1215,6 +1262,13 @@
         "endpoint_map": {
           "stock_basic_g": "stock_basic"
         },
+        "rate_limits": {
+          "__account__": {
+            "requests": 60,
+            "per_seconds": 60,
+            "burst": 1
+          }
+        },
         "partition_cadence": {
           "kind": "static_snapshot",
           "ledger_identity": "security_master:list_status:G",
@@ -1384,6 +1438,13 @@
         "endpoint_map": {
           "historical_st": "stock_st"
         },
+        "rate_limits": {
+          "__account__": {
+            "requests": 60,
+            "per_seconds": 60,
+            "burst": 1
+          }
+        },
         "partition_cadence": {
           "kind": "trading_session"
         },
@@ -1465,6 +1526,13 @@
         "priority": 10,
         "endpoint_map": {
           "industry_classification": "bak_basic"
+        },
+        "rate_limits": {
+          "__account__": {
+            "requests": 60,
+            "per_seconds": 60,
+            "burst": 1
+          }
         },
         "partition_cadence": {
           "kind": "trading_session"
@@ -1557,6 +1625,13 @@
         "endpoint_map": {
           "suspension_status": "suspend_d"
         },
+        "rate_limits": {
+          "__account__": {
+            "requests": 60,
+            "per_seconds": 60,
+            "burst": 1
+          }
+        },
         "partition_cadence": {
           "kind": "trading_session"
         },
@@ -1644,6 +1719,13 @@
         "endpoint_map": {
           "stock_limit": "stk_limit"
         },
+        "rate_limits": {
+          "__account__": {
+            "requests": 60,
+            "per_seconds": 60,
+            "burst": 1
+          }
+        },
         "partition_cadence": {
           "kind": "trading_session"
         },
@@ -1725,6 +1807,13 @@
         "priority": 10,
         "endpoint_map": {
           "company_action": "dividend"
+        },
+        "rate_limits": {
+          "__account__": {
+            "requests": 60,
+            "per_seconds": 60,
+            "burst": 1
+          }
         },
         "partition_cadence": {
           "kind": "event_date",
@@ -2028,6 +2117,13 @@
         "dataset": "rt_min",
         "endpoint": "rt_min",
         "method": "SDK",
+        "rate_limits": {
+          "__account__": {
+            "requests": 60,
+            "per_seconds": 60,
+            "burst": 1
+          }
+        },
         "request": {
           "ts_code": "${decision_universe_csv}",
           "freq": "1MIN"

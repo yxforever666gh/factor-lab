@@ -13,6 +13,7 @@ from factor_lab.research_os.runtime import ResearchOSSettings
 COMPOSE = Path("infra/research_os/docker-compose.yml")
 ENV_EXAMPLE = Path("infra/research_os/.env.example")
 ALEMBIC = Path("infra/research_os/alembic.ini")
+DAGSTER_CONFIG = Path("infra/research_os/dagster.yaml")
 
 
 def test_research_os_compose_is_loopback_only_and_has_no_secret_defaults() -> None:
@@ -95,6 +96,15 @@ def test_dagster_uses_one_compose_managed_external_code_server() -> None:
     assert "host: dagster-code-server" in workspace
     assert "port: 4000" in workspace
     assert "python_module:" not in workspace
+
+
+def test_dagster_serializes_runs_for_process_local_provider_account_limit() -> None:
+    model = yaml.safe_load(DAGSTER_CONFIG.read_text(encoding="utf-8"))
+    coordinator = model["run_coordinator"]
+
+    assert coordinator["module"] == "dagster.core.run_coordinator"
+    assert coordinator["class"] == "QueuedRunCoordinator"
+    assert coordinator["config"]["max_concurrent_runs"] == 1
 
 
 def test_compose_ci_execs_reenter_the_secret_file_entrypoint() -> None:

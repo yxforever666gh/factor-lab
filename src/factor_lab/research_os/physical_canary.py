@@ -50,6 +50,7 @@ from .data_sources import (
     SourceBatch,
     SourceContractError,
     SourceHealth,
+    TUSHARE_SEALED_TRANSPORT_POLICY,
     TushareSourceAdapter,
     tushare_client_uses_direct_transport,
     validate_source_frame,
@@ -905,13 +906,7 @@ class PhysicalEngineeringCanaryService:
                     tushare_client_uses_direct_transport(adapter.client)
                     and isinstance(adapter.base_url, str)
                     and adapter.base_url.startswith("https://")
-                    and adapter.transport_policy
-                    == {
-                        "schema_version": "research-os/tushare-sealed-https/v1",
-                        "https_only": True,
-                        "redirects_allowed": False,
-                        "trust_environment": False,
-                    }
+                    and adapter.transport_policy == TUSHARE_SEALED_TRANSPORT_POLICY
                 ):
                     raise PhysicalCanaryAdmissionError(
                         "production Tushare adapter lacks the reviewed sealed HTTPS transport"

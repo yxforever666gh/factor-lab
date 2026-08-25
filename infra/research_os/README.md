@@ -137,6 +137,12 @@ then registers only proven open sessions as Dagster dynamic partitions.
 Expected source/reconciliation failures flow to the risk guard; unexpected
 daily failures become typed data incidents.
 
+Tushare account and dataset token buckets are shared by adapters inside one
+Python process, not across Dagster worker processes. The queued run coordinator
+therefore admits exactly one run at a time. Do not raise `max_concurrent_runs`
+above `1` until a distributed account limiter covers every daily, historical
+backfill and live opening-observation job.
+
 Enable readiness/canary work explicitly after review. Do not turn on the daily,
 weekly, monthly, quarterly or recovery automation merely because containers
 are healthy.

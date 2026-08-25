@@ -7,14 +7,17 @@ cache is never the only copy or the audit authority.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 import hashlib
 import os
 from pathlib import Path, PurePosixPath
 import re
+import secrets
 import stat
 import tempfile
-from typing import Any, BinaryIO, Protocol
+from threading import RLock
+from typing import Any, BinaryIO, Iterator, Protocol
 from urllib.parse import urlsplit
 
 
@@ -62,6 +65,306 @@ class RestoredObject:
 
 _SAFE_SEGMENT = re.compile(r"[^A-Za-z0-9._=-]+")
 _SHA256 = re.compile(r"[0-9a-f]{64}")
+_RESTORE_LOCK_STRIPES = tuple(RLock() for _ in range(64))
+
+
+def _restore_lock(path: Path) -> RLock:
+    """Return a bounded process lock for one canonical cache destination."""
+
+    canonical = os.path.normcase(
+        os.path.normpath(os.path.abspath(os.fspath(path)))
+    )
+    digest = hashlib.sha256(os.fsencode(canonical)).digest()
+    index = int.from_bytes(digest[:2], "big") % len(_RESTORE_LOCK_STRIPES)
+    return _RESTORE_LOCK_STRIPES[index]
+
+
+def _create_windows_relative_parent_pin(parent_handle: int) -> tuple[int, str]:
+    """Create a private delete-on-close child relative to an open directory.
+
+    ``NtCreateFile`` is used deliberately: the relative name is resolved by the
+    already validated parent handle, never by a mutable path string.  The
+    child is opened without ``FILE_SHARE_DELETE`` so its parent chain cannot be
+    renamed until the returned handle is closed.
+    """
+
+    if os.name != "nt":  # pragma: no cover - guarded by the Windows caller.
+        raise ObjectStoreIntegrityError("Windows restore pin is unavailable")
+
+    import ctypes
+    from ctypes import wintypes
+
+    delete_access = 0x00010000
+    synchronize = 0x00100000
+    file_read_attributes = 0x00000080
+    file_share_read = 0x00000001
+    file_share_write = 0x00000002
+    file_attribute_hidden = 0x00000002
+    file_attribute_temporary = 0x00000100
+    file_create = 2
+    file_non_directory_file = 0x00000040
+    file_delete_on_close = 0x00001000
+    obj_case_insensitive = 0x00000040
+    obj_dont_reparse = 0x00001000
+    status_object_name_collision = ctypes.c_long(0xC0000035).value
+
+    class UnicodeString(ctypes.Structure):
+        _fields_ = [
+            ("length", wintypes.USHORT),
+            ("maximum_length", wintypes.USHORT),
+            ("buffer", wintypes.LPWSTR),
+        ]
+
+    class ObjectAttributes(ctypes.Structure):
+        _fields_ = [
+            ("length", wintypes.ULONG),
+            ("root_directory", wintypes.HANDLE),
+            ("object_name", ctypes.POINTER(UnicodeString)),
+            ("attributes", wintypes.ULONG),
+            ("security_descriptor", wintypes.LPVOID),
+            ("security_quality_of_service", wintypes.LPVOID),
+        ]
+
+    class IoStatusValue(ctypes.Union):
+        _fields_ = [("status", wintypes.LONG), ("pointer", wintypes.LPVOID)]
+
+    class IoStatusBlock(ctypes.Structure):
+        _anonymous_ = ("value",)
+        _fields_ = [
+            ("value", IoStatusValue),
+            ("information", ctypes.c_size_t),
+        ]
+
+    ntdll = ctypes.WinDLL("ntdll", use_last_error=True)
+    nt_create_file = ntdll.NtCreateFile
+    nt_create_file.argtypes = (
+        ctypes.POINTER(wintypes.HANDLE),
+        wintypes.DWORD,
+        ctypes.POINTER(ObjectAttributes),
+        ctypes.POINTER(IoStatusBlock),
+        ctypes.c_void_p,
+        wintypes.ULONG,
+        wintypes.ULONG,
+        wintypes.ULONG,
+        wintypes.ULONG,
+        ctypes.c_void_p,
+        wintypes.ULONG,
+    )
+    nt_create_file.restype = wintypes.LONG
+
+    for _attempt in range(16):
+        name = f".factor-lab-restore-parent-{secrets.token_hex(16)}.pin"
+        name_buffer = ctypes.create_unicode_buffer(name)
+        name_value = UnicodeString(
+            length=len(name.encode("utf-16-le")),
+            maximum_length=ctypes.sizeof(name_buffer),
+            buffer=ctypes.cast(name_buffer, wintypes.LPWSTR),
+        )
+        attributes = ObjectAttributes(
+            length=ctypes.sizeof(ObjectAttributes),
+            root_directory=parent_handle,
+            object_name=ctypes.pointer(name_value),
+            attributes=obj_case_insensitive | obj_dont_reparse,
+            security_descriptor=None,
+            security_quality_of_service=None,
+        )
+        io_status = IoStatusBlock()
+        pin_handle = wintypes.HANDLE()
+        status = nt_create_file(
+            ctypes.byref(pin_handle),
+            delete_access | synchronize | file_read_attributes,
+            ctypes.byref(attributes),
+            ctypes.byref(io_status),
+            None,
+            file_attribute_hidden | file_attribute_temporary,
+            file_share_read | file_share_write,
+            file_create,
+            file_non_directory_file | file_delete_on_close,
+            None,
+            0,
+        )
+        if status >= 0 and pin_handle.value:
+            return int(pin_handle.value), name
+        if status != status_object_name_collision:
+            break
+    raise ObjectStoreIntegrityError("restore parent pin cannot be created safely")
+
+
+@contextmanager
+def _pinned_non_reparse_parent_chain(target: Path) -> Iterator[None]:
+    """Pin the Windows parent chain against rename/reparse substitution.
+
+    The immediate parent is first opened and validated without creating any
+    path-based child.  A random delete-on-close child is then created relative
+    to that directory handle without ``FILE_SHARE_DELETE``.  Windows prevents
+    the pinned parent chain from being renamed while restore commits, without
+    blocking atomic replacement of sibling data files.  Revalidating the
+    parent's final path after the child is pinned closes the remaining rename
+    window.  Other platforms retain the existing component checks.
+    """
+
+    _assert_no_link_components(target)
+    if os.name != "nt":
+        yield
+        return
+
+    import ctypes
+    from ctypes import wintypes
+
+    file_list_directory = 0x00000001
+    file_share_read = 0x00000001
+    file_share_write = 0x00000002
+    file_share_delete = 0x00000004
+    file_read_attributes = 0x00000080
+    open_existing = 3
+    file_attribute_directory = 0x00000010
+    file_attribute_reparse_point = 0x00000400
+    file_flag_backup_semantics = 0x02000000
+    file_flag_open_reparse_point = 0x00200000
+    file_attribute_tag_info_class = 9
+    invalid_handle_value = ctypes.c_void_p(-1).value
+
+    class FileAttributeTagInfo(ctypes.Structure):
+        _fields_ = [
+            ("file_attributes", wintypes.DWORD),
+            ("reparse_tag", wintypes.DWORD),
+        ]
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    create_file = kernel32.CreateFileW
+    create_file.argtypes = (
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    )
+    create_file.restype = wintypes.HANDLE
+    get_information = kernel32.GetFileInformationByHandleEx
+    get_information.argtypes = (
+        wintypes.HANDLE,
+        ctypes.c_int,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+    )
+    get_information.restype = wintypes.BOOL
+    get_final_path = kernel32.GetFinalPathNameByHandleW
+    get_final_path.argtypes = (
+        wintypes.HANDLE,
+        wintypes.LPWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+    )
+    get_final_path.restype = wintypes.DWORD
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = (wintypes.HANDLE,)
+    close_handle.restype = wintypes.BOOL
+
+    parent = target.parent
+    expected_parent = os.path.normcase(
+        os.path.normpath(os.path.abspath(os.fspath(parent)))
+    )
+    parent_handle: int | None = None
+    pin_handle: int | None = None
+    failed = False
+    reparse_found = False
+
+    def normalized_final_path(handle: int) -> str | None:
+        buffer = ctypes.create_unicode_buffer(32768)
+        length = get_final_path(handle, buffer, len(buffer), 0)
+        if length == 0 or length >= len(buffer):
+            return None
+        observed = buffer.value
+        if observed.startswith("\\\\?\\UNC\\"):
+            observed = "\\\\" + observed[8:]
+        elif observed.startswith("\\\\?\\"):
+            observed = observed[4:]
+        return os.path.normcase(
+            os.path.normpath(os.path.abspath(observed))
+        )
+
+    try:
+        parent_handle = create_file(
+            os.fspath(parent),
+            file_list_directory | file_read_attributes,
+            file_share_read | file_share_write | file_share_delete,
+            None,
+            open_existing,
+            file_flag_backup_semantics | file_flag_open_reparse_point,
+            None,
+        )
+        if parent_handle == invalid_handle_value:
+            failed = True
+            parent_handle = None
+        else:
+            information = FileAttributeTagInfo()
+            if not get_information(
+                parent_handle,
+                file_attribute_tag_info_class,
+                ctypes.byref(information),
+                ctypes.sizeof(information),
+            ):
+                failed = True
+            elif information.file_attributes & file_attribute_reparse_point:
+                reparse_found = True
+            elif not information.file_attributes & file_attribute_directory:
+                failed = True
+            observed_parent = normalized_final_path(parent_handle)
+            if observed_parent is None:
+                failed = True
+            elif observed_parent != expected_parent:
+                reparse_found = True
+        if failed:
+            raise ObjectStoreIntegrityError(
+                "restore parent chain cannot be pinned safely"
+            )
+        if reparse_found or parent_handle is None:
+            raise ValueError("restore path contains a symlink/reparse component")
+
+        pin_handle, _pin_name = _create_windows_relative_parent_pin(parent_handle)
+        # The pin now prevents any further rename.  If the parent moved between
+        # its first validation and relative pin creation, its final path differs
+        # and the delete-on-close child is removed without touching the path it
+        # was meant to protect.
+        observed_parent = normalized_final_path(parent_handle)
+        if observed_parent is None:
+            raise ObjectStoreIntegrityError(
+                "restore parent chain cannot be pinned safely"
+            )
+        if observed_parent != expected_parent:
+            raise ValueError("restore path contains a symlink/reparse component")
+        _assert_no_link_components(target)
+        yield
+    finally:
+        if pin_handle is not None:
+            close_handle(pin_handle)
+        if parent_handle is not None:
+            close_handle(parent_handle)
+
+
+@contextmanager
+def _cleanup_restore_temporary(temporary: Path) -> Iterator[None]:
+    """Remove a restore temporary without confusing caller exception state."""
+
+    body_error: BaseException | None = None
+    try:
+        try:
+            yield
+        except BaseException as exc:
+            body_error = exc
+            raise
+    finally:
+        try:
+            temporary.unlink(missing_ok=True)
+        except OSError:
+            if body_error is None:
+                raise ObjectStoreIntegrityError(
+                    "restore temporary cleanup failed"
+                ) from None
+            if hasattr(body_error, "add_note"):
+                body_error.add_note("restore temporary cleanup also failed")
 
 
 def _safe_logical_path(value: str) -> str:
@@ -267,6 +570,34 @@ class S3ImmutableArchive:
         expected_sha256: str | None = None,
         expected_size_bytes: int | None = None,
     ) -> RestoredObject:
+        """Hydrate one destination atomically under a process-wide path lock.
+
+        Windows does not allow a verifier to open a destination during another
+        thread's ``os.replace``.  A fixed set of striped locks serializes only
+        colliding cache paths without growing an unbounded path registry.
+        Dagster's production run coordinator separately prevents cross-worker
+        restore overlap until a distributed cache lock is introduced.
+        """
+
+        target = _restore_destination(destination)
+        with _restore_lock(target):
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with _pinned_non_reparse_parent_chain(target):
+                return self._restore_file_serialized(
+                    archived,
+                    target,
+                    expected_sha256=expected_sha256,
+                    expected_size_bytes=expected_size_bytes,
+                )
+
+    def _restore_file_serialized(
+        self,
+        archived: ArchivedObject | str,
+        destination: str | Path,
+        *,
+        expected_sha256: str | None = None,
+        expected_size_bytes: int | None = None,
+    ) -> RestoredObject:
         """Hydrate an immutable object into a symlink-free local cache path.
 
         URI callers must supply both expected integrity fields.  An
@@ -318,7 +649,7 @@ class S3ImmutableArchive:
             dir=target.parent,
         )
         temporary = Path(temporary_name)
-        try:
+        with _cleanup_restore_temporary(temporary):
             downloaded_digest = hashlib.sha256()
             downloaded_size = 0
             try:
@@ -372,8 +703,6 @@ class S3ImmutableArchive:
                     f"restored destination failed integrity verification: {target}"
                 )
             return RestoredObject(target, uri, digest, size, False)
-        finally:
-            temporary.unlink(missing_ok=True)
 
     def archive_file(self, path: str | Path, *, logical_path: str) -> ArchivedObject:
         source = Path(path)

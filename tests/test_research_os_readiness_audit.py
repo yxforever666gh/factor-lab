@@ -33,6 +33,8 @@ from factor_lab.research_os.execution_snapshot_authority import (
     OPEN_DATASET as TYPED_OPEN_DATASET,
     OUTPUT_CONTRACT_HASH as TYPED_EXECUTION_CONTRACT_HASH,
     OUTPUT_DATASET as TYPED_EXECUTION_OUTPUT_DATASET,
+    production_execution_configuration_hash,
+    production_formal_source_contract_hash,
 )
 from factor_lab.research_os.execution_open_sources import (
     diemeng_engineering_canary_execution_mapping,
@@ -131,6 +133,14 @@ class FrozenCatalog:
 
 
 def _config() -> dict:
+    execution = diemeng_engineering_canary_execution_mapping()
+    execution["collection_mode"] = "realtime_open"
+    # This declaration is not capability evidence, but it is part of the
+    # exact production document to which a physical capability must bind.
+    execution["formal_capability"] = {
+        "status": "accepted",
+        "formal_shadow_projection": "allowed",
+    }
     return {
         "daily": {
             "bootstrap": {"source_start": "2016-06-01"},
@@ -141,35 +151,86 @@ def _config() -> dict:
                 }
             },
             "shadow": {
-                "execution_market_data": {
-                    "source": "official-open-vendor",
-                    "dataset": "opening_auction",
-                    "collection_mode": "realtime_open",
-                    "contract": {
-                        "key_fields": ["stock_code", "trade_time"],
-                        "event_time_field": "trade_time",
-                        "fields": ["stock_code", "trade_time", "open"],
-                        "execution_observation": {
-                            "required_local_time": "09:30:00",
-                            "timezone": "Asia/Shanghai",
-                            "event_time_source": "trade_time",
-                            "available_at_source": "trade_time",
-                            "price_field": "open",
-                        },
-                    },
-                    "availability": {
-                        "mode": "event_timestamp",
-                        "event_time_field": "trade_time",
-                        "available_at_field": "trade_time",
-                    },
-                    # This declaration is intentionally not used as runtime
-                    # capability evidence by the auditor.
-                    "formal_capability": {
-                        "status": "accepted",
-                        "formal_shadow_projection": "allowed",
-                    },
+                "execution_market_data": execution,
+            },
+        }
+    }
+
+
+def _tushare_formal_execution_mapping() -> dict:
+    return {
+        "source": "tushare",
+        "profile_name": "primary-tushare",
+        "credential_ref": "secret://tushare_token",
+        "dataset": "rt_min",
+        "endpoint": "rt_min",
+        "method": "SDK",
+        "rate_limits": {
+            "__account__": {
+                "requests": 60,
+                "per_seconds": 60,
+                "burst": 1,
+            }
+        },
+        "request": {
+            "ts_code": "${decision_universe_csv}",
+            "freq": "1MIN",
+        },
+        "batching": {
+            "mode": "sorted_deterministic_chunks",
+            "maximum_symbols_per_request": 300,
+        },
+        "contract": {
+            "key_fields": ["ts_code", "time"],
+            "event_time_field": "time",
+            "fields": [
+                "ts_code",
+                "time",
+                "open",
+                "close",
+                "high",
+                "low",
+                "vol",
+                "amount",
+            ],
+        },
+        "availability": {
+            "mode": "collector_ingested_at",
+            "event_time_field": "time",
+            "available_at_field": "ingested_at",
+            "maximum_delay_minutes": 5,
+        },
+        "formal_capability": {
+            "status": "runtime_probe_required",
+            "formal_shadow_projection": "runtime_probe_gated",
+        },
+        "end_of_day_mark": {
+            "source": "accepted_gold_close_snapshot",
+        },
+    }
+
+
+def _configure_tushare_formal_execution(config: dict) -> None:
+    config["daily"]["sources"] = [
+        {
+            "source": "tushare",
+            "rate_limits": {
+                "__account__": {
+                    "requests": 60,
+                    "per_seconds": 60,
+                    "burst": 1,
                 }
             },
+        }
+    ]
+    config["daily"]["shadow"][
+        "execution_market_data"
+    ] = _tushare_formal_execution_mapping()
+    config["security"] = {
+        "source_transport": {
+            "tushare": {
+                "api_origin": "https://api.waditu.com/dataapi",
+            }
         }
     }
 
@@ -1001,8 +1062,12 @@ class AuditSystem:
                 "mark_semantics": "accepted_gold_close_snapshot",
                 "execution_mark_roles_separate": True,
                 "trade_date": session,
-                "production_configuration_hash": "1" * 64,
-                "source_contract_hash": "2" * 64,
+                "production_configuration_hash": (
+                    production_execution_configuration_hash(self.config)
+                ),
+                "source_contract_hash": (
+                    production_formal_source_contract_hash(self.config)
+                ),
                 "source_snapshot_id": source_ref.snapshot_id,
                 "source_snapshot_hash": source_ref.content_hash,
                 "source_partition_hash": source_partition_hash,
@@ -2078,7 +2143,25 @@ def test_config_declared_accepted_without_pg_probe_is_not_capability_evidence(
         system.close()
 
 
-def test_config_renaming_cannot_override_the_typed_execution_authority(
+def test_legacy_missing_source_identity_is_compatibility_only_for_diemeng_config(
+    tmp_path: Path,
+) -> None:
+    system = AuditSystem(tmp_path)
+    try:
+        check = next(
+            item
+            for item in system.auditor().audit().checks
+            if item.code == "formal_execution_capability"
+        )
+
+        assert check.passed
+        assert check.evidence["configured_semantics_source"] == "diemeng"
+        assert check.evidence["legacy_identity_compatibility_used"] is True
+    finally:
+        system.close()
+
+
+def test_current_config_change_invalidates_stale_typed_execution_capability(
     tmp_path: Path,
 ) -> None:
     system = AuditSystem(tmp_path)
@@ -2101,18 +2184,228 @@ def test_config_renaming_cannot_override_the_typed_execution_authority(
             item for item in audit.checks if item.code == "formal_execution_capability"
         )
 
-        assert check.passed
+        assert not check.passed
+        assert (
+            "formal_execution_production_configuration_hash_mismatch"
+            in check.blockers
+        )
         assert check.evidence["configured_source_dataset"] == "minute_history"
-        assert check.evidence["configured_declaration_is_authoritative"] is False
+        assert check.evidence["configured_binding_is_authoritative"] is True
     finally:
         system.close()
 
 
-def test_tushare_runtime_probe_chain_uses_dynamic_source_partition_and_honest_time(
+def test_invalid_current_formal_source_mapping_fails_closed(
     tmp_path: Path,
 ) -> None:
     system = AuditSystem(tmp_path)
     try:
+        request = system.config["daily"]["shadow"]["execution_market_data"][
+            "request"
+        ]
+        request["page_size"] = 9_999
+
+        check = next(
+            item
+            for item in system.auditor().audit().checks
+            if item.code == "formal_execution_capability"
+        )
+
+        assert not check.passed
+        assert "formal_execution_current_source_contract_invalid" in check.blockers
+        assert "formal_execution_source_contract_hash_mismatch" in check.blockers
+    finally:
+        system.close()
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement", "blocker"),
+    (
+        (
+            "production_configuration_hash",
+            None,
+            "formal_execution_production_configuration_hash_mismatch",
+        ),
+        (
+            "production_configuration_hash",
+            "f" * 64,
+            "formal_execution_production_configuration_hash_mismatch",
+        ),
+        (
+            "source_contract_hash",
+            None,
+            "formal_execution_source_contract_hash_mismatch",
+        ),
+        (
+            "source_contract_hash",
+            "f" * 64,
+            "formal_execution_source_contract_hash_mismatch",
+        ),
+    ),
+)
+def test_formal_capability_self_hash_cannot_authorize_missing_or_stale_binding(
+    tmp_path: Path,
+    field: str,
+    replacement: str | None,
+    blocker: str,
+) -> None:
+    system = AuditSystem(tmp_path)
+    try:
+        with system.engine.connect() as connection:
+            row = connection.execute(
+                text(
+                    "SELECT detail, fields_json, contract_hash "
+                    "FROM ros_source_capabilities "
+                    "WHERE source_id=:source_id AND dataset=:dataset"
+                ),
+                {
+                    "source_id": FORMAL_EXECUTION_SOURCE_ID,
+                    "dataset": TYPED_EXECUTION_CAPABILITY_DATASET,
+                },
+            ).mappings().one()
+        detail = json.loads(str(row["detail"]))
+        detail[field] = replacement
+        raw_fields = row["fields_json"]
+        fields = tuple(
+            map(
+                str,
+                json.loads(raw_fields) if isinstance(raw_fields, str) else raw_fields,
+            )
+        )
+        probe_hash = formal_execution_probe_hash(
+            source_id=FORMAL_EXECUTION_SOURCE_ID,
+            dataset=TYPED_EXECUTION_CAPABILITY_DATASET,
+            contract_hash=str(row["contract_hash"]),
+            fields=fields,
+            detail=detail,
+        )
+        with system.engine.begin() as connection:
+            connection.execute(
+                text(
+                    "UPDATE ros_source_capabilities SET detail=:detail, "
+                    "probe_hash=:probe_hash WHERE source_id=:source_id "
+                    "AND dataset=:dataset"
+                ),
+                {
+                    "detail": json.dumps(
+                        detail,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ),
+                    "probe_hash": probe_hash,
+                    "source_id": FORMAL_EXECUTION_SOURCE_ID,
+                    "dataset": TYPED_EXECUTION_CAPABILITY_DATASET,
+                },
+            )
+
+        check = next(
+            item
+            for item in system.auditor().audit().checks
+            if item.code == "formal_execution_capability"
+        )
+
+        assert not check.passed
+        assert blocker in check.blockers
+        assert "formal_execution_real_probe_hash_invalid" not in check.blockers
+    finally:
+        system.close()
+
+
+def test_tushare_config_cannot_admit_rehashed_legacy_diemeng_identity(
+    tmp_path: Path,
+) -> None:
+    system = AuditSystem(tmp_path)
+    try:
+        # Preserve the old, source-id-free Diemeng capability and its valid
+        # physical authority chain, but switch the current configuration to
+        # the reviewed Tushare route.  Rehashing every caller-visible field
+        # must not let the legacy semantics impersonate the configured source.
+        _configure_tushare_formal_execution(system.config)
+        with system.engine.connect() as connection:
+            row = connection.execute(
+                text(
+                    "SELECT detail, fields_json, contract_hash "
+                    "FROM ros_source_capabilities "
+                    "WHERE source_id=:source_id AND dataset=:dataset"
+                ),
+                {
+                    "source_id": FORMAL_EXECUTION_SOURCE_ID,
+                    "dataset": TYPED_EXECUTION_CAPABILITY_DATASET,
+                },
+            ).mappings().one()
+        detail = json.loads(str(row["detail"]))
+        assert detail.get("open_source_id") is None
+        assert detail["event_semantics"] == "realtime_server_timed_open_09_30"
+        detail["production_configuration_hash"] = (
+            production_execution_configuration_hash(system.config)
+        )
+        detail["source_contract_hash"] = (
+            production_formal_source_contract_hash(system.config)
+        )
+        raw_fields = row["fields_json"]
+        fields = tuple(
+            map(
+                str,
+                json.loads(raw_fields) if isinstance(raw_fields, str) else raw_fields,
+            )
+        )
+        probe_hash = formal_execution_probe_hash(
+            source_id=FORMAL_EXECUTION_SOURCE_ID,
+            dataset=TYPED_EXECUTION_CAPABILITY_DATASET,
+            contract_hash=str(row["contract_hash"]),
+            fields=fields,
+            detail=detail,
+        )
+        with system.engine.begin() as connection:
+            connection.execute(
+                text(
+                    "UPDATE ros_source_capabilities SET detail=:detail, "
+                    "probe_hash=:probe_hash WHERE source_id=:source_id "
+                    "AND dataset=:dataset"
+                ),
+                {
+                    "detail": json.dumps(
+                        detail,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ),
+                    "probe_hash": probe_hash,
+                    "source_id": FORMAL_EXECUTION_SOURCE_ID,
+                    "dataset": TYPED_EXECUTION_CAPABILITY_DATASET,
+                },
+            )
+
+        check = next(
+            item
+            for item in system.auditor().audit().checks
+            if item.code == "formal_execution_capability"
+        )
+
+        assert not check.passed
+        assert "formal_execution_semantics_unverified" in check.blockers
+        assert (
+            "formal_execution_production_configuration_hash_mismatch"
+            not in check.blockers
+        )
+        assert "formal_execution_source_contract_hash_mismatch" not in check.blockers
+        assert check.evidence["configured_semantics_source"] == "tushare"
+        assert check.evidence["legacy_identity_compatibility_used"] is False
+    finally:
+        system.close()
+
+
+@pytest.mark.parametrize(
+    ("provider_endpoint", "expected_pass"),
+    (("rt_min", True), ("rt_min_daily", False)),
+)
+def test_tushare_runtime_probe_chain_uses_only_formal_rt_min_semantics(
+    tmp_path: Path,
+    provider_endpoint: str,
+    expected_pass: bool,
+) -> None:
+    system = AuditSystem(tmp_path)
+    try:
+        _configure_tushare_formal_execution(system.config)
         with system.engine.connect() as connection:
             row = connection.execute(
                 text(
@@ -2187,7 +2480,7 @@ def test_tushare_runtime_probe_chain_uses_dynamic_source_partition_and_honest_ti
             {
                 "open_source_id": "tushare",
                 "open_source_role": "tushare_open_observation",
-                "provider_endpoint": "rt_min",
+                "provider_endpoint": provider_endpoint,
                 "event_semantics": (
                     "official_realtime_current_session_1min_open_09_30"
                 ),
@@ -2203,6 +2496,12 @@ def test_tushare_runtime_probe_chain_uses_dynamic_source_partition_and_honest_ti
                 "source_snapshot_id": source_ref.snapshot_id,
                 "source_snapshot_hash": source_ref.content_hash,
                 "source_partition_hash": source_partition_hash,
+                "production_configuration_hash": (
+                    production_execution_configuration_hash(system.config)
+                ),
+                "source_contract_hash": (
+                    production_formal_source_contract_hash(system.config)
+                ),
             }
         )
         fields = tuple(FORMAL_EXECUTION_REQUIRED_FIELDS)
@@ -2227,16 +2526,16 @@ def test_tushare_runtime_probe_chain_uses_dynamic_source_partition_and_honest_ti
                     "dataset": TYPED_EXECUTION_CAPABILITY_DATASET,
                 },
             )
-        execution = system.config["daily"]["shadow"]["execution_market_data"]
-        execution.update({"source": "tushare", "endpoint": "rt_min"})
-
         check = next(
             item
             for item in system.auditor().audit().checks
             if item.code == "formal_execution_capability"
         )
-        assert check.passed
-        assert check.evidence["authority_chain"]["open_source_id"] == "tushare"
+        assert check.passed is expected_pass
+        if expected_pass:
+            assert check.evidence["authority_chain"]["open_source_id"] == "tushare"
+        else:
+            assert "formal_execution_semantics_unverified" in check.blockers
     finally:
         system.close()
 

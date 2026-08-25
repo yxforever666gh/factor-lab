@@ -11,9 +11,9 @@ collector receive time, never the provider's event timestamp.
 Tushare documents ``rt_min`` as the multi-symbol real-time minute endpoint
 (document 374; the entitlement table limits one request to 300 companies) and
 ``rt_min_daily`` as the current-day minute-history endpoint (document 457).
-Both are supported, but neither is treated as permissioned merely because it
-appears in configuration: the live call and exact response contract are the
-capability probe.
+The latter remains only as a deterministic compatibility seam; formal
+production execution is fixed to ``rt_min``.  A live call and its exact
+response contract are still the capability probe.
 """
 
 from __future__ import annotations
@@ -34,13 +34,20 @@ from .data_sources import (
     FetchRequest,
     FieldContract,
     ProbeResult,
+    RateLimit,
     SourceAdapter,
     SourceBatch,
     SourceContractError,
     SourceHealth,
+    TUSHARE_ACCOUNT_RATE_LIMIT_KEY,
+    TUSHARE_PRODUCTION_ACCOUNT_RATE_LIMIT,
+    TUSHARE_SEALED_TRANSPORT_POLICY,
+    TokenBucketRateLimiter,
+    call_sealed_tushare_query,
     harden_tushare_client_transport,
     tushare_client_uses_direct_transport,
     validate_production_diemeng_base_url,
+    validate_tushare_https_origin,
 )
 from .field_safety import is_forward_derived_field
 from .fingerprint import content_fingerprint
@@ -276,6 +283,85 @@ def normalized_open_contract() -> DatasetContract:
     )
 
 
+def tushare_realtime_open_routing_contract(
+    *,
+    endpoint: str,
+    api_origin: str | None,
+    collection_window_minutes: int,
+    max_universe_size: int,
+    max_symbols_per_request: int,
+    account_rate_limit: RateLimit | None,
+    production_transport: bool,
+) -> dict[str, Any]:
+    """Return the exact credential-free realtime adapter routing contract.
+
+    Both the concrete adapter and the production execution binding use this
+    pure descriptor.  Readiness can therefore reject evidence created under
+    an older endpoint, batching, account limit or sealed retry policy without
+    constructing a provider client or resolving a credential.
+    """
+
+    selected = str(endpoint).strip()
+    if selected not in TUSHARE_REALTIME_ENDPOINTS:
+        raise ValueError("unsupported Tushare realtime endpoint")
+    if collection_window_minutes <= 0 or max_universe_size <= 0:
+        raise ValueError("collection window and universe size must be positive")
+    if not (
+        1
+        <= int(max_symbols_per_request)
+        <= TUSHARE_RT_MIN_MAX_SYMBOLS_PER_REQUEST
+    ):
+        raise ValueError("Tushare rt_min request capacity must be between 1 and 300")
+    reviewed_origin = None
+    if production_transport:
+        reviewed_origin = validate_tushare_https_origin(str(api_origin or ""))
+    rate_limits = (
+        {}
+        if not isinstance(account_rate_limit, RateLimit)
+        else {
+            TUSHARE_ACCOUNT_RATE_LIMIT_KEY: {
+                "requests": int(account_rate_limit.requests),
+                "per_seconds": float(account_rate_limit.per_seconds),
+                "burst": int(account_rate_limit.burst),
+            }
+        }
+    )
+    transport_policy = (
+        {
+            **dict(TUSHARE_SEALED_TRANSPORT_POLICY),
+            # Realtime execution has no dataset-specific secondary bucket.
+            "rate_limit_admission_order": (
+                TUSHARE_ACCOUNT_RATE_LIMIT_KEY,
+            ),
+        }
+        if production_transport
+        else {
+            "schema_version": "research-os/tushare-realtime-fixture/v1",
+            "formal_production_transport": False,
+        }
+    )
+    return {
+        "schema_version": "research-os/tushare-realtime-open-execution/v2",
+        "endpoint": selected,
+        "api_origin": reviewed_origin,
+        "official_document_id": TUSHARE_REALTIME_DOC_IDS[selected],
+        "frequency": "1MIN",
+        "collection_window_minutes": int(collection_window_minutes),
+        "max_universe_size": int(max_universe_size),
+        "batching": {
+            "mode": (
+                "sorted_deterministic_chunks"
+                if selected == TUSHARE_RT_MIN
+                else "one_ticker_per_request"
+            ),
+            "maximum_symbols_per_request": int(max_symbols_per_request),
+        },
+        "rate_limits": rate_limits,
+        "wire_admission_order": (TUSHARE_ACCOUNT_RATE_LIMIT_KEY,),
+        "transport_policy": transport_policy,
+    }
+
+
 def _aware_utc(value: datetime, *, label: str) -> datetime:
     if value.tzinfo is None or value.utcoffset() is None:
         raise SourceContractError(f"{label} must be timezone-aware")
@@ -289,32 +375,69 @@ def _event_time(value: Any) -> pd.Timestamp:
         raise SourceContractError(
             "Tushare realtime response time must include an explicit calendar date"
         )
-    parsed = pd.Timestamp(value)
-    if pd.isna(parsed):
+    parse_failed = False
+    try:
+        parsed = pd.Timestamp(value)
+        if pd.isna(parsed):
+            parse_failed = True
+        elif parsed.tzinfo is None:
+            parsed = parsed.tz_localize(_SHANGHAI)
+        else:
+            parsed = parsed.tz_convert(_SHANGHAI)
+    except Exception:
+        # Pandas includes the raw value in DateParseError.  Raise only after
+        # leaving the handler so it cannot survive in cause/context metadata.
+        parse_failed = True
+        parsed = None
+    if parse_failed or parsed is None:
         raise SourceContractError("Tushare realtime response has an invalid time")
-    if parsed.tzinfo is None:
-        parsed = parsed.tz_localize(_SHANGHAI)
-    else:
-        parsed = parsed.tz_convert(_SHANGHAI)
     return parsed
 
 
-def _call_tushare(client: Any, endpoint: str, parameters: Mapping[str, Any]) -> Any:
-    target = getattr(client, endpoint, None)
+def _call_tushare(
+    client: Any,
+    endpoint: str,
+    parameters: Mapping[str, Any],
+    *,
+    before_wire_attempt: Callable[[], Any],
+) -> Any:
+    if _real_tushare_data_api(client):
+        return call_sealed_tushare_query(
+            client,
+            endpoint,
+            parameters,
+            before_wire_attempt=before_wire_attempt,
+        )
+
+    admission_failed = False
     try:
+        before_wire_attempt()
+    except Exception:
+        admission_failed = True
+    if admission_failed:
+        raise SourceContractError("Tushare realtime wire admission failed")
+
+    call_failed = False
+    value: Any = None
+    try:
+        target = getattr(client, endpoint, None)
         if callable(target):
-            return target(**dict(parameters))
-        query = getattr(client, "query", None)
-        if callable(query):
-            return query(endpoint, **dict(parameters))
-    except Exception as exc:
-        # Do not copy a vendor exception into persisted lineage: SDK/network
-        # errors have historically included request material.  The type is
-        # sufficient to distinguish entitlement/network failures operationally.
+            value = target(**dict(parameters))
+        else:
+            query = getattr(client, "query", None)
+            if callable(query):
+                value = query(endpoint, **dict(parameters))
+            else:
+                call_failed = True
+    except Exception:
+        # Do not retain a vendor exception: SDK/network errors have
+        # historically included credentials and raw response material.
+        call_failed = True
+    if call_failed:
         raise SourceContractError(
-            f"Tushare realtime endpoint unavailable or unauthorized ({type(exc).__name__})"
-        ) from exc
-    raise SourceContractError("Tushare client has no supported realtime endpoint")
+            "Tushare realtime endpoint unavailable or unauthorized"
+        )
+    return value
 
 
 def _real_tushare_data_api(client: Any) -> bool:
@@ -361,6 +484,10 @@ class TushareRealtimeOpenAdapter(SourceAdapter):
         max_universe_size: int = 500,
         max_symbols_per_request: int = TUSHARE_RT_MIN_MAX_SYMBOLS_PER_REQUEST,
         lineage: Mapping[str, Any] | None = None,
+        rate_limits: Mapping[str, RateLimit] | None = None,
+        rate_limiter: TokenBucketRateLimiter | None = None,
+        monotonic_clock: Callable[[], float] | None = None,
+        sleeper: Callable[[float], None] | None = None,
     ) -> None:
         selected = str(endpoint).strip()
         if selected not in TUSHARE_REALTIME_ENDPOINTS:
@@ -371,7 +498,27 @@ class TushareRealtimeOpenAdapter(SourceAdapter):
             raise ValueError(
                 "Tushare rt_min request capacity must be between 1 and 300"
             )
+        reviewed_rate_limits = dict(rate_limits or {})
         self.client = harden_tushare_client_transport(client)
+        if _real_tushare_data_api(self.client) and selected != TUSHARE_RT_MIN:
+            raise SourceContractError(
+                "formal Tushare realtime execution requires the rt_min endpoint"
+            )
+        if _real_tushare_data_api(self.client) and (
+            set(reviewed_rate_limits) != {TUSHARE_ACCOUNT_RATE_LIMIT_KEY}
+            or not isinstance(
+                reviewed_rate_limits.get(TUSHARE_ACCOUNT_RATE_LIMIT_KEY), RateLimit
+            )
+            or reviewed_rate_limits.get(TUSHARE_ACCOUNT_RATE_LIMIT_KEY)
+            != TUSHARE_PRODUCTION_ACCOUNT_RATE_LIMIT
+        ):
+            raise SourceContractError(
+                "formal Tushare realtime execution requires the reviewed closed "
+                "account rate limit"
+            )
+        self._constructed_account_rate_limit = reviewed_rate_limits.get(
+            TUSHARE_ACCOUNT_RATE_LIMIT_KEY
+        )
         self.endpoint = selected
         self.collection_window_minutes = int(collection_window_minutes)
         self.max_universe_size = int(max_universe_size)
@@ -390,6 +537,10 @@ class TushareRealtimeOpenAdapter(SourceAdapter):
                 "provider_event_time_is_not_availability": True,
                 "max_symbols_per_request": self.max_symbols_per_request,
             },
+            rate_limits=reviewed_rate_limits,
+            rate_limiter=rate_limiter,
+            monotonic_clock=monotonic_clock,
+            sleeper=sleeper,
         )
 
     @property
@@ -399,12 +550,61 @@ class TushareRealtimeOpenAdapter(SourceAdapter):
         return bool(
             _real_tushare_data_api(self.client)
             and not self._clock_is_injected
-            and self.endpoint in TUSHARE_REALTIME_ENDPOINTS
+            and self.endpoint == TUSHARE_RT_MIN
+            and set(self.rate_limits) == {TUSHARE_ACCOUNT_RATE_LIMIT_KEY}
+            and isinstance(
+                self.rate_limits.get(TUSHARE_ACCOUNT_RATE_LIMIT_KEY), RateLimit
+            )
+            and self.rate_limits.get(TUSHARE_ACCOUNT_RATE_LIMIT_KEY)
+            == self._constructed_account_rate_limit
+            and self.rate_limits.get(TUSHARE_ACCOUNT_RATE_LIMIT_KEY)
+            == TUSHARE_PRODUCTION_ACCOUNT_RATE_LIMIT
+            and self.process_rate_limit_runtime_attested
         )
 
     @property
     def real_time_open_capable(self) -> bool:
         return True
+
+    @property
+    def public_execution_contract(self) -> dict[str, Any]:
+        """Credential-free routing, batching and account admission identity."""
+
+        account = self.rate_limits.get(TUSHARE_ACCOUNT_RATE_LIMIT_KEY)
+        production_transport = _real_tushare_data_api(self.client)
+        api_origin = None
+        if production_transport:
+            api_origin = str(
+                getattr(self.client, "_DataApi__http_url", "") or ""
+            )
+        return tushare_realtime_open_routing_contract(
+            endpoint=self.endpoint,
+            api_origin=api_origin,
+            collection_window_minutes=self.collection_window_minutes,
+            max_universe_size=self.max_universe_size,
+            max_symbols_per_request=self.max_symbols_per_request,
+            account_rate_limit=(
+                account if isinstance(account, RateLimit) else None
+            ),
+            production_transport=production_transport,
+        )
+
+    def public_contract_identity(self) -> dict[str, Any]:
+        base = super().public_contract_identity()
+        payload = {
+            key: value for key, value in base.items() if key != "public_contract_hash"
+        }
+        payload["routing_contract"] = self.public_execution_contract
+        return {
+            **payload,
+            "public_contract_hash": content_fingerprint(
+                payload,
+                domain=(
+                    "factor-lab/research-os/v1/"
+                    "tushare-realtime-open-public-contract"
+                ),
+            ),
+        }
 
     def probe(self) -> ProbeResult:
         # A ticker-free/static probe cannot establish entitlement to these
@@ -458,12 +658,13 @@ class TushareRealtimeOpenAdapter(SourceAdapter):
             extra = sorted(set(actual) - set(expected))
             raise SourceContractError(
                 "Tushare realtime response schema must match exactly; "
-                f"missing={missing}, extra={extra}"
+                f"missing_count={len(missing)}, extra_count={len(extra)}"
             )
         forbidden = sorted(name for name in actual if is_forward_derived_field(name))
         if forbidden:
             raise SourceContractError(
-                f"Tushare realtime response contains forward fields: {forbidden}"
+                "Tushare realtime response contains forward fields; "
+                f"field_count={len(forbidden)}"
             )
         if self.endpoint == TUSHARE_RT_MIN_DAILY and not frame.empty:
             if not frame["freq"].astype(str).str.upper().eq("1MIN").all():
@@ -487,6 +688,9 @@ class TushareRealtimeOpenAdapter(SourceAdapter):
                 self.client,
                 self.endpoint,
                 {"ts_code": ",".join(group), "freq": "1MIN"},
+                before_wire_attempt=lambda: self._acquire_rate_limit(
+                    TUSHARE_ACCOUNT_RATE_LIMIT_KEY
+                ),
             )
             # Capture availability immediately after each successful response.
             # One clock read after a multi-request merge would let a late batch
@@ -510,9 +714,19 @@ class TushareRealtimeOpenAdapter(SourceAdapter):
         raw_tickers = request.parameters.get("tickers")
         if not isinstance(raw_tickers, (tuple, list)):
             raise SourceContractError("typed Tushare fetch requires a ticker sequence")
+        invalid_trade_date = False
+        try:
+            trade_date = date.fromisoformat(
+                str(request.parameters.get("trade_date") or "")
+            )
+        except (TypeError, ValueError):
+            invalid_trade_date = True
+            trade_date = date.min
+        if invalid_trade_date:
+            raise SourceContractError("typed Tushare fetch has an invalid trade date")
         collection = self.fetch_open_batch(
             tuple(map(str, raw_tickers)),
-            date.fromisoformat(str(request.parameters.get("trade_date") or "")),
+            trade_date,
         )
         return collection.batch.frame.copy(deep=True)
 
@@ -569,13 +783,15 @@ class TushareRealtimeOpenAdapter(SourceAdapter):
             cross_batch = sorted(observed_in_batch & seen)
             if cross_batch:
                 raise SourceContractError(
-                    f"Tushare realtime response has cross-batch duplicate tickers: {cross_batch}"
+                    "Tushare realtime response has cross-batch duplicate tickers; "
+                    f"ticker_count={len(cross_batch)}"
                 )
             expected_in_batch = set(response.requested_tickers)
             unexpected = sorted(observed_in_batch - expected_in_batch)
             if unexpected:
                 raise SourceContractError(
-                    f"Tushare realtime response contains unrequested tickers: {unexpected}"
+                    "Tushare realtime response contains unrequested tickers; "
+                    f"ticker_count={len(unexpected)}"
                 )
             missing = sorted(expected_in_batch - observed_in_batch)
             missing_total.update(missing)
@@ -676,6 +892,9 @@ class TushareRealtimeOpenAdapter(SourceAdapter):
                     item["request_hash"] for item in batch_lineage
                 ),
                 "request_batches": tuple(batch_lineage),
+                "public_execution_contract_hash": self.public_contract_identity()[
+                    "public_contract_hash"
+                ],
             },
         )
         return RealtimeOpenCollection(
@@ -701,5 +920,6 @@ __all__ = [
     "diemeng_opening_session_request_template",
     "engineering_canary_execution_contract_hash",
     "normalized_open_contract",
+    "tushare_realtime_open_routing_contract",
     "validate_diemeng_engineering_canary_execution_mapping",
 ]
