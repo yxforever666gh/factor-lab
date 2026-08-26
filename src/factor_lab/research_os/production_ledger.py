@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 import re
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Iterator, Mapping, Sequence
 
 from .fingerprint import content_fingerprint
 
@@ -996,6 +996,42 @@ class ProductionLedger:
                 ).limit(limit)
             ).scalars()
             return tuple(self._incident_record(model) for model in models)
+
+    def iter_incidents(
+        self,
+        *,
+        status: IncidentStatus | None = None,
+        batch_size: int = 1_000,
+    ) -> Iterator[IncidentRecord]:
+        """Stream every incident from one stable, deterministically ordered query.
+
+        Unlike :meth:`list_incidents`, this authority path never truncates the
+        ledger.  SQLAlchemy's ``yield_per`` keeps the result bounded in memory
+        while the single SELECT/cursor retains one statement snapshot.
+        """
+
+        if batch_size <= 0 or batch_size > 10_000:
+            raise ValueError("batch_size must be between 1 and 10000")
+        normalized_status = (
+            None if status is None else IncidentStatus(status)
+        )
+        query = select(orm.DataIncidentModel)
+        if normalized_status is not None:
+            query = query.where(
+                orm.DataIncidentModel.status == normalized_status.value
+            )
+        query = query.order_by(
+            orm.DataIncidentModel.occurred_at.desc(),
+            orm.DataIncidentModel.incident_id,
+        ).execution_options(yield_per=batch_size)
+
+        def stream() -> Iterator[IncidentRecord]:
+            with self._session.begin() as session:
+                models = session.execute(query).scalars()
+                for model in models:
+                    yield self._incident_record(model)
+
+        return stream()
 
 
 def load_runtime_authority_marker(

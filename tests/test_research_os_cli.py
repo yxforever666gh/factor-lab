@@ -14,6 +14,7 @@ from factor_lab.research_os.cli import build_parser, main
 from factor_lab.research_os.contracts import (
     DataQualityStatus,
     DataSnapshotRef,
+    RecoveryCaseStatus,
     SnapshotTier,
 )
 from factor_lab.research_os.snapshots import build_immutable_snapshot_manifest
@@ -110,6 +111,109 @@ def test_cli_exposes_exact_research_os_commands() -> None:
     assert parser.parse_args(["canary", "restore"]).canary_command == "restore"
     assert parser.parse_args(["monitor", "tick"]).input is None
     assert parser.parse_args(["shadow", "step", "--date", "2026-08-21"]).input is None
+
+
+def test_monitor_cli_sees_older_active_recovery_beyond_terminal_window(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload_path = tmp_path / "monitor.json"
+    payload_path.write_text(
+        json.dumps(
+            {
+                "record": {
+                    "sleeve_id": "value_quality",
+                    "state": "active",
+                    "target_weight": 0.25,
+                    "effective_weight": 0.25,
+                },
+                "observation": {
+                    "as_of_date": "2026-08-22",
+                    "active_ir_13w": 0.1,
+                    "active_ir_26w": 0.1,
+                    "ic_26w": 0.01,
+                },
+                "snapshot_id": "snapshot-monitor-cli",
+            }
+        ),
+        encoding="utf-8",
+    )
+    active = SimpleNamespace(
+        recovery_case_id="older-active-cli",
+        sleeve_id="value_quality",
+        status=RecoveryCaseStatus.OPEN,
+    )
+    cases = [
+        *(
+            SimpleNamespace(
+                recovery_case_id=f"newer-terminal-cli-{index}",
+                sleeve_id="value_quality",
+                status=RecoveryCaseStatus.CLOSED,
+            )
+            for index in range(101)
+        ),
+        active,
+    ]
+
+    class FakeCatalog:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_exc):
+            return None
+
+        def list_lifecycle_events(self, **_kwargs):
+            return []
+
+        def append_lifecycle_event(self, event):
+            return event
+
+        def list_recovery_cases(self, *, limit, **_kwargs):
+            return cases[:limit]
+
+        def iter_recovery_cases(
+            self, *, statuses, sleeve_id=None, batch_size
+        ):
+            assert batch_size == 1_000
+            allowed = set(statuses)
+            return iter(
+                case
+                for case in cases
+                if case.status in allowed
+                and (sleeve_id is None or case.sleeve_id == sleeve_id)
+            )
+
+    captured: dict[str, object] = {}
+
+    class Monitor:
+        def __init__(self, _catalog):
+            pass
+
+        def tick(self, *_args, active_recovery_case=None, **_kwargs):
+            captured["active_recovery_case"] = active_recovery_case
+            return {"status": "completed"}
+
+    catalog = FakeCatalog()
+    assert active not in catalog.list_recovery_cases(limit=100)
+    monkeypatch.setattr(
+        cli_module,
+        "_settings",
+        lambda _args: SimpleNamespace(
+            environment="local",
+            uses_postgresql=False,
+        ),
+    )
+    monkeypatch.setattr(cli_module, "_catalog", lambda _settings: catalog)
+    monkeypatch.setattr(cli_module, "LifecycleMonitor", Monitor)
+    monkeypatch.setattr(
+        cli_module,
+        "_coordinated",
+        lambda _catalog, _run_type, _inputs, action: action(),
+    )
+    monkeypatch.setattr(cli_module, "_emit", lambda result: captured.setdefault("result", result))
+
+    assert cli_module._monitor_tick(SimpleNamespace(input=str(payload_path))) == 0
+    assert captured["active_recovery_case"] is active
 
 
 @pytest.mark.parametrize(

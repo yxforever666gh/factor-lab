@@ -15,6 +15,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 SCHEMA_VERSION = "research-os/v1"
+PHYSICAL_CANARY_SNAPSHOT_REFERENCE_SCHEMA = (
+    "research-os/physical-canary-snapshot-reference/v1"
+)
 Sha256Digest = str
 
 

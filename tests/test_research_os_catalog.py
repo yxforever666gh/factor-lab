@@ -22,6 +22,7 @@ from factor_lab.research_os.contracts import (
     FactorSpec,
     Preregistration,
     RecoveryCase,
+    RecoveryCaseStatus,
 )
 from factor_lab.research_os.governance import (
     EvidenceClass,
@@ -338,6 +339,34 @@ def test_trial_lifecycle_recovery_run_and_summary_queries(catalog) -> None:
     )
     catalog.save_recovery_case(case)
     assert catalog.list_recovery_cases(sleeve_id="low_risk") == [case]
+    terminal_cases = tuple(
+        RecoveryCase(
+            **{
+                **case.model_dump(),
+                "recovery_case_id": f"closed-case-{index}",
+                "status": RecoveryCaseStatus.CLOSED,
+                "triggered_at": NOW + timedelta(minutes=index + 1),
+                "drift_event_due_at": NOW + timedelta(days=5, minutes=index + 1),
+                "diagnosis_due_at": NOW + timedelta(days=20, minutes=index + 1),
+                "earliest_recovery_review_at": NOW
+                + timedelta(days=84, minutes=index + 1),
+            }
+        )
+        for index in range(3)
+    )
+    for terminal in terminal_cases:
+        catalog.save_recovery_case(terminal)
+    assert tuple(
+        catalog.iter_recovery_cases(
+            statuses=(
+                RecoveryCaseStatus.OPEN,
+                RecoveryCaseStatus.DIAGNOSING,
+                RecoveryCaseStatus.OBSERVING,
+            ),
+            sleeve_id="low_risk",
+            batch_size=1,
+        )
+    ) == (case,)
 
     run = RunRecord(
         run_id="run-1",

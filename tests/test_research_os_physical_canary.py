@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 import io
@@ -10,12 +11,16 @@ import pandas as pd
 import pytest
 
 pytest.importorskip("sqlalchemy")
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, insert
 from sqlalchemy.orm import Session
 
 from factor_lab.research_os import physical_canary as physical_canary_module
 from factor_lab.research_os.catalog import ResearchCatalog
-from factor_lab.research_os.contracts import DataSnapshotRef, SnapshotTier
+from factor_lab.research_os.contracts import (
+    DataSnapshotRef,
+    PHYSICAL_CANARY_SNAPSHOT_REFERENCE_SCHEMA,
+    SnapshotTier,
+)
 from factor_lab.research_os.data_sources import (
     DatasetContract,
     DiemengSourceAdapter,
@@ -29,9 +34,13 @@ from factor_lab.research_os.fingerprint import content_fingerprint
 from factor_lab.research_os.execution_open_sources import (
     diemeng_engineering_canary_execution_mapping,
 )
-from factor_lab.research_os.object_store import S3ImmutableArchive
+from factor_lab.research_os.object_store import (
+    ObjectStoreIntegrityError,
+    S3ImmutableArchive,
+)
 from factor_lab.research_os.orm import (
     Base,
+    DataIncidentModel,
     EvidenceEpochModel,
     EvidenceEpochPointerModel,
     PartitionRunModel,
@@ -573,6 +582,826 @@ def _runtime(tmp_path: Path, *, active_epoch: bool = False):
     )
 
 
+def _persisted_boundary_frame() -> pd.DataFrame:
+    timestamps = pd.Series(
+        pd.to_datetime(
+            [
+                "2026-08-21T01:30:00.123456789Z",
+                None,
+                "2026-08-21T07:00:00.987654321Z",
+            ],
+            utc=True,
+        )
+    ).dt.tz_convert("Asia/Shanghai")
+    return pd.DataFrame(
+        {
+            "object_text": pd.Series(["alpha", None, "中文"], dtype=object),
+            "string_text": pd.Series(["one", pd.NA, "three"], dtype="string"),
+            "event_time": timestamps,
+            "nullable_count": pd.Series([1, pd.NA, 3], dtype="Int64"),
+            "value": [1.25, float("nan"), -3.5],
+        }
+    )
+
+
+def _snapshot_reference_from_manifest(
+    reference: DataSnapshotRef,
+    manifest: dict[str, object],
+    *,
+    tier: SnapshotTier | None = None,
+    uri: str | None = None,
+    parent_snapshot_ids: tuple[str, ...] | None = None,
+    snapshot_id: str | None = None,
+    content_hash: str | None = None,
+    as_of: datetime | None = None,
+) -> DataSnapshotRef:
+    selected_tier = tier or reference.tier
+    selected_content_hash = content_hash or (
+        physical_canary_module._snapshot_content_hash(manifest)
+    )
+    return DataSnapshotRef(
+        snapshot_id=snapshot_id
+        or physical_canary_module._snapshot_id(
+            selected_tier,
+            selected_content_hash,
+        ),
+        tier=selected_tier,
+        uri=uri or reference.uri,
+        content_hash=selected_content_hash,
+        parent_snapshot_ids=(
+            reference.parent_snapshot_ids
+            if parent_snapshot_ids is None
+            else parent_snapshot_ids
+        ),
+        as_of=reference.as_of if as_of is None else as_of,
+        quality_status=reference.quality_status,
+        trust_labels=reference.trust_labels,
+        manifest=manifest,
+    )
+
+
+def _legacy_prewrite_snapshot_reference(
+    runtime,
+    reference: DataSnapshotRef,
+    frame: pd.DataFrame,
+    *,
+    path: Path,
+    logical_name: str,
+    include_reference_binding: bool = False,
+) -> DataSnapshotRef:
+    frame.to_parquet(path, index=False)
+    archived = runtime.service.archive.archive_file(
+        path,
+        logical_path=f"legacy/{logical_name}",
+    )
+    manifest = dict(reference.manifest)
+    manifest.pop("frame_digest_schema")
+    if not include_reference_binding:
+        manifest.pop("snapshot_reference_schema", None)
+        manifest.pop("snapshot_as_of", None)
+    manifest.update(
+        {
+            "rows": len(frame),
+            "columns": list(map(str, frame.columns)),
+            "frame_digest": physical_canary_module._legacy_frame_digest(frame),
+            "physical_object": archived.to_dict(),
+        }
+    )
+    return _snapshot_reference_from_manifest(
+        reference,
+        manifest,
+        uri=archived.uri,
+    )
+
+
+def test_parquet_boundary_digest_uses_exact_persisted_arrow_table(
+    tmp_path: Path,
+) -> None:
+    frame = _persisted_boundary_frame()
+
+    persisted = physical_canary_module._write_frame_once(
+        tmp_path / "persisted",
+        frame,
+    )
+    table = physical_canary_module._read_persisted_table(
+        persisted.path,
+        context="test",
+    )
+
+    assert physical_canary_module._normalize_logical_arrow_table(table).equals(
+        physical_canary_module._canonical_arrow_table(frame)
+    )
+    assert persisted.frame_digest == (
+        physical_canary_module._persisted_frame_digest(table)
+    )
+    assert persisted.path.name == f"{persisted.frame_digest}.parquet"
+    assert persisted.rows == len(frame)
+    assert persisted.columns == tuple(frame.columns)
+    assert not list(persisted.path.parent.glob(".candidate-frame.*"))
+
+
+@pytest.mark.parametrize(
+    "string_type",
+    [
+        physical_canary_module.pa.string(),
+        physical_canary_module.pa.large_string(),
+        physical_canary_module.pa.string_view(),
+    ],
+)
+def test_logical_arrow_normalizes_equivalent_string_layouts(string_type) -> None:
+    pa = physical_canary_module.pa
+    baseline = pa.table(
+        {"text": pa.array(["alpha", None, "中文"], type=pa.string())}
+    )
+    variant = pa.table(
+        {"text": pa.array(["alpha", None, "中文"], type=string_type)}
+    )
+
+    assert physical_canary_module._normalize_logical_arrow_table(
+        baseline
+    ).equals(physical_canary_module._normalize_logical_arrow_table(variant))
+    assert physical_canary_module._normalize_logical_arrow_table(
+        variant
+    ).schema.field("text").type == pa.large_string()
+
+
+def test_parquet_boundary_rejects_lossy_candidate_before_immutable_link(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    frame = _persisted_boundary_frame()
+    original = physical_canary_module.pq.write_table
+
+    def lossy_write_table(table, path, *args, **kwargs):
+        changed = table.to_pandas()
+        changed.loc[0, "object_text"] = "changed-during-write"
+        return original(
+            physical_canary_module._canonical_arrow_table(changed),
+            path,
+            *args,
+            **kwargs,
+        )
+
+    monkeypatch.setattr(
+        physical_canary_module.pq,
+        "write_table",
+        lossy_write_table,
+    )
+    directory = tmp_path / "lossy"
+
+    with pytest.raises(
+        PhysicalCanaryDataRejected,
+        match="changed logical frame values or schema",
+    ):
+        physical_canary_module._write_frame_once(directory, frame)
+
+    assert not list(directory.glob("*.parquet"))
+    assert not list(directory.glob(".candidate-frame.*"))
+
+
+def test_parquet_boundary_is_idempotent_and_concurrent(
+    tmp_path: Path,
+) -> None:
+    frame = _persisted_boundary_frame()
+    directory = tmp_path / "concurrent"
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        results = tuple(
+            executor.map(
+                lambda _index: physical_canary_module._write_frame_once(
+                    directory,
+                    frame.copy(),
+                ),
+                range(8),
+            )
+        )
+
+    first = results[0]
+    assert all(item == first for item in results)
+    assert list(directory.glob("*.parquet")) == [first.path]
+    assert not list(directory.glob(".candidate-frame.*"))
+
+    round_tripped = pd.read_parquet(first.path)
+    assert physical_canary_module._write_frame_once(
+        directory,
+        round_tripped,
+    ) == first
+
+
+def test_parquet_boundary_rejects_tampered_existing_cache(
+    tmp_path: Path,
+) -> None:
+    frame = _persisted_boundary_frame()
+    directory = tmp_path / "tampered-cache"
+    persisted = physical_canary_module._write_frame_once(directory, frame)
+    tampered = frame.copy()
+    tampered.loc[0, "object_text"] = "tampered"
+    tampered.to_parquet(persisted.path, index=False)
+
+    with pytest.raises(
+        PhysicalCanaryDataRejected,
+        match="concurrent immutable canary cache differs",
+    ):
+        physical_canary_module._write_frame_once(directory, frame)
+
+
+def test_snapshot_publication_rejects_cache_swap_during_verification(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = _runtime(tmp_path)
+    try:
+        frame = _persisted_boundary_frame()
+        real_file_integrity = physical_canary_module._file_integrity
+        calls = 0
+
+        def swap_before_second_integrity(path: Path) -> tuple[str, int]:
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                replacement = frame.copy()
+                replacement.loc[0, "object_text"] = "swapped-after-table-read"
+                replacement_path = path.with_suffix(".replacement.parquet")
+                replacement.to_parquet(replacement_path, index=False)
+                replacement_path.replace(path)
+            return real_file_integrity(path)
+
+        monkeypatch.setattr(
+            physical_canary_module,
+            "_file_integrity",
+            swap_before_second_integrity,
+        )
+        snapshots_before = runtime.catalog.list_snapshots(limit=1_000)
+
+        with pytest.raises(
+            PhysicalCanaryDataRejected,
+            match="changed while it was being verified",
+        ):
+            runtime.service._publish_frame_snapshot(
+                run_id="cache-swap-fixture",
+                session=SESSIONS[1],
+                tier=SnapshotTier.BRONZE,
+                role="source",
+                frame=frame,
+                parent_snapshot_ids=(),
+                as_of=NOW,
+            )
+
+        assert calls == 2
+        assert runtime.catalog.list_snapshots(limit=1_000) == snapshots_before
+    finally:
+        _close(runtime)
+    runtime.engine.dispose()
+
+
+def test_snapshot_manifest_binds_verified_parquet_bytes_and_roundtrip(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime(tmp_path)
+    try:
+        frame = _persisted_boundary_frame()
+        reference = runtime.service._publish_frame_snapshot(
+            run_id="persisted-boundary-fixture",
+            session=SESSIONS[1],
+            tier=SnapshotTier.BRONZE,
+            role="roundtrip",
+            frame=frame,
+            parent_snapshot_ids=(),
+            as_of=NOW,
+        )
+        manifest = reference.manifest
+        physical = manifest["physical_object"]
+        local_path = (
+            runtime.service.local_root
+            / "persisted-boundary-fixture"
+            / SnapshotTier.BRONZE.value
+            / SESSIONS[1].isoformat()
+            / "roundtrip"
+            / f"{manifest['frame_digest']}.parquet"
+        )
+
+        assert manifest["frame_digest_schema"] == (
+            physical_canary_module._PERSISTED_FRAME_DIGEST_SCHEMA
+        )
+        assert manifest["snapshot_reference_schema"] == (
+            PHYSICAL_CANARY_SNAPSHOT_REFERENCE_SCHEMA
+        )
+        assert manifest["snapshot_as_of"] == NOW.isoformat()
+        assert reference.as_of.isoformat() == manifest["snapshot_as_of"]
+        assert local_path.is_file()
+        assert physical_canary_module._file_integrity(local_path) == (
+            physical["sha256"],
+            physical["size_bytes"],
+        )
+        assert runtime.filesystem.objects[
+            f"{runtime.archive.bucket}/{physical['key']}"
+        ] == local_path.read_bytes()
+
+        loaded, restored = runtime.service._load_snapshot_frame(
+            reference.snapshot_id
+        )
+        assert loaded == reference
+        assert physical_canary_module._canonical_arrow_table(restored).equals(
+            physical_canary_module._canonical_arrow_table(frame)
+        )
+    finally:
+        _close(runtime)
+    runtime.engine.dispose()
+
+
+def test_snapshot_restore_uses_one_pinned_arrow_table_for_digest_and_frame(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = _runtime(tmp_path)
+    try:
+        frame = _persisted_boundary_frame()
+        reference = runtime.service._publish_frame_snapshot(
+            run_id="single-pinned-table-fixture",
+            session=SESSIONS[1],
+            tier=SnapshotTier.BRONZE,
+            role="source",
+            frame=frame,
+            parent_snapshot_ids=(),
+            as_of=NOW,
+        )
+        real_read_table = physical_canary_module.pq.read_table
+        arrow_reads = 0
+
+        def counted_read_table(*args, **kwargs):
+            nonlocal arrow_reads
+            arrow_reads += 1
+            return real_read_table(*args, **kwargs)
+
+        def forbidden_pandas_read(*_args, **_kwargs):
+            raise AssertionError("snapshot loader must not parse Parquet twice")
+
+        monkeypatch.setattr(
+            physical_canary_module.pq,
+            "read_table",
+            counted_read_table,
+        )
+        monkeypatch.setattr(
+            physical_canary_module.pd,
+            "read_parquet",
+            forbidden_pandas_read,
+        )
+
+        loaded, restored = runtime.service._load_snapshot_frame(
+            reference.snapshot_id
+        )
+
+        assert loaded == reference
+        assert arrow_reads == 1
+        assert physical_canary_module._canonical_arrow_table(restored).equals(
+            physical_canary_module._canonical_arrow_table(frame)
+        )
+    finally:
+        _close(runtime)
+    runtime.engine.dispose()
+
+
+def test_snapshot_restore_rejects_substituted_payload_between_integrity_checks(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = _runtime(tmp_path)
+    try:
+        frame = _persisted_boundary_frame()
+        reference = runtime.service._publish_frame_snapshot(
+            run_id="pinned-payload-substitution-fixture",
+            session=SESSIONS[1],
+            tier=SnapshotTier.BRONZE,
+            role="source",
+            frame=frame,
+            parent_snapshot_ids=(),
+            as_of=NOW,
+        )
+        tampered = frame.copy()
+        tampered.loc[0, "object_text"] = "substituted-between-checks"
+        tampered_payload = physical_canary_module._write_frame_once(
+            tmp_path / "substituted-payload",
+            tampered,
+        ).path.read_bytes()
+        target = runtime.service._snapshot_cache_path(reference.snapshot_id)
+        real_read_bytes = physical_canary_module._read_file_bytes
+
+        def substitute_payload(path: Path) -> bytes:
+            if path == target:
+                return tampered_payload
+            return real_read_bytes(path)
+
+        monkeypatch.setattr(
+            physical_canary_module,
+            "_read_file_bytes",
+            substitute_payload,
+        )
+
+        with pytest.raises(
+            PhysicalCanaryDataRejected,
+            match="pinned snapshot Parquet bytes differ",
+        ):
+            runtime.service._load_snapshot_frame(reference.snapshot_id)
+    finally:
+        _close(runtime)
+    runtime.engine.dispose()
+
+
+def test_snapshot_restore_rejects_cache_swap_after_pinned_read(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    runtime = _runtime(tmp_path)
+    try:
+        frame = _persisted_boundary_frame()
+        reference = runtime.service._publish_frame_snapshot(
+            run_id="restore-cache-swap-fixture",
+            session=SESSIONS[1],
+            tier=SnapshotTier.BRONZE,
+            role="source",
+            frame=frame,
+            parent_snapshot_ids=(),
+            as_of=NOW,
+        )
+        replacement = frame.copy()
+        replacement.loc[0, "object_text"] = "swapped-after-pinned-read"
+        replacement_path = physical_canary_module._write_frame_once(
+            tmp_path / "restore-cache-replacement",
+            replacement,
+        ).path
+        target = runtime.service._snapshot_cache_path(reference.snapshot_id)
+        real_file_integrity = physical_canary_module._file_integrity
+        target_integrity_calls = 0
+
+        def swap_before_second_integrity(path: Path) -> tuple[str, int]:
+            nonlocal target_integrity_calls
+            if path == target:
+                target_integrity_calls += 1
+                if target_integrity_calls == 2:
+                    replacement_path.replace(path)
+            return real_file_integrity(path)
+
+        monkeypatch.setattr(
+            physical_canary_module,
+            "_file_integrity",
+            swap_before_second_integrity,
+        )
+
+        with pytest.raises(
+            PhysicalCanaryDataRejected,
+            match="changed while bytes were pinned",
+        ):
+            runtime.service._load_snapshot_frame(reference.snapshot_id)
+        assert target_integrity_calls == 2
+    finally:
+        _close(runtime)
+    runtime.engine.dispose()
+
+
+def test_snapshot_restore_rejects_unbound_legacy_prewrite_digest_and_accepts_successor(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime(tmp_path)
+    try:
+        legacy_input = pd.DataFrame(
+            {
+                "security_id": [1, 2, 3],
+                "value": [1.25, 2.5, -3.0],
+            }
+        )
+        reference = runtime.service._publish_frame_snapshot(
+            run_id="digest-schema-fixture",
+            session=SESSIONS[1],
+            tier=SnapshotTier.GOLD,
+            role="mark",
+            frame=legacy_input,
+            parent_snapshot_ids=(),
+            as_of=NOW,
+        )
+
+        legacy = _legacy_prewrite_snapshot_reference(
+            runtime,
+            reference,
+            legacy_input,
+            path=tmp_path / "recoverable-legacy.parquet",
+            logical_name="recoverable-numeric",
+        )
+        runtime.catalog.register_snapshot(legacy)
+        with pytest.raises(
+            PhysicalCanaryDataRejected,
+            match="reference schema is missing or unsupported",
+        ):
+            runtime.service._load_snapshot_frame(legacy.snapshot_id)
+
+        loaded_successor, restored_successor = (
+            runtime.service._load_snapshot_frame(reference.snapshot_id)
+        )
+        assert loaded_successor == reference
+        assert reference.snapshot_id != legacy.snapshot_id
+        assert physical_canary_module._canonical_arrow_table(
+            restored_successor
+        ).equals(
+            physical_canary_module._canonical_arrow_table(legacy_input)
+        )
+
+        unknown_manifest = dict(reference.manifest)
+        unknown_manifest["frame_digest_schema"] = "unknown/frame-digest/v99"
+        unknown = _snapshot_reference_from_manifest(
+            reference,
+            unknown_manifest,
+        )
+        runtime.catalog.register_snapshot(unknown)
+        with pytest.raises(
+            PhysicalCanaryDataRejected,
+            match="digest schema is unsupported",
+        ):
+            runtime.service._load_snapshot_frame(unknown.snapshot_id)
+    finally:
+        _close(runtime)
+    runtime.engine.dispose()
+
+
+def test_snapshot_restore_rejects_legacy_silver_object_string_digest_and_requires_successor(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime(tmp_path)
+    try:
+        legacy_input = pd.DataFrame(
+            {
+                "ticker": pd.Series(
+                    ["000001.SZ", None, "600000.SH"],
+                    dtype=object,
+                ),
+                "value": [1.0, 2.0, 3.0],
+            }
+        )
+        successor = runtime.service._publish_frame_snapshot(
+            run_id="legacy-silver-object-string-fixture",
+            session=SESSIONS[1],
+            tier=SnapshotTier.SILVER,
+            role="accepted_reconciled",
+            frame=legacy_input,
+            parent_snapshot_ids=(),
+            as_of=NOW,
+        )
+        legacy = _legacy_prewrite_snapshot_reference(
+            runtime,
+            successor,
+            legacy_input,
+            path=tmp_path / "legacy-silver-object-string.parquet",
+            logical_name="silver-object-string",
+            include_reference_binding=True,
+        )
+        runtime.catalog.register_snapshot(legacy)
+
+        with pd.option_context("future.infer_string", True):
+            with pytest.raises(
+                PhysicalCanaryDataRejected,
+                match="restored snapshot frame digest differs",
+            ):
+                runtime.service._load_snapshot_frame(legacy.snapshot_id)
+
+        loaded_successor, restored_successor = (
+            runtime.service._load_snapshot_frame(successor.snapshot_id)
+        )
+        assert loaded_successor == successor
+        assert successor.snapshot_id != legacy.snapshot_id
+        assert successor.manifest["frame_digest_schema"] == (
+            physical_canary_module._PERSISTED_FRAME_DIGEST_SCHEMA
+        )
+        assert physical_canary_module._canonical_arrow_table(
+            restored_successor
+        ).equals(
+            physical_canary_module._canonical_arrow_table(legacy_input)
+        )
+    finally:
+        _close(runtime)
+    runtime.engine.dispose()
+
+
+@pytest.mark.parametrize("invalid_schema", [None, "", 0, False])
+def test_snapshot_restore_rejects_present_but_invalid_digest_schema(
+    tmp_path: Path,
+    invalid_schema: object,
+) -> None:
+    runtime = _runtime(tmp_path)
+    try:
+        reference = runtime.service._publish_frame_snapshot(
+            run_id="invalid-digest-schema-fixture",
+            session=SESSIONS[1],
+            tier=SnapshotTier.BRONZE,
+            role="source",
+            frame=_persisted_boundary_frame(),
+            parent_snapshot_ids=(),
+            as_of=NOW,
+        )
+        invalid_manifest = {
+            **reference.manifest,
+            "frame_digest_schema": invalid_schema,
+        }
+        invalid = _snapshot_reference_from_manifest(
+            reference,
+            invalid_manifest,
+        )
+        runtime.catalog.register_snapshot(invalid)
+
+        with pytest.raises(
+            PhysicalCanaryDataRejected,
+            match="digest schema is unsupported",
+        ):
+            runtime.service._load_snapshot_frame(invalid.snapshot_id)
+    finally:
+        _close(runtime)
+    runtime.engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ("reference_schema", "reference schema is missing or unsupported"),
+        ("missing_as_of", "as_of binding is missing or malformed"),
+        ("manifest_as_of", "as_of differs from its manifest"),
+        ("reference_as_of", "as_of differs from its manifest"),
+        ("noncanonical_as_of", "as_of binding is not canonical UTC"),
+        ("noncanonical_reference_as_of", "reference as_of is not canonical UTC"),
+    ],
+)
+def test_snapshot_restore_rejects_snapshot_reference_schema_and_as_of_tamper(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+    message: str,
+) -> None:
+    runtime = _runtime(tmp_path)
+    try:
+        reference = runtime.service._publish_frame_snapshot(
+            run_id=f"snapshot-reference-{mutation}-fixture",
+            session=SESSIONS[1],
+            tier=SnapshotTier.BRONZE,
+            role="source",
+            frame=_persisted_boundary_frame(),
+            parent_snapshot_ids=(),
+            as_of=NOW,
+        )
+        record = runtime.catalog.get_snapshot(reference.snapshot_id)
+        assert record is not None
+        manifest = dict(reference.manifest)
+        if mutation == "reference_schema":
+            manifest["snapshot_reference_schema"] = (
+                "unknown/physical-canary-snapshot-reference/v99"
+            )
+            tampered = _snapshot_reference_from_manifest(reference, manifest)
+        elif mutation == "missing_as_of":
+            manifest.pop("snapshot_as_of")
+            tampered = _snapshot_reference_from_manifest(reference, manifest)
+        elif mutation == "manifest_as_of":
+            manifest["snapshot_as_of"] = (NOW + timedelta(seconds=1)).isoformat()
+            tampered = _snapshot_reference_from_manifest(reference, manifest)
+        elif mutation == "reference_as_of":
+            tampered = _snapshot_reference_from_manifest(
+                reference,
+                manifest,
+                as_of=NOW + timedelta(seconds=1),
+            )
+        elif mutation == "noncanonical_as_of":
+            manifest["snapshot_as_of"] = NOW.astimezone(
+                timezone(timedelta(hours=8))
+            ).isoformat()
+            tampered = _snapshot_reference_from_manifest(reference, manifest)
+        elif mutation == "noncanonical_reference_as_of":
+            tampered = _snapshot_reference_from_manifest(
+                reference,
+                manifest,
+                as_of=NOW.astimezone(timezone(timedelta(hours=8))),
+            )
+        else:  # pragma: no cover - the parametrization is closed above.
+            raise AssertionError(mutation)
+
+        monkeypatch.setattr(
+            runtime.catalog,
+            "get_snapshot",
+            lambda _snapshot_id: replace(record, reference=tampered),
+        )
+
+        with pytest.raises(PhysicalCanaryDataRejected, match=message):
+            runtime.service._load_snapshot_frame(tampered.snapshot_id)
+    finally:
+        _close(runtime)
+    runtime.engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ("manifest_content", "content hash differs"),
+        ("snapshot_id", "canonical identity"),
+        ("tier", "tier differs"),
+        ("parents", "parents differ"),
+        ("uri", "URI differs"),
+    ],
+)
+def test_snapshot_restore_rejects_catalog_reference_manifest_identity_tamper(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    mutation: str,
+    message: str,
+) -> None:
+    runtime = _runtime(tmp_path)
+    try:
+        reference = runtime.service._publish_frame_snapshot(
+            run_id=f"catalog-identity-{mutation}-fixture",
+            session=SESSIONS[1],
+            tier=SnapshotTier.BRONZE,
+            role="source",
+            frame=_persisted_boundary_frame(),
+            parent_snapshot_ids=(),
+            as_of=NOW,
+        )
+        record = runtime.catalog.get_snapshot(reference.snapshot_id)
+        assert record is not None
+        requested_snapshot_id = reference.snapshot_id
+        tampered = reference
+        if mutation == "manifest_content":
+            tampered = reference.model_copy(
+                update={
+                    "manifest": {
+                        **reference.manifest,
+                        "role": "tampered-role",
+                    }
+                }
+            )
+        elif mutation == "snapshot_id":
+            requested_snapshot_id = "pec_bronze_" + "f" * 56
+            tampered = reference.model_copy(
+                update={"snapshot_id": requested_snapshot_id}
+            )
+        elif mutation == "tier":
+            requested_snapshot_id = physical_canary_module._snapshot_id(
+                SnapshotTier.SILVER,
+                reference.content_hash,
+            )
+            tampered = reference.model_copy(
+                update={
+                    "snapshot_id": requested_snapshot_id,
+                    "tier": SnapshotTier.SILVER,
+                }
+            )
+        elif mutation == "parents":
+            tampered = reference.model_copy(
+                update={"parent_snapshot_ids": ("unexpected-parent",)}
+            )
+        elif mutation == "uri":
+            tampered = reference.model_copy(
+                update={
+                    "uri": (
+                        f"s3://{runtime.archive.bucket}/{CANARY_OBJECT_PREFIX}/"
+                        "unexpected-object"
+                    )
+                }
+            )
+        else:  # pragma: no cover - the parametrization is closed above.
+            raise AssertionError(mutation)
+
+        monkeypatch.setattr(
+            runtime.catalog,
+            "get_snapshot",
+            lambda _snapshot_id: replace(record, reference=tampered),
+        )
+
+        with pytest.raises(PhysicalCanaryDataRejected, match=message):
+            runtime.service._load_snapshot_frame(requested_snapshot_id)
+    finally:
+        _close(runtime)
+    runtime.engine.dispose()
+
+
+def test_snapshot_restore_rejects_tampered_archived_bytes(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime(tmp_path)
+    try:
+        reference = runtime.service._publish_frame_snapshot(
+            run_id="tampered-object-fixture",
+            session=SESSIONS[1],
+            tier=SnapshotTier.BRONZE,
+            role="source",
+            frame=_persisted_boundary_frame(),
+            parent_snapshot_ids=(),
+            as_of=NOW,
+        )
+        physical = reference.manifest["physical_object"]
+        remote = f"{runtime.archive.bucket}/{physical['key']}"
+        payload = bytearray(runtime.filesystem.objects[remote])
+        payload[len(payload) // 2] ^= 0x01
+        runtime.filesystem.objects[remote] = bytes(payload)
+
+        with pytest.raises(ObjectStoreIntegrityError):
+            runtime.service._load_snapshot_frame(reference.snapshot_id)
+    finally:
+        _close(runtime)
+    runtime.engine.dispose()
+
+
 def _close(runtime) -> None:
     runtime.authority.close()
     runtime.ledger.close()
@@ -1066,6 +1895,78 @@ def test_non_retryable_current_partition_incident_is_not_auto_resolved(
         remaining = runtime.ledger.list_incidents(status=IncidentStatus.OPEN)
         assert [item.incident_id for item in remaining] == [incident.incident_id]
         assert runtime.ledger.list_incidents(status=IncidentStatus.RESOLVED) == ()
+    finally:
+        _close(runtime)
+    runtime.engine.dispose()
+
+
+def test_retry_resolution_scans_past_ten_thousand_newer_open_incidents(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime(tmp_path)
+    try:
+        replacement = _successful_partition_with_snapshot(
+            runtime,
+            identity=PartitionIdentity(
+                "engtest_current",
+                "gold_mark",
+                SESSIONS[1].isoformat(),
+            ),
+            tier=SnapshotTier.GOLD,
+            role="mark",
+            completed_at=NOW + timedelta(minutes=2),
+        )
+        related = runtime.ledger.record_incident(
+            partition_key=SESSIONS[1].isoformat(),
+            stage=IncidentStage.GOLD,
+            error_code="fixture_retryable_failure",
+            message="older retryable failure must remain discoverable",
+            occurred_at=NOW,
+            partition_run_id=replacement.identity.partition_run_id,
+            payload={"partition_terminal_status": PartitionStatus.FAILED.value},
+        )
+        newer_at = NOW + timedelta(minutes=1)
+        decoys = [
+            {
+                "incident_id": f"incident_bulk_decoy_{index:05d}",
+                "incident_hash": content_fingerprint(
+                    index, domain="tests/physical-canary-bulk-incident-decoy"
+                ),
+                "partition_run_id": None,
+                "partition_key": SESSIONS[2].isoformat(),
+                "stage": IncidentStage.SOURCE.value,
+                "status": IncidentStatus.OPEN.value,
+                "error_code": "fixture_unrelated_open",
+                "message": "newer unrelated open incident",
+                "source_ids_json": [],
+                "evidence_hashes_json": [],
+                "payload_json": {"fixture_index": index},
+                "occurred_at": newer_at,
+                "resolved_at": None,
+                "resolution_hash": None,
+            }
+            for index in range(10_001)
+        ]
+        with Session(runtime.engine) as session, session.begin():
+            session.execute(insert(DataIncidentModel), decoys)
+
+        truncated = runtime.ledger.list_incidents(
+            status=IncidentStatus.OPEN, limit=10_000
+        )
+        assert related.incident_id not in {item.incident_id for item in truncated}
+
+        runtime.service._resolve_retried_partition_incidents(
+            replace(replacement, attempts=2)
+        )
+
+        resolved = runtime.ledger.list_incidents(status=IncidentStatus.RESOLVED)
+        assert [item.incident_id for item in resolved] == [related.incident_id]
+        assert resolved[0].payload["resolution"]["disposition"] == (
+            "resolved_by_successful_partition_retry"
+        )
+        assert runtime.ledger.list_incidents(
+            status=IncidentStatus.OPEN, limit=1
+        )[0].error_code == "fixture_unrelated_open"
     finally:
         _close(runtime)
     runtime.engine.dispose()

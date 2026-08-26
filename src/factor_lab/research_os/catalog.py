@@ -1040,6 +1040,14 @@ class _CatalogBackend(Protocol):
         self, *, limit: int, sleeve_id: str | None
     ) -> list[LifecycleEvent]: ...
 
+    def iter_lifecycle_events(
+        self,
+        *,
+        sleeve_id: str | None,
+        cause: str | None,
+        batch_size: int,
+    ) -> Iterator[LifecycleEvent]: ...
+
     def latest_lifecycle_state(self, sleeve_id: str) -> LifecycleState | None: ...
 
     def save_recovery_case(self, case: RecoveryCase) -> RecoveryCase: ...
@@ -1053,6 +1061,14 @@ class _CatalogBackend(Protocol):
         status: RecoveryCaseStatus | None,
         sleeve_id: str | None,
     ) -> list[RecoveryCase]: ...
+
+    def iter_recovery_cases(
+        self,
+        *,
+        statuses: Sequence[RecoveryCaseStatus] | None,
+        sleeve_id: str | None,
+        batch_size: int,
+    ) -> Iterator[RecoveryCase]: ...
 
     def save_run(self, run: RunRecord) -> RunRecord: ...
 
@@ -1086,6 +1102,10 @@ class _CatalogBackend(Protocol):
         self, *, limit: int, status: str | None
     ) -> list[ShadowAccountRecord]: ...
 
+    def iter_shadow_accounts(
+        self, *, status: str | None, batch_size: int
+    ) -> Iterator[ShadowAccountRecord]: ...
+
     def append_shadow_event(
         self,
         *,
@@ -1115,6 +1135,16 @@ class _CatalogBackend(Protocol):
         through: datetime | None,
         limit: int,
     ) -> list[ShadowEvent]: ...
+
+    def iter_shadow_events_by_type(
+        self,
+        *,
+        account_id: str,
+        event_type: str,
+        since: datetime | None,
+        through: datetime | None,
+        batch_size: int,
+    ) -> Iterator[ShadowEvent]: ...
 
     def count_shadow_sessions(
         self, *, account_id: str, since: date, through: date
@@ -2974,6 +3004,36 @@ class _SQLiteCatalog:
             rows = self._connection.execute(query, tuple(params)).fetchall()
         return [self._lifecycle_from_row(row) for row in rows]
 
+    def iter_lifecycle_events(
+        self,
+        *,
+        sleeve_id: str | None,
+        cause: str | None,
+        batch_size: int,
+    ) -> Iterator[LifecycleEvent]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if sleeve_id is not None:
+            clauses.append("sleeve_id = ?")
+            params.append(sleeve_id)
+        if cause is not None:
+            clauses.append("cause = ?")
+            params.append(cause)
+        query = "SELECT * FROM ros_lifecycle_events"
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY occurred_at DESC, event_id DESC"
+        size = _validate_limit(batch_size)
+
+        def stream() -> Iterator[LifecycleEvent]:
+            with self._lock:
+                cursor = self._connection.execute(query, tuple(params))
+                while rows := cursor.fetchmany(size):
+                    for row in rows:
+                        yield self._lifecycle_from_row(row)
+
+        return stream()
+
     def latest_lifecycle_state(self, sleeve_id: str) -> LifecycleState | None:
         with self._lock:
             row = self._connection.execute(
@@ -3072,6 +3132,37 @@ class _SQLiteCatalog:
         with self._lock:
             rows = self._connection.execute(query, tuple(params)).fetchall()
         return [RecoveryCase.model_validate_json(row["case_json"]) for row in rows]
+
+    def iter_recovery_cases(
+        self,
+        *,
+        statuses: Sequence[RecoveryCaseStatus] | None,
+        sleeve_id: str | None,
+        batch_size: int,
+    ) -> Iterator[RecoveryCase]:
+        clauses: list[str] = []
+        params: list[Any] = []
+        if statuses is not None:
+            placeholders = ",".join("?" for _status in statuses)
+            clauses.append(f"status IN ({placeholders})")
+            params.extend(status.value for status in statuses)
+        if sleeve_id is not None:
+            clauses.append("sleeve_id = ?")
+            params.append(sleeve_id)
+        query = "SELECT case_json FROM ros_recovery_cases"
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
+        query += " ORDER BY triggered_at DESC, recovery_case_id"
+        size = _validate_limit(batch_size)
+
+        def stream() -> Iterator[RecoveryCase]:
+            with self._lock:
+                cursor = self._connection.execute(query, tuple(params))
+                while rows := cursor.fetchmany(size):
+                    for row in rows:
+                        yield RecoveryCase.model_validate_json(row["case_json"])
+
+        return stream()
 
     def save_run(self, run: RunRecord) -> RunRecord:
         with self._transaction() as connection:
@@ -3411,6 +3502,26 @@ class _SQLiteCatalog:
             rows = self._connection.execute(query, tuple(params)).fetchall()
         return [self._shadow_account_from_row(row) for row in rows]
 
+    def iter_shadow_accounts(
+        self, *, status: str | None, batch_size: int
+    ) -> Iterator[ShadowAccountRecord]:
+        query = "SELECT * FROM ros_shadow_accounts"
+        params: list[Any] = []
+        if status is not None:
+            query += " WHERE status = ?"
+            params.append(status)
+        query += " ORDER BY as_of DESC, account_id"
+        size = _validate_limit(batch_size)
+
+        def stream() -> Iterator[ShadowAccountRecord]:
+            with self._lock:
+                cursor = self._connection.execute(query, tuple(params))
+                while rows := cursor.fetchmany(size):
+                    for row in rows:
+                        yield self._shadow_account_from_row(row)
+
+        return stream()
+
     def append_shadow_event(
         self,
         *,
@@ -3598,6 +3709,40 @@ class _SQLiteCatalog:
                 tuple(params),
             ).fetchall()
         return [self._shadow_event_from_row(row) for row in rows]
+
+    def iter_shadow_events_by_type(
+        self,
+        *,
+        account_id: str,
+        event_type: str,
+        since: datetime | None,
+        through: datetime | None,
+        batch_size: int,
+    ) -> Iterator[ShadowEvent]:
+        normalized_type = _validate_event_type(event_type)
+        clauses = ["account_id = ?", "event_type = ?"]
+        params: list[Any] = [account_id, normalized_type]
+        if since is not None:
+            clauses.append("occurred_at >= ?")
+            params.append(_time_text(_require_aware(since, "since")))
+        if through is not None:
+            clauses.append("occurred_at <= ?")
+            params.append(_time_text(_require_aware(through, "through")))
+        size = _validate_limit(batch_size)
+        query = (
+            "SELECT * FROM ros_shadow_events WHERE "
+            + " AND ".join(clauses)
+            + " ORDER BY sequence_number DESC"
+        )
+
+        def stream() -> Iterator[ShadowEvent]:
+            with self._lock:
+                cursor = self._connection.execute(query, tuple(params))
+                while rows := cursor.fetchmany(size):
+                    for row in rows:
+                        yield self._shadow_event_from_row(row)
+
+        return stream()
 
     def count_shadow_sessions(
         self, *, account_id: str, since: date, through: date
@@ -5220,6 +5365,36 @@ class _SQLAlchemyCatalog:
             rows = session.scalars(statement).all()
         return [self._lifecycle_from_model(row) for row in rows]
 
+    def iter_lifecycle_events(
+        self,
+        *,
+        sleeve_id: str | None,
+        cause: str | None,
+        batch_size: int,
+    ) -> Iterator[LifecycleEvent]:
+        from sqlalchemy import select
+
+        size = _validate_limit(batch_size)
+        statement = select(orm.LifecycleEventModel)
+        if sleeve_id is not None:
+            statement = statement.where(
+                orm.LifecycleEventModel.sleeve_id == sleeve_id
+            )
+        if cause is not None:
+            statement = statement.where(orm.LifecycleEventModel.cause == cause)
+        statement = statement.order_by(
+            orm.LifecycleEventModel.occurred_at.desc(),
+            orm.LifecycleEventModel.event_id.desc(),
+        ).execution_options(yield_per=size)
+
+        def stream() -> Iterator[LifecycleEvent]:
+            with self._sessions() as session:
+                rows = session.scalars(statement)
+                for row in rows:
+                    yield self._lifecycle_from_model(row)
+
+        return stream()
+
     def latest_lifecycle_state(self, sleeve_id: str) -> LifecycleState | None:
         from sqlalchemy import select
 
@@ -5290,6 +5465,40 @@ class _SQLAlchemyCatalog:
         with self._sessions() as session:
             rows = session.scalars(statement).all()
         return [RecoveryCase.model_validate(row.case_json) for row in rows]
+
+    def iter_recovery_cases(
+        self,
+        *,
+        statuses: Sequence[RecoveryCaseStatus] | None,
+        sleeve_id: str | None,
+        batch_size: int,
+    ) -> Iterator[RecoveryCase]:
+        from sqlalchemy import select
+
+        size = _validate_limit(batch_size)
+        statement = select(orm.RecoveryCaseModel)
+        if statuses is not None:
+            statement = statement.where(
+                orm.RecoveryCaseModel.status.in_(
+                    tuple(status.value for status in statuses)
+                )
+            )
+        if sleeve_id is not None:
+            statement = statement.where(
+                orm.RecoveryCaseModel.sleeve_id == sleeve_id
+            )
+        statement = statement.order_by(
+            orm.RecoveryCaseModel.triggered_at.desc(),
+            orm.RecoveryCaseModel.recovery_case_id,
+        ).execution_options(yield_per=size)
+
+        def stream() -> Iterator[RecoveryCase]:
+            with self._sessions() as session:
+                rows = session.scalars(statement)
+                for row in rows:
+                    yield RecoveryCase.model_validate(row.case_json)
+
+        return stream()
 
     def save_run(self, run: RunRecord) -> RunRecord:
         from sqlalchemy import select
@@ -5620,6 +5829,27 @@ class _SQLAlchemyCatalog:
             rows = session.scalars(statement).all()
         return [self._shadow_account_from_model(row) for row in rows]
 
+    def iter_shadow_accounts(
+        self, *, status: str | None, batch_size: int
+    ) -> Iterator[ShadowAccountRecord]:
+        from sqlalchemy import select
+
+        size = _validate_limit(batch_size)
+        statement = select(orm.ShadowAccountModel)
+        if status is not None:
+            statement = statement.where(orm.ShadowAccountModel.status == status)
+        statement = statement.order_by(
+            orm.ShadowAccountModel.as_of.desc(), orm.ShadowAccountModel.account_id
+        ).execution_options(yield_per=size)
+
+        def stream() -> Iterator[ShadowAccountRecord]:
+            with self._sessions() as session:
+                rows = session.scalars(statement)
+                for row in rows:
+                    yield self._shadow_account_from_model(row)
+
+        return stream()
+
     def append_shadow_event(
         self,
         *,
@@ -5788,6 +6018,43 @@ class _SQLAlchemyCatalog:
         with self._sessions() as session:
             rows = session.scalars(statement).all()
         return [self._shadow_event_from_model(row) for row in rows]
+
+    def iter_shadow_events_by_type(
+        self,
+        *,
+        account_id: str,
+        event_type: str,
+        since: datetime | None,
+        through: datetime | None,
+        batch_size: int,
+    ) -> Iterator[ShadowEvent]:
+        from sqlalchemy import select
+
+        normalized_type = _validate_event_type(event_type)
+        size = _validate_limit(batch_size)
+        statement = select(orm.ShadowEventModel).where(
+            orm.ShadowEventModel.account_id == account_id,
+            orm.ShadowEventModel.event_type == normalized_type,
+        )
+        if since is not None:
+            statement = statement.where(
+                orm.ShadowEventModel.occurred_at >= _require_aware(since, "since")
+            )
+        if through is not None:
+            statement = statement.where(
+                orm.ShadowEventModel.occurred_at <= _require_aware(through, "through")
+            )
+        statement = statement.order_by(
+            orm.ShadowEventModel.sequence_number.desc()
+        ).execution_options(yield_per=size)
+
+        def stream() -> Iterator[ShadowEvent]:
+            with self._sessions() as session:
+                rows = session.scalars(statement)
+                for row in rows:
+                    yield self._shadow_event_from_model(row)
+
+        return stream()
 
     def count_shadow_sessions(
         self, *, account_id: str, since: date, through: date
@@ -6457,6 +6724,19 @@ class ResearchCatalog:
     ) -> list[LifecycleEvent]:
         return self._backend.list_lifecycle_events(limit=limit, sleeve_id=sleeve_id)
 
+    def iter_lifecycle_events(
+        self,
+        *,
+        sleeve_id: str | None = None,
+        cause: str | None = None,
+        batch_size: int = 1_000,
+    ) -> Iterator[LifecycleEvent]:
+        return self._backend.iter_lifecycle_events(
+            sleeve_id=sleeve_id,
+            cause=cause,
+            batch_size=batch_size,
+        )
+
     def latest_lifecycle_state(self, sleeve_id: str) -> LifecycleState | None:
         return self._backend.latest_lifecycle_state(sleeve_id)
 
@@ -6477,6 +6757,31 @@ class ResearchCatalog:
             status = RecoveryCaseStatus(status)
         return self._backend.list_recovery_cases(
             limit=limit, status=status, sleeve_id=sleeve_id
+        )
+
+    def iter_recovery_cases(
+        self,
+        *,
+        statuses: Sequence[RecoveryCaseStatus | str] | None = None,
+        sleeve_id: str | None = None,
+        batch_size: int = 1_000,
+    ) -> Iterator[RecoveryCase]:
+        normalized_statuses: tuple[RecoveryCaseStatus, ...] | None = None
+        if statuses is not None:
+            normalized_statuses = tuple(
+                dict.fromkeys(
+                    status
+                    if isinstance(status, RecoveryCaseStatus)
+                    else RecoveryCaseStatus(status)
+                    for status in statuses
+                )
+            )
+            if not normalized_statuses:
+                raise ValueError("statuses must contain at least one recovery status")
+        return self._backend.iter_recovery_cases(
+            statuses=normalized_statuses,
+            sleeve_id=sleeve_id,
+            batch_size=batch_size,
         )
 
     def save_run(self, run: RunRecord) -> RunRecord:
@@ -6532,6 +6837,14 @@ class ResearchCatalog:
     ) -> list[ShadowAccountRecord]:
         return self._backend.list_shadow_accounts(limit=limit, status=status)
 
+    def iter_shadow_accounts(
+        self, *, status: str | None = None, batch_size: int = 1_000
+    ) -> Iterator[ShadowAccountRecord]:
+        return self._backend.iter_shadow_accounts(
+            status=status,
+            batch_size=batch_size,
+        )
+
     def append_shadow_event(
         self,
         *,
@@ -6582,6 +6895,23 @@ class ResearchCatalog:
             since=since,
             through=through,
             limit=limit,
+        )
+
+    def iter_shadow_events_by_type(
+        self,
+        *,
+        account_id: str,
+        event_type: str,
+        since: datetime | None = None,
+        through: datetime | None = None,
+        batch_size: int = 1_000,
+    ) -> Iterator[ShadowEvent]:
+        return self._backend.iter_shadow_events_by_type(
+            account_id=account_id,
+            event_type=event_type,
+            since=since,
+            through=through,
+            batch_size=batch_size,
         )
 
     def count_shadow_sessions(

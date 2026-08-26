@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, insert
 
 import factor_lab.research_os.application_services as application_services
 from factor_lab.research_os import orm
@@ -26,6 +26,7 @@ from factor_lab.research_os.orchestration import (
 )
 from factor_lab.research_os.production_ledger import (
     IncidentStage,
+    IncidentStatus,
     PartitionIdentity,
     PartitionStatus,
     ProductionLedger,
@@ -255,6 +256,24 @@ def test_automatic_monthly_proposals_are_one_per_family_three_total_and_idempote
     class Catalog:
         def __init__(self) -> None:
             self.runs = {}
+            self.active_case = SimpleNamespace(
+                recovery_case_id="older-active-family-0",
+                sleeve_id="family_0",
+                status=application_services.RecoveryCaseStatus.OPEN,
+                triggered_at=now - timedelta(days=1),
+            )
+            self.recovery_cases = [
+                *(
+                    SimpleNamespace(
+                        recovery_case_id=f"newer-terminal-{index}",
+                        sleeve_id="family_0",
+                        status=application_services.RecoveryCaseStatus.CLOSED,
+                        triggered_at=now + timedelta(minutes=index),
+                    )
+                    for index in range(1_001)
+                ),
+                self.active_case,
+            ]
 
         def database_now(self):
             return now
@@ -267,9 +286,17 @@ def test_automatic_monthly_proposals_are_one_per_family_three_total_and_idempote
             assert limit == 1_000
             return []
 
-        def list_recovery_cases(self, *, limit, **_kwargs):
-            assert limit == 1_000
-            return []
+        def iter_recovery_cases(
+            self, *, statuses, sleeve_id=None, batch_size
+        ):
+            assert batch_size == 1_000
+            allowed = set(statuses)
+            return iter(
+                case
+                for case in self.recovery_cases
+                if case.status in allowed
+                and (sleeve_id is None or case.sleeve_id == sleeve_id)
+            )
 
         def list_research_families(self, *, active_only):
             assert active_only
@@ -293,8 +320,11 @@ def test_automatic_monthly_proposals_are_one_per_family_three_total_and_idempote
             self.calls = []
 
         def propose(self, _port, *, family_id, recovery_case_id):
-            assert recovery_case_id is None
-            self.calls.append(family_id)
+            expected_recovery = (
+                "older-active-family-0" if family_id == "family_0" else None
+            )
+            assert recovery_case_id == expected_recovery
+            self.calls.append((family_id, recovery_case_id))
             decision = SimpleNamespace(
                 decision_id=f"decision_{family_id}",
                 raw_proposal_hash=(family_id[-1] or "0") * 64,
@@ -332,9 +362,86 @@ def test_automatic_monthly_proposals_are_one_per_family_three_total_and_idempote
 
     assert len(first) == 3
     assert second == ()
-    assert service.monthly_research.calls == ["family_0", "family_1", "family_2"]
-    assert len(set(service.monthly_research.calls)) == 3
+    assert service.monthly_research.calls == [
+        ("family_0", "older-active-family-0"),
+        ("family_1", None),
+        ("family_2", None),
+    ]
+    assert len({family for family, _case in service.monthly_research.calls}) == 3
     assert len(service.catalog.runs) == 3
+
+
+def test_recovery_sla_sensor_sees_older_active_case_beyond_terminal_window() -> None:
+    now = datetime(2026, 8, 23, 8, tzinfo=timezone.utc)
+    active = SimpleNamespace(
+        recovery_case_id="older-active-recovery",
+        sleeve_id="value_quality",
+        status=application_services.RecoveryCaseStatus.OBSERVING,
+        drift_event_due_at=now - timedelta(days=2),
+        diagnosis_due_at=now - timedelta(days=1),
+        earliest_recovery_review_at=now - timedelta(hours=1),
+    )
+    cases = [
+        *(
+            SimpleNamespace(
+                recovery_case_id=f"newer-terminal-{index}",
+                sleeve_id="value_quality",
+                status=application_services.RecoveryCaseStatus.CLOSED,
+            )
+            for index in range(1_001)
+        ),
+        active,
+    ]
+
+    class Catalog:
+        def iter_recovery_cases(
+            self, *, statuses, sleeve_id=None, batch_size
+        ):
+            assert batch_size == 1_000
+            allowed = set(statuses)
+            return iter(
+                case
+                for case in cases
+                if case.status in allowed
+                and (sleeve_id is None or case.sleeve_id == sleeve_id)
+            )
+
+    service = object.__new__(ApplicationServices)
+    service.catalog = Catalog()
+    service._now = lambda: now
+
+    poll = service._poll_recovery_sla(None)
+
+    assert len(poll.triggers) == 3
+    assert {trigger.metadata["recovery_case_id"] for trigger in poll.triggers} == {
+        active.recovery_case_id
+    }
+
+
+def test_recovery_safety_paths_fail_closed_on_duplicate_active_cases() -> None:
+    now = datetime(2026, 8, 23, 8, tzinfo=timezone.utc)
+    cases = tuple(
+        SimpleNamespace(
+            recovery_case_id=f"duplicate-active-{index}",
+            sleeve_id="value_quality",
+            status=application_services.RecoveryCaseStatus.OPEN,
+            drift_event_due_at=now,
+            diagnosis_due_at=now,
+            earliest_recovery_review_at=now,
+        )
+        for index in range(2)
+    )
+
+    class Catalog:
+        def iter_recovery_cases(self, **_kwargs):
+            return iter(cases)
+
+    service = object.__new__(ApplicationServices)
+    service.catalog = Catalog()
+    service._now = lambda: now
+
+    with pytest.raises(OrchestrationFailure, match="multiple active recovery cases"):
+        service._poll_recovery_sla(None)
 
 
 def test_missing_direct_model_config_is_blocked_and_recorded(
@@ -791,6 +898,208 @@ def test_source_failure_shadow_branch_immediately_freezes_and_persists_cash_inte
         account = catalog.get_shadow_account("champion-shadow")
         assert account is not None
         assert account.cash == account.nav == 50_000_000
+    finally:
+        ledger.close()
+        catalog.close()
+        engine.dispose()
+
+
+def test_data_failure_freezes_oldest_of_more_than_one_thousand_active_accounts(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "full-active-fleet-incident.db"
+    catalog = ResearchCatalog(database)
+    catalog.initialize_schema()
+    engine = create_engine(f"sqlite:///{database}")
+    orm.Base.metadata.create_all(engine)
+    ledger = ProductionLedger(engine)
+    occurred_at = datetime(2026, 8, 23, 10, tzinfo=timezone.utc)
+    identity = PartitionIdentity("research_os", "stage_source", "2026-08-23")
+    ledger.ensure_partition(identity, created_at=occurred_at)
+    lease = ledger.claim(
+        identity=identity,
+        owner="source-worker",
+        now=occurred_at,
+        lease_for=timedelta(minutes=5),
+    )
+    assert lease is not None
+    ledger.finish(
+        lease,
+        status=PartitionStatus.FAILED,
+        completed_at=occurred_at,
+        error_code="SourceUnavailable",
+        error="provider unavailable",
+    )
+    oldest_account_id = "fleet-account-0000"
+    opened_from = occurred_at - timedelta(days=2)
+    for index in range(1_001):
+        catalog.create_shadow_account(
+            account_id=f"fleet-account-{index:04d}",
+            name=f"Fleet account {index:04d}",
+            initial_capital=50_000_000,
+            opened_at=opened_from + timedelta(seconds=index),
+        )
+    truncated = catalog.list_shadow_accounts(limit=1_000, status="active")
+    assert oldest_account_id not in {account.account_id for account in truncated}
+
+    service = object.__new__(ApplicationServices)
+    service.catalog = catalog
+    service.production_ledger = ledger
+    service.shadow_authority = None
+    service.sleeve_roster = load_sleeve_roster(
+        Path(__file__).resolve().parents[1]
+        / "configs"
+        / "research_os_initial_sleeves.json"
+    )
+    try:
+        result = service.report_unexpected_data_failure(
+            "2026-08-23",
+            message="source chain is unavailable",
+            occurred_at=occurred_at,
+            dagster_run_id="full-active-fleet-failure",
+            failed_step_key="source_sync",
+            error_code="SourceUnavailable",
+            expected_failure_stage="source",
+        )
+
+        assert len(result["cash_intent_accounts"]) == 1_001
+        assert oldest_account_id in result["cash_intent_accounts"]
+        oldest_events = catalog.list_shadow_events(
+            account_id=oldest_account_id,
+            limit=10,
+        )
+        assert sum(event.event_type == "data_incident" for event in oldest_events) == 1
+        assert sum(
+            event.event_type == "cash_target_intent" for event in oldest_events
+        ) == 1
+        for entry in service.sleeve_roster.entries:
+            state = catalog.latest_lifecycle_state(entry.sleeve.sleeve_id)
+            assert state is not None and state.value == "frozen_data"
+    finally:
+        ledger.close()
+        catalog.close()
+        engine.dispose()
+
+
+def test_pending_cash_intent_survives_ten_thousand_newer_open_incidents(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "pending-cash-incident-depth.db"
+    catalog = ResearchCatalog(database)
+    catalog.initialize_schema()
+    engine = create_engine(f"sqlite:///{database}")
+    orm.Base.metadata.create_all(engine)
+    ledger = ProductionLedger(engine)
+    incident_at = datetime(2026, 8, 23, 10, tzinfo=timezone.utc)
+    domain_incident_id = "domain-incident-beyond-truncated-window"
+    account_id = "cash-intent-depth-shadow"
+    account = catalog.create_shadow_account(
+        account_id=account_id,
+        name="Cash intent depth shadow",
+        initial_capital=50_000_000,
+        opened_at=incident_at - timedelta(hours=2),
+    )
+    position = catalog.append_shadow_event(
+        account_id=account_id,
+        event_type="position_seeded",
+        occurred_at=incident_at - timedelta(hours=1),
+        payload={
+            "account_state": {
+                "cash": 49_000_000,
+                "nav": 50_000_000,
+                "benchmark_nav": 50_000_000,
+            },
+            "position_state": {
+                "ticker": "000001.SZ",
+                "quantity": 100_000,
+                "average_cost": 10.0,
+                "market_price": 10.0,
+                "market_value": 1_000_000,
+            },
+        },
+        expected_previous_hash=account.last_event_hash,
+    )
+    cash_intent = catalog.append_shadow_event(
+        account_id=account_id,
+        event_type="cash_target_intent",
+        occurred_at=incident_at,
+        payload={
+            "incident_id": domain_incident_id,
+            "cash_weight": 1.0,
+            "execution_state": "awaiting_trusted_execution",
+        },
+        expected_previous_hash=position.event_hash,
+    )
+    catalog.append_shadow_events_atomic(
+        account_id=account_id,
+        events=tuple(
+            {
+                "event_type": "cash_target_intent",
+                "occurred_at": incident_at + timedelta(seconds=index + 1),
+                "payload": {
+                    "incident_id": f"closed-domain-noise-{index}",
+                    "cash_weight": 1.0,
+                    "execution_state": "already_superseded",
+                },
+            }
+            for index in range(1_001)
+        ),
+        expected_previous_hash=cash_intent.event_hash,
+    )
+    related = ledger.record_incident(
+        partition_key="2026-08-23",
+        stage=IncidentStage.SOURCE,
+        error_code="fixture_pending_cash_incident",
+        message="older open incident still governs cash intent",
+        occurred_at=incident_at,
+        payload={"domain_incident_id": domain_incident_id},
+    )
+    decoys = [
+        {
+            "incident_id": f"incident_cash_decoy_{index:05d}",
+            "incident_hash": f"{index + 1:064x}",
+            "partition_run_id": None,
+            "partition_key": "2026-08-24",
+            "stage": IncidentStage.SOURCE.value,
+            "status": IncidentStatus.OPEN.value,
+            "error_code": "fixture_unrelated_open",
+            "message": "newer unrelated open incident",
+            "source_ids_json": [],
+            "evidence_hashes_json": [],
+            "payload_json": {"domain_incident_id": f"noise-{index}"},
+            "occurred_at": incident_at + timedelta(minutes=1),
+            "resolved_at": None,
+            "resolution_hash": None,
+        }
+        for index in range(10_001)
+    ]
+    with engine.begin() as connection:
+        connection.execute(insert(orm.DataIncidentModel), decoys)
+
+    service = object.__new__(ApplicationServices)
+    service.catalog = catalog
+    service.production_ledger = ledger
+    try:
+        truncated = ledger.list_incidents(status=IncidentStatus.OPEN, limit=10_000)
+        assert related.incident_id not in {item.incident_id for item in truncated}
+        truncated_cash_events = catalog.list_shadow_events_by_type(
+            account_id=account_id,
+            event_type="cash_target_intent",
+            limit=1_000,
+        )
+        assert cash_intent.event_id not in {
+            event.event_id for event in truncated_cash_events
+        }
+
+        pending = service._pending_cash_intent_for_account(
+            account_id,
+            superseding_target_generated_at=None,
+        )
+
+        assert pending is not None
+        assert pending["incident_id"] == domain_incident_id
+        assert pending["cash_weight"] == 1.0
+        assert catalog.list_shadow_positions(account_id)
     finally:
         ledger.close()
         catalog.close()

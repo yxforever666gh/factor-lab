@@ -23,7 +23,11 @@ from .build_provenance import (
     bind_verified_oci_deployment,
 )
 from .catalog import RESEARCH_OS_ALEMBIC_HEAD, ResearchCatalog, RunRecord
-from .contracts import DataQualityStatus, SnapshotTier
+from .contracts import (
+    PHYSICAL_CANARY_SNAPSHOT_REFERENCE_SCHEMA,
+    DataQualityStatus,
+    SnapshotTier,
+)
 from .fingerprint import canonical_json, content_fingerprint
 from .gold_panel import DEFAULT_REQUIRED_DATASETS
 from .orchestration import CYCLE_BLUEPRINTS
@@ -81,6 +85,10 @@ PHYSICAL_CANARY_EVALUATOR_IDENTITY_SCHEMA = (
     "research-os/physical-canary-evaluator-identity/v1"
 )
 RESTORE_DRILL_SCHEMA_VERSION = "research-os/minio-restore-drill/v1"
+RESTORE_DRILL_ATTEMPT_SCHEMA_VERSION = (
+    "research-os/minio-restore-drill-attempt/v2"
+)
+RESTORE_DRILL_ATTEMPT_AUTHORITY = "code_owned_physical_restore_attempt"
 DAGSTER_CODE_LOCATION_SOAK_SCHEMA_VERSION = (
     "research-os/dagster-code-location-soak/v1"
 )
@@ -135,6 +143,11 @@ _DATASET_ALIASES = {
 }
 _CANARY_MAX_AGE = timedelta(hours=24)
 _RESTORE_MAX_AGE = timedelta(hours=24)
+_RESTORE_ATTEMPT_ERROR_TYPES = {
+    "restore_drill_evidence_unavailable",
+    "restore_drill_verification_error",
+    "restore_drill_internal_error",
+}
 _CALENDAR_MAX_STALENESS = timedelta(days=10)
 _SOAK_MINIMUM = timedelta(hours=24)
 _HOST_ATTESTATION_MAX_AGE = timedelta(minutes=10)
@@ -424,6 +437,34 @@ def restore_drill_evidence_hash(payload: Mapping[str, Any]) -> str:
         payload,
         field_name="restore_evidence_hash",
         domain=RESTORE_DRILL_SCHEMA_VERSION,
+    )
+
+
+def restore_drill_attempt_fingerprint(
+    *,
+    started_at: datetime,
+    nonce: str,
+    physical: bool,
+    controlled_test_object_store: bool,
+    readiness_admission: str,
+) -> str:
+    """Bind one restore invocation before it may inspect object-store state."""
+
+    canonical_started_at = _parse_time(started_at).isoformat()
+    normalized_nonce = str(nonce)
+    if not re.fullmatch(r"[0-9a-f]{32}", normalized_nonce):
+        raise ValueError("restore drill attempt nonce must be 32 lowercase hex characters")
+    return content_fingerprint(
+        {
+            "attempt_schema_version": RESTORE_DRILL_ATTEMPT_SCHEMA_VERSION,
+            "attempt_authority": RESTORE_DRILL_ATTEMPT_AUTHORITY,
+            "attempt_started_at": canonical_started_at,
+            "attempt_nonce": normalized_nonce,
+            "physical": physical,
+            "controlled_test_object_store": controlled_test_object_store,
+            "readiness_admission": str(readiness_admission),
+        },
+        domain=RESTORE_DRILL_ATTEMPT_SCHEMA_VERSION,
     )
 
 
@@ -1407,8 +1448,85 @@ class ProductionReadinessAuditor:
         )
         return matrix, gold_check
 
+    def _valid_restore_attempt_envelope(
+        self, run: RunRecord, *, now: datetime
+    ) -> bool:
+        metadata = run.metadata
+        outcome = str(metadata.get("attempt_outcome") or "")
+        terminal = run.status in {"succeeded", "failed"}
+        try:
+            attempt_started_at = _parse_time(metadata.get("attempt_started_at"))
+            failed_at = (
+                _parse_time(metadata.get("failed_at"))
+                if run.status == "failed"
+                else None
+            )
+            attempt_fingerprint = restore_drill_attempt_fingerprint(
+                started_at=attempt_started_at,
+                nonce=str(metadata.get("attempt_nonce") or ""),
+                physical=metadata.get("physical"),
+                controlled_test_object_store=metadata.get(
+                    "controlled_test_object_store"
+                ),
+                readiness_admission=str(metadata.get("readiness_admission") or ""),
+            )
+        except (TypeError, ValueError):
+            return False
+        error_type = metadata.get("error_type")
+        return bool(
+            run.run_type == RESTORE_DRILL_RUN_TYPE
+            and run.run_id == f"restore_attempt_{attempt_fingerprint}"
+            and run.input_fingerprint == attempt_fingerprint
+            and metadata.get("attempt_schema_version")
+            == RESTORE_DRILL_ATTEMPT_SCHEMA_VERSION
+            and metadata.get("attempt_authority")
+            == RESTORE_DRILL_ATTEMPT_AUTHORITY
+            and metadata.get("attempt_started_at")
+            == run.started_at.astimezone(timezone.utc).isoformat()
+            and attempt_started_at == run.started_at.astimezone(timezone.utc)
+            and metadata.get("physical") is True
+            and metadata.get("controlled_test_object_store") is False
+            and metadata.get("readiness_admission")
+            == "physical_minio_restore_drill"
+            and run.status in {"running", "succeeded", "failed"}
+            and outcome == run.status
+            and run.started_at <= now
+            and (
+                (
+                    not terminal
+                    and run.completed_at is None
+                    and run.error is None
+                    and error_type is None
+                    and metadata.get("failed_at") is None
+                )
+                or (
+                    terminal
+                    and run.completed_at is not None
+                    and run.started_at <= run.completed_at <= now
+                    and (
+                        (
+                            run.status == "failed"
+                            and run.error in _RESTORE_ATTEMPT_ERROR_TYPES
+                            and error_type == run.error
+                            and failed_at == run.completed_at
+                        )
+                        or (
+                            run.status == "succeeded"
+                            and run.error is None
+                            and error_type is None
+                            and metadata.get("failed_at") is None
+                        )
+                    )
+                )
+            )
+            and metadata.get("formal_readiness_eligible")
+            is (run.status == "succeeded")
+        )
+
     def _valid_restore_run(self, run: RunRecord, *, now: datetime) -> tuple[bool, str | None]:
         metadata = run.metadata
+        if not self._valid_restore_attempt_envelope(run, now=now):
+            return False, None
         expected = restore_drill_evidence_hash(metadata)
         expected_sha = str(metadata.get("expected_sha256") or "")
         current_canary_contract = self._current_canary_execution_contract_hash()
@@ -1441,7 +1559,6 @@ class ProductionReadinessAuditor:
         if not (
             run.run_type == RESTORE_DRILL_RUN_TYPE
             and run.status == "succeeded"
-            and run.run_id == f"restore_{expected}"
             and run.completed_at is not None
             and run.started_at <= run.completed_at <= now
             and timedelta(0) <= now - run.completed_at <= _RESTORE_MAX_AGE
@@ -1476,31 +1593,100 @@ class ProductionReadinessAuditor:
             and metadata.get("source_snapshot_role") == "mark"
             and str(metadata.get("source_snapshot_trade_date") or "")
             and metadata.get("restore_evidence_hash") == expected
-            and run.input_fingerprint == expected
         ):
             return False, None
         return True, expected
 
     def _restore_check(self, *, now: datetime) -> tuple[ReadinessCheck, RunRecord | None]:
-        runs = self.catalog.list_runs(limit=1_000, run_type=RESTORE_DRILL_RUN_TYPE)
-        for run in runs:
-            valid, evidence_hash = self._valid_restore_run(run, now=now)
-            if valid:
-                return (
-                    self._check(
-                        "minio_restore_drill",
-                        (),
-                        run_id=run.run_id,
-                        evidence_hash=evidence_hash,
-                        completed_at=run.completed_at,
+        # Two rows are sufficient to reject an equal-start ambiguity while
+        # never opening a historical window in which an older success could be
+        # selected after a newer invocation started or failed.
+        runs = self.catalog.list_runs(limit=2, run_type=RESTORE_DRILL_RUN_TYPE)
+        if not runs:
+            return (
+                self._check(
+                    "minio_restore_drill",
+                    ("physical_minio_restore_drill_missing",),
+                    inspected_runs=0,
+                ),
+                None,
+            )
+        run = runs[0]
+        if len(runs) > 1 and runs[1].started_at == run.started_at:
+            return (
+                self._check(
+                    "minio_restore_drill",
+                    ("physical_minio_restore_drill_latest_attempt_ambiguous",),
+                    inspected_runs=2,
+                    latest_started_at=run.started_at,
+                    latest_run_ids=[item.run_id for item in runs],
+                ),
+                None,
+            )
+        if metadata_schema := run.metadata.get("attempt_schema_version"):
+            schema_is_current = metadata_schema == RESTORE_DRILL_ATTEMPT_SCHEMA_VERSION
+        else:
+            schema_is_current = False
+        if not schema_is_current:
+            blocker = (
+                "physical_minio_restore_drill_new_attempt_required"
+                if metadata_schema is None
+                else "physical_minio_restore_drill_latest_attempt_invalid"
+            )
+            return (
+                self._check(
+                    "minio_restore_drill",
+                    (blocker,),
+                    inspected_runs=1,
+                    latest_run_id=run.run_id,
+                    latest_status=run.status,
+                ),
+                None,
+            )
+        if not self._valid_restore_attempt_envelope(run, now=now):
+            return (
+                self._check(
+                    "minio_restore_drill",
+                    ("physical_minio_restore_drill_latest_attempt_invalid",),
+                    inspected_runs=1,
+                    latest_run_id=run.run_id,
+                    latest_status=run.status,
+                ),
+                None,
+            )
+        if run.status != "succeeded":
+            return (
+                self._check(
+                    "minio_restore_drill",
+                    (
+                        "physical_minio_restore_drill_latest_attempt_"
+                        + ("running" if run.status == "running" else "failed"),
                     ),
-                    run,
-                )
+                    inspected_runs=1,
+                    latest_run_id=run.run_id,
+                    latest_status=run.status,
+                ),
+                None,
+            )
+        valid, evidence_hash = self._valid_restore_run(run, now=now)
+        if valid:
+            return (
+                self._check(
+                    "minio_restore_drill",
+                    (),
+                    run_id=run.run_id,
+                    evidence_hash=evidence_hash,
+                    completed_at=run.completed_at,
+                ),
+                run,
+            )
         return (
             self._check(
                 "minio_restore_drill",
-                ("physical_minio_restore_drill_missing",),
-                inspected_runs=len(runs),
+                ("physical_minio_restore_drill_latest_attempt_invalid",),
+                inspected_runs=1,
+                latest_run_id=run.run_id,
+                latest_status=run.status,
             ),
             None,
         )
@@ -1607,6 +1793,12 @@ class ProductionReadinessAuditor:
                 "retrospective_non_forward",
                 "retrospective_physical_replay",
             }
+            and self._physical_canary_snapshot_reference_is_valid(
+                reference,
+                expected_canary_execution_contract_hash=(
+                    expected_canary_execution_contract_hash
+                ),
+            )
         ):
             errors.append("physical_snapshot_contract_or_hash_invalid")
 
@@ -1904,6 +2096,551 @@ class ProductionReadinessAuditor:
         )
         return labeled_physical
 
+    @staticmethod
+    def _physical_canary_partition_role(record: PartitionRecord) -> str:
+        role = str(record.details.get("role") or record.details.get("gold_role") or "")
+        if role:
+            return role
+        claim_lineage = record.details.get("claim_lineage")
+        stage_lineage = (
+            claim_lineage.get("stage_lineage")
+            if isinstance(claim_lineage, Mapping)
+            else None
+        )
+        if isinstance(stage_lineage, Mapping):
+            role = str(
+                stage_lineage.get("role") or stage_lineage.get("gold_role") or ""
+            )
+            if role:
+                return role
+            source_id = str(stage_lineage.get("source_id") or "")
+            dataset = str(stage_lineage.get("dataset") or "")
+            if source_id and dataset:
+                return f"{source_id}_{dataset}"
+        dataset = record.identity.dataset
+        if dataset == "gold_mark" or dataset.startswith("gold_mark_"):
+            return "mark"
+        if dataset == "gold_execution" or dataset.startswith("gold_execution_"):
+            return "execution"
+        return ""
+
+    @classmethod
+    def _physical_canary_incident_semantics(
+        cls,
+        incident: IncidentRecord,
+        *,
+        partitions: Mapping[str, PartitionRecord],
+    ) -> tuple[str, str, str] | None:
+        """Return the immutable dataset/date/role affected by an incident."""
+
+        payload = incident.payload
+        original = partitions.get(str(incident.partition_run_id or ""))
+        if original is not None:
+            dataset = original.identity.dataset
+            partition_key = original.identity.partition_key
+            if partition_key != incident.partition_key:
+                return None
+            declared_dataset = str(payload.get("dataset") or "")
+            if declared_dataset and declared_dataset != dataset:
+                return None
+            role = cls._physical_canary_partition_role(original)
+        else:
+            dataset = str(payload.get("dataset") or "")
+            partition_key = incident.partition_key
+            role = ""
+
+        declared_role = str(payload.get("gold_role") or payload.get("role") or "")
+        if role and declared_role and role != declared_role:
+            return None
+        role = role or declared_role
+        if not dataset and incident.error_code == "gold_market_semantics_rejected":
+            role = role or ("execution" if payload.get("projected") is True else "mark")
+            dataset = f"gold_{role}"
+        if not dataset:
+            return None
+        return dataset, partition_key, role
+
+    @classmethod
+    def _physical_canary_partition_matches_semantics(
+        cls,
+        record: PartitionRecord,
+        semantics: tuple[str, str, str],
+    ) -> bool:
+        dataset, partition_key, role = semantics
+        return bool(
+            record.identity.dataset == dataset
+            and record.identity.partition_key == partition_key
+            and (not role or cls._physical_canary_partition_role(record) == role)
+        )
+
+    @staticmethod
+    def _physical_canary_snapshot_reference_is_valid(
+        reference: Any,
+        *,
+        expected_canary_execution_contract_hash: str,
+    ) -> bool:
+        """Verify the immutable production-physical snapshot reference binding."""
+
+        manifest = reference.manifest
+        if not isinstance(manifest, Mapping):
+            return False
+        physical_object = manifest.get("physical_object")
+        manifest_as_of = manifest.get("snapshot_as_of")
+        if not (
+            isinstance(physical_object, Mapping)
+            and isinstance(manifest_as_of, str)
+            and _valid_hash(expected_canary_execution_contract_hash)
+        ):
+            return False
+        try:
+            parsed_as_of = datetime.fromisoformat(manifest_as_of)
+            if parsed_as_of.tzinfo is None or parsed_as_of.utcoffset() is None:
+                return False
+            canonical_manifest_as_of = parsed_as_of.astimezone(
+                timezone.utc
+            ).isoformat()
+            reference_as_of = reference.as_of
+            if reference_as_of.tzinfo is None or reference_as_of.utcoffset() is None:
+                return False
+            canonical_reference_as_of = reference_as_of.astimezone(
+                timezone.utc
+            ).isoformat()
+        except (AttributeError, TypeError, ValueError):
+            return False
+        parents = manifest.get("parent_snapshot_ids")
+        if not (
+            isinstance(parents, (list, tuple))
+            and all(isinstance(item, str) for item in parents)
+        ):
+            return False
+        expected_content_hash = content_fingerprint(
+            manifest,
+            domain="factor-lab/research-os/v1/physical-canary-snapshot",
+        )
+        expected_snapshot_id = (
+            f"pec_{reference.tier.value}_{expected_content_hash[:56]}"
+        )
+        return bool(
+            manifest.get("snapshot_reference_schema")
+            == PHYSICAL_CANARY_SNAPSHOT_REFERENCE_SCHEMA
+            and manifest_as_of == canonical_manifest_as_of
+            and reference_as_of.isoformat() == canonical_reference_as_of
+            and canonical_manifest_as_of == canonical_reference_as_of
+            and reference.content_hash == expected_content_hash
+            and reference.snapshot_id == expected_snapshot_id
+            and reference.quality_status is DataQualityStatus.ACCEPTED
+            and str(manifest.get("tier") or "") == reference.tier.value
+            and tuple(parents) == reference.parent_snapshot_ids
+            and str(physical_object.get("uri") or "") == reference.uri
+            and reference.trust_labels
+            == (
+                "physical_engineering_canary",
+                "retrospective_non_forward",
+                "retrospective_physical_replay",
+            )
+            and manifest.get("evidence_schema")
+            == PHYSICAL_CANARY_SCHEMA_VERSION
+            and manifest.get("evidence_class") == "engineering_canary"
+            and manifest.get("evidence_scope") == "retrospective_non_forward"
+            and manifest.get("formal_epoch_eligible") is False
+            and manifest.get("physical_source_attested") is True
+            and manifest.get("controlled_test_adapter") is False
+            and manifest.get("readiness_admission")
+            == "physical_engineering_prerequisite"
+            and manifest.get("canary_execution_contract_hash")
+            == expected_canary_execution_contract_hash
+        )
+
+    def _physical_canary_partition_output_is_valid(
+        self, record: PartitionRecord
+    ) -> bool:
+        """Verify a succeeded partition still binds its immutable catalog output."""
+
+        if not (
+            record.status is PartitionStatus.SUCCEEDED
+            and record.completed_at is not None
+            and record.run_id
+            and record.output_snapshot_id
+            and record.output_hash
+        ):
+            return False
+        snapshot = self.catalog.get_snapshot(record.output_snapshot_id)
+        if snapshot is None:
+            return False
+        reference = snapshot.reference
+        manifest = reference.manifest
+        if not (
+            isinstance(manifest, Mapping)
+            and self._physical_canary_snapshot_reference_is_valid(
+                reference,
+                expected_canary_execution_contract_hash=(
+                    self._current_canary_execution_contract_hash()
+                ),
+            )
+        ):
+            return False
+        expected_content_hash = content_fingerprint(
+            manifest,
+            domain="factor-lab/research-os/v1/physical-canary-snapshot",
+        )
+        expected_snapshot_id = (
+            f"pec_{reference.tier.value}_{expected_content_hash[:56]}"
+        )
+        physical_object = manifest.get("physical_object")
+        if not isinstance(physical_object, Mapping):
+            return False
+        if record.identity.dataset == "dq_accepted":
+            report = manifest.get("quality_report")
+            if not isinstance(report, Mapping):
+                return False
+            expected_output_hash = content_fingerprint(
+                dict(report),
+                domain="factor-lab/research-os/v1/physical-canary-dq-report",
+            )
+        else:
+            expected_output_hash = reference.content_hash
+        role = self._physical_canary_partition_role(record)
+        return bool(
+            reference.snapshot_id == record.output_snapshot_id
+            and reference.snapshot_id == expected_snapshot_id
+            and reference.content_hash == expected_content_hash
+            and reference.quality_status is DataQualityStatus.ACCEPTED
+            and record.output_hash == expected_output_hash
+            and str(manifest.get("tier") or "") == reference.tier.value
+            and tuple(map(str, manifest.get("parent_snapshot_ids") or ()))
+            == reference.parent_snapshot_ids
+            and str(physical_object.get("uri") or "") == reference.uri
+            and str(manifest.get("run_id") or "") == record.run_id
+            and str(manifest.get("trade_date") or "")
+            == record.identity.partition_key
+            and (not record.details.get("run_id") or record.details.get("run_id") == record.run_id)
+            and (not role or str(manifest.get("role") or "") == role)
+        )
+
+    @staticmethod
+    def _physical_canary_incident_hash_is_valid(incident: IncidentRecord) -> bool:
+        origin_payload = dict(incident.payload)
+        origin_payload.pop("resolution", None)
+        expected = content_fingerprint(
+            {
+                "partition_key": incident.partition_key,
+                "stage": incident.stage.value,
+                "error_code": incident.error_code,
+                "occurred_at": incident.occurred_at,
+                "partition_run_id": incident.partition_run_id,
+                "source_ids": incident.source_ids,
+                "evidence_hashes": incident.evidence_hashes,
+                "payload": origin_payload,
+            },
+            domain="factor-lab/research-os/v1/data-incident",
+        )
+        return bool(
+            incident.incident_hash == expected
+            and incident.incident_id == f"incident_{expected[:64]}"
+        )
+
+    @staticmethod
+    def _physical_canary_producer_labels_are_valid(payload: Mapping[str, Any]) -> bool:
+        return bool(
+            payload.get("evidence_schema") == PHYSICAL_CANARY_SCHEMA_VERSION
+            and payload.get("evidence_class") == "engineering_canary"
+            and payload.get("evidence_scope") == "retrospective_non_forward"
+            and payload.get("formal_epoch_eligible") is False
+            and payload.get("physical_source_attested") is True
+            and payload.get("controlled_test_adapter") is False
+            and payload.get("readiness_admission")
+            == "physical_engineering_prerequisite"
+        )
+
+    @staticmethod
+    def _physical_canary_claim_lineage_is_valid(record: PartitionRecord) -> bool:
+        lineage = record.details.get("claim_lineage")
+        lineage_hash = str(record.details.get("claim_lineage_hash") or "")
+        if not isinstance(lineage, Mapping):
+            return False
+        identity = lineage.get("partition_identity")
+        if not isinstance(identity, Mapping):
+            return False
+        expected_hash = content_fingerprint(
+            dict(lineage),
+            domain="factor-lab/research-os/v1/physical-canary-partition-claim-lineage",
+        )
+        return bool(
+            lineage_hash == expected_hash
+            and lineage.get("incident_stage")
+            in {"source", "silver", "data_quality", "gold"}
+            and isinstance(lineage.get("stage_lineage"), Mapping)
+            and str(lineage.get("attempted_input_hash") or "")
+            == str(record.input_hash or "")
+            and identity.get("source_id") == record.identity.source_id
+            and identity.get("dataset") == record.identity.dataset
+            and identity.get("partition_key") == record.identity.partition_key
+            and identity.get("partition_run_id")
+            == record.identity.partition_run_id
+        )
+
+    def _physical_canary_resolution_schema_is_valid(
+        self,
+        incident: IncidentRecord,
+        *,
+        replacement: PartitionRecord,
+        partitions: Mapping[str, PartitionRecord],
+    ) -> bool:
+        resolution = incident.payload.get("resolution")
+        if not isinstance(resolution, Mapping):
+            return False
+        disposition = str(resolution.get("disposition") or "")
+        common_keys = {
+            "disposition",
+            "replacement_partition_run_id",
+            "replacement_output_snapshot_id",
+            "replacement_output_hash",
+        }
+        payload = dict(incident.payload)
+        payload.pop("resolution", None)
+        original = partitions.get(str(incident.partition_run_id or ""))
+
+        if disposition == "superseded_by_verified_canary_generation":
+            expected_keys = common_keys | {
+                "legacy_partition_run_id",
+                "legacy_source_id",
+                "current_source_id",
+            }
+            expected_payload_keys = {
+                "legacy_source_id",
+                "legacy_status",
+                "current_source_id",
+                "dataset",
+            }
+            original_stage = (
+                str(original.details.get("stage") or "")
+                if original is not None
+                else ""
+            )
+            expected_stage = {
+                "bronze": "source",
+                "silver": "silver",
+                "data_quality": "data_quality",
+                "gold": "gold",
+            }.get(original_stage)
+            original_output_hash = (
+                str(original.output_hash or "").lower()
+                if original is not None
+                else ""
+            )
+            expected_evidence_hashes = (
+                (original_output_hash,)
+                if _SHA256.fullmatch(original_output_hash)
+                else ()
+            )
+            return bool(
+                set(resolution) == expected_keys
+                and set(payload) == expected_payload_keys
+                and incident.status is IncidentStatus.SUPERSEDED
+                and incident.error_code == "legacy_canary_generation_isolated"
+                and original is not None
+                and incident.stage.value == expected_stage
+                and incident.partition_key == original.identity.partition_key
+                and incident.source_ids == (original.identity.source_id,)
+                and incident.evidence_hashes == expected_evidence_hashes
+                and incident.occurred_at == original.updated_at
+                and payload.get("legacy_source_id") == original.identity.source_id
+                and payload.get("legacy_status") == original.status.value
+                and payload.get("current_source_id")
+                == replacement.identity.source_id
+                and payload.get("dataset") == original.identity.dataset
+                and resolution.get("legacy_partition_run_id")
+                == original.identity.partition_run_id
+                and resolution.get("legacy_source_id")
+                == original.identity.source_id
+                and resolution.get("current_source_id")
+                == replacement.identity.source_id
+                and self._physical_canary_claim_lineage_is_valid(replacement)
+            )
+
+        if disposition == "superseded_by_verified_gold_partition":
+            expected_keys = common_keys | {"gold_role"}
+            role = str(resolution.get("gold_role") or "")
+            projected = payload.get("projected")
+            lineage_fields = (
+                "stage_source",
+                "silver_snapshot_id",
+                "calendar_hash",
+                "attempted_gold_input_hash",
+            )
+            return bool(
+                set(resolution) == expected_keys
+                and incident.status is IncidentStatus.SUPERSEDED
+                and incident.partition_run_id is None
+                and incident.error_code == "gold_market_semantics_rejected"
+                and incident.stage.value == "gold"
+                and self._physical_canary_producer_labels_are_valid(payload)
+                and projected in {True, False}
+                and role == ("execution" if projected else "mark")
+                and role == self._physical_canary_partition_role(replacement)
+                and replacement.identity.dataset == f"gold_{role}"
+                and all(
+                    str(payload.get(field) or "")
+                    and payload.get(field) == replacement.details.get(field)
+                    for field in lineage_fields
+                )
+                and payload.get("gold_role") == role
+                and self._physical_canary_claim_lineage_is_valid(replacement)
+            )
+
+        if disposition not in {
+            "resolved_by_exact_claim_lineage_success",
+            "resolved_by_successful_partition_retry",
+        }:
+            return False
+        expected_keys = common_keys | {"successful_attempt"}
+        if disposition == "resolved_by_exact_claim_lineage_success":
+            expected_keys.add("claim_lineage_hash")
+        replacement_lineage = replacement.details.get("claim_lineage")
+        replacement_lineage_hash = str(
+            replacement.details.get("claim_lineage_hash") or ""
+        )
+        base_valid = bool(
+            set(resolution) == expected_keys
+            and incident.status is IncidentStatus.RESOLVED
+            and incident.partition_run_id == replacement.identity.partition_run_id
+            and self._physical_canary_producer_labels_are_valid(payload)
+            and self._physical_canary_claim_lineage_is_valid(replacement)
+            and payload.get("claim_lineage") == replacement_lineage
+            and payload.get("claim_lineage_hash") == replacement_lineage_hash
+            and type(resolution.get("successful_attempt")) is int
+            and resolution.get("successful_attempt") == replacement.attempts
+        )
+        if not base_valid:
+            return False
+        if disposition == "resolved_by_exact_claim_lineage_success":
+            return bool(
+                payload.get("claim_attempt_status") == PartitionStatus.FAILED.value
+                and payload.get("attempted_input_hash") == replacement.input_hash
+                and resolution.get("claim_lineage_hash")
+                == replacement_lineage_hash
+            )
+        return bool(
+            replacement.attempts >= 2
+            and payload.get("partition_terminal_status")
+            == PartitionStatus.FAILED.value
+        )
+
+    def _physical_canary_causal_resolution_partition(
+        self,
+        incident: IncidentRecord,
+        *,
+        partitions: Mapping[str, PartitionRecord],
+        output_validity: Mapping[str, bool],
+    ) -> PartitionRecord | None:
+        resolution = incident.payload.get("resolution")
+        if not (
+            incident.status is not IncidentStatus.OPEN
+            and incident.resolved_at is not None
+            and isinstance(resolution, Mapping)
+            and incident.resolution_hash
+            and self._physical_canary_incident_hash_is_valid(incident)
+        ):
+            return None
+        expected_resolution_hash = content_fingerprint(
+            {
+                "incident_id": incident.incident_id,
+                "resolved_at": incident.resolved_at,
+                "evidence": dict(resolution),
+                "superseded": incident.status is IncidentStatus.SUPERSEDED,
+            },
+            domain="factor-lab/research-os/v1/data-incident-resolution",
+        )
+        if incident.resolution_hash != expected_resolution_hash:
+            return None
+        replacement_id = str(resolution.get("replacement_partition_run_id") or "")
+        replacement = partitions.get(replacement_id)
+        semantics = self._physical_canary_incident_semantics(
+            incident, partitions=partitions
+        )
+        if not (
+            replacement is not None
+            and semantics is not None
+            and self._physical_canary_partition_matches_semantics(
+                replacement, semantics
+            )
+            and output_validity.get(replacement.identity.partition_run_id) is True
+            and replacement.completed_at is not None
+            and incident.occurred_at
+            <= replacement.completed_at
+            <= incident.resolved_at
+            and str(resolution.get("replacement_output_snapshot_id") or "")
+            == str(replacement.output_snapshot_id or "")
+            and str(resolution.get("replacement_output_hash") or "")
+            == str(replacement.output_hash or "")
+            and self._physical_canary_resolution_schema_is_valid(
+                incident,
+                replacement=replacement,
+                partitions=partitions,
+            )
+        ):
+            return None
+        return replacement
+
+    def _physical_canary_current_successor(
+        self,
+        incident: IncidentRecord,
+        *,
+        partitions: Mapping[str, PartitionRecord],
+        candidates_by_dataset_date: Mapping[
+            tuple[str, str], Sequence[PartitionRecord]
+        ],
+        output_validity: Mapping[str, bool],
+    ) -> PartitionRecord | None:
+        semantics = self._physical_canary_incident_semantics(
+            incident, partitions=partitions
+        )
+        if semantics is None:
+            return None
+        dataset, partition_key, _role = semantics
+        candidates = tuple(
+            record
+            for record in candidates_by_dataset_date.get(
+                (dataset, partition_key), ()
+            )
+            if self._physical_canary_partition_matches_semantics(record, semantics)
+        )
+        if len(candidates) != 1:
+            return None
+        candidate = candidates[0]
+        return (
+            candidate
+            if output_validity.get(candidate.identity.partition_run_id) is True
+            else None
+        )
+
+    @staticmethod
+    def _physical_canary_has_transitive_bridge(
+        incident: IncidentRecord,
+        *,
+        bridge_edges: Mapping[str, frozenset[str]],
+        successor: PartitionRecord,
+    ) -> bool:
+        """Follow prevalidated immutable generation edges to the current successor."""
+
+        origin_id = str(incident.partition_run_id or "")
+        if not origin_id:
+            return False
+        target_id = successor.identity.partition_run_id
+        pending = [origin_id]
+        visited: set[str] = set()
+        while pending:
+            current = pending.pop()
+            if current in visited:
+                continue
+            visited.add(current)
+            for replacement_id in bridge_edges.get(current, frozenset()):
+                if replacement_id == target_id:
+                    return True
+                if replacement_id not in visited:
+                    pending.append(replacement_id)
+        return False
+
     def _physical_canary_incident_errors(
         self,
         *,
@@ -1927,14 +2664,71 @@ class ProductionReadinessAuditor:
         )
         errors: list[str] = []
         inspected: list[dict[str, Any]] = []
-        for incident in self.ledger.list_incidents(limit=10_000):
-            if not self._physical_canary_incident_is_related(
+        related_incidents = tuple(
+            incident
+            for incident in self.ledger.iter_incidents(batch_size=10_000)
+            if self._physical_canary_incident_is_related(
                 incident,
                 run_id=run.run_id,
                 calendar_window=calendar_window,
                 claimed_partition_ids=claimed_partition_ids,
-            ):
+            )
+        )
+        resolution_partition_ids = {
+            str(resolution.get("replacement_partition_run_id") or "")
+            for incident in related_incidents
+            for resolution in (incident.payload.get("resolution"),)
+            if isinstance(resolution, Mapping)
+            and str(resolution.get("replacement_partition_run_id") or "")
+        }
+        output_partition_ids = claimed_partition_ids | resolution_partition_ids
+        output_validity = {
+            partition_id: self._physical_canary_partition_output_is_valid(record)
+            for partition_id in output_partition_ids
+            for record in (partitions.get(partition_id),)
+            if record is not None
+        }
+        causal_replacements = {
+            incident.incident_id: self._physical_canary_causal_resolution_partition(
+                incident,
+                partitions=partitions,
+                output_validity=output_validity,
+            )
+            for incident in related_incidents
+            if incident.status is not IncidentStatus.OPEN
+        }
+        current_candidates: dict[tuple[str, str], list[PartitionRecord]] = {}
+        for partition_id in claimed_partition_ids:
+            record = partitions.get(partition_id)
+            if record is None or record.run_id != run.run_id:
                 continue
+            key = (record.identity.dataset, record.identity.partition_key)
+            current_candidates.setdefault(key, []).append(record)
+        bridge_edges_mutable: dict[str, set[str]] = {}
+        if completed_at is not None:
+            for incident in related_incidents:
+                resolution = incident.payload.get("resolution")
+                replacement = causal_replacements.get(incident.incident_id)
+                if not (
+                    incident.status is IncidentStatus.SUPERSEDED
+                    and isinstance(resolution, Mapping)
+                    and resolution.get("disposition")
+                    == "superseded_by_verified_canary_generation"
+                    and incident.partition_run_id
+                    and incident.resolved_at is not None
+                    and incident.resolved_at <= completed_at
+                    and replacement is not None
+                ):
+                    continue
+                bridge_edges_mutable.setdefault(
+                    str(incident.partition_run_id), set()
+                ).add(replacement.identity.partition_run_id)
+        bridge_edges = {
+            origin: frozenset(replacements)
+            for origin, replacements in bridge_edges_mutable.items()
+        }
+
+        for incident in related_incidents:
             reason: str | None = None
             if incident.status is IncidentStatus.OPEN:
                 reason = "related_incident_open"
@@ -1945,23 +2739,49 @@ class ProductionReadinessAuditor:
                     if isinstance(resolution, Mapping)
                     else ""
                 )
-                replacement = partitions.get(replacement_id)
-                if not (
+                directly_bound = bool(
+                    (incident.partition_run_id or "") in claimed_partition_ids
+                    or replacement_id in claimed_partition_ids
+                    or str(incident.payload.get("run_id") or "") == run.run_id
+                )
+                during_or_after_run = bool(
+                    incident.occurred_at >= run.started_at
+                    or incident.resolved_at is None
+                    or incident.resolved_at >= run.started_at
+                )
+                causal_replacement = causal_replacements.get(incident.incident_id)
+                successor = self._physical_canary_current_successor(
+                    incident,
+                    partitions=partitions,
+                    candidates_by_dataset_date=current_candidates,
+                    output_validity=output_validity,
+                )
+                strict_current_resolution = bool(
                     completed_at is not None
                     and incident.resolved_at is not None
                     and incident.occurred_at <= incident.resolved_at <= completed_at
-                    and replacement_id in claimed_partition_ids
-                    and replacement is not None
-                    and replacement.status is PartitionStatus.SUCCEEDED
-                    and replacement.completed_at is not None
-                    and incident.occurred_at
-                    <= replacement.completed_at
-                    <= incident.resolved_at
-                    and isinstance(resolution, Mapping)
-                    and str(resolution.get("replacement_output_snapshot_id") or "")
-                    == str(replacement.output_snapshot_id or "")
-                    and str(resolution.get("replacement_output_hash") or "")
-                    == str(replacement.output_hash or "")
+                    and causal_replacement is not None
+                    and successor is not None
+                    and causal_replacement.identity.partition_run_id
+                    == successor.identity.partition_run_id
+                )
+                historical_resolution = bool(
+                    not directly_bound
+                    and not during_or_after_run
+                    and successor is not None
+                    and (
+                        causal_replacement is not None
+                        or self._physical_canary_has_transitive_bridge(
+                            incident,
+                            bridge_edges=bridge_edges,
+                            successor=successor,
+                        )
+                    )
+                )
+                if not (
+                    strict_current_resolution
+                    if directly_bound or during_or_after_run
+                    else historical_resolution
                 ):
                     reason = "related_incident_resolution_not_causal"
             inspected.append(
@@ -1986,13 +2806,6 @@ class ProductionReadinessAuditor:
     ) -> ReadinessCheck:
         all_runs = self.catalog.list_runs(
             limit=1_000, run_type=PHYSICAL_CANARY_RUN_TYPE
-        )
-        valid_restore_runs = tuple(
-            run
-            for run in self.catalog.list_runs(
-                limit=1_000, run_type=RESTORE_DRILL_RUN_TYPE
-            )
-            if self._valid_restore_run(run, now=now)[0]
         )
         synthetic_count = len(
             self.catalog.list_runs(limit=1_000, run_type="engineering_canary")
@@ -2378,7 +3191,7 @@ class ProductionReadinessAuditor:
             ):
                 reasons.append("physical_snapshot_closure_invalid")
             matching_restore = None
-            for candidate in valid_restore_runs:
+            for candidate in (() if restore_run is None else (restore_run,)):
                 restore_metadata = candidate.metadata
                 selected = evidence_by_snapshot.get(
                     str(restore_metadata.get("source_snapshot_id") or "")
@@ -3487,6 +4300,8 @@ __all__ = [
     "ProductionReadinessStatus",
     "READINESS_AUDIT_RUN_TYPE",
     "READINESS_AUDIT_SCHEMA_VERSION",
+    "RESTORE_DRILL_ATTEMPT_AUTHORITY",
+    "RESTORE_DRILL_ATTEMPT_SCHEMA_VERSION",
     "RESTORE_DRILL_RUN_TYPE",
     "RESTORE_DRILL_SCHEMA_VERSION",
     "ReadinessAuditError",
@@ -3496,5 +4311,6 @@ __all__ = [
     "dagster_code_location_soak_evidence_hash",
     "formal_execution_probe_hash",
     "physical_canary_evidence_hash",
+    "restore_drill_attempt_fingerprint",
     "restore_drill_evidence_hash",
 ]

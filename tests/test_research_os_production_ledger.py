@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 pytest.importorskip("sqlalchemy")
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.exc import IntegrityError
 
 from factor_lab.research_os.orm import (
@@ -356,6 +356,63 @@ def test_capability_and_incident_records_are_deterministic_and_redacted(
     assert resolved.status is IncidentStatus.RESOLVED
     assert resolved.resolution_hash is not None
     assert ledger.list_incidents(status=IncidentStatus.OPEN) == ()
+
+
+def test_iter_incidents_streams_all_rows_from_one_stably_ordered_query(
+    ledger: ProductionLedger,
+) -> None:
+    incidents = tuple(
+        ledger.record_incident(
+            partition_key=f"2026-08-{day:02d}",
+            stage=IncidentStage.SOURCE,
+            error_code="source_probe_failed",
+            message="bounded failure",
+            occurred_at=NOW + timedelta(minutes=day),
+            payload={"sequence": day},
+        )
+        for day in (20, 21, 22)
+    )
+    ledger.resolve_incident(
+        incidents[1].incident_id,
+        resolved_at=NOW + timedelta(days=1),
+        evidence={"disposition": "test_resolution"},
+    )
+    incident_selects = 0
+
+    def count_incident_selects(
+        _connection,
+        _cursor,
+        statement,
+        _parameters,
+        _context,
+        _executemany,
+    ) -> None:
+        nonlocal incident_selects
+        if "FROM ros_data_incidents" in statement:
+            incident_selects += 1
+
+    event.listen(ledger.engine, "before_cursor_execute", count_incident_selects)
+    try:
+        streamed = tuple(ledger.iter_incidents(batch_size=2))
+    finally:
+        event.remove(
+            ledger.engine,
+            "before_cursor_execute",
+            count_incident_selects,
+        )
+
+    assert tuple(item.incident_id for item in streamed) == tuple(
+        item.incident_id for item in reversed(incidents)
+    )
+    assert incident_selects == 1
+    assert tuple(
+        item.incident_id
+        for item in ledger.iter_incidents(status=IncidentStatus.OPEN, batch_size=1)
+    ) == (incidents[2].incident_id, incidents[0].incident_id)
+    with pytest.raises(ValueError, match="batch_size"):
+        ledger.iter_incidents(batch_size=0)
+    with pytest.raises(ValueError, match="batch_size"):
+        ledger.iter_incidents(batch_size=10_001)
 
 
 def test_shadow_session_schema_rejects_cross_epoch_or_same_role_snapshots(

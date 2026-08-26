@@ -19,7 +19,10 @@ from factor_lab.research_os.physical_canary import CANARY_OBJECT_PREFIX
 from factor_lab.research_os.readiness_audit import (
     PHYSICAL_CANARY_RUN_TYPE,
     PHYSICAL_CANARY_SCHEMA_VERSION,
+    RESTORE_DRILL_ATTEMPT_AUTHORITY,
+    RESTORE_DRILL_ATTEMPT_SCHEMA_VERSION,
     RESTORE_DRILL_RUN_TYPE,
+    restore_drill_attempt_fingerprint,
     restore_drill_evidence_hash,
     physical_canary_evidence_hash,
 )
@@ -222,7 +225,21 @@ def test_controlled_restore_downloads_deletes_and_downloads_again_without_formal
         stored = catalog.get_run(result.run_id)
         assert stored is not None
         assert stored.status == "succeeded"
-        assert stored.input_fingerprint == result.restore_evidence_hash
+        assert stored.run_id == f"restore_attempt_{stored.input_fingerprint}"
+        assert stored.input_fingerprint == restore_drill_attempt_fingerprint(
+            started_at=stored.started_at,
+            nonce=stored.metadata["attempt_nonce"],
+            physical=False,
+            controlled_test_object_store=True,
+            readiness_admission=CONTROLLED_TEST_REJECTION,
+        )
+        assert (
+            stored.metadata["attempt_schema_version"]
+            == RESTORE_DRILL_ATTEMPT_SCHEMA_VERSION
+        )
+        assert stored.metadata["attempt_authority"] == RESTORE_DRILL_ATTEMPT_AUTHORITY
+        assert stored.metadata["attempt_outcome"] == "succeeded"
+        assert stored.metadata["formal_readiness_eligible"] is False
         assert stored.metadata["restore_evidence_hash"] == restore_drill_evidence_hash(
             stored.metadata
         )
@@ -300,12 +317,79 @@ def test_remote_corruption_cannot_persist_successful_restore_evidence(
                 object_store_archive=archive,
             ).run()
 
-        assert catalog.list_runs(
+        failed_attempts = catalog.list_runs(
             limit=100, status=None, run_type=CONTROLLED_TEST_RUN_TYPE
-        ) == []
+        )
+        assert len(failed_attempts) == 1
+        failed = failed_attempts[0]
+        assert failed.status == "failed"
+        assert failed.metadata["attempt_outcome"] == "failed"
+        assert failed.metadata["formal_readiness_eligible"] is False
+        assert failed.error == failed.metadata["error_type"] == (
+            "restore_drill_internal_error"
+        )
+        assert "remote-corruption" not in json.dumps(failed.metadata, sort_keys=True)
         assert catalog.list_runs(
             limit=100, status=None, run_type=RESTORE_DRILL_RUN_TYPE
         ) == []
+    finally:
+        catalog.close()
+
+
+def test_physical_invocation_claims_running_before_selection_and_terminalizes_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    catalog, filesystem, archive = _runtime(tmp_path)
+    try:
+        service = PhysicalMinioRestoreDrillService(
+            catalog=catalog,
+            object_store_archive=archive,
+            production_evidence=SimpleNamespace(
+                engineering_canary_execution_contract_hash=(
+                    CANARY_EXECUTION_CONTRACT_HASH
+                ),
+                runtime_data_root=tmp_path,
+            ),  # type: ignore[arg-type]
+            controlled_test=False,
+        )
+        monkeypatch.setattr(service, "_assert_runtime_admission", lambda: None)
+
+        def fail_after_observing_claim(*, observed_at: datetime):
+            del observed_at
+            claimed = catalog.list_runs(
+                limit=1,
+                status=None,
+                run_type=RESTORE_DRILL_RUN_TYPE,
+            )
+            assert len(claimed) == 1
+            assert claimed[0].status == "running"
+            assert claimed[0].metadata["attempt_outcome"] == "running"
+            assert filesystem.read_count == 0
+            raise RuntimeError("vendor failure token=do-not-persist")
+
+        monkeypatch.setattr(service, "_select_object", fail_after_observing_claim)
+
+        with pytest.raises(RuntimeError, match="do-not-persist"):
+            service.run()
+
+        attempts = catalog.list_runs(
+            limit=1,
+            status=None,
+            run_type=RESTORE_DRILL_RUN_TYPE,
+        )
+        assert len(attempts) == 1
+        failed = attempts[0]
+        assert failed.status == "failed"
+        assert failed.run_id == f"restore_attempt_{failed.input_fingerprint}"
+        assert failed.error == "restore_drill_internal_error"
+        assert failed.metadata["error_type"] == failed.error
+        assert failed.metadata["attempt_outcome"] == "failed"
+        assert failed.metadata["formal_readiness_eligible"] is False
+        persisted = json.dumps(failed.metadata, sort_keys=True)
+        assert "do-not-persist" not in persisted
+        assert "vendor failure" not in persisted
+        assert filesystem.read_count == 0
     finally:
         catalog.close()
 

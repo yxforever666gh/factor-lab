@@ -1226,21 +1226,22 @@ def _monitor_tick(args: argparse.Namespace) -> int:
                 },
             )
         )
-        recovery = next(
-            (
-                case
-                for case in catalog.list_recovery_cases(
-                    sleeve_id=record.sleeve_id, limit=100
-                )
-                if case.status
-                in {
+        active_recovery_cases = tuple(
+            catalog.iter_recovery_cases(
+                statuses=(
                     RecoveryCaseStatus.OPEN,
                     RecoveryCaseStatus.DIAGNOSING,
                     RecoveryCaseStatus.OBSERVING,
-                }
-            ),
-            None,
+                ),
+                sleeve_id=record.sleeve_id,
+                batch_size=1_000,
+            )
         )
+        if len(active_recovery_cases) > 1:
+            raise RuntimeError(
+                f"multiple active recovery cases exist for Sleeve {record.sleeve_id!r}"
+            )
+        recovery = active_recovery_cases[0] if active_recovery_cases else None
         result = _coordinated(
             catalog,
             "monitor_tick",

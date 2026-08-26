@@ -3,8 +3,8 @@
 The operation deliberately has no object/path arguments.  It selects one
 immutable Gold mark object from the newest fresh, hash-valid physical canary,
 hydrates it into a service-owned ephemeral cache, deletes that cache entry,
-and hydrates it again.  Only the second verified download may produce the
-``minio_restore_drill`` run consumed by the production readiness auditor.
+and hydrates it again.  Every invocation first claims a durable attempt; only
+the second verified download may terminalize that attempt as readiness success.
 
 Controlled tests exercise the exact byte path with an in-memory object store,
 but persist a distinct rejected run type and ``physical=false``.  Consequently
@@ -32,9 +32,12 @@ from .production_config import ProductionConfigEvidence, validate_production_con
 from .readiness_audit import (
     PHYSICAL_CANARY_RUN_TYPE,
     PHYSICAL_CANARY_SCHEMA_VERSION,
+    RESTORE_DRILL_ATTEMPT_AUTHORITY,
+    RESTORE_DRILL_ATTEMPT_SCHEMA_VERSION,
     RESTORE_DRILL_RUN_TYPE,
     RESTORE_DRILL_SCHEMA_VERSION,
     physical_canary_evidence_hash,
+    restore_drill_attempt_fingerprint,
     restore_drill_evidence_hash,
 )
 
@@ -61,6 +64,16 @@ class RestoreDrillAdmissionError(RestoreDrillError):
 
 class RestoreDrillEvidenceUnavailable(RestoreDrillError):
     """No fresh hash-valid physical canary object is available to restore."""
+
+
+def _sanitized_error_type(exc: Exception) -> str:
+    """Return a bounded code without persisting vendor paths or credentials."""
+
+    if isinstance(exc, RestoreDrillEvidenceUnavailable):
+        return "restore_drill_evidence_unavailable"
+    if isinstance(exc, RestoreDrillError):
+        return "restore_drill_verification_error"
+    return "restore_drill_internal_error"
 
 
 @dataclass(frozen=True)
@@ -479,125 +492,195 @@ class PhysicalMinioRestoreDrillService:
 
         self._assert_runtime_admission()
         started_at = self._database_now()
-        selected = self._select_object(observed_at=started_at)
-        challenge = content_fingerprint(
-            {
-                "source_canary_run_id": selected.canary_run_id,
-                "source_canary_execution_contract_hash": (
-                    selected.canary_execution_contract_hash
-                ),
-                "source_snapshot_id": selected.snapshot_id,
-                "object_sha256": selected.sha256,
-                "started_at": started_at,
-                "nonce": uuid4().hex,
-            },
-            domain="factor-lab/research-os/v1/restore-drill-deletion-challenge",
-        )
-
-        with tempfile.TemporaryDirectory(
-            prefix=".factor-lab-restore-drill-",
-            dir=self._cache_parent(),
-        ) as temporary_directory:
-            destination = Path(temporary_directory) / "immutable-object.cache"
-            first = self.archive.restore_file(
-                selected.object_uri,
-                destination,
-                expected_sha256=selected.sha256,
-                expected_size_bytes=selected.size_bytes,
-            )
-            if (
-                first.reused
-                or first.sha256 != selected.sha256
-                or first.size_bytes != selected.size_bytes
-                or not destination.is_file()
-            ):
-                raise RestoreDrillError("initial physical cache hydration is invalid")
-            destination.unlink()
-            if os.path.lexists(destination):
-                raise RestoreDrillError("controlled cache deletion could not be verified")
-            deleted_cache_proof = content_fingerprint(
-                {
-                    "deletion_challenge": challenge,
-                    "source_canary_evidence_hash": selected.canary_evidence_hash,
-                    "source_canary_execution_contract_hash": (
-                        selected.canary_execution_contract_hash
-                    ),
-                    "source_snapshot_id": selected.snapshot_id,
-                    "object_sha256": selected.sha256,
-                    "size_bytes": selected.size_bytes,
-                    "first_restore_sha256": first.sha256,
-                    "first_restore_size_bytes": first.size_bytes,
-                    "cache_existed_after_first_restore": True,
-                    "cache_absent_before_second_restore": True,
-                },
-                domain="factor-lab/research-os/v1/restore-drill-deleted-cache-proof",
-            )
-            second = self.archive.restore_file(
-                selected.object_uri,
-                destination,
-                expected_sha256=selected.sha256,
-                expected_size_bytes=selected.size_bytes,
-            )
-            if (
-                second.reused
-                or second.sha256 != selected.sha256
-                or second.size_bytes != selected.size_bytes
-                or not destination.is_file()
-            ):
-                raise RestoreDrillError("second physical cache hydration is invalid")
-
-        completed_at = self._database_now()
-        if completed_at < started_at:
-            raise RestoreDrillError("database clock moved backwards during restore drill")
         physical = not self.controlled_test
         run_type = RESTORE_DRILL_RUN_TYPE if physical else CONTROLLED_TEST_RUN_TYPE
         readiness_admission = (
             READINESS_ADMISSION if physical else CONTROLLED_TEST_REJECTION
         )
-        metadata = {
-            "schema_version": RESTORE_DRILL_SCHEMA_VERSION,
-            "authority": "code_selected_physical_canary_twice_hydrated",
+        attempt_nonce = uuid4().hex
+        attempt_fingerprint = restore_drill_attempt_fingerprint(
+            started_at=started_at,
+            nonce=attempt_nonce,
+            physical=physical,
+            controlled_test_object_store=self.controlled_test,
+            readiness_admission=readiness_admission,
+        )
+        attempt_metadata = {
+            "attempt_schema_version": RESTORE_DRILL_ATTEMPT_SCHEMA_VERSION,
+            "attempt_authority": RESTORE_DRILL_ATTEMPT_AUTHORITY,
+            "attempt_started_at": started_at.astimezone(timezone.utc).isoformat(),
+            "attempt_nonce": attempt_nonce,
+            "attempt_outcome": "running",
+            "formal_readiness_eligible": False,
             "physical": physical,
             "controlled_test_object_store": self.controlled_test,
             "readiness_admission": readiness_admission,
-            "object_uri": selected.object_uri,
-            "expected_sha256": selected.sha256,
-            "restored_sha256": second.sha256,
-            "expected_size_bytes": selected.size_bytes,
-            "restored_size_bytes": second.size_bytes,
-            "deleted_cache_proof": deleted_cache_proof,
-            "deletion_challenge": challenge,
-            "cache_deleted_before_second_restore": True,
-            "first_restore_sha256": first.sha256,
-            "first_restore_size_bytes": first.size_bytes,
-            "second_restore_downloaded": not second.reused,
-            "local_cache_retained": False,
-            "source_canary_run_id": selected.canary_run_id,
-            "source_canary_evidence_hash": selected.canary_evidence_hash,
-            "source_canary_execution_contract_hash": (
-                selected.canary_execution_contract_hash
-            ),
-            "source_snapshot_id": selected.snapshot_id,
-            "source_snapshot_role": selected.role,
-            "source_snapshot_trade_date": selected.trade_date,
-            "verified_at": completed_at.isoformat(),
         }
-        evidence_hash = restore_drill_evidence_hash(metadata)
-        metadata["restore_evidence_hash"] = evidence_hash
-        proposed = RunRecord(
-            run_id=f"restore_{evidence_hash}",
+        run_id = f"restore_attempt_{attempt_fingerprint}"
+        running = RunRecord(
+            run_id=run_id,
             run_type=run_type,
-            status="succeeded",
-            input_fingerprint=evidence_hash,
+            status="running",
+            input_fingerprint=attempt_fingerprint,
             started_at=started_at,
-            completed_at=completed_at,
-            metadata=metadata,
+            metadata=attempt_metadata,
         )
-        stored, won = self.catalog.claim_run(proposed)
-        if not won and stored != proposed:
+        _, won = self.catalog.claim_run(running)
+        if not won:
             raise RestoreDrillError(
-                "restore drill identity collided with different persisted evidence"
+                "restore drill attempt identity was already claimed"
             )
+        try:
+            selected = self._select_object(observed_at=started_at)
+            challenge = content_fingerprint(
+                {
+                    "source_canary_run_id": selected.canary_run_id,
+                    "source_canary_execution_contract_hash": (
+                        selected.canary_execution_contract_hash
+                    ),
+                    "source_snapshot_id": selected.snapshot_id,
+                    "object_sha256": selected.sha256,
+                    "started_at": started_at,
+                    "nonce": uuid4().hex,
+                },
+                domain="factor-lab/research-os/v1/restore-drill-deletion-challenge",
+            )
+
+            with tempfile.TemporaryDirectory(
+                prefix=".factor-lab-restore-drill-",
+                dir=self._cache_parent(),
+            ) as temporary_directory:
+                destination = Path(temporary_directory) / "immutable-object.cache"
+                first = self.archive.restore_file(
+                    selected.object_uri,
+                    destination,
+                    expected_sha256=selected.sha256,
+                    expected_size_bytes=selected.size_bytes,
+                )
+                if (
+                    first.reused
+                    or first.sha256 != selected.sha256
+                    or first.size_bytes != selected.size_bytes
+                    or not destination.is_file()
+                ):
+                    raise RestoreDrillError("initial physical cache hydration is invalid")
+                destination.unlink()
+                if os.path.lexists(destination):
+                    raise RestoreDrillError(
+                        "controlled cache deletion could not be verified"
+                    )
+                deleted_cache_proof = content_fingerprint(
+                    {
+                        "deletion_challenge": challenge,
+                        "source_canary_evidence_hash": selected.canary_evidence_hash,
+                        "source_canary_execution_contract_hash": (
+                            selected.canary_execution_contract_hash
+                        ),
+                        "source_snapshot_id": selected.snapshot_id,
+                        "object_sha256": selected.sha256,
+                        "size_bytes": selected.size_bytes,
+                        "first_restore_sha256": first.sha256,
+                        "first_restore_size_bytes": first.size_bytes,
+                        "cache_existed_after_first_restore": True,
+                        "cache_absent_before_second_restore": True,
+                    },
+                    domain=(
+                        "factor-lab/research-os/v1/restore-drill-deleted-cache-proof"
+                    ),
+                )
+                second = self.archive.restore_file(
+                    selected.object_uri,
+                    destination,
+                    expected_sha256=selected.sha256,
+                    expected_size_bytes=selected.size_bytes,
+                )
+                if (
+                    second.reused
+                    or second.sha256 != selected.sha256
+                    or second.size_bytes != selected.size_bytes
+                    or not destination.is_file()
+                ):
+                    raise RestoreDrillError("second physical cache hydration is invalid")
+
+            completed_at = self._database_now()
+            if completed_at < started_at:
+                raise RestoreDrillError(
+                    "database clock moved backwards during restore drill"
+                )
+            metadata = {
+                **attempt_metadata,
+                "attempt_outcome": "succeeded",
+                "formal_readiness_eligible": physical,
+                "schema_version": RESTORE_DRILL_SCHEMA_VERSION,
+                "authority": "code_selected_physical_canary_twice_hydrated",
+                "object_uri": selected.object_uri,
+                "expected_sha256": selected.sha256,
+                "restored_sha256": second.sha256,
+                "expected_size_bytes": selected.size_bytes,
+                "restored_size_bytes": second.size_bytes,
+                "deleted_cache_proof": deleted_cache_proof,
+                "deletion_challenge": challenge,
+                "cache_deleted_before_second_restore": True,
+                "first_restore_sha256": first.sha256,
+                "first_restore_size_bytes": first.size_bytes,
+                "second_restore_downloaded": not second.reused,
+                "local_cache_retained": False,
+                "source_canary_run_id": selected.canary_run_id,
+                "source_canary_evidence_hash": selected.canary_evidence_hash,
+                "source_canary_execution_contract_hash": (
+                    selected.canary_execution_contract_hash
+                ),
+                "source_snapshot_id": selected.snapshot_id,
+                "source_snapshot_role": selected.role,
+                "source_snapshot_trade_date": selected.trade_date,
+                "verified_at": completed_at.isoformat(),
+            }
+            evidence_hash = restore_drill_evidence_hash(metadata)
+            metadata["restore_evidence_hash"] = evidence_hash
+            stored = self.catalog.save_run(
+                RunRecord(
+                    run_id=run_id,
+                    run_type=run_type,
+                    status="succeeded",
+                    input_fingerprint=attempt_fingerprint,
+                    started_at=started_at,
+                    completed_at=completed_at,
+                    metadata=metadata,
+                )
+            )
+        except Exception as exc:
+            error_type = _sanitized_error_type(exc)
+            try:
+                failed_at = self._database_now()
+                if failed_at < started_at:
+                    failed_at = started_at
+            except Exception:
+                failed_at = started_at
+            failed_metadata = {
+                **attempt_metadata,
+                "attempt_outcome": "failed",
+                "formal_readiness_eligible": False,
+                "error_type": error_type,
+                "failed_at": failed_at.astimezone(timezone.utc).isoformat(),
+            }
+            try:
+                self.catalog.save_run(
+                    RunRecord(
+                        run_id=run_id,
+                        run_type=run_type,
+                        status="failed",
+                        input_fingerprint=attempt_fingerprint,
+                        started_at=started_at,
+                        completed_at=failed_at,
+                        metadata=failed_metadata,
+                        error=error_type,
+                    )
+                )
+            except Exception as terminalization_error:
+                raise RestoreDrillError(
+                    "restore drill failed and durable failure terminalization failed"
+                ) from terminalization_error
+            raise
         return RestoreDrillResult(
             run_id=stored.run_id,
             run_type=stored.run_type,

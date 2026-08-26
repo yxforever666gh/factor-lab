@@ -34,6 +34,8 @@ from factor_lab.research_os.contracts import (
     LifecycleState,
     PortfolioPolicy,
     Preregistration,
+    RecoveryCase,
+    RecoveryCaseStatus,
     SnapshotTier,
     UniverseSpec,
     ValidationProtocol,
@@ -1186,6 +1188,88 @@ def test_challenger_generation_rejects_local_return_file_authority(
         service._challenger_generation(request)
 
 
+def test_catalog_role_challenger_generation_streams_past_lifecycle_noise(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    input_path = tmp_path / "monthly-catalog-role-input.json"
+    input_path.write_text("{}", encoding="utf-8")
+    config = _config(tmp_path)
+    config["monthly"] = {
+        "input_path": str(input_path),
+        "challenger": {
+            "authority_mode": "catalog_roles",
+            "champion_role": "static_champion",
+        },
+    }
+    service = _services(tmp_path, config, FakeGoldPublisher([]))
+    binding_time = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    binding_event = service.catalog.append_lifecycle_event(
+        LifecycleEvent(
+            idempotency_key="old-valid-challenger-role-binding",
+            sleeve_id="value_quality",
+            from_state=LifecycleState.WALK_FORWARD,
+            to_state=LifecycleState.SHADOW,
+            cause="challenger_shadow_account_bound",
+            evidence={
+                "promotion": {"experiment_id": "old-valid-challenger"},
+                "shadow_account_id": "old-valid-challenger-account",
+            },
+            occurred_at=binding_time,
+        )
+    )
+    for index in range(1_001):
+        service.catalog.append_lifecycle_event(
+            LifecycleEvent(
+                idempotency_key=f"newer-unrelated-lifecycle-{index:04d}",
+                sleeve_id="unrelated_sleeve",
+                to_state=LifecycleState.PROPOSED,
+                cause="unrelated_lifecycle_noise",
+                evidence={"fixture_index": index},
+                occurred_at=binding_time + timedelta(days=1, seconds=index),
+            )
+        )
+    truncated = service.catalog.list_lifecycle_events(limit=1_000)
+    assert binding_event.event_id not in {event.event_id for event in truncated}
+
+    class RoleAuthority:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str]] = []
+
+        def active_binding(self, *, role, role_key):
+            self.calls.append((str(getattr(role, "value", role)), role_key))
+            if role_key == "old-valid-challenger":
+                return SimpleNamespace(account_id="old-valid-challenger-account")
+            return None
+
+    role_authority = RoleAuthority()
+    service.shadow_authority = role_authority
+    monkeypatch.setattr(
+        service,
+        "_dependency",
+        lambda *args, **kwargs: OperationResult(
+            operation=OperationName.WEIGHT_REESTIMATION,
+            status="completed",
+            summary="catalog role fixture",
+            outputs={},
+        ),
+    )
+
+    result = service._challenger_generation(
+        OperationRequest(
+            operation=OperationName.CHALLENGER_GENERATION,
+            cycle=CycleName.MONTHLY,
+            partition_key="2026-08",
+            run_id="catalog-role-lifecycle-depth",
+        )
+    )
+
+    assert result.status == "completed"
+    assert result.outputs["authority_blocker"] == (
+        "static Champion role binding is absent"
+    )
+    assert ("challenger", "old-valid-challenger") in role_authority.calls
+
+
 def test_authoritative_weight_mode_never_reads_local_state_return_files(
     tmp_path: Path, monkeypatch
 ) -> None:
@@ -1532,7 +1616,9 @@ def test_weekly_lifecycle_ignores_json_counters_and_persists_raw_measurement(
             encoding="utf-8",
         )
 
-    for index, day in enumerate((date(2026, 1, 5), date(2026, 1, 12)), 1):
+    for index, day in enumerate(
+        (date(2026, 1, 5), date(2026, 1, 12), date(2026, 1, 19)), 1
+    ):
         write_weekly(day)
         for operation in (
             OperationName.SLEEVE_HEALTH_CHECK,
@@ -1548,6 +1634,42 @@ def test_weekly_lifecycle_ignores_json_counters_and_persists_raw_measurement(
                     run_id=f"weekly-{index}",
                 )
             )
+            if index == 2 and operation is OperationName.LIFECYCLE_TRANSITION:
+                active_cases = tuple(
+                    service.catalog.iter_recovery_cases(
+                        statuses=(
+                            RecoveryCaseStatus.OPEN,
+                            RecoveryCaseStatus.DIAGNOSING,
+                            RecoveryCaseStatus.OBSERVING,
+                        ),
+                        sleeve_id="value_quality",
+                        batch_size=1_000,
+                    )
+                )
+                assert len(active_cases) == 1
+                active_case = active_cases[0]
+                for terminal_index in range(1_001):
+                    offset = timedelta(minutes=terminal_index + 1)
+                    service.catalog.save_recovery_case(
+                        RecoveryCase(
+                            recovery_case_id=f"newer-terminal-{terminal_index}",
+                            sleeve_id=active_case.sleeve_id,
+                            status=RecoveryCaseStatus.CLOSED,
+                            lifecycle_state=active_case.lifecycle_state,
+                            triggered_at=active_case.triggered_at + offset,
+                            drift_event_due_at=active_case.drift_event_due_at + offset,
+                            diagnosis_due_at=active_case.diagnosis_due_at + offset,
+                            earliest_recovery_review_at=(
+                                active_case.earliest_recovery_review_at + offset
+                            ),
+                        )
+                    )
+                visible_under_old_limit = service.catalog.list_recovery_cases(
+                    sleeve_id="value_quality", limit=100
+                )
+                assert active_case.recovery_case_id not in {
+                    case.recovery_case_id for case in visible_under_old_limit
+                }
         health_run = next(
             run
             for run in service.catalog.list_runs(limit=20)
@@ -1566,21 +1688,30 @@ def test_weekly_lifecycle_ignores_json_counters_and_persists_raw_measurement(
                 ]
                 is False
             )
-
     events = service.catalog.list_lifecycle_events(sleeve_id="value_quality", limit=20)
     ticks = [event for event in events if event.cause == "weekly_health_tick"]
     measurements = [
         event for event in events if event.cause == "health_measurement_recorded"
     ]
-    assert len(ticks) == len(measurements) == 2
+    assert len(ticks) == len(measurements) == 3
     assert ticks[0].to_state is LifecycleState.REDUCED
-    assert ticks[0].evidence["record"]["consecutive_multi_alarm_checks"] == 2
+    assert ticks[0].evidence["record"]["consecutive_multi_alarm_checks"] == 3
     assert measurements[0].evidence["measurement_kind"] == "raw_point_in_time"
     assert (
         "new_sessions_since_dormant"
         not in measurements[0].evidence["measurement"]
     )
-    recovery = service.catalog.list_recovery_cases(sleeve_id="value_quality")
+    recovery = tuple(
+        service.catalog.iter_recovery_cases(
+            statuses=(
+                RecoveryCaseStatus.OPEN,
+                RecoveryCaseStatus.DIAGNOSING,
+                RecoveryCaseStatus.OBSERVING,
+            ),
+            sleeve_id="value_quality",
+            batch_size=1_000,
+        )
+    )
     assert len(recovery) == 1
     # Configured fake future sessions did not set the authoritative deadlines.
     assert recovery[0].drift_event_due_at.date() == date(2026, 1, 19)

@@ -29,6 +29,8 @@ from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from . import orm
 from .bitemporal import CanonicalizationSpec, canonicalize_batch
@@ -37,6 +39,7 @@ from .contracts import (
     DataQualityStatus,
     DataSnapshotRef,
     LifecycleState,
+    PHYSICAL_CANARY_SNAPSHOT_REFERENCE_SCHEMA,
     SnapshotTier,
 )
 from .data_sources import (
@@ -131,8 +134,15 @@ _EXECUTION_MAXIMUM_ATTEMPTS = 100
 _EXECUTION_RESULT_METADATA = "authoritative_run_metadata"
 _EVALUATOR_IDENTITY_SCHEMA = "research-os/physical-canary-evaluator-identity/v1"
 _CONTROLLED_TEST_EVALUATOR = "research-os/physical-canary-controlled-test/v1"
-
-
+_PERSISTED_FRAME_DIGEST_SCHEMA = (
+    "research-os/physical-canary-persisted-parquet-frame-digest/v1"
+)
+_LOGICAL_FRAME_DIGEST_SCHEMA = (
+    "research-os/physical-canary-logical-arrow-frame-digest/v1"
+)
+_SNAPSHOT_FINGERPRINT_DOMAIN = (
+    "factor-lab/research-os/v1/physical-canary-snapshot"
+)
 class PhysicalCanaryError(RuntimeError):
     """Base error for physical canary admission, data, or persistence failure."""
 
@@ -207,7 +217,9 @@ def _gold_attempted_input_hash(
     )
 
 
-def _frame_digest(frame: pd.DataFrame) -> str:
+def _legacy_frame_digest(frame: pd.DataFrame) -> str:
+    """Reproduce the digest stored by pre-persisted-boundary manifests."""
+
     encoded = frame.to_json(
         orient="table",
         date_format="iso",
@@ -216,6 +228,119 @@ def _frame_digest(frame: pd.DataFrame) -> str:
         force_ascii=False,
     ).encode("utf-8")
     return _sha256_bytes(encoded)
+
+
+def _normalize_logical_arrow_table(table: pa.Table) -> pa.Table:
+    """Normalize equivalent Arrow string layouts for logical comparisons.
+
+    Pandas 3 can restore the same Parquet string values as ``large_string``
+    even when the pre-write object column and the raw Parquet table use
+    ``string``.  That presentation difference is irrelevant to the logical
+    frame, while persisted digests continue to bind the unmodified raw Arrow
+    schema below.
+    """
+
+    fields = []
+    changed = False
+    for field in table.schema:
+        field_type = field.type
+        if (
+            pa.types.is_string(field_type)
+            or pa.types.is_large_string(field_type)
+            or pa.types.is_string_view(field_type)
+        ):
+            field_type = pa.large_string()
+        changed = changed or field_type != field.type
+        fields.append(pa.field(field.name, field_type, nullable=field.nullable))
+    normalized = table.replace_schema_metadata(None).combine_chunks()
+    if changed:
+        normalized = normalized.cast(pa.schema(fields), safe=True)
+    return normalized.replace_schema_metadata(None).combine_chunks()
+
+
+def _canonical_arrow_table(frame: pd.DataFrame) -> pa.Table:
+    """Normalize pandas-only dtype presentation without relaxing values."""
+
+    try:
+        return _normalize_logical_arrow_table(
+            pa.Table.from_pandas(frame, preserve_index=False)
+        )
+    except Exception as exc:
+        raise PhysicalCanaryDataRejected(
+            "canary frame cannot be represented as canonical Arrow"
+        ) from exc
+
+
+def _read_persisted_table(path: Path, *, context: str) -> pa.Table:
+    if path.is_symlink() or not path.is_file():
+        raise PhysicalCanaryDataRejected(
+            f"{context} canary Parquet is not a regular file"
+        )
+    try:
+        return pq.read_table(path).replace_schema_metadata(None).combine_chunks()
+    except Exception as exc:
+        raise PhysicalCanaryDataRejected(
+            f"{context} canary Parquet cannot be read as Arrow"
+        ) from exc
+
+
+def _arrow_ipc_sha256(table: pa.Table) -> str:
+    sink = pa.BufferOutputStream()
+    with pa.ipc.new_stream(sink, table.schema) as writer:
+        writer.write_table(table)
+    return _sha256_bytes(sink.getvalue().to_pybytes())
+
+
+def _persisted_frame_digest(table: pa.Table) -> str:
+    """Versioned digest of the exact metadata-free persisted Arrow table."""
+
+    return content_fingerprint(
+        {
+            "schema_version": _PERSISTED_FRAME_DIGEST_SCHEMA,
+            "encoding": "arrow-ipc-stream/no-schema-metadata/combined-chunks",
+            "payload_sha256": _arrow_ipc_sha256(table),
+        },
+        domain=_PERSISTED_FRAME_DIGEST_SCHEMA,
+    )
+
+
+def _logical_frame_digest(frame: pd.DataFrame) -> str:
+    """Hash pre-write logical inputs in a domain distinct from storage."""
+
+    table = _canonical_arrow_table(frame)
+    return content_fingerprint(
+        {
+            "schema_version": _LOGICAL_FRAME_DIGEST_SCHEMA,
+            "encoding": "arrow-ipc-stream/no-schema-metadata/combined-chunks",
+            "payload_sha256": _arrow_ipc_sha256(table),
+        },
+        domain=_LOGICAL_FRAME_DIGEST_SCHEMA,
+    )
+
+
+def _snapshot_content_hash(manifest: Mapping[str, Any]) -> str:
+    return content_fingerprint(
+        manifest,
+        domain=_SNAPSHOT_FINGERPRINT_DOMAIN,
+    )
+
+
+def _snapshot_id(tier: SnapshotTier, content_hash: str) -> str:
+    return f"pec_{tier.value}_{content_hash[:56]}"
+
+
+def _assert_logically_equivalent(
+    expected: pa.Table,
+    observed: pa.Table,
+    *,
+    context: str,
+) -> None:
+    """Reject any Parquet conversion that changes schema, order, nulls, or values."""
+
+    if not expected.equals(observed):
+        raise PhysicalCanaryDataRejected(
+            f"{context} canary Parquet changed logical frame values or schema"
+        )
 
 
 def _clean_error(exc: BaseException) -> str:
@@ -567,31 +692,176 @@ def _opening_source_payload(canary: Mapping[str, Any]) -> dict[str, Any]:
     }
 
 
-def _write_frame_once(path: Path, frame: pd.DataFrame) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists():
-        if path.is_symlink() or not path.is_file():
-            raise PhysicalCanaryDataRejected("canary cache target is not a regular file")
-        existing = pd.read_parquet(path)
-        if _frame_digest(existing) != _frame_digest(frame):
-            raise PhysicalCanaryDataRejected("immutable canary cache already differs")
-        return path
+@dataclass(frozen=True)
+class _PersistedFrame:
+    path: Path
+    frame_digest: str
+    object_sha256: str
+    size_bytes: int
+    rows: int
+    columns: tuple[str, ...]
+
+
+def _file_integrity(path: Path) -> tuple[str, int]:
+    digest = hashlib.sha256()
+    size = 0
+    with path.open("rb") as handle:
+        while True:
+            chunk = handle.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+            size += len(chunk)
+    return digest.hexdigest(), size
+
+
+@dataclass(frozen=True)
+class _PinnedParquetFrame:
+    table: pa.Table
+    frame: pd.DataFrame
+    object_sha256: str
+    size_bytes: int
+
+
+def _read_file_bytes(path: Path) -> bytes:
+    try:
+        return path.read_bytes()
+    except OSError as exc:
+        raise PhysicalCanaryDataRejected(
+            "restored snapshot Parquet bytes cannot be pinned"
+        ) from exc
+
+
+def _read_pinned_parquet_frame(
+    path: Path,
+    *,
+    expected_sha256: str,
+    expected_size_bytes: int,
+) -> _PinnedParquetFrame:
+    """Bind one immutable byte payload to both Arrow evidence and pandas values."""
+
+    if path.is_symlink() or not path.is_file():
+        raise PhysicalCanaryDataRejected(
+            "restored snapshot Parquet is not a regular file"
+        )
+    try:
+        integrity_before = _file_integrity(path)
+        payload = _read_file_bytes(path)
+        payload_integrity = (_sha256_bytes(payload), len(payload))
+        integrity_after = _file_integrity(path)
+    except PhysicalCanaryDataRejected:
+        raise
+    except OSError as exc:
+        raise PhysicalCanaryDataRejected(
+            "restored snapshot Parquet integrity cannot be verified"
+        ) from exc
+    expected_integrity = (expected_sha256, expected_size_bytes)
+    if integrity_before != expected_integrity:
+        raise PhysicalCanaryDataRejected(
+            "restored snapshot Parquet differs before bytes are pinned"
+        )
+    if payload_integrity != expected_integrity:
+        raise PhysicalCanaryDataRejected(
+            "pinned snapshot Parquet bytes differ from archived evidence"
+        )
+    if integrity_after != expected_integrity:
+        raise PhysicalCanaryDataRejected(
+            "restored snapshot Parquet changed while bytes were pinned"
+        )
+    try:
+        raw_table = pq.read_table(pa.BufferReader(payload)).combine_chunks()
+        frame = raw_table.to_pandas()
+    except Exception as exc:
+        raise PhysicalCanaryDataRejected(
+            "pinned snapshot Parquet cannot be restored as Arrow"
+        ) from exc
+    return _PinnedParquetFrame(
+        table=raw_table.replace_schema_metadata(None).combine_chunks(),
+        frame=frame,
+        object_sha256=payload_integrity[0],
+        size_bytes=payload_integrity[1],
+    )
+
+
+def _persisted_frame(
+    path: Path,
+    *,
+    expected_digest: str,
+    expected_table: pa.Table,
+) -> _PersistedFrame:
+    object_sha256_before, size_bytes_before = _file_integrity(path)
+    table = _read_persisted_table(path, context="persisted")
+    observed_digest = _persisted_frame_digest(table)
+    if observed_digest != expected_digest or not table.equals(expected_table):
+        raise PhysicalCanaryDataRejected(
+            "persisted canary Parquet frame digest differs"
+        )
+    object_sha256, size_bytes = _file_integrity(path)
+    if (
+        object_sha256 != object_sha256_before
+        or size_bytes != size_bytes_before
+    ):
+        raise PhysicalCanaryDataRejected(
+            "persisted canary Parquet changed while it was being verified"
+        )
+    return _PersistedFrame(
+        path=path,
+        frame_digest=observed_digest,
+        object_sha256=object_sha256,
+        size_bytes=size_bytes,
+        rows=int(table.num_rows),
+        columns=tuple(map(str, table.column_names)),
+    )
+
+
+def _write_frame_once(directory: Path, frame: pd.DataFrame) -> _PersistedFrame:
+    """Persist, read back, and content-address the exact Parquet candidate.
+
+    The candidate must cross the same Parquet boundary as a later restore
+    before it receives an immutable name. Existing and concurrent winners are
+    compared to that read-back digest, never to the caller's pre-write dtypes.
+    """
+
+    directory.mkdir(parents=True, exist_ok=True)
     descriptor, temporary_name = tempfile.mkstemp(
-        prefix=f".{path.name}.", suffix=".tmp", dir=path.parent
+        prefix=".candidate-frame.", suffix=".parquet.tmp", dir=directory
     )
     os.close(descriptor)
     temporary = Path(temporary_name)
     try:
-        frame.to_parquet(temporary, index=False)
+        expected = _canonical_arrow_table(frame)
+        storage_frame = frame.copy()
+        for field in expected.schema:
+            if pa.types.is_large_string(field.type):
+                storage_frame[field.name] = storage_frame[field.name].astype(
+                    pd.ArrowDtype(pa.large_string())
+                )
+        storage_table = pa.Table.from_pandas(storage_frame, preserve_index=False)
+        pq.write_table(storage_table, temporary)
+        candidate = _read_persisted_table(temporary, context="candidate")
+        _assert_logically_equivalent(
+            expected,
+            _normalize_logical_arrow_table(candidate),
+            context="candidate",
+        )
+        candidate_digest = _persisted_frame_digest(candidate)
+        path = directory / f"{candidate_digest}.parquet"
         try:
             os.link(temporary, path)
         except FileExistsError:
-            existing = pd.read_parquet(path)
-            if _frame_digest(existing) != _frame_digest(frame):
+            existing = _read_persisted_table(path, context="concurrent")
+            if (
+                _persisted_frame_digest(existing) != candidate_digest
+                or not existing.equals(candidate)
+            ):
                 raise PhysicalCanaryDataRejected(
                     "concurrent immutable canary cache differs"
                 )
-        return path
+        return _persisted_frame(
+            path,
+            expected_digest=candidate_digest,
+            expected_table=candidate,
+        )
     finally:
         temporary.unlink(missing_ok=True)
 
@@ -1489,9 +1759,15 @@ class PhysicalEngineeringCanaryService:
         replacement_claim_lineage_hash = str(
             replacement.details.get("claim_lineage_hash") or ""
         )
-        for incident in self.production_ledger.list_incidents(
-            status=IncidentStatus.OPEN, limit=10_000
-        ):
+        candidates = tuple(
+            incident
+            for incident in self.production_ledger.iter_incidents(
+                status=IncidentStatus.OPEN
+            )
+            if incident.partition_run_id
+            == replacement.identity.partition_run_id
+        )
+        for incident in candidates:
             if (
                 incident.partition_run_id
                 == replacement.identity.partition_run_id
@@ -1554,11 +1830,14 @@ class PhysicalEngineeringCanaryService:
         completed_at = replacement.completed_at if replacement is not None else None
         if evidence is None or replacement is None or completed_at is None:
             return
-        for incident in self.production_ledger.list_incidents(
-            status=IncidentStatus.OPEN, limit=10_000
-        ):
-            if incident.partition_run_id != legacy.identity.partition_run_id:
-                continue
+        candidates = tuple(
+            incident
+            for incident in self.production_ledger.iter_incidents(
+                status=IncidentStatus.OPEN
+            )
+            if incident.partition_run_id == legacy.identity.partition_run_id
+        )
+        for incident in candidates:
             self.production_ledger.resolve_incident(
                 incident.incident_id,
                 resolved_at=max(completed_at, incident.occurred_at),
@@ -1675,19 +1954,24 @@ class PhysicalEngineeringCanaryService:
         }
         if any(not str(value or "") for value in replacement_lineage.values()):
             return
-        for incident in self.production_ledger.list_incidents(
-            status=IncidentStatus.OPEN, limit=10_000
-        ):
+        candidates = tuple(
+            incident
+            for incident in self.production_ledger.iter_incidents(
+                status=IncidentStatus.OPEN
+            )
             if (
-                incident.partition_run_id is not None
-                or incident.partition_key != session.isoformat()
-                or incident.stage is not IncidentStage.GOLD
-                or incident.error_code != "gold_market_semantics_rejected"
-                or incident.occurred_at >= replacement.completed_at
-            ):
-                continue
+                incident.partition_run_id is None
+                and incident.partition_key == session.isoformat()
+                and incident.stage is IncidentStage.GOLD
+                and incident.error_code == "gold_market_semantics_rejected"
+                and incident.occurred_at < replacement.completed_at
+            )
+        )
+        for incident in candidates:
             projected = bool(incident.payload.get("projected", False))
-            if (projected and role != "execution") or (not projected and role != "mark"):
+            if (projected and role != "execution") or (
+                not projected and role != "mark"
+            ):
                 continue
             incident_lineage = {
                 key: incident.payload.get(key) for key in replacement_lineage
@@ -1741,12 +2025,121 @@ class PhysicalEngineeringCanaryService:
             size_bytes=archived.size_bytes,
         )
 
+    def _validate_snapshot_reference(
+        self,
+        *,
+        requested_snapshot_id: str,
+        reference: DataSnapshotRef,
+        manifest: Mapping[str, Any],
+        archived: ArchivedObject,
+    ) -> None:
+        if reference.snapshot_id != requested_snapshot_id:
+            raise PhysicalCanaryDataRejected(
+                "catalog snapshot identity differs from requested snapshot"
+            )
+        expected_content_hash = _snapshot_content_hash(manifest)
+        if reference.content_hash != expected_content_hash:
+            raise PhysicalCanaryDataRejected(
+                "catalog snapshot content hash differs from its manifest"
+            )
+        if reference.snapshot_id != _snapshot_id(
+            reference.tier,
+            expected_content_hash,
+        ):
+            raise PhysicalCanaryDataRejected(
+                "catalog snapshot ID differs from its canonical identity"
+            )
+        if (
+            manifest.get("snapshot_reference_schema")
+            != PHYSICAL_CANARY_SNAPSHOT_REFERENCE_SCHEMA
+        ):
+            raise PhysicalCanaryDataRejected(
+                "catalog snapshot reference schema is missing or unsupported"
+            )
+        manifest_as_of = manifest.get("snapshot_as_of")
+        if not isinstance(manifest_as_of, str):
+            raise PhysicalCanaryDataRejected(
+                "catalog snapshot as_of binding is missing or malformed"
+            )
+        try:
+            parsed_as_of = datetime.fromisoformat(manifest_as_of)
+            canonical_manifest_as_of = _aware(
+                parsed_as_of,
+                name="manifest snapshot_as_of",
+            ).isoformat()
+        except (TypeError, ValueError) as exc:
+            raise PhysicalCanaryDataRejected(
+                "catalog snapshot as_of binding is missing or malformed"
+            ) from exc
+        canonical_reference_as_of = _aware(
+            reference.as_of,
+            name="snapshot reference as_of",
+        ).isoformat()
+        if manifest_as_of != canonical_manifest_as_of:
+            raise PhysicalCanaryDataRejected(
+                "catalog snapshot as_of binding is not canonical UTC"
+            )
+        if reference.as_of.isoformat() != canonical_reference_as_of:
+            raise PhysicalCanaryDataRejected(
+                "catalog snapshot reference as_of is not canonical UTC"
+            )
+        if canonical_manifest_as_of != canonical_reference_as_of:
+            raise PhysicalCanaryDataRejected(
+                "catalog snapshot as_of differs from its manifest"
+            )
+        if manifest.get("tier") != reference.tier.value:
+            raise PhysicalCanaryDataRejected(
+                "catalog snapshot tier differs from its manifest"
+            )
+        manifest_parents = manifest.get("parent_snapshot_ids")
+        if (
+            not isinstance(manifest_parents, (list, tuple))
+            or any(not isinstance(item, str) for item in manifest_parents)
+            or tuple(manifest_parents) != reference.parent_snapshot_ids
+        ):
+            raise PhysicalCanaryDataRejected(
+                "catalog snapshot parents differ from its manifest"
+            )
+        if reference.uri != archived.uri:
+            raise PhysicalCanaryDataRejected(
+                "catalog snapshot URI differs from its manifest"
+            )
+        if reference.quality_status is not DataQualityStatus.ACCEPTED:
+            raise PhysicalCanaryDataRejected(
+                "physical canary snapshot is not accepted"
+            )
+        expected_trust_labels = (
+            "physical_engineering_canary"
+            if self.physical_source_attested
+            else "controlled_test_adapter",
+            EVIDENCE_SCOPE,
+            "retrospective_physical_replay",
+        )
+        if reference.trust_labels != expected_trust_labels:
+            raise PhysicalCanaryDataRejected(
+                "catalog snapshot trust labels differ from runtime authority"
+            )
+        if (
+            manifest.get("canary_execution_contract_hash")
+            != self.canary_execution_contract_hash
+        ):
+            raise PhysicalCanaryDataRejected(
+                "catalog snapshot execution contract differs from runtime authority"
+            )
+
     def _load_snapshot_frame(self, snapshot_id: str) -> tuple[DataSnapshotRef, pd.DataFrame]:
         record = self.catalog.get_snapshot(snapshot_id)
         if record is None:
             raise PhysicalCanaryDataRejected("partition snapshot disappeared from the catalog")
         reference = record.reference
         manifest = dict(reference.manifest or {})
+        archived = self._archived_object(reference)
+        self._validate_snapshot_reference(
+            requested_snapshot_id=snapshot_id,
+            reference=reference,
+            manifest=manifest,
+            archived=archived,
+        )
         labels = _labels(
             physical_source_attested=self.physical_source_attested,
             controlled_test=self.controlled_test,
@@ -1756,9 +2149,8 @@ class PhysicalEngineeringCanaryService:
                 raise PhysicalCanaryDataRejected(
                     "persisted canary snapshot labels differ from runtime authority"
                 )
-        archived = self._archived_object(reference)
         expected_prefix = f"s3://{self.archive.bucket}/{CANARY_OBJECT_PREFIX}/"
-        if not archived.uri.startswith(expected_prefix) or reference.uri != archived.uri:
+        if not archived.uri.startswith(expected_prefix):
             raise PhysicalCanaryDataRejected(
                 "canary snapshot escaped the isolated physical object prefix"
             )
@@ -1766,9 +2158,41 @@ class PhysicalEngineeringCanaryService:
             archived,
             self._snapshot_cache_path(reference.snapshot_id),
         )
-        frame = pd.read_parquet(restored.path)
-        if _frame_digest(frame) != str(manifest.get("frame_digest") or ""):
+        if (
+            restored.uri != archived.uri
+            or restored.sha256 != archived.sha256
+            or restored.size_bytes != archived.size_bytes
+        ):
+            raise PhysicalCanaryDataRejected(
+                "restored snapshot physical object evidence differs"
+            )
+        legacy_digest = "frame_digest_schema" not in manifest
+        digest_schema = manifest.get("frame_digest_schema")
+        if not legacy_digest and digest_schema != _PERSISTED_FRAME_DIGEST_SCHEMA:
+            raise PhysicalCanaryDataRejected(
+                "restored snapshot frame digest schema is unsupported"
+            )
+        pinned = _read_pinned_parquet_frame(
+            restored.path,
+            expected_sha256=archived.sha256,
+            expected_size_bytes=archived.size_bytes,
+        )
+        frame = pinned.frame
+        observed_frame_digest = (
+            _legacy_frame_digest(frame)
+            if legacy_digest
+            else _persisted_frame_digest(pinned.table)
+        )
+        if observed_frame_digest != str(manifest.get("frame_digest") or ""):
             raise PhysicalCanaryDataRejected("restored snapshot frame digest differs")
+        if (
+            int(manifest.get("rows", -1)) != pinned.table.num_rows
+            or list(map(str, manifest.get("columns") or ()))
+            != list(map(str, pinned.table.column_names))
+        ):
+            raise PhysicalCanaryDataRejected(
+                "restored snapshot frame shape differs"
+            )
         return reference, frame
 
     def _publish_frame_snapshot(
@@ -1783,18 +2207,16 @@ class PhysicalEngineeringCanaryService:
         as_of: datetime,
         extra_manifest: Mapping[str, Any] | None = None,
     ) -> DataSnapshotRef:
-        digest = _frame_digest(frame)
-        local_path = (
+        local_directory = (
             self.local_root
             / run_id
             / tier.value
             / session.isoformat()
             / role
-            / f"{digest}.parquet"
         )
-        _write_frame_once(local_path, frame)
+        persisted = _write_frame_once(local_directory, frame)
         archived = self.archive.archive_file(
-            local_path,
+            persisted.path,
             logical_path=(
                 Path(run_id)
                 / tier.value
@@ -1802,6 +2224,14 @@ class PhysicalEngineeringCanaryService:
                 / role
             ).as_posix(),
         )
+        if (
+            archived.sha256 != persisted.object_sha256
+            or archived.size_bytes != persisted.size_bytes
+        ):
+            raise PhysicalCanaryDataRejected(
+                "archived canary Parquet differs from verified persisted bytes"
+            )
+        canonical_as_of = _aware(as_of, name="snapshot as_of")
         manifest = {
             **_labels(
                 physical_source_attested=self.physical_source_attested,
@@ -1814,25 +2244,27 @@ class PhysicalEngineeringCanaryService:
             "tier": tier.value,
             "role": role,
             "trade_date": session.isoformat(),
-            "rows": int(len(frame)),
-            "columns": list(map(str, frame.columns)),
-            "frame_digest": digest,
+            "rows": persisted.rows,
+            "columns": list(persisted.columns),
+            "frame_digest_schema": _PERSISTED_FRAME_DIGEST_SCHEMA,
+            "frame_digest": persisted.frame_digest,
             "physical_object": archived.to_dict(),
             "parent_snapshot_ids": list(parent_snapshot_ids),
             "published_at": _aware(self._now(), name="now").isoformat(),
             **dict(extra_manifest or {}),
+            "snapshot_reference_schema": (
+                PHYSICAL_CANARY_SNAPSHOT_REFERENCE_SCHEMA
+            ),
+            "snapshot_as_of": canonical_as_of.isoformat(),
         }
-        content_hash = content_fingerprint(
-            manifest,
-            domain="factor-lab/research-os/v1/physical-canary-snapshot",
-        )
+        content_hash = _snapshot_content_hash(manifest)
         reference = DataSnapshotRef(
-            snapshot_id=f"pec_{tier.value}_{content_hash[:56]}",
+            snapshot_id=_snapshot_id(tier, content_hash),
             tier=tier,
             uri=archived.uri,
             content_hash=content_hash,
             parent_snapshot_ids=tuple(parent_snapshot_ids),
-            as_of=_aware(as_of, name="snapshot as_of"),
+            as_of=canonical_as_of,
             quality_status=DataQualityStatus.ACCEPTED,
             trust_labels=(
                 "physical_engineering_canary"
@@ -2085,15 +2517,21 @@ class PhysicalEngineeringCanaryService:
             )
         except Exception as exc:
             now = _aware(self._now(), name="now")
-            already_open = any(
-                incident.partition_run_id == identity.partition_run_id
-                and incident.payload.get("claim_attempt_status")
-                == PartitionStatus.FAILED.value
-                and incident.payload.get("claim_lineage_hash") == lineage_hash
-                for incident in self.production_ledger.list_incidents(
-                    status=IncidentStatus.OPEN, limit=10_000
-                )
+            open_incidents = self.production_ledger.iter_incidents(
+                status=IncidentStatus.OPEN
             )
+            try:
+                already_open = any(
+                    incident.partition_run_id == identity.partition_run_id
+                    and incident.payload.get("claim_attempt_status")
+                    == PartitionStatus.FAILED.value
+                    and incident.payload.get("claim_lineage_hash") == lineage_hash
+                    for incident in open_incidents
+                )
+            finally:
+                close = getattr(open_incidents, "close", None)
+                if close is not None:
+                    close()
             if not already_open:
                 self.production_ledger.record_incident(
                     partition_key=identity.partition_key,
@@ -2849,7 +3287,7 @@ class PhysicalEngineeringCanaryService:
             calendar_hash=calendar_hash,
         )
         identity = PartitionIdentity(stage_source, dataset, session.isoformat())
-        frame_digest = _frame_digest(frame)
+        frame_digest = _logical_frame_digest(frame)
         input_hash = content_fingerprint(
             {
                 "silver_snapshot_id": silver.snapshot_id,
@@ -2887,7 +3325,9 @@ class PhysicalEngineeringCanaryService:
             if not record.output_snapshot_id:
                 raise PhysicalCanaryDataRejected("successful Gold partition has no snapshot")
             reference, stored = self._load_snapshot_frame(record.output_snapshot_id)
-            if _frame_digest(stored) != _frame_digest(frame):
+            if not _canonical_arrow_table(stored).equals(
+                _canonical_arrow_table(frame)
+            ):
                 raise PhysicalCanaryDataRejected("persisted Gold frame differs on resume")
             self._resolve_retried_partition_incidents(record)
             self._audit_legacy_source_generations(replacement=record)

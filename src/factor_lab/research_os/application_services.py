@@ -171,6 +171,11 @@ WEBUI_ENV_FILE_ENV = "FACTOR_LAB_ENV_FILE"
 _SAFE_COMPONENT = re.compile(r"[^A-Za-z0-9._-]+")
 _ZERO_HASH = hashlib.sha256(b"").hexdigest()
 _SHANGHAI = ZoneInfo("Asia/Shanghai")
+_ACTIVE_RECOVERY_CASE_STATUSES = (
+    RecoveryCaseStatus.OPEN,
+    RecoveryCaseStatus.DIAGNOSING,
+    RecoveryCaseStatus.OBSERVING,
+)
 
 _WEBUI_DATA_SOURCE_ENV_KEYS = frozenset(
     {
@@ -201,6 +206,32 @@ _RAW_WEBUI_SECRET_KEYS = frozenset(
         "FACTOR_LAB_LLM_API_KEY",
     }
 )
+
+
+def _active_recovery_cases(
+    catalog: ResearchCatalog,
+    *,
+    sleeve_id: str | None = None,
+) -> tuple[Any, ...]:
+    cases = tuple(
+        catalog.iter_recovery_cases(
+            statuses=_ACTIVE_RECOVERY_CASE_STATUSES,
+            sleeve_id=sleeve_id,
+            batch_size=1_000,
+        )
+    )
+    seen_sleeves: set[str] = set()
+    duplicates: set[str] = set()
+    for case in cases:
+        if case.sleeve_id in seen_sleeves:
+            duplicates.add(case.sleeve_id)
+        seen_sleeves.add(case.sleeve_id)
+    if duplicates:
+        raise OrchestrationFailure(
+            "multiple active recovery cases exist for Sleeve(s): "
+            + ", ".join(sorted(duplicates))
+        )
+    return cases
 
 
 def _database_connect_args(settings: Any) -> dict[str, Any] | None:
@@ -3524,22 +3555,22 @@ class ApplicationServices(ResearchOSServices):
             return None
         open_domain_incidents = {
             str(item.payload.get("domain_incident_id") or "")
-            for item in self.production_ledger.list_incidents(
-                status=IncidentStatus.OPEN, limit=10_000
+            for item in self.production_ledger.iter_incidents(
+                status=IncidentStatus.OPEN
             )
         }
-        cash_events = self.catalog.list_shadow_events_by_type(
-            account_id=account_id,
-            event_type="cash_target_intent",
-            since=None,
-            through=None,
-            limit=10_000,
-        )
-        pending = [
+        if not open_domain_incidents:
+            return None
+        pending = tuple(
             event
-            for event in cash_events
+            for event in self.catalog.iter_shadow_events_by_type(
+                account_id=account_id,
+                event_type="cash_target_intent",
+                since=None,
+                through=None,
+            )
             if str(event.payload.get("incident_id") or "") in open_domain_incidents
-        ]
+        )
         if not pending:
             return None
         latest = max(
@@ -3872,12 +3903,16 @@ class ApplicationServices(ResearchOSServices):
     def _record_from_catalog(
         self, sleeve_id: str, bootstrap: Mapping[str, Any]
     ) -> SleeveLifecycleRecord:
-        for event in self.catalog.list_lifecycle_events(
-            sleeve_id=sleeve_id, limit=1000
-        ):
-            persisted = event.evidence.get("record")
-            if isinstance(persisted, Mapping):
-                return self._lifecycle_record(persisted)
+        lifecycle_events = self.catalog.iter_lifecycle_events(sleeve_id=sleeve_id)
+        try:
+            for event in lifecycle_events:
+                persisted = event.evidence.get("record")
+                if isinstance(persisted, Mapping):
+                    return self._lifecycle_record(persisted)
+        finally:
+            close = getattr(lifecycle_events, "close", None)
+            if close is not None:
+                close()
 
         # Compatibility bootstrap for sleeves not yet imported into the new
         # catalog.  Only durable identity/state/weights are admitted.  Runtime
@@ -4112,29 +4147,19 @@ class ApplicationServices(ResearchOSServices):
         ):
             raise OrchestrationFailure(
                 "weekly lifecycle input requires a registered accepted Gold snapshot"
-            )
+        )
         monitor = LifecycleMonitor(self.catalog)
         outputs: list[dict[str, Any]] = []
-        active_statuses = {
-            RecoveryCaseStatus.OPEN,
-            RecoveryCaseStatus.DIAGNOSING,
-            RecoveryCaseStatus.OBSERVING,
+        active_by_sleeve = {
+            case.sleeve_id: case
+            for case in _active_recovery_cases(self.catalog)
         }
         for row in rows:
             record = self._lifecycle_record(row["record"])
             observation = self._health_observation(
                 row["observation"], catalog_projection=True
             )
-            recovery = next(
-                (
-                    case
-                    for case in self.catalog.list_recovery_cases(
-                        sleeve_id=record.sleeve_id, limit=100
-                    )
-                    if case.status in active_statuses
-                ),
-                None,
-            )
+            recovery = active_by_sleeve.get(record.sleeve_id)
             result = monitor.tick(
                 record,
                 observation,
@@ -4164,16 +4189,7 @@ class ApplicationServices(ResearchOSServices):
             as_of = datetime.combine(as_of_date, time(15, 0), tzinfo=timezone.utc)
         except ValueError:
             as_of = self._now()
-        active = [
-            case
-            for case in self.catalog.list_recovery_cases(limit=1000)
-            if case.status
-            in {
-                RecoveryCaseStatus.OPEN,
-                RecoveryCaseStatus.DIAGNOSING,
-                RecoveryCaseStatus.OBSERVING,
-            }
-        ]
+        active = _active_recovery_cases(self.catalog)
         if not active:
             return OperationResult(
                 operation=request.operation,
@@ -4546,16 +4562,7 @@ class ApplicationServices(ResearchOSServices):
         if remaining == 0:
             return ()
 
-        active_cases = [
-            case
-            for case in self.catalog.list_recovery_cases(limit=1_000)
-            if case.status
-            in {
-                RecoveryCaseStatus.OPEN,
-                RecoveryCaseStatus.DIAGNOSING,
-                RecoveryCaseStatus.OBSERVING,
-            }
-        ]
+        active_cases = _active_recovery_cases(self.catalog)
         cases_by_family: dict[str, Any] = {}
         for case in sorted(
             active_cases,
@@ -5199,18 +5206,16 @@ class ApplicationServices(ResearchOSServices):
             if self.shadow_authority is None:
                 role_blocker = "formal PostgreSQL shadow authority is unavailable"
             else:
-                events = [
-                    event
-                    for event in self.catalog.list_lifecycle_events(limit=10_000)
-                    if event.cause == "challenger_shadow_account_bound"
-                ]
-                if not events:
+                event = max(
+                    self.catalog.iter_lifecycle_events(
+                        cause="challenger_shadow_account_bound"
+                    ),
+                    key=lambda item: (item.occurred_at, item.idempotency_key),
+                    default=None,
+                )
+                if event is None:
                     role_blocker = "no promoted Challenger role binding exists"
                 else:
-                    event = sorted(
-                        events,
-                        key=lambda item: (item.occurred_at, item.idempotency_key),
-                    )[-1]
                     promotion = event.evidence.get("promotion")
                     challenger_experiment_id = (
                         str(promotion.get("experiment_id") or "").strip()
@@ -5469,8 +5474,7 @@ class ApplicationServices(ResearchOSServices):
         account_ids = tuple(
             sorted(
                 account.account_id
-                for account in self.catalog.list_shadow_accounts(limit=1_000)
-                if account.status == "active"
+                for account in self.catalog.iter_shadow_accounts(status="active")
             )
         )
         return tuple(records), {
@@ -5552,17 +5556,22 @@ class ApplicationServices(ResearchOSServices):
             raise OrchestrationFailure(
                 "production data failures require the PostgreSQL incident ledger"
             )
-        existing = next(
-            (
-                item
-                for item in self.production_ledger.list_incidents(
-                    status=IncidentStatus.OPEN,
-                    limit=10_000,
-                )
-                if item.partition_key == partition_key
-            ),
-            None,
+        open_incidents = self.production_ledger.iter_incidents(
+            status=IncidentStatus.OPEN
         )
+        try:
+            existing = next(
+                (
+                    item
+                    for item in open_incidents
+                    if item.partition_key == partition_key
+                ),
+                None,
+            )
+        finally:
+            close = getattr(open_incidents, "close", None)
+            if close is not None:
+                close()
         if existing is not None:
             return {
                 "incident_id": existing.incident_id,
@@ -6553,14 +6562,16 @@ class ApplicationServices(ResearchOSServices):
             raise OrchestrationFailure(
                 "data incident revalidation requires the PostgreSQL ledger"
             )
-        incident = next(
-            (
-                item
-                for item in self.production_ledger.list_incidents(limit=10_000)
-                if item.incident_id == incident_id
-            ),
-            None,
-        )
+        incidents = self.production_ledger.iter_incidents()
+        try:
+            incident = next(
+                (item for item in incidents if item.incident_id == incident_id),
+                None,
+            )
+        finally:
+            close = getattr(incidents, "close", None)
+            if close is not None:
+                close()
         if incident is None:
             raise OrchestrationFailure("data incident was not found")
         if incident.status is not IncidentStatus.OPEN:
@@ -6660,14 +6671,7 @@ class ApplicationServices(ResearchOSServices):
             seen = set()
         now = self._now()
         keys: list[tuple[str, str, str]] = []
-        active_statuses = {
-            RecoveryCaseStatus.OPEN,
-            RecoveryCaseStatus.DIAGNOSING,
-            RecoveryCaseStatus.OBSERVING,
-        }
-        for case in self.catalog.list_recovery_cases(limit=1000):
-            if case.status not in active_statuses:
-                continue
+        for case in _active_recovery_cases(self.catalog):
             for checkpoint, due_at in (
                 ("drift", case.drift_event_due_at),
                 ("diagnosis", case.diagnosis_due_at),
