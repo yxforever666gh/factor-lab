@@ -132,6 +132,21 @@ factor-lab research cycle --help
 factor-lab shadow step --help
 ```
 
+## Research Lite（历史因子先跑通）
+
+Research Lite 直接使用本地历史特征运行因子诊断，无需 PostgreSQL、MinIO、Dagster 或 evidence epoch。结果写入 `runtime/artifacts/research-lite/<mode>`，统一属于 `historical_diagnostic`，不会创建候选或触发晋级。
+
+```powershell
+# 小样本快速验证
+python .\scripts\run_research_lite.py --mode canary
+
+# 完整历史样本
+python .\scripts\run_research_lite.py --mode full
+
+# 只运行指定因子；--factor 可重复
+python .\scripts\run_research_lite.py --mode canary --factor mom_20 --factor book_yield
+```
+
 ## WebUI 信息架构
 
 | 主导航 | 路径 | 内容 |

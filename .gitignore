@@ -1,6 +1,9 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.codex-test-tmp-*/
+runtime/
+test-runs/
 .mypy_cache/
 .ruff_cache/
 *.egg-info/
