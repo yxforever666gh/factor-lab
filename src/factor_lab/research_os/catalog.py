@@ -31,6 +31,7 @@ from .contracts import (
     TrialOutcome,
 )
 from .fingerprint import canonical_json, content_fingerprint, experiment_fingerprint
+from .production_ledger import INCIDENT_CONTROL_LOCK_KEYS
 from .governance import (
     EvidenceClass,
     TrialAdmissionDecision,
@@ -42,7 +43,7 @@ from .governance import (
 from . import orm
 
 
-RESEARCH_OS_ALEMBIC_HEAD = "0010_evidence_epoch_versions"
+RESEARCH_OS_ALEMBIC_HEAD = "0013_incident_control_outbox"
 
 EVIDENCE_EPOCH_SCHEMA_VERSION = "research-os/evidence-epoch/v1"
 EVIDENCE_EPOCH_SLOT = "research_os"
@@ -390,6 +391,20 @@ class LifecycleEvent:
             raise ValueError("idempotency_key, sleeve_id, and cause are required")
 
 
+def _same_lifecycle_event(
+    existing: LifecycleEvent, requested: LifecycleEvent
+) -> bool:
+    return bool(
+        existing.sleeve_id == requested.sleeve_id
+        and existing.from_state == requested.from_state
+        and existing.to_state == requested.to_state
+        and existing.cause == requested.cause
+        and canonical_json(existing.evidence) == canonical_json(requested.evidence)
+        and existing.occurred_at
+        == _require_aware(requested.occurred_at, "occurred_at")
+    )
+
+
 @dataclass(frozen=True)
 class RunRecord:
     run_id: str
@@ -675,6 +690,63 @@ def _json_tree(value: Any) -> dict[str, Any]:
     return json.loads(canonical_json(value))
 
 
+def _recovery_projection_payload(case: RecoveryCase) -> dict[str, Any]:
+    payload = _json_tree(case)
+    payload.pop("projection_version", None)
+    return payload
+
+
+def _prepare_recovery_case_write(
+    existing: RecoveryCase | None,
+    requested: RecoveryCase,
+) -> tuple[RecoveryCase, bool]:
+    """Version one mutable recovery projection without changing its evidence."""
+
+    if existing is None:
+        if requested.projection_version != 0:
+            raise CatalogConflict(
+                "a new recovery case must start at projection_version 0"
+            )
+        return requested.model_copy(update={"projection_version": 1}), True
+
+    immutable_fields = (
+        "sleeve_id",
+        "triggered_at",
+        "drift_event_due_at",
+        "diagnosis_due_at",
+        "earliest_recovery_review_at",
+        "data_integrity_failure",
+        "trigger_evidence",
+    )
+    if any(
+        getattr(existing, name) != getattr(requested, name)
+        for name in immutable_fields
+    ):
+        raise CatalogConflict(
+            f"recovery case identity collision for {requested.recovery_case_id!r}"
+        )
+    if _recovery_projection_payload(existing) == _recovery_projection_payload(
+        requested
+    ):
+        return existing, False
+    if requested.projection_version != existing.projection_version:
+        raise CatalogConflict(
+            "recovery case projection changed since it was read"
+        )
+    status_order = {
+        RecoveryCaseStatus.OPEN: 0,
+        RecoveryCaseStatus.DIAGNOSING: 1,
+        RecoveryCaseStatus.OBSERVING: 2,
+        RecoveryCaseStatus.RECOVERED: 3,
+        RecoveryCaseStatus.CLOSED: 4,
+    }
+    if status_order[requested.status] < status_order[existing.status]:
+        raise CatalogConflict("recovery case status cannot regress")
+    return requested.model_copy(
+        update={"projection_version": existing.projection_version + 1}
+    ), True
+
+
 def _run_is_terminal(run: RunRecord) -> bool:
     """Return whether a durable run has left its sole mutable state."""
 
@@ -731,6 +803,20 @@ def _validate_limit(limit: int) -> int:
     if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 1000:
         raise ValueError("limit must be an integer between 1 and 1000")
     return limit
+
+
+def _validate_shadow_account_id(account_id: str) -> str:
+    if (
+        not isinstance(account_id, str)
+        or not account_id
+        or account_id != account_id.strip()
+        or len(account_id) > 160
+    ):
+        raise ValueError(
+            "account_id must be a non-empty string of at most 160 characters "
+            "without surrounding whitespace"
+        )
+    return account_id
 
 
 _ZERO_EVENT_HASH = "0" * 64
@@ -1036,8 +1122,16 @@ class _CatalogBackend(Protocol):
 
     def append_lifecycle_event(self, event: LifecycleEvent) -> LifecycleEvent: ...
 
+    def append_lifecycle_path(
+        self, events: Sequence[LifecycleEvent]
+    ) -> tuple[LifecycleEvent, ...]: ...
+
     def list_lifecycle_events(
         self, *, limit: int, sleeve_id: str | None
+    ) -> list[LifecycleEvent]: ...
+
+    def list_latest_lifecycle_events(
+        self, *, limit: int, sleeve_ids: Sequence[str] | None
     ) -> list[LifecycleEvent]: ...
 
     def iter_lifecycle_events(
@@ -1097,6 +1191,10 @@ class _CatalogBackend(Protocol):
     ) -> ShadowAccountRecord: ...
 
     def get_shadow_account(self, account_id: str) -> ShadowAccountRecord | None: ...
+
+    def get_shadow_event(
+        self, *, account_id: str, event_hash: str
+    ) -> ShadowEvent | None: ...
 
     def list_shadow_accounts(
         self, *, limit: int, status: str | None
@@ -2935,8 +3033,40 @@ class _SQLiteCatalog:
             return self._research_submission(row)
 
     def append_lifecycle_event(self, event: LifecycleEvent) -> LifecycleEvent:
-        try:
-            with self._transaction() as connection:
+        with self._transaction() as connection:
+            existing_row = connection.execute(
+                "SELECT * FROM ros_lifecycle_events WHERE idempotency_key = ?",
+                (event.idempotency_key,),
+            ).fetchone()
+            if existing_row is not None:
+                existing = self._lifecycle_from_row(existing_row)
+                if _same_lifecycle_event(existing, event):
+                    return existing
+                raise CatalogConflict(
+                    f"lifecycle idempotency key {event.idempotency_key!r} was reused"
+                )
+            latest = connection.execute(
+                """
+                SELECT to_state, occurred_at FROM ros_lifecycle_events
+                WHERE sleeve_id = ?
+                ORDER BY occurred_at DESC, event_id DESC LIMIT 1
+                """,
+                (event.sleeve_id,),
+            ).fetchone()
+            current_state = (
+                None if latest is None else LifecycleState(latest["to_state"])
+            )
+            if event.from_state != current_state:
+                raise CatalogConflict(
+                    "lifecycle transition does not match the latest durable state"
+                )
+            if latest is not None and event.occurred_at <= _parse_time(
+                latest["occurred_at"]
+            ):
+                raise CatalogConflict(
+                    "lifecycle transition must be strictly later than the latest event"
+                )
+            try:
                 connection.execute(
                     """
                     INSERT INTO ros_lifecycle_events(
@@ -2948,34 +3078,107 @@ class _SQLiteCatalog:
                         event.event_id,
                         event.idempotency_key,
                         event.sleeve_id,
-                        event.from_state.value if event.from_state is not None else None,
+                        (
+                            event.from_state.value
+                            if event.from_state is not None
+                            else None
+                        ),
                         event.to_state.value,
                         event.cause,
                         canonical_json(event.evidence),
                         _time_text(event.occurred_at),
                     ),
                 )
-        except sqlite3.IntegrityError as exc:
-            with self._lock:
-                row = self._connection.execute(
-                    "SELECT * FROM ros_lifecycle_events WHERE idempotency_key = ?",
-                    (event.idempotency_key,),
-                ).fetchone()
-            if row is not None:
-                existing = self._lifecycle_from_row(row)
-                if (
-                    existing.sleeve_id == event.sleeve_id
-                    and existing.from_state == event.from_state
-                    and existing.to_state == event.to_state
-                    and existing.cause == event.cause
-                    and canonical_json(existing.evidence) == canonical_json(event.evidence)
-                    and existing.occurred_at == _require_aware(event.occurred_at, "occurred_at")
-                ):
-                    return existing
-            raise CatalogConflict(
-                f"lifecycle idempotency key {event.idempotency_key!r} was reused"
-            ) from exc
+            except sqlite3.IntegrityError as exc:
+                raise CatalogConflict("lifecycle event identity already exists") from exc
         return event
+
+    def append_lifecycle_path(
+        self, events: Sequence[LifecycleEvent]
+    ) -> tuple[LifecycleEvent, ...]:
+        path = tuple(events)
+        if not path:
+            raise ValueError("lifecycle path must not be empty")
+        sleeve_ids = {event.sleeve_id for event in path}
+        if len(sleeve_ids) != 1:
+            raise ValueError("a lifecycle path must target exactly one Sleeve")
+        if len({event.idempotency_key for event in path}) != len(path):
+            raise ValueError("lifecycle path idempotency keys must be unique")
+
+        with self._transaction() as connection:
+            existing_rows = connection.execute(
+                "SELECT * FROM ros_lifecycle_events WHERE idempotency_key IN ("
+                + ",".join("?" for _ in path)
+                + ")",
+                tuple(event.idempotency_key for event in path),
+            ).fetchall()
+            existing_by_key = {
+                row["idempotency_key"]: self._lifecycle_from_row(row)
+                for row in existing_rows
+            }
+            if existing_by_key:
+                if len(existing_by_key) == len(path) and all(
+                    _same_lifecycle_event(
+                        existing_by_key[event.idempotency_key], event
+                    )
+                    for event in path
+                ):
+                    return tuple(
+                        existing_by_key[event.idempotency_key] for event in path
+                    )
+                raise CatalogConflict(
+                    "lifecycle path is partially persisted or differs from its durable replay"
+                )
+
+            latest = connection.execute(
+                """
+                SELECT to_state, occurred_at FROM ros_lifecycle_events
+                WHERE sleeve_id = ?
+                ORDER BY occurred_at DESC, event_id DESC LIMIT 1
+                """,
+                (path[0].sleeve_id,),
+            ).fetchone()
+            current_state = (
+                None if latest is None else LifecycleState(latest["to_state"])
+            )
+            latest_time = None if latest is None else _parse_time(latest["occurred_at"])
+            for event in path:
+                if event.from_state != current_state:
+                    raise CatalogConflict(
+                        "lifecycle transition does not match the latest durable state"
+                    )
+                if latest_time is not None and event.occurred_at <= latest_time:
+                    raise CatalogConflict(
+                        "lifecycle transition must be strictly later than the latest event"
+                    )
+                current_state = event.to_state
+                latest_time = event.occurred_at
+
+            try:
+                connection.executemany(
+                    """
+                    INSERT INTO ros_lifecycle_events(
+                        event_id, idempotency_key, sleeve_id, from_state, to_state,
+                        cause, evidence_json, occurred_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    tuple(
+                        (
+                            event.event_id,
+                            event.idempotency_key,
+                            event.sleeve_id,
+                            event.from_state.value if event.from_state else None,
+                            event.to_state.value,
+                            event.cause,
+                            canonical_json(event.evidence),
+                            _time_text(event.occurred_at),
+                        )
+                        for event in path
+                    ),
+                )
+            except sqlite3.IntegrityError as exc:
+                raise CatalogConflict("lifecycle path identity already exists") from exc
+        return path
 
     @staticmethod
     def _lifecycle_from_row(row: sqlite3.Row) -> LifecycleEvent:
@@ -2999,6 +3202,41 @@ class _SQLiteCatalog:
             query += " WHERE sleeve_id = ?"
             params.append(sleeve_id)
         query += " ORDER BY occurred_at DESC, event_id DESC LIMIT ?"
+        params.append(_validate_limit(limit))
+        with self._lock:
+            rows = self._connection.execute(query, tuple(params)).fetchall()
+        return [self._lifecycle_from_row(row) for row in rows]
+
+    def list_latest_lifecycle_events(
+        self, *, limit: int, sleeve_ids: Sequence[str] | None
+    ) -> list[LifecycleEvent]:
+        normalized_ids = tuple(
+            dict.fromkeys(str(item).strip() for item in (sleeve_ids or ()) if str(item).strip())
+        )
+        if sleeve_ids is not None and not normalized_ids:
+            return []
+        where_clause = ""
+        params: list[Any] = []
+        if normalized_ids:
+            where_clause = "WHERE sleeve_id IN (" + ",".join("?" for _ in normalized_ids) + ")"
+            params.extend(normalized_ids)
+        query = """
+            SELECT event_id, idempotency_key, sleeve_id, from_state, to_state,
+                   cause, evidence_json, occurred_at
+            FROM (
+                SELECT event_id, idempotency_key, sleeve_id, from_state, to_state,
+                       cause, evidence_json, occurred_at,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY sleeve_id
+                           ORDER BY occurred_at DESC, event_id DESC
+                       ) AS lifecycle_rank
+                FROM ros_lifecycle_events
+                {where_clause}
+            ) ranked
+            WHERE lifecycle_rank = 1
+            ORDER BY occurred_at DESC, event_id DESC
+            LIMIT ?
+        """.format(where_clause=where_clause)
         params.append(_validate_limit(limit))
         with self._lock:
             rows = self._connection.execute(query, tuple(params)).fetchall()
@@ -3052,6 +3290,14 @@ class _SQLiteCatalog:
                 "SELECT case_json FROM ros_recovery_cases WHERE recovery_case_id = ?",
                 (case.recovery_case_id,),
             ).fetchone()
+            existing = (
+                None
+                if existing_row is None
+                else RecoveryCase.model_validate_json(existing_row["case_json"])
+            )
+            stored, changed = _prepare_recovery_case_write(existing, case)
+            if not changed:
+                return stored
             if existing_row is None:
                 connection.execute(
                     """
@@ -3061,30 +3307,16 @@ class _SQLiteCatalog:
                     ) VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
-                        case.recovery_case_id,
-                        case.sleeve_id,
-                        case.status.value,
-                        case.lifecycle_state.value,
-                        canonical_json(case),
-                        _time_text(case.triggered_at),
+                        stored.recovery_case_id,
+                        stored.sleeve_id,
+                        stored.status.value,
+                        stored.lifecycle_state.value,
+                        canonical_json(stored),
+                        _time_text(stored.triggered_at),
                         _time_text(now),
                     ),
                 )
             else:
-                existing = RecoveryCase.model_validate_json(existing_row["case_json"])
-                immutable_fields = (
-                    "sleeve_id",
-                    "triggered_at",
-                    "drift_event_due_at",
-                    "diagnosis_due_at",
-                    "earliest_recovery_review_at",
-                    "data_integrity_failure",
-                    "trigger_evidence",
-                )
-                if any(getattr(existing, name) != getattr(case, name) for name in immutable_fields):
-                    raise CatalogConflict(
-                        f"recovery case identity collision for {case.recovery_case_id!r}"
-                    )
                 connection.execute(
                     """
                     UPDATE ros_recovery_cases
@@ -3092,14 +3324,14 @@ class _SQLiteCatalog:
                     WHERE recovery_case_id = ?
                     """,
                     (
-                        case.status.value,
-                        case.lifecycle_state.value,
-                        canonical_json(case),
+                        stored.status.value,
+                        stored.lifecycle_state.value,
+                        canonical_json(stored),
                         _time_text(now),
-                        case.recovery_case_id,
+                        stored.recovery_case_id,
                     ),
                 )
-        return case
+        return stored
 
     def get_recovery_case(self, recovery_case_id: str) -> RecoveryCase | None:
         with self._lock:
@@ -3488,6 +3720,21 @@ class _SQLiteCatalog:
             ).fetchone()
         return None if row is None else self._shadow_account_from_row(row)
 
+    def get_shadow_event(
+        self, *, account_id: str, event_hash: str
+    ) -> ShadowEvent | None:
+        normalized_account_id = _validate_shadow_account_id(account_id)
+        normalized_event_hash = _require_sha256(event_hash, name="event_hash")
+        with self._lock:
+            row = self._connection.execute(
+                """
+                SELECT * FROM ros_shadow_events
+                WHERE account_id = ? AND event_hash = ?
+                """,
+                (normalized_account_id, normalized_event_hash),
+            ).fetchone()
+        return None if row is None else self._shadow_event_from_row(row)
+
     def list_shadow_accounts(
         self, *, limit: int, status: str | None
     ) -> list[ShadowAccountRecord]:
@@ -3857,6 +4104,24 @@ class _SQLiteCatalog:
             latest_run = self._connection.execute(
                 "SELECT MAX(started_at) FROM ros_runs"
             ).fetchone()[0]
+            lifecycle_states = {
+                str(row[0]): int(row[1])
+                for row in self._connection.execute(
+                    """
+                    SELECT to_state, COUNT(*)
+                    FROM (
+                        SELECT to_state,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY sleeve_id
+                                   ORDER BY occurred_at DESC, event_id DESC
+                               ) AS lifecycle_rank
+                        FROM ros_lifecycle_events
+                    ) ranked
+                    WHERE lifecycle_rank = 1
+                    GROUP BY to_state
+                    """
+                ).fetchall()
+            }
             return CatalogSummary(
                 generated_at=_utc_now(),
                 totals=totals,
@@ -3864,7 +4129,7 @@ class _SQLiteCatalog:
                 data_quality_statuses=grouped(
                     "ros_data_snapshots", "quality_status"
                 ),
-                lifecycle_states=grouped("ros_lifecycle_events", "to_state"),
+                lifecycle_states=lifecycle_states,
                 recovery_statuses=grouped("ros_recovery_cases", "status"),
                 latest_run_started_at=_parse_time(latest_run) if latest_run else None,
             )
@@ -4161,11 +4426,18 @@ class _SQLAlchemyCatalog:
         calendar_content_hash: str,
         activated_at: datetime,
     ) -> EvidenceEpochRecord:
-        from sqlalchemy import select, text
+        from sqlalchemy import func, select, text
 
         activated_at = _require_aware(activated_at, "activated_at")
         with self._sessions.begin() as session:
             if self._engine.dialect.name == "postgresql":
+                session.execute(
+                    select(
+                        func.pg_advisory_xact_lock(
+                            *INCIDENT_CONTROL_LOCK_KEYS
+                        )
+                    )
+                )
                 session.execute(
                     text("SELECT pg_advisory_xact_lock(:lock_key)"),
                     {"lock_key": _EVIDENCE_EPOCH_LOCK_KEY},
@@ -5294,23 +5566,82 @@ class _SQLAlchemyCatalog:
             return self._research_submission(model)
 
     def append_lifecycle_event(self, event: LifecycleEvent) -> LifecycleEvent:
-        from sqlalchemy import select
+        from sqlalchemy import func, select
         from sqlalchemy.exc import IntegrityError
 
         try:
             with self._sessions.begin() as session:
+                if session.get_bind().dialect.name == "postgresql":
+                    session.connection().exec_driver_sql("SET LOCAL lock_timeout = '5s'")
+                    session.connection().exec_driver_sql(
+                        "SET LOCAL statement_timeout = '30s'"
+                    )
+                    session.execute(
+                        select(
+                            func.pg_advisory_xact_lock(
+                                *INCIDENT_CONTROL_LOCK_KEYS
+                            )
+                        )
+                    )
+                    digest = hashlib.sha256(
+                        f"research-os:lifecycle:{event.sleeve_id}".encode("utf-8")
+                    ).digest()
+                    lock_key = int.from_bytes(digest[:8], "big", signed=True)
+                    session.execute(select(func.pg_advisory_xact_lock(lock_key)))
+                existing_model = session.scalar(
+                    select(orm.LifecycleEventModel).where(
+                        orm.LifecycleEventModel.idempotency_key
+                        == event.idempotency_key
+                    )
+                )
+                if existing_model is not None:
+                    existing = self._lifecycle_from_model(existing_model)
+                    if _same_lifecycle_event(existing, event):
+                        return existing
+                    raise CatalogConflict(
+                        f"lifecycle idempotency key {event.idempotency_key!r} was reused"
+                    )
+                latest = session.scalar(
+                    select(orm.LifecycleEventModel)
+                    .where(orm.LifecycleEventModel.sleeve_id == event.sleeve_id)
+                    .order_by(
+                        orm.LifecycleEventModel.occurred_at.desc(),
+                        orm.LifecycleEventModel.event_id.desc(),
+                    )
+                    .limit(1)
+                )
+                current_state = (
+                    None if latest is None else LifecycleState(latest.to_state)
+                )
+                if event.from_state != current_state:
+                    raise CatalogConflict(
+                        "lifecycle transition does not match the latest durable state"
+                    )
+                if latest is not None and event.occurred_at <= _parse_time(
+                    latest.occurred_at
+                ):
+                    raise CatalogConflict(
+                        "lifecycle transition must be strictly later than the latest event"
+                    )
                 session.add(
                     orm.LifecycleEventModel(
                         event_id=event.event_id,
                         idempotency_key=event.idempotency_key,
                         sleeve_id=event.sleeve_id,
-                        from_state=event.from_state.value if event.from_state else None,
+                        from_state=(
+                            event.from_state.value
+                            if event.from_state
+                            else None
+                        ),
                         to_state=event.to_state.value,
                         cause=event.cause,
-                        evidence_json=json.loads(canonical_json(event.evidence)),
+                        evidence_json=json.loads(
+                            canonical_json(event.evidence)
+                        ),
                         occurred_at=event.occurred_at,
                     )
                 )
+                session.flush()
         except IntegrityError as exc:
             with self._sessions() as session:
                 row = session.scalar(
@@ -5320,19 +5651,117 @@ class _SQLAlchemyCatalog:
                 )
             if row is not None:
                 existing = self._lifecycle_from_model(row)
-                if (
-                    existing.sleeve_id == event.sleeve_id
-                    and existing.from_state == event.from_state
-                    and existing.to_state == event.to_state
-                    and existing.cause == event.cause
-                    and canonical_json(existing.evidence) == canonical_json(event.evidence)
-                    and existing.occurred_at == _require_aware(event.occurred_at, "occurred_at")
-                ):
+                if _same_lifecycle_event(existing, event):
                     return existing
             raise CatalogConflict(
                 f"lifecycle idempotency key {event.idempotency_key!r} was reused"
             ) from exc
         return event
+
+    def append_lifecycle_path(
+        self, events: Sequence[LifecycleEvent]
+    ) -> tuple[LifecycleEvent, ...]:
+        from sqlalchemy import func, select
+        from sqlalchemy.exc import IntegrityError
+
+        path = tuple(events)
+        if not path:
+            raise ValueError("lifecycle path must not be empty")
+        sleeve_ids = {event.sleeve_id for event in path}
+        if len(sleeve_ids) != 1:
+            raise ValueError("a lifecycle path must target exactly one Sleeve")
+        if len({event.idempotency_key for event in path}) != len(path):
+            raise ValueError("lifecycle path idempotency keys must be unique")
+
+        try:
+            with self._sessions.begin() as session:
+                if session.get_bind().dialect.name == "postgresql":
+                    session.connection().exec_driver_sql("SET LOCAL lock_timeout = '5s'")
+                    session.connection().exec_driver_sql(
+                        "SET LOCAL statement_timeout = '30s'"
+                    )
+                    session.execute(
+                        select(
+                            func.pg_advisory_xact_lock(
+                                *INCIDENT_CONTROL_LOCK_KEYS
+                            )
+                        )
+                    )
+                    digest = hashlib.sha256(
+                        f"research-os:lifecycle:{path[0].sleeve_id}".encode("utf-8")
+                    ).digest()
+                    lock_key = int.from_bytes(digest[:8], "big", signed=True)
+                    session.execute(select(func.pg_advisory_xact_lock(lock_key)))
+
+                existing_models = session.scalars(
+                    select(orm.LifecycleEventModel).where(
+                        orm.LifecycleEventModel.idempotency_key.in_(
+                            tuple(event.idempotency_key for event in path)
+                        )
+                    )
+                ).all()
+                existing_by_key = {
+                    model.idempotency_key: self._lifecycle_from_model(model)
+                    for model in existing_models
+                }
+                if existing_by_key:
+                    if len(existing_by_key) == len(path) and all(
+                        _same_lifecycle_event(
+                            existing_by_key[event.idempotency_key], event
+                        )
+                        for event in path
+                    ):
+                        return tuple(
+                            existing_by_key[event.idempotency_key] for event in path
+                        )
+                    raise CatalogConflict(
+                        "lifecycle path is partially persisted or differs from its durable replay"
+                    )
+
+                latest = session.scalar(
+                    select(orm.LifecycleEventModel)
+                    .where(orm.LifecycleEventModel.sleeve_id == path[0].sleeve_id)
+                    .order_by(
+                        orm.LifecycleEventModel.occurred_at.desc(),
+                        orm.LifecycleEventModel.event_id.desc(),
+                    )
+                    .limit(1)
+                )
+                current_state = (
+                    None if latest is None else LifecycleState(latest.to_state)
+                )
+                latest_time = (
+                    None if latest is None else _parse_time(latest.occurred_at)
+                )
+                for event in path:
+                    if event.from_state != current_state:
+                        raise CatalogConflict(
+                            "lifecycle transition does not match the latest durable state"
+                        )
+                    if latest_time is not None and event.occurred_at <= latest_time:
+                        raise CatalogConflict(
+                            "lifecycle transition must be strictly later than the latest event"
+                        )
+                    current_state = event.to_state
+                    latest_time = event.occurred_at
+                    session.add(
+                        orm.LifecycleEventModel(
+                            event_id=event.event_id,
+                            idempotency_key=event.idempotency_key,
+                            sleeve_id=event.sleeve_id,
+                            from_state=(
+                                event.from_state.value if event.from_state else None
+                            ),
+                            to_state=event.to_state.value,
+                            cause=event.cause,
+                            evidence_json=json.loads(canonical_json(event.evidence)),
+                            occurred_at=event.occurred_at,
+                        )
+                    )
+                session.flush()
+        except IntegrityError as exc:
+            raise CatalogConflict("lifecycle path identity already exists") from exc
+        return path
 
     @staticmethod
     def _lifecycle_from_model(model: Any) -> LifecycleEvent:
@@ -5350,7 +5779,7 @@ class _SQLAlchemyCatalog:
     def list_lifecycle_events(
         self, *, limit: int, sleeve_id: str | None
     ) -> list[LifecycleEvent]:
-        from sqlalchemy import select
+        from sqlalchemy import func, select
 
         statement = select(orm.LifecycleEventModel)
         if sleeve_id is not None:
@@ -5361,6 +5790,49 @@ class _SQLAlchemyCatalog:
             orm.LifecycleEventModel.occurred_at.desc(),
             orm.LifecycleEventModel.event_id.desc(),
         ).limit(_validate_limit(limit))
+        with self._sessions() as session:
+            rows = session.scalars(statement).all()
+        return [self._lifecycle_from_model(row) for row in rows]
+
+    def list_latest_lifecycle_events(
+        self, *, limit: int, sleeve_ids: Sequence[str] | None
+    ) -> list[LifecycleEvent]:
+        from sqlalchemy import func, select
+        from sqlalchemy.orm import aliased
+
+        size = _validate_limit(limit)
+        ranked = select(
+            orm.LifecycleEventModel,
+            func.row_number()
+            .over(
+                partition_by=orm.LifecycleEventModel.sleeve_id,
+                order_by=(
+                    orm.LifecycleEventModel.occurred_at.desc(),
+                    orm.LifecycleEventModel.event_id.desc(),
+                ),
+            )
+            .label("lifecycle_rank"),
+        )
+        normalized_ids = tuple(
+            dict.fromkeys(str(item).strip() for item in (sleeve_ids or ()) if str(item).strip())
+        )
+        if sleeve_ids is not None:
+            if not normalized_ids:
+                return []
+            ranked = ranked.where(
+                orm.LifecycleEventModel.sleeve_id.in_(normalized_ids)
+            )
+        ranked = ranked.subquery()
+        latest_model = aliased(orm.LifecycleEventModel, ranked)
+        statement = (
+            select(latest_model)
+            .where(ranked.c.lifecycle_rank == 1)
+            .order_by(
+                latest_model.occurred_at.desc(),
+                latest_model.event_id.desc(),
+            )
+            .limit(size)
+        )
         with self._sessions() as session:
             rows = session.scalars(statement).all()
         return [self._lifecycle_from_model(row) for row in rows]
@@ -5411,33 +5883,43 @@ class _SQLAlchemyCatalog:
         return None if state is None else LifecycleState(state)
 
     def save_recovery_case(self, case: RecoveryCase) -> RecoveryCase:
+        from sqlalchemy import func, select
+
         with self._sessions.begin() as session:
-            model = session.get(orm.RecoveryCaseModel, case.recovery_case_id)
+            if self.engine.dialect.name == "postgresql":
+                digest = hashlib.sha256(
+                    f"research-os:recovery-case:{case.recovery_case_id}".encode(
+                        "utf-8"
+                    )
+                ).digest()
+                lock_key = int.from_bytes(digest[:8], "big", signed=True)
+                session.execute(select(func.pg_advisory_xact_lock(lock_key)))
+            model = session.scalar(
+                select(orm.RecoveryCaseModel)
+                .where(
+                    orm.RecoveryCaseModel.recovery_case_id
+                    == case.recovery_case_id
+                )
+                .with_for_update()
+            )
+            existing = (
+                None
+                if model is None
+                else RecoveryCase.model_validate(model.case_json)
+            )
+            stored, changed = _prepare_recovery_case_write(existing, case)
+            if not changed:
+                return stored
             if model is None:
                 model = orm.RecoveryCaseModel(recovery_case_id=case.recovery_case_id)
                 session.add(model)
-            else:
-                existing = RecoveryCase.model_validate(model.case_json)
-                immutable_fields = (
-                    "sleeve_id",
-                    "triggered_at",
-                    "drift_event_due_at",
-                    "diagnosis_due_at",
-                    "earliest_recovery_review_at",
-                    "data_integrity_failure",
-                    "trigger_evidence",
-                )
-                if any(getattr(existing, name) != getattr(case, name) for name in immutable_fields):
-                    raise CatalogConflict(
-                        f"recovery case identity collision for {case.recovery_case_id!r}"
-                    )
-            model.sleeve_id = case.sleeve_id
-            model.status = case.status.value
-            model.lifecycle_state = case.lifecycle_state.value
-            model.case_json = _json_tree(case)
-            model.triggered_at = case.triggered_at
+            model.sleeve_id = stored.sleeve_id
+            model.status = stored.status.value
+            model.lifecycle_state = stored.lifecycle_state.value
+            model.case_json = _json_tree(stored)
+            model.triggered_at = stored.triggered_at
             model.updated_at = _utc_now()
-        return case
+        return stored
 
     def get_recovery_case(self, recovery_case_id: str) -> RecoveryCase | None:
         with self._sessions() as session:
@@ -5814,6 +6296,21 @@ class _SQLAlchemyCatalog:
             model = session.get(orm.ShadowAccountModel, account_id)
             return None if model is None else self._shadow_account_from_model(model)
 
+    def get_shadow_event(
+        self, *, account_id: str, event_hash: str
+    ) -> ShadowEvent | None:
+        from sqlalchemy import select
+
+        normalized_account_id = _validate_shadow_account_id(account_id)
+        normalized_event_hash = _require_sha256(event_hash, name="event_hash")
+        statement = select(orm.ShadowEventModel).where(
+            orm.ShadowEventModel.account_id == normalized_account_id,
+            orm.ShadowEventModel.event_hash == normalized_event_hash,
+        )
+        with self._sessions() as session:
+            model = session.scalar(statement)
+        return None if model is None else self._shadow_event_from_model(model)
+
     def list_shadow_accounts(
         self, *, limit: int, status: str | None
     ) -> list[ShadowAccountRecord]:
@@ -5883,6 +6380,18 @@ class _SQLAlchemyCatalog:
         normalized = _normalize_shadow_event_inputs(events)
         committed: list[ShadowEvent] = []
         with self._sessions.begin() as session:
+            if session.get_bind().dialect.name == "postgresql":
+                session.connection().exec_driver_sql("SET LOCAL lock_timeout = '5s'")
+                session.connection().exec_driver_sql(
+                    "SET LOCAL statement_timeout = '30s'"
+                )
+                session.execute(
+                    select(
+                        func.pg_advisory_xact_lock(
+                            *INCIDENT_CONTROL_LOCK_KEYS
+                        )
+                    )
+                )
             account = session.scalar(
                 select(orm.ShadowAccountModel)
                 .where(orm.ShadowAccountModel.account_id == account_id)
@@ -6166,6 +6675,29 @@ class _SQLAlchemyCatalog:
                 }
 
             latest_run = session.scalar(select(func.max(orm.RunModel.started_at)))
+            ranked_lifecycle = select(
+                orm.LifecycleEventModel.to_state.label("to_state"),
+                func.row_number()
+                .over(
+                    partition_by=orm.LifecycleEventModel.sleeve_id,
+                    order_by=(
+                        orm.LifecycleEventModel.occurred_at.desc(),
+                        orm.LifecycleEventModel.event_id.desc(),
+                    ),
+                )
+                .label("lifecycle_rank"),
+            ).subquery()
+            lifecycle_states = {
+                str(key): int(count)
+                for key, count in session.execute(
+                    select(
+                        ranked_lifecycle.c.to_state,
+                        func.count(),
+                    )
+                    .where(ranked_lifecycle.c.lifecycle_rank == 1)
+                    .group_by(ranked_lifecycle.c.to_state)
+                ).all()
+            }
             return CatalogSummary(
                 generated_at=_utc_now(),
                 totals=totals,
@@ -6175,9 +6707,7 @@ class _SQLAlchemyCatalog:
                 data_quality_statuses=grouped(
                     orm.DataSnapshotModel, orm.DataSnapshotModel.quality_status
                 ),
-                lifecycle_states=grouped(
-                    orm.LifecycleEventModel, orm.LifecycleEventModel.to_state
-                ),
+                lifecycle_states=lifecycle_states,
                 recovery_statuses=grouped(
                     orm.RecoveryCaseModel, orm.RecoveryCaseModel.status
                 ),
@@ -6719,10 +7249,25 @@ class ResearchCatalog:
     def append_lifecycle_event(self, event: LifecycleEvent) -> LifecycleEvent:
         return self._backend.append_lifecycle_event(event)
 
+    def append_lifecycle_path(
+        self, events: Sequence[LifecycleEvent]
+    ) -> tuple[LifecycleEvent, ...]:
+        return self._backend.append_lifecycle_path(events)
+
     def list_lifecycle_events(
         self, *, limit: int = 100, sleeve_id: str | None = None
     ) -> list[LifecycleEvent]:
         return self._backend.list_lifecycle_events(limit=limit, sleeve_id=sleeve_id)
+
+    def list_latest_lifecycle_events(
+        self,
+        *,
+        limit: int = 1_000,
+        sleeve_ids: Sequence[str] | None = None,
+    ) -> list[LifecycleEvent]:
+        return self._backend.list_latest_lifecycle_events(
+            limit=limit, sleeve_ids=sleeve_ids
+        )
 
     def iter_lifecycle_events(
         self,
@@ -6831,6 +7376,14 @@ class ResearchCatalog:
 
     def get_shadow_account(self, account_id: str) -> ShadowAccountRecord | None:
         return self._backend.get_shadow_account(account_id)
+
+    def get_shadow_event(
+        self, *, account_id: str, event_hash: str
+    ) -> ShadowEvent | None:
+        return self._backend.get_shadow_event(
+            account_id=_validate_shadow_account_id(account_id),
+            event_hash=_require_sha256(event_hash, name="event_hash"),
+        )
 
     def list_shadow_accounts(
         self, *, limit: int = 100, status: str | None = None

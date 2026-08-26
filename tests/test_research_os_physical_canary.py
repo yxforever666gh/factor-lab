@@ -14,8 +14,9 @@ pytest.importorskip("sqlalchemy")
 from sqlalchemy import create_engine, insert
 from sqlalchemy.orm import Session
 
+from factor_lab.research_os import catalog as catalog_module
 from factor_lab.research_os import physical_canary as physical_canary_module
-from factor_lab.research_os.catalog import ResearchCatalog
+from factor_lab.research_os.catalog import ResearchCatalog, RunRecord
 from factor_lab.research_os.contracts import (
     DataSnapshotRef,
     PHYSICAL_CANARY_SNAPSHOT_REFERENCE_SCHEMA,
@@ -67,7 +68,10 @@ from factor_lab.research_os.production_ledger import (
     PartitionStatus,
     ProductionLedger,
 )
-from factor_lab.research_os.readiness_audit import physical_canary_evidence_hash
+from factor_lab.research_os.readiness_audit import (
+    ProductionReadinessAuditor,
+    physical_canary_evidence_hash,
+)
 from factor_lab.research_os.shadow_authority import (
     ShadowEvidenceAuthority,
     ShadowEvidenceClass,
@@ -76,7 +80,14 @@ from factor_lab.research_os.shadow_authority import (
 
 NOW = datetime(2026, 8, 23, 12, 0, tzinfo=timezone.utc)
 SESSIONS = tuple(item.date() for item in pd.bdate_range("2026-06-01", periods=21))
+CURRENT_STAGE_SOURCE = f"engineering_canary_{'c' * 24}"
+LEGACY_STAGE_SOURCE = f"engineering_canary_{'a' * 24}"
 TICKERS = tuple(f"{index:06d}.SZ" for index in range(1, 61))
+
+
+@pytest.fixture(autouse=True)
+def _freeze_catalog_registration_clock(monkeypatch) -> None:
+    monkeypatch.setattr(catalog_module, "_utc_now", lambda: NOW)
 
 
 def _opening_shadow(request: dict[str, object]) -> dict[str, object]:
@@ -1412,8 +1423,9 @@ def _enable_generation_audit_fixture(runtime) -> None:
     """Enable production-only audits without invoking host build admission."""
 
     runtime.service.controlled_test = False
+    runtime.service.physical_source_attested = True
     runtime.service._partition_source = lambda binding: (
-        f"engcan_{binding.adapter.source_id}_current"
+        f"engcan_{binding.adapter.source_id}_{'c' * 24}"
     )
 
 
@@ -1528,6 +1540,83 @@ def test_production_partition_source_versions_transport_and_parser_contract(
     runtime.engine.dispose()
 
 
+def test_provider_generation_identity_never_matches_nested_provider_prefix() -> None:
+    generation = "1" * 24
+
+    assert PhysicalEngineeringCanaryService._provider_generation_source_matches(
+        f"engcan_tushare_{generation}", "tushare"
+    )
+    assert PhysicalEngineeringCanaryService._provider_generation_source_matches(
+        f"engcan_tushare_pro_{generation}", "tushare_pro"
+    )
+    assert not PhysicalEngineeringCanaryService._provider_generation_source_matches(
+        f"engcan_tushare_pro_{generation}", "tushare"
+    )
+    assert PhysicalEngineeringCanaryService._provider_generation_source_matches(
+        f"engcan_tushare_{'2' * 12}", "tushare"
+    )
+
+
+@pytest.mark.parametrize(
+    ("source_identity", "generation_base", "expected"),
+    [
+        ("engineering_canary", "engineering_canary", True),
+        (f"engineering_canary_{'1' * 12}", "engineering_canary", True),
+        (f"engineering_canary_{'2' * 24}", "engineering_canary", True),
+        ("engineering_canary_backup", "engineering_canary", False),
+        ("engineering_canary_12345678901g", "engineering_canary", False),
+        ("engcan_tushare", "engcan_tushare", True),
+        (f"engcan_tushare_{'3' * 12}", "engcan_tushare", True),
+        (f"engcan_tushare_{'4' * 24}", "engcan_tushare", True),
+        ("engcan_tushare_old", "engcan_tushare", False),
+    ],
+)
+def test_generation_family_accepts_only_exact_or_hex_generation_suffix(
+    source_identity: str,
+    generation_base: str,
+    expected: bool,
+) -> None:
+    assert (
+        physical_canary_module.physical_canary_generation_source_matches(
+            source_identity,
+            generation_base,
+        )
+        is expected
+    )
+
+
+def test_legacy_generation_selects_only_exact_nested_provider_family(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime(tmp_path)
+    try:
+        record = runtime.ledger.ensure_partition(
+            PartitionIdentity(
+                f"engcan_foo_bar_{'1' * 12}",
+                "daily",
+                SESSIONS[0].isoformat(),
+            ),
+            created_at=NOW,
+            input_hash="a" * 64,
+        )
+        foo_generation = f"engcan_foo_{'2' * 24}"
+        nested_generation = f"engcan_foo_bar_{'3' * 24}"
+
+        selected = runtime.service._current_generation_for_legacy(
+            record,
+            source_generations={
+                ("foo", "daily"): foo_generation,
+                ("foo_bar", "daily"): nested_generation,
+            },
+            stage_generation="",
+        )
+
+        assert selected == nested_generation
+    finally:
+        _close(runtime)
+    runtime.engine.dispose()
+
+
 def test_opening_probe_keeps_descriptor_and_source_generation_stable(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1611,7 +1700,7 @@ def test_opening_probe_keeps_descriptor_and_source_generation_stable(
     runtime.engine.dispose()
 
 
-def test_legacy_canary_source_generation_stays_open_without_replacement(
+def test_legacy_pending_generation_never_creates_isolation_claim(
     tmp_path: Path,
 ) -> None:
     runtime = _runtime(tmp_path)
@@ -1639,10 +1728,19 @@ def test_legacy_canary_source_generation_stays_open_without_replacement(
             if item.error_code == "legacy_canary_generation_isolated"
             and item.partition_run_id == legacy_identity.partition_run_id
         ]
-        assert len(matching) == 1
-        assert matching[0].status is IncidentStatus.OPEN
-        assert matching[0].payload["legacy_source_id"] == legacy_identity.source_id
-        assert matching[0].payload["current_source_id"] != legacy_identity.source_id
+        assert matching == []
+        replacement = _successful_partition_with_snapshot(
+            runtime,
+            identity=PartitionIdentity(
+                runtime.service._partition_source(binding),
+                binding.dataset,
+                SESSIONS[0].isoformat(),
+            ),
+            tier=SnapshotTier.BRONZE,
+            role="current_source_generation",
+        )
+        runtime.service._audit_legacy_source_generations(replacement=replacement)
+        assert runtime.ledger.list_incidents() == ()
     finally:
         _close(runtime)
     runtime.engine.dispose()
@@ -1654,13 +1752,79 @@ def _failed_partition_with_incident(
     identity: PartitionIdentity,
     stage: IncidentStage,
     error_code: str = "fixture_generation_failed",
+    terminal_status: PartitionStatus = PartitionStatus.FAILED,
 ):
+    run_id = "legacy-generation-failure-fixture"
+    if runtime.catalog.get_run(run_id) is None:
+        runtime.catalog.save_run(
+            RunRecord(
+                run_id=run_id,
+                run_type=PHYSICAL_RUN_TYPE,
+                status="running",
+                input_fingerprint=content_fingerprint(
+                    run_id, domain="tests/legacy-generation-failure-run"
+                ),
+                started_at=NOW - timedelta(hours=1),
+                metadata={"fixture": True},
+            )
+        )
+    input_hash = content_fingerprint(
+        identity.partition_run_id, domain="tests/legacy-canary-partition-input"
+    )
+    stage_name = {
+        IncidentStage.SOURCE: "bronze",
+        IncidentStage.SILVER: "silver",
+        IncidentStage.DATA_QUALITY: "data_quality",
+        IncidentStage.GOLD: "gold",
+    }[stage]
+    stage_details: dict[str, object] = {"stage": stage_name}
+    if stage is IncidentStage.SOURCE:
+        providers = {
+            binding.adapter.source_id
+            for binding in runtime.service.bindings
+            if binding.dataset == identity.dataset
+            and runtime.service._provider_generation_source_matches(
+                identity.source_id,
+                binding.adapter.source_id,
+            )
+        }
+        if len(providers) == 1:
+            stage_details.update(
+                {"source_id": next(iter(providers)), "dataset": identity.dataset}
+            )
+    elif stage is IncidentStage.GOLD:
+        role = identity.dataset.removeprefix("gold_")
+        stage_details.update({"role": role, "gold_role": role})
+    lineage = runtime.service._partition_claim_lineage(
+        identity,
+        input_hash=input_hash,
+        stage=stage,
+        details=stage_details,
+        evidence_hashes=(),
+    )
+    lineage_hash = content_fingerprint(
+        lineage,
+        domain=(
+            "factor-lab/research-os/v1/"
+            "physical-canary-partition-claim-lineage"
+        ),
+    )
+    labels = _labels(
+        physical_source_attested=runtime.service.physical_source_attested,
+        controlled_test=runtime.service.controlled_test,
+    )
+    record_details = {
+        **labels,
+        "run_id": run_id,
+        **stage_details,
+        "claim_lineage": lineage,
+        "claim_lineage_hash": lineage_hash,
+    }
     runtime.ledger.ensure_partition(
         identity,
         created_at=NOW,
-        input_hash=content_fingerprint(
-            identity.partition_run_id, domain="tests/legacy-canary-partition-input"
-        ),
+        input_hash=input_hash,
+        details=record_details,
     )
     lease = runtime.ledger.claim(
         identity=identity,
@@ -1671,10 +1835,12 @@ def _failed_partition_with_incident(
     assert lease is not None
     failed = runtime.ledger.finish(
         lease,
-        status=PartitionStatus.FAILED,
+        status=terminal_status,
         completed_at=NOW,
+        run_id=run_id,
         error_code=error_code,
         error="fixture legacy generation failure",
+        details=record_details,
     )
     incident = runtime.ledger.record_incident(
         partition_key=identity.partition_key,
@@ -1684,6 +1850,16 @@ def _failed_partition_with_incident(
         occurred_at=NOW,
         partition_run_id=identity.partition_run_id,
         source_ids=(identity.source_id,),
+        payload={
+            **labels,
+            "run_id": run_id,
+            "failure_type": "FixtureGenerationFailure",
+            "partition_terminalized": True,
+            "partition_terminal_status": terminal_status.value,
+            "terminalization_failure_type": None,
+            "claim_lineage": lineage,
+            "claim_lineage_hash": lineage_hash,
+        },
     )
     return failed, incident
 
@@ -1698,16 +1874,83 @@ def _successful_partition_with_snapshot(
     completed_at: datetime = NOW,
     details: dict[str, object] | None = None,
 ):
+    run_id = "generation-replacement-fixture"
+    if runtime.catalog.get_run(run_id) is None:
+        runtime.catalog.save_run(
+            RunRecord(
+                run_id=run_id,
+                run_type=PHYSICAL_RUN_TYPE,
+                status="running",
+                input_fingerprint=content_fingerprint(
+                    run_id, domain="tests/generation-replacement-run"
+                ),
+                started_at=NOW - timedelta(hours=1),
+                metadata={"fixture": True},
+            )
+        )
+    stage = (
+        IncidentStage.SILVER
+        if identity.dataset == "silver_accepted"
+        else IncidentStage.DATA_QUALITY
+        if identity.dataset == "dq_accepted"
+        else IncidentStage.GOLD
+        if identity.dataset.startswith("gold_")
+        else IncidentStage.SOURCE
+    )
+    providers = {
+        binding.adapter.source_id
+        for binding in runtime.service.bindings
+        if binding.dataset == identity.dataset
+        and runtime.service._provider_generation_source_matches(
+            identity.source_id,
+            binding.adapter.source_id,
+        )
+    }
+    published_role = (
+        f"{next(iter(providers))}_{identity.dataset}"
+        if stage is IncidentStage.SOURCE and len(providers) == 1
+        else role
+    )
     report = {
         "schema_version": "test/v1",
         "status": "accepted",
         "trade_date": identity.partition_key,
     }
+    if tier is SnapshotTier.BRONZE:
+        parent_references = ()
+    else:
+        parent_tier = (
+            SnapshotTier.BRONZE
+            if tier is SnapshotTier.SILVER
+            else SnapshotTier.SILVER
+        )
+        parent_role = (
+            "fixture_parent_raw"
+            if parent_tier is SnapshotTier.BRONZE
+            else "accepted_reconciled"
+        )
+        parent_references = (
+            runtime.service._publish_frame_snapshot(
+                run_id=run_id,
+                session=date.fromisoformat(identity.partition_key),
+                tier=parent_tier,
+                role=parent_role,
+                frame=pd.DataFrame(
+                    {
+                        "ticker": ["000001.SZ"],
+                        "trade_date": [identity.partition_key],
+                        "value": [0.5],
+                    }
+                ),
+                parent_snapshot_ids=(),
+                as_of=NOW,
+            ),
+        )
     reference = runtime.service._publish_frame_snapshot(
-        run_id="generation-replacement-fixture",
+        run_id=run_id,
         session=date.fromisoformat(identity.partition_key),
         tier=tier,
-        role=role,
+        role=published_role,
         frame=pd.DataFrame(
             {
                 "ticker": ["000001.SZ"],
@@ -1715,7 +1958,7 @@ def _successful_partition_with_snapshot(
                 "value": [1.0],
             }
         ),
-        parent_snapshot_ids=(),
+        parent_snapshot_ids=tuple(item.snapshot_id for item in parent_references),
         as_of=NOW,
         extra_manifest=(
             {"quality_report": report}
@@ -1731,12 +1974,88 @@ def _successful_partition_with_snapshot(
         if identity.dataset == "dq_accepted"
         else reference.content_hash
     )
+    input_hash = content_fingerprint(
+        identity.partition_run_id, domain="tests/current-canary-partition-input"
+    )
+    stage_name = {
+        IncidentStage.SOURCE: "bronze",
+        IncidentStage.SILVER: "silver",
+        IncidentStage.DATA_QUALITY: "data_quality",
+        IncidentStage.GOLD: "gold",
+    }[stage]
+    stage_details: dict[str, object] = {
+        "stage": stage_name,
+        "role": published_role,
+        **dict(details or {}),
+    }
+    if stage is IncidentStage.SOURCE:
+        if len(providers) == 1:
+            stage_details.update(
+                {"source_id": next(iter(providers)), "dataset": identity.dataset}
+            )
+    elif stage is IncidentStage.SILVER:
+        stage_details["parent_snapshot_ids"] = list(reference.parent_snapshot_ids)
+    elif stage is IncidentStage.DATA_QUALITY:
+        stage_details.update(
+            {
+                "silver_snapshot_id": reference.snapshot_id,
+                "quality_report_hash": output_hash,
+            }
+        )
+    elif stage is IncidentStage.GOLD:
+        stage_details.update(
+            {
+                "gold_role": published_role,
+                "silver_snapshot_id": reference.parent_snapshot_ids[0],
+            }
+        )
+        if all(
+            str(stage_details.get(field) or "")
+            for field in ("stage_source", "calendar_hash")
+        ):
+            stage_details["attempted_gold_input_hash"] = _gold_attempted_input_hash(
+                stage_source=str(stage_details["stage_source"]),
+                session=date.fromisoformat(identity.partition_key),
+                role=published_role,
+                silver_snapshot_id=reference.parent_snapshot_ids[0],
+                calendar_hash=str(stage_details["calendar_hash"]),
+            )
+    logical_parent_references = (
+        (reference,)
+        if stage is IncidentStage.DATA_QUALITY
+        else parent_references
+    )
+    lineage = runtime.service._partition_claim_lineage(
+        identity,
+        input_hash=input_hash,
+        stage=stage,
+        details=stage_details,
+        evidence_hashes=tuple(
+            item.content_hash for item in logical_parent_references
+        ),
+    )
+    lineage_hash = content_fingerprint(
+        lineage,
+        domain=(
+            "factor-lab/research-os/v1/"
+            "physical-canary-partition-claim-lineage"
+        ),
+    )
+    record_details = {
+        **_labels(
+            physical_source_attested=runtime.service.physical_source_attested,
+            controlled_test=runtime.service.controlled_test,
+        ),
+        "run_id": run_id,
+        **stage_details,
+        "claim_lineage": lineage,
+        "claim_lineage_hash": lineage_hash,
+    }
     runtime.ledger.ensure_partition(
         identity,
         created_at=NOW,
-        input_hash=content_fingerprint(
-            identity.partition_run_id, domain="tests/current-canary-partition-input"
-        ),
+        input_hash=input_hash,
+        details=record_details,
     )
     lease = runtime.ledger.claim(
         identity=identity,
@@ -1749,13 +2068,14 @@ def _successful_partition_with_snapshot(
         lease,
         status=PartitionStatus.SUCCEEDED,
         completed_at=completed_at,
+        run_id=run_id,
         output_snapshot_id=reference.snapshot_id,
         output_hash=override_output_hash or output_hash,
-        details=details,
+        details=record_details,
     )
 
 
-def test_legacy_source_incidents_close_only_after_verified_replacement_and_are_idempotent(
+def test_legacy_source_generation_closes_exact_original_failure_and_bridge(
     tmp_path: Path,
 ) -> None:
     runtime = _runtime(tmp_path)
@@ -1775,10 +2095,9 @@ def test_legacy_source_incidents_close_only_after_verified_replacement_and_are_i
 
         runtime.service._audit_legacy_source_generations()
         open_incidents = runtime.ledger.list_incidents(status=IncidentStatus.OPEN)
-        assert {item.error_code for item in open_incidents} == {
-            "fixture_generation_failed",
-            "legacy_canary_generation_isolated",
-        }
+        assert [item.incident_id for item in open_incidents] == [
+            failure.incident_id
+        ]
 
         replacement = _successful_partition_with_snapshot(
             runtime,
@@ -1793,6 +2112,40 @@ def test_legacy_source_incidents_close_only_after_verified_replacement_and_are_i
         runtime.service._audit_legacy_source_generations(replacement=replacement)
         closed = runtime.ledger.list_incidents(status=IncidentStatus.SUPERSEDED)
         assert len(closed) == 2
+        by_error = {item.error_code: item for item in closed}
+        assert set(by_error) == {
+            "fixture_generation_failed",
+            "legacy_canary_generation_isolated",
+        }
+        assert by_error["fixture_generation_failed"].incident_id == failure.incident_id
+        assert runtime.service._verified_replacement_evidence(replacement) is not None
+        partitions = {
+            legacy.identity.partition_run_id: legacy,
+            replacement.identity.partition_run_id: replacement,
+        }
+        readiness = object.__new__(ProductionReadinessAuditor)
+        original_failure = by_error["fixture_generation_failed"]
+        assert readiness._physical_canary_producer_labels_are_valid(
+            {
+                key: value
+                for key, value in original_failure.payload.items()
+                if key != "resolution"
+            }
+        )
+        assert readiness._physical_canary_claim_lineage_is_valid(legacy)
+        assert readiness._physical_canary_claim_lineage_is_valid(replacement)
+        assert readiness._physical_canary_failure_incident_matches_partition(
+            original_failure, legacy
+        )
+        schema_validity = {
+            incident.error_code: readiness._physical_canary_resolution_schema_is_valid(
+                incident,
+                replacement=replacement,
+                partitions=partitions,
+            )
+            for incident in closed
+        }
+        assert all(schema_validity.values()), schema_validity
         for incident in closed:
             resolution = incident.payload["resolution"]
             assert (
@@ -1817,7 +2170,139 @@ def test_legacy_source_incidents_close_only_after_verified_replacement_and_are_i
         } == resolution_hashes
         assert runtime.ledger.get_partition(legacy_identity) == legacy
         assert runtime.ledger.list_incidents(status=IncidentStatus.OPEN) == ()
-        assert failure.incident_id in resolution_hashes
+    finally:
+        _close(runtime)
+    runtime.engine.dispose()
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    ["missing_lineage", "bad_lineage_hash", "wrong_run_id", "wrong_role"],
+)
+def test_generation_bridge_is_not_written_for_unverifiable_replacement_metadata(
+    tmp_path: Path,
+    tamper: str,
+) -> None:
+    runtime = _runtime(tmp_path)
+    try:
+        _enable_generation_audit_fixture(runtime)
+        binding = runtime.service.bindings[0]
+        legacy_identity = PartitionIdentity(
+            f"engcan_{binding.adapter.source_id}",
+            binding.dataset,
+            SESSIONS[0].isoformat(),
+        )
+        runtime.ledger.ensure_partition(
+            legacy_identity,
+            created_at=NOW - timedelta(minutes=2),
+            input_hash="8" * 64,
+        )
+        lease = runtime.ledger.claim(
+            identity=legacy_identity,
+            owner="unverifiable-legacy",
+            now=NOW - timedelta(minutes=2),
+            lease_for=timedelta(minutes=10),
+        )
+        assert lease is not None
+        runtime.ledger.finish(
+            lease,
+            status=PartitionStatus.FAILED,
+            completed_at=NOW - timedelta(minutes=1),
+            error_code="fixture_legacy_failed",
+            error="fixture legacy failed",
+        )
+        replacement = _successful_partition_with_snapshot(
+            runtime,
+            identity=PartitionIdentity(
+                runtime.service._partition_source(binding),
+                binding.dataset,
+                SESSIONS[0].isoformat(),
+            ),
+            tier=SnapshotTier.BRONZE,
+            role=f"{binding.adapter.source_id}_{binding.dataset}",
+        )
+        tampered_details = dict(replacement.details)
+        if tamper == "missing_lineage":
+            tampered_details.pop("claim_lineage", None)
+        elif tamper == "bad_lineage_hash":
+            tampered_details["claim_lineage_hash"] = "0" * 64
+        elif tamper == "wrong_run_id":
+            tampered_details["run_id"] = "wrong-run"
+        else:
+            tampered_details["role"] = "wrong-role"
+        unverifiable = replace(replacement, details=tampered_details)
+
+        runtime.service._audit_legacy_source_generations(
+            replacement=unverifiable
+        )
+
+        assert runtime.service._verified_replacement_evidence(unverifiable) is None
+        assert runtime.ledger.list_incidents() == ()
+    finally:
+        _close(runtime)
+    runtime.engine.dispose()
+
+
+def test_unverified_generation_creates_no_stale_claim_for_later_generation(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime(tmp_path)
+    try:
+        binding = runtime.service.bindings[0]
+        runtime.service.controlled_test = False
+        generation_b = f"engcan_{binding.adapter.source_id}_{'b' * 24}"
+        generation_c = f"engcan_{binding.adapter.source_id}_{'c' * 24}"
+        legacy_identity = PartitionIdentity(
+            f"engcan_{binding.adapter.source_id}",
+            binding.dataset,
+            SESSIONS[0].isoformat(),
+        )
+        runtime.ledger.ensure_partition(
+            legacy_identity,
+            created_at=NOW,
+            input_hash="9" * 64,
+            details={"legacy_generation": True},
+        )
+        legacy_lease = runtime.ledger.claim(
+            identity=legacy_identity,
+            owner="legacy-generation-a",
+            now=NOW,
+            lease_for=timedelta(minutes=10),
+        )
+        assert legacy_lease is not None
+        runtime.ledger.finish(
+            legacy_lease,
+            status=PartitionStatus.FAILED,
+            completed_at=NOW,
+            error_code="fixture_generation_a_failed",
+            error="fixture generation A failed",
+        )
+
+        runtime.service._partition_source = lambda _binding: generation_b
+        runtime.service._audit_legacy_source_generations()
+        assert runtime.ledger.list_incidents() == ()
+
+        runtime.service._partition_source = lambda _binding: generation_c
+        replacement = _successful_partition_with_snapshot(
+            runtime,
+            identity=PartitionIdentity(
+                generation_c,
+                binding.dataset,
+                SESSIONS[0].isoformat(),
+            ),
+            tier=SnapshotTier.BRONZE,
+            role="current_source_generation",
+        )
+        runtime.service._audit_legacy_source_generations(replacement=replacement)
+
+        assert runtime.ledger.list_incidents(status=IncidentStatus.OPEN) == ()
+        closed = runtime.ledger.list_incidents(status=IncidentStatus.SUPERSEDED)
+        assert len(closed) == 1
+        assert closed[0].payload["current_source_id"] == generation_c
+        assert (
+            closed[0].payload["resolution"]["replacement_partition_run_id"]
+            == replacement.identity.partition_run_id
+        )
     finally:
         _close(runtime)
     runtime.engine.dispose()
@@ -1829,9 +2314,9 @@ def test_success_status_with_unverified_output_hash_does_not_close_incident(
     runtime = _runtime(tmp_path)
     try:
         _enable_generation_audit_fixture(runtime)
-        runtime.service._stage_source = lambda: "engineering_canary_current"
+        runtime.service._stage_source = lambda: CURRENT_STAGE_SOURCE
         legacy_identity = PartitionIdentity(
-            "engineering_canary_legacy",
+            LEGACY_STAGE_SOURCE,
             "gold_mark",
             SESSIONS[1].isoformat(),
         )
@@ -1841,7 +2326,7 @@ def test_success_status_with_unverified_output_hash_does_not_close_incident(
         replacement = _successful_partition_with_snapshot(
             runtime,
             identity=PartitionIdentity(
-                "engineering_canary_current",
+                CURRENT_STAGE_SOURCE,
                 "gold_mark",
                 SESSIONS[1].isoformat(),
             ),
@@ -1853,7 +2338,7 @@ def test_success_status_with_unverified_output_hash_does_not_close_incident(
         runtime.service._audit_legacy_source_generations(replacement=replacement)
 
         assert runtime.ledger.list_incidents(status=IncidentStatus.SUPERSEDED) == ()
-        assert len(runtime.ledger.list_incidents(status=IncidentStatus.OPEN)) == 2
+        assert len(runtime.ledger.list_incidents(status=IncidentStatus.OPEN)) == 1
     finally:
         _close(runtime)
     runtime.engine.dispose()
@@ -1871,7 +2356,7 @@ def test_non_retryable_current_partition_incident_is_not_auto_resolved(
         replacement = _successful_partition_with_snapshot(
             runtime,
             identity=PartitionIdentity(
-                "engtest_current",
+                "engineering_canary_test",
                 "gold_mark",
                 SESSIONS[1].isoformat(),
             ),
@@ -1900,6 +2385,104 @@ def test_non_retryable_current_partition_incident_is_not_auto_resolved(
     runtime.engine.dispose()
 
 
+@pytest.mark.parametrize(
+    "origin_tamper",
+    ["stage", "error_code", "source_ids", "evidence_hashes"],
+)
+def test_retry_resolution_rejects_wrong_original_incident_origin(
+    tmp_path: Path,
+    origin_tamper: str,
+) -> None:
+    runtime = _runtime(tmp_path)
+    try:
+        replacement = _successful_partition_with_snapshot(
+            runtime,
+            identity=PartitionIdentity(
+                "engineering_canary_test",
+                "gold_mark",
+                SESSIONS[1].isoformat(),
+            ),
+            tier=SnapshotTier.GOLD,
+            role="mark",
+        )
+        lineage = replacement.details["claim_lineage"]
+        origin = {
+            "stage": IncidentStage.GOLD,
+            "error_code": "gold_publication_failed",
+            "source_ids": (replacement.identity.source_id,),
+            "evidence_hashes": tuple(lineage["parent_evidence_hashes"]),
+        }
+        if origin_tamper == "stage":
+            origin["stage"] = IncidentStage.SILVER
+        elif origin_tamper == "error_code":
+            origin["error_code"] = "source_fetch_failed"
+        elif origin_tamper == "source_ids":
+            origin["source_ids"] = ("engineering_canary_test_other",)
+        else:
+            origin["evidence_hashes"] = ("f" * 64,)
+        incident = runtime.ledger.record_incident(
+            partition_key=replacement.identity.partition_key,
+            stage=origin["stage"],
+            error_code=origin["error_code"],
+            message="tampered retry origin must remain open",
+            occurred_at=NOW,
+            partition_run_id=replacement.identity.partition_run_id,
+            source_ids=origin["source_ids"],
+            evidence_hashes=origin["evidence_hashes"],
+            payload={
+                **_labels(
+                    physical_source_attested=(
+                        runtime.service.physical_source_attested
+                    ),
+                    controlled_test=runtime.service.controlled_test,
+                ),
+                "run_id": replacement.run_id,
+                "partition_terminalized": True,
+                "partition_terminal_status": PartitionStatus.FAILED.value,
+                "terminalization_failure_type": None,
+                "claim_lineage": lineage,
+                "claim_lineage_hash": replacement.details["claim_lineage_hash"],
+            },
+        )
+
+        runtime.service._now = lambda: NOW + timedelta(minutes=1)
+        runtime.service._resolve_retried_partition_incidents(
+            replace(replacement, attempts=2)
+        )
+
+        assert [
+            item.incident_id
+            for item in runtime.ledger.list_incidents(status=IncidentStatus.OPEN)
+        ] == [incident.incident_id]
+        assert runtime.ledger.list_incidents(status=IncidentStatus.RESOLVED) == ()
+    finally:
+        _close(runtime)
+    runtime.engine.dispose()
+
+
+def test_verified_replacement_rejects_partition_completed_after_audit_now(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime(tmp_path)
+    try:
+        replacement = _successful_partition_with_snapshot(
+            runtime,
+            identity=PartitionIdentity(
+                "engineering_canary_test",
+                "gold_mark",
+                SESSIONS[1].isoformat(),
+            ),
+            tier=SnapshotTier.GOLD,
+            role="mark",
+            completed_at=NOW + timedelta(seconds=1),
+        )
+
+        assert runtime.service._verified_replacement_evidence(replacement) is None
+    finally:
+        _close(runtime)
+    runtime.engine.dispose()
+
+
 def test_retry_resolution_scans_past_ten_thousand_newer_open_incidents(
     tmp_path: Path,
 ) -> None:
@@ -1908,7 +2491,7 @@ def test_retry_resolution_scans_past_ten_thousand_newer_open_incidents(
         replacement = _successful_partition_with_snapshot(
             runtime,
             identity=PartitionIdentity(
-                "engtest_current",
+                "engineering_canary_test",
                 "gold_mark",
                 SESSIONS[1].isoformat(),
             ),
@@ -1919,11 +2502,28 @@ def test_retry_resolution_scans_past_ten_thousand_newer_open_incidents(
         related = runtime.ledger.record_incident(
             partition_key=SESSIONS[1].isoformat(),
             stage=IncidentStage.GOLD,
-            error_code="fixture_retryable_failure",
+            error_code="gold_publication_failed",
             message="older retryable failure must remain discoverable",
             occurred_at=NOW,
             partition_run_id=replacement.identity.partition_run_id,
-            payload={"partition_terminal_status": PartitionStatus.FAILED.value},
+            source_ids=(replacement.identity.source_id,),
+            evidence_hashes=tuple(
+                replacement.details["claim_lineage"]["parent_evidence_hashes"]
+            ),
+            payload={
+                **_labels(
+                    physical_source_attested=(
+                        runtime.service.physical_source_attested
+                    ),
+                    controlled_test=runtime.service.controlled_test,
+                ),
+                "run_id": replacement.run_id,
+                "partition_terminalized": True,
+                "partition_terminal_status": PartitionStatus.FAILED.value,
+                "terminalization_failure_type": None,
+                "claim_lineage": replacement.details["claim_lineage"],
+                "claim_lineage_hash": replacement.details["claim_lineage_hash"],
+            },
         )
         newer_at = NOW + timedelta(minutes=1)
         decoys = [
@@ -1955,6 +2555,7 @@ def test_retry_resolution_scans_past_ten_thousand_newer_open_incidents(
         )
         assert related.incident_id not in {item.incident_id for item in truncated}
 
+        runtime.service._now = lambda: NOW + timedelta(minutes=3)
         runtime.service._resolve_retried_partition_incidents(
             replace(replacement, attempts=2)
         )
@@ -1973,35 +2574,77 @@ def test_retry_resolution_scans_past_ten_thousand_newer_open_incidents(
 
 
 @pytest.mark.parametrize(
-    ("dataset", "stage", "tier", "role"),
+    ("dataset", "stage", "terminal_status", "error_code", "tier", "role"),
     [
-        ("silver_accepted", IncidentStage.SILVER, SnapshotTier.SILVER, "accepted_reconciled"),
-        ("dq_accepted", IncidentStage.DATA_QUALITY, SnapshotTier.SILVER, "accepted_reconciled"),
-        ("gold_mark", IncidentStage.GOLD, SnapshotTier.GOLD, "mark"),
-        ("gold_execution", IncidentStage.GOLD, SnapshotTier.GOLD, "execution"),
+        (
+            "silver_accepted",
+            IncidentStage.SILVER,
+            PartitionStatus.DISPUTED,
+            "source_reconciliation_disputed",
+            SnapshotTier.SILVER,
+            "accepted_reconciled",
+        ),
+        (
+            "silver_accepted",
+            IncidentStage.DATA_QUALITY,
+            PartitionStatus.QUARANTINED,
+            "data_quality_blocked",
+            SnapshotTier.SILVER,
+            "accepted_reconciled",
+        ),
+        (
+            "dq_accepted",
+            IncidentStage.DATA_QUALITY,
+            PartitionStatus.FAILED,
+            "fixture_generation_failed",
+            SnapshotTier.SILVER,
+            "accepted_reconciled",
+        ),
+        (
+            "gold_mark",
+            IncidentStage.GOLD,
+            PartitionStatus.FAILED,
+            "fixture_generation_failed",
+            SnapshotTier.GOLD,
+            "mark",
+        ),
+        (
+            "gold_execution",
+            IncidentStage.GOLD,
+            PartitionStatus.FAILED,
+            "fixture_generation_failed",
+            SnapshotTier.GOLD,
+            "execution",
+        ),
     ],
 )
 def test_stage_generation_incidents_require_same_dataset_date_replacement(
     tmp_path: Path,
     dataset: str,
     stage: IncidentStage,
+    terminal_status: PartitionStatus,
+    error_code: str,
     tier: SnapshotTier,
     role: str,
 ) -> None:
     runtime = _runtime(tmp_path)
     try:
         _enable_generation_audit_fixture(runtime)
-        runtime.service._stage_source = lambda: "engineering_canary_current"
+        runtime.service._stage_source = lambda: CURRENT_STAGE_SOURCE
         legacy_identity = PartitionIdentity(
-            "engineering_canary_legacy", dataset, SESSIONS[1].isoformat()
+            LEGACY_STAGE_SOURCE, dataset, SESSIONS[1].isoformat()
         )
         _legacy, failure = _failed_partition_with_incident(
-            runtime, identity=legacy_identity, stage=stage
+            runtime,
+            identity=legacy_identity,
+            stage=stage,
+            error_code=error_code,
+            terminal_status=terminal_status,
         )
         wrong_date = _successful_partition_with_snapshot(
             runtime,
             identity=PartitionIdentity(
-                "engineering_canary_current", dataset, SESSIONS[2].isoformat()
+                CURRENT_STAGE_SOURCE, dataset, SESSIONS[2].isoformat()
             ),
             tier=tier,
             role=role,
@@ -2012,7 +2655,7 @@ def test_stage_generation_incidents_require_same_dataset_date_replacement(
         replacement = _successful_partition_with_snapshot(
             runtime,
             identity=PartitionIdentity(
-                "engineering_canary_current", dataset, SESSIONS[1].isoformat()
+                CURRENT_STAGE_SOURCE, dataset, SESSIONS[1].isoformat()
             ),
             tier=tier,
             role=role,
@@ -2031,9 +2674,81 @@ def test_stage_generation_incidents_require_same_dataset_date_replacement(
         superseded = runtime.ledger.list_incidents(
             status=IncidentStatus.SUPERSEDED
         )
-        assert failure.incident_id in {item.incident_id for item in superseded}
+        assert {item.error_code for item in superseded} == {
+            error_code,
+            "legacy_canary_generation_isolated",
+        }
+        assert failure.incident_id in {
+            item.incident_id for item in superseded
+        }
+        partitions = {
+            legacy_identity.partition_run_id: _legacy,
+            replacement.identity.partition_run_id: replacement,
+        }
+        readiness = object.__new__(ProductionReadinessAuditor)
+        schema_validity = {
+            incident.error_code: readiness._physical_canary_resolution_schema_is_valid(
+                incident,
+                replacement=replacement,
+                partitions=partitions,
+            )
+            for incident in superseded
+        }
+        assert all(schema_validity.values()), schema_validity
         remaining = runtime.ledger.list_incidents(status=IncidentStatus.OPEN)
-        assert [item.incident_id for item in remaining] == [current_incident.incident_id]
+        assert [item.incident_id for item in remaining] == [
+            current_incident.incident_id
+        ]
+    finally:
+        _close(runtime)
+    runtime.engine.dispose()
+
+
+def test_exact_base_stage_generation_isolated_by_current_generation(
+    tmp_path: Path,
+) -> None:
+    runtime = _runtime(tmp_path)
+    try:
+        _enable_generation_audit_fixture(runtime)
+        runtime.service._stage_source = lambda: CURRENT_STAGE_SOURCE
+        legacy_identity = PartitionIdentity(
+            "engineering_canary",
+            "gold_mark",
+            SESSIONS[1].isoformat(),
+        )
+        _legacy, failure = _failed_partition_with_incident(
+            runtime,
+            identity=legacy_identity,
+            stage=IncidentStage.GOLD,
+        )
+        replacement = _successful_partition_with_snapshot(
+            runtime,
+            identity=PartitionIdentity(
+                CURRENT_STAGE_SOURCE,
+                "gold_mark",
+                SESSIONS[1].isoformat(),
+            ),
+            tier=SnapshotTier.GOLD,
+            role="mark",
+        )
+
+        runtime.service._audit_legacy_source_generations(
+            replacement=replacement
+        )
+
+        superseded = runtime.ledger.list_incidents(
+            status=IncidentStatus.SUPERSEDED
+        )
+        assert {item.error_code for item in superseded} == {
+            "fixture_generation_failed",
+            "legacy_canary_generation_isolated",
+        }
+        assert failure.incident_id in {
+            item.incident_id for item in superseded
+        }
+        assert runtime.ledger.list_incidents(
+            status=IncidentStatus.OPEN
+        ) == ()
     finally:
         _close(runtime)
     runtime.engine.dispose()
@@ -2048,37 +2763,27 @@ def test_prelease_gold_semantics_incident_closes_after_causal_gold_success(
     runtime = _runtime(tmp_path)
     try:
         runtime.service.controlled_test = False
-        runtime.service._stage_source = lambda: "engineering_canary_current"
+        runtime.service._stage_source = lambda: CURRENT_STAGE_SOURCE
         silver_snapshot_id = "fixture-silver-snapshot"
         calendar_hash = "c" * 64
         attempted_gold_input_hash = _gold_attempted_input_hash(
-            stage_source="engineering_canary_current",
+            stage_source=CURRENT_STAGE_SOURCE,
             session=SESSIONS[1],
             role=role,
             silver_snapshot_id=silver_snapshot_id,
             calendar_hash=calendar_hash,
         )
         lineage = {
-            "stage_source": "engineering_canary_current",
+            "stage_source": CURRENT_STAGE_SOURCE,
             "silver_snapshot_id": silver_snapshot_id,
             "calendar_hash": calendar_hash,
             "gold_role": role,
             "attempted_gold_input_hash": attempted_gold_input_hash,
         }
-        incident = runtime.ledger.record_incident(
-            partition_key=SESSIONS[1].isoformat(),
-            stage=IncidentStage.GOLD,
-            error_code="gold_market_semantics_rejected",
-            message="fixture pre-lease market semantic rejection",
-            occurred_at=NOW,
-            payload={"projected": projected, **lineage},
-        )
-        assert incident.status is IncidentStatus.OPEN
-
         replacement = _successful_partition_with_snapshot(
             runtime,
             identity=PartitionIdentity(
-                "engineering_canary_current",
+                CURRENT_STAGE_SOURCE,
                 f"gold_{role}",
                 SESSIONS[1].isoformat(),
             ),
@@ -2095,6 +2800,24 @@ def test_prelease_gold_semantics_incident_closes_after_causal_gold_success(
                 ],
             },
         )
+        lineage = {
+            "stage_source": replacement.details["stage_source"],
+            "silver_snapshot_id": replacement.details["silver_snapshot_id"],
+            "calendar_hash": replacement.details["calendar_hash"],
+            "gold_role": role,
+            "attempted_gold_input_hash": replacement.details[
+                "attempted_gold_input_hash"
+            ],
+        }
+        incident = runtime.ledger.record_incident(
+            partition_key=SESSIONS[1].isoformat(),
+            stage=IncidentStage.GOLD,
+            error_code="gold_market_semantics_rejected",
+            message="fixture pre-lease market semantic rejection",
+            occurred_at=NOW,
+            payload={"projected": projected, **lineage},
+        )
+        assert incident.status is IncidentStatus.OPEN
         attached_current = runtime.ledger.record_incident(
             partition_key=SESSIONS[1].isoformat(),
             stage=IncidentStage.GOLD,
@@ -2104,6 +2827,7 @@ def test_prelease_gold_semantics_incident_closes_after_causal_gold_success(
             partition_run_id=replacement.identity.partition_run_id,
             payload={"projected": projected, **lineage},
         )
+        runtime.service._now = lambda: NOW + timedelta(seconds=2)
         runtime.service._audit_prelease_gold_semantics(
             session=SESSIONS[1], role=role, replacement=replacement
         )
@@ -2132,12 +2856,12 @@ def test_prelease_gold_semantics_does_not_retroactively_use_older_gold(
     runtime = _runtime(tmp_path)
     try:
         runtime.service.controlled_test = False
-        runtime.service._stage_source = lambda: "engineering_canary_current"
+        runtime.service._stage_source = lambda: CURRENT_STAGE_SOURCE
         role = "execution"
         silver_snapshot_id = "fixture-silver-snapshot"
         calendar_hash = "c" * 64
         attempted_gold_input_hash = _gold_attempted_input_hash(
-            stage_source="engineering_canary_current",
+            stage_source=CURRENT_STAGE_SOURCE,
             session=SESSIONS[1],
             role=role,
             silver_snapshot_id=silver_snapshot_id,
@@ -2146,7 +2870,7 @@ def test_prelease_gold_semantics_does_not_retroactively_use_older_gold(
         replacement = _successful_partition_with_snapshot(
             runtime,
             identity=PartitionIdentity(
-                "engineering_canary_current",
+                CURRENT_STAGE_SOURCE,
                 "gold_execution",
                 SESSIONS[1].isoformat(),
             ),
@@ -2154,7 +2878,7 @@ def test_prelease_gold_semantics_does_not_retroactively_use_older_gold(
             role=role,
             completed_at=NOW - timedelta(seconds=1),
             details={
-                "stage_source": "engineering_canary_current",
+                "stage_source": CURRENT_STAGE_SOURCE,
                 "silver_snapshot_id": silver_snapshot_id,
                 "calendar_hash": calendar_hash,
                 "role": role,
@@ -2169,7 +2893,7 @@ def test_prelease_gold_semantics_does_not_retroactively_use_older_gold(
             occurred_at=NOW,
             payload={
                 "projected": True,
-                "stage_source": "engineering_canary_current",
+                "stage_source": CURRENT_STAGE_SOURCE,
                 "silver_snapshot_id": silver_snapshot_id,
                 "calendar_hash": calendar_hash,
                 "gold_role": role,

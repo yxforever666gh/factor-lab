@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Mapping, Sequence
 
 import pandas as pd
@@ -136,7 +136,12 @@ class SleeveShadowLifecycleService:
             roster_member=True,
         )
         decision = promote_authoritative_result_to_shadow(
-            record,
+            SleeveLifecycleRecord(
+                sleeve_id=record.sleeve_id,
+                state=SleeveState.WALK_FORWARD,
+                target_weight=record.target_weight,
+                effective_weight=record.effective_weight,
+            ),
             promotion_evidence,
             as_of_date=promoted_at.astimezone(timezone.utc).date(),
         )
@@ -179,6 +184,131 @@ class SleeveShadowLifecycleService:
                     "promotion": asdict(promotion_evidence),
                 },
             )
+        lifecycle_evidence = {
+            "promotion": asdict(promotion_evidence),
+            "snapshot_id": experiment.spec.snapshot.snapshot_id,
+            "snapshot_hash": experiment.spec.snapshot.content_hash,
+            "experiment_fingerprint": experiment.fingerprint,
+            "role_binding_id": None,
+        }
+        lifecycle_history = self.catalog.list_lifecycle_events(
+            sleeve_id=record.sleeve_id, limit=1_000
+        )
+        latest_event = lifecycle_history[0] if lifecycle_history else None
+        current_state = None if latest_event is None else latest_event.to_state
+        if current_state is LifecycleState.FROZEN_DATA:
+            raise SleeveLifecycleBridgeError(
+                "a frozen_data Sleeve cannot create or bind a Challenger"
+            )
+        allowed_existing_states = {
+            LifecycleState.WALK_FORWARD,
+            LifecycleState.SHADOW,
+            LifecycleState.ACTIVE,
+            LifecycleState.REDUCED,
+            LifecycleState.DORMANT,
+        }
+        if current_state is not None and current_state not in allowed_existing_states:
+            raise SleeveLifecycleBridgeError(
+                f"a {current_state.value} Sleeve cannot create a Challenger"
+            )
+        promotion_keys = {
+            f"shadow-promotion:{result.result_hash}",
+            f"shadow-bootstrap:{result.result_hash}:{LifecycleState.SHADOW.value}",
+        }
+        existing_promotions = tuple(
+            event
+            for event in lifecycle_history
+            if event.idempotency_key in promotion_keys
+        )
+        if len(existing_promotions) > 1:
+            raise SleeveLifecycleBridgeError(
+                "shadow promotion has ambiguous durable lifecycle evidence"
+            )
+        existing_promotion = (
+            existing_promotions[0] if existing_promotions else None
+        )
+        if existing_promotion is not None:
+            if not (
+                existing_promotion.to_state
+                in {
+                    LifecycleState.SHADOW,
+                    LifecycleState.ACTIVE,
+                    LifecycleState.REDUCED,
+                    LifecycleState.DORMANT,
+                    LifecycleState.PROBATION,
+                    LifecycleState.RETIRED,
+                }
+                and dict(existing_promotion.evidence) == lifecycle_evidence
+            ):
+                raise SleeveLifecycleBridgeError(
+                    "shadow promotion lifecycle replay differs from durable evidence"
+                )
+            assert latest_event is not None and current_state is not None
+            # The promotion event proves the research decision, but it is not
+            # the current CAS base after later monitor/incident transitions.
+            effective_state = current_state
+            promotion_time = max(
+                promoted_at,
+                latest_event.occurred_at + timedelta(microseconds=1),
+            )
+        elif current_state is None:
+            promotion_time = promoted_at
+            bootstrap_states = (
+                LifecycleState.PREREGISTERED,
+                LifecycleState.CANARY,
+                LifecycleState.WALK_FORWARD,
+                LifecycleState.SHADOW,
+            )
+            bootstrap_events: list[LifecycleEvent] = []
+            expected_state: LifecycleState | None = None
+            for index, state in enumerate(bootstrap_states):
+                bootstrap_events.append(
+                    LifecycleEvent(
+                        idempotency_key=(
+                            f"shadow-bootstrap:{result.result_hash}:{state.value}"
+                        ),
+                        sleeve_id=record.sleeve_id,
+                        from_state=expected_state,
+                        to_state=state,
+                        cause=(
+                            "authoritative_result_promoted_to_shadow"
+                            if state is LifecycleState.SHADOW
+                            else "authoritative_research_path_materialized"
+                        ),
+                        occurred_at=promotion_time
+                        + timedelta(microseconds=index),
+                        evidence=lifecycle_evidence,
+                    )
+                )
+                expected_state = state
+            self.catalog.append_lifecycle_path(bootstrap_events)
+            effective_state = LifecycleState.SHADOW
+            promotion_time = bootstrap_events[-1].occurred_at
+        else:
+            promotion_time = max(
+                promoted_at,
+                latest_event.occurred_at + timedelta(microseconds=1),
+            )
+            effective_state = (
+                LifecycleState.SHADOW
+                if current_state is LifecycleState.WALK_FORWARD
+                else current_state
+            )
+            self.catalog.append_lifecycle_event(
+                LifecycleEvent(
+                    idempotency_key=f"shadow-promotion:{result.result_hash}",
+                    sleeve_id=record.sleeve_id,
+                    from_state=current_state,
+                    to_state=effective_state,
+                    cause=(
+                        "authoritative_result_promoted_to_shadow"
+                        if current_state is LifecycleState.WALK_FORWARD
+                        else "authoritative_challenger_created_without_state_change"
+                    ),
+                    occurred_at=promotion_time,
+                    evidence=lifecycle_evidence,
+                )
+            )
         role_binding = None
         if self.shadow_authority is not None:
             role_binding = self.shadow_authority.bind_role(
@@ -187,44 +317,71 @@ class SleeveShadowLifecycleService:
                 account_id=account_id,
                 sleeve_id=record.sleeve_id,
                 experiment_id=experiment_id,
-                bound_at=promoted_at,
+                bound_at=promotion_time,
                 metadata={
                     "result_id": result.result_id,
                     "result_hash": result.result_hash,
                     "roster_manifest_id": roster.roster_id,
                 },
             )
-        lifecycle_evidence = {
-            "promotion": asdict(promotion_evidence),
-            "snapshot_id": experiment.spec.snapshot.snapshot_id,
-            "snapshot_hash": experiment.spec.snapshot.content_hash,
-            "experiment_fingerprint": experiment.fingerprint,
+        binding_evidence = {
+            **lifecycle_evidence,
             "role_binding_id": (
                 None if role_binding is None else role_binding.binding_id
             ),
+            "shadow_account_id": account_id,
         }
-        self.catalog.append_lifecycle_event(
-            LifecycleEvent(
-                idempotency_key=f"shadow-promotion:{result.result_hash}",
-                sleeve_id=record.sleeve_id,
-                from_state=LifecycleState.WALK_FORWARD,
-                to_state=LifecycleState.SHADOW,
-                cause="authoritative_result_promoted_to_shadow",
-                occurred_at=promoted_at,
-                evidence=lifecycle_evidence,
-            )
+        binding_key = f"shadow-binding:{result.result_hash}"
+        refreshed_history = self.catalog.list_lifecycle_events(
+            sleeve_id=record.sleeve_id, limit=1_000
         )
-        self.catalog.append_lifecycle_event(
-            LifecycleEvent(
-                idempotency_key=f"shadow-binding:{result.result_hash}",
-                sleeve_id=record.sleeve_id,
-                from_state=LifecycleState.SHADOW,
-                to_state=LifecycleState.SHADOW,
-                cause="challenger_shadow_account_bound",
-                occurred_at=promoted_at,
-                evidence={**lifecycle_evidence, "shadow_account_id": account_id},
-            )
+        existing_bindings = tuple(
+            event
+            for event in refreshed_history
+            if event.idempotency_key == binding_key
         )
+        if len(existing_bindings) > 1:
+            raise SleeveLifecycleBridgeError(
+                "shadow binding has ambiguous durable lifecycle evidence"
+            )
+        if existing_bindings:
+            existing_binding = existing_bindings[0]
+            if not (
+                existing_binding.from_state == existing_binding.to_state
+                and existing_binding.cause == "challenger_shadow_account_bound"
+                and dict(existing_binding.evidence) == binding_evidence
+            ):
+                raise SleeveLifecycleBridgeError(
+                    "shadow binding replay differs from durable lifecycle evidence"
+                )
+            binding_time = existing_binding.occurred_at
+        else:
+            latest_after_role = refreshed_history[0] if refreshed_history else None
+            if latest_after_role is None or latest_after_role.to_state not in {
+                LifecycleState.SHADOW,
+                LifecycleState.ACTIVE,
+                LifecycleState.REDUCED,
+                LifecycleState.DORMANT,
+            }:
+                raise SleeveLifecycleBridgeError(
+                    "current Sleeve state forbids Challenger binding materialization"
+                )
+            effective_state = latest_after_role.to_state
+            binding_time = max(
+                promotion_time + timedelta(microseconds=1),
+                latest_after_role.occurred_at + timedelta(microseconds=1),
+            )
+            self.catalog.append_lifecycle_event(
+                LifecycleEvent(
+                    idempotency_key=binding_key,
+                    sleeve_id=record.sleeve_id,
+                    from_state=effective_state,
+                    to_state=effective_state,
+                    cause="challenger_shadow_account_bound",
+                    occurred_at=binding_time,
+                    evidence=binding_evidence,
+                )
+            )
         if recovery_case_id is not None:
             recovery = RecoveryCoordinator(self.catalog)
             case = self.catalog.get_recovery_case(recovery_case_id)
@@ -234,13 +391,13 @@ class SleeveShadowLifecycleService:
                 case = recovery.register_challengers(
                     recovery_case_id,
                     (experiment_id,),
-                    registered_at=promoted_at,
+                    registered_at=binding_time,
                 )
             recovery.bind_shadow_account(
                 recovery_case_id,
                 experiment_id,
                 account_id,
-                bound_at=promoted_at,
+                bound_at=binding_time + timedelta(microseconds=1),
             )
         return PromotedShadowBinding(
             sleeve_id=record.sleeve_id,

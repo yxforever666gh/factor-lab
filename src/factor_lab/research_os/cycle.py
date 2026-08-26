@@ -9,7 +9,7 @@ exactly one preregistered experiment fingerprint.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, is_dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from math import sqrt
 from typing import Any, Iterable, Mapping, Sequence
 
@@ -707,7 +707,7 @@ class HistoricalResearchCycle:
         )
         promoted = assessment.promotion.promoted
         outcome = TrialOutcome.SUCCESS if promoted else TrialOutcome.FAILURE
-        self.catalog.complete_trial(
+        completed_trial = self.catalog.complete_trial(
             trial_id,
             experiment_id=experiment.experiment_id,
             outcome=outcome,
@@ -733,14 +733,34 @@ class HistoricalResearchCycle:
                 "net_sharpe": metrics["net_sharpe"],
             },
         )
-        lifecycle_state = LifecycleState.SHADOW if promoted else LifecycleState.WALK_FORWARD
-        for state in (
+        # The evaluator can authorize promotion, but it never publishes the
+        # SHADOW lifecycle state itself.  Account creation, role binding, and
+        # the WALK_FORWARD -> SHADOW transition have one authority in
+        # SleeveShadowLifecycleService.
+        lifecycle_state = LifecycleState.WALK_FORWARD
+        lifecycle_path = (
             LifecycleState.PREREGISTERED,
             LifecycleState.CANARY,
             LifecycleState.WALK_FORWARD,
-            *((LifecycleState.SHADOW,) if promoted else ()),
-        ):
-            self._append_lifecycle(spec.candidate_id, fingerprint, state)
+        )
+        if completed_trial.completed_at is None:
+            raise RuntimeError("completed trial has no durable completion timestamp")
+        path_started_at = completed_trial.completed_at
+        expected_state: LifecycleState | None = None
+        lifecycle_events: list[LifecycleEvent] = []
+        lifecycle_attempt_id = f"research_attempt:{fingerprint}"
+        for index, state in enumerate(lifecycle_path):
+            lifecycle_events.append(
+                self._lifecycle_event(
+                    lifecycle_attempt_id,
+                    fingerprint,
+                    state,
+                    from_state=expected_state,
+                    occurred_at=path_started_at + timedelta(microseconds=index),
+                )
+            )
+            expected_state = state
+        self.catalog.append_lifecycle_path(lifecycle_events)
         evidence_payload = _jsonable(assessment)
         result = ResearchCycleResult(
             experiment_id=experiment.experiment_id,
@@ -957,7 +977,7 @@ class HistoricalResearchCycle:
         lifecycle_state: LifecycleState = LifecycleState.WALK_FORWARD,
     ) -> ResearchCycleResult:
         now = datetime.now(timezone.utc)
-        self.catalog.complete_trial(
+        completed_trial = self.catalog.complete_trial(
             trial_id,
             experiment_id=experiment_id,
             outcome=outcome,
@@ -970,8 +990,18 @@ class HistoricalResearchCycle:
                 "hypothesis_id": spec.preregistration.hypothesis_id,
             },
         )
-        self._append_lifecycle(
-            spec.candidate_id, spec.fingerprint(), lifecycle_state
+        if completed_trial.completed_at is None:
+            raise RuntimeError("completed trial has no durable completion timestamp")
+        self.catalog.append_lifecycle_path(
+            (
+                self._lifecycle_event(
+                    f"research_attempt:{spec.fingerprint()}",
+                    spec.fingerprint(),
+                    lifecycle_state,
+                    from_state=None,
+                    occurred_at=completed_trial.completed_at,
+                ),
+            )
         )
         result = ResearchCycleResult(
             experiment_id=experiment_id,
@@ -991,18 +1021,23 @@ class HistoricalResearchCycle:
         )
         return result
 
-    def _append_lifecycle(
-        self, candidate_id: str, fingerprint: str, state: LifecycleState
-    ) -> None:
-        self.catalog.append_lifecycle_event(
-            LifecycleEvent(
-                idempotency_key=f"{fingerprint}:{state.value}",
-                sleeve_id=candidate_id,
-                to_state=state,
-                cause="deterministic_research_cycle",
-                occurred_at=datetime.now(timezone.utc),
-                evidence={"experiment_fingerprint": fingerprint},
-            )
+    @staticmethod
+    def _lifecycle_event(
+        candidate_id: str,
+        fingerprint: str,
+        state: LifecycleState,
+        *,
+        from_state: LifecycleState | None,
+        occurred_at: datetime,
+    ) -> LifecycleEvent:
+        return LifecycleEvent(
+            idempotency_key=f"{fingerprint}:{state.value}",
+            sleeve_id=candidate_id,
+            from_state=from_state,
+            to_state=state,
+            cause="deterministic_research_cycle",
+            occurred_at=occurred_at,
+            evidence={"experiment_fingerprint": fingerprint},
         )
 
 

@@ -1128,7 +1128,11 @@ def _monitor_tick(args: argparse.Namespace) -> int:
         ).isoformat()
         services = _authoritative_services()
         try:
-            results: list[dict[str, Any]] = []
+            resume_result = services.resume_pending_incident_controls(
+                worker_id=f"monitor-tick:{partition}",
+                limit=100,
+            )
+            results: list[dict[str, Any]] = [dict(resume_result)]
             for operation in (
                 OperationName.SLEEVE_HEALTH_CHECK,
                 OperationName.DRIFT_DETECTION,
@@ -1363,6 +1367,23 @@ def _shadow_step(args: argparse.Namespace) -> int:
     return 0
 
 
+def _incident_revalidate(args: argparse.Namespace) -> int:
+    settings = _settings(args)
+    _require_production(settings, "incident revalidate")
+    services = _authoritative_services()
+    try:
+        revalidate = getattr(services, "revalidate_ready_data_incident", None)
+        if not callable(revalidate):
+            raise ValueError(
+                "authoritative services do not expose incident revalidation"
+            )
+        result = revalidate(incident_id=str(args.incident_id))
+    finally:
+        _close_services(services)
+    _emit(result)
+    return 0
+
+
 def _legacy_import(args: argparse.Namespace) -> int:
     settings = _settings(args)
     _reject_file_input_in_production(settings, command="legacy import")
@@ -1434,10 +1455,11 @@ def _doctor(args: argparse.Namespace) -> int:
                     name="historical_backfill_authority",
                     status=("pass" if evidence.historical_backfill_allowed else "fail"),
                     detail=(
-                        "credential rotation permits authoritative historical backfill"
+                        "reviewed credential disposition permits authoritative historical backfill"
                         if evidence.historical_backfill_allowed
-                        else "authoritative historical backfill is blocked until the exposed "
-                        "Tushare credential is rotated and vendor-confirmed"
+                        else "authoritative historical backfill is blocked until every credential "
+                        "has either vendor-confirmed rotation or an explicit operator-accepted "
+                        "retention decision"
                     ),
                     blocking=not evidence.historical_backfill_allowed,
                 ),
@@ -1657,6 +1679,14 @@ def build_parser() -> argparse.ArgumentParser:
     step.add_argument("--input", help="test/legacy-only shadow JSON")
     step.add_argument("--date")
     step.set_defaults(handler=_shadow_step)
+
+    incident = commands.add_parser("incident")
+    incident_commands = incident.add_subparsers(
+        dest="incident_command", required=True
+    )
+    incident_revalidate = incident_commands.add_parser("revalidate")
+    incident_revalidate.add_argument("--incident-id", required=True)
+    incident_revalidate.set_defaults(handler=_incident_revalidate)
 
     legacy = commands.add_parser("legacy")
     legacy_commands = legacy.add_subparsers(dest="legacy_command", required=True)

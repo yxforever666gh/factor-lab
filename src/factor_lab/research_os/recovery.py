@@ -9,13 +9,13 @@ claim recovery with an in-memory counter or an arbitrary report file.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
-from datetime import datetime
+from dataclasses import asdict, dataclass, replace
+from datetime import datetime, timedelta
 from math import isfinite
 from typing import Any, Mapping, Sequence
 from zoneinfo import ZoneInfo
 
-from .catalog import LifecycleEvent, ResearchCatalog
+from .catalog import CatalogConflict, LifecycleEvent, ResearchCatalog
 from .contracts import (
     DataQualityStatus,
     LifecycleState,
@@ -168,6 +168,85 @@ class RecoveryCoordinator:
     def _events(self, case: RecoveryCase) -> list[LifecycleEvent]:
         return self.catalog.list_lifecycle_events(sleeve_id=case.sleeve_id, limit=1_000)
 
+    def _causal_event_time(
+        self, sleeve_id: str, requested_at: datetime
+    ) -> datetime:
+        latest = self.catalog.list_lifecycle_events(
+            sleeve_id=sleeve_id, limit=1
+        )
+        if latest and requested_at <= latest[0].occurred_at:
+            return latest[0].occurred_at + timedelta(microseconds=1)
+        return requested_at
+
+    def _append_case_event(
+        self, case: RecoveryCase, event: LifecycleEvent
+    ) -> LifecycleEvent:
+        """Append recovery evidence, bootstrapping legacy empty streams atomically."""
+
+        history = self.catalog.list_lifecycle_events(
+            sleeve_id=case.sleeve_id, limit=1_000
+        )
+        if history:
+            return self.catalog.append_lifecycle_event(event)
+        root_time = case.triggered_at
+        event_time = max(event.occurred_at, root_time + timedelta(microseconds=1))
+        bootstrap = LifecycleEvent(
+            idempotency_key=(
+                f"recovery:bootstrap:{case.recovery_case_id}:"
+                f"{case.lifecycle_state.value}"
+            ),
+            sleeve_id=case.sleeve_id,
+            from_state=None,
+            to_state=case.lifecycle_state,
+            cause="recovery_case_state_bootstrapped",
+            occurred_at=root_time,
+            evidence={"recovery_case_id": case.recovery_case_id},
+        )
+        requested = replace(
+            event,
+            from_state=case.lifecycle_state,
+            to_state=(
+                case.lifecycle_state
+                if event.from_state == event.to_state
+                else event.to_state
+            ),
+            occurred_at=event_time,
+        )
+        return self.catalog.append_lifecycle_path((bootstrap, requested))[-1]
+
+    def _advance_case_status(
+        self,
+        recovery_case_id: str,
+        target: RecoveryCaseStatus,
+        *,
+        lifecycle_state: LifecycleState | None = None,
+    ) -> RecoveryCase:
+        order = {
+            RecoveryCaseStatus.OPEN: 0,
+            RecoveryCaseStatus.DIAGNOSING: 1,
+            RecoveryCaseStatus.OBSERVING: 2,
+            RecoveryCaseStatus.RECOVERED: 3,
+            RecoveryCaseStatus.CLOSED: 4,
+        }
+        for _ in range(8):
+            current = self._case_any_status(recovery_case_id)
+            updates: dict[str, Any] = {}
+            if order[current.status] < order[target]:
+                updates["status"] = target
+            if lifecycle_state is not None and current.lifecycle_state != lifecycle_state:
+                updates["lifecycle_state"] = lifecycle_state
+            if not updates:
+                return current
+            try:
+                return self.catalog.save_recovery_case(
+                    current.model_copy(update=updates)
+                )
+            except CatalogConflict:
+                continue
+        raise RecoveryWorkflowError(
+            "recovery case projection remained contended after durable evidence was written"
+        )
+
     @staticmethod
     def _case_event(
         events: Sequence[LifecycleEvent],
@@ -281,7 +360,8 @@ class RecoveryCoordinator:
                 )
             return case
         state = _event_state(case)
-        self.catalog.append_lifecycle_event(
+        self._append_case_event(
+            case,
             LifecycleEvent(
                 idempotency_key=_idempotency_key(
                     "diagnosis", {"recovery_case_id": case.recovery_case_id}
@@ -291,11 +371,12 @@ class RecoveryCoordinator:
                 to_state=state,
                 cause="recovery_diagnosis_completed",
                 evidence=evidence,
-                occurred_at=diagnosed_at,
+                occurred_at=self._causal_event_time(case.sleeve_id, diagnosed_at),
             )
         )
-        updated = case.model_copy(update={"status": RecoveryCaseStatus.DIAGNOSING})
-        return self.catalog.save_recovery_case(updated)
+        return self._advance_case_status(
+            case.recovery_case_id, RecoveryCaseStatus.DIAGNOSING
+        )
 
     def register_challengers(
         self,
@@ -335,7 +416,8 @@ class RecoveryCoordinator:
                 },
                 domain="factor-lab/research-os/v1/recovery-challenger-registration",
             )
-            self.catalog.append_lifecycle_event(
+            self._append_case_event(
+                case,
                 LifecycleEvent(
                     idempotency_key=(
                         _idempotency_key(
@@ -355,7 +437,9 @@ class RecoveryCoordinator:
                         "challenger_id": challenger_id,
                         "registration_hash": registration_hash,
                     },
-                    occurred_at=registered_at,
+                    occurred_at=self._causal_event_time(
+                        case.sleeve_id, registered_at
+                    ),
                 )
             )
 
@@ -364,13 +448,34 @@ class RecoveryCoordinator:
         persisted_ids = self._registered_challengers(case, self._events(case))
         if len(persisted_ids) > 3:
             raise RecoveryWorkflowError("persisted recovery evidence exceeds three Challengers")
-        updated = case.model_copy(
-            update={
-                "status": RecoveryCaseStatus.OBSERVING,
-                "challenger_ids": persisted_ids,
-            }
+        for _ in range(8):
+            current = self._case_any_status(case.recovery_case_id)
+            persisted_ids = self._registered_challengers(
+                current, self._events(current)
+            )
+            if len(persisted_ids) > 3:
+                raise RecoveryWorkflowError(
+                    "persisted recovery evidence exceeds three Challengers"
+                )
+            desired_status = (
+                current.status
+                if current.status
+                in {RecoveryCaseStatus.RECOVERED, RecoveryCaseStatus.CLOSED}
+                else RecoveryCaseStatus.OBSERVING
+            )
+            desired = current.model_copy(
+                update={
+                    "status": desired_status,
+                    "challenger_ids": persisted_ids,
+                }
+            )
+            try:
+                return self.catalog.save_recovery_case(desired)
+            except CatalogConflict:
+                continue
+        raise RecoveryWorkflowError(
+            "recovery Challenger projection remained contended"
         )
-        return self.catalog.save_recovery_case(updated)
 
     def _shadow_projections(
         self,
@@ -458,7 +563,8 @@ class RecoveryCoordinator:
             )
         baseline = baselines[-1]
         state = _event_state(case)
-        self.catalog.append_lifecycle_event(
+        self._append_case_event(
+            case,
             LifecycleEvent(
                 idempotency_key=_idempotency_key(
                     "shadow",
@@ -482,7 +588,7 @@ class RecoveryCoordinator:
                     "baseline_nav": baseline.nav,
                     "baseline_benchmark_nav": baseline.benchmark_nav,
                 },
-                occurred_at=bound_at,
+                occurred_at=self._causal_event_time(case.sleeve_id, bound_at),
             )
         )
 
@@ -542,7 +648,8 @@ class RecoveryCoordinator:
                 )
             return
         state = _event_state(case)
-        self.catalog.append_lifecycle_event(
+        self._append_case_event(
+            case,
             LifecycleEvent(
                 idempotency_key=idempotency_key,
                 sleeve_id=case.sleeve_id,
@@ -556,7 +663,7 @@ class RecoveryCoordinator:
                     "ic_direction_restored": bool(ic_direction_restored),
                     "risk_alerts": list(alerts),
                 },
-                occurred_at=observed_at,
+                occurred_at=self._causal_event_time(case.sleeve_id, observed_at),
             )
         )
 
@@ -603,29 +710,48 @@ class RecoveryCoordinator:
             risk_alerts=evidence.observation.alarm_reasons(),
         )
         state = _event_state(case)
-        self.catalog.append_lifecycle_event(
+        event_chain_idempotency_key = _idempotency_key(
+            "event_chain_health",
+            {
+                "recovery_case_id": recovery_case_id,
+                "challenger_id": challenger_id,
+                "evidence_hash": evidence.evidence_hash,
+            },
+        )
+        event_chain_payload = {
+            "recovery_case_id": recovery_case_id,
+            "challenger_id": challenger_id,
+            "account_id": account_id,
+            "event_chain_evidence_hash": evidence.evidence_hash,
+            "last_event_hash": evidence.last_event_hash,
+            "snapshot_id": evidence.snapshot_id,
+        }
+        existing_chain_event = next(
+            (
+                event
+                for event in self._events(case)
+                if event.idempotency_key == event_chain_idempotency_key
+            ),
+            None,
+        )
+        if existing_chain_event is not None:
+            if dict(existing_chain_event.evidence) != event_chain_payload:
+                raise RecoveryWorkflowError(
+                    "event-chain health evidence is immutable once recorded"
+                )
+            return evidence
+        self._append_case_event(
+            case,
             LifecycleEvent(
-                idempotency_key=_idempotency_key(
-                    "event_chain_health",
-                    {
-                        "recovery_case_id": recovery_case_id,
-                        "challenger_id": challenger_id,
-                        "evidence_hash": evidence.evidence_hash,
-                    },
-                ),
+                idempotency_key=event_chain_idempotency_key,
                 sleeve_id=case.sleeve_id,
                 from_state=state,
                 to_state=state,
                 cause="recovery_challenger_event_chain_health_bound",
-                occurred_at=observed_at,
-                evidence={
-                    "recovery_case_id": recovery_case_id,
-                    "challenger_id": challenger_id,
-                    "account_id": account_id,
-                    "event_chain_evidence_hash": evidence.evidence_hash,
-                    "last_event_hash": evidence.last_event_hash,
-                    "snapshot_id": evidence.snapshot_id,
-                },
+                occurred_at=self._causal_event_time(
+                    case.sleeve_id, observed_at
+                ),
+                evidence=event_chain_payload,
             )
         )
         return evidence
@@ -900,7 +1026,8 @@ class RecoveryCoordinator:
             observation_complete=bool(eligible_ids),
         )
         if eligible_ids:
-            self.catalog.append_lifecycle_event(
+            self._append_case_event(
+                case,
                 LifecycleEvent(
                     idempotency_key=_idempotency_key(
                         "observation", {"recovery_case_id": case.recovery_case_id}
@@ -910,16 +1037,13 @@ class RecoveryCoordinator:
                     to_state=LifecycleState.PROBATION,
                     cause="recovery_shadow_observation_completed",
                     evidence=result.to_dict(),
-                    occurred_at=as_of,
+                    occurred_at=self._causal_event_time(case.sleeve_id, as_of),
                 )
             )
-            self.catalog.save_recovery_case(
-                case.model_copy(
-                    update={
-                        "status": RecoveryCaseStatus.RECOVERED,
-                        "lifecycle_state": LifecycleState.PROBATION,
-                    }
-                )
+            self._advance_case_status(
+                case.recovery_case_id,
+                RecoveryCaseStatus.RECOVERED,
+                lifecycle_state=LifecycleState.PROBATION,
             )
         return result
 

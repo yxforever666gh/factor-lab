@@ -29,6 +29,7 @@ from factor_lab.research_os.readiness_audit import (
     ReadinessCheck,
 )
 from factor_lab.webui.services.research_os_read_model import (
+    _lifecycle_projection,
     load_research_os_read_model,
 )
 
@@ -479,13 +480,15 @@ def _seed_production_read_model_fixture(database: Path) -> None:
                 text(
                     """
                     INSERT INTO ros_partition_runs(
-                        partition_run_id, source_id, dataset, partition_key, status,
+                        partition_run_id, source_id, dataset, partition_key,
+                        generation, status,
                         lease_owner, lease_token, lease_expires_at, attempts, run_id,
                         output_snapshot_id, input_hash, output_hash, vendor_revision,
                         details_json, error_code, error, created_at, updated_at,
                         started_at, completed_at
                     ) VALUES (
-                        :id, :source, :dataset, :partition_key, :status, NULL, NULL,
+                        :id, :source, :dataset, :partition_key, 'base', :status,
+                        NULL, NULL,
                         NULL, 1, NULL, NULL, NULL, NULL, NULL, '{}',
                         :error_code, :error, :created_at, :updated_at, NULL, NULL
                     )
@@ -595,6 +598,16 @@ def test_read_model_projects_catalog_without_legacy_artifact_scan(
                 as_of=now,
                 quality_status=DataQualityStatus.ACCEPTED,
                 trust_labels=("st_history_unverified",),
+            )
+        )
+        catalog.append_lifecycle_event(
+            LifecycleEvent(
+                idempotency_key="value-quality-active-20260820",
+                sleeve_id="value_quality",
+                to_state=LifecycleState.ACTIVE,
+                cause="fixture active state",
+                evidence={"sleeve_name": "价值质量"},
+                occurred_at=now - timedelta(days=2),
             )
         )
         catalog.append_lifecycle_event(
@@ -751,6 +764,133 @@ def test_read_model_projects_0007_backfill_incidents_roles_and_exact_59_60(
     assert ready["remaining_session_count"] == 0
     assert ready["status"] == "ready_for_probation"
     assert ready["ready_challenger_count"] == 1
+
+
+def test_open_data_incident_fail_closes_effective_lifecycle_projection(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "research-os-open-incident.db"
+    _seed_production_read_model_fixture(database)
+    occurred_at = datetime(2026, 8, 24, tzinfo=timezone.utc)
+    with ResearchCatalog(database) as catalog:
+        catalog.append_lifecycle_event(
+            LifecycleEvent(
+                idempotency_key="value-quality-reduced-before-data-incident-overlay",
+                sleeve_id="value_quality",
+                to_state=LifecycleState.REDUCED,
+                cause="fixture reduced state",
+                evidence={"sleeve_name": "价值质量"},
+                occurred_at=occurred_at - timedelta(microseconds=1),
+            )
+        )
+        catalog.append_lifecycle_event(
+            LifecycleEvent(
+                idempotency_key="value-quality-dormant-before-data-incident-overlay",
+                sleeve_id="value_quality",
+                from_state=LifecycleState.REDUCED,
+                to_state=LifecycleState.DORMANT,
+                cause="negative 26-week IR",
+                evidence={"sleeve_name": "价值质量"},
+                occurred_at=occurred_at,
+            )
+        )
+        for index in range(101):
+            catalog.append_lifecycle_event(
+                LifecycleEvent(
+                idempotency_key=f"value-quality-newer-noise-{index:03d}",
+                sleeve_id="value_quality",
+                from_state=LifecycleState.DORMANT,
+                to_state=LifecycleState.DORMANT,
+                    cause="high-frequency lifecycle audit noise",
+                    evidence={"fixture_index": index},
+                    occurred_at=occurred_at + timedelta(seconds=index + 1),
+                )
+            )
+        for index in range(1_005):
+            catalog.append_lifecycle_event(
+                LifecycleEvent(
+                    idempotency_key=f"ephemeral-canary-{index:04d}",
+                    sleeve_id=f"engineering-canary-{index:04d}",
+                    to_state=LifecycleState.CANARY,
+                    cause="ephemeral physical canary",
+                    evidence={"fixture_index": index},
+                    occurred_at=occurred_at + timedelta(minutes=10, seconds=index),
+                )
+            )
+        catalog.append_lifecycle_event(
+            LifecycleEvent(
+                idempotency_key="low-risk-probation-before-active",
+                sleeve_id="low_risk",
+                to_state=LifecycleState.PROBATION,
+                cause="fixture probation state",
+                evidence={"sleeve_name": "低风险防御"},
+                occurred_at=occurred_at - timedelta(microseconds=1),
+            )
+        )
+        catalog.append_lifecycle_event(
+            LifecycleEvent(
+                idempotency_key="low-risk-active-before-data-incident-overlay",
+                sleeve_id="low_risk",
+                from_state=LifecycleState.PROBATION,
+                to_state=LifecycleState.ACTIVE,
+                cause="probation completed",
+                evidence={"sleeve_name": "低风险防御"},
+                occurred_at=occurred_at,
+            )
+        )
+
+    projection = load_research_os_read_model(
+        str(database),
+        allow_sqlite=True,
+        now=datetime(2026, 8, 25, tzinfo=timezone.utc),
+    )
+
+    sleeves = {row["sleeve_id"]: row for row in projection["sleeves"]}
+    assert projection["data_incidents"]["open_count"] == 1
+    assert set(sleeves) == {"low_risk", "value_quality"}
+    assert {row["state"] for row in sleeves.values()} == {"frozen_data"}
+    assert sleeves["value_quality"]["catalog_state"] == "dormant"
+    assert sleeves["low_risk"]["catalog_state"] == "active"
+    assert {
+        row["cause"] for row in sleeves.values()
+    } == {"open_data_incident_override"}
+    assert projection["risk"]["state"] == "frozen_data"
+    assert projection["risk"]["tone"] == "bad"
+    assert projection["risk"]["cause"] == "open_data_incident_override"
+    assert projection["risk"]["open_data_incident_count"] == 1
+    assert {
+        row["sleeve_id"] for row in projection["risk"]["affected_sleeves"]
+    } == {"low_risk", "value_quality"}
+
+
+def test_incident_override_is_frozen_even_without_any_sleeve_projection() -> None:
+    sleeves, risk = _lifecycle_projection(
+        [],
+        {},
+        open_data_incident_count=1,
+    )
+    assert sleeves == []
+    assert risk == {
+        "state": "frozen_data",
+        "label": "数据冻结 / 100% 现金",
+        "tone": "bad",
+        "cause": "open_data_incident_override",
+        "open_data_incident_count": 1,
+        "affected_sleeves": [],
+    }
+
+
+def test_missing_production_incident_authority_fails_closed() -> None:
+    sleeves, risk = _lifecycle_projection(
+        [],
+        {},
+        incident_authority_available=False,
+        require_incident_authority=True,
+    )
+    assert sleeves == []
+    assert risk["state"] == "frozen_data"
+    assert risk["tone"] == "bad"
+    assert risk["cause"] == "incident_authority_unavailable_override"
 
 
 def test_unavailable_local_postgres_fails_fast() -> None:

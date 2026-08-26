@@ -314,6 +314,15 @@ def test_trial_lifecycle_recovery_run_and_summary_queries(catalog) -> None:
     catalog.append_trial(trial)
     assert catalog.list_trials(family="low_risk") == [trial]
 
+    initial_event = LifecycleEvent(
+        event_id="event-0",
+        idempotency_key="low-risk-20260822-active",
+        sleeve_id="low_risk",
+        to_state="active",
+        cause="fixture active state",
+        occurred_at=NOW - timedelta(seconds=1),
+    )
+    catalog.append_lifecycle_event(initial_event)
     event = LifecycleEvent(
         event_id="event-1",
         idempotency_key="low-risk-20260822-reduced",
@@ -326,7 +335,23 @@ def test_trial_lifecycle_recovery_run_and_summary_queries(catalog) -> None:
     assert catalog.append_lifecycle_event(event) == event
     assert catalog.append_lifecycle_event(event).event_id == "event-1"
     assert catalog.latest_lifecycle_state("low_risk").value == "reduced"
-    assert catalog.list_lifecycle_events(sleeve_id="low_risk") == [event]
+    assert catalog.list_lifecycle_events(sleeve_id="low_risk") == [
+        event,
+        initial_event,
+    ]
+
+    with pytest.raises(CatalogConflict, match="latest durable state"):
+        catalog.append_lifecycle_event(
+            LifecycleEvent(
+                idempotency_key="low-risk-stale-active-to-dormant",
+                sleeve_id="low_risk",
+                from_state="active",
+                to_state="dormant",
+                cause="stale concurrent monitor decision",
+                occurred_at=NOW + timedelta(seconds=1),
+            )
+        )
+    assert catalog.latest_lifecycle_state("low_risk").value == "reduced"
 
     case = RecoveryCase(
         recovery_case_id="case-1",
@@ -337,13 +362,14 @@ def test_trial_lifecycle_recovery_run_and_summary_queries(catalog) -> None:
         diagnosis_due_at=NOW + timedelta(days=20),
         earliest_recovery_review_at=NOW + timedelta(days=84),
     )
-    catalog.save_recovery_case(case)
+    case = catalog.save_recovery_case(case)
     assert catalog.list_recovery_cases(sleeve_id="low_risk") == [case]
     terminal_cases = tuple(
         RecoveryCase(
             **{
                 **case.model_dump(),
                 "recovery_case_id": f"closed-case-{index}",
+                "projection_version": 0,
                 "status": RecoveryCaseStatus.CLOSED,
                 "triggered_at": NOW + timedelta(minutes=index + 1),
                 "drift_event_due_at": NOW + timedelta(days=5, minutes=index + 1),
@@ -383,6 +409,167 @@ def test_trial_lifecycle_recovery_run_and_summary_queries(catalog) -> None:
     assert summary.totals["trials"] == 1
     assert summary.lifecycle_states == {"reduced": 1}
     assert summary.latest_run_started_at == NOW
+
+
+def test_recovery_case_projection_rejects_stale_lost_updates(catalog) -> None:
+    created = catalog.save_recovery_case(
+        RecoveryCase(
+            recovery_case_id="case-cas",
+            sleeve_id="value_quality",
+            lifecycle_state="dormant",
+            triggered_at=NOW,
+            drift_event_due_at=NOW + timedelta(days=5),
+            diagnosis_due_at=NOW + timedelta(days=20),
+            earliest_recovery_review_at=NOW + timedelta(days=84),
+        )
+    )
+    assert created.projection_version == 1
+    diagnosing = created.model_copy(
+        update={"status": RecoveryCaseStatus.DIAGNOSING}
+    )
+    observing = created.model_copy(
+        update={
+            "status": RecoveryCaseStatus.OBSERVING,
+            "challenger_ids": ("challenger-a",),
+        }
+    )
+
+    first = catalog.save_recovery_case(observing)
+    assert first.projection_version == 2
+    with pytest.raises(CatalogConflict, match="changed since it was read"):
+        catalog.save_recovery_case(diagnosing)
+    assert catalog.get_recovery_case(created.recovery_case_id) == first
+    # An exact stale replay is harmless and returns the current authority.
+    assert catalog.save_recovery_case(observing) == first
+
+
+def test_lifecycle_requires_explicit_cas_and_strict_causal_time(catalog) -> None:
+    with pytest.raises(CatalogConflict, match="latest durable state"):
+        catalog.append_lifecycle_event(
+            LifecycleEvent(
+                idempotency_key="bootstrap-from-unproven-state",
+                sleeve_id="unproven_sleeve",
+                from_state="walk_forward",
+                to_state="shadow",
+                cause="invalid bootstrap transition",
+                occurred_at=NOW,
+            )
+        )
+    first = LifecycleEvent(
+        event_id="evt_z",
+        idempotency_key="causal-preregistered",
+        sleeve_id="causal_sleeve",
+        to_state="preregistered",
+        cause="preregistered",
+        occurred_at=NOW,
+    )
+    catalog.append_lifecycle_event(first)
+
+    with pytest.raises(CatalogConflict, match="latest durable state"):
+        catalog.append_lifecycle_event(
+            LifecycleEvent(
+                idempotency_key="missing-cas-origin",
+                sleeve_id="causal_sleeve",
+                to_state="canary",
+                cause="missing expected origin",
+                occurred_at=NOW + timedelta(seconds=1),
+            )
+        )
+
+    with pytest.raises(CatalogConflict, match="strictly later"):
+        catalog.append_lifecycle_event(
+            LifecycleEvent(
+                event_id="evt_a",
+                idempotency_key="same-time-tie",
+                sleeve_id="causal_sleeve",
+                from_state="preregistered",
+                to_state="canary",
+                cause="ambiguous causal timestamp",
+                occurred_at=NOW,
+            )
+        )
+
+    assert catalog.latest_lifecycle_state("causal_sleeve").value == "preregistered"
+
+
+def test_lifecycle_path_is_atomic_and_exactly_replayable(catalog) -> None:
+    bad_path = (
+        LifecycleEvent(
+            idempotency_key="atomic-path:preregistered",
+            sleeve_id="atomic_sleeve",
+            to_state="preregistered",
+            cause="atomic research path",
+            occurred_at=NOW,
+        ),
+        LifecycleEvent(
+            idempotency_key="atomic-path:canary",
+            sleeve_id="atomic_sleeve",
+            from_state="active",
+            to_state="canary",
+            cause="atomic research path",
+            occurred_at=NOW + timedelta(microseconds=1),
+        ),
+    )
+    with pytest.raises(CatalogConflict, match="latest durable state"):
+        catalog.append_lifecycle_path(bad_path)
+    assert catalog.list_lifecycle_events(sleeve_id="atomic_sleeve") == []
+
+    good_path = (
+        bad_path[0],
+        LifecycleEvent(
+            idempotency_key="atomic-path:canary",
+            sleeve_id="atomic_sleeve",
+            from_state="preregistered",
+            to_state="canary",
+            cause="atomic research path",
+            occurred_at=NOW + timedelta(microseconds=1),
+        ),
+    )
+    first = catalog.append_lifecycle_path(good_path)
+    replay = catalog.append_lifecycle_path(
+        tuple(
+            LifecycleEvent(
+                idempotency_key=event.idempotency_key,
+                sleeve_id=event.sleeve_id,
+                from_state=event.from_state,
+                to_state=event.to_state,
+                cause=event.cause,
+                occurred_at=event.occurred_at,
+                evidence=event.evidence,
+            )
+            for event in good_path
+        )
+    )
+    assert replay == first
+    assert catalog.latest_lifecycle_state("atomic_sleeve").value == "canary"
+
+
+def test_latest_lifecycle_events_returns_one_database_ranked_row_per_sleeve(
+    catalog,
+) -> None:
+    for sleeve_index in range(3):
+        sleeve_id = f"sleeve-{sleeve_index}"
+        state = None
+        for event_index in range(105):
+            next_state = "preregistered" if state is None else "canary"
+            catalog.append_lifecycle_event(
+                LifecycleEvent(
+                    idempotency_key=f"{sleeve_id}:{event_index}",
+                    sleeve_id=sleeve_id,
+                    from_state=state,
+                    to_state=next_state,
+                    cause="bounded latest-per-sleeve query fixture",
+                    occurred_at=NOW
+                    + timedelta(seconds=sleeve_index * 1_000 + event_index),
+                )
+            )
+            state = next_state
+
+    latest = catalog.list_latest_lifecycle_events(limit=10)
+    selected = {event.sleeve_id: event for event in latest}
+    assert set(selected) == {"sleeve-0", "sleeve-1", "sleeve-2"}
+    assert all(event.to_state.value == "canary" for event in selected.values())
+    assert all(event.idempotency_key.endswith(":104") for event in selected.values())
 
 
 def test_run_claim_is_atomic_and_existing_identity_wins(catalog) -> None:
@@ -587,6 +774,94 @@ def test_shadow_event_chain_projects_account_and_long_only_positions(catalog) ->
             expected_previous_hash=account.last_event_hash,
             payload={},
         )
+
+
+@pytest.mark.parametrize("repository_kind", ("sqlite", "sqlalchemy"))
+def test_shadow_event_exact_lookup_is_not_bounded_by_recent_event_pages(
+    tmp_path, repository_kind: str
+) -> None:
+    if repository_kind == "sqlalchemy":
+        pytest.importorskip("sqlalchemy")
+        database = (
+            "sqlite+pysqlite:///"
+            + (tmp_path / "exact-shadow-event-sqlalchemy.sqlite").as_posix()
+        )
+    else:
+        database = tmp_path / "exact-shadow-event.sqlite"
+
+    with ResearchCatalog(database) as catalog:
+        catalog.initialize_schema()
+        account = catalog.create_shadow_account(
+            account_id="exact-event-paper",
+            name="Exact event lookup shadow",
+            initial_capital=1_000_000,
+            opened_at=NOW,
+        )
+        target = catalog.append_shadow_event(
+            account_id=account.account_id,
+            event_type="audit_marker",
+            occurred_at=NOW + timedelta(days=1),
+            expected_previous_hash=account.last_event_hash,
+            payload={"marker": "lookup-target"},
+        )
+        catalog.append_shadow_events_atomic(
+            account_id=account.account_id,
+            expected_previous_hash=target.event_hash,
+            events=tuple(
+                {
+                    "event_type": "audit_marker",
+                    "occurred_at": NOW + timedelta(days=2),
+                    "payload": {"marker": f"later-{index}"},
+                }
+                for index in range(1_001)
+            ),
+        )
+
+        assert target not in catalog.list_shadow_events(
+            account_id=account.account_id, limit=1_000
+        )
+        assert catalog.get_shadow_event(
+            account_id=account.account_id, event_hash=target.event_hash
+        ) == target
+
+        other = catalog.create_shadow_account(
+            account_id="other-exact-event-paper",
+            name="Other exact event lookup shadow",
+            initial_capital=1_000_000,
+            opened_at=NOW,
+        )
+        assert catalog.get_shadow_event(
+            account_id=other.account_id, event_hash=target.event_hash
+        ) is None
+        wrong_hash = (
+            ("0" if target.event_hash[0] != "0" else "1")
+            + target.event_hash[1:]
+        )
+        assert catalog.get_shadow_event(
+            account_id=account.account_id, event_hash=wrong_hash
+        ) is None
+
+
+def test_shadow_event_exact_lookup_validates_identity_inputs(catalog) -> None:
+    account = catalog.create_shadow_account(
+        account_id="validated-event-paper",
+        name="Validated exact event lookup shadow",
+        initial_capital=1_000_000,
+        opened_at=NOW,
+    )
+
+    for invalid_account_id in ("", " padded-account ", "a" * 161):
+        with pytest.raises(ValueError, match="account_id"):
+            catalog.get_shadow_event(
+                account_id=invalid_account_id,
+                event_hash=account.last_event_hash,
+            )
+    for invalid_event_hash in ("", "A" * 64, "g" * 64):
+        with pytest.raises(ValueError, match="event_hash"):
+            catalog.get_shadow_event(
+                account_id=account.account_id,
+                event_hash=invalid_event_hash,
+            )
 
 
 def test_shadow_ledger_rejects_forward_labels_and_negative_positions(catalog) -> None:

@@ -6,12 +6,14 @@ import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, Mapping
 
 import pytest
 
 pytest.importorskip("sqlalchemy")
 from sqlalchemy import create_engine, event, text
 
+from factor_lab.research_os import catalog as catalog_module
 from factor_lab.research_os.catalog import (
     LifecycleEvent,
     RESEARCH_OS_ALEMBIC_HEAD,
@@ -50,7 +52,10 @@ from factor_lab.research_os.docker_attestation import (
 )
 from factor_lab.research_os.orm import Base
 from factor_lab.research_os.object_store import S3ImmutableArchive
-from factor_lab.research_os.physical_canary import CANARY_OBJECT_PREFIX
+from factor_lab.research_os.physical_canary import (
+    CANARY_OBJECT_PREFIX,
+    physical_canary_partition_binding_errors,
+)
 from factor_lab.research_os.production_config import ProductionConfigEvidence
 from factor_lab.research_os.production_ledger import (
     CapabilityRecord,
@@ -93,6 +98,10 @@ from factor_lab.research_os.snapshots import SNAPSHOT_SCHEMA_VERSION
 
 
 NOW = datetime(2026, 8, 22, 12, tzinfo=timezone.utc)
+STAGE_GENERATION_A = f"engineering_canary_{'a' * 24}"
+STAGE_GENERATION_B = f"engineering_canary_{'b' * 24}"
+STAGE_GENERATION_C = f"engineering_canary_{'c' * 24}"
+STAGE_GENERATION_D = f"engineering_canary_{'d' * 24}"
 CANARY_SESSIONS = tuple(
     (date(2026, 7, 24) + timedelta(days=index)).isoformat()
     for index in range(29)
@@ -125,6 +134,15 @@ CANARY_EXECUTION_CONTRACT_HASH = engineering_canary_execution_contract_hash(
 CANARY_OPENING_CONTRACT_HASH = diemeng_engineering_canary_opening_contract_hash(
     ENGINEERING_CANARY_CONFIG
 )
+
+
+@pytest.fixture(autouse=True)
+def _freeze_catalog_registration_clock(monkeypatch) -> None:
+    monkeypatch.setattr(
+        catalog_module,
+        "_utc_now",
+        lambda: NOW - timedelta(minutes=90),
+    )
 
 
 class FrozenCatalog:
@@ -358,6 +376,7 @@ def _physical_canary_snapshot(
     trade_date: str,
     parents=(),
     manifest_variant: str | None = None,
+    published_at: datetime | None = None,
 ) -> tuple[DataSnapshotRef, dict]:
     object_sha = content_fingerprint(
         {
@@ -430,7 +449,7 @@ def _physical_canary_snapshot(
         "frame_digest": "d" * 64,
         "physical_object": physical_object,
         "parent_snapshot_ids": list(map(str, parents)),
-        "published_at": (NOW - timedelta(hours=2)).isoformat(),
+        "published_at": (published_at or NOW - timedelta(hours=2)).isoformat(),
         "snapshot_reference_schema": (
             "research-os/physical-canary-snapshot-reference/v1"
         ),
@@ -518,6 +537,20 @@ def _physical_canary_snapshot(
     return reference, evidence
 
 
+def _set_snapshot_created_at(
+    system: "AuditSystem",
+    snapshot_ids: tuple[str, ...],
+    created_at: datetime,
+) -> None:
+    table = Base.metadata.tables["ros_data_snapshots"]
+    with system.engine.begin() as connection:
+        connection.execute(
+            table.update()
+            .where(table.c.snapshot_id.in_(snapshot_ids))
+            .values(created_at=created_at)
+        )
+
+
 def _operation_result(operation: str, outputs: dict) -> dict:
     return {
         "operation": operation,
@@ -573,6 +606,8 @@ def _physical_partition_claim_lineage(
     input_hash: str,
     stage: str,
     role: str = "",
+    parent_evidence_hashes: tuple[str, ...] = (),
+    stage_lineage: Mapping[str, Any] | None = None,
 ) -> tuple[dict, str]:
     incident_stage = {
         "bronze": "source",
@@ -589,10 +624,11 @@ def _physical_partition_claim_lineage(
             "partition_run_id": identity.partition_run_id,
         },
         "attempted_input_hash": input_hash,
-        "parent_evidence_hashes": [],
+        "parent_evidence_hashes": sorted(set(parent_evidence_hashes)),
         "stage_lineage": {
             "stage": stage,
             **({"role": role} if role else {}),
+            **dict(stage_lineage or {}),
         },
     }
     lineage_hash = content_fingerprint(
@@ -1484,7 +1520,7 @@ class AuditSystem:
         silver, silver_evidence = _physical_canary_snapshot(
             SnapshotTier.SILVER,
             run_id=run_id,
-            role="accepted",
+            role="accepted_reconciled",
             trade_date=CANARY_SESSIONS[-1],
             parents=(bronze.snapshot_id,),
             manifest_variant=(
@@ -1600,16 +1636,16 @@ class AuditSystem:
 
         canary_partition_ids = []
         stage_bindings = [
-            ("bronze_daily", "bronze", bronze),
+            ("daily", "bronze", bronze),
             ("silver_accepted", "silver", silver),
             ("dq_accepted", "data_quality", silver),
         ]
         stage_bindings.extend(
-            (f"gold_mark_{session}", "gold", reference)
+            ("gold_mark", "gold", reference)
             for session, reference in mark_snapshots.items()
         )
         stage_bindings.extend(
-            (f"gold_execution_{session}", "gold", reference)
+            ("gold_execution", "gold", reference)
             for session, reference in execution_snapshots.items()
         )
         first_execution_id = execution_snapshots[CANARY_SESSIONS[1]].snapshot_id
@@ -1622,7 +1658,7 @@ class AuditSystem:
             ):
                 continue
             identity = PartitionIdentity(
-                "engineering_canary",
+                "engcan_official" if stage == "bronze" else "engineering_canary",
                 dataset,
                 str(reference.manifest["trade_date"]),
             )
@@ -1643,11 +1679,33 @@ class AuditSystem:
             )
             assert lease is not None
             role = str(reference.manifest["role"])
+            if stage == "bronze":
+                logical_parent_ids = ()
+                stage_lineage = {"source_id": "official", "dataset": dataset}
+            elif stage == "data_quality":
+                logical_parent_ids = (reference.snapshot_id,)
+                stage_lineage = {"silver_snapshot_id": reference.snapshot_id}
+            else:
+                logical_parent_ids = tuple(reference.parent_snapshot_ids)
+                stage_lineage = (
+                    {"parent_snapshot_ids": list(logical_parent_ids)}
+                    if stage == "silver"
+                    else {
+                        "gold_role": role,
+                        "silver_snapshot_id": logical_parent_ids[0],
+                    }
+                )
+            parent_hashes = tuple(
+                self.catalog.get_snapshot(parent_id).reference.content_hash
+                for parent_id in logical_parent_ids
+            )
             claim_lineage, claim_lineage_hash = _physical_partition_claim_lineage(
                 identity,
                 input_hash=partition_input_hash,
                 stage=stage,
                 role=role,
+                parent_evidence_hashes=parent_hashes,
+                stage_lineage=stage_lineage,
             )
             opening_audit = reference.manifest.get("opening_cross_check")
             quality_report = reference.manifest.get("quality_report")
@@ -3075,7 +3133,21 @@ def test_older_related_open_incident_cannot_be_hidden_by_ten_thousand_newer_rows
         incident_table = Base.metadata.tables["ros_data_incidents"]
         noise_rows = []
         for index in range(10_000):
-            incident_hash = f"{index:064x}"
+            occurred_at = NOW + timedelta(seconds=index)
+            payload = {"sequence": index}
+            incident_hash = content_fingerprint(
+                {
+                    "partition_key": "2099-01-01",
+                    "stage": IncidentStage.SOURCE.value,
+                    "error_code": "unrelated_source_noise",
+                    "occurred_at": occurred_at,
+                    "partition_run_id": None,
+                    "source_ids": ("unrelated_source",),
+                    "evidence_hashes": (),
+                    "payload": payload,
+                },
+                domain="factor-lab/research-os/v1/data-incident",
+            )
             noise_rows.append(
                 {
                     "incident_id": f"incident_{incident_hash}",
@@ -3088,8 +3160,8 @@ def test_older_related_open_incident_cannot_be_hidden_by_ten_thousand_newer_rows
                     "message": "unrelated newer incident",
                     "source_ids_json": ["unrelated_source"],
                     "evidence_hashes_json": [],
-                    "payload_json": {"sequence": index},
-                    "occurred_at": NOW + timedelta(seconds=index),
+                    "payload_json": payload,
+                    "occurred_at": occurred_at,
                     "resolved_at": None,
                     "resolution_hash": None,
                 }
@@ -3236,13 +3308,32 @@ def _historical_generation_partition(
         )
     )
     tier = SnapshotTier.GOLD if role in {"mark", "execution"} else SnapshotTier.SILVER
+    parent_reference = None
+    parents: tuple[str, ...] = ()
+    if tier is SnapshotTier.GOLD:
+        parent_reference, _parent_evidence = _physical_canary_snapshot(
+            SnapshotTier.SILVER,
+            run_id=run_id,
+            role="accepted_reconciled",
+            trade_date=partition_key,
+            published_at=completed_at - timedelta(minutes=1),
+        )
+        system.catalog.register_snapshot(parent_reference)
+        parents = (parent_reference.snapshot_id,)
     reference, _evidence = _physical_canary_snapshot(
         tier,
         run_id=run_id,
         role=role,
         trade_date=partition_key,
+        parents=parents,
+        published_at=completed_at - timedelta(minutes=1),
     )
     system.catalog.register_snapshot(reference)
+    _set_snapshot_created_at(
+        system,
+        tuple(item for item in (*parents, reference.snapshot_id)),
+        completed_at - timedelta(seconds=30),
+    )
     identity = PartitionIdentity(source_id, dataset, partition_key)
     partition_input_hash = content_fingerprint(
         {"source_id": source_id, "dataset": dataset, "partition_key": partition_key},
@@ -3254,6 +3345,14 @@ def _historical_generation_partition(
         input_hash=partition_input_hash,
         stage=stage,
         role=role,
+        parent_evidence_hashes=(
+            (parent_reference.content_hash,) if parent_reference is not None else ()
+        ),
+        stage_lineage=(
+            {"silver_snapshot_id": parent_reference.snapshot_id}
+            if parent_reference is not None
+            else {"parent_snapshot_ids": []}
+        ),
     )
     system.ledger.ensure_partition(
         identity,
@@ -3281,6 +3380,11 @@ def _historical_generation_partition(
             "run_id": run_id,
             "stage": stage,
             "role": role,
+            **(
+                {"silver_snapshot_id": parent_reference.snapshot_id}
+                if parent_reference is not None
+                else {}
+            ),
             "claim_lineage": claim_lineage,
             "claim_lineage_hash": claim_lineage_hash,
         },
@@ -3302,6 +3406,13 @@ def _historical_generation_incident(
         "data_quality": IncidentStage.DATA_QUALITY,
         "gold": IncidentStage.GOLD,
     }.get(str(original_record.details.get("stage") or ""), IncidentStage.SILVER)
+    original_output_hash = str(original_record.output_hash or "").lower()
+    evidence_hashes = (
+        (original_output_hash,)
+        if len(original_output_hash) == 64
+        and all(character in "0123456789abcdef" for character in original_output_hash)
+        else ()
+    )
     incident = system.ledger.record_incident(
         partition_key=original.partition_key,
         stage=stage,
@@ -3310,6 +3421,7 @@ def _historical_generation_incident(
         occurred_at=original_record.updated_at,
         partition_run_id=original.partition_run_id,
         source_ids=(original.source_id,),
+        evidence_hashes=evidence_hashes,
         payload={
             "legacy_source_id": original.source_id,
             "legacy_status": original_record.status.value,
@@ -3326,6 +3438,139 @@ def _historical_generation_incident(
             "legacy_source_id": original.source_id,
             "current_source_id": replacement.identity.source_id,
             "replacement_partition_run_id": replacement.identity.partition_run_id,
+            "replacement_output_snapshot_id": replacement.output_snapshot_id,
+            "replacement_output_hash": replacement.output_hash,
+        },
+        superseded=True,
+    )
+
+
+def _prelease_gold_partition(
+    system: AuditSystem,
+    *,
+    source_id: str,
+    run_id: str,
+    partition_key: str,
+    created_at: datetime,
+    completed_at: datetime,
+):
+    role = "execution"
+    parent_reference, _parent_evidence = _physical_canary_snapshot(
+        SnapshotTier.SILVER,
+        run_id=run_id,
+        role="accepted_reconciled",
+        trade_date=partition_key,
+        published_at=completed_at - timedelta(minutes=1),
+    )
+    system.catalog.register_snapshot(parent_reference)
+    reference, _evidence = _physical_canary_snapshot(
+        SnapshotTier.GOLD,
+        run_id=run_id,
+        role=role,
+        trade_date=partition_key,
+        parents=(parent_reference.snapshot_id,),
+        published_at=completed_at - timedelta(minutes=1),
+    )
+    system.catalog.register_snapshot(reference)
+    _set_snapshot_created_at(
+        system,
+        (parent_reference.snapshot_id, reference.snapshot_id),
+        completed_at - timedelta(seconds=30),
+    )
+    identity = PartitionIdentity(source_id, "gold_execution", partition_key)
+    input_hash = content_fingerprint(
+        {
+            "source_id": source_id,
+            "run_id": run_id,
+            "partition_key": partition_key,
+        },
+        domain="test/readiness/prelease-gold-input",
+    )
+    claim_lineage, claim_lineage_hash = _physical_partition_claim_lineage(
+        identity,
+        input_hash=input_hash,
+        stage="gold",
+        role=role,
+        parent_evidence_hashes=(parent_reference.content_hash,),
+        stage_lineage={"silver_snapshot_id": parent_reference.snapshot_id},
+    )
+    system.ledger.ensure_partition(
+        identity,
+        created_at=created_at,
+        input_hash=input_hash,
+    )
+    lease = system.ledger.claim(
+        identity=identity,
+        owner=f"prelease-{source_id}",
+        now=created_at + timedelta(seconds=1),
+        lease_for=timedelta(hours=2),
+    )
+    assert lease is not None
+    return system.ledger.finish(
+        lease,
+        status=PartitionStatus.SUCCEEDED,
+        completed_at=completed_at,
+        run_id=run_id,
+        output_snapshot_id=reference.snapshot_id,
+        output_hash=reference.content_hash,
+        details={
+            "run_id": run_id,
+            "stage": "gold",
+            "role": role,
+            "stage_source": source_id,
+            "silver_snapshot_id": parent_reference.snapshot_id,
+            "calendar_hash": "c" * 64,
+            "attempted_gold_input_hash": "d" * 64,
+            "claim_lineage": claim_lineage,
+            "claim_lineage_hash": claim_lineage_hash,
+        },
+    )
+
+
+def _resolved_prelease_gold_incident(
+    system: AuditSystem,
+    *,
+    replacement,
+    occurred_at: datetime,
+    resolved_at: datetime,
+):
+    role = str(replacement.details["role"])
+    incident = system.ledger.record_incident(
+        partition_key=replacement.identity.partition_key,
+        stage=IncidentStage.GOLD,
+        error_code="gold_market_semantics_rejected",
+        message="pre-lease Gold semantics recovered by exact partition",
+        occurred_at=occurred_at,
+        source_ids=("diemeng", "tushare"),
+        payload={
+            "evidence_schema": PHYSICAL_CANARY_SCHEMA_VERSION,
+            "evidence_class": "engineering_canary",
+            "evidence_scope": "retrospective_non_forward",
+            "formal_epoch_eligible": False,
+            "physical_source_attested": True,
+            "controlled_test_adapter": False,
+            "readiness_admission": "physical_engineering_prerequisite",
+            "run_id": replacement.run_id,
+            "failure_type": "PhysicalCanaryDataRejected",
+            "stage_source": replacement.details["stage_source"],
+            "silver_snapshot_id": replacement.details["silver_snapshot_id"],
+            "calendar_hash": replacement.details["calendar_hash"],
+            "gold_role": role,
+            "attempted_gold_input_hash": replacement.details[
+                "attempted_gold_input_hash"
+            ],
+            "projected": True,
+        },
+    )
+    return system.ledger.resolve_incident(
+        incident.incident_id,
+        resolved_at=resolved_at,
+        evidence={
+            "disposition": "superseded_by_verified_gold_partition",
+            "gold_role": role,
+            "replacement_partition_run_id": (
+                replacement.identity.partition_run_id
+            ),
             "replacement_output_snapshot_id": replacement.output_snapshot_id,
             "replacement_output_hash": replacement.output_hash,
         },
@@ -3367,7 +3612,208 @@ def _tamper_catalog_snapshot_reference(
     monkeypatch.setattr(system.catalog, "get_snapshot", tampered_get_snapshot)
 
 
-def test_historical_a_to_b_resolution_accepts_unique_current_c_successor(
+@pytest.mark.parametrize(
+    ("original_source", "expected"),
+    [
+        (f"engcan_tushare_{'1' * 24}", True),
+        (f"engcan_diemeng_{'1' * 24}", False),
+        (f"engcan_tushare_pro_{'1' * 24}", False),
+    ],
+)
+def test_legacy_source_bridge_infers_stage_and_rejects_cross_provider_family(
+    tmp_path: Path,
+    original_source: str,
+    expected: bool,
+) -> None:
+    system = AuditSystem(tmp_path)
+    try:
+        run = system.catalog.get_run("physical-canary-real-01")
+        assert run is not None
+        partition_key = CANARY_SESSIONS[-1]
+        original = PartitionIdentity(
+            original_source, "trade_calendar", partition_key
+        )
+        system.ledger.ensure_partition(
+            original,
+            created_at=run.started_at - timedelta(hours=2),
+            input_hash="a" * 64,
+            details={},
+        )
+        original_lease = system.ledger.claim(
+            identity=original,
+            owner="source-family-terminal-fixture",
+            now=run.started_at - timedelta(hours=2) + timedelta(seconds=1),
+            lease_for=timedelta(hours=1),
+        )
+        assert original_lease is not None
+        original_record = system.ledger.finish(
+            original_lease,
+            status=PartitionStatus.FAILED,
+            completed_at=run.started_at - timedelta(minutes=90),
+            error_code="fixture_source_generation_failed",
+            error="fixture source generation failed",
+            details={},
+        )
+        replacement_identity = PartitionIdentity(
+            f"engcan_tushare_{'2' * 24}", "trade_calendar", partition_key
+        )
+        replacement_input_hash = "b" * 64
+        lineage, _lineage_hash = _physical_partition_claim_lineage(
+            replacement_identity,
+            input_hash=replacement_input_hash,
+            stage="bronze",
+        )
+        lineage["stage_lineage"]["source_id"] = "tushare"
+        lineage_hash = content_fingerprint(
+            lineage,
+            domain=(
+                "factor-lab/research-os/v1/"
+                "physical-canary-partition-claim-lineage"
+            ),
+        )
+        system.ledger.ensure_partition(
+            replacement_identity,
+            created_at=run.started_at - timedelta(hours=1),
+            input_hash=replacement_input_hash,
+        )
+        lease = system.ledger.claim(
+            identity=replacement_identity,
+            owner="source-family-bridge",
+            now=run.started_at - timedelta(hours=1),
+            lease_for=timedelta(hours=1),
+        )
+        assert lease is not None
+        replacement = system.ledger.finish(
+            lease,
+            status=PartitionStatus.SUCCEEDED,
+            completed_at=run.started_at - timedelta(minutes=30),
+            output_snapshot_id=system.gold.snapshot_id,
+            output_hash=system.gold.content_hash,
+            details={
+                "stage": "bronze",
+                "claim_lineage": lineage,
+                "claim_lineage_hash": lineage_hash,
+            },
+        )
+        incident = system.ledger.record_incident(
+            partition_key=partition_key,
+            stage=IncidentStage.SOURCE,
+            error_code="legacy_canary_generation_isolated",
+            message="legacy source family bridge",
+            occurred_at=original_record.updated_at,
+            partition_run_id=original.partition_run_id,
+            source_ids=(original.source_id,),
+            payload={
+                "legacy_source_id": original.source_id,
+                "legacy_status": original_record.status.value,
+                "current_source_id": replacement.identity.source_id,
+                "dataset": original.dataset,
+            },
+        )
+        incident = system.ledger.resolve_incident(
+            incident.incident_id,
+            resolved_at=replacement.completed_at,
+            evidence={
+                "disposition": "superseded_by_verified_canary_generation",
+                "legacy_partition_run_id": original.partition_run_id,
+                "legacy_source_id": original.source_id,
+                "current_source_id": replacement.identity.source_id,
+                "replacement_partition_run_id": (
+                    replacement.identity.partition_run_id
+                ),
+                "replacement_output_snapshot_id": replacement.output_snapshot_id,
+                "replacement_output_hash": replacement.output_hash,
+            },
+            superseded=True,
+        )
+        partitions = {
+            original.partition_run_id: original_record,
+            replacement.identity.partition_run_id: replacement,
+        }
+
+        assert (
+            system.auditor()._physical_canary_resolution_schema_is_valid(
+                incident,
+                replacement=replacement,
+                partitions=partitions,
+            )
+            is expected
+        )
+    finally:
+        system.close()
+
+
+def test_provider_family_candidate_without_lineage_remains_ambiguous(
+    tmp_path: Path,
+) -> None:
+    system = AuditSystem(tmp_path)
+    try:
+        partition_key = CANARY_SESSIONS[-1]
+        original = PartitionIdentity(
+            f"engcan_tushare_{'1' * 24}", "trade_calendar", partition_key
+        )
+        original_record = system.ledger.ensure_partition(
+            original,
+            created_at=NOW - timedelta(hours=2),
+            input_hash="a" * 64,
+        )
+        current_identity = PartitionIdentity(
+            f"engcan_tushare_{'2' * 24}", "trade_calendar", partition_key
+        )
+        lineage, _lineage_hash = _physical_partition_claim_lineage(
+            current_identity,
+            input_hash="b" * 64,
+            stage="bronze",
+        )
+        lineage["stage_lineage"]["source_id"] = "tushare"
+        current = system.ledger.ensure_partition(
+            current_identity,
+            created_at=NOW - timedelta(hours=1),
+            input_hash="b" * 64,
+            details={"claim_lineage": lineage},
+        )
+        duplicate = system.ledger.ensure_partition(
+            PartitionIdentity(
+                f"engcan_tushare_{'3' * 24}", "trade_calendar", partition_key
+            ),
+            created_at=NOW - timedelta(hours=1),
+            input_hash="c" * 64,
+            details={},
+        )
+        incident = system.ledger.record_incident(
+            partition_key=partition_key,
+            stage=IncidentStage.SOURCE,
+            error_code="legacy_canary_generation_isolated",
+            message="provider generation ambiguity",
+            occurred_at=original_record.updated_at,
+            partition_run_id=original.partition_run_id,
+            source_ids=(original.source_id,),
+            payload={"dataset": original.dataset},
+        )
+
+        candidates = (
+            system.auditor()._physical_canary_current_successor_candidates(
+                incident,
+                partitions={
+                    original.partition_run_id: original_record,
+                    current.identity.partition_run_id: current,
+                    duplicate.identity.partition_run_id: duplicate,
+                },
+                candidates_by_dataset_date={
+                    (original.dataset, partition_key): (current, duplicate)
+                },
+            )
+        )
+
+        assert {item.identity.partition_run_id for item in candidates} == {
+            current.identity.partition_run_id,
+            duplicate.identity.partition_run_id,
+        }
+    finally:
+        system.close()
+
+
+def test_historical_a_to_b_resolution_requires_bridge_to_current_c_successor(
     tmp_path: Path,
 ) -> None:
     system = AuditSystem(tmp_path)
@@ -3376,7 +3822,7 @@ def test_historical_a_to_b_resolution_accepts_unique_current_c_successor(
         assert run is not None
         dataset = "silver_accepted"
         partition_key = CANARY_SESSIONS[-1]
-        original = PartitionIdentity("engineering_canary_generation_a", dataset, partition_key)
+        original = PartitionIdentity(STAGE_GENERATION_A, dataset, partition_key)
         system.ledger.ensure_partition(
             original,
             created_at=run.started_at - timedelta(hours=2),
@@ -3385,7 +3831,7 @@ def test_historical_a_to_b_resolution_accepts_unique_current_c_successor(
         )
         generation_b = _historical_generation_partition(
             system,
-            source_id="engineering_canary_generation_b",
+            source_id=STAGE_GENERATION_B,
             dataset=dataset,
             partition_key=partition_key,
             role="accepted",
@@ -3405,13 +3851,13 @@ def test_historical_a_to_b_resolution_accepts_unique_current_c_successor(
             if item.code == "physical_engineering_canary"
         )
 
-        assert check.passed
+        assert not check.passed
         inspected = next(
             item
-            for item in check.evidence["related_incidents"]
+            for item in check.evidence["inspected_runs"][0]["related_incidents"]
             if item["incident_id"] == closed.incident_id
         )
-        assert inspected["reason"] is None
+        assert inspected["reason"] == "related_incident_resolution_not_causal"
     finally:
         system.close()
 
@@ -3429,7 +3875,7 @@ def test_historical_bridge_rejects_tampered_generation_b_reference_binding(
         dataset = "silver_accepted"
         partition_key = CANARY_SESSIONS[-1]
         original = PartitionIdentity(
-            "engineering_canary_generation_a", dataset, partition_key
+            STAGE_GENERATION_A, dataset, partition_key
         )
         system.ledger.ensure_partition(
             original,
@@ -3439,7 +3885,7 @@ def test_historical_bridge_rejects_tampered_generation_b_reference_binding(
         )
         generation_b = _historical_generation_partition(
             system,
-            source_id="engineering_canary_generation_b",
+            source_id=STAGE_GENERATION_B,
             dataset=dataset,
             partition_key=partition_key,
             role="accepted",
@@ -3484,7 +3930,7 @@ def test_current_canary_output_rejects_tampered_reference_binding(
     try:
         current = _canary_partition(
             system,
-            dataset=f"gold_execution_{CANARY_SESSIONS[1]}",
+            dataset="gold_execution",
             partition_key=CANARY_SESSIONS[1],
             role="execution",
         )
@@ -3497,7 +3943,10 @@ def test_current_canary_output_rejects_tampered_reference_binding(
         )
         auditor = system.auditor()
 
-        assert not auditor._physical_canary_partition_output_is_valid(current)
+        assert not auditor._physical_canary_partition_output_is_valid(
+            current,
+            audit_now=NOW,
+        )
         check = next(
             item
             for item in auditor.audit().checks
@@ -3511,6 +3960,164 @@ def test_current_canary_output_rejects_tampered_reference_binding(
         system.close()
 
 
+@pytest.mark.parametrize(
+    "tamper",
+    ["cross_stage_dq", "claim_parent_hash", "future_partition"],
+)
+def test_main_canary_closure_rejects_strict_partition_binding_masquerades(
+    tmp_path: Path,
+    monkeypatch,
+    tamper: str,
+) -> None:
+    system = AuditSystem(tmp_path)
+    try:
+        rows = list(system.ledger.list_partitions(limit=100_000))
+        target = _canary_partition(
+            system,
+            dataset="dq_accepted",
+            partition_key=CANARY_SESSIONS[-1],
+        )
+        if tamper == "future_partition":
+            masquerade = replace(
+                target,
+                started_at=NOW + timedelta(minutes=1),
+                completed_at=NOW + timedelta(minutes=2),
+                updated_at=NOW + timedelta(minutes=2),
+            )
+        else:
+            details = dict(target.details)
+            if tamper == "cross_stage_dq":
+                details["stage"] = "silver"
+            else:
+                lineage = dict(details["claim_lineage"])
+                lineage["parent_evidence_hashes"] = ["f" * 64]
+                details["claim_lineage"] = lineage
+                details["claim_lineage_hash"] = content_fingerprint(
+                    lineage,
+                    domain=(
+                        "factor-lab/research-os/v1/"
+                        "physical-canary-partition-claim-lineage"
+                    ),
+                )
+            masquerade = replace(target, details=details)
+        mutated_rows = tuple(
+            masquerade
+            if item.identity.partition_run_id == target.identity.partition_run_id
+            else item
+            for item in rows
+        )
+        monkeypatch.setattr(
+            system.ledger,
+            "list_partitions",
+            lambda *args, **kwargs: mutated_rows,
+        )
+
+        check = next(
+            item
+            for item in system.auditor().audit().checks
+            if item.code == "physical_engineering_canary"
+        )
+
+        assert not check.passed
+        assert "physical_partition_strict_binding_invalid" in check.evidence[
+            "inspected_runs"
+        ][0]["reasons"]
+    finally:
+        system.close()
+
+
+@pytest.mark.parametrize(
+    ("tamper", "expected_error"),
+    [
+        ("snapshot_published", "physical_partition_snapshot_timeline_invalid"),
+        ("snapshot_as_of", "physical_partition_snapshot_timeline_invalid"),
+        ("snapshot_created", "physical_partition_snapshot_timeline_invalid"),
+        ("parent_published", "physical_partition_parent_timeline_invalid"),
+        ("parent_created", "physical_partition_parent_timeline_invalid"),
+    ],
+)
+def test_strict_partition_binding_rejects_future_snapshot_and_parent_times(
+    tmp_path: Path,
+    tamper: str,
+    expected_error: str,
+) -> None:
+    system = AuditSystem(tmp_path)
+    try:
+        target = _canary_partition(
+            system,
+            dataset="gold_execution",
+            partition_key=CANARY_SESSIONS[-1],
+            role="execution",
+        )
+        assert target.output_snapshot_id is not None
+        snapshot = system.catalog.get_snapshot(target.output_snapshot_id)
+        assert snapshot is not None
+        original_get_snapshot = system.catalog.get_snapshot
+        snapshot_record = snapshot
+        tampered_parent = None
+        if tamper == "snapshot_published":
+            manifest = {
+                **snapshot.reference.manifest,
+                "published_at": (NOW + timedelta(minutes=1)).isoformat(),
+            }
+            snapshot_record = replace(
+                snapshot,
+                reference=snapshot.reference.model_copy(update={"manifest": manifest}),
+            )
+        elif tamper == "snapshot_as_of":
+            snapshot_record = replace(
+                snapshot,
+                reference=snapshot.reference.model_copy(
+                    update={"as_of": NOW + timedelta(minutes=1)}
+                ),
+            )
+        elif tamper == "snapshot_created":
+            snapshot_record = replace(
+                snapshot,
+                created_at=NOW + timedelta(minutes=1),
+            )
+        else:
+            parent_id = snapshot.reference.parent_snapshot_ids[0]
+            parent = original_get_snapshot(parent_id)
+            assert parent is not None
+            manifest = {
+                **parent.reference.manifest,
+                "published_at": (NOW + timedelta(minutes=1)).isoformat(),
+            }
+            tampered_parent = replace(
+                parent,
+                reference=(
+                    parent.reference.model_copy(update={"manifest": manifest})
+                    if tamper == "parent_published"
+                    else parent.reference
+                ),
+                created_at=(
+                    NOW + timedelta(minutes=1)
+                    if tamper == "parent_created"
+                    else parent.created_at
+                ),
+            )
+
+        def get_snapshot(snapshot_id: str):
+            if (
+                tampered_parent is not None
+                and snapshot_id == tampered_parent.reference.snapshot_id
+            ):
+                return tampered_parent
+            return original_get_snapshot(snapshot_id)
+
+        errors = physical_canary_partition_binding_errors(
+            target,
+            snapshot_record=snapshot_record,
+            get_snapshot=get_snapshot,
+            audit_now=NOW,
+        )
+
+        assert expected_error in errors
+    finally:
+        system.close()
+
+
 def test_historical_resolution_without_current_successor_remains_blocking(
     tmp_path: Path,
 ) -> None:
@@ -3519,7 +4126,7 @@ def test_historical_resolution_without_current_successor_remains_blocking(
         run = system.catalog.get_run("physical-canary-real-01")
         assert run is not None
         original = PartitionIdentity(
-            "engineering_canary_generation_a", "obsolete_silver", CANARY_SESSIONS[-1]
+            STAGE_GENERATION_A, "obsolete_silver", CANARY_SESSIONS[-1]
         )
         system.ledger.ensure_partition(
             original,
@@ -3529,7 +4136,7 @@ def test_historical_resolution_without_current_successor_remains_blocking(
         )
         generation_b = _historical_generation_partition(
             system,
-            source_id="engineering_canary_generation_b",
+            source_id=STAGE_GENERATION_B,
             dataset=original.dataset,
             partition_key=original.partition_key,
             role="accepted",
@@ -3572,7 +4179,7 @@ def test_historical_resolution_with_bad_current_successor_remains_blocking(
             and item.identity.partition_key == CANARY_SESSIONS[1]
         )
         original = PartitionIdentity(
-            "engineering_canary_generation_a",
+            STAGE_GENERATION_A,
             current.identity.dataset,
             current.identity.partition_key,
         )
@@ -3584,7 +4191,7 @@ def test_historical_resolution_with_bad_current_successor_remains_blocking(
         )
         generation_b = _historical_generation_partition(
             system,
-            source_id="engineering_canary_generation_b",
+            source_id=STAGE_GENERATION_B,
             dataset=original.dataset,
             partition_key=original.partition_key,
             role="execution",
@@ -3612,8 +4219,12 @@ def test_historical_resolution_with_bad_current_successor_remains_blocking(
         system.close()
 
 
-def test_invalid_duplicate_current_successor_cannot_be_filtered_out(
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    "duplicate_output",
+    ["invalid", "valid", "missing_lineage"],
+)
+def test_same_family_duplicate_current_successor_cannot_be_filtered_or_bridged(
+    tmp_path: Path, duplicate_output: str
 ) -> None:
     system = AuditSystem(tmp_path)
     try:
@@ -3625,7 +4236,7 @@ def test_invalid_duplicate_current_successor_cannot_be_filtered_out(
             partition_key=CANARY_SESSIONS[-1],
         )
         original = PartitionIdentity(
-            "engineering_canary_generation_a",
+            STAGE_GENERATION_A,
             current.identity.dataset,
             current.identity.partition_key,
         )
@@ -3635,32 +4246,27 @@ def test_invalid_duplicate_current_successor_cannot_be_filtered_out(
             input_hash="a" * 64,
             details={"stage": "silver"},
         )
-        generation_b = _historical_generation_partition(
-            system,
-            source_id="engineering_canary_generation_b",
-            dataset=original.dataset,
-            partition_key=original.partition_key,
-            role="accepted",
-            run_id="historical-duplicate-generation-b",
-            completed_at=run.started_at - timedelta(minutes=30),
-        )
-        _historical_generation_incident(
+        closed = _historical_generation_incident(
             system,
             original=original,
-            replacement=generation_b,
-            resolved_at=run.started_at - timedelta(minutes=20),
+            replacement=current,
+            resolved_at=current.completed_at,
         )
 
         duplicate_identity = PartitionIdentity(
-            "engineering_canary_duplicate_current",
+            STAGE_GENERATION_D,
             current.identity.dataset,
             current.identity.partition_key,
         )
         duplicate_input_hash = "b" * 64
-        duplicate_lineage, duplicate_lineage_hash = _physical_partition_claim_lineage(
-            duplicate_identity,
-            input_hash=duplicate_input_hash,
-            stage="silver",
+        role = str(current.details.get("role") or "")
+        duplicate_lineage, duplicate_lineage_hash = (
+            _physical_partition_claim_lineage(
+                duplicate_identity,
+                input_hash=duplicate_input_hash,
+                stage="silver",
+                role=role,
+            )
         )
         system.ledger.ensure_partition(
             duplicate_identity,
@@ -3680,12 +4286,21 @@ def test_invalid_duplicate_current_successor_cannot_be_filtered_out(
             completed_at=run.started_at + timedelta(minutes=3),
             run_id=run.run_id,
             output_snapshot_id=current.output_snapshot_id,
-            output_hash="f" * 64,
+            output_hash=(
+                current.output_hash if duplicate_output == "valid" else "f" * 64
+            ),
             details={
                 "run_id": run.run_id,
                 "stage": "silver",
-                "claim_lineage": duplicate_lineage,
-                "claim_lineage_hash": duplicate_lineage_hash,
+                **({"role": role} if role else {}),
+                **(
+                    {}
+                    if duplicate_output == "missing_lineage"
+                    else {
+                        "claim_lineage": duplicate_lineage,
+                        "claim_lineage_hash": duplicate_lineage_hash,
+                    }
+                ),
             },
         )
         synthetic_run = replace(
@@ -3702,6 +4317,182 @@ def test_invalid_duplicate_current_successor_cannot_be_filtered_out(
             item.identity.partition_run_id: item
             for item in system.ledger.list_partitions(limit=100_000)
         }
+        auditor = system.auditor()
+        structural = auditor._physical_canary_current_successor_candidates(
+            closed,
+            partitions=partitions,
+            candidates_by_dataset_date={
+                (current.identity.dataset, current.identity.partition_key): (
+                    current,
+                    duplicate,
+                )
+            },
+        )
+        assert {item.identity.partition_run_id for item in structural} == {
+            current.identity.partition_run_id,
+            duplicate.identity.partition_run_id,
+        }
+
+        errors, _inspected = auditor._physical_canary_incident_errors(
+            run=synthetic_run,
+            calendar_window=CANARY_SESSIONS,
+            partitions=partitions,
+        )
+
+        assert errors == ("related_incident_resolution_not_causal",)
+    finally:
+        system.close()
+
+
+@pytest.mark.parametrize("historical", [False, True])
+def test_prelease_gold_resolution_can_bind_current_or_roll_forward_historically(
+    tmp_path: Path,
+    historical: bool,
+) -> None:
+    system = AuditSystem(tmp_path)
+    try:
+        run = system.catalog.get_run("physical-canary-real-01")
+        assert run is not None and run.completed_at is not None
+        partition_key = CANARY_SESSIONS[1]
+        existing_current = _canary_partition(
+            system,
+            dataset="gold_execution",
+            partition_key=partition_key,
+            role="execution",
+        )
+        current = _prelease_gold_partition(
+            system,
+            source_id=STAGE_GENERATION_C,
+            run_id=run.run_id,
+            partition_key=partition_key,
+            created_at=run.started_at + timedelta(minutes=1),
+            completed_at=run.started_at + timedelta(minutes=3),
+        )
+        replacement = current
+        if historical:
+            historical_run_id = "physical-canary-prelease-previous"
+            system.catalog.save_run(
+                RunRecord(
+                    run_id=historical_run_id,
+                    run_type=PHYSICAL_CANARY_RUN_TYPE,
+                    status="succeeded",
+                    input_fingerprint="e" * 64,
+                    started_at=run.started_at - timedelta(hours=2),
+                    completed_at=run.started_at - timedelta(minutes=30),
+                    metadata={"physical_source_attested": True},
+                )
+            )
+            replacement = _prelease_gold_partition(
+                system,
+                source_id=STAGE_GENERATION_B,
+                run_id=historical_run_id,
+                partition_key=partition_key,
+                created_at=run.started_at - timedelta(hours=1),
+                completed_at=run.started_at - timedelta(minutes=30),
+            )
+        assert replacement.completed_at is not None
+        incident = _resolved_prelease_gold_incident(
+            system,
+            replacement=replacement,
+            occurred_at=replacement.completed_at - timedelta(seconds=1),
+            resolved_at=replacement.completed_at,
+        )
+        synthetic_run = replace(
+            run,
+            metadata={
+                **run.metadata,
+                "partition_run_ids": [
+                    *(
+                        partition_id
+                        for partition_id in run.metadata["partition_run_ids"]
+                        if partition_id
+                        != existing_current.identity.partition_run_id
+                    ),
+                    current.identity.partition_run_id,
+                ],
+            },
+        )
+        partitions = {
+            item.identity.partition_run_id: item
+            for item in system.ledger.list_partitions(limit=100_000)
+        }
+
+        errors, inspected = system.auditor()._physical_canary_incident_errors(
+            run=synthetic_run,
+            calendar_window=CANARY_SESSIONS,
+            partitions=partitions,
+        )
+
+        assert errors == ()
+        assert next(
+            item for item in inspected if item["incident_id"] == incident.incident_id
+        )["reason"] is None
+    finally:
+        system.close()
+
+
+def test_historical_prelease_rollforward_rejects_current_missing_lineage(
+    tmp_path: Path,
+) -> None:
+    system = AuditSystem(tmp_path)
+    try:
+        run = system.catalog.get_run("physical-canary-real-01")
+        assert run is not None and run.completed_at is not None
+        partition_key = CANARY_SESSIONS[1]
+        current = _prelease_gold_partition(
+            system,
+            source_id=STAGE_GENERATION_C,
+            run_id=run.run_id,
+            partition_key=partition_key,
+            created_at=run.started_at + timedelta(minutes=1),
+            completed_at=run.started_at + timedelta(minutes=3),
+        )
+        historical_run_id = "physical-canary-prelease-lineage-previous"
+        system.catalog.save_run(
+            RunRecord(
+                run_id=historical_run_id,
+                run_type=PHYSICAL_CANARY_RUN_TYPE,
+                status="succeeded",
+                input_fingerprint="f" * 64,
+                started_at=run.started_at - timedelta(hours=2),
+                completed_at=run.started_at - timedelta(minutes=30),
+                metadata={"physical_source_attested": True},
+            )
+        )
+        previous = _prelease_gold_partition(
+            system,
+            source_id=STAGE_GENERATION_B,
+            run_id=historical_run_id,
+            partition_key=partition_key,
+            created_at=run.started_at - timedelta(hours=1),
+            completed_at=run.started_at - timedelta(minutes=30),
+        )
+        assert previous.completed_at is not None
+        _resolved_prelease_gold_incident(
+            system,
+            replacement=previous,
+            occurred_at=previous.completed_at - timedelta(seconds=1),
+            resolved_at=previous.completed_at,
+        )
+        synthetic_run = replace(
+            run,
+            metadata={
+                **run.metadata,
+                "partition_run_ids": [
+                    *run.metadata["partition_run_ids"],
+                    current.identity.partition_run_id,
+                ],
+            },
+        )
+        current_details = dict(current.details)
+        current_details.pop("claim_lineage", None)
+        partitions = {
+            item.identity.partition_run_id: item
+            for item in system.ledger.list_partitions(limit=100_000)
+        }
+        partitions[current.identity.partition_run_id] = replace(
+            current, details=current_details
+        )
 
         errors, _inspected = system.auditor()._physical_canary_incident_errors(
             run=synthetic_run,
@@ -3710,6 +4501,392 @@ def test_invalid_duplicate_current_successor_cannot_be_filtered_out(
         )
 
         assert errors == ("related_incident_resolution_not_causal",)
+    finally:
+        system.close()
+
+
+@pytest.mark.parametrize("tampered", [False, True])
+def test_historical_open_failure_is_never_hidden_by_direct_current_bridge(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tampered: bool,
+) -> None:
+    system = AuditSystem(tmp_path)
+    try:
+        run = system.catalog.get_run("physical-canary-real-01")
+        assert run is not None and run.completed_at is not None
+        current = _canary_partition(
+            system,
+            dataset="silver_accepted",
+            partition_key=CANARY_SESSIONS[-1],
+        )
+        original = PartitionIdentity(
+            STAGE_GENERATION_A,
+            current.identity.dataset,
+            current.identity.partition_key,
+        )
+        system.ledger.ensure_partition(
+            original,
+            created_at=run.started_at - timedelta(hours=2),
+            input_hash="a" * 64,
+            details={"stage": "silver", "role": current.details.get("role")},
+        )
+        lease = system.ledger.claim(
+            identity=original,
+            owner="historical-open-generation",
+            now=run.started_at - timedelta(hours=2),
+            lease_for=timedelta(hours=2),
+        )
+        assert lease is not None
+        original_record = system.ledger.finish(
+            lease,
+            status=PartitionStatus.FAILED,
+            completed_at=run.started_at - timedelta(hours=1),
+            error_code="fixture_generation_failed",
+            error="fixture historical generation failed",
+        )
+        open_incident = system.ledger.record_incident(
+            partition_key=original.partition_key,
+            stage=IncidentStage.SILVER,
+            error_code="fixture_generation_failed",
+            message="historical generation failed",
+            occurred_at=original_record.updated_at,
+            partition_run_id=original.partition_run_id,
+            source_ids=(original.source_id,),
+        )
+        _historical_generation_incident(
+            system,
+            original=original,
+            replacement=current,
+            resolved_at=current.completed_at,
+        )
+        if tampered:
+            incidents = tuple(system.ledger.iter_incidents())
+            monkeypatch.setattr(
+                system.ledger,
+                "iter_incidents",
+                lambda **_kwargs: tuple(
+                    replace(item, incident_hash="0" * 64)
+                    if item.incident_id == open_incident.incident_id
+                    else item
+                    for item in incidents
+                ),
+            )
+        partitions = {
+            item.identity.partition_run_id: item
+            for item in system.ledger.list_partitions(limit=100_000)
+        }
+
+        errors, inspected = system.auditor()._physical_canary_incident_errors(
+            run=run,
+            calendar_window=CANARY_SESSIONS,
+            partitions=partitions,
+        )
+
+        expected_errors = {"related_incident_open"}
+        if tampered:
+            expected_errors.add("related_incident_origin_hash_invalid")
+        assert set(errors) == expected_errors
+        open_row = next(
+            item for item in inspected if item["incident_id"] == open_incident.incident_id
+        )
+        assert open_row["reason"] == "related_incident_open"
+    finally:
+        system.close()
+
+
+def test_exact_base_source_fallback_blocks_minimal_open_incident(
+    tmp_path: Path,
+) -> None:
+    system = AuditSystem(tmp_path)
+    try:
+        run = system.catalog.get_run("physical-canary-real-01")
+        assert run is not None
+        incident = system.ledger.record_incident(
+            partition_key=CANARY_SESSIONS[-1],
+            stage=IncidentStage.SILVER,
+            error_code="fixture_legacy_minimal_open",
+            message="legacy exact-base incident has no modern labels",
+            occurred_at=run.started_at - timedelta(minutes=1),
+            source_ids=("engineering_canary",),
+            payload={},
+        )
+
+        check = next(
+            item
+            for item in system.auditor().audit().checks
+            if item.code == "physical_engineering_canary"
+        )
+
+        assert not check.passed
+        inspected = check.evidence["inspected_runs"][0]
+        assert "related_incident_open" in inspected["reasons"]
+        assert next(
+            item
+            for item in inspected["related_incidents"]
+            if item["incident_id"] == incident.incident_id
+        )["reason"] == "related_incident_open"
+    finally:
+        system.close()
+
+
+@pytest.mark.parametrize(
+    "legacy_source",
+    [
+        "engineering_canary",
+        f"engineering_canary_{'a' * 12}",
+        f"engineering_canary_{'b' * 24}",
+    ],
+    ids=("exact-base", "generation-12hex", "generation-24hex"),
+)
+def test_known_legacy_generation_partition_blocks_minimal_unlabeled_open(
+    tmp_path: Path,
+    legacy_source: str,
+) -> None:
+    system = AuditSystem(tmp_path)
+    try:
+        run = system.catalog.get_run("physical-canary-real-01")
+        assert run is not None
+        original = PartitionIdentity(
+            legacy_source,
+            "legacy_selector_fixture",
+            CANARY_SESSIONS[-1],
+        )
+        system.ledger.ensure_partition(
+            original,
+            created_at=run.started_at - timedelta(hours=2),
+            input_hash="a" * 64,
+            details={"stage": "silver"},
+        )
+        lease = system.ledger.claim(
+            identity=original,
+            owner=f"minimal-open-{legacy_source}",
+            now=run.started_at - timedelta(hours=2) + timedelta(seconds=1),
+            lease_for=timedelta(hours=2),
+        )
+        assert lease is not None
+        original_record = system.ledger.finish(
+            lease,
+            status=PartitionStatus.FAILED,
+            completed_at=run.started_at - timedelta(hours=1),
+            error_code="fixture_legacy_generation_failed",
+            error="fixture legacy generation failed",
+            details={"stage": "silver"},
+        )
+        incident = system.ledger.record_incident(
+            partition_key=original.partition_key,
+            stage=IncidentStage.SILVER,
+            error_code="fixture_legacy_minimal_open",
+            message="legacy incident has no source_ids or modern labels",
+            occurred_at=original_record.updated_at,
+            partition_run_id=original.partition_run_id,
+            source_ids=(),
+            payload={},
+        )
+
+        check = next(
+            item
+            for item in system.auditor().audit().checks
+            if item.code == "physical_engineering_canary"
+        )
+
+        assert not check.passed
+        inspected = check.evidence["inspected_runs"][0]
+        assert "related_incident_open" in inspected["reasons"]
+        assert next(
+            item
+            for item in inspected["related_incidents"]
+            if item["incident_id"] == incident.incident_id
+        )["reason"] == "related_incident_open"
+    finally:
+        system.close()
+
+
+def test_transitive_bridge_cannot_isolate_historical_open_failure(
+    tmp_path: Path,
+) -> None:
+    system = AuditSystem(tmp_path)
+    try:
+        run = system.catalog.get_run("physical-canary-real-01")
+        assert run is not None and run.completed_at is not None
+        current = _canary_partition(
+            system,
+            dataset="silver_accepted",
+            partition_key=CANARY_SESSIONS[-1],
+        )
+        original = PartitionIdentity(
+            STAGE_GENERATION_A,
+            current.identity.dataset,
+            current.identity.partition_key,
+        )
+        system.ledger.ensure_partition(
+            original,
+            created_at=run.started_at - timedelta(hours=3),
+            input_hash="a" * 64,
+            details={"stage": "silver", "role": current.details.get("role")},
+        )
+        lease = system.ledger.claim(
+            identity=original,
+            owner="transitive-generation-a",
+            now=run.started_at - timedelta(hours=3),
+            lease_for=timedelta(hours=2),
+        )
+        assert lease is not None
+        original_record = system.ledger.finish(
+            lease,
+            status=PartitionStatus.FAILED,
+            completed_at=run.started_at - timedelta(hours=2),
+            error_code="fixture_generation_failed",
+            error="fixture historical generation failed",
+        )
+        open_incident = system.ledger.record_incident(
+            partition_key=original.partition_key,
+            stage=IncidentStage.SILVER,
+            error_code="fixture_generation_failed",
+            message="historical generation failed",
+            occurred_at=original_record.updated_at,
+            partition_run_id=original.partition_run_id,
+            source_ids=(original.source_id,),
+        )
+        generation_b = _historical_generation_partition(
+            system,
+            source_id=STAGE_GENERATION_B,
+            dataset=original.dataset,
+            partition_key=original.partition_key,
+            role=str(current.details.get("role") or "accepted"),
+            run_id="physical-canary-transitive-generation-b",
+            completed_at=run.started_at - timedelta(minutes=30),
+        )
+        _historical_generation_incident(
+            system,
+            original=original,
+            replacement=generation_b,
+            resolved_at=run.started_at - timedelta(minutes=20),
+        )
+        _historical_generation_incident(
+            system,
+            original=generation_b.identity,
+            replacement=current,
+            resolved_at=current.completed_at,
+        )
+        partitions = {
+            item.identity.partition_run_id: item
+            for item in system.ledger.list_partitions(limit=100_000)
+        }
+
+        errors, inspected = system.auditor()._physical_canary_incident_errors(
+            run=run,
+            calendar_window=CANARY_SESSIONS,
+            partitions=partitions,
+        )
+
+        assert errors == ("related_incident_open",)
+        assert next(
+            item for item in inspected if item["incident_id"] == open_incident.incident_id
+        )["reason"] == "related_incident_open"
+    finally:
+        system.close()
+
+
+def test_new_direct_bridge_rehabilitates_historical_payload_resolution_mismatch(
+    tmp_path: Path,
+) -> None:
+    """Reproduce the production A→B payload that was wrongly resolved to C."""
+
+    system = AuditSystem(tmp_path)
+    try:
+        run = system.catalog.get_run("physical-canary-real-01")
+        assert run is not None and run.completed_at is not None
+        current = _canary_partition(
+            system,
+            dataset="silver_accepted",
+            partition_key=CANARY_SESSIONS[-1],
+        )
+        original = PartitionIdentity(
+            STAGE_GENERATION_A,
+            current.identity.dataset,
+            current.identity.partition_key,
+        )
+        system.ledger.ensure_partition(
+            original,
+            created_at=run.started_at - timedelta(hours=3),
+            input_hash="a" * 64,
+            details={"stage": "silver", "role": current.details.get("role")},
+        )
+        lease = system.ledger.claim(
+            identity=original,
+            owner="mismatched-generation-a",
+            now=run.started_at - timedelta(hours=3),
+            lease_for=timedelta(hours=2),
+        )
+        assert lease is not None
+        original_record = system.ledger.finish(
+            lease,
+            status=PartitionStatus.FAILED,
+            completed_at=run.started_at - timedelta(hours=2),
+            error_code="source_contract_violation",
+            error="historical generation failed",
+        )
+        generation_c = _historical_generation_partition(
+            system,
+            source_id=STAGE_GENERATION_C,
+            dataset=original.dataset,
+            partition_key=original.partition_key,
+            role=str(current.details.get("role") or "accepted"),
+            run_id="physical-canary-mismatched-generation-c",
+            completed_at=run.started_at - timedelta(minutes=30),
+        )
+        bad = system.ledger.record_incident(
+            partition_key=original.partition_key,
+            stage=IncidentStage.SILVER,
+            error_code="legacy_canary_generation_isolated",
+            message="payload targeted B before resolution was rebound to C",
+            occurred_at=original_record.updated_at,
+            partition_run_id=original.partition_run_id,
+            source_ids=(original.source_id,),
+            payload={
+                "legacy_source_id": original.source_id,
+                "legacy_status": original_record.status.value,
+                "current_source_id": STAGE_GENERATION_B,
+                "dataset": original.dataset,
+            },
+        )
+        bad = system.ledger.resolve_incident(
+            bad.incident_id,
+            resolved_at=run.started_at - timedelta(minutes=20),
+            evidence={
+                "disposition": "superseded_by_verified_canary_generation",
+                "legacy_partition_run_id": original.partition_run_id,
+                "legacy_source_id": original.source_id,
+                "current_source_id": generation_c.identity.source_id,
+                "replacement_partition_run_id": (
+                    generation_c.identity.partition_run_id
+                ),
+                "replacement_output_snapshot_id": generation_c.output_snapshot_id,
+                "replacement_output_hash": generation_c.output_hash,
+            },
+            superseded=True,
+        )
+        bridge = _historical_generation_incident(
+            system,
+            original=original,
+            replacement=current,
+            resolved_at=current.completed_at,
+        )
+
+        check = next(
+            item
+            for item in system.auditor().audit().checks
+            if item.code == "physical_engineering_canary"
+        )
+
+        assert check.passed
+        inspected = {
+            item["incident_id"]: item
+            for item in check.evidence["related_incidents"]
+        }
+        assert inspected[bad.incident_id]["reason"] is None
+        assert inspected[bridge.incident_id]["reason"] is None
     finally:
         system.close()
 
@@ -3723,14 +4900,29 @@ def _legacy_bridge_fixture(system: AuditSystem, *, canonical: bool):
         partition_key=CANARY_SESSIONS[-1],
     )
     original = PartitionIdentity(
-        "engineering_canary_generation_a",
+        STAGE_GENERATION_A,
         current.identity.dataset,
         current.identity.partition_key,
     )
-    original_record = system.ledger.ensure_partition(
+    system.ledger.ensure_partition(
         original,
         created_at=run.started_at - timedelta(hours=2),
         input_hash="a" * 64,
+        details={"stage": "silver"},
+    )
+    original_lease = system.ledger.claim(
+        identity=original,
+        owner="legacy-bridge-terminal-fixture",
+        now=run.started_at - timedelta(hours=2) + timedelta(seconds=1),
+        lease_for=timedelta(hours=2),
+    )
+    assert original_lease is not None
+    original_record = system.ledger.finish(
+        original_lease,
+        status=PartitionStatus.FAILED,
+        completed_at=run.started_at - timedelta(hours=1),
+        error_code="fixture_legacy_generation_failed",
+        error="fixture legacy generation failed",
         details={"stage": "silver"},
     )
     old = system.ledger.record_incident(
@@ -3738,7 +4930,7 @@ def _legacy_bridge_fixture(system: AuditSystem, *, canonical: bool):
         stage=IncidentStage.SILVER,
         error_code="legacy_canary_generation_isolated",
         message="legacy contract generation",
-        occurred_at=run.started_at - timedelta(hours=1),
+        occurred_at=original_record.updated_at,
         partition_run_id=original.partition_run_id,
         source_ids=(original.source_id,),
         payload={"dataset": original.dataset, "current_source_id": "generation_b"},
@@ -3790,6 +4982,150 @@ def _legacy_bridge_fixture(system: AuditSystem, *, canonical: bool):
         superseded=True,
     )
     return run, current, original, old, bridge
+
+
+def test_generation_bridge_rejects_replacement_lineage_stage_mismatch(
+    tmp_path: Path,
+) -> None:
+    system = AuditSystem(tmp_path)
+    try:
+        run, current, _original, _old, _bridge = _legacy_bridge_fixture(
+            system, canonical=True
+        )
+        lineage = dict(current.details["claim_lineage"])
+        lineage["incident_stage"] = "gold"
+        tampered_current = replace(
+            current,
+            details={
+                **current.details,
+                "claim_lineage": lineage,
+                "claim_lineage_hash": content_fingerprint(
+                    lineage,
+                    domain=(
+                        "factor-lab/research-os/v1/"
+                        "physical-canary-partition-claim-lineage"
+                    ),
+                ),
+            },
+        )
+        partitions = {
+            item.identity.partition_run_id: item
+            for item in system.ledger.list_partitions(limit=100_000)
+        }
+        partitions[current.identity.partition_run_id] = tampered_current
+
+        errors, _inspected = system.auditor()._physical_canary_incident_errors(
+            run=run,
+            calendar_window=CANARY_SESSIONS,
+            partitions=partitions,
+        )
+
+        assert errors == ("related_incident_resolution_not_causal",)
+    finally:
+        system.close()
+
+
+@pytest.mark.parametrize(
+    "original_status",
+    [PartitionStatus.PENDING, PartitionStatus.RUNNING],
+    ids=("pending", "running"),
+)
+def test_canonical_generation_bridge_rejects_nonterminal_original_partition(
+    tmp_path: Path,
+    original_status: PartitionStatus,
+) -> None:
+    system = AuditSystem(tmp_path)
+    try:
+        run = system.catalog.get_run("physical-canary-real-01")
+        assert run is not None
+        current = _canary_partition(
+            system,
+            dataset="silver_accepted",
+            partition_key=CANARY_SESSIONS[-1],
+        )
+        original = PartitionIdentity(
+            f"engineering_canary_{'c' * 12}",
+            current.identity.dataset,
+            current.identity.partition_key,
+        )
+        system.ledger.ensure_partition(
+            original,
+            created_at=run.started_at - timedelta(hours=2),
+            input_hash="c" * 64,
+            details={"stage": "silver"},
+        )
+        if original_status is PartitionStatus.RUNNING:
+            lease = system.ledger.claim(
+                identity=original,
+                owner="nonterminal-bridge-fixture",
+                now=run.started_at - timedelta(hours=2) + timedelta(seconds=1),
+                lease_for=timedelta(hours=4),
+            )
+            assert lease is not None
+        _historical_generation_incident(
+            system,
+            original=original,
+            replacement=current,
+            resolved_at=current.completed_at,
+        )
+
+        check = next(
+            item
+            for item in system.auditor().audit().checks
+            if item.code == "physical_engineering_canary"
+        )
+
+        assert not check.passed
+        assert "related_incident_resolution_not_causal" in check.evidence[
+            "inspected_runs"
+        ][0]["reasons"]
+    finally:
+        system.close()
+
+
+def test_global_incident_integrity_blocks_selector_field_tampering(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    system = AuditSystem(tmp_path)
+    try:
+        run, _current, _original, old, bridge = _legacy_bridge_fixture(
+            system, canonical=True
+        )
+        resolution = dict(old.payload["resolution"])
+        tampered_old = replace(
+            old,
+            partition_run_id=None,
+            partition_key="1900-01-01",
+            source_ids=(),
+            payload={"resolution": resolution},
+        )
+        monkeypatch.setattr(
+            system.ledger,
+            "iter_incidents",
+            lambda **_kwargs: (tampered_old, bridge),
+        )
+        partitions = {
+            item.identity.partition_run_id: item
+            for item in system.ledger.list_partitions(limit=100_000)
+        }
+
+        errors, inspected = system.auditor()._physical_canary_incident_errors(
+            run=run,
+            calendar_window=CANARY_SESSIONS,
+            partitions=partitions,
+        )
+
+        assert "related_incident_origin_hash_invalid" in errors
+        tampered_evidence = next(
+            item for item in inspected if item["incident_id"] == old.incident_id
+        )
+        assert tampered_evidence["reason"] == "related_incident_origin_hash_invalid"
+        assert tampered_evidence["integrity_reasons"] == [
+            "related_incident_origin_hash_invalid"
+        ]
+    finally:
+        system.close()
 
 
 def test_historical_missing_replacement_can_use_immutable_current_bridge(
@@ -3862,7 +5198,50 @@ def test_historical_bridge_rejects_tampered_authority_hash(
             partitions=partitions,
         )
 
-        assert errors == ("related_incident_resolution_not_causal",)
+        assert "related_incident_resolution_not_causal" in errors
+        assert (
+            "related_incident_origin_hash_invalid"
+            if hash_field == "incident_hash"
+            else "terminal_resolution_hash_invalid"
+        ) in errors
+    finally:
+        system.close()
+
+
+@pytest.mark.parametrize("hash_field", ["incident_hash", "resolution_hash"])
+def test_historical_bridge_cannot_hide_tampered_origin_authority(
+    tmp_path: Path,
+    monkeypatch,
+    hash_field: str,
+) -> None:
+    system = AuditSystem(tmp_path)
+    try:
+        run, _current, _original, old, bridge = _legacy_bridge_fixture(
+            system, canonical=True
+        )
+        tampered_old = replace(old, **{hash_field: "0" * 64})
+        monkeypatch.setattr(
+            system.ledger,
+            "iter_incidents",
+            lambda **_kwargs: (tampered_old, bridge),
+        )
+        partitions = {
+            item.identity.partition_run_id: item
+            for item in system.ledger.list_partitions(limit=100_000)
+        }
+
+        errors, _inspected = system.auditor()._physical_canary_incident_errors(
+            run=run,
+            calendar_window=CANARY_SESSIONS,
+            partitions=partitions,
+        )
+
+        assert "related_incident_resolution_not_causal" in errors
+        assert (
+            "related_incident_origin_hash_invalid"
+            if hash_field == "incident_hash"
+            else "terminal_resolution_hash_invalid"
+        ) in errors
     finally:
         system.close()
 
@@ -3977,7 +5356,7 @@ def test_causal_partition_recovery_restores_current_canary_readiness(
         replacement = partitions[partition_id]
         assert replacement.completed_at is not None
         original = PartitionIdentity(
-            "engineering_canary_generation_before_current",
+            STAGE_GENERATION_A,
             replacement.identity.dataset,
             replacement.identity.partition_key,
         )
@@ -3985,6 +5364,24 @@ def test_causal_partition_recovery_restores_current_canary_readiness(
             original,
             created_at=NOW - timedelta(minutes=90),
             input_hash="a" * 64,
+            details={
+                "stage": replacement.details.get("stage"),
+                "role": replacement.details.get("role"),
+            },
+        )
+        original_lease = system.ledger.claim(
+            identity=original,
+            owner="causal-recovery-terminal-fixture",
+            now=NOW - timedelta(minutes=89),
+            lease_for=timedelta(minutes=30),
+        )
+        assert original_lease is not None
+        system.ledger.finish(
+            original_lease,
+            status=PartitionStatus.FAILED,
+            completed_at=NOW - timedelta(minutes=75),
+            error_code="fixture_historical_generation_failed",
+            error="fixture historical generation failed",
             details={
                 "stage": replacement.details.get("stage"),
                 "role": replacement.details.get("role"),

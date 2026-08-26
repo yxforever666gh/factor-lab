@@ -5,9 +5,11 @@ from threading import Event
 
 import pandas as pd
 import pytest
+import factor_lab.research_os.sleeve_registry as sleeve_registry
 
 from factor_lab.research_os.catalog import (
     CatalogConflict,
+    LifecycleEvent,
     ResearchCatalog,
     ResearchSubmissionRecord,
     research_submission_lease_token,
@@ -18,7 +20,9 @@ from factor_lab.research_os.contracts import (
     EnvironmentRef,
     ExperimentSpec,
     FactorSpec,
+    LifecycleState,
     Preregistration,
+    RecoveryCase,
     SignalFieldSpec,
     SleeveSpec,
     SnapshotTier,
@@ -39,6 +43,7 @@ from factor_lab.research_os.monthly_research import (
     research_equivalence_hash,
     research_family_from_sleeve,
 )
+from factor_lab.research_os.recovery import RecoveryCoordinator
 
 
 NOW = datetime(2026, 8, 22, 8, 0, tzinfo=timezone.utc)
@@ -416,6 +421,25 @@ class _FakeCycle:
             reason="deterministic fake result",
             completed_at=NOW,
         )
+        lifecycle_states = (
+            LifecycleState.PREREGISTERED,
+            LifecycleState.CANARY,
+            LifecycleState.WALK_FORWARD,
+        )
+        self.catalog.append_lifecycle_path(
+            tuple(
+                LifecycleEvent(
+                    idempotency_key=f"{spec.fingerprint()}:{state.value}",
+                    sleeve_id=f"research_attempt:{spec.fingerprint()}",
+                    from_state=(None if index == 0 else lifecycle_states[index - 1]),
+                    to_state=state,
+                    cause="deterministic_research_cycle",
+                    occurred_at=NOW + timedelta(microseconds=index),
+                    evidence={"experiment_fingerprint": spec.fingerprint()},
+                )
+                for index, state in enumerate(lifecycle_states)
+            )
+        )
         result = ResearchCycleResult(
             experiment_id=experiment.experiment_id,
             fingerprint=spec.fingerprint(),
@@ -423,9 +447,7 @@ class _FakeCycle:
             promotion_verdict=(
                 "promote" if self.outcome == "promoted_to_shadow" else "reject"
             ),
-            lifecycle_state=(
-                "shadow" if self.outcome == "promoted_to_shadow" else "walk_forward"
-            ),
+            lifecycle_state="walk_forward",
             metrics={},
             failures=(),
             fold_results=(),
@@ -435,7 +457,7 @@ class _FakeCycle:
             experiment.experiment_id,
             outcome=self.outcome,
             metrics=result.to_dict(),
-            completed_at=NOW,
+            completed_at=NOW + timedelta(microseconds=len(lifecycle_states)),
         )
         return result
 
@@ -611,3 +633,120 @@ def test_only_authoritative_promoted_sleeve_creates_challenger_shadow(catalog) -
         sleeve_id=submission.spec.sleeve.sleeve_id, limit=100
     )
     assert any(event.cause == "challenger_shadow_account_bound" for event in events)
+
+
+def test_completed_promotion_materialization_resumes_after_roster_crash(
+    catalog, monkeypatch
+) -> None:
+    coordinator = _coordinator(
+        catalog, cycle=_FakeCycle(catalog, outcome="promoted_to_shadow")
+    )
+    submission = coordinator.submit(
+        _payload(), family_id="value_quality_v1"
+    ).submission
+    assert submission is not None
+    real_persist = sleeve_registry.persist_sleeve_roster
+    calls = {"count": 0}
+
+    def persist_then_crash(*args, **kwargs):
+        result = real_persist(*args, **kwargs)
+        calls["count"] += 1
+        if calls["count"] == 1:
+            raise RuntimeError("simulated crash after roster persistence")
+        return result
+
+    monkeypatch.setattr(
+        sleeve_registry, "persist_sleeve_roster", persist_then_crash
+    )
+    first = coordinator.run(submission.submission_id, worker_id="worker-a")
+
+    assert first.submission.status == "completed"
+    assert first.promotion_pending is True
+    assert first.promotion_error == "RuntimeError"
+    assert first.shadow_account_id is None
+    assert catalog.get_authoritative_result(first.submission.experiment_id).outcome == (
+        "promoted_to_shadow"
+    )
+
+    monkeypatch.setattr(
+        sleeve_registry, "persist_sleeve_roster", real_persist
+    )
+    resumed = coordinator.resume(worker_id="worker-b")
+
+    assert len(resumed) == 1
+    assert resumed[0].submission.status == "completed"
+    assert resumed[0].promotion_pending is False
+    assert resumed[0].shadow_account_id is not None
+    assert catalog.get_shadow_account(resumed[0].shadow_account_id) is not None
+
+
+def test_completed_promotion_resumes_recovery_registration_and_binding(
+    catalog, monkeypatch
+) -> None:
+    recovery_case_id = "recovery-monthly-value-quality"
+    catalog.save_recovery_case(
+        RecoveryCase(
+            recovery_case_id=recovery_case_id,
+            sleeve_id=_registered_sleeve().sleeve_id,
+            lifecycle_state=LifecycleState.DORMANT,
+            triggered_at=NOW - timedelta(days=2),
+            drift_event_due_at=NOW - timedelta(days=1),
+            diagnosis_due_at=NOW + timedelta(days=18),
+            earliest_recovery_review_at=NOW + timedelta(days=58),
+        )
+    )
+    RecoveryCoordinator(catalog).complete_diagnosis(
+        recovery_case_id,
+        diagnosed_at=NOW - timedelta(days=1),
+        snapshot_id=_snapshot().snapshot_id,
+        findings={"cause": "simulated signal decay"},
+    )
+    coordinator = _coordinator(
+        catalog, cycle=_FakeCycle(catalog, outcome="promoted_to_shadow")
+    )
+    submission = coordinator.submit(
+        _payload(),
+        family_id="value_quality_v1",
+        recovery_case_id=recovery_case_id,
+    ).submission
+    assert submission is not None
+
+    real_register = RecoveryCoordinator.register_challengers
+    register_calls = {"count": 0}
+
+    def register_then_crash(self, *args, **kwargs):
+        result = real_register(self, *args, **kwargs)
+        register_calls["count"] += 1
+        if register_calls["count"] == 1:
+            raise RuntimeError("simulated crash after recovery registration")
+        return result
+
+    monkeypatch.setattr(
+        RecoveryCoordinator, "register_challengers", register_then_crash
+    )
+    first = coordinator.run(submission.submission_id, worker_id="worker-a")
+    assert first.submission.status == "completed"
+    assert first.promotion_pending is True
+    case_after_registration = catalog.get_recovery_case(recovery_case_id)
+    assert case_after_registration is not None
+    assert first.submission.experiment_id in case_after_registration.challenger_ids
+
+    monkeypatch.setattr(
+        RecoveryCoordinator, "register_challengers", real_register
+    )
+    resumed = coordinator.resume(worker_id="worker-b")
+    assert len(resumed) == 1
+    assert resumed[0].promotion_pending is False
+    assert resumed[0].shadow_account_id is not None
+    recovery_bindings = [
+        event
+        for event in catalog.list_lifecycle_events(
+            sleeve_id=_registered_sleeve().sleeve_id, limit=1_000
+        )
+        if event.cause == "recovery_challenger_shadow_bound"
+        and event.evidence.get("recovery_case_id") == recovery_case_id
+        and event.evidence.get("challenger_id")
+        == first.submission.experiment_id
+        and event.evidence.get("account_id") == resumed[0].shadow_account_id
+    ]
+    assert len(recovery_bindings) == 1

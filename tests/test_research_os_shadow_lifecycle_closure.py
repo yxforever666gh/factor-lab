@@ -7,11 +7,16 @@ from pathlib import Path
 import pandas as pd
 import pytest
 
-from factor_lab.research_os.catalog import ResearchCatalog, ShadowEventInput
+from factor_lab.research_os.catalog import (
+    LifecycleEvent,
+    ResearchCatalog,
+    ShadowEventInput,
+)
 from factor_lab.research_os.contracts import (
     DataSnapshotRef,
     EnvironmentRef,
     ExperimentSpec,
+    LifecycleState,
     Preregistration,
 )
 from factor_lab.research_os.data_incidents import (
@@ -339,6 +344,15 @@ def test_data_incident_freezes_and_records_cash_intent_without_fake_fill(tmp_pat
             target_weight=0.25,
             effective_weight=0.25,
         )
+        catalog.append_lifecycle_event(
+            LifecycleEvent(
+                idempotency_key="incident-fixture-active",
+                sleeve_id=record.sleeve_id,
+                to_state=LifecycleState.ACTIVE,
+                cause="fixture active state",
+                occurred_at=datetime(2026, 1, 5, 8, tzinfo=timezone.utc),
+            )
+        )
         incident = DataIncident(
             stage=DataPipelineStage.SOURCE,
             partition_key="2026-01-06",
@@ -378,6 +392,143 @@ def test_data_incident_freezes_and_records_cash_intent_without_fake_fill(tmp_pat
         assert restored[0].effective_weight == 0.0
 
 
+def test_data_incident_freezes_a_roster_sleeve_with_no_lifecycle_root(tmp_path) -> None:
+    with ResearchCatalog(tmp_path / "fresh-roster-incident.db") as catalog:
+        catalog.initialize_schema()
+        catalog.create_shadow_account(
+            account_id="fresh-roster-account",
+            name="Fresh roster account",
+            initial_capital=1_000_000,
+            opened_at=datetime(2026, 1, 5, tzinfo=timezone.utc),
+        )
+        virtual_record = SleeveLifecycleRecord(
+            sleeve_id="value_quality_v1",
+            state=SleeveState.PROPOSED,
+        )
+        incident = DataIncident(
+            stage=DataPipelineStage.SOURCE,
+            partition_key="2026-01-06",
+            error_code="source_probe_failed",
+            message="mandatory source unavailable",
+            occurred_at=datetime(2026, 1, 6, 8, tzinfo=timezone.utc),
+        )
+        coordinator = DataIncidentCoordinator(catalog)
+
+        first = coordinator.report(
+            incident,
+            lifecycle_records=(virtual_record,),
+            shadow_accounts={
+                virtual_record.sleeve_id: ("fresh-roster-account",)
+            },
+        )
+        replay = coordinator.report(
+            incident,
+            lifecycle_records=(virtual_record,),
+            shadow_accounts={
+                virtual_record.sleeve_id: ("fresh-roster-account",)
+            },
+        )
+
+        lifecycle = catalog.list_lifecycle_events(
+            sleeve_id=virtual_record.sleeve_id, limit=10
+        )
+        assert len(lifecycle) == 1
+        assert lifecycle[0].from_state is None
+        assert lifecycle[0].to_state is LifecycleState.FROZEN_DATA
+        assert first.lifecycle_records[0].state is SleeveState.FROZEN_DATA
+        assert replay.lifecycle_records[0].state is SleeveState.FROZEN_DATA
+        cash_intents = catalog.list_shadow_events_by_type(
+            account_id="fresh-roster-account",
+            event_type="cash_target_intent",
+            since=None,
+            through=None,
+            limit=10,
+        )
+        assert len(cash_intents) == 1
+
+
+def test_interleaved_incidents_keep_origin_time_but_apply_causal_effects(tmp_path) -> None:
+    with ResearchCatalog(tmp_path / "interleaved-incidents.db") as catalog:
+        catalog.initialize_schema()
+        catalog.create_shadow_account(
+            account_id="interleaved-account",
+            name="Interleaved account",
+            initial_capital=1_000_000,
+            opened_at=datetime(2026, 1, 5, tzinfo=timezone.utc),
+        )
+        active = SleeveLifecycleRecord(
+            sleeve_id="value_quality_v1",
+            state=SleeveState.ACTIVE,
+            target_weight=0.25,
+            effective_weight=0.25,
+        )
+        catalog.append_lifecycle_event(
+            LifecycleEvent(
+                idempotency_key="interleaved-fixture-active",
+                sleeve_id=active.sleeve_id,
+                to_state=LifecycleState.ACTIVE,
+                cause="fixture active state",
+                occurred_at=datetime(2026, 1, 5, 8, tzinfo=timezone.utc),
+            )
+        )
+        earlier = DataIncident(
+            stage=DataPipelineStage.SOURCE,
+            partition_key="2026-01-06",
+            error_code="earlier_source_failure",
+            message="earlier failure whose effects were delayed",
+            occurred_at=datetime(2026, 1, 6, 8, tzinfo=timezone.utc),
+        )
+        later = DataIncident(
+            stage=DataPipelineStage.SILVER,
+            partition_key="2026-01-06",
+            error_code="later_silver_failure",
+            message="later failure applied first",
+            occurred_at=datetime(2026, 1, 6, 8, 1, tzinfo=timezone.utc),
+        )
+        coordinator = DataIncidentCoordinator(catalog)
+        later_result = coordinator.report(
+            later,
+            lifecycle_records=(active,),
+            shadow_accounts={active.sleeve_id: ("interleaved-account",)},
+        )
+        earlier_result = coordinator.report(
+            earlier,
+            lifecycle_records=later_result.lifecycle_records,
+            shadow_accounts={active.sleeve_id: ("interleaved-account",)},
+        )
+
+        events = catalog.list_lifecycle_events(
+            sleeve_id=active.sleeve_id, limit=10
+        )
+        by_incident = {
+            event.evidence["data_incident"]["incident_id"]: event
+            for event in events
+            if "data_incident" in event.evidence
+        }
+        assert by_incident[earlier.incident_id].occurred_at > by_incident[
+            later.incident_id
+        ].occurred_at
+        persisted_origin = by_incident[earlier.incident_id].evidence[
+            "data_incident"
+        ]["occurred_at"]
+        assert datetime.fromisoformat(
+            str(persisted_origin).replace("Z", "+00:00")
+        ) == earlier.occurred_at
+        assert earlier_result.lifecycle_records[0].state is SleeveState.FROZEN_DATA
+        assert catalog.latest_lifecycle_state(active.sleeve_id) is LifecycleState.FROZEN_DATA
+        cash_intents = catalog.list_shadow_events_by_type(
+            account_id="interleaved-account",
+            event_type="cash_target_intent",
+            since=None,
+            through=None,
+            limit=10,
+        )
+        assert {event.payload["incident_id"] for event in cash_intents} == {
+            earlier.incident_id,
+            later.incident_id,
+        }
+
+
 def test_production_daily_control_routes_failures_and_advances_entire_fleet(tmp_path) -> None:
     with ResearchCatalog(tmp_path / "production-daily.db") as catalog:
         catalog.initialize_schema()
@@ -394,6 +545,15 @@ def test_production_daily_control_routes_failures_and_advances_entire_fleet(tmp_
             state=SleeveState.ACTIVE,
             target_weight=0.25,
             effective_weight=0.25,
+        )
+        catalog.append_lifecycle_event(
+            LifecycleEvent(
+                idempotency_key="production-daily-fixture-active",
+                sleeve_id=record.sleeve_id,
+                to_state=LifecycleState.ACTIVE,
+                cause="fixture active state",
+                occurred_at=datetime(2026, 1, 4, 8, tzinfo=timezone.utc),
+            )
         )
         control = ProductionDailyControl(catalog)
         accepted = control.run(
@@ -619,6 +779,27 @@ def test_promoted_roster_sleeve_gets_shadow_account_and_59_60_activation_gate(tm
             target_weight=0.25,
         )
         promoted_at = datetime(2026, 1, 2, 9, tzinfo=timezone.utc)
+        lifecycle_states = (
+            LifecycleState.PREREGISTERED,
+            LifecycleState.CANARY,
+            LifecycleState.WALK_FORWARD,
+        )
+        catalog.append_lifecycle_path(
+            tuple(
+                LifecycleEvent(
+                    idempotency_key=f"promotion-fixture:{state.value}",
+                    sleeve_id=sleeve.sleeve_id,
+                    from_state=(
+                        None if index == 0 else lifecycle_states[index - 1]
+                    ),
+                    to_state=state,
+                    cause="fixture deterministic research path",
+                    occurred_at=datetime(2026, 1, 2, 8, 30, tzinfo=timezone.utc)
+                    + timedelta(microseconds=index),
+                )
+                for index, state in enumerate(lifecycle_states)
+            )
+        )
         service = SleeveShadowLifecycleService(catalog)
         binding = service.promote(
             record=record,

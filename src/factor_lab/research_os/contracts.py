@@ -480,6 +480,10 @@ class RecoveryCase(ContractModel):
     trigger_evidence: dict[str, Any] = Field(default_factory=dict)
     challenger_ids: tuple[str, ...] = Field(default=(), max_length=3)
     data_integrity_failure: bool = False
+    # Optimistic concurrency token for the mutable read projection. Lifecycle
+    # events remain the evidence authority; this prevents a stale coordinator
+    # snapshot from overwriting a newer projection.
+    projection_version: int = Field(default=0, ge=0)
 
     @field_validator(
         "triggered_at",

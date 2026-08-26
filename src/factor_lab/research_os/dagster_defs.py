@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import re
 from datetime import date, datetime, timezone
+from math import isfinite
 from typing import Any, Mapping
 from zoneinfo import ZoneInfo
 
 from .contracts import DataQualityStatus, DataSnapshotRef
+from .application_services import NonDataPipelineFailure
 from .execution_snapshot_authority import (
     ExecutionCapabilityDecision,
     TypedExecutionSession,
@@ -34,6 +36,79 @@ from .orchestration import (
 
 
 HISTORICAL_BACKFILL_JOB_NAME = "research_os_historical_backfill_job"
+DATA_INCIDENT_REPAIR_JOB_NAME = "research_os_data_incident_repair_job"
+
+
+def _durable_utc_timestamp(raw: Any, *, source: str) -> datetime:
+    """Normalize a timestamp that has already been persisted by Dagster."""
+
+    if isinstance(raw, datetime):
+        if raw.tzinfo is None or raw.utcoffset() is None:
+            raise RuntimeError(f"{source} timestamp is timezone-naive")
+        return raw.astimezone(timezone.utc)
+    if isinstance(raw, (int, float)) and isfinite(float(raw)) and float(raw) > 0:
+        return datetime.fromtimestamp(float(raw), tz=timezone.utc)
+    if isinstance(raw, str) and raw.strip():
+        text_value = raw.strip()
+        try:
+            numeric = float(text_value)
+        except ValueError:
+            parsed = datetime.fromisoformat(text_value.replace("Z", "+00:00"))
+            if parsed.tzinfo is None or parsed.utcoffset() is None:
+                raise RuntimeError(f"{source} timestamp is timezone-naive")
+            return parsed.astimezone(timezone.utc)
+        if isfinite(numeric) and numeric > 0:
+            return datetime.fromtimestamp(numeric, tz=timezone.utc)
+    raise RuntimeError(f"{source} has no stable timestamp")
+
+
+def failure_event_occurred_at(context: Any) -> datetime:
+    """Read a retry-stable failure time from Dagster's durable event storage.
+
+    ``RunFailureSensorContext.failure_event`` is a ``DagsterEvent`` and does not
+    itself carry the event-log timestamp.  Looking at it directly therefore
+    either fails or tempts callers to substitute wall-clock time.  Resolve the
+    matching run's persisted ``RUN_FAILURE`` row instead, with the persisted run
+    end time as a compatibility fallback for older Dagster storage backends.
+    """
+
+    instance = getattr(context, "instance", None)
+    dagster_run = getattr(context, "dagster_run", None)
+    run_id = str(getattr(dagster_run, "run_id", "") or "").strip()
+    if instance is None or not run_id:
+        raise RuntimeError("Dagster failure context has no durable run identity")
+
+    try:
+        from dagster import DagsterEventType
+
+        connection = instance.get_records_for_run(
+            run_id,
+            of_type=DagsterEventType.RUN_FAILURE,
+            limit=1,
+            ascending=False,
+        )
+    except Exception as exc:
+        raise RuntimeError(
+            f"could not read durable Dagster failure event for run {run_id}"
+        ) from exc
+
+    records = tuple(getattr(connection, "records", ()) or ())
+    if records:
+        return _durable_utc_timestamp(
+            getattr(records[0], "timestamp", None),
+            source="Dagster RUN_FAILURE event",
+        )
+
+    try:
+        stats = instance.get_run_stats(run_id)
+    except Exception as exc:
+        raise RuntimeError(
+            f"could not read durable Dagster run stats for run {run_id}"
+        ) from exc
+    return _durable_utc_timestamp(
+        getattr(stats, "end_time", None),
+        source="Dagster run end",
+    )
 
 
 def partition_key_for(cycle: CycleName, value: datetime) -> str:
@@ -56,9 +131,11 @@ try:
         DefaultScheduleStatus,
         DefaultSensorStatus,
         Definitions,
+        DagsterRunStatus,
         Out,
         RetryPolicy,
         RunRequest,
+        RunsFilter,
         SkipReason,
         StaticPartitionsDefinition,
         asset,
@@ -77,6 +154,7 @@ except ImportError:  # pragma: no cover - expected outside the orchestration ima
     research_os_daily_job = None
     research_os_open_observation_job = None
     research_os_historical_backfill_job = None
+    research_os_data_incident_repair_job = None
     research_os_weekly_job = None
     research_os_monthly_job = None
     research_os_quarterly_job = None
@@ -174,6 +252,51 @@ else:
                 "status": result.status,
                 "summary": result.summary,
                 "partition_key": request.partition_key,
+            }
+        )
+        return result.to_dict()
+
+
+    def _repair_incident_id(context: Any) -> str:
+        incident_id = str(
+            _run_tags(context).get("factor_lab/repair_incident_id") or ""
+        ).strip()
+        if not re.fullmatch(r"incident_[0-9a-f]{64}", incident_id):
+            raise RuntimeError(
+                "incident repair run has no canonical durable incident identity"
+            )
+        return incident_id
+
+
+    def _invoke_incident_repair(
+        context: Any, operation: OperationName
+    ) -> dict[str, Any]:
+        services = context.resources.research_os_services
+        executor = getattr(services, "execute_data_incident_repair", None)
+        if not callable(executor):
+            raise RuntimeError(
+                "production services do not expose execute_data_incident_repair"
+            )
+        request = OperationRequest(
+            operation=operation,
+            cycle=CycleName.DAILY,
+            partition_key=_partition_from_context(context, CycleName.DAILY),
+            run_id=_run_id(context),
+            metadata={"dagster_tags": _run_tags(context)},
+        )
+        result = executor(request, incident_id=_repair_incident_id(context))
+        if not isinstance(result, OperationResult):
+            raise TypeError(
+                "execute_data_incident_repair must return OperationResult"
+            )
+        result = validate_operation_result(request, result)
+        context.add_output_metadata(
+            {
+                "operation": operation.value,
+                "status": result.status,
+                "summary": result.summary,
+                "partition_key": request.partition_key,
+                "repair_incident_id": _repair_incident_id(context),
             }
         )
         return result.to_dict()
@@ -837,6 +960,115 @@ else:
     )
 
 
+    @op(
+        required_resource_keys={"research_os_services"},
+        out=Out(dict),
+        retry_policy=RetryPolicy(max_retries=1, delay=15),
+    )
+    def repair_incident_source(context) -> dict[str, Any]:
+        return _invoke_incident_repair(context, OperationName.SOURCE_SYNC)
+
+
+    @op(
+        required_resource_keys={"research_os_services"},
+        out=Out(dict),
+        retry_policy=RetryPolicy(max_retries=1, delay=15),
+    )
+    def repair_incident_silver(
+        context, source_result: dict[str, Any]
+    ) -> dict[str, Any]:
+        del source_result
+        return _invoke_incident_repair(
+            context, OperationName.SOURCE_RECONCILIATION
+        )
+
+
+    @op(
+        required_resource_keys={"research_os_services"},
+        out=Out(dict),
+        retry_policy=RetryPolicy(max_retries=1, delay=15),
+    )
+    def repair_incident_data_quality(
+        context, silver_result: dict[str, Any]
+    ) -> dict[str, Any]:
+        del silver_result
+        return _invoke_incident_repair(
+            context, OperationName.DATA_QUALITY_GATE
+        )
+
+
+    @op(
+        required_resource_keys={"research_os_services"},
+        out=Out(dict),
+        retry_policy=RetryPolicy(max_retries=1, delay=15),
+    )
+    def repair_incident_gold(
+        context, quality_result: dict[str, Any]
+    ) -> dict[str, Any]:
+        del quality_result
+        return _invoke_incident_repair(
+            context, OperationName.GOLD_ICEBERG_SNAPSHOT_PUBLISH
+        )
+
+
+    @op(
+        required_resource_keys={"research_os_services"},
+        out=Out(dict),
+        retry_policy=RetryPolicy(max_retries=1, delay=15),
+    )
+    def repair_incident_shadow(
+        context, gold_result: dict[str, Any]
+    ) -> dict[str, Any]:
+        del gold_result
+        return _invoke_incident_repair(context, OperationName.SHADOW_NAV_STEP)
+
+
+    @op(
+        required_resource_keys={"research_os_services"},
+        out=Out(dict),
+        retry_policy=RetryPolicy(max_retries=1, delay=15),
+    )
+    def repair_incident_revalidate(
+        context, shadow_result: dict[str, Any]
+    ) -> dict[str, Any]:
+        del shadow_result
+        services = context.resources.research_os_services
+        revalidator = getattr(services, "revalidate_ready_data_incident", None)
+        if not callable(revalidator):
+            raise RuntimeError(
+                "production services do not expose revalidate_ready_data_incident"
+            )
+        result = dict(
+            revalidator(incident_id=_repair_incident_id(context))
+        )
+        if result.get("status") != "resolved":
+            raise RuntimeError(
+                "incident repair did not produce a terminal resolved authority"
+            )
+        context.add_output_metadata(
+            {
+                "status": "resolved",
+                "repair_incident_id": _repair_incident_id(context),
+                "revalidation_id": str(result.get("revalidation_id") or ""),
+                "fleet_action": str(result.get("fleet_action") or ""),
+            }
+        )
+        return result
+
+
+    @job(
+        name=DATA_INCIDENT_REPAIR_JOB_NAME,
+        executor_def=multiprocess_executor,
+    )
+    def research_os_data_incident_repair_job() -> None:
+        source = repair_incident_source()
+        silver = repair_incident_silver(source)
+        quality = repair_incident_data_quality(silver)
+        gold = repair_incident_gold(quality)
+        shadow = repair_incident_shadow(gold)
+        repair_incident_revalidate(shadow)
+
+
     @op(required_resource_keys={"research_os_services"}, out=Out(dict))
     def weekly_sleeve_health(context) -> dict[str, Any]:
         return _invoke(context, CycleName.WEEKLY, OperationName.SLEEVE_HEALTH_CHECK)
@@ -1086,6 +1318,94 @@ else:
 
 
     @sensor(
+        job=research_os_data_incident_repair_job,
+        minimum_interval_seconds=60,
+        required_resource_keys={"research_os_services"},
+        default_status=DefaultSensorStatus.STOPPED,
+    )
+    def research_os_data_incident_repair_sensor(context) -> Any:
+        """Drain freeze controls and resume each OPEN incident to resolution.
+
+        No Dagster ``run_key`` is used deliberately.  Durable PostgreSQL
+        successor authorities make each stage idempotent, while omitting a
+        permanent run key lets a later Dagster run resume after a whole-run
+        crash.  Concurrent launches are suppressed by querying active runs
+        carrying the exact incident tag.
+        """
+
+        services = context.resources.research_os_services
+        resume_controls = getattr(
+            services, "resume_pending_incident_controls", None
+        )
+        pending_repairs = getattr(services, "pending_data_incident_repairs", None)
+        if not callable(resume_controls) or not callable(pending_repairs):
+            raise RuntimeError(
+                "production services do not expose durable incident repair coordination"
+            )
+        resume_controls(
+            worker_id="dagster-incident-repair-sensor",
+            limit=100,
+        )
+        candidates = tuple(pending_repairs())
+        if not candidates:
+            yield SkipReason("no OPEN data incident is ready for repair")
+            return
+
+        active_statuses = [
+            DagsterRunStatus.QUEUED,
+            DagsterRunStatus.NOT_STARTED,
+            DagsterRunStatus.MANAGED,
+            DagsterRunStatus.STARTING,
+            DagsterRunStatus.STARTED,
+            DagsterRunStatus.CANCELING,
+        ]
+        emitted = 0
+        for raw in candidates:
+            if not isinstance(raw, Mapping):
+                raise RuntimeError(
+                    "incident repair coordinator returned a malformed candidate"
+                )
+            incident_id = str(raw.get("incident_id") or "").strip()
+            partition_key = str(raw.get("partition_key") or "").strip()
+            cohort_id = str(raw.get("repair_cohort_id") or "").strip()
+            try:
+                canonical_partition = date.fromisoformat(
+                    partition_key
+                ).isoformat()
+            except ValueError:
+                canonical_partition = ""
+            if not (
+                re.fullmatch(r"incident_[0-9a-f]{64}", incident_id)
+                and canonical_partition == partition_key
+                and re.fullmatch(r"repaircohort_[0-9a-f]{64}", cohort_id)
+            ):
+                raise RuntimeError(
+                    "incident repair coordinator returned non-canonical authority"
+                )
+            active = context.instance.get_runs(
+                filters=RunsFilter(
+                    tags={"factor_lab/repair_incident_id": incident_id},
+                    statuses=active_statuses,
+                ),
+                limit=1,
+            )
+            if active:
+                continue
+            tags = cycle_tags(CycleName.DAILY, partition_key)
+            tags.update(
+                {
+                    "factor_lab/event": "data_incident_repair",
+                    "factor_lab/repair_incident_id": incident_id,
+                    "factor_lab/repair_cohort_id": cohort_id,
+                }
+            )
+            emitted += 1
+            yield RunRequest(tags=tags)
+        if emitted == 0:
+            yield SkipReason("all OPEN data incidents already have an active repair run")
+
+
+    @sensor(
         minimum_interval_seconds=300,
         required_resource_keys={"research_os_services"},
         default_status=DefaultSensorStatus.STOPPED,
@@ -1114,6 +1434,9 @@ else:
     @run_failure_sensor(
         monitored_jobs=[research_os_daily_job],
         minimum_interval_seconds=30,
+        # Keep every production trigger stopped until doctor/readiness and the
+        # explicit launch gate have passed.  Operators enable this sensor with
+        # the daily schedule as one controlled activation unit.
         default_status=DefaultSensorStatus.STOPPED,
     )
     def research_os_unexpected_daily_failure_sensor(context) -> SkipReason:
@@ -1128,22 +1451,39 @@ else:
         step_key = str(getattr(failure_event, "step_key", "") or "unknown")
         message = str(getattr(failure_event, "message", "") or "Dagster run failed")
         services = services_from_environment()
-        reporter = getattr(services, "report_unexpected_data_failure", None)
-        if not callable(reporter):
-            raise RuntimeError(
-                "production services do not expose report_unexpected_data_failure"
+        try:
+            reporter = getattr(services, "report_unexpected_data_failure", None)
+            if not callable(reporter):
+                raise RuntimeError(
+                    "production services do not expose report_unexpected_data_failure"
+                )
+            try:
+                incident = reporter(
+                    partition_key=partition_key,
+                    error_code="dagster_run_failure",
+                    message=message[:2000],
+                    occurred_at=failure_event_occurred_at(context),
+                    dagster_run_id=dagster_run.run_id,
+                    failed_step_key=step_key,
+                )
+            except NonDataPipelineFailure:
+                return SkipReason(
+                    f"recorded non-data Dagster failure for {partition_key}/{step_key}"
+                )
+            if isinstance(incident, Mapping) and bool(incident.get("reused")):
+                return SkipReason(
+                    "reused durable unexpected daily failure for "
+                    f"{partition_key}/{step_key}"
+                )
+            return SkipReason(
+                f"registered unexpected daily failure for {partition_key}/{step_key}"
             )
-        reporter(
-            partition_key=partition_key,
-            error_code="dagster_run_failure",
-            message=message[:2000],
-            occurred_at=datetime.now(timezone.utc),
-            dagster_run_id=dagster_run.run_id,
-            failed_step_key=step_key,
-        )
-        return SkipReason(
-            f"registered unexpected daily failure for {partition_key}/{step_key}"
-        )
+        finally:
+            close = getattr(services, "close", None)
+            if not callable(close):
+                close = getattr(getattr(services, "catalog", None), "close", None)
+            if callable(close):
+                close()
 
 
     defs = Definitions(
@@ -1157,6 +1497,7 @@ else:
             research_os_open_observation_job,
             research_os_daily_job,
             research_os_historical_backfill_job,
+            research_os_data_incident_repair_job,
             research_os_weekly_job,
             research_os_monthly_job,
             research_os_quarterly_job,
@@ -1171,6 +1512,7 @@ else:
         sensors=[
             research_os_trading_partition_sensor,
             research_os_recovery_sla_sensor,
+            research_os_data_incident_repair_sensor,
             research_os_code_location_soak_sensor,
             research_os_unexpected_daily_failure_sensor,
         ],
@@ -1181,11 +1523,14 @@ else:
 __all__ = [
     "CYCLE_BLUEPRINTS",
     "DAGSTER_AVAILABLE",
+    "DATA_INCIDENT_REPAIR_JOB_NAME",
     "HISTORICAL_BACKFILL_JOB_NAME",
+    "failure_event_occurred_at",
     "defs",
     "partition_key_for",
     "research_os_calendar_registry_job",
     "research_os_daily_job",
+    "research_os_data_incident_repair_job",
     "research_os_historical_backfill_job",
     "research_os_monthly_job",
     "research_os_open_observation_job",

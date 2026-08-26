@@ -526,6 +526,9 @@ if SQLALCHEMY_AVAILABLE:
         source_id: Mapped[str] = mapped_column(String(80), nullable=False)
         dataset: Mapped[str] = mapped_column(String(80), nullable=False)
         partition_key: Mapped[str] = mapped_column(String(32), nullable=False)
+        generation: Mapped[str] = mapped_column(
+            String(80), nullable=False, default="base"
+        )
         status: Mapped[str] = mapped_column(String(24), nullable=False)
         lease_owner: Mapped[str | None] = mapped_column(String(160), nullable=True)
         lease_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -553,6 +556,18 @@ if SQLALCHEMY_AVAILABLE:
         completed_at: Mapped[object | None] = mapped_column(
             DateTime(timezone=True), nullable=True
         )
+        repair_incident_id: Mapped[str | None] = mapped_column(
+            String(96), ForeignKey("ros_data_incidents.incident_id"), nullable=True
+        )
+        repair_parent_partition_run_id: Mapped[str | None] = mapped_column(
+            String(96), ForeignKey("ros_partition_runs.partition_run_id"), nullable=True
+        )
+        repair_parent_hash: Mapped[str | None] = mapped_column(
+            String(64), nullable=True
+        )
+        repair_fingerprint: Mapped[str | None] = mapped_column(
+            String(64), nullable=True
+        )
 
         __table_args__ = (
             CheckConstraint(
@@ -572,7 +587,17 @@ if SQLALCHEMY_AVAILABLE:
                 "source_id",
                 "dataset",
                 "partition_key",
-                name="uq_ros_partition_source_dataset_key",
+                "generation",
+                name="uq_ros_partition_source_dataset_key_generation",
+            ),
+            CheckConstraint(
+                "((generation = 'base' AND repair_incident_id IS NULL "
+                "AND repair_parent_partition_run_id IS NULL "
+                "AND repair_parent_hash IS NULL AND repair_fingerprint IS NULL) OR "
+                "(generation <> 'base' "
+                "AND repair_parent_partition_run_id IS NOT NULL "
+                "AND repair_parent_hash IS NOT NULL AND repair_fingerprint IS NOT NULL))",
+                name="ck_ros_partition_repair_generation",
             ),
             Index("ix_ros_partition_status_key", "status", "partition_key"),
             Index(
@@ -595,6 +620,8 @@ if SQLALCHEMY_AVAILABLE:
         partition_run_id: Mapped[str | None] = mapped_column(
             String(96), ForeignKey("ros_partition_runs.partition_run_id"), nullable=True
         )
+
+
         partition_key: Mapped[str] = mapped_column(String(32), nullable=False)
         stage: Mapped[str] = mapped_column(String(24), nullable=False)
         status: Mapped[str] = mapped_column(String(24), nullable=False)
@@ -611,7 +638,7 @@ if SQLALCHEMY_AVAILABLE:
 
         __table_args__ = (
             CheckConstraint(
-                "stage IN ('source','silver','data_quality','gold')",
+                "stage IN ('source','silver','data_quality','gold','shadow_execution')",
                 name="ck_ros_data_incident_stage",
             ),
             CheckConstraint(
@@ -626,6 +653,124 @@ if SQLALCHEMY_AVAILABLE:
             ),
             Index("ix_ros_data_incidents_status_time", "status", "occurred_at"),
             Index("ix_ros_data_incidents_partition", "partition_key", "stage"),
+        )
+
+
+    class PartitionRepairAuthorityModel(Base):
+        __tablename__ = "ros_partition_repair_authorities"
+
+        authority_id: Mapped[str] = mapped_column(String(96), primary_key=True)
+        scope_key: Mapped[str] = mapped_column(String(160), nullable=False)
+        incident_id: Mapped[str | None] = mapped_column(
+            String(96), ForeignKey("ros_data_incidents.incident_id"), nullable=True
+        )
+        source_id: Mapped[str] = mapped_column(String(80), nullable=False)
+        dataset: Mapped[str] = mapped_column(String(80), nullable=False)
+        partition_key: Mapped[str] = mapped_column(String(32), nullable=False)
+        generation: Mapped[str] = mapped_column(String(80), nullable=False)
+        parent_partition_run_id: Mapped[str] = mapped_column(
+            String(96), ForeignKey("ros_partition_runs.partition_run_id"), nullable=False
+        )
+        parent_terminal_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+        successor_partition_run_id: Mapped[str] = mapped_column(
+            String(96), ForeignKey("ros_partition_runs.partition_run_id"), nullable=False
+        )
+        repair_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+        created_at: Mapped[object] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+
+        __table_args__ = (
+            UniqueConstraint(
+                "parent_partition_run_id",
+                name="uq_ros_partition_repair_parent",
+            ),
+            UniqueConstraint(
+                "successor_partition_run_id",
+                name="uq_ros_partition_repair_successor",
+            ),
+            Index(
+                "ix_ros_partition_repair_incident",
+                "incident_id",
+                "partition_key",
+                "dataset",
+            ),
+            Index(
+                "ix_ros_partition_repair_scope_slot",
+                "scope_key",
+                "source_id",
+                "dataset",
+                "partition_key",
+            ),
+        )
+
+
+    class IncidentControlActionModel(Base):
+        __tablename__ = "ros_incident_control_actions"
+
+        action_id: Mapped[str] = mapped_column(String(96), primary_key=True)
+        incident_id: Mapped[str] = mapped_column(
+            String(96), ForeignKey("ros_data_incidents.incident_id"), nullable=False
+        )
+        action_kind: Mapped[str] = mapped_column(String(32), nullable=False)
+        status: Mapped[str] = mapped_column(String(24), nullable=False)
+        attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+        fencing_token: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+        lease_owner: Mapped[str | None] = mapped_column(String(160), nullable=True)
+        lease_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+        lease_expires_at: Mapped[object | None] = mapped_column(
+            DateTime(timezone=True), nullable=True
+        )
+        result_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+        result_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+        last_error_code: Mapped[str | None] = mapped_column(
+            String(160), nullable=True
+        )
+        created_at: Mapped[object] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        updated_at: Mapped[object] = mapped_column(
+            DateTime(timezone=True), nullable=False
+        )
+        completed_at: Mapped[object | None] = mapped_column(
+            DateTime(timezone=True), nullable=True
+        )
+
+        __table_args__ = (
+            UniqueConstraint(
+                "incident_id",
+                "action_kind",
+                name="uq_ros_incident_control_incident_kind",
+            ),
+            CheckConstraint(
+                "action_kind IN ('freeze_fleet','revalidate_incident')",
+                name="ck_ros_incident_control_kind",
+            ),
+            CheckConstraint(
+                "status IN ('pending','running','succeeded')",
+                name="ck_ros_incident_control_status",
+            ),
+            CheckConstraint(
+                "attempts >= 0 AND fencing_token >= 0",
+                name="ck_ros_incident_control_counters",
+            ),
+            CheckConstraint(
+                "((status = 'pending' AND lease_owner IS NULL "
+                "AND lease_token IS NULL AND lease_expires_at IS NULL "
+                "AND result_hash IS NULL AND completed_at IS NULL) OR "
+                "(status = 'running' AND lease_owner IS NOT NULL "
+                "AND lease_token IS NOT NULL AND lease_expires_at IS NOT NULL "
+                "AND result_hash IS NULL AND completed_at IS NULL) OR "
+                "(status = 'succeeded' AND lease_owner IS NULL "
+                "AND lease_token IS NULL AND lease_expires_at IS NULL "
+                "AND result_hash IS NOT NULL AND completed_at IS NOT NULL))",
+                name="ck_ros_incident_control_lease_state",
+            ),
+            Index(
+                "ix_ros_incident_control_status_expiry",
+                "status",
+                "lease_expires_at",
+            ),
         )
 
 
@@ -845,6 +990,8 @@ else:
     SourceCapabilityModel = None
     PartitionRunModel = None
     DataIncidentModel = None
+    PartitionRepairAuthorityModel = None
+    IncidentControlActionModel = None
     SleeveClusterModel = None
     ShadowRoleBindingModel = None
     ShadowSessionModel = None
@@ -874,6 +1021,8 @@ __all__ = [
     "SourceCapabilityModel",
     "PartitionRunModel",
     "DataIncidentModel",
+    "PartitionRepairAuthorityModel",
+    "IncidentControlActionModel",
     "SleeveClusterModel",
     "ShadowRoleBindingModel",
     "ShadowSessionModel",

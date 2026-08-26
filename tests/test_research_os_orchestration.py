@@ -7,10 +7,13 @@ import pandas as pd
 import pytest
 import yaml
 
+import factor_lab.research_os.dagster_defs as dagster_defs_module
 from factor_lab.research_os.dagster_defs import (
+    DATA_INCIDENT_REPAIR_JOB_NAME,
     DAGSTER_AVAILABLE,
     HISTORICAL_BACKFILL_JOB_NAME,
     defs,
+    failure_event_occurred_at,
     partition_key_for,
 )
 from factor_lab.research_os.contracts import (
@@ -47,6 +50,228 @@ def _success(operation: OperationName) -> OperationResult:
             "iceberg_tag": "gold-2026-08-22-deadbeef",
         }
     return OperationResult(operation, "completed", "ok", outputs)
+
+
+@pytest.mark.skipif(not DAGSTER_AVAILABLE, reason="Dagster is an orchestration extra")
+def test_failure_timestamp_comes_from_real_dagster_event_log() -> None:
+    """A DagsterEvent has no timestamp; the durable EventLogRecord does."""
+
+    from types import SimpleNamespace
+
+    from dagster import DagsterEventType, DagsterInstance, job, op
+
+    @op
+    def fail_after_start() -> None:
+        raise RuntimeError("deliberate durable failure")
+
+    @job
+    def failing_job() -> None:
+        fail_after_start()
+
+    instance = DagsterInstance.ephemeral()
+    result = failing_job.execute_in_process(
+        instance=instance,
+        raise_on_error=False,
+    )
+    assert result.success is False
+    dagster_run = instance.get_run_by_id(result.run_id)
+    assert dagster_run is not None
+    records = instance.get_records_for_run(
+        result.run_id,
+        of_type=DagsterEventType.RUN_FAILURE,
+        limit=1,
+        ascending=False,
+    ).records
+    assert len(records) == 1
+    assert not hasattr(records[0].event_log_entry.dagster_event, "timestamp")
+
+    resolved = failure_event_occurred_at(
+        SimpleNamespace(instance=instance, dagster_run=dagster_run)
+    )
+
+    assert resolved == datetime.fromtimestamp(records[0].timestamp, tz=timezone.utc)
+
+
+@pytest.mark.skipif(not DAGSTER_AVAILABLE, reason="Dagster is an orchestration extra")
+def test_daily_failure_sensor_reuses_durable_run_incident_and_closes_services(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Sensor replay delegates identity to durable authority, never process memory."""
+
+    from dagster import (
+        DagsterEventType,
+        DagsterInstance,
+        build_run_status_sensor_context,
+        job,
+        op,
+    )
+
+    partition_key = "2026-08-22"
+
+    @op
+    def fail_daily_run() -> None:
+        raise RuntimeError("deliberate daily failure")
+
+    @job(tags={"factor_lab/partition_key": partition_key})
+    def failed_daily_job() -> None:
+        fail_daily_run()
+
+    instance = DagsterInstance.ephemeral()
+    result = failed_daily_job.execute_in_process(
+        instance=instance,
+        raise_on_error=False,
+    )
+    assert result.success is False
+    dagster_run = instance.get_run_by_id(result.run_id)
+    assert dagster_run is not None
+    failure_records = instance.get_records_for_run(
+        result.run_id,
+        of_type=DagsterEventType.RUN_FAILURE,
+        limit=1,
+        ascending=False,
+    ).records
+    assert len(failure_records) == 1
+    failure_event = failure_records[0].event_log_entry.dagster_event
+    assert failure_event is not None
+
+    # This object stands in for PostgreSQL and deliberately outlives every
+    # transient ApplicationServices instance created by the sensor.  A replay
+    # must rediscover the same incident/cohort through this authority.
+    durable_by_run: dict[str, tuple[str, str]] = {}
+    report_calls: list[dict[str, object]] = []
+    closed_service_ids: list[int] = []
+    created_service_ids: list[int] = []
+
+    class TransientCatalog:
+        def __init__(self, service_id: int) -> None:
+            self.service_id = service_id
+
+        def close(self) -> None:
+            closed_service_ids.append(self.service_id)
+
+    class TransientServices:
+        def __init__(self, service_id: int) -> None:
+            self.catalog = TransientCatalog(service_id)
+
+        def report_unexpected_data_failure(self, **kwargs):
+            report_calls.append(dict(kwargs))
+            run_id = str(kwargs["dagster_run_id"])
+            reused = run_id in durable_by_run
+            durable_by_run.setdefault(
+                run_id,
+                ("incident_" + "a" * 64, "repaircohort_" + "b" * 64),
+            )
+            incident_id, cohort_id = durable_by_run[run_id]
+            return {
+                "incident_id": incident_id,
+                "repair_cohort_id": cohort_id,
+                "reused": reused,
+            }
+
+    def create_transient_services():
+        service_id = len(created_service_ids) + 1
+        created_service_ids.append(service_id)
+        return TransientServices(service_id)
+
+    monkeypatch.setattr(
+        dagster_defs_module,
+        "services_from_environment",
+        create_transient_services,
+    )
+    sensor_def = defs.get_sensor_def(
+        "research_os_unexpected_daily_failure_sensor"
+    )
+
+    def evaluate_once():
+        context = build_run_status_sensor_context(
+            sensor_name=sensor_def.name,
+            dagster_event=failure_event,
+            dagster_instance=instance,
+            dagster_run=dagster_run,
+            repository_def=defs.get_repository_def(),
+        )
+        return sensor_def(context)
+
+    first = evaluate_once()
+    second = evaluate_once()
+
+    assert "registered unexpected daily failure" in first.skip_message
+    assert "reused durable unexpected daily failure" in second.skip_message
+    assert len(durable_by_run) == 1
+    assert len(set(durable_by_run.values())) == 1
+    assert [call["dagster_run_id"] for call in report_calls] == [
+        result.run_id,
+        result.run_id,
+    ]
+    assert report_calls[0]["occurred_at"] == report_calls[1]["occurred_at"]
+    assert report_calls[0]["failed_step_key"] == report_calls[1]["failed_step_key"]
+    assert created_service_ids == [1, 2]
+    assert closed_service_ids == [1, 2]
+
+
+@pytest.mark.skipif(not DAGSTER_AVAILABLE, reason="Dagster is an orchestration extra")
+def test_daily_failure_sensor_closes_services_when_bridge_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from types import SimpleNamespace
+    from dagster import (
+        DagsterEventType,
+        DagsterInstance,
+        build_run_status_sensor_context,
+        job,
+        op,
+    )
+
+    @op
+    def fail_without_bridge() -> None:
+        raise RuntimeError("deliberate bridge-less failure")
+
+    @job(tags={"factor_lab/partition_key": "2026-08-22"})
+    def failed_daily_job() -> None:
+        fail_without_bridge()
+
+    instance = DagsterInstance.ephemeral()
+    result = failed_daily_job.execute_in_process(
+        instance=instance,
+        raise_on_error=False,
+    )
+    dagster_run = instance.get_run_by_id(result.run_id)
+    assert dagster_run is not None
+    failure_records = instance.get_records_for_run(
+        result.run_id,
+        of_type=DagsterEventType.RUN_FAILURE,
+        limit=1,
+        ascending=False,
+    ).records
+    assert len(failure_records) == 1
+    failure_event = failure_records[0].event_log_entry.dagster_event
+    assert failure_event is not None
+
+    closed: list[bool] = []
+
+    class MissingBridge:
+        catalog = SimpleNamespace(close=lambda: closed.append(True))
+
+    monkeypatch.setattr(
+        dagster_defs_module,
+        "services_from_environment",
+        lambda: MissingBridge(),
+    )
+    sensor_def = defs.get_sensor_def(
+        "research_os_unexpected_daily_failure_sensor"
+    )
+    context = build_run_status_sensor_context(
+        sensor_name=sensor_def.name,
+        dagster_event=failure_event,
+        dagster_instance=instance,
+        dagster_run=dagster_run,
+        repository_def=defs.get_repository_def(),
+    )
+
+    with pytest.raises(RuntimeError, match="do not expose"):
+        sensor_def(context)
+
+    assert closed == [True]
 
 
 def _typed_session(partition_key: str, *, reused: bool = False) -> TypedExecutionSession:
@@ -180,13 +405,14 @@ def test_dagster_module_stays_collectable_without_optional_dependency() -> None:
             "research_os_open_observation_job",
             "research_os_daily_job",
             HISTORICAL_BACKFILL_JOB_NAME,
+            DATA_INCIDENT_REPAIR_JOB_NAME,
             "research_os_weekly_job",
             "research_os_monthly_job",
             "research_os_quarterly_job",
         }
         assert job_names <= {definition.name for definition in repository.get_all_jobs()}
         assert len(repository.schedule_defs) == 5
-        assert len(repository.sensor_defs) == 4
+        assert len(repository.sensor_defs) == 5
         assert all(
             definition.default_status.value == "STOPPED"
             for definition in repository.schedule_defs
@@ -245,6 +471,119 @@ def test_code_defined_historical_backfill_uses_only_authoritative_data_chain() -
         OperationName.GOLD_ICEBERG_SNAPSHOT_PUBLISH,
     ]
     assert OperationName.SHADOW_NAV_STEP not in services.backfill
+
+
+@pytest.mark.skipif(not DAGSTER_AVAILABLE, reason="Dagster is an orchestration extra")
+def test_data_incident_repair_job_runs_five_stages_then_revalidates() -> None:
+    assert defs is not None
+    from dagster import DagsterInstance
+
+    incident_id = "incident_" + "a" * 64
+
+    class RepairServices:
+        def __init__(self) -> None:
+            self.calls: list[tuple[OperationName, str, str]] = []
+            self.revalidated: list[str] = []
+
+        def execute_data_incident_repair(self, request, *, incident_id):
+            self.calls.append(
+                (request.operation, request.run_id, incident_id)
+            )
+            return _success(request.operation)
+
+        def revalidate_ready_data_incident(self, *, incident_id):
+            self.revalidated.append(incident_id)
+            return {
+                "incident_id": incident_id,
+                "status": "resolved",
+                "revalidation_id": "dreval_" + "b" * 64,
+                "fleet_action": "restored_to_dormant",
+            }
+
+    services = RepairServices()
+    result = defs.resolve_job_def(
+        DATA_INCIDENT_REPAIR_JOB_NAME
+    ).execute_in_process(
+        resources={"research_os_services": services},
+        instance=DagsterInstance.ephemeral(),
+        tags={
+            "factor_lab/partition_key": "2026-08-22",
+            "factor_lab/repair_incident_id": incident_id,
+            "factor_lab/repair_cohort_id": "repaircohort_" + "c" * 64,
+        },
+    )
+
+    assert result.success
+    assert [item[0] for item in services.calls] == [
+        OperationName.SOURCE_SYNC,
+        OperationName.SOURCE_RECONCILIATION,
+        OperationName.DATA_QUALITY_GATE,
+        OperationName.GOLD_ICEBERG_SNAPSHOT_PUBLISH,
+        OperationName.SHADOW_NAV_STEP,
+    ]
+    assert len({item[1] for item in services.calls}) == 1
+    assert all(item[2] == incident_id for item in services.calls)
+    assert services.revalidated == [incident_id]
+
+
+@pytest.mark.skipif(not DAGSTER_AVAILABLE, reason="Dagster is an orchestration extra")
+def test_data_incident_repair_sensor_drains_controls_and_suppresses_active_run() -> None:
+    assert defs is not None
+    from dagster import DagsterInstance, build_sensor_context
+
+    incident_id = "incident_" + "d" * 64
+    cohort_id = "repaircohort_" + "e" * 64
+
+    class CoordinatorServices:
+        def __init__(self) -> None:
+            self.resume_calls: list[dict[str, object]] = []
+
+        def resume_pending_incident_controls(self, **kwargs):
+            self.resume_calls.append(dict(kwargs))
+            return {"status": "completed"}
+
+        @staticmethod
+        def pending_data_incident_repairs():
+            return (
+                {
+                    "incident_id": incident_id,
+                    "partition_key": "2026-08-22",
+                    "repair_cohort_id": cohort_id,
+                },
+            )
+
+    services = CoordinatorServices()
+    instance = DagsterInstance.ephemeral()
+    sensor_def = defs.get_sensor_def(
+        "research_os_data_incident_repair_sensor"
+    )
+    with build_sensor_context(
+        instance=instance,
+        definitions=defs,
+        sensor_name=sensor_def.name,
+        resources={"research_os_services": services},
+    ) as context:
+        first = sensor_def.evaluate_tick(context)
+    assert len(first.run_requests) == 1
+    request = first.run_requests[0]
+    assert request.run_key is None
+    assert request.tags["factor_lab/repair_incident_id"] == incident_id
+    assert request.tags["factor_lab/repair_cohort_id"] == cohort_id
+
+    instance.create_run_for_job(
+        defs.resolve_job_def(DATA_INCIDENT_REPAIR_JOB_NAME),
+        tags={"factor_lab/repair_incident_id": incident_id},
+    )
+    with build_sensor_context(
+        instance=instance,
+        definitions=defs,
+        sensor_name=sensor_def.name,
+        resources={"research_os_services": services},
+    ) as context:
+        second = sensor_def.evaluate_tick(context)
+    assert second.run_requests == []
+    assert "active repair run" in str(second.skip_message)
+    assert len(services.resume_calls) == 2
 
 
 @pytest.mark.skipif(not DAGSTER_AVAILABLE, reason="Dagster is an orchestration extra")

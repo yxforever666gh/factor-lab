@@ -29,6 +29,7 @@ from factor_lab.research_os.readiness_audit import (
     ReadinessAuditError,
 )
 from factor_lab.research_os.runtime import ResearchOSSettings
+from factor_lab.research_os.sleeve_registry import INITIAL_SLEEVE_IDS
 
 
 _ACTIVE_RECOVERY_STATUSES = {"open", "diagnosing", "observing"}
@@ -390,7 +391,12 @@ def _extract_champion(runs: list[Any]) -> tuple[dict[str, Any], str | None]:
 
 
 def _lifecycle_projection(
-    events: list[Any], champion: dict[str, Any]
+    events: list[Any],
+    champion: dict[str, Any],
+    *,
+    open_data_incident_count: int = 0,
+    incident_authority_available: bool = True,
+    require_incident_authority: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     latest_by_sleeve: dict[str, Any] = {}
     for event in events:
@@ -417,6 +423,37 @@ def _lifecycle_projection(
         key=lambda row: (-_RISK_PRIORITY.get(row["state"], 30), row["sleeve_id"])
     )
 
+    incident_override = open_data_incident_count > 0 or (
+        require_incident_authority and not incident_authority_available
+    )
+    if incident_override:
+        known_sleeves = {row["sleeve_id"] for row in sleeves}
+        for weight in champion.get("sleeve_weights", []):
+            sleeve_id = str(weight.get("sleeve_id") or "").strip()
+            if not sleeve_id or sleeve_id in known_sleeves:
+                continue
+            sleeves.append(
+                {
+                    "sleeve_id": sleeve_id,
+                    "name": str(weight.get("name") or sleeve_id),
+                    "state": "not_initialized",
+                    "weight": weight.get("weight"),
+                    "cause": None,
+                    "occurred_at": None,
+                }
+            )
+            known_sleeves.add(sleeve_id)
+        for row in sleeves:
+            row["catalog_state"] = row["state"]
+            row["catalog_cause"] = row["cause"]
+            row["state"] = "frozen_data"
+            row["cause"] = (
+                "open_data_incident_override"
+                if open_data_incident_count > 0
+                else "incident_authority_unavailable_override"
+            )
+        sleeves.sort(key=lambda row: row["sleeve_id"])
+
     risky = [
         row for row in sleeves if row["state"] in {"frozen_data", "dormant", "reduced"}
     ]
@@ -434,6 +471,18 @@ def _lifecycle_projection(
         risk = {"state": "research", "label": "研究 / 影子阶段", "tone": "info"}
     else:
         risk = {"state": "not_initialized", "label": "尚未建立", "tone": "info"}
+    if incident_override:
+        risk = {
+            "state": "frozen_data",
+            "label": "数据冻结 / 100% 现金",
+            "tone": "bad",
+            "cause": (
+                "open_data_incident_override"
+                if open_data_incident_count > 0
+                else "incident_authority_unavailable_override"
+            ),
+        }
+        risk["open_data_incident_count"] = open_data_incident_count
     risk["affected_sleeves"] = risky
     return sleeves, risk
 
@@ -1141,7 +1190,6 @@ def load_research_os_read_model(
             summary = catalog.catalog_summary()
             snapshots = catalog.list_snapshots(limit=12)
             experiments = catalog.list_experiments(limit=12)
-            lifecycle_events = catalog.list_lifecycle_events(limit=100)
             recovery_cases = catalog.list_recovery_cases(limit=50)
             runs = catalog.list_runs(limit=20)
             # Health samples arrive every five minutes and can legitimately
@@ -1208,7 +1256,44 @@ def load_research_os_read_model(
                         )
                 champion["run_id"] = champion_run_id
 
-            sleeves, risk = _lifecycle_projection(lifecycle_events, champion)
+            # Query only the fixed mechanism roster plus Sleeves that currently
+            # have a production role, recovery case, or Champion weight. This
+            # prevents an unbounded population of engineering-canary IDs from
+            # evicting a quiet production Sleeve at any global result limit.
+            managed_sleeve_ids = set(INITIAL_SLEEVE_IDS)
+            managed_sleeve_ids.update(
+                str(row.sleeve_id) for row in recovery_cases if row.sleeve_id
+            )
+            managed_sleeve_ids.update(
+                str(row.get("sleeve_id"))
+                for row in champion.get("sleeve_weights", [])
+                if row.get("sleeve_id")
+            )
+            for role_group in ("champions", "challengers"):
+                for role in production["shadow_roles"].get(role_group, []):
+                    if role.get("sleeve_id"):
+                        managed_sleeve_ids.add(str(role["sleeve_id"]))
+                    managed_sleeve_ids.update(
+                        str(row.get("sleeve_id"))
+                        for row in role.get("sleeve_weights", [])
+                        if row.get("sleeve_id")
+                    )
+            lifecycle_events = catalog.list_latest_lifecycle_events(
+                limit=max(1, len(managed_sleeve_ids)),
+                sleeve_ids=tuple(sorted(managed_sleeve_ids)),
+            )
+
+            sleeves, risk = _lifecycle_projection(
+                lifecycle_events,
+                champion,
+                open_data_incident_count=int(
+                    production["data_incidents"]["open_count"] or 0
+                ),
+                incident_authority_available=bool(
+                    production["data_incidents"].get("available")
+                ),
+                require_incident_authority=source == "postgresql",
+            )
             recovery_sla = _recovery_projection(recovery_cases, generated_at)
             comparison_index: dict[str, dict[str, Any]] = {}
             for comparison in production["evidence_epoch"].get("comparisons", []):

@@ -27,6 +27,7 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 
 from .fingerprint import canonical_json, content_fingerprint
+from .production_ledger import INCIDENT_CONTROL_LOCK_KEYS
 
 try:  # Keep lightweight research workers importable without infra extras.
     from sqlalchemy import create_engine, func, select, text
@@ -738,6 +739,54 @@ class ShadowEvidenceAuthority:
         canonical_json(meta)
 
         with self._sessions.begin() as session:
+            if self.engine.dialect.name == "postgresql":
+                connection = session.connection()
+                connection.exec_driver_sql("SET LOCAL lock_timeout = '5s'")
+                connection.exec_driver_sql("SET LOCAL statement_timeout = '15s'")
+                session.execute(
+                    select(
+                        func.pg_advisory_xact_lock(
+                            *INCIDENT_CONTROL_LOCK_KEYS
+                        )
+                    )
+                )
+            open_incidents = session.scalar(
+                select(func.count())
+                .select_from(orm.DataIncidentModel)
+                .where(orm.DataIncidentModel.status == "open")
+            )
+            if int(open_incidents or 0) > 0:
+                raise ShadowRoleConflict(
+                    "an open data incident forbids production role binding"
+                )
+            if normalized_role is ShadowRole.CHALLENGER:
+                assert normalized_sleeve is not None
+                if self.engine.dialect.name == "postgresql":
+                    digest = hashlib.sha256(
+                        f"research-os:lifecycle:{normalized_sleeve}".encode("utf-8")
+                    ).digest()
+                    lock_key = int.from_bytes(digest[:8], "big", signed=True)
+                    session.execute(select(func.pg_advisory_xact_lock(lock_key)))
+                latest_lifecycle = session.scalar(
+                    select(orm.LifecycleEventModel)
+                    .where(
+                        orm.LifecycleEventModel.sleeve_id == normalized_sleeve
+                    )
+                    .order_by(
+                        orm.LifecycleEventModel.occurred_at.desc(),
+                        orm.LifecycleEventModel.event_id.desc(),
+                    )
+                    .limit(1)
+                )
+                if latest_lifecycle is None or str(latest_lifecycle.to_state) not in {
+                    "shadow",
+                    "active",
+                    "reduced",
+                    "dormant",
+                }:
+                    raise ShadowRoleConflict(
+                        "Challenger role requires an admissible durable Sleeve state"
+                    )
             account = session.get(orm.ShadowAccountModel, normalized_account)
             if account is None:
                 raise ShadowRoleConflict("shadow role account is not registered")
@@ -1266,6 +1315,30 @@ class ShadowEvidenceAuthority:
             recorded_at=recorded_at,
             force_engineering=False,
         )
+
+    def session_projection(
+        self,
+        *,
+        account_id: str,
+        trade_date: date | str,
+    ) -> ShadowSessionProjection | None:
+        """Read and re-verify one formal account/session projection."""
+
+        selected_account = _identifier(account_id, name="account_id")
+        observed_date = (
+            trade_date
+            if isinstance(trade_date, date)
+            else date.fromisoformat(str(trade_date))
+        )
+        with self._sessions() as session:
+            model = session.get(
+                orm.ShadowSessionModel,
+                (selected_account, observed_date.isoformat()),
+            )
+            if model is None:
+                return None
+            self._validate_stored_projection(model)
+            return self._projection(model)
 
     def record_engineering_projection(
         self,

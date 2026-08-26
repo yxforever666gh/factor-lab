@@ -16,7 +16,7 @@ import hashlib
 import json
 from math import isfinite
 import re
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 
 from .build_provenance import (
     SourceBundleProvenanceError,
@@ -63,6 +63,7 @@ from .execution_open_sources import (
 from .production_config import ProductionConfigEvidence, ProductionConfigurationError
 from .production_ledger import (
     IncidentRecord,
+    IncidentStage,
     IncidentStatus,
     PartitionIdentity,
     PartitionRecord,
@@ -163,6 +164,28 @@ _TRUSTED_ROSOP_RUN_TYPES = frozenset(
 )
 _SHANGHAI = timezone(timedelta(hours=8))
 _MARKET_CLOSE = time(15, 0)
+
+
+def _strict_canary_generation_source_matches(
+    source_identity: str,
+    generation_base: str,
+) -> bool:
+    """Lazily reuse the producer contract without creating an import cycle."""
+
+    from .physical_canary import physical_canary_generation_source_matches
+
+    return physical_canary_generation_source_matches(
+        source_identity,
+        generation_base,
+    )
+
+
+def _strict_canary_partition_binding_errors(*args: Any, **kwargs: Any) -> tuple[str, ...]:
+    """Lazily reuse the producer contract without creating an import cycle."""
+
+    from .physical_canary import physical_canary_partition_binding_errors
+
+    return physical_canary_partition_binding_errors(*args, **kwargs)
 
 
 def _valid_tushare_batch_lineage(value: Any) -> bool:
@@ -2058,12 +2081,24 @@ class ProductionReadinessAuditor:
         return not reasons, tuple(sorted(set(reasons)))
 
     @staticmethod
+    def _physical_canary_source_is_generation_namespace(source_id: str) -> bool:
+        """Return whether ``source_id`` belongs to a physical-canary namespace."""
+
+        return bool(
+            source_id.startswith("engcan_")
+            or _strict_canary_generation_source_matches(
+                source_id, "engineering_canary"
+            )
+        )
+
+    @staticmethod
     def _physical_canary_incident_is_related(
         incident: IncidentRecord,
         *,
         run_id: str,
         calendar_window: Sequence[str],
         claimed_partition_ids: frozenset[str],
+        partitions: Mapping[str, PartitionRecord],
     ) -> bool:
         """Return whether an incident can invalidate this canary authority."""
 
@@ -2081,6 +2116,20 @@ class ProductionReadinessAuditor:
         )
         if directly_bound:
             return True
+        original = partitions.get(str(incident.partition_run_id or ""))
+        if (
+            original is not None
+            and original.identity.partition_key in set(calendar_window)
+            and ProductionReadinessAuditor._physical_canary_source_is_generation_namespace(
+                original.identity.source_id
+            )
+        ):
+            # The partition authority is a stronger selector than an incident's
+            # compatibility labels.  Old incident schemas may have neither the
+            # current payload labels nor source_ids; they must still remain
+            # visible (and OPEN) when they belong to a canary partition in the
+            # inspected window.
+            return True
         if incident.partition_key not in set(calendar_window):
             return False
         labeled_physical = bool(
@@ -2090,7 +2139,9 @@ class ProductionReadinessAuditor:
             or incident.error_code
             in {"legacy_canary_generation_isolated", "gold_market_semantics_rejected"}
             or any(
-                str(source_id).startswith(("engcan_", "engineering_canary_"))
+                ProductionReadinessAuditor._physical_canary_source_is_generation_namespace(
+                    str(source_id)
+                )
                 for source_id in incident.source_ids
             )
         )
@@ -2123,6 +2174,136 @@ class ProductionReadinessAuditor:
         if dataset == "gold_execution" or dataset.startswith("gold_execution_"):
             return "execution"
         return ""
+
+    @staticmethod
+    def _physical_canary_incident_stage_for_partition(
+        record: PartitionRecord,
+    ) -> str:
+        """Mirror the producer's dataset-owned legacy stage classification."""
+
+        dataset = record.identity.dataset
+        if dataset == "silver_accepted":
+            return "silver"
+        if dataset == "dq_accepted":
+            return "data_quality"
+        if dataset.startswith("gold_"):
+            return "gold"
+        return "source"
+
+    @classmethod
+    def _physical_canary_failure_incident_matches_partition(
+        cls,
+        incident: IncidentRecord,
+        original: PartitionRecord,
+    ) -> bool:
+        """Mirror the producer's one intentional Silver/DQ stage crossing."""
+
+        if original.identity.dataset == "silver_accepted":
+            expected = {
+                PartitionStatus.DISPUTED: (
+                    IncidentStage.SILVER,
+                    "source_reconciliation_disputed",
+                ),
+                PartitionStatus.QUARANTINED: (
+                    IncidentStage.DATA_QUALITY,
+                    "data_quality_blocked",
+                ),
+            }.get(original.status)
+            return bool(
+                expected is not None
+                and (incident.stage, incident.error_code) == expected
+            )
+        return bool(
+            incident.stage.value
+            == cls._physical_canary_incident_stage_for_partition(original)
+        )
+
+    @staticmethod
+    def _physical_canary_generation_family_is_valid(
+        original: PartitionRecord,
+        replacement: PartitionRecord,
+    ) -> bool:
+        """Prevent a canonical-looking bridge from crossing provider families."""
+
+        original_source = original.identity.source_id
+        replacement_source = replacement.identity.source_id
+        if _strict_canary_generation_source_matches(
+            original_source, "engineering_canary"
+        ):
+            return bool(
+                _strict_canary_generation_source_matches(
+                    replacement_source, "engineering_canary"
+                )
+            )
+        if not original_source.startswith("engcan_"):
+            return False
+        lineage = replacement.details.get("claim_lineage")
+        stage_lineage = (
+            lineage.get("stage_lineage") if isinstance(lineage, Mapping) else None
+        )
+        source_id = (
+            str(stage_lineage.get("source_id") or "")
+            if isinstance(stage_lineage, Mapping)
+            else ""
+        )
+        if not source_id:
+            return False
+        family = f"provider:{source_id}"
+        return bool(
+            ProductionReadinessAuditor._physical_canary_source_belongs_to_family(
+                original_source, family
+            )
+            and ProductionReadinessAuditor._physical_canary_source_belongs_to_family(
+                replacement_source, family
+            )
+        )
+
+    @staticmethod
+    def _physical_canary_source_belongs_to_family(
+        source_id: str,
+        family: str,
+    ) -> bool:
+        if family == "engineering_canary":
+            return _strict_canary_generation_source_matches(source_id, family)
+        if not family.startswith("provider:"):
+            return False
+        provider_source_id = family.removeprefix("provider:")
+        normalized = "".join(
+            character if character.isalnum() or character in "_.:-" else "_"
+            for character in provider_source_id
+        )
+        return _strict_canary_generation_source_matches(
+            source_id,
+            f"engcan_{normalized}",
+        )
+
+    @staticmethod
+    def _physical_canary_partition_generation_family(
+        record: PartitionRecord,
+    ) -> str:
+        source_id = record.identity.source_id
+        if _strict_canary_generation_source_matches(
+            source_id, "engineering_canary"
+        ):
+            return "engineering_canary"
+        lineage = record.details.get("claim_lineage")
+        stage_lineage = (
+            lineage.get("stage_lineage") if isinstance(lineage, Mapping) else None
+        )
+        provider = (
+            str(stage_lineage.get("source_id") or "")
+            if isinstance(stage_lineage, Mapping)
+            else ""
+        )
+        family = f"provider:{provider}" if provider else ""
+        return (
+            family
+            if family
+            and ProductionReadinessAuditor._physical_canary_source_belongs_to_family(
+                source_id, family
+            )
+            else ""
+        )
 
     @classmethod
     def _physical_canary_incident_semantics(
@@ -2252,7 +2433,11 @@ class ProductionReadinessAuditor:
         )
 
     def _physical_canary_partition_output_is_valid(
-        self, record: PartitionRecord
+        self,
+        record: PartitionRecord,
+        *,
+        audit_now: datetime,
+        get_snapshot: Callable[[str], Any] | None = None,
     ) -> bool:
         """Verify a succeeded partition still binds its immutable catalog output."""
 
@@ -2264,8 +2449,17 @@ class ProductionReadinessAuditor:
             and record.output_hash
         ):
             return False
-        snapshot = self.catalog.get_snapshot(record.output_snapshot_id)
+        snapshot_getter = get_snapshot or self.catalog.get_snapshot
+        snapshot = snapshot_getter(record.output_snapshot_id)
         if snapshot is None:
+            return False
+        if _strict_canary_partition_binding_errors(
+            record,
+            snapshot_record=snapshot,
+            get_snapshot=snapshot_getter,
+            audit_now=audit_now,
+            controlled_test=False,
+        ):
             return False
         reference = snapshot.reference
         manifest = reference.manifest
@@ -2340,6 +2534,37 @@ class ProductionReadinessAuditor:
         )
 
     @staticmethod
+    def _physical_canary_terminal_resolution_hash_is_valid(
+        incident: IncidentRecord,
+    ) -> bool:
+        """Verify the immutable terminal envelope without trusting its schema.
+
+        Historical incidents may use an older resolution schema and therefore
+        need a current canonical bridge.  Their own incident and terminal
+        resolution hashes must still be intact; otherwise a valid sibling bridge
+        could accidentally hide ledger tampering.
+        """
+
+        resolution = incident.payload.get("resolution")
+        if not (
+            incident.status is not IncidentStatus.OPEN
+            and incident.resolved_at is not None
+            and isinstance(resolution, Mapping)
+            and incident.resolution_hash
+        ):
+            return False
+        expected = content_fingerprint(
+            {
+                "incident_id": incident.incident_id,
+                "resolved_at": incident.resolved_at,
+                "evidence": dict(resolution),
+                "superseded": incident.status is IncidentStatus.SUPERSEDED,
+            },
+            domain="factor-lab/research-os/v1/data-incident-resolution",
+        )
+        return incident.resolution_hash == expected
+
+    @staticmethod
     def _physical_canary_producer_labels_are_valid(payload: Mapping[str, Any]) -> bool:
         return bool(
             payload.get("evidence_schema") == PHYSICAL_CANARY_SCHEMA_VERSION
@@ -2361,14 +2586,28 @@ class ProductionReadinessAuditor:
         identity = lineage.get("partition_identity")
         if not isinstance(identity, Mapping):
             return False
+        expected_incident_stages = {
+            ProductionReadinessAuditor._physical_canary_incident_stage_for_partition(
+                record
+            )
+        }
+        # ``silver_accepted`` is dataset-owned by the Silver stage, but a DQ
+        # rejection terminalizes that exact partition as QUARANTINED and its
+        # immutable claim correctly records the detecting DATA_QUALITY stage.
+        # Keep the exception status-bound so arbitrary cross-stage lineages do
+        # not become admissible.
+        if (
+            record.identity.dataset == "silver_accepted"
+            and record.status is PartitionStatus.QUARANTINED
+        ):
+            expected_incident_stages.add(IncidentStage.DATA_QUALITY.value)
         expected_hash = content_fingerprint(
             dict(lineage),
             domain="factor-lab/research-os/v1/physical-canary-partition-claim-lineage",
         )
         return bool(
             lineage_hash == expected_hash
-            and lineage.get("incident_stage")
-            in {"source", "silver", "data_quality", "gold"}
+            and lineage.get("incident_stage") in expected_incident_stages
             and isinstance(lineage.get("stage_lineage"), Mapping)
             and str(lineage.get("attempted_input_hash") or "")
             == str(record.input_hash or "")
@@ -2412,17 +2651,11 @@ class ProductionReadinessAuditor:
                 "current_source_id",
                 "dataset",
             }
-            original_stage = (
-                str(original.details.get("stage") or "")
+            expected_stage = (
+                self._physical_canary_incident_stage_for_partition(original)
                 if original is not None
                 else ""
             )
-            expected_stage = {
-                "bronze": "source",
-                "silver": "silver",
-                "data_quality": "data_quality",
-                "gold": "gold",
-            }.get(original_stage)
             original_output_hash = (
                 str(original.output_hash or "").lower()
                 if original is not None
@@ -2439,6 +2672,13 @@ class ProductionReadinessAuditor:
                 and incident.status is IncidentStatus.SUPERSEDED
                 and incident.error_code == "legacy_canary_generation_isolated"
                 and original is not None
+                and original.status
+                in {
+                    PartitionStatus.SUCCEEDED,
+                    PartitionStatus.DISPUTED,
+                    PartitionStatus.QUARANTINED,
+                    PartitionStatus.FAILED,
+                }
                 and incident.stage.value == expected_stage
                 and incident.partition_key == original.identity.partition_key
                 and incident.source_ids == (original.identity.source_id,)
@@ -2456,6 +2696,64 @@ class ProductionReadinessAuditor:
                 and resolution.get("current_source_id")
                 == replacement.identity.source_id
                 and self._physical_canary_claim_lineage_is_valid(replacement)
+                and self._physical_canary_generation_family_is_valid(
+                    original, replacement
+                )
+            )
+
+        if disposition == "superseded_by_verified_canary_generation_failure":
+            expected_keys = common_keys | {
+                "legacy_partition_run_id",
+                "legacy_source_id",
+                "current_source_id",
+            }
+            return bool(
+                set(resolution) == expected_keys
+                and incident.status is IncidentStatus.SUPERSEDED
+                and incident.error_code != "legacy_canary_generation_isolated"
+                and original is not None
+                and original.status
+                in {
+                    PartitionStatus.FAILED,
+                    PartitionStatus.DISPUTED,
+                    PartitionStatus.QUARANTINED,
+                }
+                and self._physical_canary_failure_incident_matches_partition(
+                    incident, original
+                )
+                and incident.partition_key == original.identity.partition_key
+                and incident.source_ids == (original.identity.source_id,)
+                and incident.evidence_hashes
+                == tuple(
+                    map(
+                        str,
+                        original.details.get("claim_lineage", {}).get(
+                            "parent_evidence_hashes", ()
+                        ),
+                    )
+                )
+                and incident.occurred_at == original.updated_at
+                and self._physical_canary_producer_labels_are_valid(payload)
+                and payload.get("run_id") == original.run_id
+                and payload.get("partition_terminalized") is True
+                and payload.get("partition_terminal_status")
+                == original.status.value
+                and payload.get("claim_lineage")
+                == original.details.get("claim_lineage")
+                and payload.get("claim_lineage_hash")
+                == original.details.get("claim_lineage_hash")
+                and not payload.get("domain_incident_id")
+                and self._physical_canary_claim_lineage_is_valid(original)
+                and resolution.get("legacy_partition_run_id")
+                == original.identity.partition_run_id
+                and resolution.get("legacy_source_id")
+                == original.identity.source_id
+                and resolution.get("current_source_id")
+                == replacement.identity.source_id
+                and self._physical_canary_claim_lineage_is_valid(replacement)
+                and self._physical_canary_generation_family_is_valid(
+                    original, replacement
+                )
             )
 
         if disposition == "superseded_by_verified_gold_partition":
@@ -2500,10 +2798,33 @@ class ProductionReadinessAuditor:
         replacement_lineage_hash = str(
             replacement.details.get("claim_lineage_hash") or ""
         )
+        expected_stage = (
+            str(replacement_lineage.get("incident_stage") or "")
+            if isinstance(replacement_lineage, Mapping)
+            else ""
+        )
+        expected_parent_hashes = (
+            tuple(
+                map(
+                    str,
+                    replacement_lineage.get("parent_evidence_hashes") or (),
+                )
+            )
+            if isinstance(replacement_lineage, Mapping)
+            else ()
+        )
+        retry_origin_valid = bool(
+            expected_stage
+            and incident.stage.value == expected_stage
+            and incident.partition_key == replacement.identity.partition_key
+            and incident.source_ids == (replacement.identity.source_id,)
+            and incident.evidence_hashes == expected_parent_hashes
+        )
         base_valid = bool(
             set(resolution) == expected_keys
             and incident.status is IncidentStatus.RESOLVED
             and incident.partition_run_id == replacement.identity.partition_run_id
+            and retry_origin_valid
             and self._physical_canary_producer_labels_are_valid(payload)
             and self._physical_canary_claim_lineage_is_valid(replacement)
             and payload.get("claim_lineage") == replacement_lineage
@@ -2515,13 +2836,24 @@ class ProductionReadinessAuditor:
             return False
         if disposition == "resolved_by_exact_claim_lineage_success":
             return bool(
-                payload.get("claim_attempt_status") == PartitionStatus.FAILED.value
+                incident.error_code == f"{expected_stage}_partition_claim_failed"
+                and payload.get("claim_attempt_status")
+                == PartitionStatus.FAILED.value
+                and payload.get("partition_terminalized") is False
                 and payload.get("attempted_input_hash") == replacement.input_hash
                 and resolution.get("claim_lineage_hash")
                 == replacement_lineage_hash
             )
         return bool(
             replacement.attempts >= 2
+            and incident.error_code
+            in {
+                IncidentStage.SOURCE.value: {"source_fetch_failed"},
+                IncidentStage.SILVER.value: set(),
+                IncidentStage.DATA_QUALITY.value: set(),
+                IncidentStage.GOLD.value: {"gold_publication_failed"},
+            }.get(expected_stage, set())
+            and payload.get("partition_terminalized") is True
             and payload.get("partition_terminal_status")
             == PartitionStatus.FAILED.value
         )
@@ -2535,24 +2867,12 @@ class ProductionReadinessAuditor:
     ) -> PartitionRecord | None:
         resolution = incident.payload.get("resolution")
         if not (
-            incident.status is not IncidentStatus.OPEN
-            and incident.resolved_at is not None
-            and isinstance(resolution, Mapping)
-            and incident.resolution_hash
+            isinstance(resolution, Mapping)
             and self._physical_canary_incident_hash_is_valid(incident)
+            and self._physical_canary_terminal_resolution_hash_is_valid(incident)
         ):
             return None
-        expected_resolution_hash = content_fingerprint(
-            {
-                "incident_id": incident.incident_id,
-                "resolved_at": incident.resolved_at,
-                "evidence": dict(resolution),
-                "superseded": incident.status is IncidentStatus.SUPERSEDED,
-            },
-            domain="factor-lab/research-os/v1/data-incident-resolution",
-        )
-        if incident.resolution_hash != expected_resolution_hash:
-            return None
+        assert incident.resolved_at is not None
         replacement_id = str(resolution.get("replacement_partition_run_id") or "")
         replacement = partitions.get(replacement_id)
         semantics = self._physical_canary_incident_semantics(
@@ -2582,7 +2902,7 @@ class ProductionReadinessAuditor:
             return None
         return replacement
 
-    def _physical_canary_current_successor(
+    def _physical_canary_current_successor_candidates(
         self,
         incident: IncidentRecord,
         *,
@@ -2590,28 +2910,56 @@ class ProductionReadinessAuditor:
         candidates_by_dataset_date: Mapping[
             tuple[str, str], Sequence[PartitionRecord]
         ],
-        output_validity: Mapping[str, bool],
-    ) -> PartitionRecord | None:
+    ) -> tuple[PartitionRecord, ...]:
         semantics = self._physical_canary_incident_semantics(
             incident, partitions=partitions
         )
         if semantics is None:
-            return None
+            return ()
         dataset, partition_key, _role = semantics
-        candidates = tuple(
+        structural_candidates = tuple(
             record
             for record in candidates_by_dataset_date.get(
                 (dataset, partition_key), ()
             )
             if self._physical_canary_partition_matches_semantics(record, semantics)
         )
-        if len(candidates) != 1:
-            return None
-        candidate = candidates[0]
-        return (
+        original = partitions.get(str(incident.partition_run_id or ""))
+        if original is None:
+            if not (
+                incident.partition_run_id is None
+                and incident.stage is IncidentStage.GOLD
+                and incident.error_code == "gold_market_semantics_rejected"
+            ):
+                return ()
+            family = "engineering_canary"
+        else:
+            original_source = original.identity.source_id
+            if _strict_canary_generation_source_matches(
+                original_source, "engineering_canary"
+            ):
+                family = "engineering_canary"
+            else:
+                matching_families = {
+                    family
+                    for candidate in structural_candidates
+                    for family in (
+                        self._physical_canary_partition_generation_family(candidate),
+                    )
+                    if family
+                    and self._physical_canary_source_belongs_to_family(
+                        original_source, family
+                    )
+                }
+                if len(matching_families) != 1:
+                    return ()
+                family = next(iter(matching_families))
+        return tuple(
             candidate
-            if output_validity.get(candidate.identity.partition_run_id) is True
-            else None
+            for candidate in structural_candidates
+            if self._physical_canary_source_belongs_to_family(
+                candidate.identity.source_id, family
+            )
         )
 
     @staticmethod
@@ -2647,6 +2995,7 @@ class ProductionReadinessAuditor:
         run: RunRecord,
         calendar_window: Sequence[str],
         partitions: Mapping[str, PartitionRecord],
+        audit_now: datetime | None = None,
     ) -> tuple[tuple[str, ...], tuple[dict[str, Any], ...]]:
         """Require every related incident to be closed by this exact success.
 
@@ -2659,21 +3008,60 @@ class ProductionReadinessAuditor:
         """
 
         completed_at = run.completed_at
+        audit_cutoff = (
+            audit_now.astimezone(timezone.utc)
+            if audit_now is not None
+            else datetime.now(timezone.utc)
+        )
         claimed_partition_ids = frozenset(
             map(str, run.metadata.get("partition_run_ids") or ())
         )
         errors: list[str] = []
         inspected: list[dict[str, Any]] = []
+        all_incidents = tuple(
+            self.ledger.iter_incidents(batch_size=10_000)
+        )
+        integrity_reasons_by_object: dict[int, tuple[str, ...]] = {}
+        for incident in all_incidents:
+            integrity_reasons: list[str] = []
+            if not self._physical_canary_incident_hash_is_valid(incident):
+                integrity_reasons.append("related_incident_origin_hash_invalid")
+            if (
+                incident.status is not IncidentStatus.OPEN
+                and not self._physical_canary_terminal_resolution_hash_is_valid(
+                    incident
+                )
+            ):
+                integrity_reasons.append("terminal_resolution_hash_invalid")
+            if integrity_reasons:
+                normalized = tuple(sorted(set(integrity_reasons)))
+                integrity_reasons_by_object[id(incident)] = normalized
+                errors.extend(normalized)
+
         related_incidents = tuple(
             incident
-            for incident in self.ledger.iter_incidents(batch_size=10_000)
+            for incident in all_incidents
             if self._physical_canary_incident_is_related(
                 incident,
                 run_id=run.run_id,
                 calendar_window=calendar_window,
                 claimed_partition_ids=claimed_partition_ids,
+                partitions=partitions,
             )
         )
+        related_object_ids = {id(incident) for incident in related_incidents}
+        for incident in all_incidents:
+            integrity_reasons = integrity_reasons_by_object.get(id(incident), ())
+            if integrity_reasons and id(incident) not in related_object_ids:
+                inspected.append(
+                    {
+                        "incident_id": incident.incident_id,
+                        "status": incident.status.value,
+                        "partition_key": incident.partition_key,
+                        "reason": integrity_reasons[0],
+                        "integrity_reasons": list(integrity_reasons),
+                    }
+                )
         resolution_partition_ids = {
             str(resolution.get("replacement_partition_run_id") or "")
             for incident in related_incidents
@@ -2682,8 +3070,19 @@ class ProductionReadinessAuditor:
             and str(resolution.get("replacement_partition_run_id") or "")
         }
         output_partition_ids = claimed_partition_ids | resolution_partition_ids
+        snapshot_cache: dict[str, Any] = {}
+
+        def cached_snapshot(snapshot_id: str) -> Any:
+            if snapshot_id not in snapshot_cache:
+                snapshot_cache[snapshot_id] = self.catalog.get_snapshot(snapshot_id)
+            return snapshot_cache[snapshot_id]
+
         output_validity = {
-            partition_id: self._physical_canary_partition_output_is_valid(record)
+            partition_id: self._physical_canary_partition_output_is_valid(
+                record,
+                audit_now=audit_cutoff,
+                get_snapshot=cached_snapshot,
+            )
             for partition_id in output_partition_ids
             for record in (partitions.get(partition_id),)
             if record is not None
@@ -2727,35 +3126,54 @@ class ProductionReadinessAuditor:
             origin: frozenset(replacements)
             for origin, replacements in bridge_edges_mutable.items()
         }
-
         for incident in related_incidents:
             reason: str | None = None
-            if incident.status is IncidentStatus.OPEN:
+            integrity_reasons = integrity_reasons_by_object.get(id(incident), ())
+            resolution = incident.payload.get("resolution")
+            replacement_id = (
+                str(resolution.get("replacement_partition_run_id") or "")
+                if isinstance(resolution, Mapping)
+                else ""
+            )
+            directly_bound = bool(
+                (incident.partition_run_id or "") in claimed_partition_ids
+                or replacement_id in claimed_partition_ids
+                or str(incident.payload.get("run_id") or "") == run.run_id
+            )
+            successor_candidates = self._physical_canary_current_successor_candidates(
+                incident,
+                partitions=partitions,
+                candidates_by_dataset_date=current_candidates,
+            )
+            successor = None
+            if len(successor_candidates) == 1:
+                candidate = successor_candidates[0]
+                if (
+                    output_validity.get(candidate.identity.partition_run_id) is True
+                    and self._physical_canary_claim_lineage_is_valid(candidate)
+                ):
+                    successor = candidate
+            incident_timeline_invalid = bool(
+                incident.occurred_at > audit_cutoff
+                or (
+                    incident.resolved_at is not None
+                    and (
+                        incident.resolved_at < incident.occurred_at
+                        or incident.resolved_at > audit_cutoff
+                    )
+                )
+            )
+            if incident_timeline_invalid:
+                reason = "related_incident_timeline_invalid"
+            elif incident.status is IncidentStatus.OPEN:
                 reason = "related_incident_open"
             else:
-                resolution = incident.payload.get("resolution")
-                replacement_id = (
-                    str(resolution.get("replacement_partition_run_id") or "")
-                    if isinstance(resolution, Mapping)
-                    else ""
-                )
-                directly_bound = bool(
-                    (incident.partition_run_id or "") in claimed_partition_ids
-                    or replacement_id in claimed_partition_ids
-                    or str(incident.payload.get("run_id") or "") == run.run_id
-                )
                 during_or_after_run = bool(
                     incident.occurred_at >= run.started_at
                     or incident.resolved_at is None
                     or incident.resolved_at >= run.started_at
                 )
                 causal_replacement = causal_replacements.get(incident.incident_id)
-                successor = self._physical_canary_current_successor(
-                    incident,
-                    partitions=partitions,
-                    candidates_by_dataset_date=current_candidates,
-                    output_validity=output_validity,
-                )
                 strict_current_resolution = bool(
                     completed_at is not None
                     and incident.resolved_at is not None
@@ -2765,12 +3183,48 @@ class ProductionReadinessAuditor:
                     and causal_replacement.identity.partition_run_id
                     == successor.identity.partition_run_id
                 )
+                historical_authority_intact = bool(
+                    incident.resolved_at is not None
+                    and self._physical_canary_incident_hash_is_valid(incident)
+                    and self._physical_canary_terminal_resolution_hash_is_valid(
+                        incident
+                    )
+                    and incident.occurred_at
+                    <= incident.resolved_at
+                    < run.started_at
+                )
+                causal_replacement_is_current = bool(
+                    causal_replacement is not None
+                    and successor is not None
+                    and causal_replacement.identity.partition_run_id
+                    == successor.identity.partition_run_id
+                )
+                historical_prelease_gold_rollforward = bool(
+                    incident.partition_run_id is None
+                    and incident.stage is IncidentStage.GOLD
+                    and incident.error_code == "gold_market_semantics_rejected"
+                    and isinstance(resolution, Mapping)
+                    and resolution.get("disposition")
+                    == "superseded_by_verified_gold_partition"
+                    and causal_replacement is not None
+                    and successor is not None
+                    and self._physical_canary_source_belongs_to_family(
+                        causal_replacement.identity.source_id,
+                        "engineering_canary",
+                    )
+                    and self._physical_canary_source_belongs_to_family(
+                        successor.identity.source_id,
+                        "engineering_canary",
+                    )
+                )
                 historical_resolution = bool(
                     not directly_bound
                     and not during_or_after_run
                     and successor is not None
+                    and historical_authority_intact
                     and (
-                        causal_replacement is not None
+                        causal_replacement_is_current
+                        or historical_prelease_gold_rollforward
                         or self._physical_canary_has_transitive_bridge(
                             incident,
                             bridge_edges=bridge_edges,
@@ -2784,14 +3238,15 @@ class ProductionReadinessAuditor:
                     else historical_resolution
                 ):
                     reason = "related_incident_resolution_not_causal"
-            inspected.append(
-                {
-                    "incident_id": incident.incident_id,
-                    "status": incident.status.value,
-                    "partition_key": incident.partition_key,
-                    "reason": reason,
-                }
-            )
+            inspected_row: dict[str, Any] = {
+                "incident_id": incident.incident_id,
+                "status": incident.status.value,
+                "partition_key": incident.partition_key,
+                "reason": reason,
+            }
+            if integrity_reasons:
+                inspected_row["integrity_reasons"] = list(integrity_reasons)
+            inspected.append(inspected_row)
             if reason is not None:
                 errors.append(reason)
         return tuple(sorted(set(errors))), tuple(inspected)
@@ -2875,8 +3330,11 @@ class ProductionReadinessAuditor:
             completed_at = run.completed_at
             if run.status != "succeeded" or completed_at is None:
                 reasons.append("not_succeeded")
-            elif now - completed_at > _CANARY_MAX_AGE:
-                reasons.append("stale")
+            else:
+                if not run.started_at <= completed_at <= now:
+                    reasons.append("physical_canary_timeline_invalid")
+                elif now - completed_at > _CANARY_MAX_AGE:
+                    reasons.append("stale")
             if not (
                 metadata.get("evidence_schema") == PHYSICAL_CANARY_SCHEMA_VERSION
                 and metadata.get("evidence_class") == "engineering_canary"
@@ -3129,12 +3587,30 @@ class ProductionReadinessAuditor:
                 for item in bound_partitions
             ):
                 reasons.append("physical_partition_stage_set_incomplete")
+            partition_binding_errors = tuple(
+                error
+                for item in bound_partitions
+                for error in _strict_canary_partition_binding_errors(
+                    item,
+                    snapshot_record=(
+                        self.catalog.get_snapshot(item.output_snapshot_id)
+                        if item.output_snapshot_id
+                        else None
+                    ),
+                    get_snapshot=self.catalog.get_snapshot,
+                    audit_now=now,
+                    controlled_test=False,
+                )
+            )
+            if partition_binding_errors:
+                reasons.append("physical_partition_strict_binding_invalid")
 
             incident_errors, incident_evidence = (
                 self._physical_canary_incident_errors(
                     run=run,
                     calendar_window=current_calendar_window,
                     partitions=partitions,
+                    audit_now=now,
                 )
             )
             if incident_errors:

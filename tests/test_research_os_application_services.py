@@ -964,6 +964,539 @@ def _request(operation: OperationName, *, run_id: str = "dagster-run-1") -> Oper
     )
 
 
+@pytest.mark.parametrize("first_status", ["failed", "blocked"])
+def test_authoritative_backfill_terminal_retry_runs_new_generation(
+    tmp_path: Path,
+    first_status: str,
+) -> None:
+    config = _config(tmp_path)
+    catalog, engine, ledger = _sqlite_fk_authority(tmp_path)
+    service = _services(
+        tmp_path,
+        config,
+        FakeGoldPublisher([]),
+        catalog=catalog,
+    )
+    service.production_ledger = ledger
+    calls: list[str] = []
+
+    def flaky_handler(request: OperationRequest) -> OperationResult:
+        calls.append(request.run_id)
+        if len(calls) == 1:
+            return OperationResult(
+                operation=request.operation,
+                status=first_status,
+                summary="injected first terminal failure",
+            )
+        return OperationResult(
+            operation=request.operation,
+            status="completed",
+            summary="repaired generation completed",
+            outputs={"generation_attempt": len(calls)},
+        )
+
+    service._handlers[OperationName.SOURCE_SYNC] = flaky_handler
+    request = _request(OperationName.SOURCE_SYNC, run_id="retry-generation-run")
+    try:
+        first = service.execute_authoritative_backfill(request)
+        second = service.execute_authoritative_backfill(request)
+        repeated = service.execute_authoritative_backfill(request)
+
+        assert first.status == first_status
+        assert second.status == repeated.status == "completed"
+        assert calls == ["retry-generation-run", "retry-generation-run"]
+        base_identity = PartitionIdentity(
+            "research_os", "stage_source", request.partition_key
+        )
+        base = ledger.get_partition(base_identity)
+        assert base is not None
+        assert base.status is (
+            PartitionStatus.FAILED
+            if first_status == "failed"
+            else PartitionStatus.QUARANTINED
+        )
+        rows = ledger.list_partitions(
+            source_id="research_os", dataset="stage_source"
+        )
+        assert len(rows) == 2
+        successor = next(row for row in rows if row.identity != base_identity)
+        assert successor.status is PartitionStatus.SUCCEEDED
+        assert successor.repair_parent_partition_run_id == base_identity.partition_run_id
+    finally:
+        ledger.close()
+        engine.dispose()
+        catalog.close()
+
+
+def test_source_child_quarantine_is_repaired_by_real_handler_successor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = _config(tmp_path)
+    config["daily"]["sources"][0]["partition_cadence"] = {
+        "kind": "trading_session",
+        "ledger_identity": "required_daily",
+    }
+    catalog, engine, ledger = _sqlite_fk_authority(tmp_path)
+    service = _services(
+        tmp_path,
+        config,
+        FakeGoldPublisher([]),
+        catalog=catalog,
+    )
+    service.production_ledger = ledger
+    request = _request(OperationName.SOURCE_SYNC, run_id="source-child-repair")
+    child_base = PartitionIdentity(
+        "required_daily", "daily", request.partition_key
+    )
+    stage_base = PartitionIdentity(
+        "research_os", "stage_source", request.partition_key
+    )
+    created_at = service._now() - timedelta(minutes=2)
+    for identity in (child_base, stage_base):
+        ledger.ensure_partition(identity, created_at=created_at)
+        lease = ledger.claim(
+            owner=f"quarantine-{identity.source_id}",
+            identity=identity,
+            now=created_at,
+            lease_for=timedelta(minutes=10),
+        )
+        assert lease is not None
+        ledger.finish(
+            lease,
+            status=PartitionStatus.QUARANTINED,
+            completed_at=created_at + timedelta(minutes=1),
+            error_code="source_disputed",
+            error="injected old source dispute",
+        )
+
+    original_sync_bronze = application_services_module.sync_bronze
+    handler_calls: list[str] = []
+
+    def observed_sync_bronze(*args, **kwargs):
+        handler_calls.append("sync_bronze")
+        return original_sync_bronze(*args, **kwargs)
+
+    monkeypatch.setattr(
+        application_services_module, "sync_bronze", observed_sync_bronze
+    )
+    try:
+        repaired = service.execute_authoritative_backfill(request)
+        repeated = service.execute_authoritative_backfill(request)
+
+        assert repaired.status == repeated.status == "completed"
+        assert handler_calls == ["sync_bronze"]
+        assert ledger.get_partition(child_base).status is PartitionStatus.QUARANTINED
+        assert ledger.get_partition(stage_base).status is PartitionStatus.QUARANTINED
+        child_rows = ledger.list_partitions(
+            source_id="required_daily", dataset="daily"
+        )
+        assert len(child_rows) == 2
+        child_successor = next(
+            row for row in child_rows if row.identity != child_base
+        )
+        assert child_successor.status is PartitionStatus.SUCCEEDED
+        assert (
+            child_successor.repair_parent_partition_run_id
+            == child_base.partition_run_id
+        )
+        stage_rows = ledger.list_partitions(
+            source_id="research_os", dataset="stage_source"
+        )
+        assert len(stage_rows) == 2
+        assert next(
+            row for row in stage_rows if row.identity != stage_base
+        ).status is PartitionStatus.SUCCEEDED
+    finally:
+        ledger.close()
+        engine.dispose()
+        catalog.close()
+
+
+def test_downstream_dependency_selects_succeeded_generic_retry_leaf(
+    tmp_path: Path,
+) -> None:
+    config = _config(tmp_path)
+    catalog, engine, ledger = _sqlite_fk_authority(tmp_path)
+    service = _services(
+        tmp_path,
+        config,
+        FakeGoldPublisher([]),
+        catalog=catalog,
+    )
+    service.production_ledger = ledger
+    source_calls = 0
+
+    def source_handler(request: OperationRequest) -> OperationResult:
+        nonlocal source_calls
+        source_calls += 1
+        return OperationResult(
+            operation=request.operation,
+            status=("failed" if source_calls == 1 else "completed"),
+            summary="first source failed" if source_calls == 1 else "source repaired",
+            outputs={"sources": [], "attempt": source_calls},
+        )
+
+    def silver_handler(request: OperationRequest) -> OperationResult:
+        source = service._dependency(request, OperationName.SOURCE_SYNC)
+        return OperationResult(
+            operation=request.operation,
+            status="completed",
+            summary="silver consumed repaired source",
+            outputs={"source_attempt": source.outputs["attempt"]},
+        )
+
+    service._handlers[OperationName.SOURCE_SYNC] = source_handler
+    service._handlers[OperationName.SOURCE_RECONCILIATION] = silver_handler
+    try:
+        source_request = _request(
+            OperationName.SOURCE_SYNC, run_id="generic-source-retry"
+        )
+        assert service.execute_authoritative_backfill(source_request).status == "failed"
+        assert service.execute_authoritative_backfill(source_request).status == "completed"
+
+        silver = service.execute_authoritative_backfill(
+            _request(
+                OperationName.SOURCE_RECONCILIATION,
+                run_id="silver-after-generic-source-retry",
+            )
+        )
+        assert silver.status == "completed"
+        assert silver.outputs["source_attempt"] == 2
+    finally:
+        ledger.close()
+        engine.dispose()
+        catalog.close()
+
+
+def test_failed_generic_successor_is_exact_incident_repair_parent(
+    tmp_path: Path,
+) -> None:
+    config = _config(tmp_path)
+    catalog, engine, ledger = _sqlite_fk_authority(tmp_path)
+    service = _services(
+        tmp_path,
+        config,
+        FakeGoldPublisher([]),
+        catalog=catalog,
+    )
+    service.production_ledger = ledger
+
+    def failed_source(request: OperationRequest) -> OperationResult:
+        return OperationResult(
+            operation=request.operation,
+            status="failed",
+            summary="injected persistent source failure",
+        )
+
+    service._handlers[OperationName.SOURCE_SYNC] = failed_source
+    request = _request(
+        OperationName.SOURCE_SYNC, run_id="failed-source-successor"
+    )
+    try:
+        assert service.execute_authoritative_backfill(request).status == "failed"
+        assert service.execute_authoritative_backfill(request).status == "failed"
+        incident_stage, pipeline_stage, partition_run_id, _evidence = (
+            service._infer_failed_data_stage(request.partition_key)
+        )
+        base = PartitionIdentity(
+            "research_os", "stage_source", request.partition_key
+        )
+        retry = ledger.get_retry_partition(base)
+        assert retry is not None and retry.status is PartitionStatus.FAILED
+        assert partition_run_id == retry.identity.partition_run_id
+        assert pipeline_stage.value == "source"
+        incident = ledger.record_incident(
+            partition_key=request.partition_key,
+            stage=incident_stage,
+            error_code="dagster_run_failure",
+            message="repair the failed successor",
+            occurred_at=service._now(),
+            partition_run_id=partition_run_id,
+            payload={
+                "dagster_run_id": request.run_id,
+                "failed_step_key": "source_sync",
+            },
+        )
+        selected = ledger.reserve_repair_successor(
+            incident_id=incident.incident_id,
+            dataset="stage_source",
+            repair_fingerprint="f" * 64,
+            created_at=service._now(),
+        )
+        assert selected.parent_partition_run_id == retry.identity.partition_run_id
+    finally:
+        ledger.close()
+        engine.dispose()
+        catalog.close()
+
+
+def test_explicit_incident_repair_executes_one_five_stage_successor_chain(
+    tmp_path: Path,
+) -> None:
+    config = _config(tmp_path)
+    catalog, engine, ledger = _sqlite_fk_authority(tmp_path)
+    service = _services(
+        tmp_path,
+        config,
+        FakeGoldPublisher([]),
+        catalog=catalog,
+    )
+    service.production_ledger = ledger
+    partition_key = "2024-01-03"
+    occurred_at = datetime(2026, 8, 21, 12, tzinfo=timezone.utc)
+    source_base = PartitionIdentity(
+        "research_os", "stage_source", partition_key
+    )
+    gold_base = PartitionIdentity("research_os", "stage_gold", partition_key)
+    for identity, status in (
+        (source_base, PartitionStatus.SUCCEEDED),
+        (gold_base, PartitionStatus.FAILED),
+    ):
+        ledger.ensure_partition(
+            identity,
+            created_at=occurred_at - timedelta(minutes=2),
+            input_hash="a" * 64,
+        )
+        lease = ledger.claim(
+            owner=f"base-{identity.dataset}",
+            identity=identity,
+            now=occurred_at - timedelta(minutes=2),
+            lease_for=timedelta(minutes=10),
+        )
+        assert lease is not None
+        ledger.finish(
+            lease,
+            status=status,
+            completed_at=occurred_at - timedelta(minutes=1),
+            output_hash=("b" * 64 if status is PartitionStatus.SUCCEEDED else None),
+            error_code=(None if status is PartitionStatus.SUCCEEDED else "gold_failed"),
+            error=(None if status is PartitionStatus.SUCCEEDED else "gold failed"),
+        )
+    incident = ledger.record_incident(
+        partition_key=partition_key,
+        stage=application_services_module.IncidentStage.GOLD,
+        error_code="gold_failed",
+        message="gold failed",
+        occurred_at=occurred_at,
+        partition_run_id=gold_base.partition_run_id,
+    )
+    calls: list[OperationName] = []
+
+    def completed(request: OperationRequest) -> OperationResult:
+        calls.append(request.operation)
+        return OperationResult(
+            operation=request.operation,
+            status="completed",
+            summary=f"repaired {request.operation.value}",
+        )
+
+    operations = (
+        OperationName.SOURCE_SYNC,
+        OperationName.SOURCE_RECONCILIATION,
+        OperationName.DATA_QUALITY_GATE,
+        OperationName.GOLD_ICEBERG_SNAPSHOT_PUBLISH,
+        OperationName.SHADOW_NAV_STEP,
+    )
+    for operation in operations:
+        service._handlers[operation] = completed
+    service._latest_complete_accepted_session = lambda: date.fromisoformat(
+        partition_key
+    )
+    try:
+        with pytest.raises(
+            ProductionLedgerError, match="Source-to-Shadow order"
+        ):
+            service.execute_data_incident_repair(
+                _request(
+                    OperationName.SOURCE_RECONCILIATION,
+                    run_id="incident-repair-run",
+                ),
+                incident_id=incident.incident_id,
+            )
+
+        results = [
+            service.execute_data_incident_repair(
+                _request(
+                    operation,
+                    run_id=(
+                        "incident-repair-run"
+                        if operation is OperationName.SOURCE_SYNC
+                        else "incident-repair-resume-run"
+                    ),
+                ),
+                incident_id=incident.incident_id,
+            )
+            for operation in operations
+        ]
+        repeated = service.execute_data_incident_repair(
+            _request(
+                OperationName.SHADOW_NAV_STEP,
+                run_id="incident-repair-second-resume-run",
+            ),
+            incident_id=incident.incident_id,
+        )
+
+        assert all(result.status == "completed" for result in results)
+        assert repeated.status == "completed"
+        assert calls == list(operations)
+        authorities = [
+            ledger.get_repair_authority(
+                incident.incident_id,
+                {
+                    OperationName.SOURCE_SYNC: "stage_source",
+                    OperationName.SOURCE_RECONCILIATION: "stage_silver",
+                    OperationName.DATA_QUALITY_GATE: "stage_data_quality",
+                    OperationName.GOLD_ICEBERG_SNAPSHOT_PUBLISH: "stage_gold",
+                    OperationName.SHADOW_NAV_STEP: "stage_shadow",
+                }[operation],
+            )
+            for operation in operations
+        ]
+        assert all(authority is not None for authority in authorities)
+        assert len({authority.repair_fingerprint for authority in authorities}) == 1
+        cohorts = {
+            ledger.get_partition(authority.identity).details["repair_cohort_id"]
+            for authority in authorities
+        }
+        assert len(cohorts) == 1
+        assert ledger.get_partition(gold_base).status is PartitionStatus.FAILED
+    finally:
+        ledger.close()
+        engine.dispose()
+        catalog.close()
+
+
+def test_open_incident_repair_fails_closed_across_runtime_configuration_drift(
+    tmp_path: Path,
+) -> None:
+    config_a = _config(tmp_path)
+    config_b = json.loads(json.dumps(config_a))
+    config_b["repair_runtime_marker"] = "configuration-b"
+    catalog, engine, ledger = _sqlite_fk_authority(tmp_path)
+    service_a = _services(
+        tmp_path,
+        config_a,
+        FakeGoldPublisher([]),
+        catalog=catalog,
+    )
+    service_b = _services(
+        tmp_path,
+        config_b,
+        FakeGoldPublisher([]),
+        catalog=catalog,
+    )
+    service_a.production_ledger = ledger
+    service_b.production_ledger = ledger
+    partition_key = "2024-01-03"
+    occurred_at = datetime(2026, 8, 21, 12, tzinfo=timezone.utc)
+    source_base = PartitionIdentity(
+        "research_os", "stage_source", partition_key
+    )
+    gold_base = PartitionIdentity("research_os", "stage_gold", partition_key)
+    for identity, status in (
+        (source_base, PartitionStatus.SUCCEEDED),
+        (gold_base, PartitionStatus.FAILED),
+    ):
+        ledger.ensure_partition(
+            identity,
+            created_at=occurred_at - timedelta(minutes=2),
+            input_hash="a" * 64,
+        )
+        lease = ledger.claim(
+            owner=f"config-drift-{identity.dataset}",
+            identity=identity,
+            now=occurred_at - timedelta(minutes=2),
+            lease_for=timedelta(minutes=10),
+        )
+        assert lease is not None
+        ledger.finish(
+            lease,
+            status=status,
+            completed_at=occurred_at - timedelta(minutes=1),
+            output_hash=("b" * 64 if status is PartitionStatus.SUCCEEDED else None),
+            error_code=(None if status is PartitionStatus.SUCCEEDED else "gold_failed"),
+            error=(None if status is PartitionStatus.SUCCEEDED else "gold failed"),
+        )
+    incident = ledger.record_incident(
+        partition_key=partition_key,
+        stage=application_services_module.IncidentStage.GOLD,
+        error_code="gold_failed",
+        message="gold failed before a configuration change",
+        occurred_at=occurred_at,
+        partition_run_id=gold_base.partition_run_id,
+    )
+    calls_a: list[OperationName] = []
+    calls_b: list[OperationName] = []
+
+    def completed_a(request: OperationRequest) -> OperationResult:
+        calls_a.append(request.operation)
+        return OperationResult(
+            operation=request.operation,
+            status="completed",
+            summary=f"configuration A repaired {request.operation.value}",
+        )
+
+    def forbidden_b(request: OperationRequest) -> OperationResult:
+        calls_b.append(request.operation)
+        return OperationResult(
+            operation=request.operation,
+            status="completed",
+            summary="configuration B must not execute",
+        )
+
+    service_a._handlers[OperationName.SOURCE_SYNC] = completed_a
+    service_a._handlers[OperationName.SOURCE_RECONCILIATION] = completed_a
+    service_b._handlers[OperationName.SOURCE_RECONCILIATION] = forbidden_b
+    try:
+        source_result = service_a.execute_data_incident_repair(
+            _request(OperationName.SOURCE_SYNC, run_id="config-a-source"),
+            incident_id=incident.incident_id,
+        )
+        assert source_result.status == "completed"
+        source_authority = ledger.get_repair_authority(
+            incident.incident_id, "stage_source"
+        )
+        assert source_authority is not None
+
+        with pytest.raises(
+            OrchestrationFailure,
+            match="OPEN data incident repair configuration drift",
+        ):
+            service_b.execute_data_incident_repair(
+                _request(
+                    OperationName.SOURCE_RECONCILIATION,
+                    run_id="config-b-resume",
+                ),
+                incident_id=incident.incident_id,
+            )
+
+        assert calls_b == []
+        assert ledger.get_repair_authority(
+            incident.incident_id, "stage_source"
+        ) == source_authority
+        assert ledger.get_repair_authority(
+            incident.incident_id, "stage_silver"
+        ) is None
+
+        resumed = service_a.execute_data_incident_repair(
+            _request(
+                OperationName.SOURCE_RECONCILIATION,
+                run_id="config-a-resume",
+            ),
+            incident_id=incident.incident_id,
+        )
+        assert resumed.status == "completed"
+        assert calls_a == [
+            OperationName.SOURCE_SYNC,
+            OperationName.SOURCE_RECONCILIATION,
+        ]
+    finally:
+        ledger.close()
+        engine.dispose()
+        catalog.close()
+
+
 def test_monthly_gate_rejects_payload_evidence_authority_and_uses_database_clock(
     tmp_path: Path,
 ) -> None:
@@ -1203,6 +1736,15 @@ def test_catalog_role_challenger_generation_streams_past_lifecycle_noise(
     }
     service = _services(tmp_path, config, FakeGoldPublisher([]))
     binding_time = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    service.catalog.append_lifecycle_event(
+        LifecycleEvent(
+            idempotency_key="old-valid-challenger-walk-forward",
+            sleeve_id="value_quality",
+            to_state=LifecycleState.WALK_FORWARD,
+            cause="fixture walk-forward state",
+            occurred_at=binding_time - timedelta(microseconds=1),
+        )
+    )
     binding_event = service.catalog.append_lifecycle_event(
         LifecycleEvent(
             idempotency_key="old-valid-challenger-role-binding",
@@ -1221,7 +1763,7 @@ def test_catalog_role_challenger_generation_streams_past_lifecycle_noise(
         service.catalog.append_lifecycle_event(
             LifecycleEvent(
                 idempotency_key=f"newer-unrelated-lifecycle-{index:04d}",
-                sleeve_id="unrelated_sleeve",
+                sleeve_id=f"unrelated_sleeve_{index:04d}",
                 to_state=LifecycleState.PROPOSED,
                 cause="unrelated_lifecycle_noise",
                 evidence={"fixture_index": index},
@@ -1584,6 +2126,15 @@ def test_weekly_lifecycle_ignores_json_counters_and_persists_raw_measurement(
             trust_labels=("point_in_time",),
         )
     )
+    service.catalog.append_lifecycle_event(
+        LifecycleEvent(
+            idempotency_key="weekly-fixture-active",
+            sleeve_id="value_quality",
+            to_state=LifecycleState.ACTIVE,
+            cause="fixture active state",
+            occurred_at=datetime(2026, 1, 1, 8, tzinfo=timezone.utc),
+        )
+    )
 
     def write_weekly(day: date) -> None:
         weekly_path.write_text(
@@ -1735,6 +2286,15 @@ def test_dormant_recovery_uses_sixty_persisted_shadow_sessions(tmp_path: Path) -
         )
     )
     dormant_day = date(2026, 1, 1)
+    service.catalog.append_lifecycle_event(
+        LifecycleEvent(
+            idempotency_key="seed:reduced:value_quality",
+            sleeve_id="value_quality",
+            to_state=LifecycleState.REDUCED,
+            cause="legacy_catalog_migration_root",
+            occurred_at=datetime(2026, 1, 1, 6, 59, tzinfo=timezone.utc),
+        )
+    )
     service.catalog.append_lifecycle_event(
         LifecycleEvent(
             idempotency_key="seed:dormant:value_quality",

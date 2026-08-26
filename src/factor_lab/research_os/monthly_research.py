@@ -156,6 +156,8 @@ class SubmissionExecution:
     claimed: bool
     result: ResearchCycleResult | None = None
     shadow_account_id: str | None = None
+    promotion_pending: bool = False
+    promotion_error: str | None = None
 
 
 class _SubmissionLeaseGuard:
@@ -1016,6 +1018,105 @@ class MonthlyResearchCoordinator:
         )
         return binding.shadow_account_id
 
+    def _promotion_required(
+        self, submission: ResearchSubmissionRecord
+    ) -> bool:
+        experiment_id = submission.experiment_id
+        if not experiment_id:
+            return False
+        authoritative = self.catalog.get_authoritative_result(experiment_id)
+        if authoritative is None or authoritative.outcome != "promoted_to_shadow":
+            return False
+        experiment = self.catalog.get_experiment(experiment_id)
+        if experiment is None or experiment.spec.sleeve is None:
+            return True
+        binding_key = f"shadow-binding:{authoritative.result_hash}"
+        binding_events = tuple(
+            event
+            for event in self.catalog.list_lifecycle_events(
+                sleeve_id=experiment.spec.sleeve.sleeve_id, limit=1_000
+            )
+            if event.idempotency_key == binding_key
+        )
+        if len(binding_events) > 1:
+            return True
+        lifecycle_complete = len(binding_events) == 1
+        shadow_account_id = (
+            str(binding_events[0].evidence.get("shadow_account_id") or "").strip()
+            if lifecycle_complete
+            else ""
+        )
+        lifecycle_complete = lifecycle_complete and bool(shadow_account_id)
+        role_complete = True
+        if self.shadow_authority is not None:
+            role_binding = self.shadow_authority.active_binding(
+                role="challenger", role_key=experiment_id
+            )
+            role_complete = bool(
+                role_binding is not None
+                and str(role_binding.account_id) == shadow_account_id
+            )
+
+        recovery_complete = True
+        if submission.recovery_case_id is not None:
+            recovery_case = self.catalog.get_recovery_case(
+                submission.recovery_case_id
+            )
+            recovery_complete = bool(
+                recovery_case is not None
+                and experiment_id in recovery_case.challenger_ids
+                and lifecycle_complete
+            )
+            if recovery_complete:
+                recovery_bindings = tuple(
+                    event
+                    for event in self.catalog.list_lifecycle_events(
+                        sleeve_id=recovery_case.sleeve_id,
+                        limit=1_000,
+                    )
+                    if event.cause == "recovery_challenger_shadow_bound"
+                    and event.evidence.get("recovery_case_id")
+                    == submission.recovery_case_id
+                    and event.evidence.get("challenger_id") == experiment_id
+                    and str(event.evidence.get("account_id") or "").strip()
+                    == shadow_account_id
+                )
+                recovery_complete = len(recovery_bindings) == 1
+        return not (lifecycle_complete and role_complete and recovery_complete)
+
+    def _materialize_completed_promotion(
+        self,
+        submission: ResearchSubmissionRecord,
+        *,
+        claimed: bool,
+        result: ResearchCycleResult | None = None,
+    ) -> SubmissionExecution:
+        experiment_id = submission.experiment_id
+        if not experiment_id or not self._promotion_required(submission):
+            return SubmissionExecution(submission, claimed, result=result)
+        try:
+            account_id = self._promote_shadow(
+                submission, experiment_id=experiment_id
+            )
+        except Exception as exc:
+            # Research truth is already terminal and immutable.  Projection
+            # materialization is an idempotent outbox-style retry, never a
+            # reason to rewrite a successful trial/submission as failed.
+            return SubmissionExecution(
+                submission,
+                claimed,
+                result=result,
+                promotion_pending=True,
+                promotion_error=type(exc).__name__,
+            )
+        return SubmissionExecution(
+            submission,
+            claimed,
+            result=result,
+            shadow_account_id=account_id,
+            promotion_pending=self._promotion_required(submission),
+        )
+
     def _execute_claimed_submission(
         self,
         submission: ResearchSubmissionRecord,
@@ -1051,21 +1152,17 @@ class MonthlyResearchCoordinator:
                 if trial is not None and trial.outcome is TrialOutcome.MISSING_DATA
                 else "failed"
             )
-            shadow_account_id = None
             lease.assert_owned()
-            if terminal == "completed":
-                shadow_account_id = self._promote_shadow(
-                    submission, experiment_id=experiment_id
-                )
-                lease.assert_owned()
             finished = lease.finish(
                 status=terminal,
                 experiment_id=experiment_id,
                 error=None if terminal == "completed" else ",".join(result.failures),
             )
-            return SubmissionExecution(
-                finished, True, result=result, shadow_account_id=shadow_account_id
-            )
+            if terminal == "completed":
+                return self._materialize_completed_promotion(
+                    finished, claimed=True, result=result
+                )
+            return SubmissionExecution(finished, True, result=result)
         except ResearchSubmissionLeaseLost:
             raise
         except AuthoritativeResearchInputUnavailable as exc:
@@ -1120,6 +1217,10 @@ class MonthlyResearchCoordinator:
             raise ValueError("lease_seconds must be positive")
         submission = self.reserve(submission_id)
         if submission.status in TERMINAL_SUBMISSION_STATUSES:
+            if submission.status == "completed":
+                return self._materialize_completed_promotion(
+                    submission, claimed=False
+                )
             return SubmissionExecution(submission, False)
         now = self.catalog.database_now()
         claimed, won = self.catalog.claim_research_submission(
@@ -1164,11 +1265,12 @@ class MonthlyResearchCoordinator:
         lease_seconds: int = 1_800,
     ) -> tuple[SubmissionExecution, ...]:
         pending: dict[str, ResearchSubmissionRecord] = {}
-        for status in ("reviewed", "reserved", "running"):
+        for status in ("reviewed", "reserved", "running", "completed"):
             for row in self.catalog.list_research_submissions(
                 limit=limit, status=status
             ):
-                pending[row.submission_id] = row
+                if status != "completed" or self._promotion_required(row):
+                    pending[row.submission_id] = row
         ordered = sorted(
             pending.values(), key=lambda row: (row.updated_at, row.submission_id)
         )[:limit]

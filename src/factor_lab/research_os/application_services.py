@@ -127,6 +127,7 @@ from .production_config import (
 from .production_ledger import (
     CapabilityRecord,
     CapabilityStatus,
+    IncidentRecord,
     IncidentStage,
     IncidentStatus,
     PartitionIdentity,
@@ -134,14 +135,23 @@ from .production_ledger import (
     PartitionStatus,
     ProductionLedger,
     ProductionLedgerError,
+    TypedEffectFenceConflict,
     load_runtime_authority_marker,
     sanitize_operational_text,
 )
+from .incident_control_outbox import IncidentControlActionStatus
 from .readiness_audit import (
     ProductionReadinessAudit,
     ProductionReadinessAuditor,
 )
-from .data_incidents import DataIncidentCoordinator, DataPipelineStage, DataRevalidation
+from .data_incidents import (
+    CashTargetIntent,
+    DataIncident,
+    DataIncidentCoordinator,
+    DataPipelineStage,
+    DataRevalidation,
+    DataRevalidationConflict,
+)
 from .recovery import RecoveryCoordinator, RecoveryWorkflowError
 from .runtime import ResearchOSSettings
 from .shadow import ShadowExecutionConfig
@@ -163,6 +173,14 @@ from .snapshots import (
     publish_snapshot_manifest,
     verify_immutable_snapshot_manifest,
 )
+
+
+class NonDataPipelineFailure(OrchestrationFailure):
+    """A Dagster run failed after every durable data stage had succeeded."""
+
+
+class RetryableShadowRepairEvidence(OrchestrationFailure):
+    """A completed Shadow attempt lost its exact fleet/tail validation window."""
 
 
 APPLICATION_SERVICES_SCHEMA_VERSION = "research-os/application-services/v1"
@@ -304,11 +322,31 @@ _PRODUCTION_STAGE_DATASETS = {
     OperationName.SOURCE_RECONCILIATION: "stage_silver",
     OperationName.DATA_QUALITY_GATE: "stage_data_quality",
     OperationName.GOLD_ICEBERG_SNAPSHOT_PUBLISH: "stage_gold",
+    OperationName.SHADOW_NAV_STEP: "stage_shadow",
 }
 _SEMANTIC_OPERATION_METADATA_KEYS = frozenset(
     {
         "static_refresh_id",
         "submission_id",
+        "repair_scope_key",
+        "repair_incident_id",
+        "repair_fingerprint",
+        "repair_generation",
+        "repair_parent_partition_run_id",
+        "repair_validation_trade_date",
+    }
+)
+_REPAIR_METADATA_KEYS = frozenset(
+    {
+        "repair_scope_key",
+        "repair_incident_id",
+        "repair_fingerprint",
+        "repair_generation",
+        "repair_parent_partition_run_id",
+        "repair_authority_id",
+        "repair_cohort_id",
+        "repair_stage_generations",
+        "repair_validation_trade_date",
     }
 )
 
@@ -1229,7 +1267,9 @@ class ApplicationServices(ResearchOSServices):
                 "config": self._configuration_hash,
                 "cycle": request.cycle.value,
                 "partition_key": request.partition_key,
-                "semantic_metadata": self._semantic_operation_metadata(request),
+                "semantic_metadata": self._semantic_operation_metadata(
+                    request, request.operation
+                ),
             },
             domain="factor-lab/research-os/v1/orchestration-stage",
         )
@@ -1245,7 +1285,10 @@ class ApplicationServices(ResearchOSServices):
         )
 
     @staticmethod
-    def _semantic_operation_metadata(request: OperationRequest) -> dict[str, Any]:
+    def _semantic_operation_metadata(
+        request: OperationRequest,
+        operation: OperationName | None = None,
+    ) -> dict[str, Any]:
         """Keep only inputs that may change deterministic operation semantics.
 
         Dagster tags, run UUIDs, CLI authority labels and failure wake-up
@@ -1254,11 +1297,36 @@ class ApplicationServices(ResearchOSServices):
         the immutable partition created by the previous attempt.
         """
 
-        return {
+        selected_operation = request.operation if operation is None else operation
+        metadata_keys = set(_SEMANTIC_OPERATION_METADATA_KEYS)
+        # A generic retry regenerates only its failed logical slot; its
+        # dependencies remain the immutable base authority.  Incident repair,
+        # in contrast, intentionally carries one scope across all five stages.
+        if (
+            request.metadata.get("repair_scope_key")
+            and not request.metadata.get("repair_incident_id")
+            and selected_operation is not request.operation
+        ):
+            metadata_keys -= _REPAIR_METADATA_KEYS
+        elif request.metadata.get("repair_incident_id"):
+            metadata_keys -= {
+                "repair_generation",
+                "repair_parent_partition_run_id",
+            }
+        selected = {
             key: _jsonable(request.metadata[key])
-            for key in sorted(_SEMANTIC_OPERATION_METADATA_KEYS)
+            for key in sorted(metadata_keys)
             if key in request.metadata
         }
+        if request.metadata.get("repair_incident_id"):
+            generations = request.metadata.get("repair_stage_generations")
+            if isinstance(generations, Mapping):
+                generation = str(
+                    generations.get(selected_operation.value) or ""
+                ).strip()
+                if generation:
+                    selected["repair_generation"] = generation
+        return selected
 
     def _operation_identity(
         self, request: OperationRequest, operation: OperationName
@@ -1268,7 +1336,9 @@ class ApplicationServices(ResearchOSServices):
             "cycle": request.cycle.value,
             "partition_key": request.partition_key,
             "operation": operation.value,
-            "semantic_metadata": self._semantic_operation_metadata(request),
+            "semantic_metadata": self._semantic_operation_metadata(
+                request, operation
+            ),
         }
         fingerprint = content_fingerprint(
             payload, domain="factor-lab/research-os/v1/dagster-operation"
@@ -1314,10 +1384,57 @@ class ApplicationServices(ResearchOSServices):
             )
         return result
 
+    def _authoritative_dependency_request(
+        self,
+        request: OperationRequest,
+        operation: OperationName,
+    ) -> OperationRequest:
+        """Select the immutable generic-retry leaf for an upstream stage."""
+
+        if (
+            self.production_ledger is None
+            or request.metadata.get("repair_incident_id")
+        ):
+            return request
+        dataset = _PRODUCTION_STAGE_DATASETS.get(operation)
+        if dataset is None:
+            return request
+        base_identity = PartitionIdentity(
+            "research_os", dataset, request.partition_key
+        )
+        selector = getattr(self.production_ledger, "get_retry_authority", None)
+        if not callable(selector):
+            return request
+        authority = selector(base_identity)
+        if authority is None:
+            return request
+        metadata = {
+            key: value
+            for key, value in dict(request.metadata).items()
+            if key not in _REPAIR_METADATA_KEYS
+        }
+        metadata.update(
+            {
+                "repair_scope_key": authority.scope_key,
+                "repair_fingerprint": authority.repair_fingerprint,
+                "repair_generation": authority.identity.generation,
+                "repair_parent_partition_run_id": (
+                    authority.parent_partition_run_id
+                ),
+                "repair_authority_id": authority.authority_id,
+            }
+        )
+        # Make the selected upstream the request's own operation so generic
+        # repair metadata is retained by semantic identity construction.
+        return replace(request, operation=operation, metadata=metadata)
+
     def _dependency(
         self, request: OperationRequest, operation: OperationName, *, allow_skipped: bool = False
     ) -> OperationResult:
-        result = self._read_stage(request, operation)
+        dependency_request = self._authoritative_dependency_request(
+            request, operation
+        )
+        result = self._read_stage(dependency_request, operation)
         if result is None:
             raise OrchestrationFailure(
                 f"{request.operation.value} requires persisted {operation.value} state"
@@ -1580,10 +1697,89 @@ class ApplicationServices(ResearchOSServices):
         dataset = _PRODUCTION_STAGE_DATASETS.get(request.operation)
         if self.production_ledger is None or dataset is None:
             return None
+        generation = str(
+            request.metadata.get("repair_generation") or "base"
+        ).strip()
         return PartitionIdentity(
             source_id="research_os",
             dataset=dataset,
             partition_key=request.partition_key,
+            generation=generation,
+        )
+
+    def _server_repair_fingerprint(
+        self,
+        request: OperationRequest,
+        *,
+        incident: IncidentRecord | None = None,
+    ) -> str:
+        return content_fingerprint(
+            {
+                "configuration_hash": self._configuration_hash,
+                "environment_hashes": _jsonable(
+                    getattr(self, "_environment_hashes", {})
+                ),
+                "cycle": request.cycle.value,
+                "partition_key": request.partition_key,
+                "incident_id": None if incident is None else incident.incident_id,
+                "incident_hash": None if incident is None else incident.incident_hash,
+            },
+            domain="factor-lab/research-os/v1/server-repair-fingerprint",
+        )
+
+    @staticmethod
+    def _has_repair_metadata(request: OperationRequest) -> bool:
+        return any(key in request.metadata for key in _REPAIR_METADATA_KEYS)
+
+    @staticmethod
+    def _reject_external_repair_metadata(request: OperationRequest) -> None:
+        if ApplicationServices._has_repair_metadata(request):
+            raise OrchestrationFailure(
+                "repair authority metadata is server-owned"
+            )
+
+    def _prepare_generic_retry_request(
+        self, request: OperationRequest, *, now: datetime
+    ) -> OperationRequest:
+        if self.production_ledger is None or self._has_repair_metadata(request):
+            return request
+        dataset = _PRODUCTION_STAGE_DATASETS.get(request.operation)
+        if dataset is None:
+            return request
+        base_identity = PartitionIdentity(
+            "research_os", dataset, request.partition_key
+        )
+        base = self.production_ledger.get_partition(base_identity)
+        if base is None or base.status not in {
+            PartitionStatus.FAILED,
+            PartitionStatus.DISPUTED,
+            PartitionStatus.QUARANTINED,
+        }:
+            return request
+        repair_fingerprint = self._server_repair_fingerprint(request)
+        authority = self.production_ledger.reserve_retry_successor(
+            base_identity,
+            repair_fingerprint=repair_fingerprint,
+            created_at=now,
+            details={
+                "cycle": request.cycle.value,
+                "operation": request.operation.value,
+                "dagster_run_id": request.run_id,
+                "authority_kind": "generic_terminal_retry",
+            },
+        )
+        return replace(
+            request,
+            metadata={
+                **dict(request.metadata),
+                "repair_scope_key": authority.scope_key,
+                "repair_fingerprint": authority.repair_fingerprint,
+                "repair_generation": authority.identity.generation,
+                "repair_parent_partition_run_id": (
+                    authority.parent_partition_run_id
+                ),
+                "repair_authority_id": authority.authority_id,
+            },
         )
 
     def _claim_production_stage(
@@ -1605,6 +1801,11 @@ class ApplicationServices(ResearchOSServices):
                 "cycle": request.cycle.value,
                 "operation": request.operation.value,
                 "dagster_run_id": request.run_id,
+                **{
+                    key: request.metadata[key]
+                    for key in sorted(_REPAIR_METADATA_KEYS)
+                    if key in request.metadata
+                },
             },
         )
         if record.status in {
@@ -1685,6 +1886,11 @@ class ApplicationServices(ResearchOSServices):
                 "operation": request.operation.value,
                 "dagster_run_id": request.run_id,
                 "operation_result": result_payload,
+                **{
+                    key: request.metadata[key]
+                    for key in sorted(_REPAIR_METADATA_KEYS)
+                    if key in request.metadata
+                },
             },
             error_code=(
                 None
@@ -1720,6 +1926,7 @@ class ApplicationServices(ResearchOSServices):
             )
 
     def execute(self, request: OperationRequest) -> OperationResult:
+        self._reject_external_repair_metadata(request)
         if request.operation in {
             OperationName.SOURCE_SYNC,
             OperationName.SOURCE_RECONCILIATION,
@@ -1745,6 +1952,7 @@ class ApplicationServices(ResearchOSServices):
         envelope against the durable failed PG stage before freezing anything.
         """
 
+        self._reject_external_repair_metadata(request)
         if (
             request.cycle is not CycleName.DAILY
             or request.operation is not OperationName.SHADOW_NAV_STEP
@@ -1760,6 +1968,7 @@ class ApplicationServices(ResearchOSServices):
     def execute_authoritative_backfill(
         self, request: OperationRequest
     ) -> OperationResult:
+        self._reject_external_repair_metadata(request)
         if request.operation not in {
             OperationName.SOURCE_SYNC,
             OperationName.SOURCE_RECONCILIATION,
@@ -1774,9 +1983,296 @@ class ApplicationServices(ResearchOSServices):
         )
         return self._execute_admitted(request)
 
+    @staticmethod
+    def _repair_cohort_id(
+        incident: IncidentRecord, repair_fingerprint: str
+    ) -> str:
+        return "repaircohort_" + content_fingerprint(
+            {
+                "incident_id": incident.incident_id,
+                "incident_hash": incident.incident_hash,
+                "repair_fingerprint": repair_fingerprint,
+            },
+            domain="factor-lab/research-os/v1/data-incident-repair-cohort",
+        )[:64]
+
+    def _incident_repair_fingerprint(
+        self,
+        request: OperationRequest,
+        *,
+        incident: IncidentRecord,
+    ) -> str:
+        """Bind an OPEN repair cohort to its originating runtime provenance.
+
+        Repair authorities are immutable.  Resuming one under a different
+        production configuration/environment would otherwise combine Source
+        evidence from runtime A with later stages produced by runtime B.  The
+        safe recovery policy is to stop before reserving or executing another
+        stage; the original authority remains untouched and can be resumed by
+        the exact originating runtime.
+        """
+
+        if self.production_ledger is None:
+            raise OrchestrationFailure(
+                "data incident repair provenance requires the production ledger"
+            )
+        expected = self._server_repair_fingerprint(
+            request, incident=incident
+        )
+        source_authority = self.production_ledger.get_repair_authority(
+            incident.incident_id, "stage_source"
+        )
+        if source_authority is None:
+            return expected
+        if source_authority.repair_fingerprint != expected:
+            raise OrchestrationFailure(
+                "OPEN data incident repair configuration drift: the immutable "
+                "cohort must be resumed under its originating production "
+                "configuration and environment"
+            )
+        return source_authority.repair_fingerprint
+
+    def pending_data_incident_repairs(self) -> tuple[Mapping[str, Any], ...]:
+        """Return server-derived OPEN repair candidates for the Dagster sensor."""
+
+        if self.production_ledger is None:
+            raise OrchestrationFailure(
+                "data incident repair coordination requires the production ledger"
+            )
+        candidates: list[Mapping[str, Any]] = []
+        incidents = self.production_ledger.iter_incidents(
+            status=IncidentStatus.OPEN
+        )
+        try:
+            for incident in incidents:
+                domain_incident_id = str(
+                    incident.payload.get("domain_incident_id") or ""
+                ).strip()
+                if not re.fullmatch(r"dinc_[0-9a-f]{64}", domain_incident_id):
+                    continue
+                controls = self.production_ledger.incident_controls.get(
+                    incident.incident_id
+                )
+                if (
+                    controls is None
+                    or controls.status
+                    is not IncidentControlActionStatus.SUCCEEDED
+                ):
+                    continue
+                seed = OperationRequest(
+                    operation=OperationName.SOURCE_SYNC,
+                    cycle=CycleName.DAILY,
+                    partition_key=incident.partition_key,
+                    run_id="repair-coordinator",
+                )
+                repair_fingerprint = self._incident_repair_fingerprint(
+                    seed, incident=incident
+                )
+                candidates.append(
+                    {
+                        "incident_id": incident.incident_id,
+                        "incident_hash": incident.incident_hash,
+                        "partition_key": incident.partition_key,
+                        "occurred_at": incident.occurred_at.isoformat(),
+                        "repair_fingerprint": repair_fingerprint,
+                        "repair_cohort_id": self._repair_cohort_id(
+                            incident, repair_fingerprint
+                        ),
+                    }
+                )
+        finally:
+            close = getattr(incidents, "close", None)
+            if close is not None:
+                close()
+        return tuple(
+            sorted(
+                candidates,
+                key=lambda item: (
+                    str(item["occurred_at"]),
+                    str(item["incident_id"]),
+                ),
+            )
+        )
+
+    def execute_data_incident_repair(
+        self,
+        request: OperationRequest,
+        *,
+        incident_id: str,
+    ) -> OperationResult:
+        """Execute one server-selected stage of an OPEN incident repair chain."""
+
+        self._reject_external_repair_metadata(request)
+        if self.production_ledger is None:
+            raise OrchestrationFailure(
+                "data incident repair requires the production ledger"
+            )
+        dataset = _PRODUCTION_STAGE_DATASETS.get(request.operation)
+        if (
+            request.cycle is not CycleName.DAILY
+            or dataset is None
+            or request.operation
+            not in {
+                OperationName.SOURCE_SYNC,
+                OperationName.SOURCE_RECONCILIATION,
+                OperationName.DATA_QUALITY_GATE,
+                OperationName.GOLD_ICEBERG_SNAPSHOT_PUBLISH,
+                OperationName.SHADOW_NAV_STEP,
+            }
+        ):
+            raise OrchestrationFailure(
+                "data incident repair is limited to the five-stage daily chain"
+            )
+        incident = self.production_ledger.get_incident(incident_id)
+        if incident is None:
+            raise OrchestrationFailure("data incident repair authority was not found")
+        if (
+            incident.status is not IncidentStatus.OPEN
+            or incident.partition_key != request.partition_key
+        ):
+            raise OrchestrationFailure(
+                "data incident repair requires its exact OPEN partition authority"
+            )
+        repair_fingerprint = self._incident_repair_fingerprint(
+            request, incident=incident
+        )
+        # ``repair_fingerprint`` is the durable repair cohort.  Dagster run IDs
+        # are individual execution attempts: after a worker/process crash a
+        # new Dagster run must be able to resume the same immutable successor
+        # chain instead of being permanently rejected by the first attempt ID.
+        repair_cohort_id = self._repair_cohort_id(
+            incident, repair_fingerprint
+        )
+        repair_validation_trade_date: str | None = None
+        if request.operation is OperationName.SHADOW_NAV_STEP:
+            existing_shadow = self.production_ledger.get_repair_authority(
+                incident.incident_id, "stage_shadow"
+            )
+            existing_shadow_record = (
+                None
+                if existing_shadow is None
+                else self.production_ledger.get_partition(
+                    existing_shadow.identity
+                )
+            )
+            if (
+                existing_shadow_record is not None
+                and existing_shadow_record.status
+                in {
+                    PartitionStatus.PENDING,
+                    PartitionStatus.RUNNING,
+                    PartitionStatus.SUCCEEDED,
+                }
+            ):
+                repair_validation_trade_date = str(
+                    existing_shadow_record.details.get(
+                        "repair_validation_trade_date"
+                    )
+                    or ""
+                ).strip()
+                try:
+                    repair_validation_trade_date = date.fromisoformat(
+                        repair_validation_trade_date
+                    ).isoformat()
+                except ValueError as exc:
+                    raise OrchestrationFailure(
+                        "active Shadow repair lacks its server-selected validation session"
+                    ) from exc
+            else:
+                validation_session = self._latest_complete_accepted_session()
+                previous_validation_session: date | None = None
+                if existing_shadow_record is not None:
+                    raw_previous_validation = str(
+                        existing_shadow_record.details.get(
+                            "repair_validation_trade_date"
+                        )
+                        or ""
+                    ).strip()
+                    if raw_previous_validation:
+                        try:
+                            previous_validation_session = date.fromisoformat(
+                                raw_previous_validation
+                            )
+                        except ValueError as exc:
+                            raise OrchestrationFailure(
+                                "failed Shadow repair has a malformed validation session"
+                            ) from exc
+                if validation_session < date.fromisoformat(
+                    incident.partition_key
+                ):
+                    raise OrchestrationFailure(
+                        "no post-incident accepted session is ready for Shadow validation"
+                    )
+                if (
+                    previous_validation_session is not None
+                    and validation_session <= previous_validation_session
+                ):
+                    raise OrchestrationFailure(
+                        "no newer accepted session is ready after the failed Shadow validation"
+                    )
+                repair_validation_trade_date = validation_session.isoformat()
+        authority = self.production_ledger.reserve_repair_successor(
+            incident_id=incident.incident_id,
+            dataset=dataset,
+            repair_fingerprint=repair_fingerprint,
+            created_at=self._now(),
+            details={
+                "cycle": request.cycle.value,
+                "operation": request.operation.value,
+                "dagster_run_id": request.run_id,
+                "repair_cohort_id": repair_cohort_id,
+                **(
+                    {}
+                    if repair_validation_trade_date is None
+                    else {
+                        "repair_validation_trade_date": (
+                            repair_validation_trade_date
+                        )
+                    }
+                ),
+                "authority_kind": "data_incident_repair",
+            },
+        )
+        stage_generations: dict[str, str] = {}
+        for stage_operation, stage_dataset in _PRODUCTION_STAGE_DATASETS.items():
+            selected = self.production_ledger.get_repair_authority(
+                incident.incident_id, stage_dataset
+            )
+            if selected is not None:
+                stage_generations[stage_operation.value] = (
+                    selected.identity.generation
+                )
+        repaired_request = replace(
+            request,
+            metadata={
+                **dict(request.metadata),
+                "repair_scope_key": authority.scope_key,
+                "repair_incident_id": incident.incident_id,
+                "repair_fingerprint": authority.repair_fingerprint,
+                "repair_generation": authority.identity.generation,
+                "repair_parent_partition_run_id": (
+                    authority.parent_partition_run_id
+                ),
+                "repair_authority_id": authority.authority_id,
+                "repair_cohort_id": repair_cohort_id,
+                "repair_stage_generations": stage_generations,
+                **(
+                    {}
+                    if repair_validation_trade_date is None
+                    else {
+                        "repair_validation_trade_date": (
+                            repair_validation_trade_date
+                        )
+                    }
+                ),
+            },
+        )
+        return self._execute_admitted(repaired_request)
+
     def execute_engineering_canary(
         self, request: OperationRequest
     ) -> OperationResult:
+        self._reject_external_repair_metadata(request)
         if request.operation is not OperationName.SOURCE_SYNC:
             raise OrchestrationFailure(
                 "engineering canary authority is limited to source synchronization"
@@ -1785,10 +2281,13 @@ class ApplicationServices(ResearchOSServices):
         return self._execute_admitted(request)
 
     def _execute_admitted(self, request: OperationRequest) -> OperationResult:
+        started_at = self._now()
+        request = self._prepare_generic_retry_request(
+            request, now=started_at
+        )
         run_id, run_type, input_fingerprint = self._operation_identity(
             request, request.operation
         )
-        started_at = self._now()
         stage_lease, ledger_cached = self._claim_production_stage(
             request, input_hash=input_fingerprint, now=started_at
         )
@@ -2008,15 +2507,69 @@ class ApplicationServices(ResearchOSServices):
                     source,
                     domain="factor-lab/research-os/v1/source-partition-input",
                 )
-                source_record = self.production_ledger.ensure_partition(
-                    source_identity,
-                    created_at=self._now(),
-                    input_hash=source_input_hash,
-                    details={
-                        "source_config_index": index,
-                        "dagster_run_id": request.run_id,
-                    },
+                base_source_identity = source_identity
+                source_record = self.production_ledger.get_partition(
+                    base_source_identity
                 )
+                if source_record is None:
+                    source_record = self.production_ledger.ensure_partition(
+                        base_source_identity,
+                        created_at=self._now(),
+                        input_hash=source_input_hash,
+                        details={
+                            "source_config_index": index,
+                            "dagster_run_id": request.run_id,
+                        },
+                    )
+                repair_scope = str(
+                    request.metadata.get("repair_scope_key") or ""
+                ).strip()
+                repair_incident_id = str(
+                    request.metadata.get("repair_incident_id") or ""
+                ).strip()
+                if repair_scope and (
+                    repair_incident_id
+                    or source_record.status
+                    in {
+                        PartitionStatus.FAILED,
+                        PartitionStatus.DISPUTED,
+                        PartitionStatus.QUARANTINED,
+                    }
+                ):
+                    child_authority = self.production_ledger.reserve_retry_successor(
+                        base_source_identity,
+                        repair_fingerprint=str(
+                            request.metadata["repair_fingerprint"]
+                        ),
+                        created_at=self._now(),
+                        input_hash=source_input_hash,
+                        details={
+                            "source_config_index": index,
+                            "dagster_run_id": request.run_id,
+                            "parent_stage_authority_id": request.metadata.get(
+                                "repair_authority_id"
+                            ),
+                        },
+                        scope_key=repair_scope,
+                        incident_id=(repair_incident_id or None),
+                        allow_succeeded_base=bool(repair_incident_id),
+                    )
+                    source_identity = child_authority.identity
+                    source_record = self.production_ledger.ensure_partition(
+                        source_identity,
+                        created_at=self._now(),
+                        input_hash=source_input_hash,
+                    )
+                elif source_record.input_hash not in {None, source_input_hash}:
+                    raise OrchestrationFailure(
+                        "source partition input changed without repair authority"
+                    )
+                elif source_record.input_hash is None:
+                    source_record = self.production_ledger.ensure_partition(
+                        source_identity,
+                        created_at=self._now(),
+                        input_hash=source_input_hash,
+                    )
                 if source_record.status is PartitionStatus.SUCCEEDED:
                     cached_output = source_record.details.get("source_output")
                     if not isinstance(cached_output, Mapping):
@@ -2169,6 +2722,11 @@ class ApplicationServices(ResearchOSServices):
                             "source_config_index": index,
                             "dagster_run_id": request.run_id,
                             "source_output": output,
+                            **{
+                                key: request.metadata[key]
+                                for key in sorted(_REPAIR_METADATA_KEYS)
+                                if key in request.metadata
+                            },
                         },
                     )
                 if non_blocking_sample:
@@ -2197,6 +2755,15 @@ class ApplicationServices(ResearchOSServices):
                                 if accepted_non_blocking_degradation
                                 else f"{type(exc).__name__}: {exc}"
                             ),
+                            details={
+                                "source_config_index": index,
+                                "dagster_run_id": request.run_id,
+                                **{
+                                    key: request.metadata[key]
+                                    for key in sorted(_REPAIR_METADATA_KEYS)
+                                    if key in request.metadata
+                                },
+                            },
                         )
                         failure_persisted = True
                     except ProductionLedgerError:
@@ -2818,11 +3385,12 @@ class ApplicationServices(ResearchOSServices):
             report.to_dict(),
         )
         if report.promotion_allowed and self.production_ledger is not None:
-            calendar_identity = PartitionIdentity(
+            base_calendar_identity = PartitionIdentity(
                 source_id="research_os",
                 dataset="accepted_trade_calendar",
                 partition_key=request.partition_key,
             )
+            calendar_identity = base_calendar_identity
             calendar_output = {
                 "partition_key": request.partition_key,
                 "silver_snapshot_id": silver.outputs["silver_snapshot_id"],
@@ -2835,14 +3403,67 @@ class ApplicationServices(ResearchOSServices):
                 calendar_output,
                 domain="factor-lab/research-os/v1/accepted-calendar-input",
             )
-            calendar_record = self.production_ledger.ensure_partition(
-                calendar_identity,
-                created_at=self._now(),
-                input_hash=calendar_input_hash,
-                details={"dagster_run_id": request.run_id},
+            calendar_record = self.production_ledger.get_partition(
+                base_calendar_identity
             )
+            if calendar_record is None:
+                calendar_record = self.production_ledger.ensure_partition(
+                    base_calendar_identity,
+                    created_at=self._now(),
+                    input_hash=calendar_input_hash,
+                    details={"dagster_run_id": request.run_id},
+                )
+            repair_scope = str(
+                request.metadata.get("repair_scope_key") or ""
+            ).strip()
+            repair_incident_id = str(
+                request.metadata.get("repair_incident_id") or ""
+            ).strip()
+            if repair_scope and (
+                repair_incident_id
+                or calendar_record.status
+                in {
+                    PartitionStatus.FAILED,
+                    PartitionStatus.DISPUTED,
+                    PartitionStatus.QUARANTINED,
+                }
+            ):
+                child_authority = self.production_ledger.reserve_retry_successor(
+                    base_calendar_identity,
+                    repair_fingerprint=str(
+                        request.metadata["repair_fingerprint"]
+                    ),
+                    created_at=self._now(),
+                    input_hash=calendar_input_hash,
+                    details={
+                        "dagster_run_id": request.run_id,
+                        "parent_stage_authority_id": request.metadata.get(
+                            "repair_authority_id"
+                        ),
+                    },
+                    scope_key=repair_scope,
+                    incident_id=(repair_incident_id or None),
+                    allow_succeeded_base=bool(repair_incident_id),
+                )
+                calendar_identity = child_authority.identity
+                calendar_record = self.production_ledger.ensure_partition(
+                    calendar_identity,
+                    created_at=self._now(),
+                    input_hash=calendar_input_hash,
+                )
+            elif calendar_record.input_hash not in {None, calendar_input_hash}:
+                raise OrchestrationFailure(
+                    "accepted calendar input changed without repair authority"
+                )
+            elif calendar_record.input_hash is None:
+                calendar_record = self.production_ledger.ensure_partition(
+                    calendar_identity,
+                    created_at=self._now(),
+                    input_hash=calendar_input_hash,
+                )
             if calendar_record.status is not PartitionStatus.SUCCEEDED:
                 if calendar_record.status in {
+                    PartitionStatus.FAILED,
                     PartitionStatus.DISPUTED,
                     PartitionStatus.QUARANTINED,
                 }:
@@ -2872,6 +3493,11 @@ class ApplicationServices(ResearchOSServices):
                     details={
                         "dagster_run_id": request.run_id,
                         "accepted_calendar": calendar_output,
+                        **{
+                            key: request.metadata[key]
+                            for key in sorted(_REPAIR_METADATA_KEYS)
+                            if key in request.metadata
+                        },
                     },
                 )
         status = "completed" if report.promotion_allowed else "blocked"
@@ -3208,13 +3834,36 @@ class ApplicationServices(ResearchOSServices):
             "occurred_at": occurred_at,
         }
 
+    def _durable_stage_failure_time(
+        self, partition_key: str, dataset: str
+    ) -> datetime:
+        if self.production_ledger is None:
+            raise OrchestrationFailure(
+                "production stage failure time requires the partition ledger"
+            )
+        record = self.production_ledger.get_partition(
+            PartitionIdentity("research_os", dataset, partition_key)
+        )
+        if record is None:
+            raise OrchestrationFailure(
+                "production stage failure has no durable partition identity"
+            )
+        return (
+            record.started_at
+            or record.updated_at
+            or record.created_at
+        ).astimezone(timezone.utc)
+
     def _shadow_nav_step(self, request: OperationRequest) -> OperationResult:
         blocked = self._blocked_daily_outcome_from_request(request)
         if blocked is not None:
             incident = self.report_unexpected_data_failure(
                 request.partition_key,
                 message=blocked["message"],
-                occurred_at=self._now(),
+                occurred_at=_parse_aware(
+                    blocked["occurred_at"],
+                    name="daily_data_outcome.occurred_at",
+                ),
                 dagster_run_id=request.run_id,
                 failed_step_key="shadow_account_nav:daily_data_outcome",
                 error_code=blocked["error_code"],
@@ -3247,6 +3896,11 @@ class ApplicationServices(ResearchOSServices):
         try:
             return self._authoritative_shadow_nav_step(request, shadow=shadow)
         except Exception as exc:
+            if request.metadata.get("repair_incident_id"):
+                # A repair attempt already belongs to one durable incident
+                # cohort.  Let its selected successor fail and be retried;
+                # minting a nested incident would fork the recovery authority.
+                raise
             if not self._is_production_runtime():
                 raise
             incident = self.report_unexpected_data_failure(
@@ -3255,7 +3909,9 @@ class ApplicationServices(ResearchOSServices):
                     "authoritative typed shadow closure failed: "
                     f"{type(exc).__name__}"
                 ),
-                occurred_at=self._now(),
+                occurred_at=self._durable_stage_failure_time(
+                    request.partition_key, "stage_shadow"
+                ),
                 dagster_run_id=request.run_id,
                 failed_step_key="shadow_account_nav:typed_execution_closure",
                 error_code="shadow_typed_execution_failed",
@@ -3585,13 +4241,224 @@ class ApplicationServices(ResearchOSServices):
             return None
         return {**dict(latest.payload), "occurred_at": latest.occurred_at}
 
+    def _validate_fresh_shadow_repair_projection(
+        self,
+        *,
+        incident_id: str,
+        trade_date: date,
+        projections: Sequence[Any],
+    ) -> None:
+        """Reject cached pre-repair account/session evidence before stage success."""
+
+        if self.production_ledger is None:
+            raise OrchestrationFailure(
+                "Shadow incident repair requires the production partition ledger"
+            )
+        gold_stage = self.production_ledger.get_repair_partition(
+            incident_id, "stage_gold"
+        )
+        if not (
+            gold_stage is not None
+            and gold_stage.status is PartitionStatus.SUCCEEDED
+            and gold_stage.completed_at is not None
+        ):
+            raise OrchestrationFailure(
+                "Shadow incident repair has no completed repaired Gold authority"
+            )
+        if self.shadow_authority is None:
+            raise OrchestrationFailure(
+                "Shadow incident repair lacks formal role authority"
+            )
+        try:
+            bindings = tuple(self.shadow_authority.active_fleet_bindings())
+        except Exception as exc:
+            raise OrchestrationFailure(
+                "Shadow incident repair cannot read active fleet authority"
+            ) from exc
+        binding_by_account = {
+            str(binding.account_id): binding for binding in bindings
+        }
+        if not (
+            bindings
+            and len(binding_by_account) == len(bindings)
+            and set(binding_by_account)
+            == {str(item.account_id) for item in projections}
+        ):
+            raise OrchestrationFailure(
+                "Shadow incident repair projection fleet differs from active bindings"
+            )
+
+        formal_projection_reader = getattr(
+            self.shadow_authority, "session_projection", None
+        )
+        fleet_closure_reader = getattr(
+            self.shadow_authority, "fleet_closure", None
+        )
+        if getattr(self, "_production_authority", False) and not (
+            callable(formal_projection_reader) and callable(fleet_closure_reader)
+        ):
+            raise OrchestrationFailure(
+                "production Shadow repair lacks formal session/closure readers"
+            )
+
+        formal_sessions: dict[str, Any] = {}
+        for projection in projections:
+            account_id = str(projection.account_id)
+            account = self.catalog.get_shadow_account(account_id)
+            if account is None or account.status != "active":
+                raise OrchestrationFailure(
+                    "Shadow incident repair account is not active"
+                )
+            reported_tail = (
+                int(projection.last_event_sequence),
+                str(projection.last_event_hash),
+            )
+            if (
+                account.last_event_sequence,
+                account.last_event_hash,
+            ) != reported_tail:
+                raise OrchestrationFailure(
+                    "Shadow incident repair did not finish at its projection tail"
+                )
+            event = self.catalog.get_shadow_event(
+                account_id=account_id,
+                event_hash=reported_tail[1],
+            )
+            if event is None or event.sequence_number != reported_tail[0]:
+                raise OrchestrationFailure(
+                    "Shadow incident repair projection event is not uniquely durable"
+                )
+            if not (
+                event.event_type == "account_projected"
+                and event.occurred_at.astimezone(_SHANGHAI).date() == trade_date
+                and event.occurred_at >= gold_stage.completed_at
+                and isinstance(
+                    event.payload.get("research_os_shadow_step"), Mapping
+                )
+                and event.payload["research_os_shadow_step"].get("kind")
+                == "account_projection"
+                and str(
+                    event.payload["research_os_shadow_step"].get("step_id") or ""
+                )
+                == str(projection.step_id)
+            ):
+                raise OrchestrationFailure(
+                    "Shadow incident repair recovered a pre-Gold or detached projection"
+                )
+
+            if getattr(self, "_production_authority", False):
+                try:
+                    formal = formal_projection_reader(
+                        account_id=account_id, trade_date=trade_date
+                    )
+                except Exception as exc:
+                    raise OrchestrationFailure(
+                        "Shadow incident repair formal session is invalid"
+                    ) from exc
+                binding = binding_by_account[account_id]
+                if not (
+                    formal is not None
+                    and formal.trade_date == trade_date
+                    and formal.role_binding_id == str(binding.binding_id)
+                    and formal.account_event_sequence == reported_tail[0]
+                    and formal.account_event_hash == reported_tail[1]
+                    and formal.decision_snapshot_id
+                    == projection.decision_snapshot_id
+                    and formal.execution_snapshot_id
+                    == projection.execution_snapshot_id
+                    and formal.mark_snapshot_id == projection.mark_snapshot_id
+                    and formal.rebalanced == bool(projection.rebalanced)
+                    and np.isclose(formal.cash, projection.cash, atol=0.01)
+                    and np.isclose(formal.nav, projection.nav, atol=0.01)
+                    and np.isclose(
+                        formal.benchmark_nav,
+                        projection.benchmark_nav,
+                        atol=0.01,
+                    )
+                    and formal.position_count == projection.position_count
+                    and formal.created_at >= event.occurred_at
+                ):
+                    raise OrchestrationFailure(
+                        "Shadow incident repair formal session differs from its account event"
+                    )
+                formal_sessions[account_id] = formal
+
+        if formal_sessions:
+            try:
+                closure = fleet_closure_reader(trade_date)
+            except Exception as exc:
+                raise OrchestrationFailure(
+                    "Shadow incident repair formal fleet closure is invalid"
+                ) from exc
+            expected_members = tuple(
+                sorted(
+                    (
+                        {
+                            "binding_id": str(binding_by_account[account_id].binding_id),
+                            "binding_hash": str(
+                                binding_by_account[account_id].binding_hash
+                            ),
+                            "role": (
+                                binding_by_account[account_id].role.value
+                                if isinstance(
+                                    binding_by_account[account_id].role, ShadowRole
+                                )
+                                else str(binding_by_account[account_id].role)
+                            ),
+                            "role_key": str(
+                                binding_by_account[account_id].role_key
+                            ),
+                            "account_id": account_id,
+                            "session_hash": formal_sessions[account_id].session_hash,
+                            "account_event_hash": formal_sessions[
+                                account_id
+                            ].account_event_hash,
+                        }
+                        for account_id in formal_sessions
+                    ),
+                    key=lambda member: (
+                        member["role"],
+                        member["role_key"],
+                        member["binding_id"],
+                    ),
+                )
+            )
+            if not (
+                closure is not None
+                and closure.trade_date == trade_date
+                and closure.members == expected_members
+                and closure.member_count == len(expected_members)
+                and closure.closed_at
+                >= max(item.created_at for item in formal_sessions.values())
+            ):
+                raise OrchestrationFailure(
+                    "Shadow incident repair lacks its exact immutable fleet closure"
+                )
+
     def _authoritative_shadow_nav_step(
         self,
         request: OperationRequest,
         *,
         shadow: Mapping[str, Any],
     ) -> OperationResult:
-        trade_date = _parse_date(request.partition_key, name="daily partition")
+        incident_repair = bool(request.metadata.get("repair_incident_id"))
+        validation_partition = str(
+            request.metadata.get("repair_validation_trade_date")
+            or request.partition_key
+        )
+        trade_date = _parse_date(
+            validation_partition,
+            name=(
+                "repair validation trade date"
+                if incident_repair
+                else "daily partition"
+            ),
+        )
+        execution_request = (
+            replace(request, partition_key=trade_date.isoformat())
+            if trade_date.isoformat() != request.partition_key
+            else request
+        )
         control = AuthoritativeChampionControl(
             self.catalog, shadow_authority=self.shadow_authority
         )
@@ -3607,11 +4474,14 @@ class ApplicationServices(ResearchOSServices):
         challenger_plans: tuple[DailyShadowPlan, ...] = ()
         challenger_authorities: dict[str, Any] = {}
         if challenger_planner is not None:
-            challenger_generated, challenger_generation_reason = (
-                self._current_challenger_target_generation(
-                    request, planner=challenger_planner
+            if not incident_repair:
+                challenger_generated, challenger_generation_reason = (
+                    self._current_challenger_target_generation(
+                        execution_request, planner=challenger_planner
+                    )
                 )
-            )
+            else:
+                challenger_generation_reason = "incident_repair_validation_only"
             try:
                 authorities = challenger_planner.active_authorities()
                 challenger_authorities = {
@@ -3802,6 +4672,12 @@ class ApplicationServices(ResearchOSServices):
                 raise OrchestrationFailure(
                     "formal daily control returned an unexpected projection count"
                 )
+            if incident_repair:
+                self._validate_fresh_shadow_repair_projection(
+                    incident_id=str(request.metadata["repair_incident_id"]),
+                    trade_date=trade_date,
+                    projections=daily_result.projections,
+                )
             executed = {
                 "projections": [
                     _jsonable(asdict(item)) for item in daily_result.projections
@@ -3812,9 +4688,13 @@ class ApplicationServices(ResearchOSServices):
                 ],
             }
 
-        generated, generation_reason = self._current_target_generation(
-            request, control=control
-        )
+        if incident_repair:
+            generated = None
+            generation_reason = "incident_repair_validation_only"
+        else:
+            generated, generation_reason = self._current_target_generation(
+                execution_request, control=control
+            )
         if executed is None and generated is None and not challenger_generated:
             return OperationResult(
                 operation=request.operation,
@@ -3822,6 +4702,14 @@ class ApplicationServices(ResearchOSServices):
                 summary="no executable or newly generated authoritative Champion target",
                 outputs={
                     "input_mode": "authoritative_pg",
+                    **(
+                        {
+                            "incident_partition_key": request.partition_key,
+                            "validation_trade_date": trade_date.isoformat(),
+                        }
+                        if incident_repair
+                        else {}
+                    ),
                     "generation_reason": generation_reason,
                     "challenger_generation_reason": challenger_generation_reason,
                 },
@@ -3836,6 +4724,14 @@ class ApplicationServices(ResearchOSServices):
             ),
             outputs={
                 "input_mode": "authoritative_pg",
+                **(
+                    {
+                        "incident_partition_key": request.partition_key,
+                        "validation_trade_date": trade_date.isoformat(),
+                    }
+                    if incident_repair
+                    else {}
+                ),
                 "executed": executed,
                 "generated_target": (
                     None if generated is None else generated.to_dict()
@@ -3903,12 +4799,14 @@ class ApplicationServices(ResearchOSServices):
     def _record_from_catalog(
         self, sleeve_id: str, bootstrap: Mapping[str, Any]
     ) -> SleeveLifecycleRecord:
+        record: SleeveLifecycleRecord | None = None
         lifecycle_events = self.catalog.iter_lifecycle_events(sleeve_id=sleeve_id)
         try:
             for event in lifecycle_events:
                 persisted = event.evidence.get("record")
                 if isinstance(persisted, Mapping):
-                    return self._lifecycle_record(persisted)
+                    record = self._lifecycle_record(persisted)
+                    break
         finally:
             close = getattr(lifecycle_events, "close", None)
             if close is not None:
@@ -3917,14 +4815,22 @@ class ApplicationServices(ResearchOSServices):
         # Compatibility bootstrap for sleeves not yet imported into the new
         # catalog.  Only durable identity/state/weights are admitted.  Runtime
         # counters and dormant dates from the old JSON are deliberately ignored.
-        return SleeveLifecycleRecord(
-            sleeve_id=sleeve_id,
-            state=SleeveState(
-                str(bootstrap.get("state") or SleeveState.PROPOSED.value)
-            ),
-            target_weight=float(bootstrap.get("target_weight", 0.0)),
-            effective_weight=float(bootstrap.get("effective_weight", 0.0)),
-        )
+        if record is None:
+            record = SleeveLifecycleRecord(
+                sleeve_id=sleeve_id,
+                state=SleeveState(
+                    str(bootstrap.get("state") or SleeveState.PROPOSED.value)
+                ),
+                target_weight=float(bootstrap.get("target_weight", 0.0)),
+                effective_weight=float(bootstrap.get("effective_weight", 0.0)),
+            )
+        if self._has_open_data_incident():
+            return replace(
+                record,
+                state=SleeveState.FROZEN_DATA,
+                effective_weight=0.0,
+            )
+        return record
 
     def _shadow_sessions_since(
         self, account_id: str | None, since: date | None, as_of: date
@@ -5445,8 +6351,23 @@ class ApplicationServices(ResearchOSServices):
             return self._poll_recovery_sla(cursor)
         return TriggerPoll(cursor=cursor, message=f"unknown sensor {sensor_name!r}")
 
+    def _has_open_data_incident(self) -> bool:
+        ledger = getattr(self, "production_ledger", None)
+        iter_incidents = getattr(ledger, "iter_incidents", None)
+        if not callable(iter_incidents):
+            return False
+        incidents = iter_incidents(status=IncidentStatus.OPEN)
+        try:
+            return next(incidents, None) is not None
+        finally:
+            close = getattr(incidents, "close", None)
+            if close is not None:
+                close()
+
     def _production_lifecycle_fleet(
         self,
+        *,
+        overlay_open_incidents: bool = True,
     ) -> tuple[tuple[SleeveLifecycleRecord, ...], dict[str, tuple[str, ...]]]:
         if self.sleeve_roster is None:
             raise OrchestrationFailure(
@@ -5468,6 +6389,15 @@ class ApplicationServices(ResearchOSServices):
             raise OrchestrationFailure(
                 "production incident handling found no registered lifecycle records"
             )
+        if overlay_open_incidents and self._has_open_data_incident():
+            records = [
+                replace(
+                    record,
+                    state=SleeveState.FROZEN_DATA,
+                    effective_weight=0.0,
+                )
+                for record in records
+            ]
         # A data failure freezes the entire research fleet.  Every open shadow
         # account therefore receives the same cash intent; actual positions
         # remain unchanged until a trusted priced execution consumes it.
@@ -5497,9 +6427,13 @@ class ApplicationServices(ResearchOSServices):
                 DataPipelineStage.DATA_QUALITY,
             ),
             ("stage_gold", IncidentStage.GOLD, DataPipelineStage.GOLD),
+            (
+                "stage_shadow",
+                IncidentStage.SHADOW_EXECUTION,
+                DataPipelineStage.SHADOW_EXECUTION,
+            ),
         )
         completed_hashes: list[str] = []
-        latest_partition_run_id: str | None = None
         for dataset, incident_stage, pipeline_stage in order:
             identity = PartitionIdentity(
                 source_id="research_os",
@@ -5507,26 +6441,94 @@ class ApplicationServices(ResearchOSServices):
                 partition_key=partition_key,
             )
             record = self.production_ledger.get_partition(identity)
+            retry_selector = getattr(
+                self.production_ledger, "get_retry_partition", None
+            )
+            retry_record = (
+                retry_selector(identity) if callable(retry_selector) else None
+            )
+            if retry_record is not None:
+                record = retry_record
             if record is None or record.status is not PartitionStatus.SUCCEEDED:
                 return (
                     incident_stage,
                     pipeline_stage,
-                    None if record is None else identity.partition_run_id,
+                    (
+                        identity.partition_run_id
+                        if record is None
+                        else record.identity.partition_run_id
+                    ),
                     tuple(completed_hashes),
                 )
-            latest_partition_run_id = identity.partition_run_id
             if record.output_hash:
                 completed_hashes.append(record.output_hash)
-        if require_incomplete:
-            raise OrchestrationFailure(
-                "daily data outcome claimed a failure but every durable stage succeeded"
-            )
-        return (
-            IncidentStage.GOLD,
-            DataPipelineStage.GOLD,
-            latest_partition_run_id,
-            tuple(completed_hashes),
+        raise NonDataPipelineFailure(
+            "daily data outcome claimed a failure but every durable stage succeeded"
         )
+
+    def resume_pending_incident_controls(
+        self,
+        *,
+        worker_id: str,
+        limit: int = 100,
+        lease_for: timedelta = timedelta(minutes=5),
+    ) -> Mapping[str, Any]:
+        """Replay crash-left incident controls from their durable origin only."""
+
+        if self.production_ledger is None:
+            raise OrchestrationFailure(
+                "incident control resume requires the PostgreSQL ledger"
+            )
+
+        def materialize(authority: IncidentRecord) -> Mapping[str, Any]:
+            payload = dict(authority.payload)
+            payload.pop("resolution", None)
+            dagster_run_id = str(payload.get("dagster_run_id") or "").strip()
+            failed_step_key = str(payload.get("failed_step_key") or "").strip()
+            domain_incident_id = str(
+                payload.get("domain_incident_id") or ""
+            ).strip()
+            if not (dagster_run_id and failed_step_key and domain_incident_id):
+                raise OrchestrationFailure(
+                    "incident control action lacks a formal durable origin"
+                )
+            pipeline_stage = DataPipelineStage(authority.stage.value)
+            return self.report_unexpected_data_failure(
+                authority.partition_key,
+                message=authority.message,
+                occurred_at=authority.occurred_at,
+                dagster_run_id=dagster_run_id,
+                failed_step_key=failed_step_key,
+                error_code=authority.error_code,
+                expected_failure_stage=pipeline_stage,
+                _locked_authority=authority,
+                _failure_context=(
+                    authority.stage,
+                    pipeline_stage,
+                    authority.partition_run_id,
+                    authority.evidence_hashes,
+                    (
+                        None
+                        if payload.get("failed_partition_input_hash") is None
+                        else str(payload["failed_partition_input_hash"])
+                    ),
+                ),
+                _was_preexisting=True,
+            )
+
+        completed = self.production_ledger.resume_incident_controls(
+            owner=worker_id,
+            apply_effects=materialize,
+            limit=limit,
+            lease_for=lease_for,
+        )
+        return {
+            "status": "completed",
+            "worker_id": worker_id,
+            "completed_count": len(completed),
+            "action_ids": [item.action_id for item in completed],
+            "incident_ids": [item.incident_id for item in completed],
+        }
 
     def report_unexpected_data_failure(
         self,
@@ -5538,12 +6540,25 @@ class ApplicationServices(ResearchOSServices):
         failed_step_key: str,
         error_code: str = "dagster_run_failure",
         expected_failure_stage: DataPipelineStage | str | None = None,
+        _locked_authority: IncidentRecord | None = None,
+        _failure_context: tuple[
+            IncidentStage,
+            DataPipelineStage,
+            str | None,
+            tuple[str, ...],
+            str | None,
+        ]
+        | None = None,
+        _was_preexisting: bool = False,
     ) -> Mapping[str, Any]:
         """Freeze the fleet from durable PG stage facts after an unexpected run failure."""
 
         if occurred_at.tzinfo is None or occurred_at.utcoffset() is None:
             raise ValueError("occurred_at must include a timezone")
-        if not dagster_run_id.strip() or not failed_step_key.strip():
+        normalized_partition_key = str(partition_key or "").strip()
+        normalized_dagster_run_id = dagster_run_id.strip()
+        normalized_failed_step_key = failed_step_key.strip()
+        if not normalized_dagster_run_id or not normalized_failed_step_key:
             raise ValueError("dagster_run_id and failed_step_key are required")
         if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,159}", error_code):
             raise ValueError("error_code contains unsupported characters or length")
@@ -5556,90 +6571,328 @@ class ApplicationServices(ResearchOSServices):
             raise OrchestrationFailure(
                 "production data failures require the PostgreSQL incident ledger"
             )
-        open_incidents = self.production_ledger.iter_incidents(
-            status=IncidentStatus.OPEN
-        )
-        try:
-            existing = next(
-                (
-                    item
-                    for item in open_incidents
-                    if item.partition_key == partition_key
-                ),
-                None,
+        if _failure_context is None:
+            incident_stage, pipeline_stage, partition_run_id, evidence = (
+                self._infer_failed_data_stage(
+                    normalized_partition_key,
+                    require_incomplete=expected_stage is not None,
+                )
             )
-        finally:
-            close = getattr(open_incidents, "close", None)
-            if close is not None:
-                close()
-        if existing is not None:
-            return {
-                "incident_id": existing.incident_id,
-                "domain_incident_id": existing.payload.get("domain_incident_id"),
-                "stage": existing.stage.value,
-                "partition_key": partition_key,
-                "cash_intent_accounts": [],
-                "reused": True,
-            }
-        incident_stage, pipeline_stage, partition_run_id, evidence = (
-            self._infer_failed_data_stage(
-                partition_key,
-                require_incomplete=expected_stage is not None,
+            failed_stage_record = self.production_ledger.get_partition_by_run_id(
+                partition_run_id
             )
-        )
+            failed_input_hash = (
+                None
+                if failed_stage_record is None
+                else failed_stage_record.input_hash
+            )
+        else:
+            (
+                incident_stage,
+                pipeline_stage,
+                partition_run_id,
+                evidence,
+                failed_input_hash,
+            ) = _failure_context
         if expected_stage is not None and pipeline_stage is not expected_stage:
             raise OrchestrationFailure(
                 "daily data outcome stage differs from the durable PostgreSQL failure"
             )
         safe_message = sanitize_operational_text(message)
-        lifecycle_records, shadow_accounts = self._production_lifecycle_fleet()
+        normalized_occurred_at = occurred_at.astimezone(timezone.utc)
+        if normalized_occurred_at > self.catalog.database_now():
+            raise OrchestrationFailure(
+                "data incident timestamp is after the database clock"
+            )
+        outcome = DailyDataOutcome(
+            partition_key=normalized_partition_key,
+            status=DailyDataStatus.BLOCKED,
+            occurred_at=normalized_occurred_at,
+            failure_stage=pipeline_stage,
+            error_code=error_code,
+            message=safe_message,
+            evidence_hashes=evidence,
+        )
+        domain_incident = outcome.to_incident()
+        normalized_evidence = domain_incident.evidence_hashes
+        incident_payload = {
+            "dagster_run_id": normalized_dagster_run_id,
+            "failed_step_key": normalized_failed_step_key,
+            "domain_incident_id": domain_incident.incident_id,
+            "failed_partition_input_hash": failed_input_hash,
+        }
+        expected_incident_hash = content_fingerprint(
+            {
+                "partition_key": normalized_partition_key,
+                "stage": incident_stage.value,
+                "error_code": error_code,
+                "occurred_at": normalized_occurred_at,
+                "partition_run_id": partition_run_id,
+                "source_ids": (),
+                "evidence_hashes": normalized_evidence,
+                "payload": incident_payload,
+            },
+            domain="factor-lab/research-os/v1/data-incident",
+        )
+        expected_incident_id = f"incident_{expected_incident_hash[:64]}"
+        controls_locked = _locked_authority is not None
+        preexisting = None
+        if not controls_locked:
+            incidents = self.production_ledger.iter_incidents()
+            try:
+                observed_incidents = tuple(incidents)
+            finally:
+                close = getattr(incidents, "close", None)
+                if close is not None:
+                    close()
+            preexisting = next(
+                (
+                    item
+                    for item in observed_incidents
+                    if item.incident_id == expected_incident_id
+                ),
+                None,
+            )
+            same_run_incidents = tuple(
+                item
+                for item in observed_incidents
+                if item.partition_key == normalized_partition_key
+                and str(item.payload.get("dagster_run_id") or "").strip()
+                == normalized_dagster_run_id
+            )
+            if any(
+                item.incident_id != expected_incident_id
+                for item in same_run_incidents
+            ):
+                # The daily de-risk path can intentionally persist an incident
+                # and then make daily_integrity fail the Dagster run.  Its
+                # failure sensor is secondary notification for the same run,
+                # not authority to mint a second incident with a new step key.
+                raise NonDataPipelineFailure(
+                    "Dagster run already has a durable data incident for this partition"
+                )
+
+            ledger_incident = self.production_ledger.record_incident(
+                partition_key=normalized_partition_key,
+                stage=incident_stage,
+                error_code=error_code,
+                message=safe_message,
+                occurred_at=normalized_occurred_at,
+                partition_run_id=partition_run_id,
+                evidence_hashes=normalized_evidence,
+                payload=incident_payload,
+            )
+        else:
+            assert _locked_authority is not None
+            ledger_incident = _locked_authority
+
+        def origin_is_intact(item: Any) -> bool:
+            origin_payload = dict(item.payload)
+            origin_payload.pop("resolution", None)
+            return bool(
+                item.incident_id == expected_incident_id
+                and item.incident_hash == expected_incident_hash
+                and item.partition_key == normalized_partition_key
+                and item.stage is incident_stage
+                and item.error_code == error_code
+                and item.message == safe_message
+                and item.occurred_at == normalized_occurred_at
+                and item.partition_run_id == partition_run_id
+                and item.source_ids == ()
+                and item.evidence_hashes == normalized_evidence
+                and origin_payload == incident_payload
+            )
+
+        if not origin_is_intact(ledger_incident):
+            raise OrchestrationFailure(
+                "production data incident identity differs from its durable origin"
+            )
+        if ledger_incident.status is not IncidentStatus.OPEN:
+            raise OrchestrationFailure(
+                "exact production data incident is already terminal"
+            )
+
+        # A Dagster process can die after claiming a production stage but
+        # before its handler reaches the normal terminal CAS.  Bind the exact
+        # OPEN incident's durable run/step origin to that abandoned lease now;
+        # this fences the old token and gives repair generation selection an
+        # immutable FAILED parent.  Existing handler-written terminal rows are
+        # returned unchanged.
+        self.production_ledger.terminalize_incident_partition(
+            ledger_incident.incident_id
+        )
+
+        if not controls_locked:
+            failure_context = (
+                incident_stage,
+                pipeline_stage,
+                partition_run_id,
+                evidence,
+                failed_input_hash,
+            )
+            with self.production_ledger.incident_control_guard(
+                expected_incident_id
+            ) as locked_authority:
+                return self.report_unexpected_data_failure(
+                    partition_key,
+                    message=message,
+                    occurred_at=occurred_at,
+                    dagster_run_id=dagster_run_id,
+                    failed_step_key=failed_step_key,
+                    error_code=error_code,
+                    expected_failure_stage=expected_failure_stage,
+                    _locked_authority=locked_authority,
+                    _failure_context=failure_context,
+                    _was_preexisting=preexisting is not None,
+                )
+
+        lifecycle_records, shadow_accounts = self._production_lifecycle_fleet(
+            overlay_open_incidents=False
+        )
+        cash_intent = CashTargetIntent.for_incident(domain_incident)
+        expected_lifecycle_evidence = {
+            "data_incident": domain_incident.to_dict(),
+            "cash_target_intent": cash_intent.to_dict(),
+        }
+
+        def exact_lifecycle_event(sleeve_id: str) -> LifecycleEvent | None:
+            expected_key = (
+                f"data-incident:{domain_incident.incident_id}:{sleeve_id}"
+            )
+            events = self.catalog.iter_lifecycle_events(
+                sleeve_id=sleeve_id,
+                cause="data_integrity_failure",
+            )
+            try:
+                event = next(
+                    (
+                        item
+                        for item in events
+                        if item.idempotency_key == expected_key
+                    ),
+                    None,
+                )
+            finally:
+                close = getattr(events, "close", None)
+                if close is not None:
+                    close()
+            if event is None:
+                return None
+            if not (
+                event.sleeve_id == sleeve_id
+                and event.to_state is LifecycleState.FROZEN_DATA
+                and event.cause == "data_integrity_failure"
+                and event.occurred_at >= normalized_occurred_at
+                and canonical_json(event.evidence)
+                == canonical_json(expected_lifecycle_evidence)
+            ):
+                raise OrchestrationFailure(
+                    "production data incident lifecycle evidence is inconsistent"
+                )
+            return event
+
+        replay_records: list[SleeveLifecycleRecord] = []
+        for record in lifecycle_records:
+            prior_event = exact_lifecycle_event(record.sleeve_id)
+            replay_records.append(
+                record
+                if prior_event is None or prior_event.from_state is None
+                else replace(
+                    record,
+                    state=SleeveState(prior_event.from_state.value),
+                )
+            )
+
         control_result = ProductionDailyControl(
             self.catalog, shadow_authority=self.shadow_authority
         ).run(
-            outcome=DailyDataOutcome(
-                partition_key=partition_key,
-                status=DailyDataStatus.BLOCKED,
-                occurred_at=occurred_at,
-                failure_stage=pipeline_stage,
-                error_code=error_code,
-                message=safe_message,
-                evidence_hashes=evidence,
-            ),
-            lifecycle_records=lifecycle_records,
+            outcome=outcome,
+            lifecycle_records=tuple(replay_records),
             shadow_accounts=shadow_accounts,
         )
-        ledger_incident = self.production_ledger.record_incident(
-            partition_key=partition_key,
-            stage=incident_stage,
-            error_code=error_code,
-            message=safe_message,
-            occurred_at=occurred_at,
-            partition_run_id=partition_run_id,
-            evidence_hashes=evidence,
-            payload={
-                "dagster_run_id": dagster_run_id,
-                "failed_step_key": failed_step_key,
-                "domain_incident_id": (
-                    None
-                    if control_result.incident is None
-                    else control_result.incident.incident.incident_id
-                ),
-            },
+        if control_result.incident is None:
+            raise OrchestrationFailure(
+                "blocked production data outcome did not create incident controls"
+            )
+
+        for record in lifecycle_records:
+            if exact_lifecycle_event(record.sleeve_id) is None:
+                raise OrchestrationFailure(
+                    "production data incident lifecycle evidence is missing"
+                )
+            state = self.catalog.latest_lifecycle_state(record.sleeve_id)
+            if state is not LifecycleState.FROZEN_DATA:
+                raise OrchestrationFailure(
+                    "open production data incident does not freeze the current fleet"
+                )
+        account_ids = tuple(
+            sorted(
+                {
+                    str(account_id)
+                    for accounts in shadow_accounts.values()
+                    for account_id in accounts
+                }
+            )
         )
+        missing_cash_intents: list[str] = []
+        for account_id in account_ids:
+            cash_events = self.catalog.iter_shadow_events_by_type(
+                account_id=account_id,
+                event_type="cash_target_intent",
+                since=None,
+                through=None,
+            )
+            try:
+                has_matching_intent = any(
+                    str(event.payload.get("incident_id") or "")
+                    == domain_incident.incident_id
+                    and str(event.payload.get("intent_id") or "")
+                    == cash_intent.intent_id
+                    and canonical_json(event.payload)
+                    == canonical_json(cash_intent.to_dict())
+                    for event in cash_events
+                )
+            finally:
+                close = getattr(cash_events, "close", None)
+                if close is not None:
+                    close()
+            if not has_matching_intent:
+                missing_cash_intents.append(account_id)
+        if missing_cash_intents:
+            raise OrchestrationFailure(
+                "open production data incident lacks current fleet cash intents"
+            )
+
+        final_incidents = self.production_ledger.iter_incidents()
+        try:
+            final_authority = next(
+                (
+                    item
+                    for item in final_incidents
+                    if item.incident_id == expected_incident_id
+                ),
+                None,
+            )
+        finally:
+            close = getattr(final_incidents, "close", None)
+            if close is not None:
+                close()
+        if final_authority is None or not origin_is_intact(final_authority):
+            raise OrchestrationFailure(
+                "production data incident lost its durable origin authority"
+            )
+        if final_authority.status is not IncidentStatus.OPEN:
+            raise OrchestrationFailure(
+                "production data incident was terminalized during control recovery"
+            )
+
         return {
-            "incident_id": ledger_incident.incident_id,
-            "domain_incident_id": (
-                None
-                if control_result.incident is None
-                else control_result.incident.incident.incident_id
-            ),
+            "incident_id": final_authority.incident_id,
+            "domain_incident_id": domain_incident.incident_id,
             "stage": incident_stage.value,
-            "partition_key": partition_key,
-            "cash_intent_accounts": (
-                []
-                if control_result.incident is None
-                else list(control_result.incident.shadow_account_ids)
-            ),
+            "partition_key": normalized_partition_key,
+            "cash_intent_accounts": list(account_ids),
+            "reused": _was_preexisting,
         }
 
     @staticmethod
@@ -6549,14 +7802,16 @@ class ApplicationServices(ResearchOSServices):
                 )
             raise
 
-    def revalidate_data_incident(
-        self,
-        *,
-        incident_id: str,
-        snapshot_id: str,
-        occurred_at: datetime,
+    def revalidate_ready_data_incident(
+        self, *, incident_id: str
     ) -> Mapping[str, Any]:
-        """Resolve one PG incident only through matching accepted Gold evidence."""
+        """Resume or start revalidation from durable repair evidence only.
+
+        The operator supplies only the production incident identity.  Gold,
+        the database clock, and any partially committed revalidation request
+        are reconstructed from PostgreSQL/catalog authority so a crash retry
+        cannot accidentally mint a second request timestamp.
+        """
 
         if self.production_ledger is None:
             raise OrchestrationFailure(
@@ -6575,50 +7830,2052 @@ class ApplicationServices(ResearchOSServices):
         if incident is None:
             raise OrchestrationFailure("data incident was not found")
         if incident.status is not IncidentStatus.OPEN:
-            raise OrchestrationFailure("only an open data incident can be revalidated")
+            stored_resolution = incident.payload.get("resolution")
+            stored_snapshot_id = (
+                ""
+                if not isinstance(stored_resolution, Mapping)
+                else str(stored_resolution.get("snapshot_id") or "").strip()
+            )
+            if incident.resolved_at is None or not stored_snapshot_id:
+                raise OrchestrationFailure(
+                    "terminal data incident lacks immutable revalidation evidence"
+                )
+            return self.revalidate_data_incident(
+                incident_id=incident.incident_id,
+                snapshot_id=stored_snapshot_id,
+                occurred_at=incident.resolved_at,
+            )
+
+        domain_incident_id = str(
+            incident.payload.get("domain_incident_id") or ""
+        ).strip()
+        shadow_partition = self.production_ledger.get_repair_partition(
+            incident.incident_id, "stage_shadow"
+        )
+        if not (
+            shadow_partition is not None
+            and shadow_partition.status is PartitionStatus.SUCCEEDED
+            and shadow_partition.completed_at is not None
+        ):
+            raise OrchestrationFailure(
+                "data incident is waiting for a completed fresh Shadow session"
+            )
+        shadow_completed_at = shadow_partition.completed_at
+        partial_evidence: list[Mapping[str, Any]] = []
+
+        def admit_partial_evidence(value: Mapping[str, Any]) -> None:
+            evidence = dict(value)
+            if str(evidence.get("incident_id") or "") != domain_incident_id:
+                return
+            try:
+                occurred = _parse_aware(
+                    evidence.get("occurred_at"),
+                    name="partial revalidation occurred_at",
+                ).astimezone(timezone.utc)
+            except (TypeError, ValueError):
+                return
+            # A typed Shadow rejection supersedes every effect from the stale
+            # attempt.  Only evidence created after the *current* succeeded
+            # Shadow leaf may pin this attempt's immutable request time.
+            if occurred >= shadow_completed_at:
+                partial_evidence.append(evidence)
+
+        events = self.catalog.iter_lifecycle_events(
+            cause="data_revalidation_passed"
+        )
+        try:
+            for event in events:
+                admit_partial_evidence(dict(event.evidence or {}))
+        finally:
+            close = getattr(events, "close", None)
+            if close is not None:
+                close()
+
+        # Account effects are intentionally persisted before lifecycle effects.
+        # A crash between those phases must still recover the exact request
+        # rather than minting a second timestamp on the same Shadow session.
+        if self.shadow_authority is not None:
+            try:
+                recovery_bindings = self.shadow_authority.active_fleet_bindings()
+            except Exception as exc:
+                raise OrchestrationFailure(
+                    "data incident cannot read the revalidation recovery fleet"
+                ) from exc
+            for binding in recovery_bindings:
+                shadow_events = self.catalog.iter_shadow_events_by_type(
+                    account_id=str(binding.account_id),
+                    event_type="data_revalidated",
+                    since=shadow_completed_at,
+                    through=None,
+                    batch_size=500,
+                )
+                try:
+                    for event in shadow_events:
+                        admit_partial_evidence(dict(event.payload or {}))
+                finally:
+                    close = getattr(shadow_events, "close", None)
+                    if close is not None:
+                        close()
+
+        if partial_evidence:
+            canonical = {
+                canonical_json(evidence) for evidence in partial_evidence
+            }
+            if len(canonical) != 1:
+                raise OrchestrationFailure(
+                    "partial data revalidation evidence is inconsistent"
+                )
+            durable_request = partial_evidence[0]
+            snapshot_id = str(durable_request.get("snapshot_id") or "").strip()
+            revalidated_at = _parse_aware(
+                durable_request.get("occurred_at"),
+                name="partial revalidation occurred_at",
+            ).astimezone(timezone.utc)
+        else:
+            gold_partition = self.production_ledger.get_repair_partition(
+                incident.incident_id,
+                "stage_gold",
+            )
+            if (
+                gold_partition is None
+                or gold_partition.status is not PartitionStatus.SUCCEEDED
+                or not gold_partition.output_snapshot_id
+            ):
+                raise OrchestrationFailure(
+                    "data incident has no completed repaired Gold partition"
+                )
+            snapshot_id = str(gold_partition.output_snapshot_id)
+            revalidated_at = self.catalog.database_now()
+
+        try:
+            return self.revalidate_data_incident(
+                incident_id=incident.incident_id,
+                snapshot_id=snapshot_id,
+                occurred_at=revalidated_at,
+            )
+        except RetryableShadowRepairEvidence as exc:
+            gold_partition = self.production_ledger.get_repair_partition(
+                incident.incident_id, "stage_gold"
+            )
+            if not (
+                shadow_partition is not None
+                and shadow_partition.status is PartitionStatus.SUCCEEDED
+                and isinstance(shadow_partition.output_hash, str)
+                and gold_partition is not None
+                and gold_partition.status is PartitionStatus.SUCCEEDED
+                and isinstance(gold_partition.output_hash, str)
+            ):
+                raise OrchestrationFailure(
+                    "retryable Shadow rejection lost its succeeded repair authority"
+                ) from exc
+            bindings = (
+                ()
+                if self.shadow_authority is None
+                else tuple(self.shadow_authority.active_fleet_bindings())
+            )
+            fleet_tails = []
+            for binding in bindings:
+                account = self.catalog.get_shadow_account(str(binding.account_id))
+                if account is None:
+                    raise OrchestrationFailure(
+                        "retryable Shadow rejection lost an active account"
+                    ) from exc
+                fleet_tails.append(
+                    {
+                        "binding_id": str(binding.binding_id),
+                        "binding_hash": str(binding.binding_hash),
+                        "account_id": str(binding.account_id),
+                        "last_event_sequence": account.last_event_sequence,
+                        "last_event_hash": account.last_event_hash,
+                    }
+                )
+            rejection_evidence_hash = content_fingerprint(
+                {
+                    "incident_id": incident.incident_id,
+                    "incident_hash": incident.incident_hash,
+                    "gold_partition_run_id": (
+                        gold_partition.identity.partition_run_id
+                    ),
+                    "gold_output_hash": gold_partition.output_hash,
+                    "shadow_partition_run_id": (
+                        shadow_partition.identity.partition_run_id
+                    ),
+                    "shadow_output_hash": shadow_partition.output_hash,
+                    "repair_validation_trade_date": shadow_partition.details.get(
+                        "repair_validation_trade_date"
+                    ),
+                    "fleet_tails": sorted(
+                        fleet_tails,
+                        key=lambda item: (
+                            item["binding_id"], item["account_id"]
+                        ),
+                    ),
+                },
+                domain="factor-lab/research-os/v1/shadow-revalidation-failure-evidence",
+            )
+            try:
+                self.production_ledger.record_shadow_revalidation_rejection(
+                    incident_id=incident.incident_id,
+                    rejected_partition_run_id=(
+                        shadow_partition.identity.partition_run_id
+                    ),
+                    rejection_evidence_hash=rejection_evidence_hash,
+                )
+            except ProductionLedgerError as ledger_exc:
+                raise OrchestrationFailure(
+                    "retryable Shadow rejection could not persist its immutable successor"
+                ) from ledger_exc
+            raise OrchestrationFailure(
+                "Shadow repair evidence advanced; recorded a typed rejection and "
+                "waiting for a newer accepted session"
+            ) from exc
+
+    def revalidate_data_incident(
+        self,
+        *,
+        incident_id: str,
+        snapshot_id: str,
+        occurred_at: datetime,
+    ) -> Mapping[str, Any]:
+        """Close one data incident through its exact post-failure Gold lineage.
+
+        Incident terminalization is serialized in PostgreSQL.  Catalog writes
+        remain independently committed, so every lifecycle and shadow effect
+        is content-addressed and replayable: a process may die after those
+        writes and the next invocation will validate and fill the missing
+        suffix before the incident can become terminal.
+        """
+
+        if self.production_ledger is None:
+            raise OrchestrationFailure(
+                "data incident revalidation requires the PostgreSQL ledger"
+            )
         if occurred_at.tzinfo is None or occurred_at.utcoffset() is None:
             raise ValueError("occurred_at must include a timezone")
-        if occurred_at < incident.occurred_at:
+        revalidated_at = occurred_at.astimezone(timezone.utc)
+        if (
+            getattr(self.catalog, "_backend", None).__class__.__name__
+            == "_SQLAlchemyCatalog"
+            and revalidated_at > self.catalog.database_now()
+        ):
+            raise OrchestrationFailure(
+                "data incident revalidation timestamp is after the database clock"
+            )
+
+        incidents = self.production_ledger.iter_incidents()
+        try:
+            incident = next(
+                (item for item in incidents if item.incident_id == incident_id),
+                None,
+            )
+        finally:
+            close = getattr(incidents, "close", None)
+            if close is not None:
+                close()
+        if incident is None:
+            raise OrchestrationFailure("data incident was not found")
+        if revalidated_at < incident.occurred_at:
             raise ValueError("revalidation cannot predate the data incident")
+        # A terminal retry is an idempotent replay of immutable authority.  Fail
+        # a caller-supplied timestamp mismatch before inspecting mutable fleet
+        # state: legitimate account events may have advanced after resolution,
+        # but they must not obscure the authoritative terminal timestamp.
+        if (
+            incident.status is not IncidentStatus.OPEN
+            and incident.resolved_at != revalidated_at
+        ):
+            raise OrchestrationFailure(
+                "terminal revalidation retry timestamp differs from authority"
+            )
+        if incident.status is IncidentStatus.OPEN:
+            control_action = self.production_ledger.incident_controls.get(
+                incident.incident_id
+            )
+            if (
+                control_action is None
+                or control_action.status
+                is not IncidentControlActionStatus.SUCCEEDED
+            ):
+                raise OrchestrationFailure(
+                    "data incident controls are not durably materialized"
+                )
+
+        def validated_domain_incident(
+            item: IncidentRecord, *, current: bool
+        ) -> DataIncident:
+            origin_payload = dict(item.payload)
+            resolution = origin_payload.pop("resolution", None)
+            expected_hash = content_fingerprint(
+                {
+                    "partition_key": item.partition_key,
+                    "stage": item.stage.value,
+                    "error_code": item.error_code,
+                    "occurred_at": item.occurred_at,
+                    "partition_run_id": item.partition_run_id,
+                    "source_ids": item.source_ids,
+                    "evidence_hashes": item.evidence_hashes,
+                    "payload": origin_payload,
+                },
+                domain="factor-lab/research-os/v1/data-incident",
+            )
+            terminal_envelope_valid = (
+                item.status is IncidentStatus.OPEN
+                and item.resolved_at is None
+                and item.resolution_hash is None
+                and resolution is None
+            ) or (
+                item.status is not IncidentStatus.OPEN
+                and item.resolved_at is not None
+                and item.resolution_hash is not None
+                and isinstance(resolution, Mapping)
+            )
+            if not (
+                item.incident_hash == expected_hash
+                and item.incident_id == f"incident_{expected_hash[:64]}"
+                and terminal_envelope_valid
+            ):
+                raise OrchestrationFailure(
+                    "data incident origin or terminal envelope is inconsistent"
+                )
+            try:
+                domain = DataIncident(
+                    stage=DataPipelineStage(item.stage.value),
+                    partition_key=item.partition_key,
+                    error_code=item.error_code,
+                    message=item.message,
+                    occurred_at=item.occurred_at,
+                    source_ids=item.source_ids,
+                    evidence_hashes=item.evidence_hashes,
+                )
+            except (TypeError, ValueError) as exc:
+                raise OrchestrationFailure(
+                    "data incident cannot be reconstructed as a typed domain failure"
+                ) from exc
+            domain_id = str(origin_payload.get("domain_incident_id") or "").strip()
+            if domain_id != domain.incident_id:
+                qualifier = "requested" if current else "other open"
+                raise OrchestrationFailure(
+                    f"{qualifier} incident lacks its canonical domain identity"
+                )
+            if not all(
+                str(origin_payload.get(name) or "").strip()
+                for name in ("dagster_run_id", "failed_step_key")
+            ):
+                raise OrchestrationFailure(
+                    "domain incident lacks its production failure lineage"
+                )
+            return domain
+
+        domain_incident = validated_domain_incident(incident, current=True)
+
+        # A terminal retry replays the immutable resolution, not today's
+        # mutable production fleet.  Champion/Challenger bindings and account
+        # tails may legitimately advance after an incident is closed.  The
+        # terminal row hash plus the append-only effects created by this exact
+        # revalidation remain the replay authority.
+        if incident.status is not IncidentStatus.OPEN:
+            stored_resolution = incident.payload.get("resolution")
+            if not isinstance(stored_resolution, Mapping):
+                raise OrchestrationFailure(
+                    "terminal data incident lacks immutable revalidation evidence"
+                )
+            if incident.status is not IncidentStatus.RESOLVED:
+                raise OrchestrationFailure(
+                    "terminal data incident is not a resolved revalidation"
+                )
+            stored_snapshot_id = str(
+                stored_resolution.get("snapshot_id") or ""
+            ).strip()
+            stored_content_hash = str(
+                stored_resolution.get("snapshot_content_hash") or ""
+            ).strip()
+            if not (
+                stored_snapshot_id == snapshot_id
+                and re.fullmatch(r"[0-9a-f]{64}", stored_snapshot_id)
+                and stored_content_hash == stored_snapshot_id
+            ):
+                raise OrchestrationFailure(
+                    "terminal revalidation retry differs from authority evidence"
+                )
+            replay_evidence = DataRevalidation(
+                incident_id=domain_incident.incident_id,
+                snapshot_id=stored_snapshot_id,
+                snapshot_content_hash=stored_content_hash,
+                occurred_at=revalidated_at,
+            )
+            if str(stored_resolution.get("revalidation_id") or "") != (
+                replay_evidence.revalidation_id
+            ):
+                raise OrchestrationFailure(
+                    "terminal revalidation identity differs from authority evidence"
+                )
+
+            def terminal_ids(name: str) -> tuple[str, ...]:
+                raw = stored_resolution.get(name)
+                if not (
+                    isinstance(raw, Sequence)
+                    and not isinstance(raw, (str, bytes))
+                ):
+                    raise OrchestrationFailure(
+                        f"terminal revalidation {name} is malformed"
+                    )
+                values = tuple(str(item or "").strip() for item in raw)
+                if any(not item for item in values) or len(values) != len(
+                    set(values)
+                ):
+                    raise OrchestrationFailure(
+                        f"terminal revalidation {name} is ambiguous"
+                    )
+                return values
+
+            blocking_ids = terminal_ids("blocking_incident_ids")
+            restored_sleeves = terminal_ids("restored_sleeves")
+            revalidated_accounts = terminal_ids("revalidated_accounts")
+            action = str(stored_resolution.get("fleet_action") or "")
+            if action == "restored_to_dormant":
+                if blocking_ids or not restored_sleeves or not revalidated_accounts:
+                    raise OrchestrationFailure(
+                        "terminal revalidation carries an invalid restored fleet"
+                    )
+                expected_effect = replay_evidence.to_dict()
+                for sleeve_id in restored_sleeves:
+                    key = (
+                        f"data-revalidation:{replay_evidence.revalidation_id}:"
+                        f"{sleeve_id}"
+                    )
+                    events = self.catalog.iter_lifecycle_events(
+                        sleeve_id=sleeve_id,
+                        cause="data_revalidation_passed",
+                    )
+                    try:
+                        matches = tuple(
+                            item
+                            for item in events
+                            if item.idempotency_key == key
+                        )
+                    finally:
+                        close = getattr(events, "close", None)
+                        if close is not None:
+                            close()
+                    if not (
+                        len(matches) == 1
+                        and matches[0].from_state
+                        is LifecycleState.FROZEN_DATA
+                        and matches[0].to_state is LifecycleState.DORMANT
+                        and matches[0].occurred_at >= revalidated_at
+                        and canonical_json(matches[0].evidence)
+                        == canonical_json(expected_effect)
+                    ):
+                        raise OrchestrationFailure(
+                            "terminal revalidation lacks immutable lifecycle evidence"
+                        )
+                for account_id in revalidated_accounts:
+                    events = self.catalog.iter_shadow_events_by_type(
+                        account_id=account_id,
+                        event_type="data_revalidated",
+                        since=revalidated_at,
+                        through=None,
+                    )
+                    try:
+                        matches = tuple(
+                            item
+                            for item in events
+                            if str(
+                                item.payload.get("revalidation_id") or ""
+                            )
+                            == replay_evidence.revalidation_id
+                        )
+                    finally:
+                        close = getattr(events, "close", None)
+                        if close is not None:
+                            close()
+                    if not (
+                        len(matches) == 1
+                        and matches[0].occurred_at >= revalidated_at
+                        and canonical_json(matches[0].payload)
+                        == canonical_json(expected_effect)
+                    ):
+                        raise OrchestrationFailure(
+                            "terminal revalidation lacks immutable Shadow evidence"
+                        )
+            elif not (
+                action == "remained_frozen"
+                and blocking_ids
+                and not restored_sleeves
+                and not revalidated_accounts
+            ):
+                raise OrchestrationFailure(
+                    "terminal revalidation carries an invalid fleet action"
+                )
+
+            def terminal_effects_must_not_run(*_args: Any) -> None:
+                raise OrchestrationFailure(
+                    "terminal revalidation unexpectedly attempted new effects"
+                )
+
+            try:
+                resolved, _, effects_applied = (
+                    self.production_ledger._resolve_typed_data_incident_with_effects(
+                        incident_id,
+                        resolved_at=revalidated_at,
+                        evidence=dict(stored_resolution),
+                        apply_effects=terminal_effects_must_not_run,
+                    )
+                )
+            except ProductionLedgerError as exc:
+                raise OrchestrationFailure(
+                    "terminal revalidation authority is inconsistent"
+                ) from exc
+            if effects_applied:
+                raise OrchestrationFailure(
+                    "terminal revalidation replay applied duplicate effects"
+                )
+            return {
+                "incident_id": resolved.incident_id,
+                "status": resolved.status.value,
+                "revalidation_id": replay_evidence.revalidation_id,
+                "snapshot_id": stored_snapshot_id,
+                "fleet_action": action,
+                "blocking_incident_ids": list(blocking_ids),
+                "restored_sleeves": list(restored_sleeves),
+                "revalidated_accounts": list(revalidated_accounts),
+                "effects_applied": False,
+            }
+
+        candidate_snapshot = self.catalog.get_snapshot(snapshot_id)
+        if candidate_snapshot is None:
+            raise OrchestrationFailure("revalidation Gold snapshot is not cataloged")
+        candidate_reference = candidate_snapshot.reference
+        candidate_labels = {
+            str(label).strip().lower() for label in candidate_reference.trust_labels
+        }
+        if not (
+            candidate_reference.tier is SnapshotTier.GOLD
+            and candidate_reference.quality_status is DataQualityStatus.ACCEPTED
+            and {"point_in_time", "quality_accepted"}.issubset(candidate_labels)
+            and candidate_reference.uri.startswith("iceberg://")
+        ):
+            raise OrchestrationFailure(
+                "revalidation requires formal forward-eligible accepted Gold evidence"
+            )
+        stage_contract = (
+            ("stage_source", IncidentStage.SOURCE, OperationName.SOURCE_SYNC),
+            (
+                "stage_silver",
+                IncidentStage.SILVER,
+                OperationName.SOURCE_RECONCILIATION,
+            ),
+            (
+                "stage_data_quality",
+                IncidentStage.DATA_QUALITY,
+                OperationName.DATA_QUALITY_GATE,
+            ),
+            (
+                "stage_gold",
+                IncidentStage.GOLD,
+                OperationName.GOLD_ICEBERG_SNAPSHOT_PUBLISH,
+            ),
+            (
+                "stage_shadow",
+                IncidentStage.SHADOW_EXECUTION,
+                OperationName.SHADOW_NAV_STEP,
+            ),
+        )
+        failed_index = next(
+            index
+            for index, (_, stage, _) in enumerate(stage_contract)
+            if stage is incident.stage
+        )
+        failed_partition = (
+            None
+            if not incident.partition_run_id
+            else self.production_ledger.get_partition_by_run_id(
+                incident.partition_run_id
+            )
+        )
+        if not (
+            failed_partition is not None
+            and failed_partition.identity.source_id == "research_os"
+            and failed_partition.identity.dataset == stage_contract[failed_index][0]
+            and failed_partition.identity.partition_key == incident.partition_key
+            and failed_partition.status
+            in {
+                PartitionStatus.FAILED,
+                PartitionStatus.DISPUTED,
+                PartitionStatus.QUARANTINED,
+            }
+        ):
+            raise OrchestrationFailure(
+                "data incident is not bound to its exact failed terminal partition"
+            )
+
+        # Data repair is complete only after the rebuilt Gold has produced a
+        # real daily projection for the exact production fleet.  The incident
+        # stage identifies the origin of the failure; it never shortens the
+        # recovery contract to a data-only chain.
+        required_stage_contract = stage_contract
+
+        preceding_authorities: list[Any] = []
+        base_preceding_hashes: list[str] = []
+        for dataset, _, _ in stage_contract[:failed_index]:
+            base_identity = PartitionIdentity(
+                source_id="research_os",
+                dataset=dataset,
+                partition_key=incident.partition_key,
+            )
+            base_record = self.production_ledger.get_partition(base_identity)
+            retry_record = self.production_ledger.get_retry_partition(base_identity)
+            if retry_record is not None:
+                base_record = retry_record
+            if not (
+                base_record is not None
+                and base_record.status is PartitionStatus.SUCCEEDED
+                and isinstance(base_record.output_hash, str)
+                and re.fullmatch(r"[0-9a-f]{64}", base_record.output_hash)
+            ):
+                raise OrchestrationFailure(
+                    "data incident preceding base evidence is incomplete"
+                )
+            preceding_authorities.append(base_record)
+            base_preceding_hashes.append(base_record.output_hash)
+        if tuple(sorted(set(base_preceding_hashes))) != incident.evidence_hashes:
+            raise OrchestrationFailure(
+                "data incident upstream evidence differs from its authoritative chain"
+            )
+        failed_input_hash = incident.payload.get("failed_partition_input_hash")
+        if (
+            failed_input_hash is not None
+            and failed_input_hash != failed_partition.input_hash
+        ):
+            raise OrchestrationFailure(
+                "data incident failed-stage input differs from its exact failed partition"
+            )
+        try:
+            repair_predecessor = (
+                self.production_ledger.get_incident_repair_predecessor(
+                    incident.incident_id
+                )
+            )
+        except ProductionLedgerError as exc:
+            raise OrchestrationFailure(
+                "data incident repair is detached from the global partition lineage"
+            ) from exc
+        if repair_predecessor is None:
+            raise OrchestrationFailure(
+                "revalidation Gold has no complete durable repaired partition chain"
+            )
+        if incident.stage is IncidentStage.SOURCE:
+            if repair_predecessor.identity != failed_partition.identity:
+                raise OrchestrationFailure(
+                    "Source incident repair does not descend from its exact failed partition"
+                )
+        elif repair_predecessor.repair_incident_id is None:
+            # The first later-stage repair cohort starts from the authoritative
+            # Source base (or its generic retry leaf) that also supplied the
+            # incident's upstream evidence.
+            if (
+                not preceding_authorities
+                or repair_predecessor.identity
+                != preceding_authorities[0].identity
+                or repair_predecessor.identity.dataset != "stage_source"
+                or repair_predecessor.status is not PartitionStatus.SUCCEEDED
+            ):
+                raise OrchestrationFailure(
+                    "later-stage incident repair has an invalid Source predecessor"
+                )
+        elif not (
+            repair_predecessor.repair_incident_id != incident.incident_id
+            and repair_predecessor.identity.dataset == "stage_shadow"
+            and repair_predecessor.identity.partition_key
+            == incident.partition_key
+            and repair_predecessor.status is PartitionStatus.SUCCEEDED
+        ):
+            raise OrchestrationFailure(
+                "cross-incident repair predecessor is not a completed Shadow cohort"
+            )
+
+        repaired_chain: list[
+            tuple[PartitionIdentity, Any, Mapping[str, Any], Mapping[str, Any]]
+        ] = []
+        previous_completed_at: datetime | None = None
+        repair_fingerprint: str | None = None
+        repair_cohort_id: str | None = None
+        repair_attempt_run_ids: list[str] = []
+        for dataset, _, expected_operation in required_stage_contract:
+            try:
+                authority_chain = self.production_ledger.get_repair_chain(
+                    incident.incident_id, dataset
+                )
+                record = self.production_ledger.get_repair_partition(
+                    incident.incident_id, dataset
+                )
+            except ProductionLedgerError as exc:
+                raise OrchestrationFailure(
+                    "revalidation repair authority chain is inconsistent"
+                ) from exc
+            if not authority_chain or record is None:
+                raise OrchestrationFailure(
+                    "revalidation Gold has no complete durable repaired partition chain"
+                )
+            authority = authority_chain[-1]
+            expected_root_parent_run_id = (
+                repair_predecessor.identity.partition_run_id
+                if not repaired_chain
+                else repaired_chain[-1][0].partition_run_id
+            )
+            if (
+                authority_chain[0].parent_partition_run_id
+                != expected_root_parent_run_id
+            ):
+                raise OrchestrationFailure(
+                    "repaired stages do not form one Source-to-Shadow successor chain"
+                )
+            for chain_index, chain_authority in enumerate(authority_chain):
+                chain_record = self.production_ledger.get_partition(
+                    chain_authority.identity
+                )
+                next_authority = (
+                    authority_chain[chain_index + 1]
+                    if chain_index + 1 < len(authority_chain)
+                    else None
+                )
+                next_chain_record = (
+                    None
+                    if next_authority is None
+                    else self.production_ledger.get_partition(
+                        next_authority.identity
+                    )
+                )
+                if not (
+                    chain_record is not None
+                    and chain_authority.scope_key
+                    == f"incident:{incident.incident_id}"
+                    and chain_authority.incident_id == incident.incident_id
+                    and chain_authority.identity.source_id == "research_os"
+                    and chain_authority.identity.dataset == dataset
+                    and chain_authority.identity.partition_key
+                    == incident.partition_key
+                    and chain_authority.identity.generation != "base"
+                    and chain_record.repair_incident_id == incident.incident_id
+                    and chain_record.repair_parent_partition_run_id
+                    == chain_authority.parent_partition_run_id
+                    and chain_record.repair_parent_hash
+                    == chain_authority.parent_terminal_hash
+                    and chain_record.repair_fingerprint
+                    == chain_authority.repair_fingerprint
+                    and str(
+                        chain_record.details.get("repair_cohort_id") or ""
+                    ).strip()
+                    == self._repair_cohort_id(
+                        incident, chain_authority.repair_fingerprint
+                    )
+                    and chain_authority.created_at >= incident.occurred_at
+                    and (
+                        next_authority is None
+                        or (
+                            next_authority.parent_partition_run_id
+                            == chain_authority.identity.partition_run_id
+                            and (
+                                chain_record.status
+                                in {
+                                    PartitionStatus.FAILED,
+                                    PartitionStatus.DISPUTED,
+                                    PartitionStatus.QUARANTINED,
+                                }
+                                or (
+                                    dataset == "stage_shadow"
+                                    and chain_record.status
+                                    is PartitionStatus.SUCCEEDED
+                                    and next_chain_record is not None
+                                    and next_chain_record.status
+                                    is PartitionStatus.FAILED
+                                    and next_chain_record.details.get(
+                                        "authority_kind"
+                                    )
+                                    == "typed_shadow_revalidation_rejection"
+                                    and next_chain_record.details.get(
+                                        "rejected_partition_run_id"
+                                    )
+                                    == chain_authority.identity.partition_run_id
+                                    and next_chain_record.details.get(
+                                        "rejected_output_hash"
+                                    )
+                                    == chain_record.output_hash
+                                )
+                            )
+                            and chain_record.completed_at is not None
+                            and chain_record.completed_at
+                            >= incident.occurred_at
+                        )
+                    )
+                ):
+                    raise OrchestrationFailure(
+                        "repaired partition retry chain is incomplete or mutable"
+                    )
+                if repair_fingerprint is None:
+                    repair_fingerprint = chain_authority.repair_fingerprint
+                elif (
+                    chain_authority.repair_fingerprint
+                    != repair_fingerprint
+                ):
+                    raise OrchestrationFailure(
+                        "repaired partition stages do not share one repair fingerprint"
+                    )
+            identity = authority.identity
+            if not (
+                authority.scope_key == f"incident:{incident.incident_id}"
+                and authority.incident_id == incident.incident_id
+                and identity.source_id == "research_os"
+                and identity.dataset == dataset
+                and identity.partition_key == incident.partition_key
+                and identity.generation != "base"
+                and record.identity == identity
+                and record.repair_incident_id == incident.incident_id
+                and record.repair_parent_partition_run_id
+                == authority.parent_partition_run_id
+                and record.repair_parent_hash == authority.parent_terminal_hash
+                and record.repair_fingerprint == authority.repair_fingerprint
+            ):
+                raise OrchestrationFailure(
+                    "repaired partition differs from its successor selection authority"
+                )
+            operation_result = record.details.get("operation_result")
+            outputs = (
+                operation_result.get("outputs")
+                if isinstance(operation_result, Mapping)
+                else None
+            )
+            expected_operation_hash = (
+                content_fingerprint(
+                    dict(operation_result),
+                    domain="factor-lab/research-os/v1/production-operation-result",
+                )
+                if isinstance(operation_result, Mapping)
+                else None
+            )
+            completed_at = record.completed_at
+            dagster_run_id = str(record.details.get("dagster_run_id") or "").strip()
+            stage_repair_cohort_id = str(
+                record.details.get("repair_cohort_id") or ""
+            ).strip()
+            if not (
+                record.status is PartitionStatus.SUCCEEDED
+                and completed_at is not None
+                and completed_at <= revalidated_at
+                and isinstance(record.input_hash, str)
+                and re.fullmatch(r"[0-9a-f]{64}", record.input_hash)
+                and record.output_hash == expected_operation_hash
+                and isinstance(record.output_hash, str)
+                and record.details.get("operation") == expected_operation.value
+                and dagster_run_id
+                and re.fullmatch(
+                    r"repaircohort_[0-9a-f]{64}", stage_repair_cohort_id
+                )
+                and isinstance(operation_result, Mapping)
+                and operation_result.get("operation") == expected_operation.value
+                and operation_result.get("status") == "completed"
+                and isinstance(outputs, Mapping)
+            ):
+                raise OrchestrationFailure(
+                    "accepted Gold is not bound to a complete immutable repaired stage chain"
+                )
+            if previous_completed_at is not None and completed_at < previous_completed_at:
+                raise OrchestrationFailure(
+                    "repaired partition stages are not chronologically ordered"
+                )
+            previous_completed_at = completed_at
+            if completed_at < incident.occurred_at:
+                raise OrchestrationFailure(
+                    "repaired partition stage predates the data incident"
+                )
+            if repair_cohort_id is None:
+                repair_cohort_id = stage_repair_cohort_id
+            elif stage_repair_cohort_id != repair_cohort_id:
+                raise OrchestrationFailure(
+                    "repaired partition stages do not share one durable repair cohort"
+                )
+            repair_attempt_run_ids.append(dagster_run_id)
+            repaired_chain.append((identity, record, operation_result, outputs))
+
+        source_outputs = repaired_chain[0][3]
+        bronze_snapshot_ids = tuple(
+            map(str, source_outputs.get("bronze_snapshot_ids") or ())
+        )
+        if not bronze_snapshot_ids or len(bronze_snapshot_ids) != len(
+            set(bronze_snapshot_ids)
+        ):
+            raise OrchestrationFailure(
+                "repaired source stage has no unique Bronze snapshot closure"
+            )
+        for bronze_snapshot_id in bronze_snapshot_ids:
+            bronze = self.catalog.get_snapshot(bronze_snapshot_id)
+            if bronze is None:
+                raise OrchestrationFailure(
+                    "repaired source output is not a cataloged Bronze snapshot"
+                )
+            try:
+                self._validate_calendar_recovery_manifest_binding(
+                    bronze.reference,
+                    expected_tier=SnapshotTier.BRONZE,
+                    context="revalidation Bronze",
+                )
+            except Exception as exc:
+                raise OrchestrationFailure(
+                    "revalidation Bronze manifest/reference binding is invalid"
+                ) from exc
+            if not (
+                bronze.reference.quality_status is DataQualityStatus.ACCEPTED
+                and bronze.reference.snapshot_id == bronze.reference.content_hash
+                and not bronze.reference.parent_snapshot_ids
+                and "raw_vendor_response"
+                in {
+                    str(label).strip().lower()
+                    for label in bronze.reference.trust_labels
+                }
+                and bronze.created_at <= repaired_chain[0][1].completed_at
+                and bronze.reference.as_of <= repaired_chain[0][1].completed_at
+            ):
+                raise OrchestrationFailure(
+                    "repaired source output is not a cataloged Bronze snapshot"
+                )
+
+        silver_outputs = repaired_chain[1][3]
+        silver_snapshot_id = str(silver_outputs.get("silver_snapshot_id") or "")
+        silver_record = self.catalog.get_snapshot(silver_snapshot_id)
+        if silver_record is None:
+            raise OrchestrationFailure(
+                "repaired Silver stage output is not cataloged"
+            )
+        silver_reference = silver_record.reference
+        try:
+            self._validate_calendar_recovery_manifest_binding(
+                silver_reference,
+                expected_tier=SnapshotTier.SILVER,
+                context="revalidation Silver",
+            )
+        except Exception as exc:
+            raise OrchestrationFailure(
+                "revalidation Silver manifest/reference binding is invalid"
+            ) from exc
+        silver_labels = {
+            str(label).strip().lower() for label in silver_reference.trust_labels
+        }
+        if not (
+            silver_reference.quality_status is DataQualityStatus.ACCEPTED
+            and {"point_in_time", "field_reconciled"}.issubset(silver_labels)
+            and tuple(silver_reference.parent_snapshot_ids) == bronze_snapshot_ids
+            and repaired_chain[1][1].output_snapshot_id == silver_snapshot_id
+            and silver_record.created_at <= repaired_chain[1][1].completed_at
+            and silver_reference.as_of <= repaired_chain[1][1].completed_at
+        ):
+            raise OrchestrationFailure(
+                "repaired Silver snapshot is not bound to the source Bronze closure"
+            )
+
+        quality_outputs = repaired_chain[2][3]
+        quality_report = quality_outputs.get("quality_report")
+        if not (
+            str(quality_outputs.get("silver_snapshot_id") or "")
+            == silver_snapshot_id
+            and isinstance(quality_report, Mapping)
+            and quality_report.get("status") == "pass"
+            and repaired_chain[2][1].output_snapshot_id == silver_snapshot_id
+        ):
+            raise OrchestrationFailure(
+                "repaired data-quality stage does not accept the exact Silver snapshot"
+            )
+
         snapshot = self.catalog.get_snapshot(snapshot_id)
         if snapshot is None:
             raise OrchestrationFailure("revalidation Gold snapshot is not cataloged")
         reference = snapshot.reference
-        domain_incident_id = str(
-            incident.payload.get("domain_incident_id") or ""
-        ).strip()
-        if not domain_incident_id:
+        labels = {str(label).strip().lower() for label in reference.trust_labels}
+        forbidden_markers = (
+            "unverified",
+            "disputed",
+            "quarantined",
+            "frozen",
+            "canary",
+            "controlled",
+            "engineering",
+            "retrospective",
+            "non_forward",
+            "non-forward",
+            "legacy",
+            "pseudo",
+        )
+        if not (
+            reference.tier is SnapshotTier.GOLD
+            and reference.quality_status is DataQualityStatus.ACCEPTED
+            and reference.snapshot_id == reference.content_hash
+            and {"point_in_time", "quality_accepted"}.issubset(labels)
+            and not any(
+                marker in label
+                for label in labels
+                for marker in forbidden_markers
+            )
+            and reference.uri.startswith("iceberg://")
+        ):
             raise OrchestrationFailure(
-                "production incident lacks its domain cash-intent identity"
+                "revalidation requires formal forward-eligible accepted Gold evidence"
+            )
+        try:
+            self._validate_calendar_recovery_manifest_binding(
+                reference,
+                expected_tier=SnapshotTier.GOLD,
+                context="revalidation Gold",
+            )
+            _, separator, iceberg_tag = reference.uri.partition("#")
+            if not separator or not iceberg_tag.endswith(reference.snapshot_id):
+                raise OrchestrationFailure(
+                    "revalidation Gold Iceberg tag is not bound to its snapshot"
+                )
+            assert_snapshot_promotion_allowed(
+                self.catalog, reference.parent_snapshot_ids
+            )
+        except Exception as exc:
+            raise OrchestrationFailure(
+                "revalidation Gold parent or immutable manifest is invalid"
+            ) from exc
+        if silver_snapshot_id not in reference.parent_snapshot_ids:
+            raise OrchestrationFailure(
+                "revalidation Gold omits the repaired current Silver parent"
+            )
+
+        gold_identity, gold_stage, _, gold_outputs = repaired_chain[3]
+        if not (
+            gold_stage.output_snapshot_id == reference.snapshot_id
+            and str(gold_outputs.get("snapshot_id") or "") == reference.snapshot_id
+            and str(gold_outputs.get("uri") or "") == reference.uri
+            and tuple(map(str, gold_outputs.get("parent_snapshot_ids") or ()))
+            == tuple(reference.parent_snapshot_ids)
+            and snapshot.created_at <= gold_stage.completed_at
+            and reference.as_of <= gold_stage.completed_at
+        ):
+            raise OrchestrationFailure(
+                "accepted Gold is not bound to the repaired Gold operation outputs"
             )
         evidence = DataRevalidation(
-            incident_id=domain_incident_id,
+            incident_id=domain_incident.incident_id,
             snapshot_id=reference.snapshot_id,
             snapshot_content_hash=reference.content_hash,
-            occurred_at=occurred_at,
+            occurred_at=revalidated_at,
         )
-        lifecycle_records, shadow_accounts = self._production_lifecycle_fleet()
-        restored = DataIncidentCoordinator(self.catalog).revalidate(
-            evidence,
-            lifecycle_records=lifecycle_records,
-            shadow_accounts=shadow_accounts,
+        if len(repaired_chain) == len(stage_contract):
+            shadow_identity, shadow_stage, _, shadow_outputs = repaired_chain[4]
+            incident_partition_key = str(
+                shadow_outputs.get("incident_partition_key") or ""
+            ).strip()
+            raw_validation_trade_date = str(
+                shadow_outputs.get("validation_trade_date") or ""
+            ).strip()
+            try:
+                validation_trade_date = date.fromisoformat(
+                    raw_validation_trade_date
+                )
+            except ValueError as exc:
+                raise RetryableShadowRepairEvidence(
+                    "Shadow repair lacks a canonical fresh validation session"
+                ) from exc
+            executed = shadow_outputs.get("executed")
+            projections = (
+                executed.get("projections")
+                if isinstance(executed, Mapping)
+                else None
+            )
+            if not (
+                shadow_stage.output_snapshot_id is None
+                and shadow_outputs.get("input_mode") == "authoritative_pg"
+                and incident_partition_key == incident.partition_key
+                and validation_trade_date
+                >= date.fromisoformat(incident.partition_key)
+                and str(
+                    shadow_stage.details.get(
+                        "repair_validation_trade_date"
+                    )
+                    or ""
+                ).strip()
+                == validation_trade_date.isoformat()
+                and isinstance(executed, Mapping)
+                and isinstance(projections, Sequence)
+                and not isinstance(projections, (str, bytes))
+            ):
+                raise RetryableShadowRepairEvidence(
+                    "shadow-execution incident lacks a repaired authoritative account chain"
+                )
+            if self.shadow_authority is None:
+                raise OrchestrationFailure(
+                    "shadow-execution incident lacks current production role authority"
+                )
+
+            # The operation result is only an orchestration envelope.  Its
+            # ``chain_verified`` flag, account list, NAV and hashes are all
+            # caller-controlled JSON and therefore cannot resolve an incident
+            # by themselves.  Re-select the production fleet from active role
+            # bindings and bind every reported projection to the append-only
+            # account ledger and its current tail.
+            try:
+                active_bindings = self.shadow_authority.active_fleet_bindings()
+            except Exception as exc:
+                raise OrchestrationFailure(
+                    "shadow-execution incident cannot read current production role authority"
+                ) from exc
+
+            def binding_identity(binding: Any) -> tuple[str, ...]:
+                role = binding.role
+                role_value = role.value if isinstance(role, ShadowRole) else str(role)
+                return (
+                    str(binding.binding_id),
+                    str(binding.binding_hash),
+                    role_value,
+                    str(binding.role_key),
+                    str(binding.account_id),
+                )
+
+            binding_identities = tuple(map(binding_identity, active_bindings))
+            champion_bindings = tuple(
+                binding
+                for binding in active_bindings
+                if binding.role is ShadowRole.CHAMPION
+            )
+            challenger_bindings = tuple(
+                binding
+                for binding in active_bindings
+                if binding.role is ShadowRole.CHALLENGER
+            )
+            active_account_ids = tuple(
+                str(binding.account_id) for binding in active_bindings
+            )
+            binding_by_account = {
+                str(binding.account_id): binding for binding in active_bindings
+            }
+            if not (
+                len(champion_bindings) == 1
+                and len(active_bindings)
+                == len(champion_bindings) + len(challenger_bindings)
+                and len(active_account_ids) == len(set(active_account_ids))
+                and all(bool(binding.active) for binding in active_bindings)
+            ):
+                raise RetryableShadowRepairEvidence(
+                    "shadow-execution production role binding set is invalid"
+                )
+
+            raw_challenger_ids = executed.get("challenger_account_ids")
+            if not (
+                isinstance(raw_challenger_ids, Sequence)
+                and not isinstance(raw_challenger_ids, (str, bytes))
+            ):
+                raise RetryableShadowRepairEvidence(
+                    "shadow-execution executed account fields are malformed"
+                )
+            reported_champion_id = str(
+                executed.get("champion_account_id") or ""
+            ).strip()
+            reported_challenger_ids = tuple(
+                str(account_id or "").strip() for account_id in raw_challenger_ids
+            )
+            expected_champion_id = str(champion_bindings[0].account_id)
+            expected_challenger_ids = tuple(
+                str(binding.account_id) for binding in challenger_bindings
+            )
+            if not (
+                reported_champion_id == expected_champion_id
+                and all(reported_challenger_ids)
+                and len(reported_challenger_ids) == len(set(reported_challenger_ids))
+                and set(reported_challenger_ids) == set(expected_challenger_ids)
+            ):
+                raise RetryableShadowRepairEvidence(
+                    "shadow-execution executed accounts differ from active role bindings"
+                )
+
+            projection_by_account: dict[str, Mapping[str, Any]] = {}
+            for projection in projections:
+                if not isinstance(projection, Mapping):
+                    raise RetryableShadowRepairEvidence(
+                        "shadow-execution repaired projection is malformed"
+                    )
+                account_id = str(projection.get("account_id") or "").strip()
+                if not account_id or account_id in projection_by_account:
+                    raise RetryableShadowRepairEvidence(
+                        "shadow-execution repaired projections are ambiguous"
+                    )
+                projection_by_account[account_id] = projection
+            if set(projection_by_account) != set(active_account_ids):
+                raise RetryableShadowRepairEvidence(
+                    "shadow-execution repaired projections do not cover the active fleet"
+                )
+
+            verified_tails: dict[str, tuple[int, str]] = {}
+            projection_tails: dict[str, tuple[int, str]] = {}
+            formal_sessions: dict[str, Any] = {}
+            formal_projection_reader = getattr(
+                self.shadow_authority, "session_projection", None
+            )
+            fleet_closure_reader = getattr(
+                self.shadow_authority, "fleet_closure", None
+            )
+            if getattr(self, "_production_authority", False) and not (
+                callable(formal_projection_reader)
+                and callable(fleet_closure_reader)
+            ):
+                raise OrchestrationFailure(
+                    "shadow-execution production authority lacks formal session/closure readers"
+                )
+            for account_id in active_account_ids:
+                projection = projection_by_account[account_id]
+                account = self.catalog.get_shadow_account(account_id)
+                if account is None or account.status != "active":
+                    raise RetryableShadowRepairEvidence(
+                        "shadow-execution active role account is not active in the catalog"
+                    )
+                if not self.catalog.verify_shadow_chain(account_id):
+                    raise OrchestrationFailure(
+                        "shadow-execution repaired account chain is corrupt"
+                    )
+                reported_sequence = projection.get("last_event_sequence")
+                reported_hash = str(
+                    projection.get("last_event_hash") or ""
+                ).strip()
+                tail = (
+                    None
+                    if not re.fullmatch(r"[0-9a-f]{64}", reported_hash)
+                    else self.catalog.get_shadow_event(
+                        account_id=account_id,
+                        event_hash=reported_hash,
+                    )
+                )
+                if tail is None or tail.sequence_number != reported_sequence:
+                    raise RetryableShadowRepairEvidence(
+                        "shadow-execution repaired account has no unique durable projection event"
+                    )
+                projected_state = tail.payload.get("account_state")
+                step_metadata = tail.payload.get("research_os_shadow_step")
+                if not (
+                    projection.get("trade_date")
+                    == validation_trade_date.isoformat()
+                    and projection.get("chain_verified") is True
+                    and isinstance(reported_sequence, int)
+                    and not isinstance(reported_sequence, bool)
+                    and re.fullmatch(r"[0-9a-f]{64}", reported_hash)
+                    and tail.account_id == account_id
+                    and tail.event_type == "account_projected"
+                    and tail.occurred_at.astimezone(_SHANGHAI).date().isoformat()
+                    == validation_trade_date.isoformat()
+                    and tail.occurred_at >= gold_stage.completed_at
+                    and tail.occurred_at <= shadow_stage.completed_at
+                    and tail.sequence_number == reported_sequence
+                    and tail.event_hash == reported_hash
+                    and isinstance(projected_state, Mapping)
+                    and isinstance(step_metadata, Mapping)
+                    and step_metadata.get("kind") == "account_projection"
+                    and str(step_metadata.get("step_id") or "").strip()
+                    == str(projection.get("step_id") or "").strip()
+                    and str(projection.get("step_id") or "").strip()
+                ):
+                    raise RetryableShadowRepairEvidence(
+                        "shadow-execution projection is detached from its durable account tail"
+                    )
+                projection_tail = (reported_sequence, reported_hash)
+                current_tail = (
+                    account.last_event_sequence,
+                    account.last_event_hash,
+                )
+                if (
+                    incident.status is IncidentStatus.OPEN
+                    and current_tail != projection_tail
+                ):
+                    suffix = self.catalog.list_shadow_events(
+                        account_id=account_id, limit=1
+                    )
+                    exact_partial_effect = (
+                        account.last_event_sequence == reported_sequence + 1
+                        and len(suffix) == 1
+                        and suffix[0].sequence_number == account.last_event_sequence
+                        and suffix[0].event_hash == account.last_event_hash
+                        and suffix[0].previous_event_hash == reported_hash
+                        and suffix[0].event_type == "data_revalidated"
+                        and canonical_json(suffix[0].payload)
+                        == canonical_json(evidence.to_dict())
+                    )
+                    if not exact_partial_effect:
+                        raise RetryableShadowRepairEvidence(
+                            "shadow-execution account tail advanced outside the exact revalidation effect"
+                        )
+                if projection.get("event_hash") is not None and (
+                    str(projection.get("event_hash") or "").strip()
+                    != tail.event_hash
+                ):
+                    raise RetryableShadowRepairEvidence(
+                        "shadow-execution projection event hash differs from its durable tail"
+                    )
+                if projection.get("nav") is not None:
+                    try:
+                        reported_nav = float(projection["nav"])
+                        durable_nav = float(projected_state["nav"])
+                    except (KeyError, TypeError, ValueError) as exc:
+                        raise RetryableShadowRepairEvidence(
+                            "shadow-execution projection NAV is malformed"
+                        ) from exc
+                    if not (
+                        np.isfinite(reported_nav)
+                        and np.isfinite(durable_nav)
+                        and np.isclose(
+                            reported_nav,
+                            durable_nav,
+                            rtol=1e-9,
+                            atol=0.01,
+                        )
+                    ):
+                        raise RetryableShadowRepairEvidence(
+                            "shadow-execution projection NAV differs from its durable account"
+                        )
+                projection_tails[account_id] = projection_tail
+                verified_tails[account_id] = current_tail
+
+                if getattr(self, "_production_authority", False):
+                    try:
+                        formal = formal_projection_reader(
+                            account_id=account_id,
+                            trade_date=validation_trade_date,
+                        )
+                    except Exception as exc:
+                        raise OrchestrationFailure(
+                            "shadow-execution formal session authority is invalid"
+                        ) from exc
+                    binding = binding_by_account[account_id]
+                    try:
+                        projection_cash = float(projection.get("cash"))
+                        projection_nav = float(projection.get("nav"))
+                        projection_benchmark_nav = float(
+                            projection.get("benchmark_nav")
+                        )
+                        raw_position_count = projection.get("position_count")
+                        if not (
+                            isinstance(raw_position_count, int)
+                            and not isinstance(raw_position_count, bool)
+                            and isinstance(projection.get("rebalanced"), bool)
+                        ):
+                            raise TypeError("typed projection fields are malformed")
+                        projection_position_count = int(raw_position_count)
+                    except (TypeError, ValueError) as exc:
+                        raise RetryableShadowRepairEvidence(
+                            "shadow-execution formal projection fields are malformed"
+                        ) from exc
+                    if not (
+                        formal is not None
+                        and formal.trade_date == validation_trade_date
+                        and formal.role_binding_id == str(binding.binding_id)
+                        and formal.account_event_sequence == reported_sequence
+                        and formal.account_event_hash == reported_hash
+                        and formal.decision_snapshot_id
+                        == projection.get("decision_snapshot_id")
+                        and formal.execution_snapshot_id
+                        == projection.get("execution_snapshot_id")
+                        and formal.mark_snapshot_id
+                        == projection.get("mark_snapshot_id")
+                        and formal.rebalanced
+                        == projection.get("rebalanced")
+                        and np.isfinite(projection_cash)
+                        and np.isfinite(projection_nav)
+                        and np.isfinite(projection_benchmark_nav)
+                        and np.isclose(
+                            formal.cash,
+                            projection_cash,
+                            atol=0.01,
+                        )
+                        and np.isclose(
+                            formal.nav,
+                            projection_nav,
+                            atol=0.01,
+                        )
+                        and np.isclose(
+                            formal.benchmark_nav,
+                            projection_benchmark_nav,
+                            atol=0.01,
+                        )
+                        and formal.position_count
+                        == projection_position_count
+                        and formal.created_at >= tail.occurred_at
+                        and formal.created_at <= shadow_stage.completed_at
+                    ):
+                        raise RetryableShadowRepairEvidence(
+                            "shadow-execution formal session differs from its repaired projection"
+                        )
+                    formal_sessions[account_id] = formal
+
+            if getattr(self, "_production_authority", False):
+                try:
+                    closure = fleet_closure_reader(validation_trade_date)
+                except Exception as exc:
+                    raise OrchestrationFailure(
+                        "shadow-execution fleet closure authority is invalid"
+                    ) from exc
+                expected_members = tuple(
+                    sorted(
+                        (
+                            {
+                                "binding_id": str(
+                                    binding_by_account[account_id].binding_id
+                                ),
+                                "binding_hash": str(
+                                    binding_by_account[account_id].binding_hash
+                                ),
+                                "role": (
+                                    binding_by_account[account_id].role.value
+                                    if isinstance(
+                                        binding_by_account[account_id].role,
+                                        ShadowRole,
+                                    )
+                                    else str(binding_by_account[account_id].role)
+                                ),
+                                "role_key": str(
+                                    binding_by_account[account_id].role_key
+                                ),
+                                "account_id": account_id,
+                                "session_hash": formal_sessions[
+                                    account_id
+                                ].session_hash,
+                                "account_event_hash": formal_sessions[
+                                    account_id
+                                ].account_event_hash,
+                            }
+                            for account_id in active_account_ids
+                        ),
+                        key=lambda member: (
+                            member["role"],
+                            member["role_key"],
+                            member["binding_id"],
+                        ),
+                    )
+                )
+                if not (
+                    closure is not None
+                    and closure.trade_date == validation_trade_date
+                    and closure.members == expected_members
+                    and closure.member_count == len(expected_members)
+                    and closure.closed_at
+                    >= max(item.created_at for item in formal_sessions.values())
+                    and closure.closed_at <= shadow_stage.completed_at
+                ):
+                    raise RetryableShadowRepairEvidence(
+                        "shadow-execution repair lacks its exact immutable fleet closure"
+                    )
+
+            # Detect a role switch or append racing the validation window.  The
+            # account ledger is append-only, so an observed tail cannot return
+            # to the same sequence/hash after a mutation.
+            try:
+                current_binding_identities = tuple(
+                    map(
+                        binding_identity,
+                        self.shadow_authority.active_fleet_bindings(),
+                    )
+                )
+            except Exception as exc:
+                raise OrchestrationFailure(
+                    "shadow-execution incident cannot re-read production role authority"
+                ) from exc
+            if current_binding_identities != binding_identities:
+                raise RetryableShadowRepairEvidence(
+                    "shadow-execution production role bindings changed during revalidation"
+                )
+            for account_id, expected_tail in verified_tails.items():
+                current_account = self.catalog.get_shadow_account(account_id)
+                if current_account is None or (
+                    current_account.last_event_sequence,
+                    current_account.last_event_hash,
+                ) != expected_tail:
+                    raise RetryableShadowRepairEvidence(
+                        "shadow-execution account tail changed during revalidation"
+                    )
+        else:  # pragma: no cover - the five-stage contract is fixed above.
+            raise OrchestrationFailure(
+                "data incident repair did not reach authoritative Shadow execution"
+            )
+        required_revalidation_time = max(
+            shadow_stage.completed_at,
+            snapshot.created_at,
+            reference.as_of,
         )
-        resolved = self.production_ledger.resolve_incident(
-            incident_id,
-            resolved_at=occurred_at,
-            evidence={
-                "revalidation_id": evidence.revalidation_id,
-                "snapshot_id": reference.snapshot_id,
-                "snapshot_content_hash": reference.content_hash,
-                "restored_sleeves": [row.sleeve_id for row in restored],
-            },
+        if revalidated_at < required_revalidation_time:
+            raise OrchestrationFailure(
+                "revalidation timestamp predates authoritative repaired Gold evidence"
+            )
+
+        base_resolution = {
+            "revalidation_id": evidence.revalidation_id,
+            "snapshot_id": reference.snapshot_id,
+            "snapshot_content_hash": reference.content_hash,
+            "repair_cohort_id": repair_cohort_id,
+            "repair_attempt_run_ids": list(repair_attempt_run_ids),
+            "validation_trade_date": validation_trade_date.isoformat(),
+            "repaired_partition_key": shadow_identity.partition_key,
+            "repaired_partition_run_id": shadow_identity.partition_run_id,
+            "repaired_stage_completed_at": shadow_stage.completed_at.isoformat(),
+            "repaired_gold_partition_run_id": gold_identity.partition_run_id,
+            "repaired_gold_completed_at": gold_stage.completed_at.isoformat(),
+        }
+
+        expected_lifecycle_evidence = evidence.to_dict()
+
+        def exact_lifecycle_event(sleeve_id: str) -> LifecycleEvent | None:
+            key = f"data-revalidation:{evidence.revalidation_id}:{sleeve_id}"
+            events = self.catalog.iter_lifecycle_events(
+                sleeve_id=sleeve_id,
+                cause="data_revalidation_passed",
+            )
+            try:
+                matches = tuple(
+                    item for item in events if item.idempotency_key == key
+                )
+            finally:
+                close = getattr(events, "close", None)
+                if close is not None:
+                    close()
+            if not matches:
+                return None
+            if len(matches) != 1:
+                raise OrchestrationFailure(
+                    "data revalidation lifecycle identity is ambiguous"
+                )
+            event = matches[0]
+            if not (
+                event.sleeve_id == sleeve_id
+                and event.from_state is LifecycleState.FROZEN_DATA
+                and event.to_state is LifecycleState.DORMANT
+                and event.cause == "data_revalidation_passed"
+                and event.occurred_at >= revalidated_at
+                and canonical_json(event.evidence)
+                == canonical_json(expected_lifecycle_evidence)
+            ):
+                raise OrchestrationFailure(
+                    "data revalidation lifecycle evidence is inconsistent"
+                )
+            return event
+
+        def exact_shadow_event(account_id: str) -> Any | None:
+            events = self.catalog.iter_shadow_events_by_type(
+                account_id=account_id,
+                event_type="data_revalidated",
+                since=None,
+                through=None,
+            )
+            try:
+                matches = tuple(
+                    item
+                    for item in events
+                    if str(item.payload.get("revalidation_id") or "")
+                    == evidence.revalidation_id
+                )
+            finally:
+                close = getattr(events, "close", None)
+                if close is not None:
+                    close()
+            if any(
+                canonical_json(item.payload)
+                != canonical_json(expected_lifecycle_evidence)
+                for item in matches
+            ):
+                raise OrchestrationFailure(
+                    "data revalidation shadow identity has conflicting evidence"
+                )
+            projection_tail = projection_tails.get(account_id)
+            if projection_tail is None:
+                raise OrchestrationFailure(
+                    "data revalidation lacks the account projection authority"
+                )
+            causal_matches = tuple(
+                item
+                for item in matches
+                if item.previous_event_hash == projection_tail[1]
+                and item.sequence_number == projection_tail[0] + 1
+            )
+            if not causal_matches:
+                return None
+            if len(causal_matches) != 1:
+                raise OrchestrationFailure(
+                    "data revalidation has ambiguous causal Shadow evidence"
+                )
+            event = causal_matches[0]
+            if not (
+                event.account_id == account_id
+                and event.event_type == "data_revalidated"
+                and event.occurred_at >= revalidated_at
+                and canonical_json(event.payload)
+                == canonical_json(expected_lifecycle_evidence)
+            ):
+                raise OrchestrationFailure(
+                    "data revalidation shadow evidence is inconsistent"
+                )
+            if incident.status is IncidentStatus.OPEN:
+                current = self.catalog.get_shadow_account(account_id)
+                if current is None or (
+                    current.last_event_sequence,
+                    current.last_event_hash,
+                ) != (event.sequence_number, event.event_hash):
+                    raise RetryableShadowRepairEvidence(
+                        "data revalidation Shadow effect is no longer the account tail"
+                    )
+            return event
+
+        def superseded_lifecycle_events(
+            sleeve_id: str,
+        ) -> tuple[LifecycleEvent, ...]:
+            events = self.catalog.iter_lifecycle_events(
+                sleeve_id=sleeve_id,
+                cause="data_revalidation_passed",
+            )
+            try:
+                matches = tuple(
+                    item
+                    for item in events
+                    if str(item.evidence.get("incident_id") or "")
+                    == evidence.incident_id
+                    and str(item.evidence.get("revalidation_id") or "")
+                    != evidence.revalidation_id
+                )
+            finally:
+                close = getattr(events, "close", None)
+                if close is not None:
+                    close()
+            for item in matches:
+                prior_id = str(
+                    item.evidence.get("revalidation_id") or ""
+                ).strip()
+                if not (
+                    prior_id
+                    and item.idempotency_key
+                    == f"data-revalidation:{prior_id}:{sleeve_id}"
+                    and item.from_state is LifecycleState.FROZEN_DATA
+                    and item.to_state is LifecycleState.DORMANT
+                    and item.cause == "data_revalidation_passed"
+                ):
+                    raise OrchestrationFailure(
+                        "superseded data revalidation lifecycle evidence is inconsistent"
+                    )
+            return matches
+
+        def verify_frozen_controls(
+            lifecycle_records: Sequence[SleeveLifecycleRecord],
+            account_ids: Sequence[str],
+        ) -> None:
+            intent = CashTargetIntent.for_incident(domain_incident)
+            expected_incident_evidence = {
+                "data_incident": domain_incident.to_dict(),
+                "cash_target_intent": intent.to_dict(),
+            }
+            if any(
+                record.state is not SleeveState.FROZEN_DATA
+                and exact_lifecycle_event(record.sleeve_id) is None
+                and not (
+                    record.state is SleeveState.DORMANT
+                    and superseded_lifecycle_events(record.sleeve_id)
+                )
+                for record in lifecycle_records
+            ):
+                raise OrchestrationFailure(
+                    "incident controls do not cover the frozen or replayed lifecycle fleet"
+                )
+            for record in lifecycle_records:
+                key = (
+                    f"data-incident:{domain_incident.incident_id}:"
+                    f"{record.sleeve_id}"
+                )
+                events = self.catalog.iter_lifecycle_events(
+                    sleeve_id=record.sleeve_id,
+                    cause="data_integrity_failure",
+                )
+                try:
+                    matching_lifecycle = tuple(
+                        event
+                        for event in events
+                        if event.idempotency_key == key
+                    )
+                finally:
+                    close = getattr(events, "close", None)
+                    if close is not None:
+                        close()
+                if not (
+                    len(matching_lifecycle) == 1
+                    and matching_lifecycle[0].to_state
+                    is LifecycleState.FROZEN_DATA
+                    and matching_lifecycle[0].cause == "data_integrity_failure"
+                    and matching_lifecycle[0].occurred_at
+                    >= domain_incident.occurred_at
+                    and canonical_json(matching_lifecycle[0].evidence)
+                    == canonical_json(expected_incident_evidence)
+                ):
+                    raise OrchestrationFailure(
+                        "open incident lacks its exact frozen-fleet lifecycle evidence"
+                    )
+            for account_id in account_ids:
+                events = self.catalog.iter_shadow_events_by_type(
+                    account_id=account_id,
+                    event_type="cash_target_intent",
+                    since=None,
+                    through=None,
+                )
+                try:
+                    matching = tuple(
+                        event
+                        for event in events
+                        if str(event.payload.get("intent_id") or "")
+                        == intent.intent_id
+                    )
+                finally:
+                    close = getattr(events, "close", None)
+                    if close is not None:
+                        close()
+                if not (
+                    len(matching) == 1
+                    and matching[0].occurred_at >= domain_incident.occurred_at
+                    and canonical_json(matching[0].payload)
+                    == canonical_json(intent.to_dict())
+                ):
+                    raise OrchestrationFailure(
+                        "open incident lacks its exact frozen-fleet cash intent"
+                    )
+
+        prepared: dict[str, Any] = {}
+
+        def typed_effect_fence(
+            *, sleeve_ids: Sequence[str], account_ids: Sequence[str]
+        ) -> Mapping[str, Any]:
+            if self.shadow_authority is None:
+                raise RetryableShadowRepairEvidence(
+                    "typed revalidation fence lacks production role authority"
+                )
+            current_bindings = tuple(
+                self.shadow_authority.active_fleet_bindings()
+            )
+            if tuple(map(binding_identity, current_bindings)) != binding_identities:
+                raise RetryableShadowRepairEvidence(
+                    "production role bindings changed before the terminal fence"
+                )
+            selected_accounts = tuple(sorted(map(str, account_ids)))
+            if {
+                str(binding.account_id) for binding in current_bindings
+            } != set(selected_accounts):
+                raise RetryableShadowRepairEvidence(
+                    "terminal revalidation fleet differs from its role authority"
+                )
+            account_tails: list[Mapping[str, Any]] = []
+            for account_id in selected_accounts:
+                account = self.catalog.get_shadow_account(account_id)
+                if account is None:
+                    raise RetryableShadowRepairEvidence(
+                        "terminal revalidation lost a fenced Shadow account"
+                    )
+                account_tails.append(
+                    {
+                        "account_id": account_id,
+                        "last_event_sequence": account.last_event_sequence,
+                        "last_event_hash": account.last_event_hash,
+                        "status": account.status,
+                    }
+                )
+            selected_sleeves = tuple(sorted(map(str, sleeve_ids)))
+            latest_lifecycle = self.catalog.list_latest_lifecycle_events(
+                limit=max(1, len(selected_sleeves)),
+                sleeve_ids=selected_sleeves,
+            )
+            lifecycle_by_sleeve = {
+                item.sleeve_id: item for item in latest_lifecycle
+            }
+            if set(lifecycle_by_sleeve) != set(selected_sleeves):
+                raise RetryableShadowRepairEvidence(
+                    "terminal revalidation lost a fenced Sleeve lifecycle"
+                )
+            return {
+                "schema_version": "research-os/typed-revalidation-fence/v1",
+                "shadow_account_tails": account_tails,
+                "shadow_role_bindings": [
+                    {
+                        "binding_id": str(binding.binding_id),
+                        "binding_hash": str(binding.binding_hash),
+                        "role": (
+                            binding.role.value
+                            if isinstance(binding.role, ShadowRole)
+                            else str(binding.role)
+                        ),
+                        "role_key": str(binding.role_key),
+                        "account_id": str(binding.account_id),
+                    }
+                    for binding in current_bindings
+                ],
+                "lifecycle_tails": [
+                    {
+                        "sleeve_id": sleeve_id,
+                        "event_id": lifecycle_by_sleeve[sleeve_id].event_id,
+                        "idempotency_key": lifecycle_by_sleeve[
+                            sleeve_id
+                        ].idempotency_key,
+                        "to_state": lifecycle_by_sleeve[
+                            sleeve_id
+                        ].to_state.value,
+                    }
+                    for sleeve_id in selected_sleeves
+                ],
+            }
+
+        def resolution_for_scope(
+            authority: IncidentRecord,
+            other_open: tuple[IncidentRecord, ...],
+        ) -> Mapping[str, Any]:
+            locked_domain = validated_domain_incident(authority, current=True)
+            if (
+                authority.incident_id != incident.incident_id
+                or locked_domain.incident_id != domain_incident.incident_id
+            ):
+                raise OrchestrationFailure(
+                    "data incident authority changed before revalidation"
+                )
+            blockers: list[str] = []
+            for other in other_open:
+                validated_domain_incident(other, current=False)
+                blockers.append(other.incident_id)
+            lifecycle_records, shadow_accounts = self._production_lifecycle_fleet(
+                overlay_open_incidents=False
+            )
+            sleeve_ids = tuple(
+                sorted(record.sleeve_id for record in lifecycle_records)
+            )
+            account_ids = tuple(
+                sorted(
+                    {
+                        str(account_id)
+                        for values in shadow_accounts.values()
+                        for account_id in values
+                    }
+                )
+            )
+            action = "remained_frozen" if blockers else "restored_to_dormant"
+            prepared.update(
+                {
+                    "authority_id": authority.incident_id,
+                    "other_open_ids": tuple(blockers),
+                    "lifecycle_records": lifecycle_records,
+                    "shadow_accounts": shadow_accounts,
+                    "sleeve_ids": sleeve_ids,
+                    "account_ids": account_ids,
+                    "fleet_action": action,
+                }
+            )
+            return {
+                **base_resolution,
+                "fleet_action": action,
+                "blocking_incident_ids": blockers,
+                "restored_sleeves": ([] if blockers else list(sleeve_ids)),
+                "revalidated_accounts": ([] if blockers else list(account_ids)),
+            }
+
+        def apply_revalidation(
+            authority: IncidentRecord,
+            other_open: tuple[IncidentRecord, ...],
+        ) -> Mapping[str, Any]:
+            if (
+                prepared.get("authority_id") != authority.incident_id
+                or prepared.get("other_open_ids")
+                != tuple(item.incident_id for item in other_open)
+            ):
+                raise OrchestrationFailure(
+                    "serialized revalidation scope changed before effects"
+                )
+            lifecycle_records = tuple(prepared["lifecycle_records"])
+            shadow_accounts = dict(prepared["shadow_accounts"])
+            sleeve_ids = tuple(prepared["sleeve_ids"])
+            account_ids = tuple(prepared["account_ids"])
+            action = str(prepared["fleet_action"])
+            if self.shadow_authority is None or tuple(
+                map(
+                    binding_identity,
+                    self.shadow_authority.active_fleet_bindings(),
+                )
+            ) != binding_identities:
+                raise RetryableShadowRepairEvidence(
+                    "production role bindings changed before revalidation effects"
+                )
+            if set(account_ids) != set(projection_tails):
+                raise RetryableShadowRepairEvidence(
+                    "revalidation effect fleet differs from the repaired projections"
+                )
+            # Terminalization is forbidden until this exact incident has
+            # materialized both its frozen lifecycle evidence and every cash
+            # target intent.  A raw FROZEN state from another incident is not
+            # sufficient authority.
+            verify_frozen_controls(lifecycle_records, account_ids)
+            if action == "remained_frozen":
+                return {
+                    "fleet_action": action,
+                    "restored_sleeves": (),
+                    "revalidated_accounts": (),
+                    "typed_effect_fence": typed_effect_fence(
+                        sleeve_ids=sleeve_ids,
+                        account_ids=account_ids,
+                    ),
+                }
+
+            replay_records: list[SleeveLifecycleRecord] = []
+            for record in lifecycle_records:
+                prior = exact_lifecycle_event(record.sleeve_id)
+                if prior is None:
+                    if not (
+                        record.state is SleeveState.FROZEN_DATA
+                        or (
+                            record.state is SleeveState.DORMANT
+                            and superseded_lifecycle_events(record.sleeve_id)
+                        )
+                    ):
+                        raise OrchestrationFailure(
+                            "only a frozen_data fleet can be revalidated"
+                        )
+                    replay_records.append(record)
+                else:
+                    if record.state is not SleeveState.DORMANT:
+                        raise OrchestrationFailure(
+                            "partially committed revalidation has advanced unexpectedly"
+                        )
+                    replay_records.append(
+                        replace(record, state=SleeveState.FROZEN_DATA)
+                    )
+
+            pending_accounts = tuple(
+                account_id
+                for account_id in account_ids
+                if exact_shadow_event(account_id) is None
+            )
+            replay_accounts = {
+                record.sleeve_id: pending_accounts for record in replay_records
+            }
+            try:
+                restored = DataIncidentCoordinator(self.catalog).revalidate(
+                    evidence,
+                    lifecycle_records=tuple(replay_records),
+                    shadow_accounts=replay_accounts,
+                    expected_shadow_tails={
+                        account_id: projection_tails[account_id][1]
+                        for account_id in pending_accounts
+                    },
+                )
+            except DataRevalidationConflict as exc:
+                raise RetryableShadowRepairEvidence(str(exc)) from exc
+            if tuple(sorted(row.sleeve_id for row in restored)) != sleeve_ids:
+                raise OrchestrationFailure(
+                    "data revalidation restored an unexpected Sleeve set"
+                )
+            for sleeve_id in sleeve_ids:
+                if exact_lifecycle_event(sleeve_id) is None:
+                    raise OrchestrationFailure(
+                        "data revalidation lifecycle evidence is incomplete"
+                    )
+                if self.catalog.latest_lifecycle_state(sleeve_id) is not LifecycleState.DORMANT:
+                    raise OrchestrationFailure(
+                        "data revalidation did not leave the fleet dormant"
+                    )
+            for account_id in account_ids:
+                if exact_shadow_event(account_id) is None:
+                    raise OrchestrationFailure(
+                        "data revalidation shadow evidence is incomplete"
+                    )
+            return {
+                "fleet_action": action,
+                "restored_sleeves": sleeve_ids,
+                "revalidated_accounts": account_ids,
+                "typed_effect_fence": typed_effect_fence(
+                    sleeve_ids=sleeve_ids,
+                    account_ids=account_ids,
+                ),
+            }
+
+        if incident.status is IncidentStatus.OPEN:
+            resolution_argument: Any = resolution_for_scope
+        else:
+            stored_resolution = incident.payload.get("resolution")
+            if not isinstance(stored_resolution, Mapping):
+                raise OrchestrationFailure(
+                    "terminal data incident lacks immutable revalidation evidence"
+                )
+            if incident.resolved_at != revalidated_at:
+                raise OrchestrationFailure(
+                    "terminal revalidation retry timestamp differs from authority"
+                )
+            if any(
+                stored_resolution.get(key) != value
+                for key, value in base_resolution.items()
+            ):
+                raise OrchestrationFailure(
+                    "terminal revalidation retry differs from authority evidence"
+                )
+            resolution_argument = dict(stored_resolution)
+
+        try:
+            resolve_kwargs: dict[str, Any] = {
+                "resolved_at": revalidated_at,
+                "evidence": resolution_argument,
+                "apply_effects": apply_revalidation,
+            }
+            if getattr(self, "_production_authority", False):
+                resolve_kwargs["require_effect_fence"] = True
+            resolved, effect_result, effects_applied = (
+                self.production_ledger._resolve_typed_data_incident_with_effects(
+                    incident_id, **resolve_kwargs
+                )
+            )
+        except TypedEffectFenceConflict as exc:
+            raise RetryableShadowRepairEvidence(
+                "typed revalidation effects changed before terminalization"
+            ) from exc
+        except ProductionLedgerError as exc:
+            raise OrchestrationFailure(
+                "data incident revalidation lost serialized authority"
+            ) from exc
+
+        resolution = resolved.payload.get("resolution")
+        if not isinstance(resolution, Mapping):
+            raise OrchestrationFailure(
+                "resolved data incident lacks revalidation evidence"
+            )
+        action = str(resolution.get("fleet_action") or "")
+        restored_sleeves = tuple(map(str, resolution.get("restored_sleeves") or ()))
+        revalidated_accounts = tuple(
+            map(str, resolution.get("revalidated_accounts") or ())
         )
+        if action == "restored_to_dormant":
+            for sleeve_id in restored_sleeves:
+                if exact_lifecycle_event(sleeve_id) is None:
+                    raise OrchestrationFailure(
+                        "terminal revalidation lacks lifecycle evidence"
+                    )
+            for account_id in revalidated_accounts:
+                if exact_shadow_event(account_id) is None:
+                    raise OrchestrationFailure(
+                        "terminal revalidation lacks shadow evidence"
+                    )
+        elif not (
+            action == "remained_frozen"
+            and not restored_sleeves
+            and not revalidated_accounts
+            and resolution.get("blocking_incident_ids")
+        ):
+            raise OrchestrationFailure(
+                "terminal revalidation carries an invalid fleet action"
+            )
+        if effects_applied and not isinstance(effect_result, Mapping):
+            raise OrchestrationFailure(
+                "data revalidation effects returned no authoritative result"
+            )
         return {
             "incident_id": resolved.incident_id,
             "status": resolved.status.value,
             "revalidation_id": evidence.revalidation_id,
             "snapshot_id": reference.snapshot_id,
-            "restored_sleeves": [row.sleeve_id for row in restored],
+            "fleet_action": action,
+            "blocking_incident_ids": list(
+                map(str, resolution.get("blocking_incident_ids") or ())
+            ),
+            "restored_sleeves": list(restored_sleeves),
+            "revalidated_accounts": list(revalidated_accounts),
+            "effects_applied": effects_applied,
         }
 
     def _poll_trading_partitions(self, cursor: str | None) -> TriggerPoll:
