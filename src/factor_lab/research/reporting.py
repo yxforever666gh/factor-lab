@@ -30,19 +30,26 @@ def render_report(summary: Mapping[str, Any]) -> str:
         "",
         "## Stage A：方向与覆盖",
         "",
-        "| 因子 | 训练方向 | 验证 signed IC | 验证覆盖 | Stage B | 阻断原因 |",
-        "| --- | ---: | ---: | ---: | --- | --- |",
+        "| 因子 | 训练方向 | 验证 signed IC | 验证覆盖 | Stage A 通过 | Stage B 入选 | 未入选/阻断原因 |",
+        "| --- | ---: | ---: | ---: | --- | --- | --- |",
     ]
+    selected_names = set(summary.get("stage_b_selected") or [])
     for row in summary.get("stage_a") or []:
         validation = row.get("validation") or {}
+        eligible = bool(row.get("stage_b_eligible"))
+        selected = row.get("factor_name") in selected_names
+        blockers = list(row.get("blockers") or [])
+        if eligible and not selected:
+            blockers.append("Stage B 最多 3 个 Challenger，signed IC 排名未入选")
         lines.append(
-            "| {name} | {direction:+d} | {ic} | {coverage} | {eligible} | {blockers} |".format(
+            "| {name} | {direction:+d} | {ic} | {coverage} | {eligible} | {selected} | {blockers} |".format(
                 name=row.get("factor_name"),
                 direction=int(row.get("frozen_direction") or 1),
                 ic=_number(validation.get("signed_rank_ic_mean")),
                 coverage=_number(validation.get("median_cross_section_coverage"), percent=True),
-                eligible="是" if row.get("stage_b_eligible") else "否",
-                blockers=", ".join(row.get("blockers") or []) or "—",
+                eligible="是" if eligible else "否",
+                selected="是" if selected else "否",
+                blockers=", ".join(blockers) or "—",
             )
         )
 
