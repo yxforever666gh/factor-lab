@@ -34,16 +34,61 @@ def test_stage_a_freezes_training_direction_and_uses_non_overlapping_dates() -> 
 
     result = evaluate_stage_a(frame, factor, policy)
 
-    train_dates = frame.loc[
-        frame["date"].between("2017-01-01", "2022-12-31"), "date"
-    ].nunique()
+    all_dates = pd.DatetimeIndex(sorted(frame["date"].unique()))
+    expected_train_dates = [
+        day
+        for day in all_dates[::5]
+        if pd.Timestamp("2017-01-01") <= day
+        and day <= pd.Timestamp("2022-12-31")
+        and all_dates.get_loc(day) + 6 < len(all_dates)
+        and all_dates[all_dates.get_loc(day) + 6] <= pd.Timestamp("2022-12-31")
+    ]
     assert result.frozen_direction == 1
     assert result.train.signed_rank_ic_mean == 1.0
-    assert result.train.expected_date_count == int(np.ceil(train_dates / 5))
+    assert result.train.expected_date_count == len(expected_train_dates)
     assert result.validation.rank_ic_mean == 1.0
     assert result.validation.signed_rank_ic_mean == 1.0
     assert result.validation.evaluable_date_ratio == 1.0
     assert result.validation.median_cross_section_coverage == 1.0
+    assert result.stage_b_eligible is True
+
+
+def test_stage_a_uses_one_global_anchor_and_purges_cross_boundary_labels() -> None:
+    dates = pd.bdate_range("2020-01-01", periods=50)
+    rows: list[dict[str, object]] = []
+    for date_index, day in enumerate(dates):
+        exit_date = dates[date_index + 6] if date_index + 6 < len(dates) else pd.NaT
+        for ticker_index in range(6):
+            signal = float(ticker_index)
+            label = signal if date_index % 5 == 0 else -signal
+            rows.append(
+                {
+                    "date": day,
+                    "ticker": f"{ticker_index:06d}.SZ",
+                    "signal": signal,
+                    "forward_return_5d_open": label,
+                    "label_exit_date": exit_date,
+                }
+            )
+    frame = pd.DataFrame(rows)
+    policy = ValidationSpec(
+        train_start=dates[0].date().isoformat(),
+        train_end=dates[12].date().isoformat(),
+        validation_start=dates[13].date().isoformat(),
+        validation_end=dates[38].date().isoformat(),
+        audit_start=dates[39].date().isoformat(),
+        min_cross_section=3,
+    )
+
+    result = evaluate_stage_a(
+        frame,
+        FactorSpec(name="anchored", family="test", expression="signal"),
+        policy,
+    )
+
+    assert result.frozen_direction == 1
+    assert result.validation.rank_ic_mean == 1.0
+    assert result.validation.expected_date_count == 4
     assert result.stage_b_eligible is True
 
 

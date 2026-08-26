@@ -87,11 +87,48 @@ def _diagnose_window(
 ) -> WindowDiagnostics:
     dates = pd.to_datetime(frame[validation.date_column], errors="coerce").dt.normalize()
     lower = pd.Timestamp(start)
-    mask = dates.ge(lower)
-    if end is not None:
-        mask &= dates.le(pd.Timestamp(end))
-    window_dates = pd.DatetimeIndex(sorted(dates.loc[mask].dropna().unique()))
-    sampled_dates = window_dates[:: validation.holding_days]
+    upper = pd.Timestamp(end) if end is not None else None
+    all_dates = pd.DatetimeIndex(sorted(dates.dropna().unique()))
+    # The sampling anchor is global and therefore identical for train,
+    # validation, audit, and the portfolio engine.  Restarting [::5] inside
+    # each split silently evaluates different weekdays in Stage A and B.
+    sampled_dates = all_dates[:: validation.holding_days]
+    sampled_dates = sampled_dates[sampled_dates >= lower]
+    if upper is not None:
+        sampled_dates = sampled_dates[sampled_dates <= upper]
+
+    fallback_exit_by_date = {
+        signal_date: all_dates[index + validation.holding_days + 1]
+        if index + validation.holding_days + 1 < len(all_dates)
+        else pd.NaT
+        for index, signal_date in enumerate(all_dates)
+    }
+    if "label_exit_date" in frame.columns:
+        exit_rows = pd.DataFrame(
+            {
+                "date": dates,
+                "exit": pd.to_datetime(frame["label_exit_date"], errors="coerce").dt.normalize(),
+            }
+        ).dropna(subset=["date"])
+        observed_exit_by_date = exit_rows.groupby("date", sort=False)["exit"].max().to_dict()
+    else:
+        observed_exit_by_date = {}
+
+    def exit_date(signal_date: pd.Timestamp) -> pd.Timestamp | pd.NaT:
+        observed = observed_exit_by_date.get(signal_date)
+        return observed if pd.notna(observed) else fallback_exit_by_date.get(signal_date, pd.NaT)
+
+    # A finite split may only use labels whose exit is also inside it.  This
+    # keeps late-December validation returns from leaking January audit data.
+    if upper is not None:
+        sampled_dates = pd.DatetimeIndex(
+            [
+                signal_date
+                for signal_date in sampled_dates
+                if pd.notna(exit_date(signal_date)) and exit_date(signal_date) <= upper
+            ]
+        )
+    mask = dates.isin(sampled_dates)
 
     rows = pd.DataFrame(
         {
@@ -101,7 +138,7 @@ def _diagnose_window(
         },
         index=frame.index,
     )
-    rows = rows.loc[mask & dates.isin(sampled_dates)]
+    rows = rows.loc[mask]
     correlations: list[float] = []
     coverages: list[float] = []
     for _, group in rows.groupby("date", sort=True):

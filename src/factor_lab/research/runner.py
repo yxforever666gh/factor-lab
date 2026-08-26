@@ -59,6 +59,47 @@ def _read_json(path: Path) -> dict[str, Any]:
     return payload
 
 
+def _completed_run_valid(summary_path: Path, output_dir: Path, run_fingerprint: str) -> bool:
+    """Verify the immutable outputs before accepting a completed checkpoint."""
+
+    manifest_path = output_dir / "manifest.json"
+    if not summary_path.is_file() or not manifest_path.is_file():
+        return False
+    try:
+        summary = _read_json(summary_path)
+        manifest = _read_json(manifest_path)
+        if summary.get("status") != "completed":
+            return False
+        if summary.get("run_fingerprint") != run_fingerprint:
+            return False
+        if manifest.get("run_fingerprint") != run_fingerprint:
+            return False
+        rows = manifest.get("files") or []
+        if not isinstance(rows, list) or not rows:
+            return False
+        root = output_dir.resolve()
+        names: set[str] = set()
+        for row in rows:
+            relative = Path(str(row["path"]))
+            if relative.is_absolute():
+                return False
+            path = (output_dir / relative).resolve()
+            if not path.is_relative_to(root) or not path.is_file():
+                return False
+            normalized = relative.as_posix()
+            if normalized in names or _sha256_file(path) != row.get("sha256"):
+                return False
+            names.add(normalized)
+        required = {"summary.json", "report.md"}
+        required.update(
+            f"factors/{_safe_name(str(name))}.json"
+            for name in summary.get("stage_b_selected") or []
+        )
+        return required.issubset(names)
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return False
+
+
 def _git_state(project_root: Path) -> dict[str, Any]:
     def command(*args: str) -> str | None:
         try:
@@ -138,6 +179,7 @@ def _feature_columns(path: Path, factors: Sequence[FactorSpec], validation: Vali
         validation.date_column,
         "ticker",
         "st_filter_status",
+        "label_exit_date",
         *validation.label_columns,
     }
     for factor in factors:
@@ -234,8 +276,9 @@ def _window_metrics(
     rows = [
         row
         for row in periods
-        if pd.Timestamp(row["start_date"]) >= lower
-        and (upper is None or pd.Timestamp(row["start_date"]) <= upper)
+        if pd.Timestamp(row["signal_date"]) >= lower
+        and (upper is None or pd.Timestamp(row["signal_date"]) <= upper)
+        and (upper is None or pd.Timestamp(row["end_date"]) <= upper)
     ]
     net = [float(row.get("net_return") or 0.0) for row in rows]
     gross = [float(row.get("gross_return") or 0.0) for row in rows]
@@ -243,7 +286,7 @@ def _window_metrics(
     excess = [left - right for left, right in zip(net, benchmark)]
     half_year: dict[str, list[Mapping[str, Any]]] = {}
     for row in rows:
-        date = pd.Timestamp(row["start_date"])
+        date = pd.Timestamp(row["signal_date"])
         half_year.setdefault(f"{date.year}-H{1 if date.month <= 6 else 2}", []).append(row)
     half_year_excess = [
         _compound(float(item.get("net_return") or 0.0) for item in group)
@@ -471,15 +514,20 @@ def run_research(
             "execution": execution_hash,
             "factors": [row.to_dict() for row in all_factors],
             "research": research_config,
+            "run_robustness": bool(run_robustness),
         }
     )
     run_id = fingerprint[:16]
     output_dir = root / "runtime" / "runs" / run_id
     summary_path = output_dir / "summary.json"
-    if resume and summary_path.is_file():
+    existing_summary = summary_path.is_file()
+    if resume and _completed_run_valid(summary_path, output_dir, fingerprint):
         cached = _read_json(summary_path)
-        if cached.get("status") == "completed" and cached.get("run_fingerprint") == fingerprint:
-            return cached
+        _write_json(
+            root / "runtime" / "runs" / "latest.json",
+            {"run_id": run_id, "output_dir": str(output_dir), "summary_path": str(summary_path)},
+        )
+        return cached
     output_dir.mkdir(parents=True, exist_ok=True)
     factor_dir = output_dir / "factors"
     factor_dir.mkdir(parents=True, exist_ok=True)
@@ -514,9 +562,12 @@ def run_research(
     for factor in selected:
         result_path = factor_dir / f"{_safe_name(factor.name)}.json"
         cached_result: dict[str, Any] | None = None
-        if resume and result_path.is_file():
+        if resume and not existing_summary and result_path.is_file():
             payload = _read_json(result_path)
-            if payload.get("run_fingerprint") == fingerprint:
+            if (
+                payload.get("run_fingerprint") == fingerprint
+                and (payload.get("result") or {}).get("factor_name") == factor.name
+            ):
                 cached_result = payload.get("result")
         if cached_result is None:
             signal = signals[factor.name]
@@ -543,6 +594,12 @@ def run_research(
         row["validated"] = bool(row["gate_passed"] and row["beats_control"])
         if row["validated"]:
             validated.append(str(row["factor_name"]))
+    # Per-factor artifacts are authoritative evidence too.  Persist comparison
+    # flags only after the control result is known so they cannot contradict
+    # the final summary.
+    for row in stage_b:
+        result_path = factor_dir / f"{_safe_name(str(row['factor_name']))}.json"
+        _write_json(result_path, {"run_fingerprint": fingerprint, "result": row})
 
     robustness: dict[str, Any] | None = None
     if mode == "full" and suite == "next" and not validated and run_robustness:
@@ -589,6 +646,8 @@ def run_research(
         "evidence_class": EVIDENCE_CLASS,
         "investment_claim_allowed": False,
         "promotion_triggered": False,
+        "canary_smoke_only": mode == "canary",
+        "gate_results_interpretable": mode == "full",
         "git": _git_state(root),
         "implementation_sha256": implementation_hash,
         "data": {
@@ -611,12 +670,22 @@ def run_research(
         "robustness": robustness,
         "search_stopped": bool(mode == "full" and suite == "next" and not validated),
     }
-    _write_json(summary_path, summary)
     report_path = output_dir / "report.md"
     report_path.write_text(render_report(summary), encoding="utf-8")
-    artifact_paths = [summary_path, report_path, *sorted(factor_dir.glob("*.json"))]
+    # ``summary.json`` is the completed marker.  Build and hash it under a
+    # pending name, publish the manifest, then atomically expose the summary.
+    pending_summary_path = output_dir / "summary.pending.json"
+    _write_json(pending_summary_path, summary)
+    artifact_paths: list[tuple[str, Path]] = [
+        ("summary.json", pending_summary_path),
+        ("report.md", report_path),
+        *[
+            (path.relative_to(output_dir).as_posix(), path)
+            for path in sorted(factor_dir.glob("*.json"))
+        ],
+    ]
     if (output_dir / "robustness.json").is_file():
-        artifact_paths.append(output_dir / "robustness.json")
+        artifact_paths.append(("robustness.json", output_dir / "robustness.json"))
     manifest = {
         "schema_version": 1,
         "algorithm": "sha256",
@@ -624,14 +693,15 @@ def run_research(
         "run_fingerprint": fingerprint,
         "files": [
             {
-                "path": path.relative_to(output_dir).as_posix(),
+                "path": logical_path,
                 "size_bytes": path.stat().st_size,
                 "sha256": _sha256_file(path),
             }
-            for path in artifact_paths
+            for logical_path, path in artifact_paths
         ],
     }
     _write_json(output_dir / "manifest.json", manifest)
+    pending_summary_path.replace(summary_path)
     _write_json(
         root / "runtime" / "runs" / "latest.json",
         {"run_id": run_id, "output_dir": str(output_dir), "summary_path": str(summary_path)},

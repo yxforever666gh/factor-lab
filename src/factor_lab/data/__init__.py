@@ -15,6 +15,7 @@ import pandas as pd
 from .build import (
     apply_feature_store_migration,
     build_data,
+    normalize_legacy_amount_units,
     plan_feature_store_migration,
 )
 from .catalog import (
@@ -24,7 +25,7 @@ from .catalog import (
     load_data_config,
     parquet_status,
 )
-from .sources import TushareClient, sync_data
+from .sources import TushareClient, sync_data, turnover_amount_to_rmb
 
 
 @dataclass
@@ -139,7 +140,9 @@ __all__ = [
     "audit_top500_store",
     "build_data",
     "load_data_config",
+    "normalize_legacy_amount_units",
     "parquet_status",
     "plan_feature_store_migration",
     "sync_data",
+    "turnover_amount_to_rmb",
 ]

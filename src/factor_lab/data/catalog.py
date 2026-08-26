@@ -291,6 +291,23 @@ def audit_top500_store(
         )
         for name, (path, required, core, keys, date_column, ticker_column) in specifications.items()
     }
+    if deep and files["features"].get("status") == "pass":
+        available = set(files["features"].get("columns") or ())
+        if {"amount", "amount_rmb"}.issubset(available):
+            amounts = pd.read_parquet(layout.features_path, columns=["amount", "amount_rmb"])
+            base = pd.to_numeric(amounts["amount"], errors="coerce")
+            converted = pd.to_numeric(amounts["amount_rmb"], errors="coerce")
+            valid = base.notna() & converted.notna() & base.ne(0.0)
+            ratios = (converted[valid] / base[valid]).replace(
+                [float("inf"), float("-inf")], float("nan")
+            ).dropna()
+            median_ratio = float(ratios.median()) if len(ratios) else None
+            files["features"]["amount_rmb_per_amount_median"] = median_ratio
+            if median_ratio is None or not 0.9 <= median_ratio <= 1.1:
+                files["features"]["issues"] = sorted(
+                    {*files["features"]["issues"], "amount_unit_not_rmb"}
+                )
+                files["features"]["status"] = "fail"
     issues = [f"{name}:{issue}" for name, result in files.items() for issue in result["issues"]]
     if deep:
         feature_end = files["features"].get("end_date")

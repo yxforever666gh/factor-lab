@@ -76,6 +76,7 @@ def test_migrated_evaluator_preserves_legacy_numerical_regression() -> None:
     assert result.max_drawdown == pytest.approx(-0.06374198)
     assert result.actual_turnover == pytest.approx(0.68191108)
     assert result.total_cost == pytest.approx(730.7622)
+    assert result.capacity_violation_count == 0
     assert [period["selected_tickers"] for period in result.periods] == [
         ["A", "B"],
         ["B", "A"],
@@ -207,3 +208,27 @@ def test_cost_config_keeps_the_established_cost_contract() -> None:
         "transfer_fee_rate",
         "impact_coefficient",
     )
+
+
+def test_capacity_limited_target_is_reported_without_actual_violation() -> None:
+    dates = pd.bdate_range("2024-06-03", periods=7)
+    frame = _panel(dates, ("A",), adv=19_980.0)
+    frame["open"] = 10.0
+
+    result = evaluate_long_only_portfolio(
+        frame,
+        "signal",
+        LongOnlyPortfolioConfig(
+            capital=1_000.0,
+            position_count=1,
+            target_weight=1.0,
+            max_adv_participation=0.05,
+        ),
+    )
+
+    assert result.capacity_limited_count == 1
+    assert result.capacity_violation_count == 0
+    assert result.periods[0]["capacity_limited_count"] == 1
+    assert result.periods[0]["capacity_violation_count"] == 0
+    assert result.trades[0]["capacity_limited"] is True
+    assert result.trades[0]["participation"] < 0.05

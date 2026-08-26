@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from factor_lab.data import RuntimeLayout, sync_data
+from factor_lab.data import RuntimeLayout, sync_data, turnover_amount_to_rmb
 from factor_lab.data.sources import DATASET_FIELDS
 
 
@@ -29,6 +29,19 @@ class FixtureClient:
         row["ts_code"] = "000001.SZ"
         row["trade_date"] = kwargs["trade_date"]
         return pd.DataFrame([row], columns=fields)
+
+
+def test_turnover_amount_units_are_source_aware() -> None:
+    tushare_thousand_rmb = pd.Series([274_337.1858])
+    akshare_rmb = pd.Series([274_337_186.0])
+
+    tushare = turnover_amount_to_rmb(tushare_thousand_rmb, source="tushare_daily")
+    akshare = turnover_amount_to_rmb(akshare_rmb, source="akshare")
+    estimate = turnover_amount_to_rmb(akshare_rmb, source="turnover_estimate_rmb")
+
+    assert abs(tushare.iloc[0] - 274_337_185.8) < 0.001
+    assert abs(tushare.iloc[0] - akshare.iloc[0]) < 1.0
+    assert estimate.iloc[0] == akshare.iloc[0]
 
 
 def _config(tmp_path: Path) -> tuple[Path, dict]:

@@ -24,6 +24,26 @@ DATASET_FIELDS = {
     "adj_factor": "ts_code,trade_date,adj_factor",
 }
 
+AMOUNT_TO_RMB_MULTIPLIERS = {
+    "tushare_daily": 1000.0,
+    "akshare": 1.0,
+    "turnover_estimate_rmb": 1.0,
+}
+
+
+def turnover_amount_to_rmb(values: pd.Series, *, source: str) -> pd.Series:
+    """Normalize a vendor turnover-amount column to RMB explicitly.
+
+    Tushare ``daily.amount`` is reported in thousands of RMB.  AkShare
+    turnover amount and the ``circ_mv * turnover_rate`` fallback are already
+    RMB.  Keeping this conversion source-aware prevents a repeat of the
+    retired builder's blanket x1000 bug.
+    """
+
+    if source not in AMOUNT_TO_RMB_MULTIPLIERS:
+        raise ValueError(f"unknown turnover amount source: {source}")
+    return pd.to_numeric(values, errors="coerce") * AMOUNT_TO_RMB_MULTIPLIERS[source]
+
 
 class MarketDataClient(Protocol):
     def query(self, endpoint: str, **kwargs: Any) -> pd.DataFrame: ...
@@ -251,4 +271,11 @@ def sync_data(
     }
 
 
-__all__ = ["DATASET_FIELDS", "MarketDataClient", "TushareClient", "sync_data"]
+__all__ = [
+    "AMOUNT_TO_RMB_MULTIPLIERS",
+    "DATASET_FIELDS",
+    "MarketDataClient",
+    "TushareClient",
+    "sync_data",
+    "turnover_amount_to_rmb",
+]

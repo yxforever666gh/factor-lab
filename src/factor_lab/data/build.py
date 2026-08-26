@@ -4,9 +4,16 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import math
 from pathlib import Path
 import shutil
 from typing import Any, Mapping
+
+import numpy as np
+import pandas as pd
+import pyarrow as pa
+import pyarrow.compute as pc
+import pyarrow.parquet as pq
 
 from .catalog import (
     DEFAULT_CONFIG_PATH,
@@ -98,6 +105,147 @@ def _write_json_atomic(path: Path, payload: Mapping[str, Any]) -> None:
         json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8"
     )
     temporary.replace(path)
+
+
+def _median_feature_amount_ratio(path: Path) -> float | None:
+    available = set(pq.ParquetFile(path).schema_arrow.names)
+    if not {"amount", "amount_rmb"}.issubset(available):
+        return None
+    frame = pd.read_parquet(path, columns=["amount", "amount_rmb"])
+    denominator = pd.to_numeric(frame["amount"], errors="coerce")
+    numerator = pd.to_numeric(frame["amount_rmb"], errors="coerce")
+    valid = denominator.notna() & numerator.notna() & denominator.ne(0.0)
+    ratio = (numerator[valid] / denominator[valid]).replace([np.inf, -np.inf], np.nan).dropna()
+    return float(ratio.median()) if len(ratio) else None
+
+
+def _median_overlapping_adv_ratio(features_path: Path, execution_path: Path) -> float | None:
+    feature_columns = set(pq.ParquetFile(features_path).schema_arrow.names)
+    execution_columns = set(pq.ParquetFile(execution_path).schema_arrow.names)
+    required = {"ticker", "date", "adv_20"}
+    if not required.issubset(feature_columns) or not required.issubset(execution_columns):
+        return None
+    feature_parquet = pq.ParquetFile(features_path)
+    sample = feature_parquet.read_row_group(0, columns=sorted(required)).to_pandas()
+    sample = sample.head(100_000).rename(columns={"adv_20": "feature_adv"})
+    if sample.empty:
+        return None
+    sample["date"] = pd.to_datetime(sample["date"], errors="coerce")
+    lower = sample["date"].min()
+    upper = sample["date"].max()
+    execution = pd.read_parquet(
+        execution_path,
+        columns=sorted(required),
+        filters=[("date", ">=", lower), ("date", "<=", upper)],
+    ).rename(columns={"adv_20": "execution_adv"})
+    execution["date"] = pd.to_datetime(execution["date"], errors="coerce")
+    joined = sample.merge(execution, on=["ticker", "date"], how="inner")
+    denominator = pd.to_numeric(joined["feature_adv"], errors="coerce")
+    numerator = pd.to_numeric(joined["execution_adv"], errors="coerce")
+    valid = denominator.notna() & numerator.notna() & denominator.ne(0.0)
+    ratio = (numerator[valid] / denominator[valid]).replace([np.inf, -np.inf], np.nan).dropna()
+    return float(ratio.median()) if len(ratio) else None
+
+
+def _scaled_parquet_copy(source: Path, target: Path, scales: Mapping[str, float]) -> None:
+    parquet = pq.ParquetFile(source)
+    missing = sorted(set(scales) - set(parquet.schema_arrow.names))
+    if missing:
+        raise ValueError(f"cannot normalize {source.name}; missing columns: {missing}")
+    target.unlink(missing_ok=True)
+    writer = pq.ParquetWriter(target, parquet.schema_arrow, compression="zstd")
+    try:
+        for batch in parquet.iter_batches(batch_size=100_000):
+            table = pa.Table.from_batches([batch])
+            for column, scale in scales.items():
+                index = table.schema.get_field_index(column)
+                field = table.schema.field(index)
+                values = pc.multiply(table[column], float(scale)).cast(field.type)
+                table = table.set_column(index, field, values)
+            writer.write_table(table)
+    finally:
+        writer.close()
+    rewritten = pq.ParquetFile(target)
+    if rewritten.metadata.num_rows != parquet.metadata.num_rows:
+        target.unlink(missing_ok=True)
+        raise RuntimeError(f"row count changed while normalizing {source.name}")
+
+
+def normalize_legacy_amount_units(layout: RuntimeLayout) -> dict[str, Any]:
+    """Repair the retired builder's RMB x1000 bug exactly once and resumably.
+
+    AkShare turnover amount and the fallback ``circ_mv * turnover`` estimate are
+    already denominated in RMB.  The retired expanded builder multiplied the
+    unified amount by 1000 before calculating ADV.  The signature is therefore
+    deterministic: ``median(amount_rmb / amount) ~= 1000``.
+    """
+
+    marker = layout.top500_root / "unit-normalization.json"
+    feature_ratio = _median_feature_amount_ratio(layout.features_path)
+    if feature_ratio is None:
+        return {"status": "not_applicable", "reason": "amount columns unavailable"}
+    overlap_ratio = _median_overlapping_adv_ratio(layout.features_path, layout.execution_path)
+    feature_needs_scale = 900.0 <= feature_ratio <= 1100.0
+    feature_is_rmb = 0.9 <= feature_ratio <= 1.1
+    if not feature_needs_scale and not feature_is_rmb:
+        raise RuntimeError(f"ambiguous amount unit ratio: {feature_ratio:.6g}")
+    if overlap_ratio is None or not math.isfinite(overlap_ratio):
+        raise RuntimeError("cannot reconcile feature and execution ADV units")
+    execution_needs_scale = (feature_needs_scale and 0.9 <= overlap_ratio <= 1.1) or (
+        feature_is_rmb and 900.0 <= overlap_ratio <= 1100.0
+    )
+    if not execution_needs_scale and not (0.9 <= overlap_ratio <= 1.1):
+        raise RuntimeError(f"ambiguous execution ADV unit ratio: {overlap_ratio:.6g}")
+    if not feature_needs_scale and not execution_needs_scale:
+        return {
+            "status": "already_normalized",
+            "feature_amount_ratio": feature_ratio,
+            "execution_to_feature_adv_ratio": overlap_ratio,
+            "marker_path": str(marker),
+        }
+
+    before = {
+        "features_sha256": sha256_file(layout.features_path),
+        "execution_sha256": sha256_file(layout.execution_path),
+    }
+    feature_temp = layout.features_path.with_suffix(".unit-fix.partial.parquet")
+    execution_temp = layout.execution_path.with_suffix(".unit-fix.partial.parquet")
+    if feature_needs_scale:
+        _scaled_parquet_copy(
+            layout.features_path,
+            feature_temp,
+            {"amount_rmb": 0.001, "adv_20": 0.001},
+        )
+    if execution_needs_scale:
+        _scaled_parquet_copy(layout.execution_path, execution_temp, {"adv_20": 0.001})
+    if feature_needs_scale:
+        feature_temp.replace(layout.features_path)
+    if execution_needs_scale:
+        execution_temp.replace(layout.execution_path)
+    normalized_ratio = _median_feature_amount_ratio(layout.features_path)
+    normalized_overlap = _median_overlapping_adv_ratio(layout.features_path, layout.execution_path)
+    if normalized_ratio is None or not (0.9 <= normalized_ratio <= 1.1):
+        raise RuntimeError("feature amount normalization did not validate")
+    if normalized_overlap is None or not (0.9 <= normalized_overlap <= 1.1):
+        raise RuntimeError("execution ADV normalization did not validate")
+    result = {
+        "schema_version": 1,
+        "status": "normalized",
+        "completed_at_utc": datetime.now(timezone.utc).isoformat(),
+        "reason": "retired expanded builder multiplied RMB turnover amount by 1000",
+        "scale": 0.001,
+        "feature_amount_ratio_before": feature_ratio,
+        "execution_to_feature_adv_ratio_before": overlap_ratio,
+        "feature_amount_ratio_after": normalized_ratio,
+        "execution_to_feature_adv_ratio_after": normalized_overlap,
+        "before": before,
+        "after": {
+            "features_sha256": sha256_file(layout.features_path),
+            "execution_sha256": sha256_file(layout.execution_path),
+        },
+    }
+    _write_json_atomic(marker, result)
+    return {**result, "marker_path": str(marker)}
 
 
 def apply_feature_store_migration(
@@ -197,6 +345,7 @@ def build_data(
             "mode": mode,
             "migration_plan": plan,
         }
+    normalization = normalize_legacy_amount_units(resolved_layout) if mode == "full" else None
     audit = audit_top500_store(
         resolved_layout,
         config,
@@ -208,6 +357,7 @@ def build_data(
         "status": "ready" if audit["status"] == "ready" else "not_ready",
         "mode": mode,
         "migration": migration,
+        "normalization": normalization,
         "audit": audit,
     }
 
@@ -215,5 +365,6 @@ def build_data(
 __all__ = [
     "apply_feature_store_migration",
     "build_data",
+    "normalize_legacy_amount_units",
     "plan_feature_store_migration",
 ]

@@ -153,7 +153,9 @@ def test_rebalance_enforces_capacity_without_shorting_or_borrowing() -> None:
     assert [(order.ticker, order.reason) for order in blocked] == [
         ("B", "one_price_limit_up")
     ]
-    assert result.capacity_violation_count == 1
+    assert result.capacity_violation_count == 0
+    assert result.capacity_limited_order_count == 1
+    assert executed[0].capacity_limited is True
     assert result.capacity_usage == pytest.approx(0.05)
     assert account.cash >= 0.0
     assert all(position.quantity >= 0.0 for position in account.positions.values())
@@ -219,3 +221,44 @@ def test_corporate_actions_preserve_position_value_and_credit_cash() -> None:
     assert account.positions["A"].last_price == 5.0
     assert account.cash == 10.0
     assert account.nav() == 110.0
+
+
+def test_cash_scaling_keeps_capacity_clipping_diagnostic_not_violation() -> None:
+    bars = pd.DataFrame(
+        [
+            {
+                "ticker": "A",
+                "open": 10.0,
+                "close": 10.0,
+                "adv": 19_980.0,
+                "volatility": 0.02,
+                "limit_up": False,
+                "limit_down": False,
+                "suspended": False,
+                "delisted": False,
+                "split_ratio": 1.0,
+                "cash_dividend": 0.0,
+            }
+        ]
+    )
+    account = ExecutionAccount(cash=1_000.0)
+
+    result = execute_rebalance(
+        account,
+        {"A": 1.0},
+        bars,
+        trade_date="2026-01-05",
+        policy=ExecutionPolicy(
+            max_adv_participation=0.05,
+            max_position_weight=1.0,
+        ),
+        columns=_columns(),
+    )
+
+    fill = next(order for order in result.orders if order.status == "executed")
+    assert fill.capacity_limited is True
+    assert fill.executed_notional < fill.requested_notional
+    assert fill.participation < 0.05
+    assert result.capacity_limited_order_count == 1
+    assert result.capacity_violation_count == 0
+    assert account.cash >= 0.0

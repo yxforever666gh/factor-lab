@@ -107,6 +107,7 @@ class LongOnlyPortfolioEvaluation:
     capacity_usage: float
     blocked_trade_count: int
     capacity_violation_count: int
+    capacity_limited_count: int
     observations: int
     rebalance_count: int
     average_holding_count: float
@@ -219,6 +220,7 @@ def _empty_evaluation(reason: str, missing_columns: Sequence[str] = ()) -> LongO
         capacity_usage=0.0,
         blocked_trade_count=0,
         capacity_violation_count=0,
+        capacity_limited_count=0,
         observations=0,
         rebalance_count=0,
         average_holding_count=0.0,
@@ -507,6 +509,7 @@ def evaluate_long_only_portfolio(
     }
     blocked_trade_count = 0
     capacity_violation_count = 0
+    capacity_limited_count = 0
     capacity_usages: list[float] = []
     turnover_values: list[float] = []
     holding_counts: list[int] = []
@@ -596,6 +599,7 @@ def evaluate_long_only_portfolio(
             total_costs[key] += value
         blocked_trade_count += execution.blocked_trade_count
         capacity_violation_count += execution.capacity_violation_count
+        capacity_limited_count += execution.capacity_limited_order_count
         if execution.capacity_usage > 0:
             capacity_usages.append(execution.capacity_usage)
         trades.extend(order.to_trade_dict() for order in execution.orders)
@@ -652,8 +656,11 @@ def evaluate_long_only_portfolio(
                 1
                 for row in period_trades
                 if row.get("status") == "executed"
-                and float(row.get("requested_notional") or 0.0) > float(row.get("executed_notional") or 0.0) + 1e-8
-                and float(row.get("participation") or 0.0) >= cfg.max_adv_participation - 1e-8
+                and float(row.get("executed_notional") or 0.0)
+                > float(row.get("adv") or 0.0) * cfg.max_adv_participation + 1e-6
+            ),
+            "capacity_limited_count": sum(
+                bool(row.get("capacity_limited")) for row in period_trades
             ),
         })
 
@@ -711,6 +718,7 @@ def evaluate_long_only_portfolio(
         capacity_usage=round(max(capacity_usages, default=0.0), 8),
         blocked_trade_count=blocked_trade_count,
         capacity_violation_count=capacity_violation_count,
+        capacity_limited_count=capacity_limited_count,
         observations=len(periods),
         rebalance_count=len(periods),
         average_holding_count=round(float(np.mean(holding_counts)), 6),
@@ -746,4 +754,3 @@ __all__ = [
     "LongOnlyPortfolioEvaluation",
     "evaluate_long_only_portfolio",
 ]
-

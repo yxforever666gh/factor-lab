@@ -238,6 +238,7 @@ class ExecutionOrder:
             "executed_notional": number(self.executed_notional, 4),
             "status": self.status,
             "reason": self.reason,
+            "capacity_limited": bool(self.capacity_limited),
         }
         if self.status == "executed":
             payload.update(
@@ -281,6 +282,12 @@ class ExecutionResult:
             for order in self.orders
             if order.status == "executed"
         )
+
+    @property
+    def capacity_limited_order_count(self) -> int:
+        """Orders whose requested notional was clipped to the ADV budget."""
+
+        return sum(order.capacity_limited for order in self.orders)
 
 
 def _truthy(value: Any) -> bool:
@@ -457,6 +464,7 @@ def _blocked_order(
     side: str,
     requested: float,
     reason: str,
+    capacity_limited: bool = False,
 ) -> ExecutionOrder:
     return ExecutionOrder(
         date=str(trade_date.date()),
@@ -471,6 +479,7 @@ def _blocked_order(
         status="blocked",
         reason=reason,
         costs=_empty_costs(),
+        capacity_limited=capacity_limited,
     )
 
 
@@ -557,7 +566,6 @@ def execute_rebalance(
             adv, policy.max_adv_participation
         )
         capacity_limited = requested > capacity + _EPSILON
-        capacity_violations += int(capacity_limited)
         executed = min(requested, capacity, current_value)
         if executed <= _EPSILON:
             orders.append(
@@ -634,7 +642,6 @@ def execute_rebalance(
             adv, policy.max_adv_participation
         )
         capacity_limited = requested > capacity + _EPSILON
-        capacity_violations += int(capacity_limited)
         executable = min(requested, capacity)
         candidates.append(
             {
@@ -698,6 +705,7 @@ def execute_rebalance(
                     side="buy",
                     requested=requested,
                     reason="cash_or_adv_capacity",
+                    capacity_limited=bool(candidate["capacity_limited"]),
                 )
             )
             continue
@@ -763,6 +771,17 @@ def execute_rebalance(
         if order.status == "executed":
             for name, value in order.costs.items():
                 costs[name] += float(value)
+            capacity = (
+                maximum_executable_notional(
+                    order.adv, policy.max_adv_participation
+                )
+                if order.adv is not None
+                else None
+            )
+            if capacity is not None and order.executed_notional > capacity + 1e-6:
+                capacity_violations += 1
+    if capacity_violations:
+        raise RuntimeError("execution kernel exceeded max_adv_participation")
     return ExecutionResult(
         pretrade_nav=pretrade_nav,
         posttrade_nav=posttrade_nav,

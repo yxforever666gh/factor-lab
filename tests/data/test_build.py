@@ -9,6 +9,7 @@ from factor_lab.data import (
     RuntimeLayout,
     apply_feature_store_migration,
     build_data,
+    normalize_legacy_amount_units,
     plan_feature_store_migration,
 )
 
@@ -101,3 +102,34 @@ def test_build_reports_migration_required_without_writing_large_files(tmp_path: 
     assert status["status"] == "migration_required"
     assert not layout.features_path.exists()
 
+
+def test_legacy_hybrid_amount_and_adv_are_normalized_resumably(tmp_path: Path) -> None:
+    config_path, payload = _write_config(tmp_path)
+    layout = RuntimeLayout.from_config(payload, config_path=config_path)
+    layout.ensure_directories()
+    dates = pd.bdate_range("2024-01-02", periods=25)
+    features = pd.DataFrame(
+        {
+            "ticker": ["A"] * len(dates),
+            "date": dates,
+            "open_adj": range(10, 10 + len(dates)),
+            "amount": [100_000_000.0] * len(dates),
+            "amount_rmb": [100_000_000_000.0] * len(dates),
+            "adv_20": [100_000_000_000.0] * len(dates),
+        }
+    )
+    execution = features[["ticker", "date", "open_adj", "adv_20"]].copy()
+    features.to_parquet(layout.features_path, index=False)
+    execution.to_parquet(layout.execution_path, index=False)
+
+    result = normalize_legacy_amount_units(layout)
+
+    assert result["status"] == "normalized"
+    repaired_features = pd.read_parquet(layout.features_path)
+    repaired_execution = pd.read_parquet(layout.execution_path)
+    assert repaired_features["amount"].eq(100_000_000.0).all()
+    assert repaired_features["amount_rmb"].eq(100_000_000.0).all()
+    assert repaired_features["adv_20"].eq(100_000_000.0).all()
+    assert repaired_execution["adv_20"].eq(100_000_000.0).all()
+    assert repaired_features["open_adj"].equals(features["open_adj"])
+    assert normalize_legacy_amount_units(layout)["status"] == "already_normalized"
