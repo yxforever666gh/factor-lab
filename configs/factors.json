@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "control": {
+    "name": "earnings_yield_over_pb",
+    "family": "value",
+    "expression": "earnings_yield / pb",
+    "direction_policy": "train_ic",
+    "role": "control"
+  },
+  "suites": {
+    "next": [
+      {
+        "name": "value_rank",
+        "family": "value",
+        "expression": "rank(book_yield) + rank(earnings_yield)",
+        "direction_policy": "train_ic"
+      },
+      {
+        "name": "value_quality_rank",
+        "family": "value",
+        "expression": "rank(book_yield) + rank(earnings_yield) + rank(roe)",
+        "direction_policy": "train_ic"
+      },
+      {
+        "name": "value_defensive_rank",
+        "family": "value",
+        "expression": "rank(book_yield) + rank(earnings_yield) + rank(-volatility_20)",
+        "direction_policy": "train_ic"
+      },
+      {
+        "name": "value_low_turnover_rank",
+        "family": "value",
+        "expression": "rank(book_yield) + rank(earnings_yield) + rank(-turnover_rate)",
+        "direction_policy": "train_ic"
+      }
+    ],
+    "legacy-regression": [
+      {"name": "mom_20", "family": "momentum", "expression": "momentum_20", "direction_policy": "train_ic"},
+      {"name": "mom_60", "family": "momentum", "expression": "momentum_60", "direction_policy": "train_ic"},
+      {"name": "mom_120", "family": "momentum", "expression": "momentum_120", "direction_policy": "train_ic"},
+      {"name": "mom_60_skip_5", "family": "momentum", "expression": "momentum_60_skip_5", "direction_policy": "train_ic"},
+      {"name": "book_yield", "family": "value", "expression": "book_yield", "direction_policy": "train_ic"},
+      {"name": "earnings_yield", "family": "value", "expression": "earnings_yield", "direction_policy": "train_ic", "role": "diagnostic_only"},
+      {"name": "book_yield_plus_earnings_yield", "family": "value", "expression": "book_yield + earnings_yield", "direction_policy": "train_ic"},
+      {"name": "earnings_yield_over_pb", "family": "value", "expression": "earnings_yield / pb", "direction_policy": "train_ic", "role": "control"}
+    ]
+  }
+}

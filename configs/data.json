@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "runtime_root": "runtime",
+  "paths": {
+    "data": "data",
+    "raw": "data/raw",
+    "top500": "data/top500",
+    "runs": "runs",
+    "legacy": "legacy"
+  },
+  "top500": {
+    "features_file": "features.parquet",
+    "execution_file": "execution.parquet",
+    "membership_file": "membership.parquet"
+  },
+  "legacy": {
+    "expanded_feature_store": "artifacts/expanded_long_only/feature_store",
+    "files": {
+      "features": "expanded_top500_features.parquet",
+      "execution": "expanded_execution_prices.parquet",
+      "membership": "monthly_top500_membership.parquet"
+    }
+  },
+  "sync": {
+    "source": "tushare",
+    "token_env": "TUSHARE_TOKEN",
+    "exchange": "SSE",
+    "datasets": [
+      "daily",
+      "daily_basic",
+      "adj_factor"
+    ],
+    "checkpoint_file": "checkpoint.json",
+    "request_rate_per_minute": 300,
+    "verify_hashes_on_resume": false
+  },
+  "quality": {
+    "minimum_core_coverage": 0.95,
+    "feature_required_columns": [
+      "ticker",
+      "date",
+      "open_adj",
+      "close_adj",
+      "adv_20",
+      "volatility_20",
+      "forward_return_5d_open"
+    ],
+    "feature_core_columns": [
+      "ticker",
+      "date",
+      "open_adj",
+      "close_adj",
+      "adv_20",
+      "volatility_20",
+      "forward_return_5d_open"
+    ],
+    "execution_required_columns": [
+      "ticker",
+      "date",
+      "open_adj",
+      "adv_20",
+      "volatility_20",
+      "eligible",
+      "universe_member"
+    ],
+    "execution_core_columns": [
+      "ticker",
+      "date",
+      "open_adj",
+      "adv_20",
+      "volatility_20",
+      "eligible",
+      "universe_member"
+    ],
+    "membership_required_columns": [
+      "ts_code",
+      "membership_month",
+      "effective_start_date",
+      "effective_end_date"
+    ]
+  }
+}

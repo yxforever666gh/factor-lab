@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "engine": "factor-lab/lightweight-research/v2",
+  "data_warning": "st_history_unverified",
+  "validation": {
+    "train_start": "2017-01-01",
+    "train_end": "2022-12-31",
+    "validation_start": "2023-01-01",
+    "validation_end": "2024-12-31",
+    "audit_start": "2025-01-01",
+    "holding_days": 5,
+    "min_cross_section": 10,
+    "min_evaluable_ratio": 0.8,
+    "min_median_coverage": 0.8,
+    "max_challengers": 3
+  },
+  "portfolio": {
+    "mode": "long_only",
+    "capital": 50000000,
+    "holding_days": 5,
+    "rebalance_every_days": 5,
+    "position_count": 50,
+    "target_weight": 0.02,
+    "max_adv_participation": 0.05,
+    "open_column": "open_adj",
+    "adv_column": "adv_20",
+    "volatility_column": "volatility_20"
+  },
+  "costs": {
+    "commission_rate": 0.0003,
+    "slippage_bps_per_side": 5.0,
+    "stamp_duty_before_2023_08_28": 0.001,
+    "stamp_duty_from_2023_08_28": 0.0005,
+    "exchange_handling_rate": 0.0000341,
+    "transfer_fee_rate": 0.00001,
+    "impact_coefficient": 0.5
+  },
+  "promotion_gate": {
+    "validation_net_excess_annual_return_min": 0.0,
+    "validation_net_sharpe_min": 0.8,
+    "validation_information_ratio_min": 0.5,
+    "validation_max_drawdown_min": -0.25,
+    "positive_half_year_ratio_min": 0.6,
+    "average_holding_count_min": 40,
+    "capacity_violation_count_max": 0
+  },
+  "control_comparison": {
+    "max_drawdown_worsening_tolerance": 0.02
+  },
+  "robustness": {
+    "position_counts": [50, 75, 100],
+    "rebalance_every_days": [5, 20]
+  }
+}

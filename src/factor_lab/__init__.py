@@ -1,1 +1,3 @@
-"""Factor research MVP package."""
+"""Lightweight local A-share factor research package."""
+
+__version__ = "2.0.0"
