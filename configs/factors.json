@@ -8,6 +8,30 @@
     "role": "control"
   },
   "suites": {
+    "recovery": [
+      {
+        "name": "pit_cashflow_quality",
+        "family": "cashflow_quality",
+        "kind": "builtin",
+        "builtin": "pit_cashflow_quality",
+        "required_fields": [
+          "fundamental_roic",
+          "fundamental_q_ocf_to_sales",
+          "fundamental_debt_to_assets",
+          "fundamental_age_days",
+          "industry_pit",
+          "total_mv"
+        ],
+        "direction_policy": "train_ic",
+        "params": {
+          "minimum_components": 2,
+          "maximum_age_days": 550,
+          "industry_neutral": true,
+          "size_neutral": true
+        },
+        "role": "challenger"
+      }
+    ],
     "next": [
       {
         "name": "value_rank",

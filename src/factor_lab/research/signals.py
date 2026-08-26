@@ -13,6 +13,11 @@ from .contracts import FactorSpec, is_forbidden_signal_field
 
 
 BuiltinSignal = Callable[[pd.DataFrame, Mapping[str, Any]], pd.Series]
+FINANCIAL_QUALITY_FIELDS = (
+    "fundamental_roic",
+    "fundamental_q_ocf_to_sales",
+    "fundamental_debt_to_assets",
+)
 _BINARY_OPERATORS: dict[type[ast.operator], Callable[[Any, Any], Any]] = {
     ast.Add: lambda left, right: left + right,
     ast.Sub: lambda left, right: left - right,
@@ -105,6 +110,137 @@ def evaluate_expression(
     ).evaluate(expression)
 
 
+def pit_cashflow_quality(
+    frame: pd.DataFrame,
+    params: Mapping[str, Any] | None = None,
+    *,
+    date_column: str = "date",
+) -> pd.Series:
+    """Return a PIT-safe, equal-weight cash-flow quality score.
+
+    This deliberately uses actual point-in-time financial fields rather than
+    the legacy ``roe`` proxy. At least two of ROIC, quarterly operating cash
+    flow/sales, and low leverage must be available. Report age is a stale-data
+    filter only; it is never treated as alpha. Percentile ranks make the
+    composite insensitive to vendor unit choices and extreme ratios.
+    """
+
+    settings = dict(params or {})
+    allowed = {
+        "minimum_components",
+        "maximum_age_days",
+        "industry_neutral",
+        "size_neutral",
+    }
+    unknown = sorted(set(settings) - allowed)
+    if unknown:
+        raise ValueError("unsupported pit_cashflow_quality params: " + ", ".join(unknown))
+    minimum = int(settings.get("minimum_components", 2))
+    if minimum not in {2, 3}:
+        raise ValueError("pit_cashflow_quality minimum_components must be 2 or 3")
+    maximum_age = int(settings.get("maximum_age_days", 550))
+    if maximum_age <= 0:
+        raise ValueError("pit_cashflow_quality maximum_age_days must be positive")
+    industry_neutral = bool(settings.get("industry_neutral", True))
+    size_neutral = bool(settings.get("size_neutral", True))
+    required = {
+        date_column,
+        "financial_available_date",
+        "fundamental_age_days",
+        *FINANCIAL_QUALITY_FIELDS,
+    }
+    if industry_neutral:
+        required.add("industry_pit")
+    if size_neutral:
+        required.add("total_mv")
+    missing = sorted(required - set(frame.columns))
+    if missing:
+        raise ValueError("pit_cashflow_quality missing fields: " + ", ".join(missing))
+
+    dates = pd.to_datetime(frame[date_column], errors="coerce").dt.normalize()
+    available = pd.to_datetime(frame["financial_available_date"], errors="coerce").dt.normalize()
+    components = frame.loc[:, FINANCIAL_QUALITY_FIELDS].apply(
+        pd.to_numeric, errors="coerce"
+    ).replace([np.inf, -np.inf], np.nan)
+    ages = pd.to_numeric(frame["fundamental_age_days"], errors="coerce")
+    has_financial_data = components.notna().any(axis=1)
+    future = has_financial_data & available.notna() & dates.notna() & (available > dates)
+    if bool(future.any()):
+        raise ValueError("financial PIT availability violation: available_date is after signal date")
+
+    visible = (
+        has_financial_data
+        & available.notna()
+        & dates.notna()
+        & (available <= dates)
+        & ages.between(0, maximum_age, inclusive="both")
+    )
+    components = components.where(visible)
+    # Higher leverage is lower quality.  All other components are
+    # monotonically higher-is-better by contract.
+    components["fundamental_debt_to_assets"] = -components[
+        "fundamental_debt_to_assets"
+    ]
+    ranked = components.groupby(dates, sort=False).rank(method="average", pct=True)
+    count = ranked.notna().sum(axis=1)
+    score = ranked.mean(axis=1, skipna=True).where(count >= minimum).astype(float)
+
+    if industry_neutral or size_neutral:
+        industries = (
+            frame["industry_pit"].astype("string").str.strip().replace("", pd.NA)
+            if industry_neutral
+            else pd.Series("all", index=frame.index, dtype="string")
+        )
+        sizes = (
+            pd.to_numeric(frame["total_mv"], errors="coerce").where(lambda value: value > 0)
+            if size_neutral
+            else pd.Series(1.0, index=frame.index)
+        )
+        log_size = np.log(sizes)
+        residual = pd.Series(np.nan, index=frame.index, dtype=float)
+        work = pd.DataFrame(
+            {
+                "date": dates,
+                "score": score,
+                "size": log_size,
+                "industry": industries,
+            }
+        )
+        for _, group in work.groupby("date", sort=False):
+            required_columns = ["score"]
+            if size_neutral:
+                required_columns.append("size")
+            if industry_neutral:
+                required_columns.append("industry")
+            finite = group.replace([np.inf, -np.inf], np.nan).dropna(
+                subset=required_columns
+            )
+            if len(finite) < 2:
+                continue
+            y = finite["score"].to_numpy(dtype=float)
+            columns = [np.ones(len(finite), dtype=float)]
+            if size_neutral:
+                size_values = finite["size"].to_numpy(dtype=float)
+                columns.append(size_values - size_values.mean())
+            if industry_neutral:
+                dummies = pd.get_dummies(
+                    finite["industry"], drop_first=True, dtype=float
+                ).to_numpy(dtype=float)
+                columns.extend(dummies[:, column] for column in range(dummies.shape[1]))
+            design = np.column_stack(columns)
+            coefficients = np.linalg.lstsq(design, y, rcond=None)[0]
+            residual.loc[finite.index] = y - design @ coefficients
+        score = residual
+    return score.astype(float)
+
+
+DEFAULT_BUILTINS: dict[str, BuiltinSignal] = {
+    "pit_cashflow_quality": lambda frame, params: pit_cashflow_quality(frame, params),
+    # Compatibility alias for artifacts created during the recovery design.
+    "cashflow_quality_pit": lambda frame, params: pit_cashflow_quality(frame, params),
+}
+
+
 def evaluate_factor_signal(
     frame: pd.DataFrame,
     factor: FactorSpec,
@@ -131,10 +267,21 @@ def evaluate_factor_signal(
             aliases=aliases,
         )
     else:
-        registry = dict(builtins or {})
+        registry = {**DEFAULT_BUILTINS, **dict(builtins or {})}
         if factor.builtin not in registry:
             raise ValueError(f"unknown builtin factor: {factor.builtin}")
         signal = registry[factor.builtin](frame, factor.params)
         signal = pd.to_numeric(pd.Series(signal, index=frame.index), errors="coerce")
         signal = signal.replace([np.inf, -np.inf], np.nan).astype(float)
     return signal.rename(factor.name)
+
+
+__all__ = [
+    "BuiltinSignal",
+    "DEFAULT_BUILTINS",
+    "FINANCIAL_QUALITY_FIELDS",
+    "SafeExpressionEvaluator",
+    "evaluate_expression",
+    "evaluate_factor_signal",
+    "pit_cashflow_quality",
+]

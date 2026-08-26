@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "runtime_root": "runtime",
   "paths": {
     "data": "data",
@@ -24,6 +24,7 @@
   "sync": {
     "source": "tushare",
     "token_env": "TUSHARE_TOKEN",
+    "token_file": "runtime/secrets/settings/tushare_token",
     "exchange": "SSE",
     "datasets": [
       "daily",
@@ -33,6 +34,41 @@
     "checkpoint_file": "checkpoint.json",
     "request_rate_per_minute": 300,
     "verify_hashes_on_resume": false
+  },
+  "enrichment": {
+    "datasets": [
+      "fina_indicator_vip",
+      "bak_basic"
+    ],
+    "financial_lookback_quarters": 2,
+    "checkpoint_file": "enrichment-checkpoint.json",
+    "request_rate_per_minute": 300,
+    "verify_hashes_on_resume": true,
+    "maximum_financial_age_days": 550,
+    "st_resolution": "monthly_bak_basic_name_marker",
+    "security_code_aliases": [
+      {
+        "canonical_ts_code": "001872.SZ",
+        "vendor_ts_code": "000022.SZ",
+        "effective_from": "1900-01-01",
+        "effective_to": "2018-12-26",
+        "source": "https://static.cninfo.com.cn/finalpage/2018-12-26/1205690369.PDF"
+      },
+      {
+        "canonical_ts_code": "601360.SH",
+        "vendor_ts_code": "601313.SH",
+        "effective_from": "1900-01-01",
+        "effective_to": "2018-02-28",
+        "source": "https://www.sse.com.cn/disclosure/listedinfo/announcement/c/2018-02-23/601313_20180223_18.pdf"
+      },
+      {
+        "canonical_ts_code": "302132.SZ",
+        "vendor_ts_code": "300114.SZ",
+        "effective_from": "1900-01-01",
+        "effective_to": "2025-02-17",
+        "source": "https://static.cninfo.com.cn/finalpage/2025-02-15/1222544408.PDF"
+      }
+    ]
   },
   "quality": {
     "minimum_core_coverage": 0.95,

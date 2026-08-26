@@ -171,7 +171,22 @@ class ValidationSpec:
     min_evaluable_ratio: float = 0.80
     min_median_coverage: float = 0.80
     max_challengers: int = 3
+    top_tail_fraction: float = 0.10
+    top_tail_min_count: int = 3
+    top_tail_max_count: int = 50
+    decile_count: int = 10
+    min_train_top_tail_excess: float = 0.0
+    min_train_decile_monotonicity: float = 0.0
+    min_train_positive_year_ratio: float = 0.50
+    similarity_threshold: float = 0.90
+    bootstrap_samples: int = 512
+    bootstrap_block_size: int = 12
+    bootstrap_confidence: float = 0.95
+    bootstrap_seed: int = 20260827
+    audit_min_observations: int = 12
+    audit_min_failed_metrics: int = 2
     date_column: str = "date"
+    ticker_column: str = "ticker"
     label_columns: tuple[str, ...] = (
         "forward_return_5d_open",
         "forward_return_5d",
@@ -199,8 +214,32 @@ class ValidationSpec:
                 raise ValueError(f"{name} must be between 0 and 1")
         if not 1 <= self.max_challengers <= 3:
             raise ValueError("max_challengers must be between 1 and 3")
+        if not 0.0 < self.top_tail_fraction <= 0.5:
+            raise ValueError("top_tail_fraction must be in (0, 0.5]")
+        if self.top_tail_min_count < 1:
+            raise ValueError("top_tail_min_count must be positive")
+        if self.top_tail_max_count < self.top_tail_min_count:
+            raise ValueError("top_tail_max_count must be >= top_tail_min_count")
+        if not 2 <= self.decile_count <= 20:
+            raise ValueError("decile_count must be between 2 and 20")
+        if not 0.0 <= self.min_train_positive_year_ratio <= 1.0:
+            raise ValueError("min_train_positive_year_ratio must be between 0 and 1")
+        if not 0.0 <= self.similarity_threshold <= 1.0:
+            raise ValueError("similarity_threshold must be between 0 and 1")
+        if self.bootstrap_samples < 1:
+            raise ValueError("bootstrap_samples must be positive")
+        if self.bootstrap_block_size < 1:
+            raise ValueError("bootstrap_block_size must be positive")
+        if not 0.0 < self.bootstrap_confidence < 1.0:
+            raise ValueError("bootstrap_confidence must be in (0, 1)")
+        if self.audit_min_observations < 1:
+            raise ValueError("audit_min_observations must be positive")
+        if not 1 <= self.audit_min_failed_metrics <= 3:
+            raise ValueError("audit_min_failed_metrics must be between 1 and 3")
         if not self.date_column.strip():
             raise ValueError("date_column must not be empty")
+        if not self.ticker_column.strip():
+            raise ValueError("ticker_column must not be empty")
         if not self.label_columns:
             raise ValueError("at least one diagnostic label column is required")
 
@@ -217,6 +256,21 @@ class ValidationSpec:
             "min_evaluable_ratio": self.min_evaluable_ratio,
             "min_median_coverage": self.min_median_coverage,
             "max_challengers": self.max_challengers,
+            "top_tail_fraction": self.top_tail_fraction,
+            "top_tail_min_count": self.top_tail_min_count,
+            "top_tail_max_count": self.top_tail_max_count,
+            "decile_count": self.decile_count,
+            "min_train_top_tail_excess": self.min_train_top_tail_excess,
+            "min_train_decile_monotonicity": self.min_train_decile_monotonicity,
+            "min_train_positive_year_ratio": self.min_train_positive_year_ratio,
+            "similarity_threshold": self.similarity_threshold,
+            "bootstrap_samples": self.bootstrap_samples,
+            "bootstrap_block_size": self.bootstrap_block_size,
+            "bootstrap_confidence": self.bootstrap_confidence,
+            "bootstrap_seed": self.bootstrap_seed,
+            "audit_min_observations": self.audit_min_observations,
+            "audit_min_failed_metrics": self.audit_min_failed_metrics,
             "date_column": self.date_column,
+            "ticker_column": self.ticker_column,
             "label_columns": list(self.label_columns),
         }

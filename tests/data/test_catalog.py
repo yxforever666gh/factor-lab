@@ -44,12 +44,12 @@ def test_runtime_layout_resolves_all_paths_under_canonical_runtime(tmp_path: Pat
 
 def test_config_requires_versioned_lightweight_shape(tmp_path: Path) -> None:
     path = tmp_path / "data.json"
-    path.write_text('{"schema_version": 2}', encoding="utf-8")
+    path.write_text('{"schema_version": 3}', encoding="utf-8")
 
     try:
         load_data_config(path)
     except ValueError as exc:
-        assert "schema_version=1" in str(exc)
+        assert "schema_version=1 or 2" in str(exc)
     else:  # pragma: no cover
         raise AssertionError("invalid config unexpectedly loaded")
 

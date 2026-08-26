@@ -11,9 +11,11 @@ from factor_lab.data import (
     RuntimeLayout,
     audit_top500_store,
     build_data,
+    enrich_top500_store,
     load_data_config,
     plan_feature_store_migration,
     sync_data,
+    sync_enrichment,
 )
 from factor_lab.research.runner import latest_run, run_research
 
@@ -51,6 +53,25 @@ def build_parser() -> argparse.ArgumentParser:
     sync.add_argument("--dataset", action="append", dest="datasets")
     sync.add_argument("--max-partitions", type=int)
 
+    enrich = data_commands.add_parser(
+        "enrich",
+        help="Resume PIT financial/reference downloads and enrich canonical Parquet.",
+    )
+    enrich.add_argument("--from", dest="start_date", required=True)
+    enrich.add_argument("--to", dest="end_date", required=True)
+    enrich.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
+    enrich.add_argument(
+        "--dataset",
+        action="append",
+        dest="datasets",
+        choices=("fina_indicator_vip", "bak_basic", "stock_st"),
+    )
+    enrich.add_argument("--max-partitions", type=int)
+    enrich.add_argument("--batch-size", type=int, default=100_000)
+    enrich_phase = enrich.add_mutually_exclusive_group()
+    enrich_phase.add_argument("--sync-only", action="store_true")
+    enrich_phase.add_argument("--apply-only", action="store_true")
+
     build = data_commands.add_parser("build", help="Adopt and audit the frozen Top-500 store.")
     build_mode = build.add_mutually_exclusive_group(required=True)
     build_mode.add_argument("--canary", action="store_true")
@@ -65,7 +86,11 @@ def build_parser() -> argparse.ArgumentParser:
     research = commands.add_parser("research", help="Run or inspect historical factor research.")
     research_commands = research.add_subparsers(dest="research_command", required=True)
     run = research_commands.add_parser("run", help="Run the two-stage factor protocol.")
-    run.add_argument("--suite", choices=("next", "legacy-regression"), default="next")
+    run.add_argument(
+        "--suite",
+        choices=("recovery", "next", "legacy-regression"),
+        default="recovery",
+    )
     run_mode = run.add_mutually_exclusive_group(required=True)
     run_mode.add_argument("--canary", action="store_true")
     run_mode.add_argument("--full", action="store_true")
@@ -114,6 +139,32 @@ def _data_command(arguments: argparse.Namespace) -> int:
         )
         _json(result)
         return 0 if result.get("status") in {"complete", "partial"} else 1
+    if arguments.data_command == "enrich":
+        sync_result = None
+        if not bool(arguments.apply_only):
+            sync_result = sync_enrichment(
+                arguments.start_date,
+                arguments.end_date,
+                config_path=config_path,
+                layout=layout,
+                datasets=arguments.datasets,
+                resume=bool(arguments.resume),
+                max_partitions=arguments.max_partitions,
+            )
+        if bool(arguments.sync_only) or (
+            sync_result is not None and sync_result.get("status") != "complete"
+        ):
+            result = {"status": sync_result.get("status"), "sync": sync_result}
+            _json(result)
+            return 0 if result["status"] in {"complete", "partial"} else 1
+        enrichment = enrich_top500_store(
+            config_path=config_path,
+            layout=layout,
+            batch_size=int(arguments.batch_size),
+        )
+        result = {"status": enrichment.get("status"), "sync": sync_result, "enrichment": enrichment}
+        _json(result)
+        return 0 if result["status"] == "complete" else 1
     if arguments.data_command == "build":
         result = build_data(
             _mode(arguments),

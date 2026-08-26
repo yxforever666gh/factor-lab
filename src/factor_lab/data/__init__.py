@@ -25,7 +25,13 @@ from .catalog import (
     load_data_config,
     parquet_status,
 )
-from .sources import TushareClient, sync_data, turnover_amount_to_rmb
+from .enrich import (
+    build_monthly_reference_state,
+    canonical_trading_dates,
+    enrich_top500_store,
+    prepare_financial_pit,
+)
+from .sources import TushareClient, sync_data, sync_enrichment, turnover_amount_to_rmb
 
 
 @dataclass
@@ -139,10 +145,15 @@ __all__ = [
     "audit_parquet",
     "audit_top500_store",
     "build_data",
+    "build_monthly_reference_state",
+    "canonical_trading_dates",
+    "enrich_top500_store",
     "load_data_config",
     "normalize_legacy_amount_units",
     "parquet_status",
     "plan_feature_store_migration",
+    "prepare_financial_pit",
     "sync_data",
+    "sync_enrichment",
     "turnover_amount_to_rmb",
 ]

@@ -232,3 +232,185 @@ def test_capacity_limited_target_is_reported_without_actual_violation() -> None:
     assert result.periods[0]["capacity_violation_count"] == 0
     assert result.trades[0]["capacity_limited"] is True
     assert result.trades[0]["participation"] < 0.05
+
+
+def test_t_plus_one_open_uses_previous_visible_adv_and_volatility() -> None:
+    dates = pd.bdate_range("2024-07-01", periods=7)
+    frame = _panel(dates, ("A",), adv=1_000_000_000.0)
+    frame["open"] = 10.0
+    frame.loc[frame["date"] == dates[0], "adv_20"] = 10_000.0
+    frame.loc[frame["date"] == dates[0], "volatility_20"] = 0.20
+    frame.loc[frame["date"] == dates[1], "volatility_20"] = 0.0
+    costs = LongOnlyCostConfig(
+        commission_rate=0.0,
+        slippage_bps_per_side=0.0,
+        stamp_duty_before_2023_08_28=0.0,
+        stamp_duty_from_2023_08_28=0.0,
+        exchange_handling_rate=0.0,
+        transfer_fee_rate=0.0,
+        impact_coefficient=1.0,
+    )
+
+
+    result = evaluate_long_only_portfolio(
+        frame,
+        "signal",
+        LongOnlyPortfolioConfig(
+            capital=1_000.0,
+            position_count=1,
+            target_weight=1.0,
+            max_adv_participation=0.05,
+            costs=costs,
+        ),
+    )
+
+    fill = next(trade for trade in result.trades if trade["status"] == "executed")
+    assert fill["adv"] == 10_000.0
+    assert fill["capacity_limited"] is True
+    assert fill["execution_input_date"] == str(dates[0].date())
+    assert fill["costs"]["impact"] > 0.0
+    assert result.capacity_limited_count == 1
+    assert result.execution_input_policy == "previous_visible_ticker_row"
+    assert result.periods[0]["execution_input_min_date"] == str(dates[0].date())
+    assert result.periods[0]["execution_input_max_date"] == str(dates[0].date())
+    assert result.periods[0]["execution_input_required_count"] == 1
+    assert result.periods[0]["execution_input_observed_count"] == 1
+    assert result.periods[0]["execution_input_coverage"] == 1.0
+    assert fill["execution_input_complete"] is True
+
+
+def test_pricing_warmup_cannot_shift_the_signal_rebalance_anchor() -> None:
+    dates = pd.bdate_range("2024-04-01", periods=20)
+    prices = _panel(dates, ("A", "B"), adv=1_000_000_000.0)
+    signals = prices.loc[
+        prices["date"] >= dates[3], ["date", "ticker", "signal"]
+    ].copy()
+
+    result = evaluate_long_only_portfolio(
+        signals,
+        "signal",
+        LongOnlyPortfolioConfig(
+            capital=1_000.0,
+            position_count=1,
+            target_weight=1.0,
+            max_adv_participation=1.0,
+            costs=_zero_costs(),
+        ),
+        pricing_frame=prices,
+    )
+
+    assert result.periods[0]["signal_date"] == str(dates[3].date())
+    assert result.periods[1]["signal_date"] == str(dates[8].date())
+
+
+def test_benchmark_endpoint_coverage_reports_missing_start_and_end() -> None:
+    dates = pd.bdate_range("2024-08-01", periods=7)
+    complete = _panel(dates, ("A", "B", "C"), adv=1_000_000_000.0)
+    complete["open"] = 100.0
+    signals = complete[["date", "ticker", "signal"]].copy()
+    prices = complete.drop(
+        index=complete.index[
+            ((complete["ticker"] == "C") & (complete["date"] == dates[1]))
+            | ((complete["ticker"] == "B") & (complete["date"] == dates[6]))
+        ]
+    ).copy()
+
+    result = evaluate_long_only_portfolio(
+        signals,
+        "signal",
+        LongOnlyPortfolioConfig(
+            capital=1_000.0,
+            position_count=1,
+            target_weight=1.0,
+            max_adv_participation=1.0,
+            costs=_zero_costs(),
+        ),
+        pricing_frame=prices,
+    )
+
+    period = result.periods[0]
+    assert period["benchmark_expected_endpoint_count"] == 6
+    assert period["benchmark_observed_endpoint_count"] == 4
+    assert period["benchmark_complete_return_count"] == 1
+    assert period["benchmark_missing_start_count"] == 1
+    assert period["benchmark_missing_end_count"] == 1
+    assert period["benchmark_endpoint_coverage"] == pytest.approx(2 / 3)
+    assert period["benchmark_return_coverage"] == pytest.approx(1 / 3)
+    assert result.benchmark_expected_endpoint_count == 6
+    assert result.benchmark_observed_endpoint_count == 4
+    assert result.benchmark_complete_return_count == 1
+    assert result.benchmark_endpoint_coverage == pytest.approx(2 / 3)
+    assert result.benchmark_return_coverage == pytest.approx(1 / 3)
+
+
+def test_retention_buffer_keeps_incumbent_until_it_falls_below_exit_rank() -> None:
+    dates = pd.bdate_range("2024-09-02", periods=17)
+    frame = _panel(dates, ("A", "B", "C", "D"), adv=1_000_000_000.0)
+    frame["open"] = 100.0
+    rankings = (
+        {"A": 4.0, "B": 3.0, "C": 2.0, "D": 1.0},
+        {"A": 3.0, "B": 2.0, "C": 4.0, "D": 1.0},
+        {"A": 3.0, "B": 1.0, "C": 4.0, "D": 2.0},
+    )
+    for day_index, trade_date in enumerate(dates):
+        mapping = rankings[min(day_index // 5, 2)]
+        mask = frame["date"] == trade_date
+        frame.loc[mask, "signal"] = frame.loc[mask, "ticker"].map(mapping)
+
+    result = evaluate_long_only_portfolio(
+        frame,
+        "signal",
+        LongOnlyPortfolioConfig(
+            capital=1_000.0,
+            position_count=2,
+            retention_buffer=1,
+            target_weight=0.5,
+            max_adv_participation=1.0,
+            costs=_zero_costs(),
+        ),
+    )
+
+    assert [period["selected_tickers"] for period in result.periods] == [
+        ["A", "B"],
+        ["A", "B"],
+        ["C", "A"],
+    ]
+    assert [period["target_entry_count"] for period in result.periods] == [2, 0, 1]
+    assert [period["target_exit_count"] for period in result.periods] == [0, 0, 1]
+    assert [period["retained_target_count"] for period in result.periods] == [0, 2, 1]
+    assert result.retention_buffer == 1
+    assert result.total_target_entry_count == 3
+    assert result.total_target_exit_count == 1
+
+
+def test_rebalance_offset_changes_fixed_anchor_and_is_validated() -> None:
+    dates = pd.bdate_range("2024-10-01", periods=14)
+    frame = _panel(dates, ("A", "B"), adv=1_000_000_000.0)
+    frame["open"] = 100.0
+
+    result = evaluate_long_only_portfolio(
+        frame,
+        "signal",
+        LongOnlyPortfolioConfig(
+            capital=1_000.0,
+            position_count=1,
+            target_weight=1.0,
+            max_adv_participation=1.0,
+            rebalance_offset_days=2,
+            costs=_zero_costs(),
+        ),
+    )
+
+    assert [period["signal_date"] for period in result.periods] == [
+        str(dates[2].date()),
+        str(dates[7].date()),
+    ]
+    assert all(period["rebalance_offset_days"] == 2 for period in result.periods)
+    assert result.rebalance_offset_days == 2
+
+    with pytest.raises(ValueError, match="rebalance_offset_days"):
+        evaluate_long_only_portfolio(
+            frame,
+            "signal",
+            LongOnlyPortfolioConfig(rebalance_offset_days=5),
+        )

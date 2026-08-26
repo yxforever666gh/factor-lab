@@ -25,6 +25,11 @@ from factor_lab.portfolio.execution import (
 )
 
 
+_ASOF_ADV_COLUMN = "_factor_lab_adv_asof"
+_ASOF_VOLATILITY_COLUMN = "_factor_lab_volatility_asof"
+_ASOF_DATE_COLUMN = "_factor_lab_execution_input_date"
+
+
 @dataclass(frozen=True)
 class LongOnlyCostConfig:
     """Per-side A-share transaction cost assumptions."""
@@ -45,7 +50,9 @@ class LongOnlyPortfolioConfig:
     capital: float = 50_000_000.0
     holding_days: int = 5
     rebalance_every_days: int = 5
+    rebalance_offset_days: int = 0
     position_count: int = 50
+    retention_buffer: int = 0
     target_weight: float = 0.02
     max_adv_participation: float = 0.05
     periods_per_year: float = 252.0 / 5.0
@@ -99,6 +106,13 @@ class LongOnlyPortfolioEvaluation:
     net_annual_return: float
     benchmark_annual_return: float
     net_excess_annual_return: float
+    benchmark_expected_endpoint_count: int
+    benchmark_observed_endpoint_count: int
+    benchmark_complete_return_count: int
+    benchmark_missing_start_count: int
+    benchmark_missing_end_count: int
+    benchmark_endpoint_coverage: float
+    benchmark_return_coverage: float
     annual_volatility: float
     net_sharpe: float
     max_drawdown: float
@@ -114,6 +128,13 @@ class LongOnlyPortfolioEvaluation:
     max_holding_count: int
     average_cash_weight: float
     max_position_weight: float
+    retention_buffer: int
+    rebalance_offset_days: int
+    average_target_entry_count: float
+    total_target_entry_count: int
+    total_target_exit_count: int
+    execution_input_policy: str
+    max_execution_input_age_days: int
     positive_half_year_ratio: float
     trade_count: int
     buy_trade_count: int
@@ -159,8 +180,15 @@ def _as_config(config: LongOnlyPortfolioConfig | Mapping[str, Any] | None) -> Lo
         raise ValueError("holding_days and rebalance_every_days must be positive")
     if result.holding_days > result.rebalance_every_days:
         raise ValueError("holding_days cannot exceed rebalance_every_days for non-overlapping periods")
+    if (
+        int(result.rebalance_offset_days) != result.rebalance_offset_days
+        or not 0 <= int(result.rebalance_offset_days) < result.rebalance_every_days
+    ):
+        raise ValueError("rebalance_offset_days must be an integer in [0, rebalance_every_days)")
     if result.position_count <= 0:
         raise ValueError("position_count must be positive")
+    if int(result.retention_buffer) != result.retention_buffer or result.retention_buffer < 0:
+        raise ValueError("retention_buffer must be a non-negative integer")
     if not 0 < result.target_weight <= 1:
         raise ValueError("target_weight must be in (0, 1]")
     if not 0 < result.max_adv_participation <= 1:
@@ -212,6 +240,13 @@ def _empty_evaluation(reason: str, missing_columns: Sequence[str] = ()) -> LongO
         net_annual_return=0.0,
         benchmark_annual_return=0.0,
         net_excess_annual_return=0.0,
+        benchmark_expected_endpoint_count=0,
+        benchmark_observed_endpoint_count=0,
+        benchmark_complete_return_count=0,
+        benchmark_missing_start_count=0,
+        benchmark_missing_end_count=0,
+        benchmark_endpoint_coverage=0.0,
+        benchmark_return_coverage=0.0,
         annual_volatility=0.0,
         net_sharpe=0.0,
         max_drawdown=0.0,
@@ -227,6 +262,13 @@ def _empty_evaluation(reason: str, missing_columns: Sequence[str] = ()) -> LongO
         max_holding_count=0,
         average_cash_weight=1.0,
         max_position_weight=0.0,
+        retention_buffer=0,
+        rebalance_offset_days=0,
+        average_target_entry_count=0.0,
+        total_target_entry_count=0,
+        total_target_exit_count=0,
+        execution_input_policy="previous_visible_ticker_row",
+        max_execution_input_age_days=0,
         positive_half_year_ratio=0.0,
         trade_count=0,
         buy_trade_count=0,
@@ -279,6 +321,14 @@ def _finite_positive(value: Any) -> float | None:
     return number if np.isfinite(number) and number > 0 else None
 
 
+def _finite_nonnegative(value: Any) -> float | None:
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if np.isfinite(number) and number >= 0 else None
+
+
 def _annualized_return(period_returns: Sequence[float], periods_per_year: float) -> float:
     if not period_returns:
         return 0.0
@@ -311,6 +361,24 @@ def _compound(period_returns: Sequence[float]) -> float:
     return float(np.prod(1.0 + np.asarray(period_returns, dtype=float)) - 1.0)
 
 
+def _benchmark_coverage(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    expected = int(sum(int(row.get("benchmark_expected_endpoint_count") or 0) for row in rows))
+    observed = int(sum(int(row.get("benchmark_observed_endpoint_count") or 0) for row in rows))
+    complete = int(sum(int(row.get("benchmark_complete_return_count") or 0) for row in rows))
+    missing_start = int(sum(int(row.get("benchmark_missing_start_count") or 0) for row in rows))
+    missing_end = int(sum(int(row.get("benchmark_missing_end_count") or 0) for row in rows))
+    constituent_count = expected // 2
+    return {
+        "benchmark_expected_endpoint_count": expected,
+        "benchmark_observed_endpoint_count": observed,
+        "benchmark_complete_return_count": complete,
+        "benchmark_missing_start_count": missing_start,
+        "benchmark_missing_end_count": missing_end,
+        "benchmark_endpoint_coverage": observed / expected if expected else 0.0,
+        "benchmark_return_coverage": complete / constituent_count if constituent_count else 0.0,
+    }
+
+
 def _segment_rows(periods: list[dict[str, Any]], *, half_year: bool, periods_per_year: float) -> list[dict[str, Any]]:
     grouped: dict[str, list[dict[str, Any]]] = {}
     for row in periods:
@@ -341,6 +409,10 @@ def _segment_rows(periods: list[dict[str, Any]], *, half_year: bool, periods_per
             "actual_turnover": round(float(np.mean([row["turnover"] for row in rows])), 8),
             "average_holding_count": round(float(np.mean([row["holding_count"] for row in rows])), 6),
             "total_cost": round(float(sum(row["costs"]["total"] for row in rows)), 4),
+            **{
+                key: round(value, 8) if isinstance(value, float) else value
+                for key, value in _benchmark_coverage(rows).items()
+            },
         })
     return output
 
@@ -446,6 +518,7 @@ def evaluate_long_only_portfolio(
         *([cash_dividend_col] if cash_dividend_col else []),
     ]))
     work = price_source[selected_columns].copy()
+    signal_calendar_start: pd.Timestamp | None = None
     if pricing_frame is None:
         work["_signal"] = signal_values
     else:
@@ -458,6 +531,7 @@ def evaluate_long_only_portfolio(
         signal_lookup[signal_date_col] = pd.to_datetime(signal_lookup[signal_date_col], errors="coerce")
         signal_lookup[signal_ticker_col] = signal_lookup[signal_ticker_col].astype(str)
         signal_lookup = signal_lookup.drop_duplicates([signal_date_col, signal_ticker_col], keep="last")
+        signal_calendar_start = signal_lookup[signal_date_col].dropna().min()
         work[date_col] = pd.to_datetime(work[date_col], errors="coerce")
         work[ticker_col] = work[ticker_col].astype(str)
         if signal_date_col != date_col or signal_ticker_col != ticker_col:
@@ -470,6 +544,14 @@ def evaluate_long_only_portfolio(
     work[volatility_col] = pd.to_numeric(work[volatility_col], errors="coerce")
     work = work.dropna(subset=[date_col, ticker_col]).sort_values([date_col, ticker_col])
     work = work.drop_duplicates([date_col, ticker_col], keep="last")
+    # Orders are submitted at the next session's open.  The current session's
+    # rolling ADV and close-to-close volatility are not known at that time, so
+    # execution must use the latest strictly earlier observation for each
+    # ticker.  The opening price and tradability flags remain from trade_date.
+    ticker_history = work.groupby(ticker_col, sort=False)
+    work[_ASOF_ADV_COLUMN] = ticker_history[adv_col].shift(1)
+    work[_ASOF_VOLATILITY_COLUMN] = ticker_history[volatility_col].shift(1)
+    work[_ASOF_DATE_COLUMN] = ticker_history[date_col].shift(1)
     dates = [pd.Timestamp(value) for value in sorted(work[date_col].unique())]
     required_span = cfg.holding_days + 2
     if len(dates) < required_span:
@@ -481,8 +563,8 @@ def evaluate_long_only_portfolio(
     execution_columns = ExecutionColumns(
         open=open_col,
         mark=open_col,
-        adv=adv_col,
-        volatility=volatility_col,
+        adv=_ASOF_ADV_COLUMN,
+        volatility=_ASOF_VOLATILITY_COLUMN,
         limit_up=limit_up_col,
         limit_down=limit_down_col,
         suspended=suspended_col,
@@ -514,8 +596,22 @@ def evaluate_long_only_portfolio(
     turnover_values: list[float] = []
     holding_counts: list[int] = []
     cash_weights: list[float] = []
+    target_entry_counts: list[int] = []
+    target_exit_counts: list[int] = []
+    execution_input_ages: list[int] = []
+    previous_target_tickers: set[str] = set()
 
-    signal_indices = range(0, len(dates) - cfg.holding_days - 1, cfg.rebalance_every_days)
+    if signal_calendar_start is None:
+        signal_calendar_start = dates[0]
+    first_signal_index = next(
+        (index for index, value in enumerate(dates) if value >= signal_calendar_start),
+        len(dates),
+    )
+    signal_indices = range(
+        first_signal_index + int(cfg.rebalance_offset_days),
+        len(dates) - cfg.holding_days - 1,
+        cfg.rebalance_every_days,
+    )
     for signal_index in signal_indices:
         signal_date = dates[signal_index]
         trade_date = dates[signal_index + 1]
@@ -540,13 +636,33 @@ def evaluate_long_only_portfolio(
         signal_key = signal_date.normalize()
         optimized = normalized_targets.get(signal_key)
         period_optimization_audit = dict(normalized_audit.get(signal_key) or {})
+        prior_target_tickers = set(previous_target_tickers)
         if optimized is None:
-            selected = eligible_day.head(cfg.position_count)[ticker_col].astype(str).tolist()
+            ranked_tickers = eligible_day[ticker_col].astype(str).tolist()
+            selected: list[str] = []
+            if cfg.retention_buffer and prior_target_tickers:
+                retention_rank = cfg.position_count + int(cfg.retention_buffer)
+                retained = {
+                    ticker
+                    for rank, ticker in enumerate(ranked_tickers, start=1)
+                    if rank <= retention_rank and ticker in prior_target_tickers
+                }
+                selected.extend(ticker for ticker in ranked_tickers if ticker in retained)
+            for ticker in ranked_tickers:
+                if len(selected) >= cfg.position_count:
+                    break
+                if ticker not in selected:
+                    selected.append(ticker)
+            rank_order = {ticker: rank for rank, ticker in enumerate(ranked_tickers)}
+            selected.sort(key=lambda ticker: rank_order[ticker])
             equal_weight = min(cfg.target_weight, 1.0 / len(selected))
             target_weights = {ticker: equal_weight for ticker in selected}
-            target_weight_mode = (
-                "equal_weight_fallback" if require_optimized_targets else "equal_weight"
-            )
+            if require_optimized_targets:
+                target_weight_mode = "equal_weight_fallback"
+            elif cfg.retention_buffer:
+                target_weight_mode = "equal_weight_retention_buffer"
+            else:
+                target_weight_mode = "equal_weight"
             if require_optimized_targets:
                 risk_blockers.append(
                     f"optimized_target_missing:{signal_date.date().isoformat()}"
@@ -582,6 +698,14 @@ def evaluate_long_only_portfolio(
                     f"optimization_audit_not_eligible:{signal_date.date().isoformat()}"
                 )
 
+        current_target_tickers = set(target_weights)
+        retained_target_count = len(prior_target_tickers & current_target_tickers)
+        target_entry_count = len(current_target_tickers - prior_target_tickers)
+        target_exit_count = len(prior_target_tickers - current_target_tickers)
+        target_entry_counts.append(target_entry_count)
+        target_exit_counts.append(target_exit_count)
+        previous_target_tickers = current_target_tickers
+
         period_trade_start = len(trades)
         execution = execute_rebalance(
             execution_account,
@@ -602,7 +726,34 @@ def evaluate_long_only_portfolio(
         capacity_limited_count += execution.capacity_limited_order_count
         if execution.capacity_usage > 0:
             capacity_usages.append(execution.capacity_usage)
-        trades.extend(order.to_trade_dict() for order in execution.orders)
+        for order in execution.orders:
+            trade = order.to_trade_dict()
+            market_row = trade_map.get(order.ticker)
+            raw_input_date = (
+                market_row.get(_ASOF_DATE_COLUMN)
+                if market_row is not None
+                else None
+            )
+            if raw_input_date is not None and not pd.isna(raw_input_date):
+                input_date = pd.Timestamp(raw_input_date).normalize()
+                trade["execution_input_date"] = str(input_date.date())
+                execution_input_ages.append(max((trade_date.normalize() - input_date).days, 0))
+            else:
+                trade["execution_input_date"] = None
+            trade["execution_input_adv_available"] = bool(
+                market_row is not None
+                and _finite_positive(market_row.get(_ASOF_ADV_COLUMN)) is not None
+            )
+            trade["execution_input_volatility_available"] = bool(
+                market_row is not None
+                and _finite_nonnegative(market_row.get(_ASOF_VOLATILITY_COLUMN)) is not None
+            )
+            trade["execution_input_complete"] = bool(
+                trade["execution_input_date"]
+                and trade["execution_input_adv_available"]
+                and trade["execution_input_volatility_available"]
+            )
+            trades.append(trade)
         weights = dict(execution.weights)
         holding_count = len(weights)
         cash_weight = execution.cash_weight
@@ -616,16 +767,46 @@ def evaluate_long_only_portfolio(
         gross_period_return = (end_nav + period_costs["total"]) / pretrade_nav - 1.0
 
         benchmark_returns: list[float] = []
+        benchmark_missing_start_count = 0
+        benchmark_missing_end_count = 0
+        benchmark_start_count = 0
+        benchmark_end_count = 0
         for ticker in benchmark_day[ticker_col].astype(str):
             start_row = trade_map.get(ticker)
             finish_row = end_map.get(ticker)
             start_price = _finite_positive(start_row[open_col]) if start_row is not None else None
             finish_price = _finite_positive(finish_row[open_col]) if finish_row is not None else None
+            if start_price is None:
+                benchmark_missing_start_count += 1
+            else:
+                benchmark_start_count += 1
+            if finish_price is None:
+                benchmark_missing_end_count += 1
+            else:
+                benchmark_end_count += 1
             if start_price is not None and finish_price is not None:
                 benchmark_returns.append(finish_price / start_price - 1.0)
         benchmark_period_return = float(np.mean(benchmark_returns)) if benchmark_returns else 0.0
 
         period_trades = trades[period_trade_start:]
+        period_input_dates = sorted(
+            pd.Timestamp(row["execution_input_date"])
+            for row in period_trades
+            if row.get("execution_input_date")
+        )
+        period_input_ages = [
+            max((trade_date.normalize() - value.normalize()).days, 0)
+            for value in period_input_dates
+        ]
+        execution_input_required_count = len(period_trades)
+        execution_input_observed_count = sum(
+            bool(row.get("execution_input_complete")) for row in period_trades
+        )
+        execution_input_future_violation_count = sum(
+            bool(row.get("execution_input_date"))
+            and pd.Timestamp(str(row["execution_input_date"])) > signal_date
+            for row in period_trades
+        )
         traded_notional = sum(float(row.get("executed_notional") or 0.0) for row in period_trades)
         turnover = traded_notional / pretrade_nav if pretrade_nav > 0 else 0.0
         turnover_values.append(turnover)
@@ -635,6 +816,22 @@ def evaluate_long_only_portfolio(
             "signal_date": str(signal_date.date()),
             "start_date": str(trade_date.date()),
             "end_date": str(end_date.date()),
+            "rebalance_offset_days": int(cfg.rebalance_offset_days),
+            "execution_input_policy": "previous_visible_ticker_row",
+            "execution_input_min_date": str(period_input_dates[0].date()) if period_input_dates else None,
+            "execution_input_max_date": str(period_input_dates[-1].date()) if period_input_dates else None,
+            "execution_input_required_count": execution_input_required_count,
+            "execution_input_observed_count": execution_input_observed_count,
+            "execution_input_future_violation_count": int(
+                execution_input_future_violation_count
+            ),
+            "execution_input_coverage": round(
+                execution_input_observed_count / execution_input_required_count,
+                10,
+            )
+            if execution_input_required_count
+            else 1.0,
+            "max_execution_input_age_days": max(period_input_ages, default=0),
             "gross_return": round(gross_period_return, 10),
             "net_return": round(net_period_return, 10),
             "benchmark_return": round(benchmark_period_return, 10),
@@ -648,9 +845,25 @@ def evaluate_long_only_portfolio(
                 for key, value in sorted(target_weights.items())
             },
             "target_weight_mode": target_weight_mode,
+            "retention_buffer": int(cfg.retention_buffer),
+            "effective_retention_rank": cfg.position_count + int(cfg.retention_buffer),
+            "retained_target_count": retained_target_count,
+            "target_entry_count": target_entry_count,
+            "target_exit_count": target_exit_count,
             "optimization_audit": period_optimization_audit,
             "weights": {key: round(value, 10) for key, value in sorted(weights.items())},
             "costs": {key: round(value, 6) for key, value in period_costs.items()},
+            "benchmark_expected_endpoint_count": 2 * len(benchmark_day),
+            "benchmark_observed_endpoint_count": benchmark_start_count + benchmark_end_count,
+            "benchmark_complete_return_count": len(benchmark_returns),
+            "benchmark_missing_start_count": benchmark_missing_start_count,
+            "benchmark_missing_end_count": benchmark_missing_end_count,
+            "benchmark_endpoint_coverage": round(
+                (benchmark_start_count + benchmark_end_count) / (2 * len(benchmark_day)), 10
+            ) if len(benchmark_day) else 0.0,
+            "benchmark_return_coverage": round(
+                len(benchmark_returns) / len(benchmark_day), 10
+            ) if len(benchmark_day) else 0.0,
             "blocked_trade_count": sum(1 for row in period_trades if row.get("status") == "blocked"),
             "capacity_violation_count": sum(
                 1
@@ -679,6 +892,7 @@ def evaluate_long_only_portfolio(
     gross_annual_return = _annualized_return(gross_returns, cfg.periods_per_year)
     net_annual_return = _annualized_return(net_returns, cfg.periods_per_year)
     benchmark_annual_return = _annualized_return(benchmark_returns, cfg.periods_per_year)
+    benchmark_coverage = _benchmark_coverage(periods)
     yearly_segments = _segment_rows(periods, half_year=False, periods_per_year=cfg.periods_per_year)
     half_year_segments = _segment_rows(periods, half_year=True, periods_per_year=cfg.periods_per_year)
     positive_half_year_ratio = float(np.mean([row["excess_return"] > 0 for row in half_year_segments])) if half_year_segments else 0.0
@@ -710,6 +924,10 @@ def evaluate_long_only_portfolio(
         net_annual_return=round(net_annual_return, 8),
         benchmark_annual_return=round(benchmark_annual_return, 8),
         net_excess_annual_return=round(net_annual_return - benchmark_annual_return, 8),
+        **{
+            key: round(value, 8) if isinstance(value, float) else value
+            for key, value in benchmark_coverage.items()
+        },
         annual_volatility=round(annual_volatility, 8),
         net_sharpe=round(_sharpe(net_returns, cfg.periods_per_year), 8),
         max_drawdown=round(_max_drawdown(net_returns), 8),
@@ -725,6 +943,13 @@ def evaluate_long_only_portfolio(
         max_holding_count=max(holding_counts, default=0),
         average_cash_weight=round(float(np.mean(cash_weights)), 8),
         max_position_weight=round(max_position_weight, 8),
+        retention_buffer=int(cfg.retention_buffer),
+        rebalance_offset_days=int(cfg.rebalance_offset_days),
+        average_target_entry_count=round(float(np.mean(target_entry_counts)), 8),
+        total_target_entry_count=int(sum(target_entry_counts)),
+        total_target_exit_count=int(sum(target_exit_counts)),
+        execution_input_policy="previous_visible_ticker_row",
+        max_execution_input_age_days=max(execution_input_ages, default=0),
         positive_half_year_ratio=round(positive_half_year_ratio, 8),
         trade_count=len(executed_trades),
         buy_trade_count=sum(1 for row in executed_trades if row.get("side") == "buy"),

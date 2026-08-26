@@ -1,7 +1,7 @@
 {
-  "schema_version": 1,
-  "engine": "factor-lab/lightweight-research/v2",
-  "data_warning": "st_history_unverified",
+  "schema_version": 2,
+  "engine": "factor-lab/lightweight-research/v3",
+  "data_warning": "monthly_name_verified_daily_events_unavailable",
   "validation": {
     "train_start": "2017-01-01",
     "train_end": "2022-12-31",
@@ -12,7 +12,13 @@
     "min_cross_section": 10,
     "min_evaluable_ratio": 0.8,
     "min_median_coverage": 0.8,
-    "max_challengers": 3
+    "max_challengers": 3,
+    "bootstrap_samples": 512,
+    "bootstrap_block_size": 12,
+    "bootstrap_confidence": 0.95,
+    "bootstrap_seed": 20260827,
+    "audit_min_observations": 12,
+    "audit_min_failed_metrics": 2
   },
   "portfolio": {
     "mode": "long_only",
@@ -22,6 +28,8 @@
     "position_count": 50,
     "target_weight": 0.02,
     "max_adv_participation": 0.05,
+    "retention_buffer": 25,
+    "rebalance_offset_days": 0,
     "open_column": "open_adj",
     "adv_column": "adv_20",
     "volatility_column": "volatility_20"
@@ -42,13 +50,27 @@
     "validation_max_drawdown_min": -0.25,
     "positive_half_year_ratio_min": 0.6,
     "average_holding_count_min": 40,
-    "capacity_violation_count_max": 0
+    "capacity_violation_count_max": 0,
+    "validation_excess_mean_bootstrap_lower_min": 0.0,
+    "benchmark_return_coverage_min": 0.95,
+    "execution_input_policy_match_ratio_min": 1.0,
+    "execution_input_future_violation_count_max": 0,
+    "execution_input_coverage_min": 1.0,
+    "validation_observations_min": 90,
+    "execution_period_coverage_min": 0.9,
+    "signal_evaluable_date_ratio_min": 0.8,
+    "signal_median_cross_section_coverage_min": 0.8
   },
   "control_comparison": {
     "max_drawdown_worsening_tolerance": 0.02
   },
   "robustness": {
     "position_counts": [50, 75, 100],
-    "rebalance_every_days": [5, 20]
+    "rebalance_every_days": [5, 20],
+    "anchor_offsets_by_rebalance_days": {
+      "5": [0],
+      "20": [0, 5, 10, 15]
+    },
+    "minimum_anchor_pass_ratio": 0.75
   }
 }

@@ -50,6 +50,9 @@ def test_validation_windows_are_frozen_and_ordered() -> None:
     assert policy.validation_start == "2023-01-01"
     assert policy.audit_start == "2025-01-01"
     assert policy.holding_days == 5
+    assert policy.similarity_threshold == 0.9
+    assert policy.bootstrap_block_size == 12
+    assert policy.audit_min_failed_metrics == 2
 
     with pytest.raises(ValueError, match="ordered"):
         ValidationSpec(validation_start="2022-01-01")

@@ -5,10 +5,16 @@ production lifecycle dependencies.  It is safe to import in the minimal CLI.
 """
 
 from .contracts import FactorSpec, ValidationSpec
-from .signals import evaluate_factor_signal, evaluate_expression
+from .signals import evaluate_factor_signal, evaluate_expression, pit_cashflow_quality
 from .validation import (
+    BootstrapInterval,
     FactorValidation,
+    SignalSimilarity,
+    StageASelection,
     WindowDiagnostics,
+    build_stage_a_selection,
+    deterministic_block_bootstrap_mean,
+    diagnose_train_similarity,
     evaluate_stage_a,
     select_stage_b,
 )
@@ -18,8 +24,15 @@ __all__ = [
     "ValidationSpec",
     "WindowDiagnostics",
     "FactorValidation",
+    "BootstrapInterval",
+    "SignalSimilarity",
+    "StageASelection",
     "evaluate_expression",
     "evaluate_factor_signal",
+    "pit_cashflow_quality",
     "evaluate_stage_a",
     "select_stage_b",
+    "build_stage_a_selection",
+    "diagnose_train_similarity",
+    "deterministic_block_bootstrap_mean",
 ]

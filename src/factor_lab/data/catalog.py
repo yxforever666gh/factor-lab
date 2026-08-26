@@ -30,8 +30,8 @@ def _resolve(base: Path, value: str | Path) -> Path:
 def load_data_config(path: str | Path = DEFAULT_CONFIG_PATH) -> dict[str, Any]:
     config_path = Path(path).expanduser().resolve()
     payload = json.loads(config_path.read_text(encoding="utf-8"))
-    if int(payload.get("schema_version") or 0) != 1:
-        raise ValueError("data config requires schema_version=1")
+    if int(payload.get("schema_version") or 0) not in {1, 2}:
+        raise ValueError("data config requires schema_version=1 or 2")
     if not isinstance(payload.get("paths"), Mapping):
         raise ValueError("data config requires a paths mapping")
     if not isinstance(payload.get("top500"), Mapping):
