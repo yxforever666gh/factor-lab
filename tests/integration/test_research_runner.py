@@ -189,6 +189,9 @@ def test_results_first_ranks_comparable_control_and_ensembles(tmp_path: Path) ->
     research_config["portfolio"].update(
         {"position_count": 3, "target_weight": 1 / 3, "retention_buffer": 0}
     )
+    research_config["results_first"]["portfolio"].update(
+        {"position_count": 3, "target_weight": 1 / 3, "retention_buffer": 0}
+    )
     research_config["results_first"]["challenger_weights"] = [0.3, 0.7]
     research_path.write_text(json.dumps(research_config), encoding="utf-8")
 
@@ -231,6 +234,8 @@ def test_results_first_ranks_comparable_control_and_ensembles(tmp_path: Path) ->
     assert result["results_first"]["best_historical_strategy"] == rankings[0][
         "factor_name"
     ]
+    assert result["portfolio_config"]["position_count"] == 3
+    assert result["portfolio_config"]["rebalance_every_days"] == 10
     assert any(row["strategy_kind"] == "ensemble" for row in rankings)
     assert len({row["net_annual_return"] for row in rankings}) > 1
     ensemble = next(

@@ -69,6 +69,14 @@
     "challenger_weights": [0.3, 0.7],
     "missing_challenger_policy": "fallback_control",
     "incomplete_period_policy": "exclude_from_ranking",
+    "portfolio": {
+      "holding_days": 10,
+      "rebalance_every_days": 10,
+      "position_count": 10,
+      "target_weight": 0.1,
+      "retention_buffer": 5,
+      "periods_per_year": 25.2
+    },
     "score_weights": {
       "net_sharpe": 0.25,
       "information_ratio": 0.15,

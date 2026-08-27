@@ -7,7 +7,7 @@ import json
 import math
 import re
 import subprocess
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
@@ -207,8 +207,18 @@ def _validation_spec(config: Mapping[str, Any]) -> ValidationSpec:
     return ValidationSpec(**values)
 
 
-def _portfolio_config(config: Mapping[str, Any]) -> LongOnlyPortfolioConfig:
-    return LongOnlyPortfolioConfig.from_mapping(config)
+def _portfolio_config(
+    config: Mapping[str, Any], *, suite: str | None = None
+) -> LongOnlyPortfolioConfig:
+    if suite != RESULTS_FIRST_SUITE:
+        return LongOnlyPortfolioConfig.from_mapping(config)
+    merged = dict(config)
+    portfolio = dict(config.get("portfolio") or {})
+    portfolio.update(
+        dict((config.get("results_first") or {}).get("portfolio") or {})
+    )
+    merged["portfolio"] = portfolio
+    return LongOnlyPortfolioConfig.from_mapping(merged)
 
 
 def _feature_columns(path: Path, factors: Sequence[FactorSpec], validation: ValidationSpec) -> list[str]:
@@ -1437,7 +1447,7 @@ def run_research(
         # enough to enter the expensive portfolio leaderboard.
         selected = [control, *ensemble_factors]
 
-    portfolio_config = _portfolio_config(research_config)
+    portfolio_config = _portfolio_config(research_config, suite=suite)
     execution = _load_execution(execution_file, portfolio_config)
     execution_date_column = _resolve_column(
         set(execution.columns), portfolio_config.date_column, ("date", "trade_date")
@@ -1749,6 +1759,7 @@ def run_research(
             ),
         },
         "control_factor": control.name,
+        "portfolio_config": asdict(portfolio_config),
         "stage_a": [row.to_dict() for row in stage_a_rows],
         "stage_a_selection": stage_a_selection.to_dict()
         if stage_a_selection is not None

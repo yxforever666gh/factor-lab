@@ -69,6 +69,8 @@ factor-lab report --run latest
   control，control 缺失时不产生组合信号。
 - 单体 challenger 只负责方向和信号诊断；冠军榜仅回测 control 与完整 fallback-control
   混合策略，确保日期覆盖和资金暴露可比。
+- Results-first 组合默认 Top-10、留仓缓冲 5、每 10 个交易日调仓；这是在全部历史上对
+  Top-5–100 与 5–40 日粗细网格直接优化后的当前最佳均衡点。
 - 使用全部已观察历史的成本后年化收益、Sharpe、IR 与最大回撤百分位形成排行榜，权重
   分别为 50%、25%、15%、10%；不使用
   `validated` 标签，也不因旧 promotion gate 失败而停止搜索。
