@@ -1,6 +1,6 @@
 {
-  "schema_version": 4,
-  "engine": "factor-lab/research/v6",
+  "schema_version": 5,
+  "engine": "factor-lab/research/v7",
   "data_warning": "monthly_name_verified_daily_events_unavailable",
   "validation": {
     "train_start": "2017-01-01",

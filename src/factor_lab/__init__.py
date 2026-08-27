@@ -1,3 +1,3 @@
-"""Local A-share walk-forward research with selector-causal return cutoffs."""
+"""Local A-share adaptive research with causal execution and evidence logging."""
 
-__version__ = "4.1.0"
+__version__ = "5.0.0"

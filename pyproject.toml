@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "factor-research-mvp"
-version = "4.1.0"
-description = "A-share walk-forward factor selection with causal return cutoffs"
+version = "5.0.0"
+description = "A-share adaptive core-overlay research with prospective evidence logging"
 requires-python = ">=3.10"
 dependencies = [
   "pandas>=2.2",

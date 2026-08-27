@@ -336,6 +336,29 @@ def test_capacity_limited_target_is_reported_without_actual_violation() -> None:
     assert result.trades[0]["participation"] < 0.05
 
 
+def test_period_capacity_audit_uses_full_precision_execution_result() -> None:
+    dates = pd.bdate_range("2024-06-03", periods=7)
+    frame = _panel(dates, ("A",), adv=1_111.111)
+    frame["open"] = 3.7
+
+    result = evaluate_long_only_portfolio(
+        frame,
+        "signal",
+        LongOnlyPortfolioConfig(
+            capital=1_000.0,
+            position_count=1,
+            target_weight=1.0,
+            max_adv_participation=0.05,
+            lot_size=0,
+            costs=_zero_costs(),
+        ),
+    )
+
+    assert result.trades[0]["executed_notional"] == pytest.approx(55.5556)
+    assert result.capacity_violation_count == 0
+    assert result.periods[0]["capacity_violation_count"] == 0
+
+
 def test_t_plus_one_open_uses_previous_valid_adv_and_volatility() -> None:
     dates = pd.bdate_range("2024-07-01", periods=7)
     frame = _panel(dates, ("A",), adv=1_000_000_000.0)
@@ -1209,3 +1232,117 @@ def test_empty_scheduled_signal_cross_section_fails_closed() -> None:
     assert result.reason == f"empty_signal_cross_section:{dates[10].date()}"
     assert result.observations == 0
     assert result.end_nav == 0.0
+
+
+def test_required_external_targets_fail_before_any_fallback_accounting() -> None:
+    dates = pd.bdate_range("2026-03-02", periods=17)
+    frame = _panel(dates, ("A", "B"), adv=1_000_000_000.0)
+    target_dates = (dates[0], dates[5], dates[10])
+    targets = {
+        target_dates[0]: {"A": 1.0},
+        target_dates[1]: {"A": 1.0},
+    }
+    audits = {
+        value: {"promotion_eligible": True}
+        for value in target_dates
+    }
+
+    with pytest.raises(ValueError, match="missing=\\['2026-03-16'\\]"):
+        evaluate_long_only_portfolio(
+            frame,
+            "signal",
+            LongOnlyPortfolioConfig(
+                capital=1_000.0,
+                position_count=1,
+                target_weight=1.0,
+                max_adv_participation=1.0,
+                costs=_zero_costs(),
+            ),
+            target_weights_by_date=targets,
+            optimization_audit_by_date=audits,
+            require_optimized_targets=True,
+        )
+
+
+def test_required_external_targets_execute_without_rank_fallback() -> None:
+    dates = pd.bdate_range("2026-03-02", periods=17)
+    frame = _panel(dates, ("A", "B"), adv=1_000_000_000.0)
+    target_dates = (dates[0], dates[5], dates[10])
+    targets = {value: {"B": 0.75} for value in target_dates}
+    audits = {
+        value: {"promotion_eligible": True, "source": "adaptive_protocol"}
+        for value in target_dates
+    }
+
+    result = evaluate_long_only_portfolio(
+        frame,
+        "signal",
+        LongOnlyPortfolioConfig(
+            capital=1_000.0,
+            position_count=2,
+            target_weight=1.0,
+            max_adv_participation=1.0,
+            costs=_zero_costs(),
+        ),
+        target_weights_by_date=targets,
+        optimization_audit_by_date=audits,
+        require_optimized_targets=True,
+    )
+
+    assert result.status == "ok"
+    assert result.observations == 3
+    assert [row["target_weight_mode"] for row in result.periods] == [
+        "optimized",
+        "optimized",
+        "optimized",
+    ]
+    assert [row["target_weights"] for row in result.periods] == [
+        {"B": 0.75},
+        {"B": 0.75},
+        {"B": 0.75},
+    ]
+
+
+def test_required_empty_external_target_is_explicit_full_cash_not_fallback() -> None:
+    dates = pd.bdate_range("2026-03-02", periods=17)
+    frame = _panel(dates, ("A", "B"), adv=1_000_000_000.0)
+    target_dates = (dates[0], dates[5], dates[10])
+    targets = {
+        target_dates[0]: {"B": 0.75},
+        target_dates[1]: {},
+        target_dates[2]: {},
+    }
+    audits = {
+        value: {"promotion_eligible": True, "source": "adaptive_fail_closed"}
+        for value in target_dates
+    }
+
+    result = evaluate_long_only_portfolio(
+        frame,
+        "signal",
+        LongOnlyPortfolioConfig(
+            capital=1_000.0,
+            position_count=2,
+            target_weight=1.0,
+            max_adv_participation=1.0,
+            costs=_zero_costs(),
+        ),
+        target_weights_by_date=targets,
+        optimization_audit_by_date=audits,
+        require_optimized_targets=True,
+    )
+
+    assert result.status == "ok"
+    assert [row["target_weight_mode"] for row in result.periods] == [
+        "optimized",
+        "optimized",
+        "optimized",
+    ]
+    assert [row["target_weights"] for row in result.periods] == [
+        {"B": 0.75},
+        {},
+        {},
+    ]
+    assert result.periods[1]["target_exit_count"] == 1
+    assert result.periods[1]["holding_count"] == 0
+    assert result.periods[2]["holding_count"] == 0

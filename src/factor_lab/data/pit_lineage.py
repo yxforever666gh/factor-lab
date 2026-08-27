@@ -502,6 +502,13 @@ def conservative_default_field_lineage() -> dict[str, PITFieldLineage]:
             revision_policy="inherits_dependency_vintage",
             pit_status=unverified,
         ),
+        "momentum_120": PITFieldLineage(
+            source="legacy_canonical_store:derived_feature",
+            dependencies=("close_adj",),
+            availability="rolling_window_ends_at_signal_date_not_attested",
+            revision_policy="inherits_dependency_vintage",
+            pit_status=unverified,
+        ),
         "volatility_20": PITFieldLineage(
             source="legacy_canonical_store:derived_feature",
             dependencies=("return_1d",),

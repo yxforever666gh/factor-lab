@@ -273,6 +273,128 @@ def _walk_forward_lines(
     return lines
 
 
+def _adaptive_lines(
+    adaptive: Mapping[str, Any], *, results_available: bool
+) -> list[str]:
+    experts = list(adaptive.get("expert_registry") or [])
+    accounts = list(adaptive.get("account_registry") or [])
+    lines = [
+        "",
+        "## 5.0 固定核心与自适应覆盖协议",
+        "",
+        "本节严格绑定运行前冻结的 `protocols/5.0.json`。固定核心来自已观察的 4.1"
+        " 结果，因此本次仍是 post-selection 历史模拟；在线组合只是挑战者，不能把"
+        "历史路由冒充前瞻确认。",
+        "",
+        f"- Protocol：`{adaptive.get('protocol_id') or '—'}`；SHA-256 "
+        f"`{adaptive.get('protocol_sha256') or '—'}`；状态 "
+        f"`{adaptive.get('protocol_status') or '—'}`。",
+        f"- 四个独立成本影子账户：{', '.join(f'`{name}`' for name in experts) or '—'}。",
+        f"- 五个 fresh equal-AUM 评分账户：{', '.join(f'`{name}`' for name in accounts) or '—'}。",
+        "- 在线分配只读取 `end_date < signal_date` 的完整共同 cohort；50% 固定核心"
+        " anchor 与 50% softmax sleeve 在股票目标权重层相加，重叠持仓不截断、不"
+        "归一化，未使用权重保留现金。",
+        "- 市场覆盖层使用当前 PIT eligible universe 的等权日收益、SMA200、120 日动量"
+        " breadth 与 60 日波动；信号在 t 日收盘形成，t+1 开盘执行，不回填缺失值。",
+    ]
+    if not results_available:
+        lines.extend(
+            [
+                "",
+                "### Adaptive canary",
+                "",
+                "Canary 只检查冻结协议、四专家信号和执行入口；不建立 40 个影子账户或"
+                " 50 个共同起点评分账户，不计算 gate，也不形成历史路由。",
+            ]
+        )
+        return lines
+
+    lines.extend(
+        [
+            f"- 共同评价起点：`{adaptive.get('common_evaluation_start') or '—'}`。",
+            f"- 影子账户完整性：`{adaptive.get('shadow_accounts_valid')}`；评分账户完整性："
+            f"`{adaptive.get('scoring_accounts_valid')}`；全协议完整性："
+            f"`{adaptive.get('integrity_valid')}`。",
+            "- 因果违规：feedback "
+            f"**{int(adaptive.get('future_feedback_violation_count') or 0)}**；overlay "
+            f"**{int(adaptive.get('future_overlay_violation_count') or 0)}**。",
+            f"- 冻结路由：`{adaptive.get('frozen_route') or '不可评价'}`。该路由只能作为"
+            " 5.0 历史诊断后的前瞻候选，不是收益保证。",
+            "",
+            "### 五账户十相位绝对分布",
+            "",
+            "这里按协议注册顺序完整报告五类账户，不生成名次；Q20、median 与 worst 都来自"
+            "同一市场路径上的十个相关调仓相位。",
+            "",
+            "| 账户 | 年化 Q20 / median / worst | Sharpe Q20 / median / worst | "
+            "IR Q20 | 最大回撤 Q20 / worst |",
+            "| --- | ---: | ---: | ---: | ---: |",
+        ]
+    )
+    phase_distributions = adaptive.get("account_phase_distributions") or {}
+    for account_name in accounts:
+        phase = dict(phase_distributions.get(account_name) or {})
+        annual = dict(phase.get("net_annual_return") or {})
+        sharpe = dict(phase.get("net_sharpe") or {})
+        information = dict(phase.get("information_ratio") or {})
+        drawdown = dict(phase.get("max_drawdown") or {})
+        lines.append(
+            f"| `{account_name}` | "
+            f"{_number(annual.get('q20'), percent=True)} / "
+            f"{_number(annual.get('median'), percent=True)} / "
+            f"{_number(annual.get('worst'), percent=True)} | "
+            f"{_number(sharpe.get('q20'))} / "
+            f"{_number(sharpe.get('median'))} / "
+            f"{_number(sharpe.get('worst'))} | "
+            f"{_number(information.get('q20'))} | "
+            f"{_number(drawdown.get('q20'), percent=True)} / "
+            f"{_number(drawdown.get('worst'), percent=True)} |"
+        )
+    lines.extend(
+        [
+            "",
+            "### 冻结 gate",
+            "",
+            "每个 operator 与 threshold 都来自运行前提交的协议；严格大于与大于等于"
+            " 不得在看到结果后互换。",
+        ]
+    )
+    for name, result in (adaptive.get("gate_results") or {}).items():
+        result_map = dict(result or {}) if isinstance(result, Mapping) else {}
+        checks = result_map.get("checks") or result_map.get("criteria") or []
+        lines.append(f"- `{name}`：`{'pass' if result_map.get('passed') else 'fail'}`")
+        for check in checks:
+            if not isinstance(check, Mapping):
+                continue
+            observed = check.get("observed")
+            threshold = check.get("threshold")
+            lines.append(
+                "  - `{criterion}`：{observed} `{operator}` {threshold} → `{status}`".format(
+                    criterion=check.get("criterion") or "unknown",
+                    observed=_number(observed),
+                    operator=check.get("operator") or "?",
+                    threshold=_number(threshold),
+                    status="pass" if check.get("passed") else "fail",
+                )
+            )
+    comparisons = adaptive.get("paired_comparisons") or {}
+    if comparisons:
+        lines.extend(["", "### 十相位 paired 诊断", ""])
+        for name, result in comparisons.items():
+            row = dict(result or {}) if isinstance(result, Mapping) else {}
+            deltas = row.get("phase_deltas") or row
+            lines.append(
+                f"- `{name}`：年化差 Q20 "
+                f"{_number((deltas.get('net_annual_return') or {}).get('q20'), percent=True)}；"
+                f"Sharpe 差 Q20 {_number((deltas.get('net_sharpe') or {}).get('q20'))}；"
+                f"最大回撤差 Q20 "
+                f"{_number((deltas.get('max_drawdown') or {}).get('q20'), percent=True)}；"
+                f"年化改善 offset 比例 "
+                f"{_number(row.get('positive_annual_return_delta_ratio'), percent=True)}。"
+            )
+    return lines
+
+
 def render_report(summary: Mapping[str, Any]) -> str:
     """Render a compact Markdown report from a completed run summary."""
 
@@ -281,6 +403,13 @@ def render_report(summary: Mapping[str, Any]) -> str:
     results_first = summary.get("results_first") or {}
     results_first_enabled = bool(results_first.get("enabled"))
     results_first_ranking = bool(results_first.get("ranking_available"))
+    adaptive = summary.get("adaptive") or {}
+    adaptive_enabled = bool(
+        adaptive.get("enabled") or summary.get("suite") == "adaptive"
+    )
+    adaptive_results = bool(
+        adaptive_enabled and not adaptive.get("canary_smoke_only")
+    )
     walk_forward = summary.get("walk_forward") or {}
     walk_forward_enabled = bool(
         walk_forward.get("enabled") or summary.get("suite") == "walk-forward"
@@ -289,7 +418,12 @@ def render_report(summary: Mapping[str, Any]) -> str:
         walk_forward_enabled and walk_forward.get("ranking_available")
     )
     objective = (
-        "- Objective: selector-internal causal walk-forward；每次选择只读取严格成熟历史，"
+        "- Objective: 固定防御价值核心、独立市场风险覆盖和因果在线挑战者；"
+        "全部阈值在历史执行前冻结，不进行事后排名。"
+        if adaptive_results
+        else "- Objective: adaptive canary，只检查冻结协议、专家信号和执行入口。"
+        if adaptive_enabled
+        else "- Objective: selector-internal causal walk-forward；每次选择只读取严格成熟历史，"
         "结果属于 `post_selection_causal_simulation`，不声称独立 OOS。"
         if walk_forward_ranking
         else "- Objective: walk-forward canary，只检查固定方向、selector 配置和静态执行链；"
@@ -302,14 +436,20 @@ def render_report(summary: Mapping[str, Any]) -> str:
         else "- Objective: train/validation/audit 两阶段研究协议。"
     )
     evidence = (
-        "post_selection_causal_simulation"
+        "post_selection_adaptive_simulation"
+        if adaptive_results
+        else "engineering_smoke"
+        if adaptive_enabled
+        else "post_selection_causal_simulation"
         if walk_forward_ranking
         else "engineering_smoke"
         if walk_forward_enabled
         else "historical_diagnostic"
     )
     evidence_scope = (
-        "仅创建历史 shadow/deployed-account 模拟，不触发实盘动作"
+        "仅创建历史 shadow/scoring-account 模拟，不触发实盘动作"
+        if adaptive_enabled
+        else "仅创建历史 shadow/deployed-account 模拟，不触发实盘动作"
         if walk_forward_enabled
         else "不会创建候选、影子账户或实盘动作"
     )
@@ -340,12 +480,14 @@ def render_report(summary: Mapping[str, Any]) -> str:
         "",
         "## Walk-forward 候选注册与固定方向"
         if walk_forward_enabled
+        else "## Adaptive 专家注册与固定方向"
+        if adaptive_enabled
         else "## Stage A：训练段筛选",
         "",
         (
             "候选注册表和方向在 sweep 前固定；下表 IC 仅作描述，不能据此反转方向、"
             "增删候选或改变 selector。"
-            if walk_forward_enabled
+            if walk_forward_enabled or adaptive_enabled
             else "基础信号方向、组合权重与最终名次都使用全部已观察历史。"
             if results_first_ranking
             else "基础信号与组合只做最近窗口执行 smoke；本报告不解释其收益排名。"
@@ -404,7 +546,9 @@ def render_report(summary: Mapping[str, Any]) -> str:
                 f"{_number(row.get('mean_rank_correlation'))}，只保留训练排序代表。"
             )
 
-    if walk_forward_enabled:
+    if adaptive_enabled:
+        lines.extend(_adaptive_lines(adaptive, results_available=adaptive_results))
+    elif walk_forward_enabled:
         lines.extend(
             _walk_forward_lines(
                 summary,
@@ -551,7 +695,12 @@ def render_report(summary: Mapping[str, Any]) -> str:
             "## 结论",
             "",
             (
-                f"- Dynamic phase rank：{walk_forward.get('dynamic_phase_rank') or '—'}；"
+                f"- 冻结历史路由：`{adaptive.get('frozen_route') or '不可评价'}`；"
+                "前瞻账本在 5.0 发布激活后从下一条新数据开始，不回填历史观察。"
+                if adaptive_results
+                else "- Adaptive canary 已完成；未建立共同评价账户、gate 或历史路由。"
+                if adaptive_enabled
+                else f"- Dynamic phase rank：{walk_forward.get('dynamic_phase_rank') or '—'}；"
                 f"Q20 首位策略：`{walk_forward.get('best_phase_strategy') or '—'}`。"
                 "该结论聚合全部预注册 offset，不授权选择最佳 offset。"
                 if walk_forward_ranking
@@ -573,7 +722,7 @@ def render_report(summary: Mapping[str, Any]) -> str:
             "历史阈值诊断："
             f"`{'pass' if walk_forward.get('historical_diagnostic_passed') else 'not_passed'}`。"
         )
-    if not walk_forward_enabled and summary.get("robustness"):
+    if not walk_forward_enabled and not adaptive_enabled and summary.get("robustness"):
         robustness = summary["robustness"]
         lines.append(
             f"- 因未产生合格改进，已完成有限稳健性矩阵：{len(robustness.get('results') or [])} 个组合；"
@@ -632,10 +781,29 @@ def render_report(summary: Mapping[str, Any]) -> str:
                         else "—",
                     )
                 )
-    elif not walk_forward_enabled and summary.get("search_stopped"):
+    elif not walk_forward_enabled and not adaptive_enabled and summary.get("search_stopped"):
         lines.append("- 本轮预注册研究已停止：不追加变体，也不降低晋级门槛。")
     lines.append(f"- 搜索终态：`{summary.get('search_status') or 'unknown'}`。")
-    if walk_forward_ranking:
+    if adaptive_results:
+        lines.extend(
+            [
+                "- 五类账户与全部 offset 必须一起报告；相关 offset 不是独立实验。",
+                "- 固定核心来自 4.1 的已观察结果，在线与覆盖层 gate 仍只是历史诊断。",
+                "- 前瞻状态在发布激活时应为 `awaiting_new_data`，确认观察数为 0；"
+                "任何历史回填均违反协议。",
+                "- PIT lineage 仍有未验证 vintage，`investment_claim_allowed=false`。",
+                "",
+            ]
+        )
+    elif adaptive_enabled:
+        lines.extend(
+            [
+                "- Canary 不具备共同起点、paired gate 或前瞻确认能力。",
+                "- 历史回测不能证明未来盈利。",
+                "",
+            ]
+        )
+    elif walk_forward_ranking:
         lines.extend(
             [
                 "- 共同起点后的结果是 post-selection causal simulation：选择时无未来，"

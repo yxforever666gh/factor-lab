@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -19,6 +20,22 @@ from factor_lab.data import (
     sync_suspensions,
 )
 from factor_lab.research.runner import latest_run, run_research
+from factor_lab.prospective_attestation import DEFAULT_REPOSITORY
+from factor_lab.prospective_ledger import (
+    LedgerLayout,
+    activate_protocol,
+    append_correction,
+    append_outcome,
+    audit_ledger,
+    build_decision_plan,
+    canonical_json_bytes,
+    create_only_file,
+    ledger_status,
+    seal_decision,
+    store_decision_plan,
+    strict_load_canonical,
+)
+from factor_lab.prospective_runtime import attest_snapshot, verify_authoritative_run
 
 
 def _root() -> Path:
@@ -99,13 +116,14 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument(
         "--suite",
         choices=(
+            "adaptive",
             "walk-forward",
             "results-first",
             "recovery",
             "next",
             "legacy-regression",
         ),
-        default="walk-forward",
+        default="adaptive",
     )
     run_mode = run.add_mutually_exclusive_group(required=True)
     run_mode.add_argument("--canary", action="store_true")
@@ -116,6 +134,61 @@ def build_parser() -> argparse.ArgumentParser:
 
     report = commands.add_parser("report", help="Print a completed Markdown report.")
     report.add_argument("--run", default="latest", help="Run id or 'latest'.")
+
+    prospective = commands.add_parser(
+        "prospective", help="Manage the create-only 5.0 prospective evidence ledger."
+    )
+    prospective_commands = prospective.add_subparsers(
+        dest="prospective_command", required=True
+    )
+    prospective.add_argument("--ledger-root", type=Path, help=argparse.SUPPRESS)
+    activation = prospective_commands.add_parser(
+        "activate", help="Bind an empty ledger to the immutable 5.0 release."
+    )
+    activation.add_argument(
+        "--run",
+        required=True,
+        help="Exact completed full adaptive run id to bind as authoritative.",
+    )
+    activation.add_argument("--protocol", type=Path)
+    activation.add_argument("--release-tag", default="5.0")
+    plan = prospective_commands.add_parser(
+        "plan", help="Create a canonical decision plan without appending the ledger."
+    )
+    plan.add_argument("--input", type=Path, required=True)
+    plan.add_argument("--output", type=Path)
+    seal = prospective_commands.add_parser(
+        "seal", help="Append a pre-deadline decision from a canonical plan."
+    )
+    seal.add_argument("--plan", type=Path, required=True)
+    outcome = prospective_commands.add_parser(
+        "outcome", help="Append a confirmed prospective outcome."
+    )
+    outcome.add_argument("--input", type=Path, required=True)
+    correction = prospective_commands.add_parser(
+        "correct", help="Append a correction without rewriting an outcome."
+    )
+    correction.add_argument("--input", type=Path, required=True)
+    attest = prospective_commands.add_parser(
+        "attest", help="Attest a sealed snapshot and append its verified receipt."
+    )
+    attest.add_argument(
+        "--snapshot",
+        default="latest",
+        help="Snapshot path or 'latest' (default).",
+    )
+    attest.add_argument("--release-tag", default="5.0")
+    attest.add_argument("--workflow-run-id", type=int)
+    attest.add_argument(
+        "--purpose",
+        choices=("activation_canary", "decision_anchor"),
+        required=True,
+    )
+    attest.add_argument("--decision-record-sha256")
+    attest.add_argument("--admission-deadline-utc")
+    attest.add_argument("--repository", default=DEFAULT_REPOSITORY)
+    prospective_commands.add_parser("audit", help="Verify every record and snapshot.")
+    prospective_commands.add_parser("status", help="Show the current ledger phase.")
     return parser
 
 
@@ -206,7 +279,8 @@ def _data_command(arguments: argparse.Namespace) -> int:
 
 def _compact_research(summary: Mapping[str, Any]) -> dict[str, Any]:
     walk_forward = dict(summary.get("walk_forward") or {})
-    return {
+    adaptive = dict(summary.get("adaptive") or {})
+    compact = {
         "status": summary.get("status"),
         "run_id": summary.get("run_id"),
         "suite": summary.get("suite"),
@@ -245,8 +319,33 @@ def _compact_research(summary: Mapping[str, Any]) -> dict[str, Any]:
         }
         if walk_forward.get("enabled")
         else None,
+        "adaptive": {
+            "evidence_class": adaptive.get("evidence_class"),
+            "canary_smoke_only": adaptive.get("canary_smoke_only"),
+            "protocol_sha256": adaptive.get("protocol_sha256"),
+            "common_evaluation_start": adaptive.get(
+                "common_evaluation_start"
+            ),
+            "shadow_accounts_valid": adaptive.get("shadow_accounts_valid"),
+            "scoring_accounts_valid": adaptive.get("scoring_accounts_valid"),
+            "future_feedback_violation_count": adaptive.get(
+                "future_feedback_violation_count"
+            ),
+            "future_overlay_violation_count": adaptive.get(
+                "future_overlay_violation_count"
+            ),
+            "integrity_valid": adaptive.get("integrity_valid"),
+            "frozen_route": adaptive.get("frozen_route"),
+            "gate_results": adaptive.get("gate_results"),
+        }
+        if adaptive.get("enabled")
+        else None,
         "data": summary.get("data"),
     }
+    if summary.get("suite") != "results-first":
+        compact.pop("best_historical_strategy", None)
+        compact.pop("results_first_top", None)
+    return compact
 
 
 def _research_command(arguments: argparse.Namespace) -> int:
@@ -289,6 +388,187 @@ def _report_command(arguments: argparse.Namespace) -> int:
     return 0
 
 
+def _json_object(path: Path) -> dict[str, Any]:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        raise ValueError(f"expected JSON object: {path}")
+    return payload
+
+
+def _prospective_root(arguments: argparse.Namespace) -> Path:
+    configured = getattr(arguments, "ledger_root", None)
+    return (
+        Path(configured).resolve()
+        if configured is not None
+        else (arguments.root.resolve() / "runtime" / "prospective" / "5.0")
+    )
+
+
+def _published_tag_oids(root: Path, tag: str) -> tuple[str, str]:
+    def git(*values: str) -> str:
+        completed = subprocess.run(
+            ["git", *values],
+            cwd=root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return completed.stdout.strip()
+
+    reference = f"refs/tags/{tag}"
+    object_oid = git("rev-parse", reference)
+    if git("cat-file", "-t", object_oid) != "tag":
+        raise ValueError(f"release tag must be annotated: {tag}")
+    commit_oid = git("rev-parse", f"{reference}^{{}}")
+    remote_lines = git(
+        "-c",
+        "http.version=HTTP/1.1",
+        "ls-remote",
+        "origin",
+        reference,
+        f"{reference}^{{}}",
+    ).splitlines()
+    remote = {
+        name: oid
+        for line in remote_lines
+        for oid, name in [line.split("\t", maxsplit=1)]
+    }
+    if remote.get(reference) != object_oid or remote.get(f"{reference}^{{}}") != commit_oid:
+        raise ValueError(
+            f"local and GitHub tag objects do not match for {tag}"
+        )
+    return object_oid, commit_oid
+
+
+def _prospective_snapshot_path(ledger_root: Path, requested: str) -> Path:
+    if requested != "latest":
+        path = Path(requested).resolve()
+        if not path.is_file():
+            raise ValueError(f"missing prospective snapshot: {path}")
+        return path
+    audit = audit_ledger(ledger_root)
+    if not audit.get("valid"):
+        raise ValueError("cannot attest latest snapshot of an invalid ledger")
+    sequence = audit.get("head_sequence")
+    if type(sequence) is not int:
+        raise ValueError("cannot attest an unactivated ledger")
+    layout = LedgerLayout.at(ledger_root)
+    candidates = sorted(layout.snapshots.glob(f"{sequence:016d}-*.json"))
+    if len(candidates) != 1 or not candidates[0].is_file():
+        raise ValueError(
+            f"expected exactly one latest snapshot for sequence {sequence}"
+        )
+    return candidates[0]
+
+
+def _prospective_command(arguments: argparse.Namespace) -> int:
+    root = arguments.root.resolve()
+    ledger_root = _prospective_root(arguments)
+    command = arguments.prospective_command
+    if command == "activate":
+        protocol_path = Path(
+            arguments.protocol or root / "protocols" / "5.0.json"
+        ).resolve()
+        object_oid, commit_oid = _published_tag_oids(
+            root, str(arguments.release_tag)
+        )
+        authoritative_run = verify_authoritative_run(
+            root,
+            str(arguments.run),
+            protocol_path=protocol_path,
+            release_commit_oid=commit_oid,
+        )
+        _json(
+            activate_protocol(
+                ledger_root,
+                protocol_path=protocol_path,
+                release_tag=str(arguments.release_tag),
+                release_tag_object_oid=object_oid,
+                release_commit_oid=commit_oid,
+                authoritative_run=authoritative_run,
+            )
+        )
+        return 0
+    if command == "plan":
+        intent = _json_object(arguments.input.resolve())
+        if "frozen_route" in intent:
+            raise ValueError(
+                "decision intent cannot override the activation frozen_route"
+            )
+        plan = build_decision_plan(
+            ledger_root,
+            decision_session=str(intent["decision_session"]),
+            information_cutoff_utc=str(intent["information_cutoff_utc"]),
+            input_max_available_at_utc=str(
+                intent["input_max_available_at_utc"]
+            ),
+            input_snapshot_sha256=str(intent["input_snapshot_sha256"]),
+            model_state_sha256=str(intent["model_state_sha256"]),
+            code_commit_oid=str(intent["code_commit_oid"]),
+            expected_nav_fen=int(intent["expected_nav_fen"]),
+            targets_ppm=dict(intent["targets_ppm"]),
+            cash_weight_ppm=int(intent.get("cash_weight_ppm", 0)),
+            planned_at_utc=intent.get("planned_at_utc"),
+        )
+        stored = store_decision_plan(ledger_root, plan)
+        if arguments.output is not None:
+            output = arguments.output.resolve()
+            created = create_only_file(output, canonical_json_bytes(plan))
+            stored["requested_output"] = str(output)
+            stored["requested_output_created"] = created
+        _json({"plan": plan, "stored": stored})
+        return 0
+    if command == "seal":
+        _json(seal_decision(ledger_root, arguments.plan.resolve()))
+        return 0
+    if command == "outcome":
+        _json(
+            append_outcome(
+                ledger_root, _json_object(arguments.input.resolve())
+            )
+        )
+        return 0
+    if command == "correct":
+        _json(
+            append_correction(
+                ledger_root, _json_object(arguments.input.resolve())
+            )
+        )
+        return 0
+    if command == "attest":
+        snapshot_path = _prospective_snapshot_path(
+            ledger_root, str(arguments.snapshot)
+        )
+        snapshot = strict_load_canonical(snapshot_path.read_bytes())
+        if not isinstance(snapshot, Mapping):
+            raise ValueError(f"expected snapshot JSON object: {snapshot_path}")
+        release_commit_oid = snapshot.get("release_commit_oid")
+        if not isinstance(release_commit_oid, str) or not release_commit_oid:
+            raise ValueError("prospective snapshot has no release commit oid")
+        _json(
+            attest_snapshot(
+                ledger_root,
+                snapshot_path,
+                purpose=str(arguments.purpose),
+                release_commit_oid=release_commit_oid,
+                decision_record_sha256=arguments.decision_record_sha256,
+                admission_deadline_utc=arguments.admission_deadline_utc,
+                workflow_run_id=arguments.workflow_run_id,
+                repository=str(arguments.repository),
+                release_tag=str(arguments.release_tag),
+            )
+        )
+        return 0
+    if command == "audit":
+        audit = audit_ledger(ledger_root)
+        _json(audit)
+        return 0 if audit.get("valid") else 1
+    if command == "status":
+        _json(ledger_status(ledger_root))
+        return 0
+    raise AssertionError(command)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = build_parser().parse_args(argv)
     if arguments.command == "data":
@@ -297,6 +577,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _research_command(arguments)
     if arguments.command == "report":
         return _report_command(arguments)
+    if arguments.command == "prospective":
+        return _prospective_command(arguments)
     raise AssertionError(arguments.command)
 
 

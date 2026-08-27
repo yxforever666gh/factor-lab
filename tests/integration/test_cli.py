@@ -20,8 +20,8 @@ def test_cli_exposes_only_lightweight_mainline_commands() -> None:
     assert suspensions.resume is True
 
 
-def test_walk_forward_is_the_default_research_suite() -> None:
+def test_adaptive_is_the_default_research_suite() -> None:
     research = build_parser().parse_args(["research", "run", "--canary"])
 
-    assert research.suite == "walk-forward"
+    assert research.suite == "adaptive"
 

@@ -743,7 +743,16 @@ def evaluate_long_only_portfolio(
     risk_blockers = list(dict.fromkeys(map(str, promotion_blockers)))
     for signal_date, weights in normalized_targets.items():
         numeric = pd.Series(weights, dtype=float)
-        if numeric.empty or not np.isfinite(numeric.to_numpy()).all():
+        # In strict externally-scheduled mode an explicit empty mapping means
+        # a deliberate 100% cash target.  It remains distinct from an omitted
+        # date, which the complete-schedule validation below rejects.  Legacy
+        # optional target maps retain the old non-empty requirement so an
+        # accidental empty mapping cannot silently disable rank construction.
+        if numeric.empty and not require_optimized_targets:
+            raise ValueError(
+                f"optimized target weights are empty or non-finite at {signal_date.date()}"
+            )
+        if not np.isfinite(numeric.to_numpy()).all():
             raise ValueError(f"optimized target weights are empty or non-finite at {signal_date.date()}")
         if numeric.lt(0).any() or numeric.sum() > 1.0 + 1e-8:
             raise ValueError(f"optimized target weights violate long-only funding at {signal_date.date()}")
@@ -992,6 +1001,38 @@ def evaluate_long_only_portfolio(
         or dates[index].normalize() >= requested_evaluation_start_date
         if signal_calendar_end is None or dates[index] <= signal_calendar_end
     ]
+    if require_optimized_targets:
+        scheduled_signal_dates = [dates[index].normalize() for index in signal_indices]
+        missing_targets = [
+            value.date().isoformat()
+            for value in scheduled_signal_dates
+            if value not in normalized_targets
+        ]
+        if missing_targets:
+            raise ValueError(
+                "optimized targets are required for every scheduled signal date; "
+                f"missing={missing_targets}"
+            )
+        missing_audits = [
+            value.date().isoformat()
+            for value in scheduled_signal_dates
+            if value not in normalized_audit
+        ]
+        if missing_audits:
+            raise ValueError(
+                "optimization audits are required for every scheduled signal date; "
+                f"missing={missing_audits}"
+            )
+        ineligible_audits = [
+            value.date().isoformat()
+            for value in scheduled_signal_dates
+            if not bool(normalized_audit[value].get("promotion_eligible", False))
+        ]
+        if ineligible_audits:
+            raise ValueError(
+                "optimized targets require promotion_eligible audits; "
+                f"ineligible={ineligible_audits}"
+            )
     effective_evaluation_start_date = (
         dates[signal_indices[0]].normalize() if signal_indices else None
     )
@@ -1050,20 +1091,19 @@ def evaluate_long_only_portfolio(
             selected.sort(key=lambda ticker: rank_order[ticker])
             equal_weight = min(cfg.target_weight, 1.0 / len(selected))
             target_weights = {ticker: equal_weight for ticker in selected}
-            if require_optimized_targets:
-                target_weight_mode = "equal_weight_fallback"
-            elif cfg.retention_buffer:
+            if cfg.retention_buffer:
                 target_weight_mode = "equal_weight_retention_buffer"
             else:
                 target_weight_mode = "equal_weight"
-            if require_optimized_targets:
-                risk_blockers.append(
-                    f"optimized_target_missing:{signal_date.date().isoformat()}"
-                )
         else:
             eligible_tickers = set(eligible_day[ticker_col].astype(str))
             unknown = sorted(set(optimized) - eligible_tickers)
             if unknown:
+                if require_optimized_targets:
+                    raise ValueError(
+                        "optimized targets include ineligible tickers at "
+                        f"{signal_date.date().isoformat()}: {unknown}"
+                    )
                 risk_blockers.append(
                     f"optimized_target_not_eligible:{signal_date.date().isoformat()}"
                 )
@@ -1080,16 +1120,6 @@ def evaluate_long_only_portfolio(
             }
             selected = sorted(target_weights, key=lambda ticker: score_order[ticker])
             target_weight_mode = "optimized"
-            if require_optimized_targets and not period_optimization_audit:
-                risk_blockers.append(
-                    f"optimization_audit_missing:{signal_date.date().isoformat()}"
-                )
-            elif require_optimized_targets and not bool(
-                period_optimization_audit.get("promotion_eligible", False)
-            ):
-                risk_blockers.append(
-                    f"optimization_audit_not_eligible:{signal_date.date().isoformat()}"
-                )
 
         current_target_tickers = set(target_weights)
         retained_target_count = len(prior_target_tickers & current_target_tickers)
@@ -1445,13 +1475,11 @@ def evaluate_long_only_portfolio(
                 len(benchmark_returns) / len(benchmark_day), 10
             ) if len(benchmark_day) else 0.0,
             "blocked_trade_count": sum(1 for row in period_trades if row.get("status") == "blocked"),
-            "capacity_violation_count": sum(
-                1
-                for row in period_trades
-                if row.get("status") == "executed"
-                and float(row.get("executed_notional") or 0.0)
-                > float(row.get("adv") or 0.0) * cfg.max_adv_participation + 1e-6
-            ),
+            # The execution kernel checks capacity on full-precision values
+            # and raises on any violation.  Recomputing this audit from the
+            # four-decimal serialized trade rows can create a false positive
+            # when an order lands exactly on its ADV cap.
+            "capacity_violation_count": int(execution.capacity_violation_count),
             "capacity_limited_count": sum(
                 bool(row.get("capacity_limited")) for row in period_trades
             ),

@@ -5,8 +5,9 @@ Factor Lab 是一条本地、可复现的 A 股组合研究链：Parquet 数据 
 
 项目不再依赖 WebUI、Docker、PostgreSQL、MinIO、Dagster、Hermes 或自治 Agent。旧 Research OS 已完整归档在 Git tag `research-os-final-20260826`，不再进入当前主线。
 
-> 默认 `walk-forward` 在每个历史决策点严格排除尚未结束的持有期，但候选库和协议是在
-> 看过既有历史后设计的，因此证据等级只能是 `post_selection_causal_simulation`，不是
+> 默认 `adaptive` 主线以 4.1 事后选出的防御价值核心为锚，在线权重只读取当时已结束的
+> 独立成本后影子收益，风险覆盖层只读取当日收盘及此前信息。但核心和 5.0 协议都建立在
+> 已反复观察的历史上，因此证据等级仍只是 `post_selection_adaptive_simulation`，不是
 > 独立 OOS。项目不连接券商、不下单，也不保证未来收益。
 
 历史版本与当前未发布改动见 [CHANGELOG.md](CHANGELOG.md)。正式发布、Git tag 与 GitHub
@@ -47,10 +48,13 @@ factor-lab data suspensions --from 2017-01-01 --to 2026-08-21 --resume
 # 续传 PIT 财务指标和历史月末名称/行业，并原子更新 canonical Parquet
 factor-lab data enrich --from 2017-01-01 --to 2026-08-13 --resume
 
-# 默认主线：固定方向、selector 配置与静态执行链 smoke（不执行 selector）
+# 默认主线 canary：冻结协议、四专家信号与执行入口 smoke
 factor-lab research run --canary --resume
 
-# 全历史因果模拟、10 个调仓 offset 与相位汇总
+# 5.0 全历史：40 个因果影子账户、50 个共同起点评分账户、冻结 gate 与路由
+factor-lab research run --suite adaptive --full --resume
+
+# 4.1 hard-selector 纠正基线，仅用于复现历史诊断
 factor-lab research run --suite walk-forward --full --resume
 
 # 旧全历史方向/冠军榜，仅用于复现历史诊断
@@ -67,9 +71,49 @@ factor-lab research run --suite legacy-regression --full --resume
 
 factor-lab research status
 factor-lab report --run latest
+
+# 5.0 tag 发布且权威 full run 绑定完成后，激活不可回填的前瞻账本
+factor-lab prospective activate --run <authoritative-run-id> --release-tag 5.0
+factor-lab prospective status
+factor-lab prospective audit
 ```
 
-## 当前主线：校正后的 Walk-forward 4.1
+## 当前主线：固定核心、挑战者和前瞻账本 5.0
+
+5.0 不再让一组高度相关的价值信号做 hard switch。系统固定保留 4.1 事后观察到最稳健的
+70% 防御价值核心，同时把两个可能增加复杂度的机制隔离成挑战者：市场风险覆盖层和因果
+在线分配。协议 `protocols/5.0.json` 在首次历史执行前冻结十个 offset、五类账户、四组配对
+gate 和三分支路由；看到结果后不能改阈值、挑最好相位或重写路由。
+
+完整运行 `d97f124c47b2a5f9` 建立 40 个连续独立成本影子账户和 50 个从
+`2018-09-03` 以 5000 万现金、空仓开始的 fresh equal-AUM 账户。40/40 影子与 50/50
+评分账户通过状态、目标 cohort、完整逐日 NAV、执行输入、容量、未来输入和期末复利对账；
+feedback/overlay 未来违规均为 0。该运行只用于提交前审计，不能成为发布权威；正式身份只
+认 clean `5.0` tag target 上的完整运行，并由 activation record 同时绑定 run fingerprint、
+manifest、adaptive summary 与重算路由，避免在 tracked 文档里预填一个循环失效的 run id。
+
+冻结 gate 全部拒绝新增复杂度，历史路由为 `fixed_core_full`：
+
+- 固定核心全仓年化收益 Q20 / median / worst 为 10.62% / 11.07% / 10.11%，Sharpe
+  Q20 为 0.674、IR Q20 为 0.162、最大回撤 Q20 为 -18.30%。
+- 核心风险覆盖层在 89.28% 的信号日降低暴露，最大回撤配对 Q20 改善 2.31 个百分点，
+  但年化收益和 Sharpe 配对 Q20 分别损失 6.49 个百分点和 0.216，0/10 offset 改善年化；
+  因此覆盖层 gate 失败。
+- 静态分散相对固定核心的年化 / Sharpe 配对 Q20 为 -1.14 个百分点 / -0.056，
+  0/10 offset 改善年化。在线分配又相对静态先验略差：年化 / Sharpe 配对 Q20 为
+  -0.04 个百分点 / -0.002，只有 1/10 offset 改善年化；因此在线挑战者 gate 失败。
+
+这不是“稳定盈利已经证明”。它表示在当前历史证据下，可靠方向反而是删去不能证明增益的
+覆盖层、分散 sleeve 和在线权重，把可执行路线收缩为单一固定核心。正式 5.0 激活后，前瞻
+账本从数据截止日之后的第一条新决策开始，确认观察数从 0 起步，历史记录不得回填；只有
+前瞻证据才能决定固定核心是否真的值得继续。
+
+5.0 activation 会把 clean full run、manifest、协议和 `fixed_core_full` 路由固化为零观察
+检查点；但当前尚未实现可验证的 route→targets 生成器，也没有冻结十个 offset 的实际资本
+编排。因而 activation canary 可以执行，第一条 decision 仍必须阻塞。这个缺口应作为 5.1
+的小版本目标先补齐，不能用手工 targets 冒充固定核心的前瞻结果。
+
+## 4.1 纠正基线：否决 hard selector
 
 4.1 首先修复了 4.0 最关键的研究错误：旧 dynamic/static 账户在公共评分起点前已经拥有
 财富和持仓，而 fixed 账户从 5000 万现金开始，跨策略排名并不等资金可比。旧运行
@@ -148,12 +192,17 @@ runtime/runs/<run-id>/
   manifest.json
   summary.json
   factors/<factor>.json
-  walk-forward/
-    walk-forward-summary.json
+  adaptive/
+    adaptive-summary.json
     offset-00/ ... offset-09/
   robustness.json      # 仅在触发时存在
   report.md
 runtime/runs/latest.json
+
+runtime/prospective/5.0/
+  records/             # create-only canonical JSON hash chain
+  snapshots/           # 可提交 GitHub attestation 的 immutable snapshot
+  bundles/             # 已验证的远端 attestation bundle
 ```
 
 ## 测试

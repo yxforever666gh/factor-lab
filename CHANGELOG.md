@@ -10,12 +10,77 @@
 
 ## [Unreleased]
 
+## [5.0] - 2026-08-28
+
 ### Added
 
 - 冻结 `protocols/5.0.json`：下一大方向改为固定防御价值核心、独立市场风险覆盖层、
   仅作挑战者的因果在线组合，以及不可回填的前瞻 hash-chain 账本。协议在首次 5.0
   历史运行前固定五类等 AUM 账户、十个 offset、配对 gate 与确定性路由，并绑定已发布
   `4.1` tag、纠正后权威运行及全部源产物哈希。
+- 增加独立 `adaptive` suite：十个预注册 offset 分别建立四个全历史独立成本影子账户，
+  并在共同起点新建 `fixed_core_full`、`fixed_core_overlay`、`static_prior_full`、
+  `online_full`、`online_overlay` 五个等 AUM 评分账户。在线权重只读取严格成熟共同 cohort，
+  市场覆盖层只读取信号日收盘可得的趋势、breadth 与波动信息；产物不生成策略排名。
+- 增加 create-only 前瞻证据账本：严格 canonical JSON、逐记录 SHA-256 hash chain、
+  Windows/POSIX 跨进程锁、hardlink 原子发布、activation/decision/attestation/outcome/
+  correction 状态机，以及绑定 immutable `5.0` tag 的 GitHub artifact attestation workflow。
+  Activation 必须显式指定一个干净、完整、非 canary 的 adaptive run，并复核 tag commit、
+  双层 manifest、全部文件、协议、完整性 gate 与重算路由后，把 run/hash/route 固化进账本。
+
+### Changed
+
+- 默认研究入口改为 `adaptive`，research config 与 summary schema 升至 `5`，engine 升至
+  `factor-lab/research/v7`；冻结 protocol 的原始 SHA-256 同时进入运行指纹、summary、
+  adaptive envelope 与 manifest inputs。
+- 外部目标持仓账户改为 fail-closed：任一计划调仓日缺目标、缺 promotion audit、audit 未获
+  准入或目标包含非 eligible 股票时，在生成任何排名等权 fallback 会计前直接拒绝。
+- Overlay 的 `return_1d`、`momentum_120` 改为 adaptive suite 强制加载字段；
+  `momentum_120` 显式绑定到 `close_adj` 的保守 PIT lineage，不再遗漏在依赖审计之外。
+
+### Fixed
+
+- 修正市场覆盖层把 breadth 尚未完成 400 日 warm-up 误当成市场收益缺失、从而污染累计
+  market level 的问题；收益覆盖与 breadth readiness 现在分别判定，覆盖层在真实样本上从
+  `2018-08-22` 起可用，缺值仍保持 fail-closed。
+- 修正外部自适应目标中空映射被误当成“缺少目标”并回退的问题；显式空目标现在表示全现金，
+  缺失调仓日仍直接失败。组合容量审计改用全精度执行结果，不再用四位小数展示值产生误报。
+- 完成运行的 checkpoint 校验现在同时核对 manifest 每行的文件大小与 SHA-256；全历史
+  research summary 在账本真正激活前明确标记 `prospective_status=not_activated`。
+- 在线决策的 `excluded_unmatured_cohort_count` 只统计信号日已经出现但尚未成熟的 cohort，
+  不再泄露全样本未来 cohort 数；追加未来数据不会改写既有决策及其 history hash。
+- Canary 与 full 现在复用同一套完整冻结协议校验；程序化 `run_research()` 与 CLI 都默认
+  `adaptive`。特征、执行、停复牌和 protocol 在加载后及 manifest 发布前各复核一次，长跑中
+  任一输入变化都不会发布 completed summary 或 latest checkpoint。
+- 前瞻 attestation 不再用可查询但可拼接的 workflow `created_at` 代替可信时间：收据现在
+  持久化并复核 request/display title、精确 run id/attempt、证书 RunInvocationURI、完整
+  `verifiedTimestamps` 与最早 Tlog 时间；decision 只接受严格早于 09:15 deadline 的 Tlog。
+  同一 snapshot 有多个合法 attestation 时按本次 run attempt 精确选择，resume 不能借用旧 run。
+
+### Research results
+
+- 首个完整开发树运行建立 40/40 个连续成本后影子账户和 50/50 个共同起点 fresh equal-AUM
+  评分账户；共同起点为 `2018-09-03`，全部账户的执行输入与期间覆盖率为 1，未来 feedback/
+  overlay、容量与对账违规均为 0。两组独立审计分别从原始 NAV/period 重算 200 个指标和
+  2,329 条在线历史，并复核 manifest 108/108 个文件，结果与产物零差异。
+- 固定核心全仓的年化收益 Q20 / median / worst 为 10.62% / 11.07% / 10.11%，Sharpe
+  Q20 为 0.674，最大回撤 Q20 为 -18.30%。风险覆盖层虽将最大回撤配对 Q20 改善 2.31 个
+  百分点，却损失 6.49 个百分点年化和 0.216 Sharpe，0/10 offset 改善年化；gate 失败。
+- 静态分散相对固定核心的年化与 Sharpe 配对 Q20 为 -1.14 个百分点和 -0.056；在线分配
+  相对静态先验又为 -0.04 个百分点和 -0.002，只有 1/10 offset 改善年化。四个冻结 gate
+  全部失败，确定性路由因此收缩为 `fixed_core_full`，在线、分散与覆盖层均不部署。
+
+### Known limitations
+
+- 上述结果仍使用已反复观察的 2017–2026 历史，固定核心本身来自 4.1 的事后选择；十个
+  offset 共享同一市场路径，不是十份独立样本。它只否决新增复杂度，不能证明稳定盈利。
+- PIT feature、复权执行价和 universe 的历史 vintage 仍未完全验证，固定保持
+  `investment_claim_allowed=false`。正式权威运行必须来自干净的 5.0 release commit；
+  前瞻账本发布激活前为 `not_activated`，激活后也从 0 个确认观察起步且禁止历史回填。
+- 5.0 activation 能证明“哪次运行决定了哪条 route”，但当前 decision targets 仍由调用方
+  提供，尚无可验证的 route→targets 生成器和十 offset 实际资本编排。因此激活与远端 canary
+  可作为零观察方向检查点，第一条前瞻 decision 在该缺口补齐前仍必须阻塞，不能把手工目标
+  伪称为 `fixed_core_full` 产物。
 
 ## [4.1] - 2026-08-28
 
