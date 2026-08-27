@@ -1,0 +1,186 @@
+{
+  "schema_version": 1,
+  "protocol_id": "factor-lab/5.0/adaptive-core-overlay",
+  "release": "5.0",
+  "status": "frozen_before_historical_execution",
+  "frozen_at_utc": "2026-08-27T21:04:15Z",
+  "objective": "Seek phase-stable net performance with a fixed defensive-value core, an independently motivated market-risk overlay, a causal online challenger, and a tamper-evident prospective ledger.",
+  "evidence_class": "post_selection_adaptive_simulation",
+  "investment_claim_allowed": false,
+  "disclosures": [
+    "The fixed core was selected after observing the complete 4.1 historical comparison.",
+    "Historical gates below are diagnostic routing rules, not prospective confirmation.",
+    "No historical result may be relabeled as a prospective result.",
+    "The online sleeve is a challenger; it is not the default deployment route."
+  ],
+  "source_evidence": {
+    "release_tag": "4.1",
+    "annotated_tag_object_id": "77ff60b61a2968006a608a7ebd542b36bb90335c",
+    "target_commit": "808a9d6b6e897b107c5998e2359e46eef16f43cc",
+    "authoritative_run_id": "6462d5550b459fb2",
+    "run_fingerprint": "6462d5550b459fb23e5ef2b44a990d39609b762f0ac8733fd6ac5338f3cba7af",
+    "manifest_sha256": "1725b7676ddc8f9d25ba4c2484688ae2f67d9dbd9f8d7392b03b488924ea3b55",
+    "manifest_self_sha256": "aacf4255eecce07e145b989f33b22df6212012346f22fa54ecde4293a4c5450f",
+    "summary_sha256": "c6268556bdfa03f46610744f6fb8c5a40cfd4dc64999b5a3a93872a0b02c9efb",
+    "walk_forward_summary_sha256": "eed393b699337e7e89a6e641c29f6cfb0de20e1a4d8cfc691d1d807767af4e40",
+    "pit_lineage_sha256": "6150ace7798298f6eb97e6410d11a88a2673ffd6b67d97334163c9e65c40f8c3",
+    "observed_data_cutoff": "2026-08-21"
+  },
+  "portfolio": {
+    "capital": 50000000,
+    "holding_days": 10,
+    "rebalance_every_days": 10,
+    "rebalance_offsets": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "position_count_per_expert": 10,
+    "maximum_combined_position_count": 40,
+    "retention_buffer": 5,
+    "periods_per_year": 25.2,
+    "execution_timing": "signal_at_close_t_trade_at_next_open",
+    "accounting": "fresh_equal_AUM_account_per_strategy_per_offset",
+    "common_evaluation_start_policy": "latest_first_complete_period_end_across_all_shadows_and_overlay_readiness",
+    "target_combination": "sum_overlapping_explicit_expert_stock_weights_without_truncation_or_renormalization",
+    "cash_policy": "unallocated_weight_remains_cash",
+    "costs_and_capacity": "existing_4.1_execution_contract"
+  },
+  "experts": {
+    "ordered_registry": [
+      "earnings_yield_over_pb",
+      "causal_blend__earnings_yield_over_pb__value_defensive_rank__w0p7",
+      "causal_blend__earnings_yield_over_pb__low_volatility__w0p7",
+      "causal_blend__earnings_yield_over_pb__low_turnover__w0p7"
+    ],
+    "control": "earnings_yield_over_pb",
+    "fixed_core": "causal_blend__earnings_yield_over_pb__value_defensive_rank__w0p7",
+    "core_selection_basis": "post_selection_best_phase_result_observed_in_4.1",
+    "shadow_account_count": 40,
+    "shadow_history_policy": "only_periods_with_end_date_strictly_before_current_signal_date"
+  },
+  "online_allocator": {
+    "anchor_weight": 0.5,
+    "anchor_expert": "causal_blend__earnings_yield_over_pb__value_defensive_rank__w0p7",
+    "flexible_sleeve_weight": 0.5,
+    "flexible_sleeve_experts": [
+      "earnings_yield_over_pb",
+      "causal_blend__earnings_yield_over_pb__value_defensive_rank__w0p7",
+      "causal_blend__earnings_yield_over_pb__low_volatility__w0p7",
+      "causal_blend__earnings_yield_over_pb__low_turnover__w0p7"
+    ],
+    "score": "cumulative_sum_log1p_of_independent_costed_shadow_net_returns",
+    "allocation": "softmax_score",
+    "initial_sleeve_weights": [0.25, 0.25, 0.25, 0.25],
+    "learning_rate": 1.0,
+    "decay": null,
+    "score_clipping": null,
+    "hyperparameter_search": false,
+    "static_prior_total_weights": [0.125, 0.625, 0.125, 0.125]
+  },
+  "market_overlay": {
+    "market_proxy": "equal_weight_return_1d_over_current_PIT_eligible_universe",
+    "market_level": "cumulative_product_one_plus_market_proxy_return",
+    "trend_window_trading_days": 200,
+    "trend_rule": "market_level_greater_than_simple_moving_average",
+    "breadth_field": "momentum_120",
+    "breadth_rule": "fraction_strictly_greater_than_zero_at_least_0.5",
+    "volatility_window_trading_days": 60,
+    "volatility_ddof": 1,
+    "annualization_days": 252,
+    "target_annual_volatility": 0.2,
+    "volatility_scalar_clip": [0.25, 1.0],
+    "regime_exposure_caps": {
+      "trend_and_breadth": 1.0,
+      "exactly_one": 0.6,
+      "neither": 0.25
+    },
+    "exposure": "minimum_of_regime_cap_and_volatility_scalar",
+    "minimum_history_trading_days": 400,
+    "minimum_daily_return_coverage": 0.95,
+    "minimum_daily_breadth_coverage": 0.95,
+    "missing_value_policy": "fail_closed_no_backfill_no_forward_fill",
+    "timing": "use_close_information_on_signal_date_for_next_open_trade"
+  },
+  "scoring_accounts": {
+    "per_offset": [
+      "fixed_core_full",
+      "fixed_core_overlay",
+      "static_prior_full",
+      "online_full",
+      "online_overlay"
+    ],
+    "total_count": 50,
+    "initial_nav": 50000000,
+    "required_daily_nav_path": true,
+    "required_period_coverage": 1.0
+  },
+  "paired_comparisons": {
+    "core_overlay": "fixed_core_overlay_minus_fixed_core_full",
+    "static_prior_diversification": "static_prior_full_minus_fixed_core_full",
+    "online_vs_static": "online_full_minus_static_prior_full",
+    "online_overlay_effect": "online_overlay_minus_online_full",
+    "combined": "online_overlay_minus_fixed_core_full"
+  },
+  "phase_aggregation": {
+    "offset_count": 10,
+    "quantile": 0.2,
+    "annual_return_and_ratios": "lower_quantile_q20",
+    "max_drawdown_delta": "lower_quantile_q20_where_positive_means_less_severe_drawdown",
+    "ranking": false,
+    "best_strategy_selection": false
+  },
+  "frozen_gates": {
+    "core_overlay": {
+      "paired_q20_net_annual_return_delta_min": 0.0,
+      "paired_q20_net_sharpe_delta_min": 0.0,
+      "paired_q20_max_drawdown_delta_min": 0.0,
+      "positive_annual_return_delta_ratio_min": 0.8,
+      "mean_fraction_signal_dates_exposure_below_one_min": 0.1
+    },
+    "online_vs_static": {
+      "paired_q20_net_annual_return_delta_exclusive_min": 0.0,
+      "paired_q20_net_sharpe_delta_min": 0.0,
+      "paired_q20_max_drawdown_delta_min": -0.02,
+      "positive_annual_return_delta_ratio_min": 0.8
+    },
+    "online_overlay_effect": {
+      "paired_q20_net_annual_return_delta_min": 0.0,
+      "paired_q20_net_sharpe_delta_min": 0.0,
+      "paired_q20_max_drawdown_delta_min": 0.0,
+      "positive_annual_return_delta_ratio_min": 0.8,
+      "mean_fraction_signal_dates_exposure_below_one_min": 0.1
+    },
+    "combined": {
+      "paired_q20_net_annual_return_delta_exclusive_min": 0.0,
+      "paired_q20_net_sharpe_delta_min": 0.0,
+      "paired_q20_max_drawdown_delta_min": -0.02,
+      "positive_annual_return_delta_ratio_min": 0.8
+    }
+  },
+  "routing": {
+    "if_core_overlay_gate_fails": "fixed_core_full",
+    "if_all_four_gates_pass": "online_overlay",
+    "otherwise": "fixed_core_overlay",
+    "allow_post_run_threshold_changes": false,
+    "allow_historical_rerun_to_change_route_after_release": false
+  },
+  "integrity_gates": {
+    "future_selection_violation_count_max": 0,
+    "capacity_violation_count_max": 0,
+    "account_reconciliation_error_max": 1e-08,
+    "execution_input_coverage_min": 1.0,
+    "execution_period_coverage_min": 1.0,
+    "overlay_signal_coverage_min": 1.0,
+    "fresh_account_boundary_required": true,
+    "manifest_self_hash_required": true,
+    "protocol_hash_in_run_fingerprint_required": true
+  },
+  "prospective": {
+    "ledger_format": "one_create_only_canonical_JSON_record_per_sequence",
+    "hash_chain_required": true,
+    "activation_historical_cutoff": "2026-08-21",
+    "first_decision_signal_date_rule": "strictly_greater_than_activation_historical_cutoff",
+    "activation_release": "5.0",
+    "attestation": "GitHub_Actions_artifact_at_immutable_5.0_tag",
+    "pretrade_deadline": "09:15 Asia/Shanghai on trade date",
+    "historical_backfill_forbidden": true,
+    "initial_status_without_new_market_data": "awaiting_new_data"
+  }
+}
