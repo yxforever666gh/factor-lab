@@ -68,6 +68,29 @@ def test_runtime_ensemble_requires_pre_directed_policy() -> None:
         )
 
 
+def test_fixed_direction_requires_an_explicit_binary_sign() -> None:
+    factor = FactorSpec(
+        name="causal_value",
+        family="value",
+        expression="book_yield",
+        direction_policy="fixed",
+        params={"fixed_direction": 1},
+    )
+
+    assert factor.direction_policy == "fixed"
+    assert factor.params["fixed_direction"] == 1
+
+    for invalid in (None, 0, 2, True):
+        with pytest.raises(ValueError, match="fixed_direction"):
+            FactorSpec(
+                name="bad_fixed",
+                family="value",
+                expression="book_yield",
+                direction_policy="fixed",
+                params={"fixed_direction": invalid},
+            )
+
+
 def test_expression_factor_allows_explicit_all_history_direction_search() -> None:
     factor = FactorSpec(
         name="in_sample_value",

@@ -88,8 +88,14 @@ def build_parser() -> argparse.ArgumentParser:
     run = research_commands.add_parser("run", help="Run a factor research suite.")
     run.add_argument(
         "--suite",
-        choices=("results-first", "recovery", "next", "legacy-regression"),
-        default="results-first",
+        choices=(
+            "walk-forward",
+            "results-first",
+            "recovery",
+            "next",
+            "legacy-regression",
+        ),
+        default="walk-forward",
     )
     run_mode = run.add_mutually_exclusive_group(required=True)
     run_mode.add_argument("--canary", action="store_true")
@@ -179,6 +185,7 @@ def _data_command(arguments: argparse.Namespace) -> int:
 
 
 def _compact_research(summary: Mapping[str, Any]) -> dict[str, Any]:
+    walk_forward = dict(summary.get("walk_forward") or {})
     return {
         "status": summary.get("status"),
         "run_id": summary.get("run_id"),
@@ -192,6 +199,32 @@ def _compact_research(summary: Mapping[str, Any]) -> dict[str, Any]:
             "best_historical_strategy"
         ),
         "results_first_top": ((summary.get("results_first") or {}).get("rankings") or [])[:5],
+        "walk_forward": {
+            "evidence_class": walk_forward.get("evidence_class"),
+            "canary_smoke_only": walk_forward.get("canary_smoke_only"),
+            "causal_history_valid": walk_forward.get("causal_history_valid"),
+            "historical_diagnostic_passed": walk_forward.get(
+                "historical_diagnostic_passed"
+            ),
+            "future_selection_violation_count": walk_forward.get(
+                "future_selection_violation_count"
+            ),
+            "common_evaluation_start": walk_forward.get("common_evaluation_start"),
+            "dynamic_phase_rank": walk_forward.get("dynamic_phase_rank"),
+            "dynamic_status": walk_forward.get("dynamic_status"),
+            "best_phase_strategy": walk_forward.get("best_phase_strategy"),
+            "fixed_comparator": (walk_forward.get("fixed_comparator") or {}).get(
+                "factor_name"
+            ),
+            "dynamic_annual_q20_delta_vs_fixed_comparator": (
+                ((walk_forward.get("fixed_comparator") or {}).get(
+                    "dynamic_phase_deltas"
+                ) or {}).get("net_annual_return")
+                or {}
+            ).get("q20"),
+        }
+        if walk_forward.get("enabled")
+        else None,
         "data": summary.get("data"),
     }
 

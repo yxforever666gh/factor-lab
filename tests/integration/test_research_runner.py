@@ -750,3 +750,217 @@ def test_robustness_requires_every_anchor_to_pass_data_integrity() -> None:
     assert runner_module._robustness_integrity_blockers(anchors) == [
         "future_execution_input_detected"
     ]
+
+
+def test_full_walk_forward_runs_every_offset_with_strictly_matured_history(
+    tmp_path: Path,
+) -> None:
+    """Exercise the real runner without the production-sized ten-offset matrix."""
+
+    features, execution = _frames()
+    feature_path = tmp_path / "features.parquet"
+    execution_path = tmp_path / "execution.parquet"
+    factors_path = tmp_path / "factors.json"
+    research_path = tmp_path / "research.json"
+    features.to_parquet(feature_path, index=False)
+    execution.to_parquet(execution_path, index=False)
+    factors_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "control": {
+                    "name": "earnings_yield_over_pb",
+                    "family": "value",
+                    "expression": "earnings_yield / pb",
+                    "direction_policy": "train_ic",
+                    "role": "control",
+                },
+                "suites": {
+                    "walk-forward": [
+                        {
+                            "name": "value_defensive_rank",
+                            "family": "value",
+                            "expression": (
+                                "rank(book_yield) + rank(earnings_yield) + "
+                                "rank(-volatility_20)"
+                            ),
+                            "direction_policy": "fixed",
+                            "params": {"fixed_direction": 1},
+                        }
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    research_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 3,
+                "engine": "factor-lab/research/v5",
+                "validation": {
+                    "train_start": "2017-01-01",
+                    "train_end": "2022-12-31",
+                    "validation_start": "2023-01-01",
+                    "validation_end": "2024-12-31",
+                    "audit_start": "2025-01-01",
+                    "holding_days": 2,
+                    "min_cross_section": 5,
+                    "bootstrap_samples": 8,
+                    "bootstrap_block_size": 2,
+                    "audit_min_observations": 2,
+                },
+                "portfolio": {
+                    "capital": 1_000_000,
+                    "holding_days": 2,
+                    "rebalance_every_days": 2,
+                    "rebalance_offset_days": 0,
+                    "position_count": 3,
+                    "retention_buffer": 0,
+                    "target_weight": 1 / 3,
+                    "periods_per_year": 126.0,
+                    "open_column": "open_adj",
+                    "adv_column": "adv_20",
+                    "volatility_column": "volatility_20",
+                },
+                "promotion_gate": _promotion_gate(validation_observations_min=2),
+                "control_comparison": {
+                    "max_drawdown_worsening_tolerance": 1.0
+                },
+                "results_first": {
+                    "incomplete_period_policy": "exclude_from_ranking"
+                },
+                "walk_forward": {
+                    "candidate_factors": ["value_defensive_rank"],
+                    "candidate_weights": [0.7],
+                    "rebalance_offsets": [0, 1],
+                    "phase_quantile": 0.2,
+                    "portfolio": {
+                        "holding_days": 2,
+                        "rebalance_every_days": 2,
+                        "rebalance_offset_days": 0,
+                        "position_count": 3,
+                        "retention_buffer": 0,
+                        "target_weight": 1 / 3,
+                        "periods_per_year": 126.0,
+                    },
+                    "selector": {
+                        "lookback_trading_days": 20,
+                        "minimum_completed_periods": 2,
+                        "update_every_trading_days": 1,
+                        "score_method": "net_sharpe",
+                        "control_score_guard": 0.0,
+                        "history_policy": (
+                            "end_date_strictly_before_signal_date"
+                        ),
+                        "missing_signal_policy": "fallback_control",
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    common = {
+        "project_root": tmp_path,
+        "suite": "walk-forward",
+        "resume": False,
+        "feature_path": feature_path,
+        "execution_path": execution_path,
+        "factors_path": factors_path,
+        "research_config_path": research_path,
+        "run_robustness": False,
+    }
+    canary = run_research(
+        mode="canary",
+        **common,
+    )
+    assert canary["evidence_class"] == "engineering_smoke"
+    assert canary["walk_forward"]["evidence_class"] == "engineering_smoke"
+    assert canary["walk_forward"]["selector_executed"] is False
+    assert canary["walk_forward"]["fixed_comparator"]["factor_name"] == (
+        "fixed_registry_equal_weight"
+    )
+
+    result = run_research(
+        mode="full",
+        **common,
+    )
+
+    walk_forward = result["walk_forward"]
+    assert result["schema_version"] == 3
+    assert result["evidence_class"] == "post_selection_causal_simulation"
+    assert walk_forward["evidence_class"] == result["evidence_class"]
+    assert walk_forward["protocol"] == "causal_walk_forward"
+    assert walk_forward["selector_executed"] is True
+    assert walk_forward["rebalance_offsets"] == [0, 1]
+    assert [row["rebalance_offset_days"] for row in walk_forward["offsets"]] == [
+        0,
+        1,
+    ]
+    assert walk_forward["future_selection_violation_count"] == 0
+    assert walk_forward["causal_history_valid"] is True
+    assert walk_forward["full_dynamic_period_coverage"] is True
+    fixed_name = walk_forward["fixed_comparator"]["factor_name"]
+    assert fixed_name == "fixed_registry_equal_weight"
+    assert fixed_name not in walk_forward["candidate_registry"]
+    assert fixed_name in {
+        row["strategy_name"] for row in walk_forward["phase_rankings"]
+    }
+    for offset in walk_forward["offsets"]:
+        assert offset["signal_date_count"] > 0
+        assert offset["update_count"] > 0
+        assert offset["future_selection_violation_count"] == 0
+
+    run_dir = tmp_path / "runtime" / "runs" / result["run_id"]
+    walk_root = run_dir / "walk-forward"
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    manifest_paths = {str(row["path"]) for row in manifest["files"]}
+    walk_artifacts = {
+        path.relative_to(run_dir).as_posix()
+        for path in walk_root.rglob("*.json")
+    }
+    assert walk_artifacts
+    assert walk_artifacts <= manifest_paths
+    assert "walk-forward/walk-forward-summary.json" in manifest_paths
+    assert runner_module._completed_run_valid(
+        run_dir / "summary.json",
+        run_dir,
+        result["run_fingerprint"],
+    )
+
+    candidate_registry = list(walk_forward["candidate_registry"])
+    for offset in (0, 1):
+        offset_dir = walk_root / f"offset-{offset:02d}"
+        dynamic = json.loads(
+            (offset_dir / "dynamic.json").read_text(encoding="utf-8")
+        )
+        fixed_comparator = json.loads(
+            (offset_dir / "fixed-comparator.json").read_text(encoding="utf-8")
+        )
+        assert fixed_comparator["role"] == "fixed_registry_comparator"
+        assert fixed_comparator["result"]["factor_name"] == fixed_name
+        assert fixed_comparator["result"]["portfolio"]["status"] == "ok"
+        assert fixed_comparator["result"]["portfolio"]["total_cost"] > 0
+        assert dynamic["role"] == "causal_deployed_account"
+        assert dynamic["result"]["factor_name"] == walk_forward["dynamic_factor"]
+        assert dynamic["result"]["portfolio"]["status"] == "ok"
+        assert dynamic["result"]["portfolio"]["trade_count"] > 0
+        assert dynamic["result"]["portfolio"]["total_cost"] > 0
+        decisions = dynamic["decisions"]
+        assert decisions["history_policy"] == (
+            "end_date_strictly_before_signal_date"
+        )
+        assert decisions["future_selection_violation_count"] == 0
+        for update in decisions["updates"]:
+            if update["latest_used_end_date"] is not None:
+                assert pd.Timestamp(update["latest_used_end_date"]) < pd.Timestamp(
+                    update["decision_date"]
+                )
+        static_files = list((offset_dir / "static").glob("*.json"))
+        assert len(static_files) == len(candidate_registry)
+        assert all(
+            json.loads(path.read_text(encoding="utf-8"))["role"]
+            == "causal_shadow_candidate"
+            for path in static_files
+        )

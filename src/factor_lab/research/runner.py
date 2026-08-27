@@ -21,6 +21,8 @@ from factor_lab.portfolio import LongOnlyPortfolioConfig, evaluate_long_only_por
 from .contracts import FactorSpec, ValidationSpec
 from .reporting import render_report
 from .signals import directed_rank_blend, evaluate_factor_signal
+from .walk_forward import WalkForwardSelectorSpec
+from .walk_forward_runtime import run_walk_forward_sweep
 from .validation import (
     FactorValidation,
     StageASelection,
@@ -31,9 +33,10 @@ from .validation import (
 )
 
 
-ENGINE_ID = "factor-lab/research/v4"
+ENGINE_ID = "factor-lab/research/v5"
 EVIDENCE_CLASS = "historical_diagnostic"
 RESULTS_FIRST_SUITE = "results-first"
+WALK_FORWARD_SUITE = "walk-forward"
 _DETAIL_FIELDS = {"periods", "trades", "optimization_audit"}
 _REQUIRED_PROMOTION_GATE_KEYS = {
     "validation_net_excess_annual_return_min",
@@ -133,6 +136,20 @@ def _completed_run_valid(summary_path: Path, output_dir: Path, run_fingerprint: 
             f"factors/{_safe_name(str(name))}.json"
             for name in summary.get("stage_b_selected") or []
         )
+        walk_forward = summary.get("walk_forward") or {}
+        if walk_forward.get("enabled") and not walk_forward.get("canary_smoke_only"):
+            required.add("walk-forward/walk-forward-summary.json")
+            candidate_registry = tuple(walk_forward.get("candidate_registry") or ())
+            for offset in walk_forward.get("rebalance_offsets") or ():
+                offset_root = f"walk-forward/offset-{int(offset):02d}"
+                required.add(f"{offset_root}/decisions.json")
+                required.add(f"{offset_root}/dynamic.json")
+                if (walk_forward.get("fixed_comparator") or {}).get("factor_name"):
+                    required.add(f"{offset_root}/fixed-comparator.json")
+                required.update(
+                    f"{offset_root}/static/{_safe_name(str(name))}.json"
+                    for name in candidate_registry
+                )
         return required.issubset(names)
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
         return False
@@ -210,13 +227,16 @@ def _validation_spec(config: Mapping[str, Any]) -> ValidationSpec:
 def _portfolio_config(
     config: Mapping[str, Any], *, suite: str | None = None
 ) -> LongOnlyPortfolioConfig:
-    if suite != RESULTS_FIRST_SUITE:
+    if suite not in {RESULTS_FIRST_SUITE, WALK_FORWARD_SUITE}:
         return LongOnlyPortfolioConfig.from_mapping(config)
     merged = dict(config)
     portfolio = dict(config.get("portfolio") or {})
-    portfolio.update(
-        dict((config.get("results_first") or {}).get("portfolio") or {})
-    )
+    suite_settings = (
+        config.get("results_first")
+        if suite == RESULTS_FIRST_SUITE
+        else config.get("walk_forward")
+    ) or {}
+    portfolio.update(dict(suite_settings.get("portfolio") or {}))
     merged["portfolio"] = portfolio
     return LongOnlyPortfolioConfig.from_mapping(merged)
 
@@ -1072,6 +1092,147 @@ def _build_results_first_ensembles(
     return ensemble_factors, ensemble_signals, ensemble_validations
 
 
+def _walk_forward_weights(settings: Mapping[str, Any]) -> tuple[float, ...]:
+    raw = tuple(settings.get("candidate_weights") or (0.3, 0.7))
+    if not raw or any(isinstance(value, (bool, np.bool_)) for value in raw):
+        raise ValueError("walk_forward candidate_weights must be unique values in (0, 1]")
+    try:
+        weights = tuple(float(value) for value in raw)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "walk_forward candidate_weights must be unique values in (0, 1]"
+        ) from exc
+    if (
+        len(set(weights)) != len(weights)
+        or any(not np.isfinite(value) or value <= 0.0 or value > 1.0 for value in weights)
+    ):
+        raise ValueError("walk_forward candidate_weights must be unique values in (0, 1]")
+    return weights
+
+
+def _walk_forward_fixed_comparator(settings: Mapping[str, Any]) -> dict[str, str]:
+    """Validate the single return-blind comparator protocol used by v5."""
+
+    raw = settings.get("fixed_comparator") or {}
+    if not isinstance(raw, Mapping):
+        raise ValueError("walk_forward fixed_comparator must be an object")
+    protocol = {
+        "name": str(raw.get("name", "fixed_registry_equal_weight")),
+        "weighting": str(raw.get("weighting", "equal")),
+        "missing_signal_policy": str(
+            raw.get("missing_signal_policy", "fallback_control")
+        ),
+    }
+    if set(raw) != set(protocol) and raw:
+        raise ValueError("walk_forward fixed_comparator contains unknown settings")
+    if protocol != {
+        "name": "fixed_registry_equal_weight",
+        "weighting": "equal",
+        "missing_signal_policy": "fallback_control",
+    }:
+        raise ValueError(
+            "walk_forward fixed_comparator must use the frozen v5 protocol"
+        )
+    return protocol
+
+
+def _build_walk_forward_candidates(
+    frame: pd.DataFrame,
+    control: FactorSpec,
+    challengers: Sequence[FactorSpec],
+    signals: Mapping[str, pd.Series],
+    validations: Mapping[str, FactorValidation],
+    validation_spec: ValidationSpec,
+    research_config: Mapping[str, Any],
+) -> tuple[list[FactorSpec], dict[str, pd.Series], dict[str, FactorValidation]]:
+    """Build the fixed, small candidate registry used by the causal selector."""
+
+    settings = dict(research_config.get("walk_forward") or {})
+    configured_evidence = str(
+        settings.get("evidence_class", "post_selection_causal_simulation")
+    )
+    if configured_evidence != "post_selection_causal_simulation":
+        raise ValueError(
+            "walk_forward evidence_class must be "
+            "'post_selection_causal_simulation'"
+        )
+    _walk_forward_fixed_comparator(settings)
+    allowed = tuple(str(value) for value in settings.get("candidate_factors") or ())
+    if not allowed or len(set(allowed)) != len(allowed):
+        raise ValueError("walk_forward candidate_factors must be a unique non-empty list")
+    by_name = {factor.name: factor for factor in challengers}
+    missing = [name for name in allowed if name not in by_name]
+    if missing:
+        raise ValueError(
+            "walk_forward candidate_factors are not registered: " + ", ".join(missing)
+        )
+    weights = _walk_forward_weights(settings)
+    labels = tuple(format(value, ".12g").replace(".", "p") for value in weights)
+    if len(set(labels)) != len(labels):
+        raise ValueError("walk_forward candidate_weights must have unique labels")
+
+    control_validation = validations[control.name]
+    if control.direction_policy != "fixed" or control_validation.frozen_direction not in {-1, 1}:
+        raise ValueError("walk_forward control must have a fixed direction")
+    control_rank = directed_rank_blend(
+        frame,
+        signals[control.name],
+        signals[control.name],
+        control_direction=control_validation.frozen_direction,
+        challenger_direction=control_validation.frozen_direction,
+        challenger_weight=0.0,
+        date_column=validation_spec.date_column,
+    ).rename(control.name)
+    candidate_factors = [control]
+    candidate_signals = {control.name: control_rank}
+    candidate_validations = {control.name: control_validation}
+
+    for challenger_name in allowed:
+        challenger = by_name[challenger_name]
+        challenger_validation = validations[challenger.name]
+        if challenger.direction_policy != "fixed":
+            raise ValueError(
+                f"walk_forward candidate must have a fixed direction: {challenger.name}"
+            )
+        challenger_rank = directed_rank_blend(
+            frame,
+            signals[control.name],
+            signals[challenger.name],
+            control_direction=control_validation.frozen_direction,
+            challenger_direction=challenger_validation.frozen_direction,
+            challenger_weight=1.0,
+            date_column=validation_spec.date_column,
+        )
+        for weight, label in zip(weights, labels, strict=True):
+            name = f"causal_blend__{control.name}__{challenger.name}__w{label}"
+            factor = FactorSpec(
+                name=name,
+                family="walk_forward_candidate",
+                kind="ensemble",
+                direction_policy="pre_directed",
+                params={
+                    "control_factor": control.name,
+                    "challenger_factor": challenger.name,
+                    "control_direction": control_validation.frozen_direction,
+                    "challenger_direction": challenger_validation.frozen_direction,
+                    "challenger_weight": weight,
+                    "missing_challenger_policy": "fallback_control",
+                    "selection_role": "causal_walk_forward_static_candidate",
+                },
+                role="walk_forward_candidate",
+            )
+            signal = (
+                (1.0 - weight) * control_rank + weight * challenger_rank
+            ).where(control_rank.notna()).rename(name)
+            validation = evaluate_stage_a(
+                frame, factor, validation_spec, signal=signal
+            )
+            candidate_factors.append(factor)
+            candidate_signals[name] = signal
+            candidate_validations[name] = validation
+    return candidate_factors, candidate_signals, candidate_validations
+
+
 def _control_comparison(
     candidate: Mapping[str, Any],
     control: Mapping[str, Any],
@@ -1331,7 +1492,7 @@ def _run_robustness(
 def run_research(
     *,
     project_root: str | Path | None = None,
-    suite: str = RESULTS_FIRST_SUITE,
+    suite: str = WALK_FORWARD_SUITE,
     mode: str = "canary",
     resume: bool = True,
     feature_path: str | Path | None = None,
@@ -1363,6 +1524,12 @@ def run_research(
             replace(factor, direction_policy="all_history_ic")
             for factor in challengers
         ]
+    elif suite == WALK_FORWARD_SUITE:
+        control = replace(
+            control,
+            direction_policy="fixed",
+            params={**dict(control.params), "fixed_direction": 1},
+        )
     all_factors = [control, *challengers]
     feature_hash = _sha256_file(feature_file)
     execution_hash = _sha256_file(execution_file)
@@ -1409,7 +1576,7 @@ def run_research(
         features, signals, stage_a_rows, validation_spec
     )
     stage_a_selection: StageASelection | None = None
-    if suite in {"legacy-regression", RESULTS_FIRST_SUITE}:
+    if suite in {"legacy-regression", RESULTS_FIRST_SUITE, WALK_FORWARD_SUITE}:
         selected = [factor for factor in all_factors if factor.role != "diagnostic_only"]
     else:
         stage_a_selection = build_stage_a_selection(
@@ -1446,6 +1613,26 @@ def run_research(
         # direction, but only fallback-control ensembles are exposure-comparable
         # enough to enter the expensive portfolio leaderboard.
         selected = [control, *ensemble_factors]
+    elif suite == WALK_FORWARD_SUITE:
+        candidate_factors, candidate_signals, candidate_validations = (
+            _build_walk_forward_candidates(
+                features,
+                control,
+                challengers,
+                signals,
+                validations,
+                validation_spec,
+                research_config,
+            )
+        )
+        signals.update(candidate_signals)
+        validations.update(candidate_validations)
+        stage_a_rows.extend(
+            candidate_validations[factor.name]
+            for factor in candidate_factors
+            if factor.name != control.name
+        )
+        selected = candidate_factors
 
     portfolio_config = _portfolio_config(research_config, suite=suite)
     execution = _load_execution(execution_file, portfolio_config)
@@ -1493,6 +1680,7 @@ def run_research(
     results_first_rankings: list[dict[str, Any]] = []
     results_first_excluded: list[dict[str, Any]] = []
     best_historical_strategy: str | None = None
+    walk_forward_summary: dict[str, Any] | None = None
     if suite == RESULTS_FIRST_SUITE:
         comparison_periods = list(control_result.get("period_active_returns") or [])
         for row in stage_b:
@@ -1625,6 +1813,83 @@ def run_research(
                 for row in stage_b
                 if not row["results_first_ranking_eligible"]
             ]
+    elif suite == WALK_FORWARD_SUITE:
+        if mode == "full":
+            walk_forward_summary, dynamic_base_result = run_walk_forward_sweep(
+                factors=selected,
+                validations=validations,
+                signals=signals,
+                features=features,
+                execution=execution,
+                base_config=portfolio_config,
+                research_config=research_config,
+                base_results=stage_b,
+                control=control,
+                output_dir=output_dir,
+                run_fingerprint=fingerprint,
+                resume=resume,
+                portfolio_result=_portfolio_result,
+                historical_metrics=_results_first_metrics,
+            )
+            stage_b.append(dynamic_base_result)
+        else:
+            walk_forward_settings = dict(research_config.get("walk_forward") or {})
+            selector = WalkForwardSelectorSpec.from_mapping(
+                walk_forward_settings.get("selector") or {}
+            )
+            fixed_comparator = _walk_forward_fixed_comparator(
+                walk_forward_settings
+            )
+            walk_forward_summary = {
+                "enabled": True,
+                "protocol": "causal_walk_forward",
+                "evidence_class": "engineering_smoke",
+                "canary_smoke_only": True,
+                "ranking_available": False,
+                "selector_executed": False,
+                "selector": selector.to_dict(),
+                "candidate_registry": [factor.name for factor in selected],
+                "fixed_comparator_factor": fixed_comparator["name"],
+                "fixed_comparator": {
+                    "factor_name": fixed_comparator["name"],
+                    "protocol": fixed_comparator,
+                    "candidate_registry": [factor.name for factor in selected],
+                    "uses_realized_returns": False,
+                    "independent_cost_account_per_offset": False,
+                    "phase_ranking_eligible": False,
+                    "phase_rank": None,
+                    "dynamic_phase_deltas": {},
+                    "dynamic_positive_annual_return_delta_ratio": None,
+                },
+                "dynamic_factor": "causal_walk_forward_dynamic",
+                "dynamic_status": "experimental_account",
+                "rebalance_offsets": [],
+                "phase_quantile": float(
+                    walk_forward_settings.get("phase_quantile", 0.20)
+                ),
+                "common_evaluation_start": None,
+                "future_selection_violation_count": 0,
+                "full_dynamic_period_coverage": False,
+                "causal_history_valid": False,
+                "control_phase_ranking_eligible": False,
+                "dynamic_phase_ranking_eligible": False,
+                "dynamic_control_common_offset_count": 0,
+                "historical_diagnostic_passed": False,
+                "best_phase_strategy": None,
+                "dynamic_phase_rank": None,
+                "phase_rankings": [],
+                "offsets": [],
+            }
+        for row in stage_b:
+            row["strategy_kind"] = (
+                "walk_forward_dynamic"
+                if row["factor_name"] == "causal_walk_forward_dynamic"
+                else "control"
+                if row["factor_name"] == control.name
+                else "static_candidate"
+            )
+            row["pre_audit_confirmed"] = False
+            row["validated"] = False
     else:
         challenger_count = max(
             1, sum(row["factor_name"] != control.name for row in stage_b)
@@ -1695,7 +1960,11 @@ def run_research(
             output_dir / "robustness.json",
         )
 
-    if suite == RESULTS_FIRST_SUITE and mode == "full":
+    if suite == WALK_FORWARD_SUITE and mode == "full":
+        search_status = "causal_walk_forward_sweep_completed"
+    elif suite == WALK_FORWARD_SUITE:
+        search_status = "causal_walk_forward_canary_smoke"
+    elif suite == RESULTS_FIRST_SUITE and mode == "full":
         search_status = "results_first_historical_ranking_completed"
     elif suite == RESULTS_FIRST_SUITE:
         search_status = "results_first_canary_smoke"
@@ -1721,7 +1990,7 @@ def run_research(
     )):
         data_warning = "st_history_unverified"
     summary: dict[str, Any] = {
-        "schema_version": 2,
+        "schema_version": 3,
         "engine": ENGINE_ID,
         "status": "completed",
         "run_id": run_id,
@@ -1729,13 +1998,27 @@ def run_research(
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "suite": suite,
         "mode": mode,
-        "evidence_class": EVIDENCE_CLASS,
+        "evidence_class": (
+            "post_selection_causal_simulation"
+            if suite == WALK_FORWARD_SUITE and mode == "full"
+            else "engineering_smoke"
+            if suite == WALK_FORWARD_SUITE
+            else EVIDENCE_CLASS
+        ),
         "investment_claim_allowed": False,
         "promotion_triggered": False,
         "canary_smoke_only": mode == "canary",
-        "gate_results_interpretable": mode == "full" and suite != RESULTS_FIRST_SUITE,
+        "gate_results_interpretable": (
+            mode == "full"
+            and suite not in {RESULTS_FIRST_SUITE, WALK_FORWARD_SUITE}
+        ),
         "ranking_results_interpretable": (
             mode == "full" and suite == RESULTS_FIRST_SUITE
+        ),
+        "walk_forward_results_interpretable": bool(
+            mode == "full"
+            and suite == WALK_FORWARD_SUITE
+            and (walk_forward_summary or {}).get("causal_history_valid")
         ),
         "git": _git_state(root),
         "implementation_sha256": implementation_hash,
@@ -1767,13 +2050,15 @@ def run_research(
             "basis": (
                 "all_registered_plus_runtime_ensembles"
                 if suite == RESULTS_FIRST_SUITE
+                else "fixed_direction_causal_candidate_registry"
+                if suite == WALK_FORWARD_SUITE
                 else "legacy_regression_all_registered"
             ),
             "selected": [row.name for row in selected if row.name != control.name],
             "decisions": [],
             "similarities": [row.to_dict() for row in similarities],
         },
-        "stage_b_selected": [row.name for row in selected],
+        "stage_b_selected": [str(row["factor_name"]) for row in stage_b],
         "stage_b": stage_b,
         "validated_factors": validated,
         "validated_count": len(validated),
@@ -1801,11 +2086,16 @@ def run_research(
             "rankings": results_first_rankings,
             "excluded_from_ranking": results_first_excluded,
         },
+        "walk_forward": walk_forward_summary,
         "robustness": robustness,
         "search_status": search_status,
         "search_stopped": bool(
             mode == "full"
-            and suite not in {"legacy-regression", RESULTS_FIRST_SUITE}
+            and suite not in {
+                "legacy-regression",
+                RESULTS_FIRST_SUITE,
+                WALK_FORWARD_SUITE,
+            }
         ),
     }
     report_path = output_dir / "report.md"
@@ -1824,6 +2114,15 @@ def run_research(
     ]
     if (output_dir / "robustness.json").is_file():
         artifact_paths.append(("robustness.json", output_dir / "robustness.json"))
+    walk_forward_dir = output_dir / "walk-forward"
+    if walk_forward_dir.is_dir():
+        artifact_paths.extend(
+            (
+                path.relative_to(output_dir).as_posix(),
+                path,
+            )
+            for path in sorted(walk_forward_dir.rglob("*.json"))
+        )
     manifest = {
         "schema_version": 1,
         "algorithm": "sha256",

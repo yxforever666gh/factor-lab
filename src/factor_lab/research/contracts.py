@@ -66,9 +66,11 @@ class FactorSpec:
     """A pre-registered signal definition.
 
     Ordinary protocols use ``train_ic``. Results-first may deliberately use
-    ``all_history_ic`` for an in-sample direction search. Runtime ensembles are
-    built from directed components and use ``pre_directed`` so their sign is not
-    learned a second time.
+    ``all_history_ic`` for an in-sample direction search. Causal walk-forward
+    protocols use an economically declared ``fixed`` direction so a future
+    label can never rewrite an earlier sign. Runtime ensembles are built from
+    directed components and use ``pre_directed`` so their sign is not learned a
+    second time.
     """
 
     name: str
@@ -94,15 +96,23 @@ class FactorSpec:
         if self.direction_policy not in {
             "train_ic",
             "all_history_ic",
+            "fixed",
             "pre_directed",
         }:
             raise ValueError(
-                "direction_policy must be 'train_ic', 'all_history_ic', or 'pre_directed'"
+                "direction_policy must be 'train_ic', 'all_history_ic', 'fixed', "
+                "or 'pre_directed'"
             )
         if kind == "ensemble" and self.direction_policy != "pre_directed":
             raise ValueError("ensemble factors must use direction_policy='pre_directed'")
         if kind != "ensemble" and self.direction_policy == "pre_directed":
             raise ValueError("only ensemble factors may use direction_policy='pre_directed'")
+        if self.direction_policy == "fixed":
+            fixed_direction = self.params.get("fixed_direction")
+            if isinstance(fixed_direction, bool) or fixed_direction not in {-1, 1}:
+                raise ValueError(
+                    "fixed direction_policy requires params.fixed_direction to be -1 or 1"
+                )
 
         expression = self.expression.strip() if self.expression else None
         builtin = self.builtin.strip() if self.builtin else None

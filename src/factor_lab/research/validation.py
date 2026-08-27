@@ -574,7 +574,9 @@ def evaluate_stage_a(
         end=direction_end,
     )
     frozen_direction = (
-        1
+        int(factor.params["fixed_direction"])
+        if factor.direction_policy == "fixed"
+        else 1
         if factor.direction_policy == "pre_directed"
         else 1
         if (raw_direction_ic or 0.0) >= 0.0
@@ -664,6 +666,8 @@ def evaluate_stage_a(
         selection_basis=(
             "pre_directed_components"
             if factor.direction_policy == "pre_directed"
+            else "fixed_ex_ante_direction"
+            if factor.direction_policy == "fixed"
             else "all_observed_history_direction"
             if factor.direction_policy == "all_history_ic"
             else "train_only"

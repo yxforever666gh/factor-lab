@@ -10,32 +10,61 @@
 
 ## [Unreleased]
 
+## [4.0] - 2026-08-27
+
 ### Changed
 
-- **下一主版本方向（目标 `4.0`）：**主线从单体 challenger 晋级协议切换为 results-first
-  全历史成绩优化；旧 `recovery` 仍可复现，但不再是 CLI 默认入口。
-- 默认研究 suite 改为 `results-first`，不因旧 promotion gate、`0 validated` 或保守停止
-  条件中断搜索；训练、验证和审计均明确作为已观察历史参与成绩排名。
-- Results-first 的基础方向也改为全部已观察历史选择；单体 challenger 仅作组件诊断，
-  昂贵的组合回测和冠军榜只包含 control 与覆盖完整的 fallback-control 混合策略。
-- Canary 明确降级为执行链 smoke，不再用最近 4 个持有期输出伪“全历史冠军”；full 榜单
-  统一使用控制组调仓日期，覆盖不完整的策略不得入榜。
-- 全量多组合回测改用批量行映射并复用相邻持有期的共同边界行情，移除 pandas
-  `iterrows()` 热点，同时保持成交、估值和基准计算语义不变。
-- Results-first 组合从旧 Top-50/5 日改为独立的 Top-10/10 日默认；全部历史粗细网格中，
-  控制组成本后年化由 5.00% 提高到 7.81%，Sharpe 由 0.352 提高到 0.516，最大回撤由
-  -27.26% 改善到 -21.80%。旧 suite 继续使用原 Top-50/5 日配置。
-- 新默认下的 11 策略全历史运行 `0bfd70e808416ddc` 由 70% 防御价值混合胜出：成本后
-  年化 9.96%、Sharpe 0.656、IR 0.374、最大回撤 -22.49%；这些仍是全部历史优化成绩，
-  不是独立 OOS。
+- **4.0 大方向：**默认主线从 results-first 全历史冠军榜切换为 selector 内部因果的
+  walk-forward 研究 framework；`causal_walk_forward_dynamic` 只是其中的实验账户，不是
+  默认获胜策略。旧 `results-first`、`recovery`、`next` 与 `legacy-regression` 仍可复现，
+  但只作为历史诊断。
+- 默认研究 suite 改为 `walk-forward`。控制项以及防御价值、低波动、低换手三个候选均
+  使用预注册固定 `+1` 方向，不再让完整历史 IC 改写较早时点的方向。
+- 研究配置与运行 summary schema 升至 `3`；顶层 evidence class 与 walk-forward 产物
+  统一，canary 明确只属于 `engineering_smoke`。
+- Walk-forward 只读取 `end_date < signal_date` 的共同完整持有期；756 个交易日回看、
+  60 个成熟持有期、距上次更新至少 63 个交易日后的首个该 offset 调仓日更新、成本后
+  Sharpe、相对 control `0.10` 的选择保护，以及最多三个合格候选等权合成，均冻结为
+  单一协议。
+- 默认 Top-10/10 日组合必须完整运行 offset `0..9`，在共同 warmup 日期后汇总 Q20、
+  median、worst 和 IQR，不允许选择最佳调仓相位。
+- Results-first 曾用全部已观察历史选择方向、组合权重和冠军，现明确标记为旧的样本内
+  诊断。运行 `0bfd70e808416ddc` 的 70% 防御价值混合成绩（成本后年化 9.96%、Sharpe
+  0.656、IR 0.374、最大回撤 -22.49%）不再作为主线选择证据。
+- 全量多组合回测继续使用批量行映射并复用相邻持有期的共同边界行情，保持成交、估值和
+  基准计算语义不变。
+- 完整 selector-internal-causal 历史模拟 `97840d20b4a2ff71` 覆盖十个 offset，未来选择
+  违规为 0、动态实验账户周期覆盖 100%；共同区间内动态账户年化收益 Q20 / median /
+  worst 为 8.88% / 9.11% / 6.85%，Sharpe Q20 为 0.561、最大回撤 Q20 为 -18.15%，
+  且 10/10 offset 年化均优于 control。
+- 固定等权基准的年化 Q20 / median / worst 为 9.50% / 10.22% / 8.84%。逐 offset
+  配对的 dynamic − fixed 年化 / Sharpe / IR / 最大回撤 Q20 为 -1.35 个百分点 /
+  -0.098 / -0.043 / -2.98 个百分点，动态仅 5/10 offset 年化更高，因此
+  `historical_diagnostic_passed=false`。当前结果支持候选篮子，不支持这套轮换逻辑。
+- 事后 phase 排名最强的静态防御价值候选 Q20 年化为 11.13%；它和动态账户均不标记为
+  可靠性确认、可直接晋级的赢家或独立 OOS。
 
 ### Added
 
-- 增加 control/challenger 有向截面秩混合，首轮搜索 30%、70% challenger 权重；
-  challenger 缺失回退 control，避免覆盖率变化伪造改善。
-- 增加覆盖 PIT 现金流质量、防御价值、60 日动量/反转、低波动与低换手的 results-first
-  suite，以及收益优先的成本后年化收益、Sharpe、IR、回撤百分位综合历史排行榜。
-- 报告和 CLI 输出最佳历史策略及前五名，同时明确它们是全历史优化而非独立 OOS。
+- 增加成本后影子候选账户、严格成熟期过滤、确定性 control guard、Top-3 等权动态信号
+  组装与十相位 walk-forward 汇总；较长回看与季度更新用于降低短窗 hard switch 噪声。
+- 增加同 candidate registry、同日期、同组合执行与成本模型的 `fixed_registry_equal_weight`
+  基准；它等权 control 与六个预注册混合策略，并非原始因子等权。动态
+  selector 的历史阈值诊断必须同时优于 control 和固定等权基准，避免把静态暴露收益误归
+  因于轮换时点。
+- 增加 `post_selection_causal_simulation` 证据等级：它表示模拟内部没有使用未来已实现
+  收益，但候选和协议是在看过既有历史后设计的，不能声称为独立 OOS 或保证未来盈利。
+- 保留 control/challenger 有向截面秩混合及 results-first 全历史排行榜，用于数值回归和
+  历史问题复现，而不是当前默认研究结论。
+
+### Known limitations
+
+- `post_selection_causal_simulation` 只保证 selector 的历史收益 cutoff 和固定方向不读取
+  当时尚未完成的收益，不代表数据、候选提出和研究协议构成全链路 pristine OOS。
+- 财务数据的修订 vintage 尚未完全还原；后续修订可能污染较早决策点可见的数据版本。
+- 退市、吸收合并及其 ghost position 处置仍未做完备的逐事件验证。
+- 十个 offset 共享同一市场路径且不是独立样本；候选间等 AUM 可比性和历史分段资本重置
+  仍有限制。2017–2026 已被反复查看，本次结果只能作为协议冻结时的历史模拟基线。
 
 ## [3.0] - 2026-08-27
 
@@ -195,6 +224,7 @@
   移除这些实验层。
 
 [Unreleased]: https://github.com/yxforever666gh/factor-lab/commits/main
+[4.0]: https://github.com/yxforever666gh/factor-lab/tree/4.0
 [3.0]: https://github.com/yxforever666gh/factor-lab/tree/3.0
 [research-os-final-20260826]: https://github.com/yxforever666gh/factor-lab/tree/research-os-final-20260826
 [2.1]: https://github.com/yxforever666gh/factor-lab/tree/2.1

@@ -1,3 +1,3 @@
-"""Local A-share results-first factor ensemble research package."""
+"""Local A-share walk-forward research with selector-causal return cutoffs."""
 
-__version__ = "3.0.0"
+__version__ = "4.0.0"

@@ -153,6 +153,26 @@ def test_all_history_direction_policy_uses_every_observed_window() -> None:
     assert result.train.signed_rank_ic_mean == -1.0
 
 
+def test_fixed_direction_never_uses_future_labels_to_choose_sign() -> None:
+    frame = _research_frame()
+    frame["forward_return_5d_open"] *= -1
+    factor = FactorSpec(
+        name="fixed_positive",
+        family="value",
+        expression="signal",
+        direction_policy="fixed",
+        params={"fixed_direction": 1},
+    )
+
+    result = evaluate_stage_a(
+        frame, factor, ValidationSpec(min_cross_section=5, bootstrap_samples=16)
+    )
+
+    assert result.frozen_direction == 1
+    assert result.selection_basis == "fixed_ex_ante_direction"
+    assert result.train.signed_rank_ic_mean == -1.0
+
+
 def test_stage_b_selection_is_capped_and_deterministic() -> None:
     frame = _research_frame()
     policy = ValidationSpec(

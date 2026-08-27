@@ -1,6 +1,6 @@
 {
-  "schema_version": 2,
-  "engine": "factor-lab/research/v4",
+  "schema_version": 3,
+  "engine": "factor-lab/research/v5",
   "data_warning": "monthly_name_verified_daily_events_unavailable",
   "validation": {
     "train_start": "2017-01-01",
@@ -63,6 +63,41 @@
   },
   "control_comparison": {
     "max_drawdown_worsening_tolerance": 0.02
+  },
+  "walk_forward": {
+    "evidence_class": "post_selection_causal_simulation",
+    "candidate_factors": [
+      "value_defensive_rank",
+      "low_volatility",
+      "low_turnover"
+    ],
+    "candidate_weights": [0.3, 0.7],
+    "rebalance_offsets": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+    "phase_quantile": 0.2,
+    "fixed_comparator": {
+      "name": "fixed_registry_equal_weight",
+      "weighting": "equal",
+      "missing_signal_policy": "fallback_control"
+    },
+    "portfolio": {
+      "holding_days": 10,
+      "rebalance_every_days": 10,
+      "position_count": 10,
+      "target_weight": 0.1,
+      "retention_buffer": 5,
+      "periods_per_year": 25.2
+    },
+    "selector": {
+      "lookback_trading_days": 756,
+      "minimum_completed_periods": 60,
+      "update_every_trading_days": 63,
+      "score_method": "net_sharpe",
+      "control_score_guard": 0.1,
+      "selection_count": 3,
+      "selection_weighting": "equal",
+      "history_policy": "end_date_strictly_before_signal_date",
+      "missing_signal_policy": "fallback_control"
+    }
   },
   "results_first": {
     "optimization_scope": "all_observed_history",
