@@ -114,6 +114,45 @@ def test_validation_cannot_flip_the_training_direction() -> None:
     assert result.blockers == ()
 
 
+def test_all_history_direction_policy_uses_every_observed_window() -> None:
+    dates = pd.DatetimeIndex(
+        [
+            *pd.bdate_range("2017-01-03", periods=20),
+            *pd.bdate_range("2023-01-03", periods=50),
+            *pd.bdate_range("2025-01-03", periods=50),
+        ]
+    )
+    rows = []
+    for day in dates:
+        direction = 1.0 if day.year == 2017 else -1.0
+        for ticker_index in range(10):
+            signal = float(ticker_index)
+            rows.append(
+                {
+                    "date": day,
+                    "ticker": f"{ticker_index:06d}.SZ",
+                    "signal": signal,
+                    "forward_return_5d_open": signal * direction,
+                }
+            )
+    frame = pd.DataFrame(rows)
+    result = evaluate_stage_a(
+        frame,
+        FactorSpec(
+            name="all_history",
+            family="test",
+            expression="signal",
+            direction_policy="all_history_ic",
+        ),
+        ValidationSpec(min_cross_section=5, bootstrap_samples=16),
+    )
+
+    assert result.frozen_direction == -1
+    assert result.selection_basis == "all_observed_history_direction"
+    assert result.train.rank_ic_mean == 1.0
+    assert result.train.signed_rank_ic_mean == -1.0
+
+
 def test_stage_b_selection_is_capped_and_deterministic() -> None:
     frame = _research_frame()
     policy = ValidationSpec(

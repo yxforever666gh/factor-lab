@@ -10,6 +10,27 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **下一主版本方向（目标 `4.0`）：**主线从单体 challenger 晋级协议切换为 results-first
+  全历史成绩优化；旧 `recovery` 仍可复现，但不再是 CLI 默认入口。
+- 默认研究 suite 改为 `results-first`，不因旧 promotion gate、`0 validated` 或保守停止
+  条件中断搜索；训练、验证和审计均明确作为已观察历史参与成绩排名。
+- Results-first 的基础方向也改为全部已观察历史选择；单体 challenger 仅作组件诊断，
+  昂贵的组合回测和冠军榜只包含 control 与覆盖完整的 fallback-control 混合策略。
+- Canary 明确降级为执行链 smoke，不再用最近 4 个持有期输出伪“全历史冠军”；full 榜单
+  统一使用控制组调仓日期，覆盖不完整的策略不得入榜。
+- 全量多组合回测改用批量行映射并复用相邻持有期的共同边界行情，移除 pandas
+  `iterrows()` 热点，同时保持成交、估值和基准计算语义不变。
+
+### Added
+
+- 增加 control/challenger 有向截面秩混合，首轮搜索 30%、70% challenger 权重；
+  challenger 缺失回退 control，避免覆盖率变化伪造改善。
+- 增加覆盖 PIT 现金流质量、防御价值、60 日动量/反转、低波动与低换手的 results-first
+  suite，以及收益优先的成本后年化收益、Sharpe、IR、回撤百分位综合历史排行榜。
+- 报告和 CLI 输出最佳历史策略及前五名，同时明确它们是全历史优化而非独立 OOS。
+
 ## [3.0] - 2026-08-27
 
 ### Changed

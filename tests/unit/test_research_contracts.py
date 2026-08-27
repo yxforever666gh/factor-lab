@@ -43,6 +43,42 @@ def test_builtin_requires_declared_fields() -> None:
         FactorSpec(name="momentum", family="trend", kind="builtin", builtin="momentum_12_1")
 
 
+def test_runtime_ensemble_requires_pre_directed_policy() -> None:
+    factor = FactorSpec(
+        name="value_plus_quality_w30",
+        family="ensemble",
+        kind="ensemble",
+        direction_policy="pre_directed",
+        params={"challenger_weight": 0.3},
+    )
+
+    assert factor.kind == "ensemble"
+    assert factor.required_fields == ()
+    assert factor.direction_policy == "pre_directed"
+
+    with pytest.raises(ValueError, match="must use direction_policy='pre_directed'"):
+        FactorSpec(name="bad", family="ensemble", kind="ensemble")
+
+    with pytest.raises(ValueError, match="only ensemble"):
+        FactorSpec(
+            name="bad_expression",
+            family="value",
+            expression="book_yield",
+            direction_policy="pre_directed",
+        )
+
+
+def test_expression_factor_allows_explicit_all_history_direction_search() -> None:
+    factor = FactorSpec(
+        name="in_sample_value",
+        family="value",
+        expression="book_yield",
+        direction_policy="all_history_ic",
+    )
+
+    assert factor.direction_policy == "all_history_ic"
+
+
 def test_validation_windows_are_frozen_and_ordered() -> None:
     policy = ValidationSpec()
 

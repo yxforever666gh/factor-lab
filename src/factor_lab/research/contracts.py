@@ -65,9 +65,10 @@ def referenced_expression_fields(expression: str) -> tuple[str, ...]:
 class FactorSpec:
     """A pre-registered signal definition.
 
-    ``direction_policy`` is intentionally fixed to ``train_ic``.  Historical
-    configuration may describe a preferred sign, but validation must learn and
-    freeze the executable direction using the 2017--2022 training segment.
+    Ordinary protocols use ``train_ic``. Results-first may deliberately use
+    ``all_history_ic`` for an in-sample direction search. Runtime ensembles are
+    built from directed components and use ``pre_directed`` so their sign is not
+    learned a second time.
     """
 
     name: str
@@ -88,10 +89,20 @@ class FactorSpec:
             raise ValueError("factor name must not be empty")
         if not family:
             raise ValueError("factor family must not be empty")
-        if kind not in {"expression", "builtin"}:
-            raise ValueError("factor kind must be 'expression' or 'builtin'")
-        if self.direction_policy != "train_ic":
-            raise ValueError("direction_policy must be 'train_ic'")
+        if kind not in {"expression", "builtin", "ensemble"}:
+            raise ValueError("factor kind must be 'expression', 'builtin', or 'ensemble'")
+        if self.direction_policy not in {
+            "train_ic",
+            "all_history_ic",
+            "pre_directed",
+        }:
+            raise ValueError(
+                "direction_policy must be 'train_ic', 'all_history_ic', or 'pre_directed'"
+            )
+        if kind == "ensemble" and self.direction_policy != "pre_directed":
+            raise ValueError("ensemble factors must use direction_policy='pre_directed'")
+        if kind != "ensemble" and self.direction_policy == "pre_directed":
+            raise ValueError("only ensemble factors may use direction_policy='pre_directed'")
 
         expression = self.expression.strip() if self.expression else None
         builtin = self.builtin.strip() if self.builtin else None
@@ -102,7 +113,7 @@ class FactorSpec:
                 raise ValueError("expression factors cannot also define builtin")
             inferred = referenced_expression_fields(expression)
             required = (*inferred, *self.required_fields)
-        else:
+        elif kind == "builtin":
             if not builtin:
                 raise ValueError("builtin factors need a builtin name")
             if expression:
@@ -110,6 +121,10 @@ class FactorSpec:
             required = self.required_fields
             if not required:
                 raise ValueError("builtin factors must declare required_fields")
+        else:
+            if expression or builtin:
+                raise ValueError("ensemble factors are runtime signals without expression/builtin")
+            required = self.required_fields
 
         normalized_fields = tuple(dict.fromkeys(str(item).strip() for item in required))
         if any(not item for item in normalized_fields):

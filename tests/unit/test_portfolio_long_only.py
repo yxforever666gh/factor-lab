@@ -3,6 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
+import factor_lab.portfolio.long_only as long_only_module
 from factor_lab.portfolio.long_only import (
     LongOnlyCostConfig,
     LongOnlyPortfolioConfig,
@@ -82,6 +83,64 @@ def test_migrated_evaluator_preserves_legacy_numerical_regression() -> None:
         ["B", "A"],
         ["C", "A"],
     ]
+
+
+def test_row_map_preserves_iterrows_lookup_semantics() -> None:
+    day = pd.DataFrame(
+        {
+            "ticker": ["A", "B", "A"],
+            "open": [10.0, float("nan"), 11.0],
+            "volume": [100, 200, 300],
+            "eligible": [True, False, True],
+            "date": pd.to_datetime(["2024-01-02"] * 3),
+        },
+        index=[7, 3, 9],
+    )
+    reference = {
+        str(row["ticker"]): row
+        for _, row in day.iterrows()
+    }
+
+    actual = long_only_module._row_map(day, "ticker")
+
+    assert list(actual) == list(reference)
+    for ticker, expected in reference.items():
+        assert list(actual[ticker]) == list(expected.index)
+        for column, expected_value in expected.items():
+            actual_value = actual[ticker][column]
+            if pd.isna(expected_value):
+                assert pd.isna(actual_value)
+            else:
+                assert actual_value == expected_value
+    assert actual["A"]["open"] == 11.0
+
+
+def test_shared_period_boundary_reuses_market_row_map(monkeypatch: pytest.MonkeyPatch) -> None:
+    dates = pd.bdate_range("2024-01-02", periods=17)
+    frame = _panel(dates, ("A", "B"), adv=1_000_000_000.0)
+    mapped_dates: list[pd.Timestamp] = []
+    original = long_only_module._row_map
+
+    def counting_row_map(day: pd.DataFrame, ticker_column: str):
+        mapped_dates.append(pd.Timestamp(day["date"].iloc[0]))
+        return original(day, ticker_column)
+
+    monkeypatch.setattr(long_only_module, "_row_map", counting_row_map)
+
+    result = evaluate_long_only_portfolio(
+        frame,
+        "signal",
+        LongOnlyPortfolioConfig(
+            capital=1_000.0,
+            position_count=1,
+            target_weight=1.0,
+            max_adv_participation=1.0,
+            costs=_zero_costs(),
+        ),
+    )
+
+    assert result.observations == 3
+    assert mapped_dates == [dates[1], dates[6], dates[11], dates[16]]
 
 
 def test_signal_at_close_executes_next_open_and_marks_after_five_days() -> None:

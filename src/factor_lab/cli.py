@@ -85,11 +85,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     research = commands.add_parser("research", help="Run or inspect historical factor research.")
     research_commands = research.add_subparsers(dest="research_command", required=True)
-    run = research_commands.add_parser("run", help="Run the two-stage factor protocol.")
+    run = research_commands.add_parser("run", help="Run a factor research suite.")
     run.add_argument(
         "--suite",
-        choices=("recovery", "next", "legacy-regression"),
-        default="recovery",
+        choices=("results-first", "recovery", "next", "legacy-regression"),
+        default="results-first",
     )
     run_mode = run.add_mutually_exclusive_group(required=True)
     run_mode.add_argument("--canary", action="store_true")
@@ -188,6 +188,10 @@ def _compact_research(summary: Mapping[str, Any]) -> dict[str, Any]:
         "validated_factors": summary.get("validated_factors"),
         "stage_b_selected": summary.get("stage_b_selected"),
         "search_stopped": summary.get("search_stopped"),
+        "best_historical_strategy": (summary.get("results_first") or {}).get(
+            "best_historical_strategy"
+        ),
+        "results_first_top": ((summary.get("results_first") or {}).get("rankings") or [])[:5],
         "data": summary.get("data"),
     }
 

@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "engine": "factor-lab/lightweight-research/v3",
+  "engine": "factor-lab/research/v4",
   "data_warning": "monthly_name_verified_daily_events_unavailable",
   "validation": {
     "train_start": "2017-01-01",
@@ -63,6 +63,18 @@
   },
   "control_comparison": {
     "max_drawdown_worsening_tolerance": 0.02
+  },
+  "results_first": {
+    "optimization_scope": "all_observed_history",
+    "challenger_weights": [0.3, 0.7],
+    "missing_challenger_policy": "fallback_control",
+    "incomplete_period_policy": "exclude_from_ranking",
+    "score_weights": {
+      "net_sharpe": 0.25,
+      "information_ratio": 0.15,
+      "net_annual_return": 0.5,
+      "max_drawdown": 0.1
+    }
   },
   "robustness": {
     "position_counts": [50, 75, 100],

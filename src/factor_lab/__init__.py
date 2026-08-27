@@ -1,3 +1,3 @@
-"""Lightweight local A-share factor research package."""
+"""Local A-share results-first factor ensemble research package."""
 
 __version__ = "3.0.0"

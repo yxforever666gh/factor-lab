@@ -1,10 +1,12 @@
 # Factor Lab
 
-Factor Lab 是一条本地、可复现的 A 股因子研究主线：Parquet 数据 → 因子计算 → 训练段冻结方向 → 验证段筛选 → 真实成本多头回测 → Markdown/JSON 报告。
+Factor Lab 是一条本地、可复现的 A 股历史成绩优化主线：Parquet 数据 → 因子计算 →
+有向截面排名 → control/challenger 权重混合 → 真实成本多头回测 → 全历史成绩榜。
 
 项目不再依赖 WebUI、Docker、PostgreSQL、MinIO、Dagster、Hermes 或自治 Agent。旧 Research OS 已完整归档在 Git tag `research-os-final-20260826`，不再进入当前主线。
 
-> 当前结果全部属于 `historical_diagnostic`。本项目不连接券商、不下单，也不保证未来收益。
+> `results-first` 会直接使用训练、验证和审计全部已观察历史来选择最佳构造；它追求当前
+> 回测成绩，不把结果包装成独立 OOS。本项目不连接券商、不下单，也不保证未来收益。
 
 历史版本与当前未发布改动见 [CHANGELOG.md](CHANGELOG.md)。正式发布、Git tag 与 GitHub
 同步规则见 [RELEASING.md](RELEASING.md)。
@@ -41,10 +43,13 @@ factor-lab data sync --from 2026-08-14 --to 2026-08-26 --resume
 # 续传 PIT 财务指标和历史月末名称/行业，并原子更新 canonical Parquet
 factor-lab data enrich --from 2017-01-01 --to 2026-08-13 --resume
 
-# 50 只股票 / 20 个交易日 smoke test
-factor-lab research run --suite recovery --canary --resume
+# 默认主线：control + challenger 多权重组合的快速 smoke test
+factor-lab research run --suite results-first --canary --resume
 
-# 正式恢复研究；失败时自动运行一次有限稳健性矩阵并停止
+# 全样本真实成本成绩优化与排行榜
+factor-lab research run --suite results-first --full --resume
+
+# 旧保守 recovery 协议，仅保留为历史诊断
 factor-lab research run --suite recovery --full --resume
 
 # 已冻结的旧价值族实验，仅用于复现既有研究
@@ -57,7 +62,21 @@ factor-lab research status
 factor-lab report --run latest
 ```
 
-## 研究协议
+## 当前主线：Results-first
+
+- 控制信号和 challenger 直接用全部已观察历史确定方向；这是有意的样本内成绩优化。
+- 对每个 challenger 先构造 30%、70% 两档粗网格有向秩混合；challenger 缺失时回退
+  control，control 缺失时不产生组合信号。
+- 单体 challenger 只负责方向和信号诊断；冠军榜仅回测 control 与完整 fallback-control
+  混合策略，确保日期覆盖和资金暴露可比。
+- 使用全部已观察历史的成本后年化收益、Sharpe、IR 与最大回撤百分位形成排行榜，权重
+  分别为 50%、25%、15%、10%；不使用
+  `validated` 标签，也不因旧 promotion gate 失败而停止搜索。
+- Canary 只检查执行链，不输出“最佳策略”；只有 full 模式生成历史榜单。
+- 当前 suite 搜索 PIT 现金流质量、防御价值、60 日动量/反转、低波动和低换手对价值控制
+  的增量组合。
+
+## 保留的旧研究协议
 
 - 训练：2017–2022，只在这里确定因子方向。
 - 验证：2023–2024，只用于 Stage B 成本后组合硬门槛，不参与 Stage A 排序。
@@ -67,7 +86,7 @@ factor-lab report --run latest
 - 晋级还要求验证期主动收益循环区块 Bootstrap 的 95% 下界不小于 0，且基准成分收益覆盖率不低于 95%。
 - 没有因子通过时输出 0 个 validated，并在有限稳健性矩阵结束后停止，不降低门槛。
 
-当前 `recovery` 只注册一个与旧价值信号低相关的机制 Challenger：
+旧 `recovery` 只注册一个与旧价值信号低相关的机制 Challenger：
 
 - `pit_cashflow_quality`：使用公告后下一交易日起可见的 ROIC、单季经营现金流/收入和资产负债率；至少两个分量有效，并做 PIT 行业与规模中性化。
 

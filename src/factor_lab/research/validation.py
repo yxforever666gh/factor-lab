@@ -347,18 +347,20 @@ def _cross_section_metrics(
     }
 
 
-def _raw_training_ic(
+def _raw_window_ic(
     frame: pd.DataFrame,
     signal: pd.Series,
     *,
     label_column: str,
     validation: ValidationSpec,
+    start: str,
+    end: str | None,
 ) -> float | None:
     dates, sampled = _sampled_dates(
         frame,
         validation,
-        start=validation.train_start,
-        end=validation.train_end,
+        start=start,
+        end=end,
     )
     rows = pd.DataFrame(
         {
@@ -557,13 +559,27 @@ def evaluate_stage_a(
     else:
         signal = pd.Series(np.asarray(signal), index=frame.index, name=factor.name)
 
-    raw_train_ic = _raw_training_ic(
+    direction_start = (
+        pd.to_datetime(frame[policy.date_column], errors="coerce").min().date().isoformat()
+        if factor.direction_policy == "all_history_ic"
+        else policy.train_start
+    )
+    direction_end = None if factor.direction_policy == "all_history_ic" else policy.train_end
+    raw_direction_ic = _raw_window_ic(
         frame,
         signal,
         label_column=label_column,
         validation=policy,
+        start=direction_start,
+        end=direction_end,
     )
-    frozen_direction = 1 if (raw_train_ic or 0.0) >= 0.0 else -1
+    frozen_direction = (
+        1
+        if factor.direction_policy == "pre_directed"
+        else 1
+        if (raw_direction_ic or 0.0) >= 0.0
+        else -1
+    )
     train = _diagnose_window(
         frame,
         signal,
@@ -645,6 +661,13 @@ def evaluate_stage_a(
         direction_consistent=direction_consistent,
         stage_b_eligible=not blockers,
         blockers=tuple(blockers),
+        selection_basis=(
+            "pre_directed_components"
+            if factor.direction_policy == "pre_directed"
+            else "all_observed_history_direction"
+            if factor.direction_policy == "all_history_ic"
+            else "train_only"
+        ),
         audit_signal_failures=tuple(audit_failures),
     )
 

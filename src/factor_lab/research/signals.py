@@ -110,6 +110,57 @@ def evaluate_expression(
     ).evaluate(expression)
 
 
+def directed_rank_blend(
+    frame: pd.DataFrame,
+    control: pd.Series,
+    challenger: pd.Series,
+    *,
+    control_direction: int,
+    challenger_direction: int,
+    challenger_weight: float,
+    date_column: str = "date",
+) -> pd.Series:
+    """Blend two frozen-direction signals using daily percentile ranks.
+
+    A missing control signal always leaves the blend missing. When only the
+    challenger is missing, its rank falls back to the control rank so partial
+    challenger coverage does not dilute or exclude the control observation.
+    """
+
+    if date_column not in frame.columns:
+        raise ValueError(f"missing date column: {date_column}")
+    for label, direction in (
+        ("control_direction", control_direction),
+        ("challenger_direction", challenger_direction),
+    ):
+        if isinstance(direction, (bool, np.bool_)) or direction not in {-1, 1}:
+            raise ValueError(f"{label} must be -1 or 1")
+    if isinstance(challenger_weight, (bool, np.bool_)):
+        raise ValueError("challenger_weight must be between 0 and 1")
+    try:
+        weight = float(challenger_weight)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("challenger_weight must be between 0 and 1") from exc
+    if not np.isfinite(weight) or not 0.0 <= weight <= 1.0:
+        raise ValueError("challenger_weight must be between 0 and 1")
+
+    dates = frame[date_column]
+
+    def _directed_rank(signal: pd.Series, direction: int) -> pd.Series:
+        values = pd.to_numeric(
+            pd.Series(signal, index=frame.index), errors="coerce"
+        ).replace([np.inf, -np.inf], np.nan)
+        return (values * direction).groupby(dates, sort=False).rank(
+            method="average", pct=True
+        )
+
+    control_rank = _directed_rank(control, control_direction)
+    challenger_rank = _directed_rank(challenger, challenger_direction)
+    effective_challenger = challenger_rank.where(challenger_rank.notna(), control_rank)
+    blended = (1.0 - weight) * control_rank + weight * effective_challenger
+    return blended.where(control_rank.notna()).astype(float).rename("directed_rank_blend")
+
+
 def pit_cashflow_quality(
     frame: pd.DataFrame,
     params: Mapping[str, Any] | None = None,
@@ -251,6 +302,10 @@ def evaluate_factor_signal(
 ) -> pd.Series:
     """Evaluate a registered factor and return a numeric named Series."""
 
+    if factor.kind == "ensemble":
+        raise ValueError(
+            "ensemble factors require a precomputed runtime signal and cannot be evaluated directly"
+        )
     missing = sorted(
         field
         for field in factor.required_fields
@@ -281,6 +336,7 @@ __all__ = [
     "DEFAULT_BUILTINS",
     "FINANCIAL_QUALITY_FIELDS",
     "SafeExpressionEvaluator",
+    "directed_rank_blend",
     "evaluate_expression",
     "evaluate_factor_signal",
     "pit_cashflow_quality",

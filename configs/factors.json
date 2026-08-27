@@ -8,6 +8,54 @@
     "role": "control"
   },
   "suites": {
+    "results-first": [
+      {
+        "name": "pit_cashflow_quality",
+        "family": "cashflow_quality",
+        "kind": "builtin",
+        "builtin": "pit_cashflow_quality",
+        "required_fields": [
+          "fundamental_roic",
+          "fundamental_q_ocf_to_sales",
+          "fundamental_debt_to_assets",
+          "fundamental_age_days",
+          "industry_pit",
+          "total_mv"
+        ],
+        "direction_policy": "train_ic",
+        "params": {
+          "minimum_components": 2,
+          "maximum_age_days": 550,
+          "industry_neutral": true,
+          "size_neutral": true
+        },
+        "role": "challenger"
+      },
+      {
+        "name": "value_defensive_rank",
+        "family": "value",
+        "expression": "rank(book_yield) + rank(earnings_yield) + rank(-volatility_20)",
+        "direction_policy": "train_ic"
+      },
+      {
+        "name": "mom_60",
+        "family": "momentum",
+        "expression": "momentum_60",
+        "direction_policy": "train_ic"
+      },
+      {
+        "name": "low_volatility",
+        "family": "defensive",
+        "expression": "-volatility_20",
+        "direction_policy": "train_ic"
+      },
+      {
+        "name": "low_turnover",
+        "family": "liquidity",
+        "expression": "-turnover_rate",
+        "direction_policy": "train_ic"
+      }
+    ],
     "recovery": [
       {
         "name": "pit_cashflow_quality",

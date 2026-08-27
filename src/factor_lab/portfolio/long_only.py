@@ -309,8 +309,18 @@ def _normalized_date_mapping(
     return output
 
 
-def _row_map(day: pd.DataFrame, ticker_column: str) -> dict[str, pd.Series]:
-    return {str(row[ticker_column]): row for _, row in day.iterrows()}
+def _row_map(day: pd.DataFrame, ticker_column: str) -> dict[str, Mapping[str, Any]]:
+    """Build the execution lookup without pandas' per-row Series overhead."""
+
+    if day.empty:
+        return {}
+    columns = tuple(day.columns)
+    ticker_position = day.columns.get_loc(ticker_column)
+    values = day.to_numpy(copy=False)
+    return {
+        str(row[ticker_position]): dict(zip(columns, row))
+        for row in values
+    }
 
 
 def _finite_positive(value: Any) -> float | None:
@@ -600,6 +610,8 @@ def evaluate_long_only_portfolio(
     target_exit_counts: list[int] = []
     execution_input_ages: list[int] = []
     previous_target_tickers: set[str] = set()
+    cached_row_map_date: pd.Timestamp | None = None
+    cached_row_map: dict[str, Mapping[str, Any]] | None = None
 
     if signal_calendar_start is None:
         signal_calendar_start = dates[0]
@@ -619,8 +631,14 @@ def evaluate_long_only_portfolio(
         signal_day = by_date[signal_date]
         trade_day = by_date[trade_date]
         end_day = by_date[end_date]
-        trade_map = _row_map(trade_day, ticker_col)
+        if trade_date == cached_row_map_date:
+            assert cached_row_map is not None
+            trade_map = cached_row_map
+        else:
+            trade_map = _row_map(trade_day, ticker_col)
         end_map = _row_map(end_day, ticker_col)
+        cached_row_map_date = end_date
+        cached_row_map = end_map
 
         eligible_mask = pd.Series(True, index=signal_day.index)
         for column in present_eligible:

@@ -59,6 +59,9 @@ def _frames() -> tuple[pd.DataFrame, pd.DataFrame]:
                     "roe": value * 0.2,
                     "volatility_20": 0.3 - value * 0.1,
                     "turnover_rate": 0.2 - value * 0.05,
+                    "momentum_60": ((ticker_index * 5) % len(tickers))
+                    / len(tickers)
+                    + day_index * 1e-8,
                     "financial_available_date": date - pd.Timedelta(days=1),
                     "fundamental_roic": value * 10.0,
                     "fundamental_q_ocf_to_sales": value * 0.5,
@@ -172,6 +175,73 @@ def test_registered_recovery_builtin_runs_through_stage_a(tmp_path: Path) -> Non
     assert result["search_status"] == "canary_smoke"
 
 
+def test_results_first_ranks_comparable_control_and_ensembles(tmp_path: Path) -> None:
+    features, execution = _frames()
+    feature_path = tmp_path / "features.parquet"
+    execution_path = tmp_path / "execution.parquet"
+    research_path = tmp_path / "research.json"
+    features.to_parquet(feature_path, index=False)
+    execution.to_parquet(execution_path, index=False)
+    repository = Path(__file__).resolve().parents[2]
+    research_config = json.loads(
+        (repository / "configs" / "research.json").read_text(encoding="utf-8")
+    )
+    research_config["portfolio"].update(
+        {"position_count": 3, "target_weight": 1 / 3, "retention_buffer": 0}
+    )
+    research_config["results_first"]["challenger_weights"] = [0.3, 0.7]
+    research_path.write_text(json.dumps(research_config), encoding="utf-8")
+
+    common = dict(
+        project_root=tmp_path,
+        suite="results-first",
+        feature_path=feature_path,
+        execution_path=execution_path,
+        factors_path=repository / "configs" / "factors.json",
+        research_config_path=research_path,
+        run_robustness=False,
+        resume=False,
+    )
+    canary = run_research(mode="canary", **common)
+    assert canary["search_status"] == "results_first_canary_smoke"
+    assert canary["results_first"]["ranking_available"] is False
+    assert canary["results_first"]["best_historical_strategy"] is None
+    assert canary["results_first"]["rankings"] == []
+
+    result = run_research(mode="full", **common)
+
+    rankings = result["results_first"]["rankings"]
+    assert result["results_first"]["enabled"] is True
+    assert result["results_first"]["optimization_scope"] == "all_observed_history"
+    assert result["search_status"] == "results_first_historical_ranking_completed"
+    assert result["search_stopped"] is False
+    assert result["validated_count"] == 0
+    assert len(result["stage_b_selected"]) == 11
+    assert len(rankings) == 11
+    assert result["results_first"]["excluded_from_ranking"] == []
+    assert [row["rank"] for row in rankings] == list(range(1, 12))
+    assert rankings == sorted(
+        rankings,
+        key=lambda row: (
+            -float(row["historical_score"]),
+            -float(row["net_annual_return"]),
+            str(row["factor_name"]),
+        ),
+    )
+    assert result["results_first"]["best_historical_strategy"] == rankings[0][
+        "factor_name"
+    ]
+    assert any(row["strategy_kind"] == "ensemble" for row in rankings)
+    assert len({row["net_annual_return"] for row in rankings}) > 1
+    ensemble = next(
+        row
+        for row in result["stage_a"]
+        if str(row["factor_name"]).startswith("blend__")
+    )
+    assert ensemble["selection_basis"] == "pre_directed_components"
+    assert "不声称独立 OOS" in render_report(result)
+
+
 def _period(
     signal_date: str,
     start_date: str,
@@ -203,6 +273,47 @@ def _period(
         "blocked_trade_count": 0,
         "costs": {"total": 0.0},
     }
+
+
+def test_results_first_metrics_align_to_control_periods_and_expose_gaps() -> None:
+    reference = [
+        {
+            "signal_date": "2025-01-03",
+            "net_return": 0.05,
+            "benchmark_return": 0.02,
+            "active_return": 0.03,
+        },
+        {
+            "signal_date": "2025-01-10",
+            "net_return": -0.01,
+            "benchmark_return": 0.01,
+            "active_return": -0.02,
+        },
+    ]
+    sparse = {
+        "period_active_returns": [
+            {
+                "signal_date": "2025-01-03",
+                "net_return": 0.10,
+                "benchmark_return": 0.02,
+                "active_return": 0.08,
+            }
+        ]
+    }
+
+    metrics = runner_module._results_first_metrics(
+        sparse,
+        {"results_first": {"incomplete_period_policy": "exclude_from_ranking"}},
+        periods_per_year=2,
+        reference_periods=reference,
+    )
+
+    assert metrics["observations"] == 2
+    assert metrics["observed_strategy_periods"] == 1
+    assert metrics["missing_strategy_periods"] == 1
+    assert metrics["period_coverage"] == 0.5
+    assert metrics["comparison_period_basis"] == "control_signal_dates"
+    assert metrics["missing_period_score_policy"] == "cash_return_zero_diagnostic_only"
 
 
 def test_window_metrics_require_the_whole_period_to_stay_inside_split() -> None:

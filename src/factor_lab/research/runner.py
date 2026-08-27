@@ -20,7 +20,7 @@ from factor_lab.portfolio import LongOnlyPortfolioConfig, evaluate_long_only_por
 
 from .contracts import FactorSpec, ValidationSpec
 from .reporting import render_report
-from .signals import evaluate_factor_signal
+from .signals import directed_rank_blend, evaluate_factor_signal
 from .validation import (
     FactorValidation,
     StageASelection,
@@ -31,8 +31,9 @@ from .validation import (
 )
 
 
-ENGINE_ID = "factor-lab/lightweight-research/v3"
+ENGINE_ID = "factor-lab/research/v4"
 EVIDENCE_CLASS = "historical_diagnostic"
+RESULTS_FIRST_SUITE = "results-first"
 _DETAIL_FIELDS = {"periods", "trades", "optimization_audit"}
 _REQUIRED_PROMOTION_GATE_KEYS = {
     "validation_net_excess_annual_return_min",
@@ -754,6 +755,7 @@ def _portfolio_result(
             expected_observations=expected["audit"],
         ),
     }
+
     for split, diagnostics in (
         ("train", validation.train),
         ("validation", validation.validation),
@@ -814,6 +816,250 @@ def _portfolio_result(
         "control_comparison": None,
         "validated": False,
     }
+
+
+def _results_first_metrics(
+    result: Mapping[str, Any],
+    research_config: Mapping[str, Any],
+    *,
+    periods_per_year: float,
+    reference_periods: Sequence[Mapping[str, Any]] | None = None,
+    optimization_scope: str = "all_observed_history",
+) -> dict[str, Any]:
+    """Score one strategy over every observed historical period.
+
+    This is deliberately an in-sample leaderboard. It optimizes the result the
+    user asked for and never labels the winner as independently validated.
+    """
+
+    settings = dict(research_config.get("results_first") or {})
+    incomplete_policy = str(
+        settings.get("incomplete_period_policy", "exclude_from_ranking")
+    )
+    if incomplete_policy != "exclude_from_ranking":
+        raise ValueError(
+            "results_first incomplete_period_policy must be 'exclude_from_ranking'"
+        )
+
+    observed_rows = list(result.get("period_active_returns") or [])
+    missing_periods = 0
+    if reference_periods is None:
+        rows = observed_rows
+        observed_periods = len(rows)
+        comparison_basis = "strategy_observed_periods"
+    else:
+        observed_by_date = {
+            str(row.get("signal_date")): row
+            for row in observed_rows
+            if row.get("signal_date") is not None
+        }
+        rows = []
+        observed_periods = 0
+        for reference in reference_periods:
+            signal_date = str(reference.get("signal_date"))
+            candidate = observed_by_date.get(signal_date)
+            if candidate is None:
+                missing_periods += 1
+                net_return = 0.0
+            else:
+                observed_periods += 1
+                net_return = float(candidate.get("net_return") or 0.0)
+            benchmark_return = float(reference.get("benchmark_return") or 0.0)
+            rows.append(
+                {
+                    "signal_date": reference.get("signal_date"),
+                    "net_return": net_return,
+                    "benchmark_return": benchmark_return,
+                    "active_return": net_return - benchmark_return,
+                }
+            )
+        comparison_basis = "control_signal_dates"
+    net = np.asarray([float(row.get("net_return") or 0.0) for row in rows], dtype=float)
+    active = np.asarray(
+        [float(row.get("active_return") or 0.0) for row in rows], dtype=float
+    )
+    finite = np.isfinite(net) & np.isfinite(active)
+    net = net[finite]
+    active = active[finite]
+    if not len(net):
+        return {
+            "observations": 0,
+            "historical_score": None,
+            "net_annual_return": None,
+            "net_sharpe": None,
+            "information_ratio": None,
+            "max_drawdown": None,
+            "optimization_scope": optimization_scope,
+            "comparison_period_basis": comparison_basis,
+            "observed_strategy_periods": observed_periods,
+            "missing_strategy_periods": missing_periods,
+            "period_coverage": 0.0,
+            "missing_period_score_policy": "cash_return_zero_diagnostic_only",
+            "incomplete_period_ranking_policy": incomplete_policy,
+        }
+
+    growth = float(np.prod(1.0 + net))
+    annual_return = (
+        growth ** (float(periods_per_year) / len(net)) - 1.0
+        if growth > 0.0
+        else -1.0
+    )
+    net_std = float(np.std(net, ddof=1)) if len(net) > 1 else 0.0
+    active_std = float(np.std(active, ddof=1)) if len(active) > 1 else 0.0
+    scale = math.sqrt(float(periods_per_year))
+    sharpe = float(np.mean(net) / net_std * scale) if net_std > 0.0 else 0.0
+    information_ratio = (
+        float(np.mean(active) / active_std * scale) if active_std > 0.0 else 0.0
+    )
+    nav = np.concatenate(([1.0], np.cumprod(1.0 + net)))
+    peaks = np.maximum.accumulate(nav)
+    drawdowns = nav / peaks - 1.0
+    max_drawdown = float(np.min(drawdowns))
+
+    default_score_weights = {
+        "net_sharpe": 1.0,
+        "information_ratio": 0.35,
+        "net_annual_return": 0.50,
+        "max_drawdown": 0.35,
+    }
+    configured_weights = dict(settings.get("score_weights") or {})
+    unknown_weights = sorted(set(configured_weights) - set(default_score_weights))
+    if unknown_weights:
+        raise ValueError(
+            "unsupported results_first score_weights: " + ", ".join(unknown_weights)
+        )
+    score_weights: dict[str, float] = {}
+    for key, raw_value in {**default_score_weights, **configured_weights}.items():
+        if isinstance(raw_value, (bool, np.bool_)):
+            raise ValueError("results_first score_weights must be finite non-negative numbers")
+        try:
+            parsed_weight = float(raw_value)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "results_first score_weights must be finite non-negative numbers"
+            ) from exc
+        if not np.isfinite(parsed_weight) or parsed_weight < 0.0:
+            raise ValueError("results_first score_weights must be finite non-negative numbers")
+        score_weights[key] = parsed_weight
+    if not any(score_weights.values()):
+        raise ValueError("at least one results_first score weight must be positive")
+    return {
+        "observations": int(len(net)),
+        "optimization_scope": optimization_scope,
+        "comparison_period_basis": comparison_basis,
+        "observed_strategy_periods": observed_periods,
+        "missing_strategy_periods": missing_periods,
+        "period_coverage": round(observed_periods / len(rows), 8),
+        "missing_period_score_policy": "cash_return_zero_diagnostic_only",
+        "incomplete_period_ranking_policy": incomplete_policy,
+        "historical_score": None,
+        "score_method": "cross_strategy_percentile_weighted",
+        "net_annual_return": round(annual_return, 8),
+        "net_sharpe": round(sharpe, 8),
+        "information_ratio": round(information_ratio, 8),
+        "max_drawdown": round(max_drawdown, 8),
+        "active_return_annual_mean": round(float(np.mean(active)) * periods_per_year, 8),
+        "score_weights": score_weights,
+    }
+
+
+def _build_results_first_ensembles(
+    frame: pd.DataFrame,
+    control: FactorSpec,
+    challengers: Sequence[FactorSpec],
+    signals: Mapping[str, pd.Series],
+    validations: Mapping[str, FactorValidation],
+    validation_spec: ValidationSpec,
+    research_config: Mapping[str, Any],
+) -> tuple[list[FactorSpec], dict[str, pd.Series], dict[str, FactorValidation]]:
+    settings = dict(research_config.get("results_first") or {})
+    if str(settings.get("optimization_scope", "all_observed_history")) != (
+        "all_observed_history"
+    ):
+        raise ValueError(
+            "results_first optimization_scope must be 'all_observed_history'"
+        )
+    if str(settings.get("missing_challenger_policy", "fallback_control")) != (
+        "fallback_control"
+    ):
+        raise ValueError(
+            "results_first missing_challenger_policy must be 'fallback_control'"
+        )
+    raw_weights = tuple(settings.get("challenger_weights", (0.2, 0.4, 0.6)))
+    if not raw_weights or any(isinstance(value, (bool, np.bool_)) for value in raw_weights):
+        raise ValueError("results_first challenger_weights must be in (0, 1]")
+    try:
+        weights = tuple(float(value) for value in raw_weights)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("results_first challenger_weights must be in (0, 1]") from exc
+    if any(not np.isfinite(value) or value <= 0.0 or value > 1.0 for value in weights):
+        raise ValueError("results_first challenger_weights must be in (0, 1]")
+    if len(set(weights)) != len(weights):
+        raise ValueError("results_first challenger_weights must be unique")
+    weight_labels = tuple(
+        format(value, ".12g").replace(".", "p") for value in weights
+    )
+    if len(set(weight_labels)) != len(weight_labels):
+        raise ValueError("results_first challenger_weights must have unique labels")
+
+    ensemble_factors: list[FactorSpec] = []
+    ensemble_signals: dict[str, pd.Series] = {}
+    ensemble_validations: dict[str, FactorValidation] = {}
+    control_validation = validations[control.name]
+    # Daily ranks are invariant across the weight grid.  Compute the control
+    # once and each challenger's fallback-adjusted rank once instead of doing
+    # two full groupby/rank passes for every candidate weight.
+    control_rank = directed_rank_blend(
+        frame,
+        signals[control.name],
+        signals[control.name],
+        control_direction=control_validation.frozen_direction,
+        challenger_direction=control_validation.frozen_direction,
+        challenger_weight=0.0,
+        date_column=validation_spec.date_column,
+    )
+    for challenger in challengers:
+        challenger_validation = validations[challenger.name]
+        effective_challenger_rank = directed_rank_blend(
+            frame,
+            signals[control.name],
+            signals[challenger.name],
+            control_direction=control_validation.frozen_direction,
+            challenger_direction=challenger_validation.frozen_direction,
+            challenger_weight=1.0,
+            date_column=validation_spec.date_column,
+        )
+        for weight, weight_label in zip(weights, weight_labels, strict=True):
+            name = f"blend__{control.name}__{challenger.name}__w{weight_label}"
+            factor = FactorSpec(
+                name=name,
+                family="results_first_ensemble",
+                kind="ensemble",
+                direction_policy="pre_directed",
+                params={
+                    "control_factor": control.name,
+                    "challenger_factor": challenger.name,
+                    "control_direction": control_validation.frozen_direction,
+                    "challenger_direction": challenger_validation.frozen_direction,
+                    "challenger_weight": weight,
+                    "missing_challenger_policy": "fallback_control",
+                    "optimization_scope": "all_observed_history",
+                },
+                role="results_first_candidate",
+            )
+            signal = (
+                (1.0 - weight) * control_rank + weight * effective_challenger_rank
+            ).where(control_rank.notna()).rename(name)
+            validation = evaluate_stage_a(
+                frame,
+                factor,
+                validation_spec,
+                signal=signal,
+            )
+            ensemble_factors.append(factor)
+            ensemble_signals[name] = signal
+            ensemble_validations[name] = validation
+    return ensemble_factors, ensemble_signals, ensemble_validations
 
 
 def _control_comparison(
@@ -1075,7 +1321,7 @@ def _run_robustness(
 def run_research(
     *,
     project_root: str | Path | None = None,
-    suite: str = "next",
+    suite: str = RESULTS_FIRST_SUITE,
     mode: str = "canary",
     resume: bool = True,
     feature_path: str | Path | None = None,
@@ -1084,7 +1330,7 @@ def run_research(
     research_config_path: str | Path | None = None,
     run_robustness: bool = True,
 ) -> dict[str, Any]:
-    """Run the deterministic two-stage historical research loop."""
+    """Run a deterministic historical research suite."""
 
     if mode not in {"canary", "full"}:
         raise ValueError("mode must be canary or full")
@@ -1101,6 +1347,12 @@ def run_research(
     research_config = _read_json(research_file)
     validation_spec = _validation_spec(research_config)
     control, challengers = load_factor_suite(factors_file, suite)
+    if suite == RESULTS_FIRST_SUITE:
+        control = replace(control, direction_policy="all_history_ic")
+        challengers = [
+            replace(factor, direction_policy="all_history_ic")
+            for factor in challengers
+        ]
     all_factors = [control, *challengers]
     feature_hash = _sha256_file(feature_file)
     execution_hash = _sha256_file(execution_file)
@@ -1147,7 +1399,7 @@ def run_research(
         features, signals, stage_a_rows, validation_spec
     )
     stage_a_selection: StageASelection | None = None
-    if suite == "legacy-regression":
+    if suite in {"legacy-regression", RESULTS_FIRST_SUITE}:
         selected = [factor for factor in all_factors if factor.role != "diagnostic_only"]
     else:
         stage_a_selection = build_stage_a_selection(
@@ -1164,6 +1416,26 @@ def run_research(
                 for row in stage_a_selection.selected
             ],
         ]
+
+    if suite == RESULTS_FIRST_SUITE:
+        ensemble_factors, ensemble_signals, ensemble_validations = (
+            _build_results_first_ensembles(
+                features,
+                control,
+                [factor for factor in challengers if factor.role != "diagnostic_only"],
+                signals,
+                validations,
+                validation_spec,
+                research_config,
+            )
+        )
+        signals.update(ensemble_signals)
+        validations.update(ensemble_validations)
+        stage_a_rows.extend(ensemble_validations[factor.name] for factor in ensemble_factors)
+        # Standalone challengers provide component diagnostics and an optimized
+        # direction, but only fallback-control ensembles are exposure-comparable
+        # enough to enter the expensive portfolio leaderboard.
+        selected = [control, *ensemble_factors]
 
     portfolio_config = _portfolio_config(research_config)
     execution = _load_execution(execution_file, portfolio_config)
@@ -1207,38 +1479,174 @@ def run_research(
 
     control_result = next(row for row in stage_b if row["factor_name"] == control.name)
     validated: list[str] = []
-    challenger_count = max(
-        1, sum(row["factor_name"] != control.name for row in stage_b)
-    )
     pre_audit_confirmed: list[str] = []
-    for row in stage_b:
-        if row["factor_name"] == control.name:
-            continue
-        comparison = _control_comparison(
-            row,
-            control_result,
-            research_config,
-            validation_spec,
-            correction_factor=challenger_count,
+    results_first_rankings: list[dict[str, Any]] = []
+    results_first_excluded: list[dict[str, Any]] = []
+    best_historical_strategy: str | None = None
+    if suite == RESULTS_FIRST_SUITE:
+        comparison_periods = list(control_result.get("period_active_returns") or [])
+        for row in stage_b:
+            metrics = _results_first_metrics(
+                row,
+                research_config,
+                periods_per_year=portfolio_config.periods_per_year,
+                reference_periods=comparison_periods,
+                optimization_scope=(
+                    "all_observed_history"
+                    if mode == "full"
+                    else "canary_recent_window_smoke_only"
+                ),
+            )
+            row["results_first_metrics"] = metrics
+            row["strategy_kind"] = (
+                "control"
+                if row["factor_name"] == control.name
+                else "ensemble"
+                if ((row.get("factor") or {}).get("kind") == "ensemble")
+                else "standalone_diagnostic"
+            )
+            row["results_first_ranking_eligible"] = bool(
+                row["strategy_kind"] in {"control", "ensemble"}
+                and metrics.get("observations")
+                and float(metrics.get("period_coverage") or 0.0) >= 1.0
+            )
+            row["results_first_ranking_exclusion_reason"] = (
+                None
+                if row["results_first_ranking_eligible"]
+                else "standalone_diagnostic_only"
+                if row["strategy_kind"] == "standalone_diagnostic"
+                else "incomplete_control_period_coverage"
+            )
+            row["pre_audit_confirmed"] = False
+            row["validated"] = False
+
+        if mode == "full":
+            def ranking_value(row: Mapping[str, Any], key: str) -> float:
+                value = (row.get("results_first_metrics") or {}).get(key)
+                if value is None:
+                    return -np.inf
+                parsed = float(value)
+                return parsed if np.isfinite(parsed) else -np.inf
+
+            score_rows = [
+                row for row in stage_b if row["results_first_ranking_eligible"]
+            ]
+            if score_rows:
+                score_weights = dict(
+                    (score_rows[0].get("results_first_metrics") or {}).get(
+                        "score_weights"
+                    )
+                    or {}
+                )
+                weight_total = float(sum(score_weights.values()))
+                for row in score_rows:
+                    (row.get("results_first_metrics") or {})[
+                        "score_percentiles"
+                    ] = {}
+                for metric_name, weight in score_weights.items():
+                    metric_ranks = pd.Series(
+                        [ranking_value(row, metric_name) for row in score_rows],
+                        dtype=float,
+                    ).rank(method="average", pct=True)
+                    for row, percentile in zip(
+                        score_rows, metric_ranks.tolist(), strict=True
+                    ):
+                        (row.get("results_first_metrics") or {})[
+                            "score_percentiles"
+                        ][metric_name] = round(float(percentile), 8)
+                for row in score_rows:
+                    metrics = row.get("results_first_metrics") or {}
+                    percentiles = metrics["score_percentiles"]
+                    metrics["historical_score"] = round(
+                        sum(
+                            float(score_weights[key]) * float(percentiles[key])
+                            for key in score_weights
+                        )
+                        / weight_total,
+                        8,
+                    )
+
+            ranked_rows = sorted(
+                score_rows,
+                key=lambda row: (
+                    -ranking_value(row, "historical_score"),
+                    -ranking_value(row, "net_annual_return"),
+                    str(row.get("factor_name") or ""),
+                ),
+            )
+            control_score = ranking_value(control_result, "historical_score")
+            if not np.isfinite(control_score):
+                control_score = 0.0
+            for rank, row in enumerate(ranked_rows, start=1):
+                metrics = dict(row.get("results_first_metrics") or {})
+                score = metrics.get("historical_score")
+                row["historical_rank"] = rank
+                row["historical_score_delta_vs_control"] = (
+                    round(float(score) - control_score, 8) if score is not None else None
+                )
+                results_first_rankings.append(
+                    {
+                        "rank": rank,
+                        "factor_name": row.get("factor_name"),
+                        "strategy_kind": row.get("strategy_kind"),
+                        "historical_score_delta_vs_control": row.get(
+                            "historical_score_delta_vs_control"
+                        ),
+                        **metrics,
+                    }
+                )
+            if results_first_rankings:
+                best_historical_strategy = str(results_first_rankings[0]["factor_name"])
+            results_first_excluded = [
+                {
+                    "factor_name": row.get("factor_name"),
+                    "strategy_kind": row.get("strategy_kind"),
+                    "reason": row.get("results_first_ranking_exclusion_reason"),
+                    "period_coverage": (row.get("results_first_metrics") or {}).get(
+                        "period_coverage"
+                    ),
+                    "observed_strategy_periods": (
+                        row.get("results_first_metrics") or {}
+                    ).get("observed_strategy_periods"),
+                    "observations": (row.get("results_first_metrics") or {}).get(
+                        "observations"
+                    ),
+                }
+                for row in stage_b
+                if not row["results_first_ranking_eligible"]
+            ]
+    else:
+        challenger_count = max(
+            1, sum(row["factor_name"] != control.name for row in stage_b)
         )
-        row["control_comparison"] = comparison
-        row["beats_control"] = _beats_control(
-            row, control_result, research_config, comparison
-        )
-        row["pre_audit_confirmed"] = bool(
-            suite != "legacy-regression"
-            and row["gate_passed"]
-            and row["beats_control"]
-        )
-        if row["pre_audit_confirmed"]:
-            pre_audit_confirmed.append(str(row["factor_name"]))
-        row["validated"] = bool(
-            mode == "full"
-            and row["pre_audit_confirmed"]
-            and not row.get("audit_falsified", False)
-        )
-        if row["validated"]:
-            validated.append(str(row["factor_name"]))
+        for row in stage_b:
+            if row["factor_name"] == control.name:
+                continue
+            comparison = _control_comparison(
+                row,
+                control_result,
+                research_config,
+                validation_spec,
+                correction_factor=challenger_count,
+            )
+            row["control_comparison"] = comparison
+            row["beats_control"] = _beats_control(
+                row, control_result, research_config, comparison
+            )
+            row["pre_audit_confirmed"] = bool(
+                suite != "legacy-regression"
+                and row["gate_passed"]
+                and row["beats_control"]
+            )
+            if row["pre_audit_confirmed"]:
+                pre_audit_confirmed.append(str(row["factor_name"]))
+            row["validated"] = bool(
+                mode == "full"
+                and row["pre_audit_confirmed"]
+                and not row.get("audit_falsified", False)
+            )
+            if row["validated"]:
+                validated.append(str(row["factor_name"]))
     # Per-factor artifacts are authoritative evidence too.  Persist comparison
     # flags only after the control result is known so they cannot contradict
     # the final summary.
@@ -1248,7 +1656,8 @@ def run_research(
 
     robustness: dict[str, Any] | None = None
     if (
-        mode == "full"
+        suite != RESULTS_FIRST_SUITE
+        and mode == "full"
         and suite in {"next", "recovery"}
         and not pre_audit_confirmed
         and run_robustness
@@ -1276,7 +1685,11 @@ def run_research(
             output_dir / "robustness.json",
         )
 
-    if mode == "canary":
+    if suite == RESULTS_FIRST_SUITE and mode == "full":
+        search_status = "results_first_historical_ranking_completed"
+    elif suite == RESULTS_FIRST_SUITE:
+        search_status = "results_first_canary_smoke"
+    elif mode == "canary":
         search_status = "canary_smoke"
     elif suite == "legacy-regression":
         search_status = "legacy_regression_completed"
@@ -1310,7 +1723,10 @@ def run_research(
         "investment_claim_allowed": False,
         "promotion_triggered": False,
         "canary_smoke_only": mode == "canary",
-        "gate_results_interpretable": mode == "full",
+        "gate_results_interpretable": mode == "full" and suite != RESULTS_FIRST_SUITE,
+        "ranking_results_interpretable": (
+            mode == "full" and suite == RESULTS_FIRST_SUITE
+        ),
         "git": _git_state(root),
         "implementation_sha256": implementation_hash,
         "data": {
@@ -1337,7 +1753,11 @@ def run_research(
         "stage_a_selection": stage_a_selection.to_dict()
         if stage_a_selection is not None
         else {
-            "basis": "legacy_regression_all_registered",
+            "basis": (
+                "all_registered_plus_runtime_ensembles"
+                if suite == RESULTS_FIRST_SUITE
+                else "legacy_regression_all_registered"
+            ),
             "selected": [row.name for row in selected if row.name != control.name],
             "decisions": [],
             "similarities": [row.to_dict() for row in similarities],
@@ -1347,9 +1767,35 @@ def run_research(
         "validated_factors": validated,
         "validated_count": len(validated),
         "pre_audit_confirmed_factors": pre_audit_confirmed,
+        "results_first": {
+            "enabled": suite == RESULTS_FIRST_SUITE,
+            "ranking_available": suite == RESULTS_FIRST_SUITE and mode == "full",
+            "optimization_scope": (
+                "all_observed_history"
+                if suite == RESULTS_FIRST_SUITE and mode == "full"
+                else "canary_recent_window_smoke_only"
+                if suite == RESULTS_FIRST_SUITE
+                else None
+            ),
+            "comparison_period_basis": "control_signal_dates"
+            if suite == RESULTS_FIRST_SUITE
+            else None,
+            "missing_period_score_policy": "cash_return_zero_diagnostic_only"
+            if suite == RESULTS_FIRST_SUITE
+            else None,
+            "incomplete_period_ranking_policy": "exclude_from_ranking"
+            if suite == RESULTS_FIRST_SUITE
+            else None,
+            "best_historical_strategy": best_historical_strategy,
+            "rankings": results_first_rankings,
+            "excluded_from_ranking": results_first_excluded,
+        },
         "robustness": robustness,
         "search_status": search_status,
-        "search_stopped": bool(mode == "full" and suite != "legacy-regression"),
+        "search_stopped": bool(
+            mode == "full"
+            and suite not in {"legacy-regression", RESULTS_FIRST_SUITE}
+        ),
     }
     report_path = output_dir / "report.md"
     report_path.write_text(render_report(summary), encoding="utf-8")

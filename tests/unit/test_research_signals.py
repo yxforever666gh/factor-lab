@@ -6,6 +6,7 @@ import pytest
 
 from factor_lab.research.contracts import FactorSpec
 from factor_lab.research.signals import (
+    directed_rank_blend,
     evaluate_expression,
     evaluate_factor_signal,
     pit_cashflow_quality,
@@ -65,6 +66,118 @@ def test_factor_signal_supports_registered_builtin() -> None:
 def test_expression_cannot_access_frame_attributes() -> None:
     with pytest.raises(ValueError, match="unsupported"):
         evaluate_expression(_frame(), "book_yield.__class__")
+
+
+def test_directed_rank_blend_applies_frozen_directions_within_each_date() -> None:
+    frame = pd.DataFrame({"date": ["2024-01-02"] * 3 + ["2024-01-03"] * 2})
+    control = pd.Series([1.0, 2.0, 3.0, 20.0, 10.0])
+    challenger = pd.Series([30.0, 20.0, 10.0, 1.0, 2.0])
+
+    signal = directed_rank_blend(
+        frame,
+        control,
+        challenger,
+        control_direction=1,
+        challenger_direction=-1,
+        challenger_weight=0.25,
+    )
+
+    assert signal.tolist() == pytest.approx([1 / 3, 2 / 3, 1.0, 1.0, 0.5])
+
+
+def test_directed_rank_blend_is_invariant_to_positive_component_scaling() -> None:
+    frame = _frame()
+    control = frame["book_yield"]
+    challenger = frame["roe"]
+
+    original = directed_rank_blend(
+        frame,
+        control,
+        challenger,
+        control_direction=-1,
+        challenger_direction=1,
+        challenger_weight=0.3,
+    )
+    scaled = directed_rank_blend(
+        frame,
+        control * 1_000_000,
+        challenger * 0.001,
+        control_direction=-1,
+        challenger_direction=1,
+        challenger_weight=0.3,
+    )
+
+    pd.testing.assert_series_equal(original, scaled)
+
+
+def test_directed_rank_blend_falls_back_only_when_challenger_is_missing() -> None:
+    frame = pd.DataFrame({"date": ["2024-01-02"] * 4})
+    control = pd.Series([1.0, 2.0, np.nan, 4.0])
+    challenger = pd.Series([4.0, np.nan, 2.0, 1.0])
+
+    signal = directed_rank_blend(
+        frame,
+        control,
+        challenger,
+        control_direction=1,
+        challenger_direction=1,
+        challenger_weight=0.5,
+    )
+
+    assert signal.iloc[0] == pytest.approx((1 / 3 + 1.0) / 2)
+    assert signal.iloc[1] == pytest.approx(2 / 3)
+    assert pd.isna(signal.iloc[2])
+    assert signal.iloc[3] == pytest.approx((1.0 + 1 / 3) / 2)
+
+
+def test_directed_rank_blend_accepts_weight_boundaries_and_rejects_outside() -> None:
+    frame = pd.DataFrame({"date": ["2024-01-02"] * 3})
+    control = pd.Series([1.0, 2.0, 3.0])
+    challenger = pd.Series([3.0, 1.0, 2.0])
+    expected_control = pd.Series([1 / 3, 2 / 3, 1.0], name="directed_rank_blend")
+    expected_challenger = pd.Series([1.0, 1 / 3, 2 / 3], name="directed_rank_blend")
+
+    at_zero = directed_rank_blend(
+        frame,
+        control,
+        challenger,
+        control_direction=1,
+        challenger_direction=1,
+        challenger_weight=0,
+    )
+    at_one = directed_rank_blend(
+        frame,
+        control,
+        challenger,
+        control_direction=1,
+        challenger_direction=1,
+        challenger_weight=1,
+    )
+
+    pd.testing.assert_series_equal(at_zero, expected_control)
+    pd.testing.assert_series_equal(at_one, expected_challenger)
+    for invalid_weight in (-0.01, 1.01, np.nan, True):
+        with pytest.raises(ValueError, match="between 0 and 1"):
+            directed_rank_blend(
+                frame,
+                control,
+                challenger,
+                control_direction=1,
+                challenger_direction=1,
+                challenger_weight=invalid_weight,
+            )
+
+
+def test_runtime_ensemble_cannot_be_evaluated_without_precomputed_signal() -> None:
+    factor = FactorSpec(
+        name="blend",
+        family="ensemble",
+        kind="ensemble",
+        direction_policy="pre_directed",
+    )
+
+    with pytest.raises(ValueError, match="precomputed runtime signal"):
+        evaluate_factor_signal(pd.DataFrame({"date": ["2025-01-02"]}), factor)
 
 
 def _fundamental_frame() -> pd.DataFrame:
