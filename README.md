@@ -6,6 +6,13 @@ Factor Lab 是一条本地、可复现的 A 股因子研究主线：Parquet 数�
 
 > 当前结果全部属于 `historical_diagnostic`。本项目不连接券商、不下单，也不保证未来收益。
 
+历史版本与当前未发布改动见 [CHANGELOG.md](CHANGELOG.md)。正式发布、Git tag 与 GitHub
+同步规则见 [RELEASING.md](RELEASING.md)。
+
+未来 tag 统一通过 `./scripts/publish-tag.ps1 -Tag <major.minor>` 发布；大方向递增 major，
+小方向递增 minor。脚本会确认
+GitHub CI 成功并在推送后核对远端 tag SHA。
+
 ## 安装
 
 ```powershell

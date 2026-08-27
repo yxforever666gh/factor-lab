@@ -210,3 +210,18 @@ The goal: Be helpful without being annoying. Check in a few times a day, do usef
 ## Make It Yours
 
 This is a starting point. Add your own conventions, style, and rules as you figure out what works.
+
+## Changelog and Releases
+
+- Record user-visible software, data-contract, research-protocol, fix, deprecation, and known-limit
+  changes under `CHANGELOG.md` → `Unreleased` as part of the same change.
+- Before creating a release tag, follow `RELEASING.md`: update the dated changelog section and
+  `pyproject.toml` version, then use `scripts/publish-tag.ps1` as the only supported publishing
+  entry point. It must verify a clean `main`, green GitHub CI, an annotated tag, and matching local
+  and GitHub tag objects/target commits.
+- Version tags use `major.minor`: increment major and reset minor for a research-direction change;
+  increment minor for a smaller iteration. Keep `pyproject.toml` at the equivalent `major.minor.0`.
+- A local-only tag is not a completed release. Do not claim a tag is published until the remote SHA
+  has been verified.
+- Do not silently move or delete a published or archive tag. A new corrective release is preferred;
+  rewriting a remote tag requires explicit user confirmation and a changelog explanation.
