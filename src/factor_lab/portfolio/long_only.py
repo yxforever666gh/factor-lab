@@ -21,13 +21,20 @@ from factor_lab.portfolio.execution import (
     ExecutionColumns,
     ExecutionPolicy,
     execute_rebalance,
-    mark_to_market,
+    process_account_observation,
 )
 
 
 _ASOF_ADV_COLUMN = "_factor_lab_adv_asof"
 _ASOF_VOLATILITY_COLUMN = "_factor_lab_volatility_asof"
 _ASOF_DATE_COLUMN = "_factor_lab_execution_input_date"
+
+ADJUSTED_TOTAL_RETURN_PRICE_BASIS = "adjusted_total_return"
+RAW_WITH_ACTIONS_PRICE_BASIS = "raw_with_actions"
+_PRICE_BASES = {
+    ADJUSTED_TOTAL_RETURN_PRICE_BASIS,
+    RAW_WITH_ACTIONS_PRICE_BASIS,
+}
 
 
 @dataclass(frozen=True)
@@ -59,12 +66,17 @@ class LongOnlyPortfolioConfig:
     date_column: str = "date"
     ticker_column: str = "ticker"
     open_column: str = "open"
+    price_basis: str = ADJUSTED_TOTAL_RETURN_PRICE_BASIS
+    price_source: str | None = None
+    lot_size: int = 0
     adv_column: str = "adv_20"
     volatility_column: str = "volatility_20"
     eligible_columns: tuple[str, ...] = ("eligible", "universe_member")
     limit_up_column: str = "is_one_price_limit_up"
     limit_down_column: str = "is_one_price_limit_down"
+    max_stale_position_age_days: int | None = 21
     costs: LongOnlyCostConfig = field(default_factory=LongOnlyCostConfig)
+    evaluation_start_date: str | None = None
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any]) -> "LongOnlyPortfolioConfig":
@@ -151,10 +163,28 @@ class LongOnlyPortfolioEvaluation:
     half_year_segments: list[dict[str, Any]]
     periods: list[dict[str, Any]]
     trades: list[dict[str, Any]]
+    account_nav_path: list[dict[str, Any]]
     promotion_eligible: bool = True
     promotion_blockers: list[str] = field(default_factory=list)
     target_weight_mode: str = "equal_weight"
     optimization_audit: list[dict[str, Any]] = field(default_factory=list)
+    evaluation_start_date: str | None = None
+    initial_nav: float = 0.0
+    first_pretrade_nav: float = 0.0
+    end_nav: float = 0.0
+    stale_position_observation_count: int = 0
+    max_stale_position_count: int = 0
+    max_stale_position_notional: float = 0.0
+    max_stale_position_age_days: int = 0
+    stale_position_blocked_reasons: dict[str, int] = field(default_factory=dict)
+    forced_delist_write_down_count: int = 0
+    forced_delist_write_down_notional: float = 0.0
+    account_nav_reconciliation_error: float = 0.0
+    price_basis: str = ADJUSTED_TOTAL_RETURN_PRICE_BASIS
+    price_source: str = "unresolved"
+    execution_price_column: str | None = None
+    corporate_action_mode: str = "embedded_in_adjusted_prices"
+    lot_size: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -178,13 +208,17 @@ def _as_config(config: LongOnlyPortfolioConfig | Mapping[str, Any] | None) -> Lo
         raise ValueError("capital must be positive")
     if result.holding_days <= 0 or result.rebalance_every_days <= 0:
         raise ValueError("holding_days and rebalance_every_days must be positive")
-    if result.holding_days > result.rebalance_every_days:
-        raise ValueError("holding_days cannot exceed rebalance_every_days for non-overlapping periods")
+    if result.holding_days != result.rebalance_every_days:
+        raise ValueError(
+            "holding_days must equal rebalance_every_days so account and "
+            "benchmark periods share every accounting boundary"
+        )
     if (
         int(result.rebalance_offset_days) != result.rebalance_offset_days
         or not 0 <= int(result.rebalance_offset_days) < result.rebalance_every_days
     ):
         raise ValueError("rebalance_offset_days must be an integer in [0, rebalance_every_days)")
+    _parse_evaluation_start_date(result.evaluation_start_date)
     if result.position_count <= 0:
         raise ValueError("position_count must be positive")
     if int(result.retention_buffer) != result.retention_buffer or result.retention_buffer < 0:
@@ -193,7 +227,68 @@ def _as_config(config: LongOnlyPortfolioConfig | Mapping[str, Any] | None) -> Lo
         raise ValueError("target_weight must be in (0, 1]")
     if not 0 < result.max_adv_participation <= 1:
         raise ValueError("max_adv_participation must be in (0, 1]")
+    if result.price_basis not in _PRICE_BASES:
+        raise ValueError(
+            "price_basis must be 'adjusted_total_return' or 'raw_with_actions'"
+        )
+    if not isinstance(result.open_column, str) or not result.open_column.strip():
+        raise ValueError("open_column must be a non-empty string")
+    if (
+        result.price_basis == RAW_WITH_ACTIONS_PRICE_BASIS
+        and result.open_column.casefold() in {"open_adj", "open_hfq"}
+    ):
+        raise ValueError(
+            "raw_with_actions requires a non-adjusted execution price column"
+        )
+    if (
+        isinstance(result.lot_size, bool)
+        or int(result.lot_size) != result.lot_size
+        or result.lot_size < 0
+    ):
+        raise ValueError("lot_size must be a non-negative integer")
+    if (
+        result.price_basis == ADJUSTED_TOTAL_RETURN_PRICE_BASIS
+        and result.lot_size != 0
+    ):
+        raise ValueError(
+            "adjusted_total_return uses synthetic total-return units and requires lot_size=0"
+        )
+    if result.price_source is not None and (
+        not isinstance(result.price_source, str) or not result.price_source.strip()
+    ):
+        raise ValueError("price_source must be a non-empty string or null")
+    max_stale_age = result.max_stale_position_age_days
+    if max_stale_age is not None and (
+        isinstance(max_stale_age, bool)
+        or int(max_stale_age) != max_stale_age
+        or max_stale_age < 0
+    ):
+        raise ValueError(
+            "max_stale_position_age_days must be a non-negative integer or null"
+        )
     return result
+
+
+def _parse_evaluation_start_date(value: str | None) -> pd.Timestamp | None:
+    """Parse the optional scheduled-signal lower bound in canonical form."""
+
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value:
+        raise ValueError("evaluation_start_date must be an ISO date in YYYY-MM-DD format")
+    try:
+        timestamp = pd.Timestamp(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "evaluation_start_date must be an ISO date in YYYY-MM-DD format"
+        ) from exc
+    if (
+        pd.isna(timestamp)
+        or timestamp.tzinfo is not None
+        or value != timestamp.strftime("%Y-%m-%d")
+    ):
+        raise ValueError("evaluation_start_date must be an ISO date in YYYY-MM-DD format")
+    return timestamp.normalize()
 
 
 def _resolve_column(frame: pd.DataFrame, preferred: str, aliases: Sequence[str]) -> str | None:
@@ -208,7 +303,70 @@ def _bool_series(values: pd.Series) -> pd.Series:
         return values.fillna(False)
     if pd.api.types.is_numeric_dtype(values):
         return pd.to_numeric(values, errors="coerce").fillna(0).ne(0)
-    return values.fillna("").astype(str).str.strip().str.lower().isin({"1", "true", "yes", "y", "on"})
+    normalized = values.astype("string").fillna("").str.strip().str.lower()
+    return normalized.isin({"1", "true", "yes", "y", "on"})
+
+
+def _numeric_event_values(values: pd.Series, *, column: str) -> pd.Series:
+    numeric = pd.to_numeric(values, errors="coerce")
+    provided = values.notna()
+    invalid = provided & (~np.isfinite(numeric))
+    if bool(invalid.any()):
+        raise ValueError(
+            f"corporate-action column {column!r} contains non-finite values"
+        )
+    return numeric
+
+
+def _validate_price_basis_events(
+    frame: pd.DataFrame,
+    *,
+    config: LongOnlyPortfolioConfig,
+    split_ratio_column: str | None,
+    cash_dividend_column: str | None,
+) -> None:
+    """Validate the mutually exclusive adjusted-price and raw-event models."""
+
+    split_values = (
+        _numeric_event_values(frame[split_ratio_column], column=split_ratio_column)
+        if split_ratio_column is not None
+        else None
+    )
+    dividend_values = (
+        _numeric_event_values(
+            frame[cash_dividend_column], column=cash_dividend_column
+        )
+        if cash_dividend_column is not None
+        else None
+    )
+    if config.price_basis == ADJUSTED_TOTAL_RETURN_PRICE_BASIS:
+        non_neutral_split = (
+            split_values.notna()
+            & ~np.isclose(split_values, 1.0, rtol=0.0, atol=1e-12)
+            if split_values is not None
+            else pd.Series(False, index=frame.index)
+        )
+        non_neutral_dividend = (
+            dividend_values.notna()
+            & ~np.isclose(dividend_values, 0.0, rtol=0.0, atol=1e-12)
+            if dividend_values is not None
+            else pd.Series(False, index=frame.index)
+        )
+        if bool(non_neutral_split.any()) or bool(non_neutral_dividend.any()):
+            raise ValueError(
+                "adjusted_total_return forbids non-neutral split/dividend inputs; "
+                "corporate actions are already embedded in adjusted prices"
+            )
+        return
+
+    if split_values is not None and bool(
+        (split_values.notna() & split_values.le(0.0)).any()
+    ):
+        raise ValueError("raw_with_actions requires positive split ratios")
+    if dividend_values is not None and bool(
+        (dividend_values.notna() & dividend_values.lt(0.0)).any()
+    ):
+        raise ValueError("raw_with_actions requires non-negative cash dividends")
 
 
 def _signal_values(frame: pd.DataFrame, signal: str | pd.Series | Sequence[float]) -> pd.Series:
@@ -227,11 +385,39 @@ def _signal_values(frame: pd.DataFrame, signal: str | pd.Series | Sequence[float
     return pd.Series(pd.to_numeric(pd.Series(signal), errors="coerce").to_numpy(), index=frame.index)
 
 
-def _empty_evaluation(reason: str, missing_columns: Sequence[str] = ()) -> LongOnlyPortfolioEvaluation:
+def _corporate_action_mode(config: LongOnlyPortfolioConfig) -> str:
+    return (
+        "embedded_in_adjusted_prices"
+        if config.price_basis == ADJUSTED_TOTAL_RETURN_PRICE_BASIS
+        else "explicit_split_and_cash_events"
+    )
+
+
+def _resolved_price_source(
+    config: LongOnlyPortfolioConfig,
+    execution_price_column: str | None,
+) -> str:
+    return config.price_source or (
+        f"input_column:{execution_price_column or config.open_column}"
+    )
+
+
+def _empty_evaluation(
+    reason: str,
+    missing_columns: Sequence[str] = (),
+    *,
+    config: LongOnlyPortfolioConfig | None = None,
+    execution_price_column: str | None = None,
+) -> LongOnlyPortfolioEvaluation:
+    price_config = config or LongOnlyPortfolioConfig()
     return LongOnlyPortfolioEvaluation(
         status="insufficient_data",
         reason=reason,
         missing_columns=list(missing_columns),
+        evaluation_start_date=None,
+        initial_nav=0.0,
+        first_pretrade_nav=0.0,
+        end_nav=0.0,
         benchmark_return=0.0,
         excess_return=0.0,
         gross_return=0.0,
@@ -267,7 +453,7 @@ def _empty_evaluation(reason: str, missing_columns: Sequence[str] = ()) -> LongO
         average_target_entry_count=0.0,
         total_target_entry_count=0,
         total_target_exit_count=0,
-        execution_input_policy="previous_visible_ticker_row",
+        execution_input_policy="previous_valid_ticker_observation",
         max_execution_input_age_days=0,
         positive_half_year_ratio=0.0,
         trade_count=0,
@@ -285,8 +471,16 @@ def _empty_evaluation(reason: str, missing_columns: Sequence[str] = ()) -> LongO
         half_year_segments=[],
         periods=[],
         trades=[],
+        account_nav_path=[],
         promotion_eligible=False,
         promotion_blockers=[reason],
+        price_basis=price_config.price_basis,
+        price_source=_resolved_price_source(
+            price_config, execution_price_column
+        ),
+        execution_price_column=execution_price_column,
+        corporate_action_mode=_corporate_action_mode(price_config),
+        lot_size=int(price_config.lot_size),
     )
 
 
@@ -323,6 +517,25 @@ def _row_map(day: pd.DataFrame, ticker_column: str) -> dict[str, Mapping[str, An
     }
 
 
+def _row_map_for_tickers(
+    day: pd.DataFrame,
+    ticker_column: str,
+    tickers: Sequence[str],
+) -> dict[str, Mapping[str, Any]]:
+    """Build a daily mark/event lookup only for positions the account holds.
+
+    A ticker requested by the account but absent from ``day`` deliberately
+    remains absent from the result.  ``process_account_observation`` must see
+    that absence so it can emit a ``missing_market_bar`` stale diagnostic.
+    """
+
+    requested = {str(ticker) for ticker in tickers}
+    if day.empty or not requested:
+        return {}
+    mask = day[ticker_column].astype(str).isin(requested)
+    return _row_map(day.loc[mask], ticker_column)
+
+
 def _finite_positive(value: Any) -> float | None:
     try:
         number = float(value)
@@ -337,6 +550,37 @@ def _finite_nonnegative(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return number if np.isfinite(number) and number >= 0 else None
+
+
+def _truthy(value: Any) -> bool:
+    if value is None:
+        return False
+    try:
+        if bool(pd.isna(value)):
+            return False
+    except (TypeError, ValueError):
+        pass
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y", "on"}
+    return bool(value)
+
+
+def _benchmark_open(
+    row: Mapping[str, Any] | None,
+    *,
+    open_column: str,
+    suspended_column: str | None,
+    delisted_column: str | None,
+) -> float | None:
+    """Return a trustworthy observed benchmark endpoint, if one exists."""
+
+    if row is None:
+        return None
+    if suspended_column and _truthy(row.get(suspended_column)):
+        return None
+    if delisted_column and _truthy(row.get(delisted_column)):
+        return None
+    return _finite_positive(row.get(open_column))
 
 
 def _annualized_return(period_returns: Sequence[float], periods_per_year: float) -> float:
@@ -356,13 +600,38 @@ def _sharpe(period_returns: Sequence[float], periods_per_year: float) -> float:
     return float(values.mean() / standard_deviation * sqrt(periods_per_year)) if standard_deviation > 1e-12 else 0.0
 
 
-def _max_drawdown(period_returns: Sequence[float]) -> float:
-    if not period_returns:
+def _max_drawdown_from_nav_path(
+    account_nav_path: Sequence[Mapping[str, Any]],
+) -> float:
+    if not account_nav_path:
         return 0.0
-    wealth = np.cumprod(1.0 + np.asarray(period_returns, dtype=float))
-    peaks = np.maximum.accumulate(np.concatenate(([1.0], wealth)))
-    drawdowns = np.concatenate(([1.0], wealth)) / peaks - 1.0
+    nav = np.asarray(
+        [float(row["nav"]) for row in account_nav_path], dtype=float
+    )
+    if not np.isfinite(nav).all() or bool((nav < 0.0).any()):
+        raise RuntimeError("account NAV path contains an invalid value")
+    peaks = np.maximum.accumulate(nav)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        drawdowns = np.where(peaks > 0.0, nav / peaks - 1.0, 0.0)
     return float(drawdowns.min())
+
+
+def _linked_account_nav_path(
+    account_nav_path: Sequence[Mapping[str, Any]],
+    periods: Sequence[Mapping[str, Any]],
+) -> list[Mapping[str, Any]]:
+    ranges = [
+        (
+            int(row["account_nav_path_start_sequence"]),
+            int(row["account_nav_path_end_sequence"]),
+        )
+        for row in periods
+    ]
+    return [
+        row
+        for row in account_nav_path
+        if any(first <= int(row["sequence"]) <= last for first, last in ranges)
+    ]
 
 
 def _compound(period_returns: Sequence[float]) -> float:
@@ -389,7 +658,13 @@ def _benchmark_coverage(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     }
 
 
-def _segment_rows(periods: list[dict[str, Any]], *, half_year: bool, periods_per_year: float) -> list[dict[str, Any]]:
+def _segment_rows(
+    periods: list[dict[str, Any]],
+    account_nav_path: Sequence[Mapping[str, Any]],
+    *,
+    half_year: bool,
+    periods_per_year: float,
+) -> list[dict[str, Any]]:
     grouped: dict[str, list[dict[str, Any]]] = {}
     for row in periods:
         end = pd.Timestamp(row["end_date"])
@@ -402,6 +677,7 @@ def _segment_rows(periods: list[dict[str, Any]], *, half_year: bool, periods_per
         benchmark = [float(row["benchmark_return"]) for row in rows]
         net_total = _compound(net)
         benchmark_total = _compound(benchmark)
+        segment_nav_path = _linked_account_nav_path(account_nav_path, rows)
         output.append({
             "label": label,
             "start_date": rows[0]["start_date"],
@@ -415,7 +691,16 @@ def _segment_rows(periods: list[dict[str, Any]], *, half_year: bool, periods_per
             "net_annual_return": round(_annualized_return(net, periods_per_year), 8),
             "benchmark_annual_return": round(_annualized_return(benchmark, periods_per_year), 8),
             "net_sharpe": round(_sharpe(net, periods_per_year), 8),
-            "max_drawdown": round(_max_drawdown(net), 8),
+            "max_drawdown": round(
+                _max_drawdown_from_nav_path(segment_nav_path), 8
+            ),
+            "max_drawdown_basis": "daily_account_nav",
+            "account_nav_path_start_sequence": int(
+                segment_nav_path[0]["sequence"]
+            ),
+            "account_nav_path_end_sequence": int(
+                segment_nav_path[-1]["sequence"]
+            ),
             "actual_turnover": round(float(np.mean([row["turnover"] for row in rows])), 8),
             "average_holding_count": round(float(np.mean([row["holding_count"] for row in rows])), 6),
             "total_cost": round(float(sum(row["costs"]["total"] for row in rows)), 4),
@@ -446,6 +731,9 @@ def evaluate_long_only_portfolio(
     """
 
     cfg = _as_config(config)
+    requested_evaluation_start_date = _parse_evaluation_start_date(
+        cfg.evaluation_start_date
+    )
     normalized_targets = _normalized_date_mapping(
         target_weights_by_date, name="target_weights_by_date"
     )
@@ -460,7 +748,7 @@ def evaluate_long_only_portfolio(
         if numeric.lt(0).any() or numeric.sum() > 1.0 + 1e-8:
             raise ValueError(f"optimized target weights violate long-only funding at {signal_date.date()}")
     if not isinstance(frame, pd.DataFrame) or frame.empty:
-        return _empty_evaluation("empty_frame")
+        return _empty_evaluation("empty_frame", config=cfg)
 
     price_source = pricing_frame if pricing_frame is not None else frame
     date_col = _resolve_column(price_source, cfg.date_column, ("trade_date",))
@@ -482,13 +770,17 @@ def evaluate_long_only_portfolio(
     if isinstance(signal, str) and signal not in frame.columns:
         missing.append(signal)
     if missing:
-        return _empty_evaluation("missing_columns", sorted(set(missing)))
+        return _empty_evaluation(
+            "missing_columns", sorted(set(missing)), config=cfg
+        )
 
     assert date_col and ticker_col and open_col and adv_col and volatility_col
     try:
         signal_values = _signal_values(frame, signal)
     except KeyError as exc:
-        return _empty_evaluation("missing_columns", [str(exc.args[0])])
+        return _empty_evaluation(
+            "missing_columns", [str(exc.args[0])], config=cfg
+        )
 
     present_eligible = [column for column in cfg.eligible_columns if column in price_source.columns]
     limit_up_col = _resolve_column(
@@ -529,19 +821,26 @@ def evaluate_long_only_portfolio(
     ]))
     work = price_source[selected_columns].copy()
     signal_calendar_start: pd.Timestamp | None = None
+    signal_calendar_end: pd.Timestamp | None = None
     if pricing_frame is None:
         work["_signal"] = signal_values
     else:
         signal_date_col = _resolve_column(frame, cfg.date_column, ("trade_date",))
         signal_ticker_col = _resolve_column(frame, cfg.ticker_column, ("ts_code", "symbol"))
         if signal_date_col is None or signal_ticker_col is None:
-            return _empty_evaluation("missing_signal_keys", [cfg.date_column, cfg.ticker_column])
+            return _empty_evaluation(
+                "missing_signal_keys",
+                [cfg.date_column, cfg.ticker_column],
+                config=cfg,
+                execution_price_column=open_col,
+            )
         signal_lookup = frame[[signal_date_col, signal_ticker_col]].copy()
         signal_lookup["_signal"] = signal_values.to_numpy()
         signal_lookup[signal_date_col] = pd.to_datetime(signal_lookup[signal_date_col], errors="coerce")
         signal_lookup[signal_ticker_col] = signal_lookup[signal_ticker_col].astype(str)
         signal_lookup = signal_lookup.drop_duplicates([signal_date_col, signal_ticker_col], keep="last")
         signal_calendar_start = signal_lookup[signal_date_col].dropna().min()
+        signal_calendar_end = signal_lookup[signal_date_col].dropna().max()
         work[date_col] = pd.to_datetime(work[date_col], errors="coerce")
         work[ticker_col] = work[ticker_col].astype(str)
         if signal_date_col != date_col or signal_ticker_col != ticker_col:
@@ -554,22 +853,54 @@ def evaluate_long_only_portfolio(
     work[volatility_col] = pd.to_numeric(work[volatility_col], errors="coerce")
     work = work.dropna(subset=[date_col, ticker_col]).sort_values([date_col, ticker_col])
     work = work.drop_duplicates([date_col, ticker_col], keep="last")
+    _validate_price_basis_events(
+        work,
+        config=cfg,
+        split_ratio_column=split_ratio_col,
+        cash_dividend_column=cash_dividend_col,
+    )
     # Orders are submitted at the next session's open.  The current session's
     # rolling ADV and close-to-close volatility are not known at that time, so
-    # execution must use the latest strictly earlier observation for each
-    # ticker.  The opening price and tradability flags remain from trade_date.
-    ticker_history = work.groupby(ticker_col, sort=False)
-    work[_ASOF_ADV_COLUMN] = ticker_history[adv_col].shift(1)
-    work[_ASOF_VOLATILITY_COLUMN] = ticker_history[volatility_col].shift(1)
-    work[_ASOF_DATE_COLUMN] = ticker_history[date_col].shift(1)
+    # execution must use the latest strictly earlier *valid* observation for
+    # each ticker.  Event-only suspension/delist rows deliberately contain no
+    # price inputs and must not break this history chain or impersonate the
+    # actual as-of date of the carried inputs.
+    valid_execution_input = (
+        np.isfinite(work[open_col])
+        & work[open_col].gt(0.0)
+        & np.isfinite(work[adv_col])
+        & work[adv_col].gt(0.0)
+        & np.isfinite(work[volatility_col])
+        & work[volatility_col].ge(0.0)
+    )
+    if suspended_col is not None:
+        valid_execution_input &= ~_bool_series(work[suspended_col])
+    if delisted_col is not None:
+        valid_execution_input &= ~_bool_series(work[delisted_col])
+    historical_inputs = work[[adv_col, volatility_col, date_col]].where(
+        valid_execution_input
+    )
+    carried_inputs = historical_inputs.groupby(
+        work[ticker_col], sort=False
+    ).ffill()
+    asof_inputs = carried_inputs.groupby(work[ticker_col], sort=False).shift(1)
+    work[_ASOF_ADV_COLUMN] = asof_inputs[adv_col]
+    work[_ASOF_VOLATILITY_COLUMN] = asof_inputs[volatility_col]
+    work[_ASOF_DATE_COLUMN] = asof_inputs[date_col]
     dates = [pd.Timestamp(value) for value in sorted(work[date_col].unique())]
     required_span = cfg.holding_days + 2
     if len(dates) < required_span:
-        return _empty_evaluation("not_enough_trading_days")
+        return _empty_evaluation(
+            "not_enough_trading_days",
+            config=cfg,
+            execution_price_column=open_col,
+        )
 
     by_date = {pd.Timestamp(date): group.copy() for date, group in work.groupby(date_col, sort=True)}
 
-    execution_account = ExecutionAccount(cash=float(cfg.capital))
+    explicit_corporate_actions = (
+        cfg.price_basis == RAW_WITH_ACTIONS_PRICE_BASIS
+    )
     execution_columns = ExecutionColumns(
         open=open_col,
         mark=open_col,
@@ -579,17 +910,35 @@ def evaluate_long_only_portfolio(
         limit_down=limit_down_col,
         suspended=suspended_col,
         delisted=delisted_col,
-        split_ratio=split_ratio_col,
-        cash_dividend=cash_dividend_col,
+        split_ratio=split_ratio_col if explicit_corporate_actions else None,
+        cash_dividend=(
+            cash_dividend_col if explicit_corporate_actions else None
+        ),
     )
     execution_policy = ExecutionPolicy(
         max_adv_participation=cfg.max_adv_participation,
         max_position_weight=cfg.target_weight,
-        lot_size=0,
+        lot_size=int(cfg.lot_size),
         costs=cfg.costs,
+        max_stale_position_age_days=cfg.max_stale_position_age_days,
     )
     periods: list[dict[str, Any]] = []
     trades: list[dict[str, Any]] = []
+    account_nav_path: list[dict[str, Any]] = []
+
+    def record_account_nav(
+        observation_date: pd.Timestamp, phase: str, nav: float
+    ) -> int:
+        sequence = len(account_nav_path)
+        account_nav_path.append(
+            {
+                "date": observation_date.date().isoformat(),
+                "phase": phase,
+                "nav": float(nav),
+                "sequence": sequence,
+            }
+        )
+        return sequence
     total_costs = {
         "commission": 0.0,
         "slippage": 0.0,
@@ -609,9 +958,22 @@ def evaluate_long_only_portfolio(
     target_entry_counts: list[int] = []
     target_exit_counts: list[int] = []
     execution_input_ages: list[int] = []
+    net_return_values: list[float] = []
+    gross_return_values: list[float] = []
+    benchmark_return_values: list[float] = []
+    stale_position_observation_count = 0
+    max_stale_position_count = 0
+    max_stale_position_notional = 0.0
+    max_stale_position_age_days = 0
+    stale_position_blocked_reasons: dict[str, int] = {}
+    forced_delist_write_down_count = 0
+    forced_delist_write_down_notional = 0.0
     previous_target_tickers: set[str] = set()
     cached_row_map_date: pd.Timestamp | None = None
     cached_row_map: dict[str, Mapping[str, Any]] | None = None
+    processed_observation_dates: set[pd.Timestamp] = set()
+    first_pretrade_nav: float | None = None
+    latest_end_nav = float(cfg.capital)
 
     if signal_calendar_start is None:
         signal_calendar_start = dates[0]
@@ -619,26 +981,34 @@ def evaluate_long_only_portfolio(
         (index for index, value in enumerate(dates) if value >= signal_calendar_start),
         len(dates),
     )
-    signal_indices = range(
-        first_signal_index + int(cfg.rebalance_offset_days),
-        len(dates) - cfg.holding_days - 1,
-        cfg.rebalance_every_days,
+    signal_indices = [
+        index
+        for index in range(
+            first_signal_index + int(cfg.rebalance_offset_days),
+            len(dates) - cfg.holding_days - 1,
+            cfg.rebalance_every_days,
+        )
+        if requested_evaluation_start_date is None
+        or dates[index].normalize() >= requested_evaluation_start_date
+        if signal_calendar_end is None or dates[index] <= signal_calendar_end
+    ]
+    effective_evaluation_start_date = (
+        dates[signal_indices[0]].normalize() if signal_indices else None
     )
+    # The account is deliberately born at this evaluation boundary.  Earlier
+    # scheduled signals never mutate cash, holdings, or the target-retention state.
+    execution_account = ExecutionAccount(cash=float(cfg.capital))
     for signal_index in signal_indices:
         signal_date = dates[signal_index]
         trade_date = dates[signal_index + 1]
         end_date = dates[signal_index + cfg.holding_days + 1]
         signal_day = by_date[signal_date]
         trade_day = by_date[trade_date]
-        end_day = by_date[end_date]
         if trade_date == cached_row_map_date:
             assert cached_row_map is not None
             trade_map = cached_row_map
         else:
             trade_map = _row_map(trade_day, ticker_col)
-        end_map = _row_map(end_day, ticker_col)
-        cached_row_map_date = end_date
-        cached_row_map = end_map
 
         eligible_mask = pd.Series(True, index=signal_day.index)
         for column in present_eligible:
@@ -647,10 +1017,15 @@ def evaluate_long_only_portfolio(
         eligible_day = benchmark_day[benchmark_day["_signal"].notna()].copy()
         eligible_day = eligible_day.sort_values(["_signal", ticker_col], ascending=[False, True])
         if eligible_day.empty:
-            # Pricing frames may contain pre-training history while the signal
-            # frame covers only one outer fold.  Empty dates are not portfolio
-            # decisions and must not create artificial all-cash observations.
-            continue
+            # A scheduled decision cannot disappear from the account path.
+            # Silently skipping it can omit terminal NAV or merge several
+            # accounting intervals against one benchmark period.  Return an
+            # explicit unusable evaluation instead of inventing cash returns.
+            return _empty_evaluation(
+                f"empty_signal_cross_section:{signal_date.date().isoformat()}",
+                config=cfg,
+                execution_price_column=open_col,
+            )
         signal_key = signal_date.normalize()
         optimized = normalized_targets.get(signal_key)
         period_optimization_audit = dict(normalized_audit.get(signal_key) or {})
@@ -725,6 +1100,7 @@ def evaluate_long_only_portfolio(
         previous_target_tickers = current_target_tickers
 
         period_trade_start = len(trades)
+        trade_events_already_processed = trade_date.normalize() in processed_observation_dates
         execution = execute_rebalance(
             execution_account,
             target_weights,
@@ -733,9 +1109,61 @@ def evaluate_long_only_portfolio(
             policy=execution_policy,
             columns=execution_columns,
             ticker_column=ticker_col,
-            process_corporate_actions=True,
+            process_corporate_actions=(
+                explicit_corporate_actions
+                and not trade_events_already_processed
+            ),
+            process_events=not trade_events_already_processed,
         )
+        processed_observation_dates.add(trade_date.normalize())
+        accounting_start_nav = execution.accounting_start_nav
         pretrade_nav = execution.pretrade_nav
+        accounting_boundary_date = (
+            requested_evaluation_start_date
+            if not account_nav_path
+            and requested_evaluation_start_date is not None
+            else signal_date
+            if not account_nav_path
+            else trade_date
+        )
+        period_nav_path_start_sequence = record_account_nav(
+            accounting_boundary_date,
+            "accounting_boundary",
+            accounting_start_nav,
+        )
+        record_account_nav(trade_date, "posttrade", execution.posttrade_nav)
+        if first_pretrade_nav is None:
+            first_pretrade_nav = float(accounting_start_nav)
+        stale_position_observation_count += execution.stale_position_count
+        max_stale_position_count = max(
+            max_stale_position_count, execution.stale_position_count
+        )
+        max_stale_position_notional = max(
+            max_stale_position_notional, execution.stale_position_notional
+        )
+        max_stale_position_age_days = max(
+            max_stale_position_age_days,
+            execution.max_stale_position_age_days,
+        )
+        for reason, count in execution.stale_position_blocked_reasons.items():
+            stale_position_blocked_reasons[reason] = (
+                stale_position_blocked_reasons.get(reason, 0) + int(count)
+            )
+        delist_actions = [
+            action
+            for action in execution.corporate_actions
+            if action.action_type == "delist_write_down"
+        ]
+        forced_delist_write_down_count += len(delist_actions)
+        forced_delist_write_down_notional += sum(
+            float(action.payload.get("carrying_notional") or 0.0)
+            for action in delist_actions
+        )
+        if any(
+            diagnostic.blocked_reason in {"missing_market_bar", "missing_open"}
+            for diagnostic in execution.stale_position_diagnostics
+        ):
+            risk_blockers.append("unresolved_stale_position_observed")
         period_costs = dict(execution.costs)
         for key, value in period_costs.items():
             total_costs[key] += value
@@ -775,14 +1203,118 @@ def evaluate_long_only_portfolio(
         weights = dict(execution.weights)
         holding_count = len(weights)
         cash_weight = execution.cash_weight
-        end_nav = mark_to_market(
-            execution_account,
-            end_map,
-            columns=execution_columns,
-            ticker_column=ticker_col,
+        period_stale_position_count = execution.stale_position_count
+        period_stale_position_notional = execution.stale_position_notional
+        period_max_stale_position_age_days = execution.max_stale_position_age_days
+        period_stale_diagnostics = list(execution.stale_position_diagnostics)
+        period_stale_reasons = dict(execution.stale_position_blocked_reasons)
+        end_observation = None
+        end_map: dict[str, Mapping[str, Any]] | None = None
+        # Observe every execution session after the opening rebalance.  These
+        # calls never create orders: they keep the last trustworthy mark
+        # current and apply mid-period security/corporate events on their real
+        # session instead of postponing them to the next rebalance boundary.
+        for observation_index in range(
+            signal_index + 2,
+            signal_index + cfg.holding_days + 2,
+        ):
+            observation_date = dates[observation_index]
+            observation_day = by_date[observation_date]
+            if observation_date == end_date:
+                # The full terminal cross-section is required below for the
+                # benchmark endpoints and is also reused as the next period's
+                # trade map when accounting boundaries touch.
+                observation_map = _row_map(observation_day, ticker_col)
+                end_map = observation_map
+            else:
+                # No orders can be created here.  Only held securities can
+                # affect marks, security events, or corporate actions, so do
+                # not materialize thousands of irrelevant rows every day.
+                observation_map = _row_map_for_tickers(
+                    observation_day,
+                    ticker_col,
+                    execution_account.positions.keys(),
+                )
+            events_already_processed = (
+                observation_date.normalize() in processed_observation_dates
+            )
+            observation = process_account_observation(
+                execution_account,
+                observation_map,
+                observation_date=observation_date,
+                policy=execution_policy,
+                columns=execution_columns,
+                ticker_column=ticker_col,
+                process_events=not events_already_processed,
+                process_corporate_actions=(
+                    explicit_corporate_actions and not events_already_processed
+                ),
+            )
+            processed_observation_dates.add(observation_date.normalize())
+            stale_position_observation_count += observation.stale_position_count
+            max_stale_position_count = max(
+                max_stale_position_count, observation.stale_position_count
+            )
+            max_stale_position_notional = max(
+                max_stale_position_notional, observation.stale_position_notional
+            )
+            max_stale_position_age_days = max(
+                max_stale_position_age_days,
+                observation.max_stale_position_age_days,
+            )
+            period_stale_position_count += observation.stale_position_count
+            period_stale_position_notional = max(
+                period_stale_position_notional,
+                observation.stale_position_notional,
+            )
+            period_max_stale_position_age_days = max(
+                period_max_stale_position_age_days,
+                observation.max_stale_position_age_days,
+            )
+            period_stale_diagnostics.extend(observation.stale_position_diagnostics)
+            for reason, count in observation.stale_position_blocked_reasons.items():
+                stale_position_blocked_reasons[reason] = (
+                    stale_position_blocked_reasons.get(reason, 0) + int(count)
+                )
+                period_stale_reasons[reason] = (
+                    period_stale_reasons.get(reason, 0) + int(count)
+                )
+            observation_delist_actions = [
+                action
+                for action in observation.corporate_actions
+                if action.action_type == "delist_write_down"
+            ]
+            delist_actions.extend(observation_delist_actions)
+            forced_delist_write_down_count += len(observation_delist_actions)
+            forced_delist_write_down_notional += sum(
+                float(action.payload.get("carrying_notional") or 0.0)
+                for action in observation_delist_actions
+            )
+            if any(
+                diagnostic.blocked_reason
+                in {"missing_market_bar", "missing_open"}
+                for diagnostic in observation.stale_position_diagnostics
+            ):
+                risk_blockers.append("unresolved_stale_position_observed")
+            record_account_nav(
+                observation_date, "daily_end", observation.nav
+            )
+            end_observation = observation
+
+        assert end_observation is not None
+        assert end_map is not None
+        cached_row_map_date = end_date
+        cached_row_map = end_map
+        end_nav = end_observation.nav
+        period_nav_path_end_sequence = len(account_nav_path) - 1
+        latest_end_nav = float(end_nav)
+        # Use the prior accounting boundary, not the post-event sizing NAV.
+        # This makes returns continuous across idle gaps and ensures a delist
+        # write-down cannot disappear between two reported periods.
+        net_period_return = end_nav / accounting_start_nav - 1.0
+        gross_period_return = (
+            (end_nav + period_costs["total"]) / accounting_start_nav - 1.0
         )
-        net_period_return = end_nav / pretrade_nav - 1.0
-        gross_period_return = (end_nav + period_costs["total"]) / pretrade_nav - 1.0
 
         benchmark_returns: list[float] = []
         benchmark_missing_start_count = 0
@@ -792,8 +1324,18 @@ def evaluate_long_only_portfolio(
         for ticker in benchmark_day[ticker_col].astype(str):
             start_row = trade_map.get(ticker)
             finish_row = end_map.get(ticker)
-            start_price = _finite_positive(start_row[open_col]) if start_row is not None else None
-            finish_price = _finite_positive(finish_row[open_col]) if finish_row is not None else None
+            start_price = _benchmark_open(
+                start_row,
+                open_column=open_col,
+                suspended_column=suspended_col,
+                delisted_column=delisted_col,
+            )
+            finish_price = _benchmark_open(
+                finish_row,
+                open_column=open_col,
+                suspended_column=suspended_col,
+                delisted_column=delisted_col,
+            )
             if start_price is None:
                 benchmark_missing_start_count += 1
             else:
@@ -805,6 +1347,9 @@ def evaluate_long_only_portfolio(
             if start_price is not None and finish_price is not None:
                 benchmark_returns.append(finish_price / start_price - 1.0)
         benchmark_period_return = float(np.mean(benchmark_returns)) if benchmark_returns else 0.0
+        net_return_values.append(net_period_return)
+        gross_return_values.append(gross_period_return)
+        benchmark_return_values.append(benchmark_period_return)
 
         period_trades = trades[period_trade_start:]
         period_input_dates = sorted(
@@ -830,12 +1375,18 @@ def evaluate_long_only_portfolio(
         turnover_values.append(turnover)
         holding_counts.append(holding_count)
         cash_weights.append(cash_weight)
+        period_nav_path = account_nav_path[
+            period_nav_path_start_sequence : period_nav_path_end_sequence + 1
+        ]
         periods.append({
             "signal_date": str(signal_date.date()),
             "start_date": str(trade_date.date()),
             "end_date": str(end_date.date()),
+            "accounting_boundary_date": str(
+                accounting_boundary_date.date()
+            ),
             "rebalance_offset_days": int(cfg.rebalance_offset_days),
-            "execution_input_policy": "previous_visible_ticker_row",
+            "execution_input_policy": "previous_valid_ticker_observation",
             "execution_input_min_date": str(period_input_dates[0].date()) if period_input_dates else None,
             "execution_input_max_date": str(period_input_dates[-1].date()) if period_input_dates else None,
             "execution_input_required_count": execution_input_required_count,
@@ -850,6 +1401,17 @@ def evaluate_long_only_portfolio(
             if execution_input_required_count
             else 1.0,
             "max_execution_input_age_days": max(period_input_ages, default=0),
+            "accounting_start_nav": round(accounting_start_nav, 4),
+            "pretrade_nav": round(pretrade_nav, 4),
+            "end_nav": round(end_nav, 4),
+            "account_nav_path_start_sequence": period_nav_path_start_sequence,
+            "account_nav_path_end_sequence": period_nav_path_end_sequence,
+            "daily_nav_observation_count": cfg.holding_days,
+            "max_drawdown": round(
+                _max_drawdown_from_nav_path(period_nav_path), 8
+            ),
+            "max_drawdown_basis": "daily_account_nav",
+            "preorder_nav_change": round(pretrade_nav - accounting_start_nav, 4),
             "gross_return": round(gross_period_return, 10),
             "net_return": round(net_period_return, 10),
             "benchmark_return": round(benchmark_period_return, 10),
@@ -893,17 +1455,68 @@ def evaluate_long_only_portfolio(
             "capacity_limited_count": sum(
                 bool(row.get("capacity_limited")) for row in period_trades
             ),
+            "stale_position_count": (
+                period_stale_position_count
+            ),
+            "stale_position_notional": round(
+                period_stale_position_notional,
+                4,
+            ),
+            "max_stale_position_age_days": (
+                period_max_stale_position_age_days
+            ),
+            "stale_position_blocked_reasons": dict(sorted(period_stale_reasons.items())),
+            "stale_position_diagnostics": [
+                diagnostic.to_dict()
+                for diagnostic in period_stale_diagnostics
+            ],
+            "forced_delist_write_down_count": len(delist_actions),
+            "forced_delist_write_down_notional": round(
+                sum(
+                    float(action.payload.get("carrying_notional") or 0.0)
+                    for action in delist_actions
+                ),
+                4,
+            ),
         })
 
     if not periods:
-        return _empty_evaluation("no_rebalance_periods")
+        return _empty_evaluation(
+            "no_rebalance_periods",
+            config=cfg,
+            execution_price_column=open_col,
+        )
+    assert effective_evaluation_start_date is not None
+    assert first_pretrade_nav is not None
 
-    gross_returns = [float(row["gross_return"]) for row in periods]
-    net_returns = [float(row["net_return"]) for row in periods]
-    benchmark_returns = [float(row["benchmark_return"]) for row in periods]
+    gross_returns = gross_return_values
+    net_returns = net_return_values
+    benchmark_returns = benchmark_return_values
     gross_total = _compound(gross_returns)
     net_total = _compound(net_returns)
     benchmark_total = _compound(benchmark_returns)
+    account_net_return = latest_end_nav / float(cfg.capital) - 1.0
+    reconciliation_error = net_total - account_net_return
+    if not np.isclose(reconciliation_error, 0.0, rtol=0.0, atol=1e-10):
+        raise RuntimeError(
+            "portfolio period returns do not reconcile to account NAV: "
+            f"{net_total} != {account_net_return}"
+        )
+    net_total = account_net_return
+    path_start_nav = float(account_nav_path[0]["nav"])
+    path_end_nav = float(account_nav_path[-1]["nav"])
+    path_net_return = path_end_nav / path_start_nav - 1.0
+    if (
+        not np.isclose(path_start_nav, float(cfg.capital), rtol=0.0, atol=0.01)
+        or not np.isclose(path_end_nav, latest_end_nav, rtol=0.0, atol=0.01)
+        or not np.isclose(
+            path_net_return,
+            account_net_return,
+            rtol=0.0,
+            atol=max(1e-10, 0.01 / float(cfg.capital)),
+        )
+    ):
+        raise RuntimeError("daily account NAV path does not reconcile to account NAV")
     executed_trades = [row for row in trades if row.get("status") == "executed"]
     total_traded_notional = sum(float(row.get("executed_notional") or 0.0) for row in executed_trades)
     annual_volatility = float(np.std(net_returns, ddof=1) * sqrt(cfg.periods_per_year)) if len(net_returns) > 1 else 0.0
@@ -911,8 +1524,18 @@ def evaluate_long_only_portfolio(
     net_annual_return = _annualized_return(net_returns, cfg.periods_per_year)
     benchmark_annual_return = _annualized_return(benchmark_returns, cfg.periods_per_year)
     benchmark_coverage = _benchmark_coverage(periods)
-    yearly_segments = _segment_rows(periods, half_year=False, periods_per_year=cfg.periods_per_year)
-    half_year_segments = _segment_rows(periods, half_year=True, periods_per_year=cfg.periods_per_year)
+    yearly_segments = _segment_rows(
+        periods,
+        account_nav_path,
+        half_year=False,
+        periods_per_year=cfg.periods_per_year,
+    )
+    half_year_segments = _segment_rows(
+        periods,
+        account_nav_path,
+        half_year=True,
+        periods_per_year=cfg.periods_per_year,
+    )
     positive_half_year_ratio = float(np.mean([row["excess_return"] > 0 for row in half_year_segments])) if half_year_segments else 0.0
     max_position_weight = max(
         (float(weight) for period in periods for weight in period["weights"].values()),
@@ -934,6 +1557,27 @@ def evaluate_long_only_portfolio(
         status="ok",
         reason=None,
         missing_columns=[],
+        price_basis=cfg.price_basis,
+        price_source=_resolved_price_source(cfg, open_col),
+        execution_price_column=open_col,
+        corporate_action_mode=_corporate_action_mode(cfg),
+        lot_size=int(cfg.lot_size),
+        evaluation_start_date=str(effective_evaluation_start_date.date()),
+        initial_nav=round(float(cfg.capital), 4),
+        first_pretrade_nav=round(float(first_pretrade_nav), 4),
+        end_nav=round(latest_end_nav, 4),
+        stale_position_observation_count=stale_position_observation_count,
+        max_stale_position_count=max_stale_position_count,
+        max_stale_position_notional=round(max_stale_position_notional, 4),
+        max_stale_position_age_days=max_stale_position_age_days,
+        stale_position_blocked_reasons=dict(
+            sorted(stale_position_blocked_reasons.items())
+        ),
+        forced_delist_write_down_count=forced_delist_write_down_count,
+        forced_delist_write_down_notional=round(
+            forced_delist_write_down_notional, 4
+        ),
+        account_nav_reconciliation_error=round(reconciliation_error, 12),
         benchmark_return=round(benchmark_total, 8),
         excess_return=round(net_total - benchmark_total, 8),
         gross_return=round(gross_total, 8),
@@ -948,7 +1592,9 @@ def evaluate_long_only_portfolio(
         },
         annual_volatility=round(annual_volatility, 8),
         net_sharpe=round(_sharpe(net_returns, cfg.periods_per_year), 8),
-        max_drawdown=round(_max_drawdown(net_returns), 8),
+        max_drawdown=round(
+            _max_drawdown_from_nav_path(account_nav_path), 8
+        ),
         win_rate=round(float(np.mean(np.asarray(net_returns) > 0)), 8),
         actual_turnover=round(float(np.mean(turnover_values)), 8),
         capacity_usage=round(max(capacity_usages, default=0.0), 8),
@@ -966,7 +1612,7 @@ def evaluate_long_only_portfolio(
         average_target_entry_count=round(float(np.mean(target_entry_counts)), 8),
         total_target_entry_count=int(sum(target_entry_counts)),
         total_target_exit_count=int(sum(target_exit_counts)),
-        execution_input_policy="previous_visible_ticker_row",
+        execution_input_policy="previous_valid_ticker_observation",
         max_execution_input_age_days=max(execution_input_ages, default=0),
         positive_half_year_ratio=round(positive_half_year_ratio, 8),
         trade_count=len(executed_trades),
@@ -984,6 +1630,7 @@ def evaluate_long_only_portfolio(
         half_year_segments=half_year_segments,
         periods=periods,
         trades=trades,
+        account_nav_path=account_nav_path,
         promotion_eligible=not unique_blockers,
         promotion_blockers=unique_blockers,
         target_weight_mode=target_weight_mode,
@@ -992,8 +1639,10 @@ def evaluate_long_only_portfolio(
 
 
 __all__ = [
+    "ADJUSTED_TOTAL_RETURN_PRICE_BASIS",
     "LongOnlyCostConfig",
     "LongOnlyPortfolioConfig",
     "LongOnlyPortfolioEvaluation",
+    "RAW_WITH_ACTIONS_PRICE_BASIS",
     "evaluate_long_only_portfolio",
 ]

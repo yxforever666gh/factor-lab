@@ -94,6 +94,7 @@ def _period_frame(rows: Sequence[Mapping[str, Any]]) -> pd.DataFrame:
         [
             {
                 "signal_date": row.get("signal_date"),
+                "start_date": row.get("start_date"),
                 "end_date": row.get("end_date"),
                 "net_return": row.get("net_return"),
             }
@@ -101,16 +102,26 @@ def _period_frame(rows: Sequence[Mapping[str, Any]]) -> pd.DataFrame:
         ]
     )
     if frame.empty:
-        return pd.DataFrame(columns=["signal_date", "end_date", "net_return"])
+        return pd.DataFrame(
+            columns=["signal_date", "start_date", "end_date", "net_return"]
+        )
     frame["signal_date"] = pd.to_datetime(frame["signal_date"], errors="coerce")
+    frame["start_date"] = pd.to_datetime(frame["start_date"], errors="coerce")
     frame["end_date"] = pd.to_datetime(frame["end_date"], errors="coerce")
     frame["net_return"] = pd.to_numeric(frame["net_return"], errors="coerce")
-    return (
-        frame.dropna(subset=["signal_date", "end_date", "net_return"])
-        .drop_duplicates("signal_date", keep="last")
-        .sort_values("signal_date")
-        .reset_index(drop=True)
+    if frame[["signal_date", "start_date", "end_date", "net_return"]].isna().any().any():
+        raise ValueError("walk_forward period history contains invalid required values")
+    if frame["signal_date"].duplicated(keep=False).any():
+        raise ValueError("walk_forward period history contains duplicate signal_date")
+    valid_chronology = (frame["signal_date"] < frame["start_date"]) & (
+        frame["start_date"] <= frame["end_date"]
     )
+    if not bool(valid_chronology.all()):
+        raise ValueError(
+            "walk_forward period chronology must satisfy "
+            "signal_date < start_date <= end_date"
+        )
+    return frame.sort_values("signal_date").reset_index(drop=True)
 
 
 def _net_sharpe(values: Sequence[float], periods_per_year: float) -> float:
@@ -170,6 +181,7 @@ def causal_candidate_decisions(
             lookback_start = pd.Timestamp(calendar[lookback_position])
             reference = control_history[
                 (control_history["end_date"] < signal_date)
+                & (control_history["signal_date"] < signal_date)
                 & (control_history["signal_date"] >= lookback_start)
             ]
             reference_dates = tuple(reference["signal_date"].tolist())
@@ -180,6 +192,7 @@ def causal_candidate_decisions(
                     history = histories[name]
                     available = history[
                         (history["end_date"] < signal_date)
+                        & (history["signal_date"] < signal_date)
                         & history["signal_date"].isin(reference_dates)
                     ]
                     by_date = available.set_index("signal_date")
@@ -444,8 +457,12 @@ def walk_forward_phase_rankings(
     control_factor: str,
     dynamic_factor: str,
     phase_quantile: float,
+    benchmark_return_coverage_minimum: float = 0.95,
 ) -> list[dict[str, Any]]:
     """Rank strategies by fixed Q20 phase metrics, never by best offset."""
+
+    if not 0.0 <= float(benchmark_return_coverage_minimum) <= 1.0:
+        raise ValueError("benchmark_return_coverage_minimum must be in [0, 1]")
 
     metric_names = (
         "net_annual_return",
@@ -507,6 +524,39 @@ def walk_forward_phase_rankings(
         complete_offsets: list[int] = []
         for offset, metrics in enumerate(offset_metrics[:expected_offset_count]):
             offset_failures: list[dict[str, Any]] = []
+            if metrics.get("equal_aum_account_audit_valid") is not True:
+                offset_failures.append(
+                    {
+                        "reason": "equal_aum_scoring_account_audit_failed",
+                        "rebalance_offset_days": offset,
+                        "observed_valid": metrics.get(
+                            "equal_aum_account_audit_valid"
+                        ),
+                        "audit_reasons": list(
+                            metrics.get("equal_aum_account_audit_reasons") or []
+                        ),
+                        "common_window_execution_integrity": list(
+                            metrics.get(
+                                "equal_aum_account_execution_integrity"
+                            )
+                            or []
+                        ),
+                    }
+                )
+            if metrics.get("daily_nav_path_complete") is not True:
+                offset_failures.append(
+                    {
+                        "reason": "common_interval_daily_nav_path_incomplete",
+                        "rebalance_offset_days": offset,
+                        "observed_daily_nav_path_complete": metrics.get(
+                            "daily_nav_path_complete"
+                        ),
+                        "observed_daily_nav_observations": finite_number(
+                            metrics.get("daily_nav_observations")
+                        ),
+                        "required_daily_nav_path_complete": True,
+                    }
+                )
             coverage = finite_number(metrics.get("period_coverage"))
             if coverage != 1.0:
                 offset_failures.append(
@@ -529,7 +579,33 @@ def walk_forward_phase_rankings(
                         "required_observations_min_exclusive": 0.0,
                     }
                 )
+            benchmark_coverage = finite_number(
+                metrics.get("benchmark_return_coverage_min")
+            )
+            if (
+                benchmark_coverage is None
+                or benchmark_coverage < benchmark_return_coverage_minimum
+            ):
+                offset_failures.append(
+                    {
+                        "reason": "common_interval_benchmark_coverage_below_minimum",
+                        "rebalance_offset_days": offset,
+                        "observed_benchmark_return_coverage_min": (
+                            round(benchmark_coverage, 8)
+                            if benchmark_coverage is not None
+                            else None
+                        ),
+                        "required_benchmark_return_coverage_min": round(
+                            float(benchmark_return_coverage_minimum), 8
+                        ),
+                    }
+                )
             for metric_name in metric_names:
+                if (
+                    metric_name == "max_drawdown"
+                    and metrics.get("daily_nav_path_complete") is not True
+                ):
+                    continue
                 if finite_number(metrics.get(metric_name)) is None:
                     offset_failures.append(
                         {

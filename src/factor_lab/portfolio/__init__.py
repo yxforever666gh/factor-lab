@@ -9,6 +9,8 @@ from factor_lab.portfolio.execution import (
     ExecutionPolicy,
     ExecutionPosition,
     ExecutionResult,
+    StalePositionDiagnostic,
+    StalePositionViolation,
     TradeCostBreakdown,
     apply_corporate_actions,
     calculate_trade_costs,
@@ -19,14 +21,17 @@ from factor_lab.portfolio.execution import (
     validate_long_only_targets,
 )
 from factor_lab.portfolio.long_only import (
+    ADJUSTED_TOTAL_RETURN_PRICE_BASIS,
     LongOnlyCostConfig,
     LongOnlyPortfolioConfig,
     LongOnlyPortfolioEvaluation,
+    RAW_WITH_ACTIONS_PRICE_BASIS,
     evaluate_long_only_portfolio,
 )
 
 __all__ = [
     "AShareCostPolicy",
+    "ADJUSTED_TOTAL_RETURN_PRICE_BASIS",
     "CorporateAction",
     "ExecutionAccount",
     "ExecutionColumns",
@@ -34,9 +39,12 @@ __all__ = [
     "ExecutionPolicy",
     "ExecutionPosition",
     "ExecutionResult",
+    "StalePositionDiagnostic",
+    "StalePositionViolation",
     "LongOnlyCostConfig",
     "LongOnlyPortfolioConfig",
     "LongOnlyPortfolioEvaluation",
+    "RAW_WITH_ACTIONS_PRICE_BASIS",
     "TradeCostBreakdown",
     "apply_corporate_actions",
     "calculate_trade_costs",

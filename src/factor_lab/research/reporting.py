@@ -47,6 +47,11 @@ def _walk_forward_lines(
         fixed_comparator.get("factor_name") or "fixed_registry_equal_weight"
     )
     common_start = walk_forward.get("common_evaluation_start")
+    scoring_count = int(walk_forward.get("scoring_account_count") or 0)
+    expected_scoring_count = int(
+        walk_forward.get("expected_scoring_account_count") or 0
+    )
+    scoring_initial_nav = float(walk_forward.get("scoring_initial_nav") or 0.0)
     future_violations = int(
         walk_forward.get("future_selection_violation_count") or 0
     )
@@ -71,6 +76,21 @@ def _walk_forward_lines(
         "没有 challenger 越过 guard 时只使用 control。",
         f"- 缺失信号策略：`{selector.get('missing_signal_policy') or 'fallback_control'}`。",
         f"- 共同评价起点：`{common_start or '未建立（canary / 暖机不足）'}`。",
+        (
+            "- 评分账户："
+            f"`{walk_forward.get('scoring_account_protocol') or 'not_established'}`；"
+            f"{scoring_count}/{expected_scoring_count} 个账户，初始 NAV "
+            f"{scoring_initial_nav:,.0f}；equal-AUM 状态 "
+            f"`{'valid' if walk_forward.get('equal_aum_scoring_valid') else 'invalid'}`。"
+            if ranking_available
+            else "- Canary 不建立共同起点后的 equal-AUM 评分账户。"
+        ),
+        (
+            "- 全历史候选影子账户只提供 selector 反馈，不参与跨策略 phase 评分；"
+            "static、fixed 与 dynamic 评分账户均从共同起点 fresh cash / empty positions 启动。"
+            if ranking_available
+            else "- Canary 仅运行工程 smoke，不创建 selector 反馈或跨策略比较账户。"
+        ),
         f"- Future selection violations：**{future_violations}**；因果历史状态："
         f"`{'valid' if walk_forward.get('causal_history_valid') else 'not_ready_or_invalid'}`。",
         f"- 预注册 offsets：`{', '.join(str(value) for value in configured_offsets) or '—'}`。"
@@ -622,8 +642,8 @@ def render_report(summary: Mapping[str, Any]) -> str:
                 "但候选注册和协议本身已由既有研究提出，因此不是 pristine OOS。",
                 "- 全部 offset 必须一起报告；相关 offset 非独立，不能按最好路径挑选或"
                 "把通过比例解释成独立显著性。",
-                "- 因果边界不覆盖财务 revision vintage、退市/吸收合并 ghost position"
-                " 处置或等 AUM 可比性；这些仍是已知限制。",
+                "- 财务 revision vintage 与部分历史输入版本仍未被证明；PIT lineage 因而"
+                " 保持 fail-closed。等 AUM、逐日核算和退市零回收已纳入本次执行合同。",
                 "- 历史回放不能证明未来盈利，也不会产生 validated 或实盘授权。",
                 "",
             ]

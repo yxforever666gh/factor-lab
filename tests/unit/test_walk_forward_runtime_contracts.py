@@ -13,10 +13,88 @@ from factor_lab.research.contracts import FactorSpec
 from factor_lab.research.validation import FactorValidation, WindowDiagnostics
 from factor_lab.research.walk_forward_runtime import (
     _decisions_sha256,
+    _equal_aum_account_audit,
     _fixed_comparator_protocol,
     _selection_frequency,
+    _validate_candidate_artifact_names,
     run_walk_forward_sweep,
 )
+
+
+def test_equal_aum_audit_records_execution_integrity_failures_without_banning_blocks() -> None:
+    result = {
+        "portfolio": {
+            "status": "ok",
+            "evaluation_start_date": "2025-01-02",
+            "initial_nav": 1_000.0,
+            "first_pretrade_nav": 1_000.0,
+            "end_nav": 1_000.0,
+            "account_nav_reconciliation_error": 0.0,
+        },
+        "account_nav_path": [
+            {
+                "date": "2025-01-02",
+                "phase": "accounting_boundary",
+                "nav": 1_000.0,
+                "sequence": 0,
+            },
+            {
+                "date": "2025-01-03",
+                "phase": "daily_end",
+                "nav": 1_000.0,
+                "sequence": 1,
+            },
+        ],
+        "windows": {
+            "audit": {
+                "observations": 2,
+                "execution_input_coverage": 0.5,
+                "execution_input_future_violation_count": 1,
+                "capacity_violation_count": 3,
+                "blocked_trade_count": 99,
+            }
+        },
+    }
+
+    audit = _equal_aum_account_audit(
+        result,
+        requested_start_date="2025-01-02",
+        initial_nav=1_000.0,
+    )
+
+    assert audit["valid"] is False
+    assert audit["reasons"] == [
+        "scoring_common_window_execution_input_coverage_not_one",
+        "scoring_common_window_execution_input_future_violation_count_not_zero",
+        "scoring_common_window_capacity_violation_count_not_zero",
+    ]
+    assert audit["common_window_execution_integrity"] == [
+        {
+            "window": "audit",
+            "observations": 2,
+            "execution_input_coverage": 0.5,
+            "execution_input_future_violation_count": 1,
+            "capacity_violation_count": 3,
+            "valid": False,
+            "exclusion_reasons": [
+                {
+                    "reason": "execution_input_coverage_not_one",
+                    "observed_value": 0.5,
+                    "required_value": 1.0,
+                },
+                {
+                    "reason": "execution_input_future_violation_count_not_zero",
+                    "observed_value": 1,
+                    "required_value": 0,
+                },
+                {
+                    "reason": "capacity_violation_count_not_zero",
+                    "observed_value": 3,
+                    "required_value": 0,
+                },
+            ],
+        }
+    ]
 
 
 def _window(split: str) -> WindowDiagnostics:
@@ -55,10 +133,13 @@ def _period(
 ) -> dict[str, Any]:
     return {
         "signal_date": signal_date.date().isoformat(),
+        "start_date": (signal_date + pd.offsets.BDay(1)).date().isoformat(),
         "end_date": end_date.date().isoformat(),
         "net_return": net_return,
         "benchmark_return": 0.0,
         "active_return": net_return,
+        "benchmark_return_coverage": 1.0,
+        "benchmark_endpoint_coverage": 1.0,
     }
 
 
@@ -115,6 +196,48 @@ def test_fixed_comparator_protocol_rejects_tunable_variants(
 ) -> None:
     with pytest.raises(ValueError, match="fixed_comparator"):
         _fixed_comparator_protocol({"fixed_comparator": override})
+
+
+@pytest.mark.parametrize(
+    "candidate_names",
+    [
+        ["Alpha", "alpha"],
+        ["x" * 100 + "a", "x" * 100 + "b"],
+    ],
+)
+def test_walk_forward_candidate_artifacts_are_portably_unique(
+    candidate_names: list[str],
+) -> None:
+    with pytest.raises(ValueError, match="artifact-name normalization"):
+        _validate_candidate_artifact_names(
+            candidate_names,
+            reserved_runtime_names=(
+                "fixed_registry_equal_weight",
+                "causal_walk_forward_dynamic",
+            ),
+        )
+
+
+@pytest.mark.parametrize(
+    "candidate_name",
+    [
+        "fixed_registry_equal_weight",
+        "FIXED_REGISTRY_EQUAL_WEIGHT",
+        "causal_walk_forward_dynamic",
+        "causal walk forward dynamic",
+    ],
+)
+def test_walk_forward_candidate_cannot_alias_a_runtime_strategy(
+    candidate_name: str,
+) -> None:
+    with pytest.raises(ValueError, match="reserved runtime strategy"):
+        _validate_candidate_artifact_names(
+            ["control", candidate_name],
+            reserved_runtime_names=(
+                "fixed_registry_equal_weight",
+                "causal_walk_forward_dynamic",
+            ),
+        )
 
 
 def test_sweep_rejects_stale_dynamic_decisions_and_sanitizes_runtime_metadata(
@@ -191,6 +314,7 @@ def test_sweep_rejects_stale_dynamic_decisions_and_sanitizes_runtime_metadata(
     output_dir = tmp_path / "run"
     dynamic_path = output_dir / "walk-forward" / "offset-00" / "dynamic.json"
     dynamic_path.parent.mkdir(parents=True)
+    common_start = dates[3].date().isoformat()
     stale_decisions = {
         "selections": [
             {
@@ -204,19 +328,28 @@ def test_sweep_rejects_stale_dynamic_decisions_and_sanitizes_runtime_metadata(
             {
                 "run_fingerprint": "fingerprint",
                 "rebalance_offset_days": 0,
-                "role": "causal_deployed_account",
+                "role": "equal_aum_dynamic_scoring_account",
+                "evaluation_start_date": common_start,
                 "decisions_sha256": _decisions_sha256(stale_decisions),
-                "decisions": stale_decisions,
+                "decisions_path": "decisions.json",
                 "result": {
                     "factor_name": "causal_walk_forward_dynamic",
                     "period_active_returns": control_periods,
+                    "portfolio": {
+                        "status": "ok",
+                        "evaluation_start_date": common_start,
+                        "initial_nav": config.capital,
+                        "first_pretrade_nav": config.capital,
+                        "end_nav": config.capital,
+                        "account_nav_reconciliation_error": 0.0,
+                    },
                 },
             }
         ),
         encoding="utf-8",
     )
 
-    portfolio_calls: list[str] = []
+    portfolio_calls: list[tuple[str, str | None]] = []
     portfolio_signals: dict[str, list[float]] = {}
     fixed_comparator_periods = [
         {**row, "net_return": 0.05, "active_return": 0.05}
@@ -227,22 +360,39 @@ def test_sweep_rejects_stale_dynamic_decisions_and_sanitizes_runtime_metadata(
         factor: FactorSpec,
         validation: FactorValidation,
         signal: pd.Series,
-        *_args: Any,
-        **_kwargs: Any,
+        _features: pd.DataFrame,
+        _execution: pd.DataFrame,
+        portfolio_config: LongOnlyPortfolioConfig,
+        _research_config: Mapping[str, Any],
     ) -> dict[str, Any]:
-        portfolio_calls.append(factor.name)
-        portfolio_signals[factor.name] = signal.tolist()
-        periods = (
-            fixed_comparator_periods
-            if factor.name == "fixed_registry_equal_weight"
-            else control_periods
+        portfolio_calls.append(
+            (factor.name, portfolio_config.evaluation_start_date)
         )
+        portfolio_signals[factor.name] = signal.tolist()
+        if factor.name == candidate.name:
+            periods = candidate_periods
+        elif factor.name == "fixed_registry_equal_weight":
+            periods = fixed_comparator_periods
+        else:
+            periods = control_periods
+        requested_start = portfolio_config.evaluation_start_date
+        if requested_start is not None:
+            periods = [
+                row
+                for row in periods
+                if pd.Timestamp(str(row["signal_date"]))
+                >= pd.Timestamp(requested_start)
+            ]
         return {
             "factor_name": factor.name,
             "factor": factor.to_dict(),
             "stage_a": validation.to_dict(),
             "windows": {
                 "train": {
+                    "observations": len(periods),
+                    "execution_input_coverage": 1.0,
+                    "execution_input_future_violation_count": 0,
+                    "capacity_violation_count": 0,
                     "signal_evaluable_date_ratio": 1.0,
                     "signal_median_cross_section_coverage": 1.0,
                 }
@@ -255,6 +405,28 @@ def test_sweep_rejects_stale_dynamic_decisions_and_sanitizes_runtime_metadata(
             "audit_falsification_reasons": [],
             "validated": True,
             "period_active_returns": periods,
+            "account_nav_path": [
+                {
+                    "date": requested_start,
+                    "phase": "accounting_boundary",
+                    "nav": portfolio_config.capital,
+                    "sequence": 0,
+                },
+                {
+                    "date": periods[-1]["end_date"],
+                    "phase": "daily_end",
+                    "nav": portfolio_config.capital * 1.01,
+                    "sequence": 1,
+                },
+            ],
+            "portfolio": {
+                "status": "ok",
+                "evaluation_start_date": requested_start,
+                "initial_nav": portfolio_config.capital,
+                "first_pretrade_nav": portfolio_config.capital,
+                "end_nav": portfolio_config.capital * 1.01,
+                "account_nav_reconciliation_error": 0.0,
+            },
         }
 
     def historical_metrics(
@@ -278,13 +450,24 @@ def test_sweep_rejects_stale_dynamic_decisions_and_sanitizes_runtime_metadata(
         annual_return = sum(float(row["net_return"]) for row in aligned) / len(
             aligned
         )
+        benchmark_coverages = [
+            float(row["benchmark_return_coverage"])
+            for row in reference_periods
+        ]
         return {
             "observations": len(reference_periods),
             "period_coverage": len(aligned) / len(reference_periods),
+            "benchmark_return_coverage_min": min(benchmark_coverages),
+            "benchmark_return_coverage_mean": (
+                sum(benchmark_coverages) / len(benchmark_coverages)
+            ),
             "net_annual_return": annual_return,
             "net_sharpe": annual_return * 10.0,
             "information_ratio": annual_return * 5.0,
             "max_drawdown": -0.1,
+            "max_drawdown_basis": "daily_account_nav",
+            "daily_nav_path_complete": True,
+            "daily_nav_observations": len(reference_periods) * 3,
         }
 
     summary, dynamic_result = run_walk_forward_sweep(
@@ -308,14 +491,29 @@ def test_sweep_rejects_stale_dynamic_decisions_and_sanitizes_runtime_metadata(
     )
 
     assert portfolio_calls == [
-        "fixed_registry_equal_weight",
-        "causal_walk_forward_dynamic",
+        ("control", common_start),
+        ("candidate", common_start),
+        ("fixed_registry_equal_weight", common_start),
+        ("causal_walk_forward_dynamic", common_start),
     ]
     assert portfolio_signals["fixed_registry_equal_weight"] == pytest.approx(
         [3.0, 1.0, 3.0, 3.0, 3.0, 3.0]
     )
     assert summary["selector_executed"] is True
     assert summary["dynamic_status"] == "experimental_account"
+    assert summary["common_evaluation_start"] == common_start
+    assert summary["scoring_account_protocol"] == (
+        "fresh_cash_equal_aum_common_start"
+    )
+    assert summary["scoring_initial_nav"] == config.capital
+    assert summary["scoring_account_count"] == 4
+    assert summary["expected_scoring_account_count"] == 4
+    assert summary["equal_aum_scoring_valid"] is True
+    assert summary["equal_aum_scoring_violations"] == []
+    assert summary["shadow_account_role"] == (
+        "causal_selector_history_only_not_phase_scoring"
+    )
+    assert summary["benchmark_return_coverage_minimum"] == 0.95
     assert summary["control_phase_ranking_eligible"] is True
     assert summary["dynamic_control_common_offset_count"] == 1
     assert "historically_reliable" not in summary
@@ -324,6 +522,7 @@ def test_sweep_rejects_stale_dynamic_decisions_and_sanitizes_runtime_metadata(
         "fixed_registry_equal_weight"
     )
     assert summary["fixed_comparator"]["uses_realized_returns"] is False
+    assert summary["fixed_comparator"]["equal_aum_common_start_scoring"] is True
     assert (
         summary["fixed_comparator"]["dynamic_phase_deltas"][
             "net_annual_return"
@@ -362,20 +561,62 @@ def test_sweep_rejects_stale_dynamic_decisions_and_sanitizes_runtime_metadata(
     audit_payload = json.loads(
         (dynamic_path.parent / "decisions.json").read_text(encoding="utf-8")
     )
-    assert dynamic_payload["decisions"] == audit_payload["decisions"]
-    assert dynamic_payload["decisions"] != stale_decisions
+    assert dynamic_payload["role"] == "equal_aum_dynamic_scoring_account"
+    assert dynamic_payload["evaluation_start_date"] == common_start
+    assert dynamic_payload["decisions_path"] == "decisions.json"
+    assert "decisions" not in dynamic_payload
+    assert audit_payload["decisions"] != stale_decisions
     assert dynamic_payload["decisions_sha256"] == _decisions_sha256(
-        dynamic_payload["decisions"]
+        audit_payload["decisions"]
     )
     assert dynamic_payload["decisions_sha256"] == audit_payload["decisions_sha256"]
+    assert dynamic_payload["decisions_sha256"] != _decisions_sha256(
+        stale_decisions
+    )
     fixed_payload = json.loads(
         (dynamic_path.parent / "fixed-comparator.json").read_text(encoding="utf-8")
     )
-    assert fixed_payload["role"] == "fixed_registry_comparator"
+    assert fixed_payload["role"] == (
+        "equal_aum_fixed_comparator_scoring_account"
+    )
+    assert fixed_payload["evaluation_start_date"] == common_start
     assert fixed_payload["candidate_registry"] == ["control", "candidate"]
     assert fixed_payload["result"]["factor_name"] == (
         "fixed_registry_equal_weight"
     )
+    shadow_dir = dynamic_path.parent / "static"
+    scoring_dir = dynamic_path.parent / "scoring" / "static"
+    for factor_name in ("control", "candidate"):
+        shadow_payload = json.loads(
+            (shadow_dir / f"{factor_name}.json").read_text(encoding="utf-8")
+        )
+        scoring_payload = json.loads(
+            (scoring_dir / f"{factor_name}.json").read_text(encoding="utf-8")
+        )
+        assert shadow_payload["role"] == "causal_shadow_candidate"
+        assert shadow_payload["evaluation_start_date"] is None
+        assert scoring_payload["role"] == "equal_aum_static_scoring_account"
+        assert scoring_payload["evaluation_start_date"] == common_start
+        assert scoring_payload["shadow_history_path"] == (
+            f"../../static/{factor_name}.json"
+        )
+        assert scoring_payload["result"]["portfolio"]["initial_nav"] == (
+            config.capital
+        )
+        assert scoring_payload["result"]["portfolio"]["first_pretrade_nav"] == (
+            config.capital
+        )
+    scoring_audits = summary["offsets"][0]["scoring_account_audits"]
+    assert [row["account_role"] for row in scoring_audits] == [
+        "static_scoring",
+        "static_scoring",
+        "fixed_comparator_scoring",
+        "dynamic_scoring",
+    ]
+    assert all(row["valid"] is True for row in scoring_audits)
+    assert all(row["requested_start_date"] == common_start for row in scoring_audits)
+    assert all(row["initial_nav"] == config.capital for row in scoring_audits)
+    assert all(row["first_pretrade_nav"] == config.capital for row in scoring_audits)
     assert summary["selection_frequency"]
     assert sum(
         row["mean_deployed_weight"]

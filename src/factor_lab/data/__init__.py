@@ -31,7 +31,19 @@ from .enrich import (
     enrich_top500_store,
     prepare_financial_pit,
 )
+from .pit_lineage import (
+    DEFAULT_WALK_FORWARD_REQUIRED_FIELDS,
+    PIT_CONTRACT_SCHEMA_VERSION,
+    PIT_STATUS_UNVERIFIED,
+    PIT_STATUS_VERIFIED,
+    PITFieldLineage,
+    PITLineageContract,
+    audit_pit_lineage,
+    conservative_default_contract,
+    conservative_default_field_lineage,
+)
 from .sources import TushareClient, sync_data, sync_enrichment, turnover_amount_to_rmb
+from .suspensions import audit_suspensions_snapshot, sync_suspensions
 
 
 @dataclass
@@ -137,16 +149,26 @@ class SampleDataGenerator:
 
 
 __all__ = [
+    "DEFAULT_WALK_FORWARD_REQUIRED_FIELDS",
+    "PIT_CONTRACT_SCHEMA_VERSION",
+    "PIT_STATUS_UNVERIFIED",
+    "PIT_STATUS_VERIFIED",
+    "PITFieldLineage",
+    "PITLineageContract",
     "RuntimeLayout",
     "SampleDataGenerator",
     "SampleDataset",
     "TushareClient",
     "apply_feature_store_migration",
     "audit_parquet",
+    "audit_pit_lineage",
+    "audit_suspensions_snapshot",
     "audit_top500_store",
     "build_data",
     "build_monthly_reference_state",
     "canonical_trading_dates",
+    "conservative_default_contract",
+    "conservative_default_field_lineage",
     "enrich_top500_store",
     "load_data_config",
     "normalize_legacy_amount_units",
@@ -155,5 +177,6 @@ __all__ = [
     "prepare_financial_pit",
     "sync_data",
     "sync_enrichment",
+    "sync_suspensions",
     "turnover_amount_to_rmb",
 ]

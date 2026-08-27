@@ -14,6 +14,7 @@ from factor_lab.research.walk_forward import (
 def _row(signal_date: pd.Timestamp, end_date: pd.Timestamp, value: float) -> dict[str, object]:
     return {
         "signal_date": signal_date.date().isoformat(),
+        "start_date": (signal_date + pd.offsets.BDay(1)).date().isoformat(),
         "end_date": end_date.date().isoformat(),
         "net_return": value,
     }
@@ -86,6 +87,82 @@ def test_future_period_changes_cannot_rewrite_an_earlier_decision() -> None:
     assert first == second
     assert first["selected_factor"] == "candidate"
     assert pd.Timestamp(first["latest_used_end_date"]) < decision_date
+
+
+def test_duplicate_signal_date_prefix_poisoning_fails_closed() -> None:
+    dates = pd.bdate_range("2025-01-02", periods=20)
+    decision_date = dates[12]
+    control = [
+        _row(dates[0], dates[2], 0.01),
+        _row(dates[3], dates[5], -0.01),
+        _row(dates[6], dates[8], 0.02),
+    ]
+    candidate = [
+        _row(dates[0], dates[2], 0.03),
+        _row(dates[3], dates[5], 0.01),
+        _row(dates[6], dates[8], 0.04),
+        _row(dates[0], dates[15], -99.0),
+    ]
+
+    with pytest.raises(ValueError, match="duplicate signal_date"):
+        causal_candidate_decisions(
+            trading_dates=dates,
+            signal_dates=[decision_date],
+            candidate_periods={"control": control, "candidate": candidate},
+            control_factor="control",
+            selector=WalkForwardSelectorSpec(
+                lookback_trading_days=12,
+                minimum_completed_periods=3,
+                update_every_trading_days=1,
+                control_score_guard=0.0,
+            ),
+            periods_per_year=25.2,
+        )
+
+
+def test_future_signal_with_past_end_fails_closed() -> None:
+    dates = pd.bdate_range("2025-01-02", periods=20)
+    malformed = _row(dates[15], dates[8], 99.0)
+
+    with pytest.raises(ValueError, match="signal_date < start_date <= end_date"):
+        causal_candidate_decisions(
+            trading_dates=dates,
+            signal_dates=[dates[12]],
+            candidate_periods={"control": [malformed]},
+            control_factor="control",
+            selector=WalkForwardSelectorSpec(
+                lookback_trading_days=12,
+                minimum_completed_periods=2,
+                update_every_trading_days=1,
+            ),
+            periods_per_year=25.2,
+        )
+
+
+def test_well_formed_period_history_accepts_strict_chronology() -> None:
+    dates = pd.bdate_range("2025-01-02", periods=20)
+    rows = [
+        _row(dates[0], dates[2], 0.01),
+        _row(dates[3], dates[5], -0.01),
+        _row(dates[6], dates[8], 0.02),
+    ]
+
+    result = causal_candidate_decisions(
+        trading_dates=dates,
+        signal_dates=[dates[12]],
+        candidate_periods={"control": rows},
+        control_factor="control",
+        selector=WalkForwardSelectorSpec(
+            lookback_trading_days=12,
+            minimum_completed_periods=3,
+            update_every_trading_days=1,
+        ),
+        periods_per_year=25.2,
+    )
+
+    assert result["updates"][0]["reference_observations"] == 3
+    assert result["updates"][0]["latest_used_end_date"] == str(dates[8].date())
+    assert result["future_selection_violation_count"] == 0
 
 
 def test_control_guard_and_registry_order_are_deterministic() -> None:
@@ -270,6 +347,9 @@ def test_phase_ranking_excludes_any_strategy_with_an_incomplete_offset() -> None
             "information_ratio": annual_return * 5.0,
             "max_drawdown": -0.10,
             "period_coverage": period_coverage,
+            "benchmark_return_coverage_min": 1.0,
+            "equal_aum_account_audit_valid": True,
+            "daily_nav_path_complete": True,
         }
 
     rankings = walk_forward_phase_rankings(
@@ -328,6 +408,9 @@ def test_phase_ranking_requires_finite_metrics_at_every_offset(
         return {
             "observations": 10,
             "period_coverage": 1.0,
+            "benchmark_return_coverage_min": 1.0,
+            "equal_aum_account_audit_valid": True,
+            "daily_nav_path_complete": True,
             "net_annual_return": value,
             "net_sharpe": value,
             "information_ratio": value,
@@ -365,6 +448,9 @@ def test_phase_ranking_requires_positive_observations_at_every_offset() -> None:
         return {
             "observations": observations,
             "period_coverage": 1.0,
+            "benchmark_return_coverage_min": 1.0,
+            "equal_aum_account_audit_valid": True,
+            "daily_nav_path_complete": True,
             "net_annual_return": value,
             "net_sharpe": value,
             "information_ratio": value,
@@ -398,6 +484,9 @@ def test_phase_ranking_excludes_offset_count_mismatches_without_zip_failure() ->
         return {
             "observations": 10,
             "period_coverage": 1.0,
+            "benchmark_return_coverage_min": 1.0,
+            "equal_aum_account_audit_valid": True,
+            "daily_nav_path_complete": True,
             "net_annual_return": value,
             "net_sharpe": value,
             "information_ratio": value,
@@ -442,6 +531,182 @@ def test_phase_ranking_excludes_offset_count_mismatches_without_zip_failure() ->
             "rebalance_offset_days": 3,
             "expected_offset_count": 3,
             "observed_offset_count": 4,
+        }
+    ]
+
+
+def test_phase_ranking_excludes_low_benchmark_coverage_before_scoring() -> None:
+    def metrics(
+        value: float,
+        *,
+        benchmark_coverage: float = 1.0,
+    ) -> dict[str, float | int]:
+        return {
+            "observations": 10,
+            "period_coverage": 1.0,
+            "benchmark_return_coverage_min": benchmark_coverage,
+            "equal_aum_account_audit_valid": True,
+            "daily_nav_path_complete": True,
+            "net_annual_return": value,
+            "net_sharpe": value,
+            "information_ratio": value,
+            "max_drawdown": -0.10,
+        }
+
+    rankings = walk_forward_phase_rankings(
+        {
+            "control": [metrics(0.05), metrics(0.06)],
+            "eligible": [metrics(0.08), metrics(0.09)],
+            # Extreme returns must not enter phase percentiles when one offset's
+            # benchmark is below the frozen coverage floor.
+            "low_coverage": [
+                metrics(9.0),
+                metrics(9.0, benchmark_coverage=0.94),
+            ],
+        },
+        control_factor="control",
+        dynamic_factor="eligible",
+        phase_quantile=0.20,
+        benchmark_return_coverage_minimum=0.95,
+    )
+
+    by_name = {row["strategy_name"]: row for row in rankings}
+    assert by_name["eligible"]["rank"] == 1
+    assert by_name["control"]["rank"] == 2
+    assert by_name["low_coverage"]["rank"] is None
+    assert by_name["low_coverage"]["complete_rebalance_offsets"] == [0]
+    assert by_name["low_coverage"]["phase_score_percentiles"] == {}
+    assert by_name["low_coverage"]["phase_ranking_exclusion_reasons"] == [
+        {
+            "reason": "common_interval_benchmark_coverage_below_minimum",
+            "rebalance_offset_days": 1,
+            "observed_benchmark_return_coverage_min": 0.94,
+            "required_benchmark_return_coverage_min": 0.95,
+        }
+    ]
+
+
+def test_phase_ranking_excludes_extreme_cash_result_with_missing_execution_inputs() -> None:
+    def metrics(value: float, *, valid: bool = True) -> dict[str, object]:
+        return {
+            "observations": 10,
+            "period_coverage": 1.0,
+            "benchmark_return_coverage_min": 1.0,
+            "equal_aum_account_audit_valid": valid,
+            "daily_nav_path_complete": True,
+            "equal_aum_account_audit_reasons": []
+            if valid
+            else ["scoring_common_window_execution_input_coverage_not_one"],
+            "equal_aum_account_execution_integrity": []
+            if valid
+            else [
+                {
+                    "window": "audit",
+                    "observations": 10,
+                    "execution_input_coverage": 0.0,
+                    "execution_input_future_violation_count": 0,
+                    "capacity_violation_count": 0,
+                    "valid": False,
+                    "exclusion_reasons": [
+                        {
+                            "reason": "execution_input_coverage_not_one",
+                            "observed_value": 0.0,
+                            "required_value": 1.0,
+                        }
+                    ],
+                }
+            ],
+            "net_annual_return": value,
+            "net_sharpe": value,
+            "information_ratio": value,
+            "max_drawdown": 0.0,
+        }
+
+    rankings = walk_forward_phase_rankings(
+        {
+            "control": [metrics(0.05)],
+            "eligible": [metrics(0.08)],
+            # The all-cash path's superficially perfect drawdown and extreme
+            # score cannot enter the phase when ADV inputs were absent.
+            "missing_adv": [metrics(99.0, valid=False)],
+        },
+        control_factor="control",
+        dynamic_factor="eligible",
+        phase_quantile=0.20,
+    )
+
+    by_name = {row["strategy_name"]: row for row in rankings}
+    assert by_name["missing_adv"]["rank"] is None
+    assert by_name["missing_adv"]["complete_rebalance_offsets"] == []
+    assert by_name["missing_adv"]["phase_score_percentiles"] == {}
+    assert by_name["missing_adv"]["phase_ranking_exclusion_reasons"] == [
+        {
+            "reason": "equal_aum_scoring_account_audit_failed",
+            "rebalance_offset_days": 0,
+            "observed_valid": False,
+            "audit_reasons": [
+                "scoring_common_window_execution_input_coverage_not_one"
+            ],
+            "common_window_execution_integrity": [
+                {
+                    "window": "audit",
+                    "observations": 10,
+                    "execution_input_coverage": 0.0,
+                    "execution_input_future_violation_count": 0,
+                    "capacity_violation_count": 0,
+                    "valid": False,
+                    "exclusion_reasons": [
+                        {
+                            "reason": "execution_input_coverage_not_one",
+                            "observed_value": 0.0,
+                            "required_value": 1.0,
+                        }
+                    ],
+                }
+            ],
+        }
+    ]
+
+
+def test_phase_ranking_explicitly_fails_closed_on_incomplete_daily_nav_path() -> None:
+    def metrics(*, complete: bool) -> dict[str, object]:
+        return {
+            "observations": 10,
+            "period_coverage": 1.0,
+            "benchmark_return_coverage_min": 1.0,
+            "equal_aum_account_audit_valid": True,
+            "daily_nav_path_complete": complete,
+            "daily_nav_observations": 42 if complete else 3,
+            "net_annual_return": 99.0,
+            "net_sharpe": 99.0,
+            "information_ratio": 99.0,
+            # Even a superficially finite endpoint value cannot bypass the
+            # explicit daily-path completeness contract.
+            "max_drawdown": 0.0,
+        }
+
+    rankings = walk_forward_phase_rankings(
+        {
+            "control": [metrics(complete=True)],
+            "incomplete": [metrics(complete=False)],
+        },
+        control_factor="control",
+        dynamic_factor="incomplete",
+        phase_quantile=0.20,
+    )
+
+    incomplete = next(
+        row for row in rankings if row["strategy_name"] == "incomplete"
+    )
+    assert incomplete["rank"] is None
+    assert incomplete["complete_rebalance_offsets"] == []
+    assert incomplete["phase_ranking_exclusion_reasons"] == [
+        {
+            "reason": "common_interval_daily_nav_path_incomplete",
+            "rebalance_offset_days": 0,
+            "observed_daily_nav_path_complete": False,
+            "observed_daily_nav_observations": 3.0,
+            "required_daily_nav_path_complete": True,
         }
     ]
 

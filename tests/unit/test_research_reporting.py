@@ -50,6 +50,13 @@ def _walk_forward_summary(*, mode: str = "full") -> dict[str, object]:
         "common_evaluation_start": (
             "2019-01-02" if ranking_available else None
         ),
+        "scoring_account_protocol": (
+            "fresh_cash_equal_aum_common_start" if ranking_available else None
+        ),
+        "scoring_initial_nav": 50_000_000.0 if ranking_available else None,
+        "scoring_account_count": 90 if ranking_available else 0,
+        "expected_scoring_account_count": 90 if ranking_available else 0,
+        "equal_aum_scoring_valid": ranking_available,
         "future_selection_violation_count": 0,
         "full_dynamic_period_coverage": ranking_available,
         "causal_history_valid": ranking_available,
@@ -188,6 +195,10 @@ def test_full_walk_forward_report_exposes_causal_protocol_and_phase_results() ->
     assert "`fixed_direction`" in report
     assert "`pre_directed_components`" in report
     assert "共同评价起点：`2019-01-02`" in report
+    assert "`fresh_cash_equal_aum_common_start`" in report
+    assert "90/90 个账户，初始 NAV 50,000,000" in report
+    assert "equal-AUM 状态 `valid`" in report
+    assert "只提供 selector 反馈，不参与跨策略 phase 评分" in report
     assert "Future selection violations：**0**" in report
     assert "## Phase Q20 排名" in report
     assert "## Dynamic per-offset 回放" in report
@@ -199,6 +210,8 @@ def test_full_walk_forward_report_exposes_causal_protocol_and_phase_results() ->
     assert "严禁选择“最佳 offset”" in report
     assert "彼此不是独立实验" in report
     assert "post-selection causal simulation" in report
+    assert "等 AUM、逐日核算和退市零回收已纳入本次执行合同" in report
+    assert "ghost position" not in report
     assert "## Stage B：真实多头执行" not in report
 
 

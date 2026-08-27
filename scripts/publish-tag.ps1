@@ -2,20 +2,15 @@
 param(
     [Parameter(Mandatory = $true)]
     [ValidateNotNullOrEmpty()]
-    [string]$Tag,
-
-    [ValidateNotNullOrEmpty()]
-    [string]$Remote = "origin",
-
-    [ValidateNotNullOrEmpty()]
-    [string]$ReleaseBranch = "main",
-
-    [ValidateNotNullOrEmpty()]
-    [string]$Workflow = "ci.yml"
+    [string]$Tag
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+$Remote = "origin"
+$ReleaseBranch = "main"
+$Workflow = "ci.yml"
 
 function Invoke-Git {
     param([Parameter(Mandatory = $true)][string[]]$Arguments)
@@ -23,6 +18,16 @@ function Invoke-Git {
     $output = @(& git @Arguments 2>&1)
     if ($LASTEXITCODE -ne 0) {
         throw "git $($Arguments -join ' ') failed:`n$($output -join [Environment]::NewLine)"
+    }
+    return $output
+}
+
+function Invoke-Gh {
+    param([Parameter(Mandatory = $true)][string[]]$Arguments)
+
+    $output = @(& gh @Arguments 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "gh $($Arguments -join ' ') failed:`n$($output -join [Environment]::NewLine)"
     }
     return $output
 }
@@ -37,60 +42,117 @@ function Get-FirstField {
     return ($text.Trim() -split "\s+")[0]
 }
 
-$branch = ([string](Invoke-Git @("branch", "--show-current") | Select-Object -First 1)).Trim()
-if ($branch -ne $ReleaseBranch) {
-    throw "Release tags must be published from '$ReleaseBranch'; current branch is '$branch'."
+function Get-RemoteRefSha {
+    param([Parameter(Mandatory = $true)][string]$Ref)
+
+    $line = Invoke-Git @("ls-remote", $Remote, $Ref) | Select-Object -First 1
+    return Get-FirstField $line
 }
 
-$dirty = @(Invoke-Git @("status", "--porcelain"))
-if ($dirty.Count -gt 0) {
-    throw "Working tree is not clean. Commit or remove changes before publishing a tag."
+function Assert-ReleaseCommitState {
+    $branch = ([string](Invoke-Git @("branch", "--show-current") | Select-Object -First 1)).Trim()
+    if ($branch -ne $ReleaseBranch) {
+        throw "Release tags must be published from '$ReleaseBranch'; current branch is '$branch'."
+    }
+
+    $dirty = @(Invoke-Git @("status", "--porcelain"))
+    if ($dirty.Count -gt 0) {
+        throw "Working tree is not clean. Commit or remove changes before publishing a tag."
+    }
+
+    $currentHead = ([string](Invoke-Git @("rev-parse", "HEAD") | Select-Object -First 1)).Trim()
+    $remoteMain = Get-RemoteRefSha "refs/heads/$ReleaseBranch"
+    if (-not $remoteMain) {
+        throw "Remote branch '$Remote/$ReleaseBranch' was not found."
+    }
+    if ($currentHead -ne $remoteMain) {
+        throw "HEAD ($currentHead) is not the commit published at $Remote/$ReleaseBranch ($remoteMain)."
+    }
+    return $currentHead
 }
 
-$head = ([string](Invoke-Git @("rev-parse", "HEAD") | Select-Object -First 1)).Trim()
-$remoteMainLine = Invoke-Git @("ls-remote", "--heads", $Remote, "refs/heads/$ReleaseBranch") |
-    Select-Object -First 1
-$remoteMain = Get-FirstField $remoteMainLine
-if (-not $remoteMain) {
-    throw "Remote branch '$Remote/$ReleaseBranch' was not found."
-}
-if ($head -ne $remoteMain) {
-    throw "HEAD ($head) is not the commit published at $Remote/$ReleaseBranch ($remoteMain)."
+if ($Tag -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
+    throw "Tag must use canonical major.minor digits without leading zeroes (for example 4.1)."
 }
 
-$isReleaseTag = $Tag -match '^\d+\.\d+$'
-$isArchiveTag = $Tag -match '^research-os-final-\d{8}$'
-if (-not ($isReleaseTag -or $isArchiveTag)) {
-    throw "Tag must use major.minor (for example 3.0) or research-os-final-YYYYMMDD."
+$head = Assert-ReleaseCommitState
+
+$pyproject = Get-Content -LiteralPath "pyproject.toml" -Raw
+$projectBlocks = [regex]::Matches(
+    $pyproject,
+    '(?ms)^\[project\][ \t]*\r?$\n(?<body>.*?)(?=^\[|\z)'
+)
+if ($projectBlocks.Count -ne 1) {
+    throw "Expected exactly one [project] table in pyproject.toml."
+}
+$versionMatches = [regex]::Matches(
+    $projectBlocks[0].Groups["body"].Value,
+    '(?m)^version[ \t]*=[ \t]*["'']([^"'']+)["''][ \t]*\r?$'
+)
+if ($versionMatches.Count -ne 1) {
+    throw "Expected exactly one project.version in pyproject.toml."
+}
+$projectVersion = $versionMatches[0].Groups[1].Value
+$expectedProjectVersion = "${Tag}.0"
+if ($projectVersion -ne $expectedProjectVersion) {
+    throw "Release tag '$Tag' requires pyproject.toml version '$expectedProjectVersion', found '$projectVersion'."
 }
 
-if ($isReleaseTag) {
-    $pyproject = Get-Content -LiteralPath "pyproject.toml" -Raw
-    $projectBlock = [regex]::Match($pyproject, '(?ms)^\[project\]\s*(.*?)(?=^\[|\z)')
-    if (-not $projectBlock.Success) {
-        throw "Could not find [project] in pyproject.toml."
-    }
-    $versionMatch = [regex]::Match($projectBlock.Groups[1].Value, '(?m)^version\s*=\s*"([^"]+)"\s*$')
-    if (-not $versionMatch.Success) {
-        throw "Could not find project.version in pyproject.toml."
-    }
-    $projectVersion = $versionMatch.Groups[1].Value
-    $expectedProjectVersion = "$Tag.0"
-    if ($expectedProjectVersion -ne $projectVersion) {
-        throw "Release tag '$Tag' requires pyproject.toml version '$expectedProjectVersion', found '$projectVersion'."
-    }
-    $packageInit = Get-Content -LiteralPath "src/factor_lab/__init__.py" -Raw
-    $packageVersionMatch = [regex]::Match(
-        $packageInit,
-        '(?m)^__version__\s*=\s*"([^"]+)"\s*$'
-    )
-    if (-not $packageVersionMatch.Success) {
-        throw "Could not find __version__ in src/factor_lab/__init__.py."
-    }
-    $packageVersion = $packageVersionMatch.Groups[1].Value
-    if ($packageVersion -ne $projectVersion) {
-        throw "Package __version__ '$packageVersion' does not match pyproject.toml '$projectVersion'."
-    }
+$packageInit = Get-Content -LiteralPath "src/factor_lab/__init__.py" -Raw
+$packageVersionMatches = [regex]::Matches(
+    $packageInit,
+    '(?m)^__version__[ \t]*=[ \t]*["'']([^"'']+)["''][ \t]*\r?$'
+)
+if ($packageVersionMatches.Count -ne 1) {
+    throw "Expected exactly one __version__ in src/factor_lab/__init__.py."
+}
+$packageVersion = $packageVersionMatches[0].Groups[1].Value
+if ($packageVersion -ne $expectedProjectVersion) {
+    throw "Release tag '$Tag' requires package __version__ '$expectedProjectVersion', found '$packageVersion'."
+}
+
+$changelog = Get-Content -LiteralPath "CHANGELOG.md" -Raw
+$unreleasedHeadings = [regex]::Matches(
+    $changelog,
+    '(?m)^## \[Unreleased\][ \t]*\r?$'
+)
+if ($unreleasedHeadings.Count -ne 1) {
+    throw "CHANGELOG.md must contain exactly one '## [Unreleased]' section."
+}
+$unreleasedSections = [regex]::Matches(
+    $changelog,
+    '(?ms)^## \[Unreleased\][ \t]*\r?\n(?<body>.*?)(?=^## \[|\z)'
+)
+if ($unreleasedSections.Count -ne 1) {
+    throw "Could not parse the unique CHANGELOG.md Unreleased section."
+}
+if (-not [string]::IsNullOrWhiteSpace($unreleasedSections[0].Groups["body"].Value)) {
+    throw "CHANGELOG.md Unreleased must be empty before publishing '$Tag'."
+}
+
+$escapedTag = [regex]::Escape($Tag)
+$tagHeadings = [regex]::Matches(
+    $changelog,
+    "(?m)^## \[$escapedTag\][^`r`n]*`r?$"
+)
+$datedTagHeadings = [regex]::Matches(
+    $changelog,
+    "(?m)^## \[$escapedTag\] - (?<date>[0-9]{4}-[0-9]{2}-[0-9]{2})[ `t]*`r?$"
+)
+if ($tagHeadings.Count -ne 1 -or $datedTagHeadings.Count -ne 1) {
+    throw "CHANGELOG.md must contain exactly one '## [$Tag] - YYYY-MM-DD' release section."
+}
+$releaseDateText = $datedTagHeadings[0].Groups["date"].Value
+$releaseDate = [datetime]::MinValue
+$validReleaseDate = [datetime]::TryParseExact(
+    $releaseDateText,
+    "yyyy-MM-dd",
+    [Globalization.CultureInfo]::InvariantCulture,
+    [Globalization.DateTimeStyles]::None,
+    [ref]$releaseDate
+)
+if (-not $validReleaseDate -or $releaseDate.ToString("yyyy-MM-dd") -ne $releaseDateText) {
+    throw "CHANGELOG.md release date '$releaseDateText' is not a valid ISO date."
 }
 
 $ghCommand = Get-Command gh -ErrorAction SilentlyContinue
@@ -98,31 +160,56 @@ if (-not $ghCommand) {
     throw "GitHub CLI ('gh') is required to verify CI before publishing."
 }
 
-$repo = (& gh repo view --json nameWithOwner --jq .nameWithOwner 2>&1)
-if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace([string]$repo)) {
-    throw "Could not resolve the GitHub repository:`n$repo"
+$repoJson = ((Invoke-Gh @("repo", "view", "--json", "nameWithOwner")) -join [Environment]::NewLine)
+try {
+    $repoObject = $repoJson | ConvertFrom-Json
+} catch {
+    throw "Could not parse the GitHub repository response: $repoJson"
 }
-$repo = ([string]$repo).Trim()
+$repo = [string]$repoObject.nameWithOwner
+if ([string]::IsNullOrWhiteSpace($repo)) {
+    throw "Could not resolve the GitHub repository."
+}
 
-$runJson = @(& gh run list --repo $repo --workflow $Workflow --commit $head --limit 20 `
-    --json status,conclusion,headSha,databaseId,url 2>&1)
-if ($LASTEXITCODE -ne 0) {
-    throw "Could not read GitHub CI status:`n$($runJson -join [Environment]::NewLine)"
+$runJson = ((Invoke-Gh @(
+    "run", "list",
+    "--repo", $repo.Trim(),
+    "--workflow", $Workflow,
+    "--branch", $ReleaseBranch,
+    "--event", "push",
+    "--commit", $head,
+    "--limit", "20",
+    "--json", "status,conclusion,headSha,headBranch,event,databaseId,url"
+)) -join [Environment]::NewLine)
+try {
+    $runs = @($runJson | ConvertFrom-Json)
+} catch {
+    throw "Could not parse GitHub CI status: $runJson"
 }
-$runs = @((($runJson -join [Environment]::NewLine) | ConvertFrom-Json))
-$latestRun = $runs | Where-Object { $_.headSha -eq $head } | Select-Object -First 1
+$latestRun = $runs |
+    Where-Object {
+        $_.headSha -eq $head -and
+        $_.headBranch -eq $ReleaseBranch -and
+        $_.event -eq "push"
+    } |
+    Select-Object -First 1
 if (-not $latestRun) {
-    throw "No GitHub CI run was found for HEAD $head."
+    throw "No '$Workflow' push run on '$ReleaseBranch' was found for HEAD $head."
 }
 if ($latestRun.status -ne "completed" -or $latestRun.conclusion -ne "success") {
-    throw "GitHub CI is not green for HEAD $head (status=$($latestRun.status), conclusion=$($latestRun.conclusion), url=$($latestRun.url))."
+    throw "GitHub CI '$Workflow' is not green for HEAD $head (status=$($latestRun.status), conclusion=$($latestRun.conclusion), url=$($latestRun.url))."
+}
+
+# Re-check the immutable release boundary after the network CI lookup.
+$verifiedHead = Assert-ReleaseCommitState
+if ($verifiedHead -ne $head) {
+    throw "HEAD changed during release validation: $head -> $verifiedHead."
 }
 
 & git show-ref --verify --quiet "refs/tags/$Tag"
 $localExists = $LASTEXITCODE -eq 0
-$remoteTagLine = Invoke-Git @("ls-remote", "--refs", $Remote, "refs/tags/$Tag") |
-    Select-Object -First 1
-$remoteTagObject = Get-FirstField $remoteTagLine
+$remoteTagObject = Get-RemoteRefSha "refs/tags/$Tag"
+$remoteWasPresent = -not [string]::IsNullOrWhiteSpace([string]$remoteTagObject)
 
 if ($localExists) {
     $tagType = ([string](Invoke-Git @("cat-file", "-t", "refs/tags/$Tag") |
@@ -130,46 +217,52 @@ if ($localExists) {
     if ($tagType -ne "tag") {
         throw "Local tag '$Tag' is not annotated."
     }
-    $tagCommit = ([string](Invoke-Git @("rev-list", "-n", "1", $Tag) |
+    $tagCommit = ([string](Invoke-Git @("rev-parse", "refs/tags/$Tag^{}") |
         Select-Object -First 1)).Trim()
     if ($tagCommit -ne $head) {
         throw "Local tag '$Tag' points to $tagCommit instead of HEAD $head."
     }
-} elseif ($remoteTagObject) {
+} elseif ($remoteWasPresent) {
     throw "Tag '$Tag' exists on GitHub but not locally. Fetch and inspect it instead of replacing it."
 } else {
     Invoke-Git @("tag", "-a", $Tag, "-m", "Factor Lab $Tag") | Out-Null
 }
 
+$localTagType = ([string](Invoke-Git @("cat-file", "-t", "refs/tags/$Tag") |
+    Select-Object -First 1)).Trim()
+if ($localTagType -ne "tag") {
+    throw "Local tag '$Tag' is not annotated."
+}
 $localTagObject = ([string](Invoke-Git @("rev-parse", "refs/tags/$Tag") |
     Select-Object -First 1)).Trim()
+$localCommit = ([string](Invoke-Git @("rev-parse", "refs/tags/$Tag^{}") |
+    Select-Object -First 1)).Trim()
+if ($localCommit -ne $head) {
+    throw "Local tag '$Tag' points to $localCommit instead of HEAD $head."
+}
 
-if ($remoteTagObject) {
+if ($remoteWasPresent) {
     if ($localTagObject -ne $remoteTagObject) {
         throw "Local and GitHub tag objects differ: $localTagObject != $remoteTagObject."
     }
-    Write-Host "Tag '$Tag' is already synchronized with GitHub at $localTagObject."
-    exit 0
+} else {
+    Invoke-Git @("push", $Remote, "refs/tags/${Tag}:refs/tags/${Tag}") | ForEach-Object {
+        Write-Host $_
+    }
 }
 
-Invoke-Git @("push", $Remote, "refs/tags/${Tag}:refs/tags/${Tag}") | ForEach-Object {
-    Write-Host $_
-}
-
-$verifiedRemoteLine = Invoke-Git @("ls-remote", "--refs", $Remote, "refs/tags/$Tag") |
-    Select-Object -First 1
-$verifiedRemoteObject = Get-FirstField $verifiedRemoteLine
+# This verification is mandatory for both a newly pushed and a pre-existing tag.
+$verifiedRemoteObject = Get-RemoteRefSha "refs/tags/$Tag"
 if ($localTagObject -ne $verifiedRemoteObject) {
-    throw "Remote verification failed: local=$localTagObject remote=$verifiedRemoteObject."
+    throw "Remote tag object verification failed: local=$localTagObject remote=$verifiedRemoteObject."
+}
+$verifiedRemoteCommit = Get-RemoteRefSha "refs/tags/$Tag^{}"
+if ($localCommit -ne $verifiedRemoteCommit) {
+    throw "Remote peeled target verification failed: local=$localCommit remote=$verifiedRemoteCommit."
 }
 
-$localCommit = ([string](Invoke-Git @("rev-list", "-n", "1", $Tag) |
-    Select-Object -First 1)).Trim()
-$remotePeeledLine = Invoke-Git @("ls-remote", $Remote, "refs/tags/$Tag^{}") |
-    Select-Object -First 1
-$remoteCommit = Get-FirstField $remotePeeledLine
-if ($localCommit -ne $remoteCommit) {
-    throw "Remote tag target verification failed: local=$localCommit remote=$remoteCommit."
+if ($remoteWasPresent) {
+    Write-Host "Tag '$Tag' was already synchronized; verified annotated object $localTagObject and peeled commit $localCommit on GitHub."
+} else {
+    Write-Host "Published '$Tag' to GitHub and verified annotated object $localTagObject and peeled commit $localCommit."
 }
-
-Write-Host "Published '$Tag' to GitHub and verified tag object $localTagObject at commit $localCommit."

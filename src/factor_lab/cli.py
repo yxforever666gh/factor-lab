@@ -16,6 +16,7 @@ from factor_lab.data import (
     plan_feature_store_migration,
     sync_data,
     sync_enrichment,
+    sync_suspensions,
 )
 from factor_lab.research.runner import latest_run, run_research
 
@@ -52,6 +53,15 @@ def build_parser() -> argparse.ArgumentParser:
     sync.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     sync.add_argument("--dataset", action="append", dest="datasets")
     sync.add_argument("--max-partitions", type=int)
+
+    suspensions = data_commands.add_parser(
+        "suspensions", help="Synchronize Tushare daily suspension/resumption events."
+    )
+    suspensions.add_argument("--from", dest="start_date", required=True)
+    suspensions.add_argument("--to", dest="end_date", required=True)
+    suspensions.add_argument(
+        "--resume", action=argparse.BooleanOptionalAction, default=True
+    )
 
     enrich = data_commands.add_parser(
         "enrich",
@@ -145,6 +155,16 @@ def _data_command(arguments: argparse.Namespace) -> int:
         )
         _json(result)
         return 0 if result.get("status") in {"complete", "partial"} else 1
+    if arguments.data_command == "suspensions":
+        result = sync_suspensions(
+            arguments.start_date,
+            arguments.end_date,
+            config_path=config_path,
+            layout=layout,
+            resume=bool(arguments.resume),
+        )
+        _json(result)
+        return 0 if result.get("status") == "complete" else 1
     if arguments.data_command == "enrich":
         sync_result = None
         if not bool(arguments.apply_only):

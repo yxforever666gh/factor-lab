@@ -28,6 +28,7 @@ from .walk_forward import (
 
 PortfolioResult = Callable[..., dict[str, Any]]
 HistoricalMetrics = Callable[..., dict[str, Any]]
+_DYNAMIC_FACTOR_NAME = "causal_walk_forward_dynamic"
 
 
 def _write_json(path: Path, value: Any) -> None:
@@ -52,6 +53,34 @@ def _safe_name(name: str) -> str:
     return value[:100]
 
 
+def _validate_candidate_artifact_names(
+    candidate_names: Sequence[str],
+    *,
+    reserved_runtime_names: Sequence[str],
+) -> None:
+    """Reject portable path collisions and runtime-strategy name aliases."""
+
+    safe_candidate_names = [
+        _safe_name(name).casefold() for name in candidate_names
+    ]
+    if len(safe_candidate_names) != len(set(safe_candidate_names)):
+        raise ValueError(
+            "walk_forward candidate names collide after artifact-name normalization"
+        )
+    reserved_artifact_names = {
+        _safe_name(name).casefold(): name for name in reserved_runtime_names
+    }
+    for candidate_name, artifact_name in zip(
+        candidate_names, safe_candidate_names, strict=True
+    ):
+        reserved_name = reserved_artifact_names.get(artifact_name)
+        if reserved_name is not None:
+            raise ValueError(
+                "walk_forward candidate name conflicts with reserved runtime "
+                f"strategy {reserved_name!r}: {candidate_name!r}"
+            )
+
+
 def _decisions_sha256(decisions: Mapping[str, Any]) -> str:
     """Bind a cached deployed-account result to one canonical decision audit."""
 
@@ -66,6 +95,27 @@ def _decisions_sha256(decisions: Mapping[str, Any]) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _result_sha256(result: Mapping[str, Any]) -> str:
+    canonical = json.dumps(
+        result,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+        default=str,
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _result_hash_matches(
+    payload: Mapping[str, Any], result: Mapping[str, Any]
+) -> bool:
+    try:
+        return payload.get("result_sha256") == _result_sha256(result)
+    except (TypeError, ValueError):
+        return False
+
+
 def _cached_dynamic_result(
     payload: Mapping[str, Any],
     *,
@@ -73,25 +123,30 @@ def _cached_dynamic_result(
     rebalance_offset_days: int,
     dynamic_factor: str,
     fresh_decisions: Mapping[str, Any],
+    evaluation_start_date: str,
 ) -> dict[str, Any] | None:
     """Return a cache hit only when its decision audit matches the fresh audit."""
 
     result = payload.get("result")
-    cached_decisions = payload.get("decisions")
-    if not isinstance(result, Mapping) or not isinstance(cached_decisions, Mapping):
+    if not isinstance(result, Mapping):
         return None
     if (
         payload.get("run_fingerprint") != run_fingerprint
         or payload.get("rebalance_offset_days") != rebalance_offset_days
+        or payload.get("role") != "equal_aum_dynamic_scoring_account"
+        or payload.get("evaluation_start_date") != evaluation_start_date
+        or payload.get("decisions_path") != "decisions.json"
+        or "decisions" in payload
         or result.get("factor_name") != dynamic_factor
+        or not result.get("account_nav_path")
+        or not _result_hash_matches(payload, result)
     ):
         return None
     try:
         fresh_hash = _decisions_sha256(fresh_decisions)
-        cached_hash = _decisions_sha256(cached_decisions)
     except (TypeError, ValueError):
         return None
-    if payload.get("decisions_sha256") != fresh_hash or cached_hash != fresh_hash:
+    if payload.get("decisions_sha256") != fresh_hash:
         return None
     return dict(result)
 
@@ -177,8 +232,9 @@ def _cached_fixed_comparator_result(
     rebalance_offset_days: int,
     comparator_factor: str,
     candidate_names: Sequence[str],
+    evaluation_start_date: str,
 ) -> dict[str, Any] | None:
-    """Validate the inexpensive identity contract for a fixed comparator cache."""
+    """Validate one equal-AUM fixed-comparator scoring cache."""
 
     result = payload.get("result")
     if not isinstance(result, Mapping):
@@ -186,9 +242,38 @@ def _cached_fixed_comparator_result(
     if (
         payload.get("run_fingerprint") != run_fingerprint
         or payload.get("rebalance_offset_days") != rebalance_offset_days
-        or payload.get("role") != "fixed_registry_comparator"
+        or payload.get("role") != "equal_aum_fixed_comparator_scoring_account"
+        or payload.get("evaluation_start_date") != evaluation_start_date
         or tuple(payload.get("candidate_registry") or ()) != tuple(candidate_names)
         or result.get("factor_name") != comparator_factor
+        or not result.get("account_nav_path")
+        or not _result_hash_matches(payload, result)
+    ):
+        return None
+    return dict(result)
+
+
+def _cached_static_scoring_result(
+    payload: Mapping[str, Any],
+    *,
+    run_fingerprint: str,
+    rebalance_offset_days: int,
+    factor_name: str,
+    evaluation_start_date: str,
+) -> dict[str, Any] | None:
+    """Validate one equal-AUM static scoring account cache."""
+
+    result = payload.get("result")
+    if not isinstance(result, Mapping):
+        return None
+    if (
+        payload.get("run_fingerprint") != run_fingerprint
+        or payload.get("rebalance_offset_days") != rebalance_offset_days
+        or payload.get("role") != "equal_aum_static_scoring_account"
+        or payload.get("evaluation_start_date") != evaluation_start_date
+        or result.get("factor_name") != factor_name
+        or not result.get("account_nav_path")
+        or not _result_hash_matches(payload, result)
     ):
         return None
     return dict(result)
@@ -365,6 +450,213 @@ def _phase_deltas(
     )
 
 
+def _equal_aum_account_audit(
+    result: Mapping[str, Any],
+    *,
+    requested_start_date: str,
+    initial_nav: float,
+) -> dict[str, Any]:
+    """Audit that one scoring account was born at the common cash boundary."""
+
+    portfolio = result.get("portfolio") or {}
+    actual_start = portfolio.get("evaluation_start_date")
+    observed_initial = portfolio.get("initial_nav")
+    first_pretrade = portfolio.get("first_pretrade_nav")
+    end_nav = portfolio.get("end_nav")
+    reasons: list[str] = []
+    if portfolio.get("status") != "ok":
+        reasons.append("scoring_portfolio_status_not_ok")
+    try:
+        if actual_start is None or pd.Timestamp(str(actual_start)) < pd.Timestamp(
+            requested_start_date
+        ):
+            reasons.append("scoring_account_started_before_common_boundary")
+    except (TypeError, ValueError):
+        reasons.append("scoring_account_start_date_invalid")
+    for name, value in (
+        ("initial_nav", observed_initial),
+        ("first_pretrade_nav", first_pretrade),
+    ):
+        try:
+            parsed = float(value)
+        except (TypeError, ValueError):
+            parsed = np.nan
+        if not np.isfinite(parsed) or not np.isclose(
+            parsed, float(initial_nav), rtol=0.0, atol=0.01
+        ):
+            reasons.append(f"scoring_account_{name}_mismatch")
+    try:
+        parsed_end = float(end_nav)
+    except (TypeError, ValueError):
+        parsed_end = np.nan
+    if not np.isfinite(parsed_end) or parsed_end <= 0.0:
+        reasons.append("scoring_account_end_nav_invalid")
+    promotion_blockers = {
+        str(value) for value in portfolio.get("promotion_blockers") or ()
+    }
+    if "unresolved_stale_position_observed" in promotion_blockers:
+        reasons.append("scoring_account_unresolved_stale_position")
+    try:
+        reconciliation_error = float(
+            portfolio.get("account_nav_reconciliation_error")
+        )
+    except (TypeError, ValueError):
+        reconciliation_error = np.nan
+    if not np.isfinite(reconciliation_error) or not np.isclose(
+        reconciliation_error, 0.0, rtol=0.0, atol=1e-10
+    ):
+        reasons.append("scoring_account_nav_reconciliation_failed")
+
+    account_nav_path = list(result.get("account_nav_path") or [])
+    first_path_observation = (
+        dict(account_nav_path[0]) if account_nav_path else {}
+    )
+    last_path_observation = (
+        dict(account_nav_path[-1]) if account_nav_path else {}
+    )
+    if not account_nav_path:
+        reasons.append("scoring_account_nav_path_missing")
+    else:
+        try:
+            path_start_date = pd.Timestamp(
+                str(first_path_observation.get("date"))
+            )
+        except (TypeError, ValueError):
+            path_start_date = pd.NaT
+        if (
+            pd.isna(path_start_date)
+            or path_start_date != pd.Timestamp(requested_start_date)
+            or first_path_observation.get("phase") != "accounting_boundary"
+            or first_path_observation.get("sequence") != 0
+        ):
+            reasons.append("scoring_account_nav_path_common_boundary_mismatch")
+        for reason, value, expected in (
+            (
+                "scoring_account_nav_path_initial_nav_mismatch",
+                first_path_observation.get("nav"),
+                initial_nav,
+            ),
+            (
+                "scoring_account_nav_path_end_nav_mismatch",
+                last_path_observation.get("nav"),
+                parsed_end,
+            ),
+        ):
+            try:
+                parsed_value = float(value)
+            except (TypeError, ValueError):
+                parsed_value = np.nan
+            if not np.isfinite(parsed_value) or not np.isclose(
+                parsed_value, float(expected), rtol=0.0, atol=0.01
+            ):
+                reasons.append(reason)
+
+    # Scoring accounts may legitimately retain cash when an order is blocked
+    # by a limit or suspension.  They may not, however, enter the phase
+    # comparison when the inputs needed to size an executable order are
+    # incomplete, drawn from the future, or breach the declared ADV cap.  The
+    # predefined result windows partition the fresh account's common-start
+    # history, so audit every non-empty slice and preserve the observed values
+    # in the artifact instead of reducing the failure to a boolean.
+    execution_integrity_windows: list[dict[str, Any]] = []
+    for window_name, raw_window in sorted(
+        dict(result.get("windows") or {}).items()
+    ):
+        window = dict(raw_window or {})
+        try:
+            observations = int(window.get("observations") or 0)
+        except (TypeError, ValueError):
+            observations = 0
+        if observations <= 0:
+            continue
+
+        def finite_window_number(name: str) -> float | None:
+            try:
+                value = float(window.get(name))
+            except (TypeError, ValueError):
+                return None
+            return value if np.isfinite(value) else None
+
+        coverage = finite_window_number("execution_input_coverage")
+        future_violations = finite_window_number(
+            "execution_input_future_violation_count"
+        )
+        capacity_violations = finite_window_number("capacity_violation_count")
+        window_reasons: list[dict[str, Any]] = []
+        if coverage != 1.0:
+            window_reasons.append(
+                {
+                    "reason": "execution_input_coverage_not_one",
+                    "observed_value": round(coverage, 8)
+                    if coverage is not None
+                    else None,
+                    "required_value": 1.0,
+                }
+            )
+        if future_violations != 0.0:
+            window_reasons.append(
+                {
+                    "reason": "execution_input_future_violation_count_not_zero",
+                    "observed_value": int(future_violations)
+                    if future_violations is not None
+                    else None,
+                    "required_value": 0,
+                }
+            )
+        if capacity_violations != 0.0:
+            window_reasons.append(
+                {
+                    "reason": "capacity_violation_count_not_zero",
+                    "observed_value": int(capacity_violations)
+                    if capacity_violations is not None
+                    else None,
+                    "required_value": 0,
+                }
+            )
+        execution_integrity_windows.append(
+            {
+                "window": str(window_name),
+                "observations": observations,
+                "execution_input_coverage": round(coverage, 8)
+                if coverage is not None
+                else None,
+                "execution_input_future_violation_count": (
+                    int(future_violations)
+                    if future_violations is not None
+                    else None
+                ),
+                "capacity_violation_count": int(capacity_violations)
+                if capacity_violations is not None
+                else None,
+                "valid": not window_reasons,
+                "exclusion_reasons": window_reasons,
+            }
+        )
+        reasons.extend(
+            f"scoring_common_window_{item['reason']}"
+            for item in window_reasons
+        )
+    if not execution_integrity_windows:
+        reasons.append("scoring_common_window_has_no_observations")
+
+    reasons = list(dict.fromkeys(reasons))
+    return {
+        "valid": not reasons,
+        "requested_start_date": requested_start_date,
+        "actual_first_signal_date": actual_start,
+        "initial_nav": observed_initial,
+        "first_pretrade_nav": first_pretrade,
+        "end_nav": end_nav,
+        "account_nav_reconciliation_error": portfolio.get(
+            "account_nav_reconciliation_error"
+        ),
+        "account_nav_path_start": first_path_observation or None,
+        "account_nav_path_end": last_path_observation or None,
+        "common_window_execution_integrity": execution_integrity_windows,
+        "reasons": reasons,
+    }
+
+
 def run_walk_forward_sweep(
     *,
     factors: Sequence[FactorSpec],
@@ -384,6 +676,11 @@ def run_walk_forward_sweep(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """Run causal shadow candidates and one deployed account for every offset."""
 
+    if base_config.evaluation_start_date is not None:
+        raise ValueError(
+            "walk-forward base_config.evaluation_start_date must be null; "
+            "selector shadows require complete history"
+        )
     settings = dict(research_config.get("walk_forward") or {})
     selector = WalkForwardSelectorSpec.from_mapping(settings.get("selector") or {})
     fixed_comparator_protocol = _fixed_comparator_protocol(settings)
@@ -391,6 +688,15 @@ def run_walk_forward_sweep(
     phase_quantile = float(settings.get("phase_quantile", 0.20))
     if not np.isfinite(phase_quantile) or not 0.0 < phase_quantile <= 0.5:
         raise ValueError("walk_forward phase_quantile must be in (0, 0.5]")
+    benchmark_coverage_minimum = float(
+        (research_config.get("promotion_gate") or {}).get(
+            "benchmark_return_coverage_min", 0.95
+        )
+    )
+    if not np.isfinite(benchmark_coverage_minimum) or not (
+        0.0 <= benchmark_coverage_minimum <= 1.0
+    ):
+        raise ValueError("benchmark_return_coverage_min must be in [0, 1]")
     factor_by_name = {factor.name: factor for factor in factors}
     candidate_names = [factor.name for factor in factors]
     if (
@@ -399,6 +705,14 @@ def run_walk_forward_sweep(
         or len(candidate_names) != len(set(candidate_names))
     ):
         raise ValueError("walk_forward candidate registry must start with unique control")
+    reserved_runtime_names = (
+        fixed_comparator_protocol["name"],
+        _DYNAMIC_FACTOR_NAME,
+    )
+    _validate_candidate_artifact_names(
+        candidate_names,
+        reserved_runtime_names=reserved_runtime_names,
+    )
     base_by_name = {str(row["factor_name"]): dict(row) for row in base_results}
     missing_base = [name for name in candidate_names if name not in base_by_name]
     if missing_base:
@@ -414,7 +728,7 @@ def run_walk_forward_sweep(
     )
     root = output_dir / "walk-forward"
     root.mkdir(parents=True, exist_ok=True)
-    dynamic_name = "causal_walk_forward_dynamic"
+    dynamic_name = _DYNAMIC_FACTOR_NAME
     dynamic_factor = FactorSpec(
         name=dynamic_name,
         family="walk_forward",
@@ -435,10 +749,6 @@ def run_walk_forward_sweep(
         selection_basis="causal_completed_portfolio_history",
     )
     fixed_comparator_name = fixed_comparator_protocol["name"]
-    if fixed_comparator_name in candidate_names:
-        raise ValueError(
-            "walk_forward fixed comparator must not be part of the selector registry"
-        )
     fixed_comparator_factor = FactorSpec(
         name=fixed_comparator_name,
         family="walk_forward_comparator",
@@ -470,7 +780,13 @@ def run_walk_forward_sweep(
         offset_dir = root / f"offset-{offset:02d}"
         static_dir = offset_dir / "static"
         static_dir.mkdir(parents=True, exist_ok=True)
-        config = replace(base_config, rebalance_offset_days=offset)
+        # Selector shadows must retain the complete pre-boundary history even
+        # when a caller reuses a scoring-oriented base configuration.
+        config = replace(
+            base_config,
+            rebalance_offset_days=offset,
+            evaluation_start_date=None,
+        )
         static_results: dict[str, dict[str, Any]] = {}
         for factor_name in candidate_names:
             factor = factor_by_name[factor_name]
@@ -484,8 +800,13 @@ def run_walk_forward_sweep(
                 if (
                     payload.get("run_fingerprint") == run_fingerprint
                     and payload.get("rebalance_offset_days") == offset
+                    and payload.get("role") == "causal_shadow_candidate"
+                    and payload.get("evaluation_start_date") is None
                     and (payload.get("result") or {}).get("factor_name")
                     == factor_name
+                    and _result_hash_matches(
+                        payload, payload.get("result") or {}
+                    )
                 ):
                     cached = payload.get("result")
             if cached is None:
@@ -508,52 +829,12 @@ def run_walk_forward_sweep(
                         "run_fingerprint": run_fingerprint,
                         "rebalance_offset_days": offset,
                         "role": "causal_shadow_candidate",
+                        "evaluation_start_date": None,
+                        "result_sha256": _result_sha256(cached),
                         "result": cached,
                     },
                 )
             static_results[factor_name] = cached
-
-        fixed_comparator_path = offset_dir / "fixed-comparator.json"
-        fixed_comparator_result: dict[str, Any] | None = None
-        if resume and fixed_comparator_path.is_file():
-            try:
-                payload = _read_json(fixed_comparator_path)
-            except (OSError, ValueError, TypeError, json.JSONDecodeError):
-                payload = {}
-            fixed_comparator_result = _cached_fixed_comparator_result(
-                payload,
-                run_fingerprint=run_fingerprint,
-                rebalance_offset_days=offset,
-                comparator_factor=fixed_comparator_name,
-                candidate_names=candidate_names,
-            )
-        if fixed_comparator_result is None:
-            fixed_comparator_result = portfolio_result(
-                fixed_comparator_factor,
-                fixed_comparator_validation,
-                fixed_comparator_signal,
-                features,
-                execution,
-                config,
-                research_config,
-            )
-        fixed_comparator_result = _runtime_composed_result(
-            fixed_comparator_result,
-            factor=fixed_comparator_factor,
-            execution_validation=fixed_comparator_validation,
-            composition_basis="fixed_registry_equal_weight_no_return_selection",
-        )
-        _write_json(
-            fixed_comparator_path,
-            {
-                "run_fingerprint": run_fingerprint,
-                "rebalance_offset_days": offset,
-                "role": "fixed_registry_comparator",
-                "candidate_registry": candidate_names,
-                "protocol": fixed_comparator_protocol,
-                "result": fixed_comparator_result,
-            },
-        )
 
         control_periods = list(
             static_results[control.name].get("period_active_returns") or []
@@ -570,54 +851,6 @@ def run_walk_forward_sweep(
             periods_per_year=base_config.periods_per_year,
         )
         decisions_hash = _decisions_sha256(decisions)
-        dynamic_path = offset_dir / "dynamic.json"
-        dynamic_result: dict[str, Any] | None = None
-        if resume and dynamic_path.is_file():
-            try:
-                payload = _read_json(dynamic_path)
-            except (OSError, ValueError, TypeError, json.JSONDecodeError):
-                payload = {}
-            dynamic_result = _cached_dynamic_result(
-                payload,
-                run_fingerprint=run_fingerprint,
-                rebalance_offset_days=offset,
-                dynamic_factor=dynamic_name,
-                fresh_decisions=decisions,
-            )
-        if dynamic_result is None:
-            dynamic_signal = build_dynamic_signal(
-                features,
-                candidate_signals=signals,
-                decisions=decisions,
-                control_factor=control.name,
-                date_column=base_config.date_column,
-            ).rename(dynamic_name)
-            dynamic_result = portfolio_result(
-                dynamic_factor,
-                dynamic_validation,
-                dynamic_signal,
-                features,
-                execution,
-                config,
-                research_config,
-            )
-        dynamic_result = _runtime_composed_result(
-            dynamic_result,
-            factor=dynamic_factor,
-            execution_validation=dynamic_validation,
-            composition_basis="causal_completed_portfolio_history",
-        )
-        _write_json(
-            dynamic_path,
-            {
-                "run_fingerprint": run_fingerprint,
-                "rebalance_offset_days": offset,
-                "role": "causal_deployed_account",
-                "decisions_sha256": decisions_hash,
-                "decisions": decisions,
-                "result": dynamic_result,
-            },
-        )
         _write_json(
             offset_dir / "decisions.json",
             {
@@ -643,8 +876,6 @@ def run_walk_forward_sweep(
                 "decisions_sha256": decisions_hash,
                 "decisions": decisions,
                 "static_results": static_results,
-                "fixed_comparator_result": fixed_comparator_result,
-                "dynamic_result": dynamic_result,
             }
         )
 
@@ -654,6 +885,212 @@ def run_walk_forward_sweep(
         if row.get("ready_date")
     ]
     common_start = max(ready_dates) if len(ready_dates) == len(offsets) else None
+    if common_start is None:
+        raise RuntimeError(
+            "walk-forward cannot create equal-AUM scoring accounts without a "
+            "selector-ready date for every configured offset"
+        )
+    common_start_date = common_start.date().isoformat()
+    equal_aum_account_audits: list[dict[str, Any]] = []
+    for payload in offset_payloads:
+        offset = int(payload["rebalance_offset_days"])
+        offset_dir = root / f"offset-{offset:02d}"
+        scoring_dir = offset_dir / "scoring"
+        scoring_static_dir = scoring_dir / "static"
+        scoring_static_dir.mkdir(parents=True, exist_ok=True)
+        scoring_config = replace(
+            base_config,
+            rebalance_offset_days=offset,
+            evaluation_start_date=common_start_date,
+        )
+        scoring_static_results: dict[str, dict[str, Any]] = {}
+        scoring_audits: list[dict[str, Any]] = []
+        for factor_name in candidate_names:
+            factor = factor_by_name[factor_name]
+            path = scoring_static_dir / f"{_safe_name(factor_name)}.json"
+            scoring_result: dict[str, Any] | None = None
+            if resume and path.is_file():
+                try:
+                    cached_payload = _read_json(path)
+                except (OSError, ValueError, TypeError, json.JSONDecodeError):
+                    cached_payload = {}
+                scoring_result = _cached_static_scoring_result(
+                    cached_payload,
+                    run_fingerprint=run_fingerprint,
+                    rebalance_offset_days=offset,
+                    factor_name=factor_name,
+                    evaluation_start_date=common_start_date,
+                )
+            if scoring_result is None:
+                scoring_result = portfolio_result(
+                    factor,
+                    validations[factor_name],
+                    signals[factor_name],
+                    features,
+                    execution,
+                    scoring_config,
+                    research_config,
+                )
+                _write_json(
+                    path,
+                    {
+                        "run_fingerprint": run_fingerprint,
+                        "rebalance_offset_days": offset,
+                        "role": "equal_aum_static_scoring_account",
+                        "evaluation_start_date": common_start_date,
+                        "shadow_history_path": (
+                            f"../../static/{_safe_name(factor_name)}.json"
+                        ),
+                        "result_sha256": _result_sha256(scoring_result),
+                        "result": scoring_result,
+                    },
+                )
+            scoring_static_results[factor_name] = scoring_result
+            audit = _equal_aum_account_audit(
+                scoring_result,
+                requested_start_date=common_start_date,
+                initial_nav=base_config.capital,
+            )
+            audit.update(
+                {
+                    "rebalance_offset_days": offset,
+                    "factor_name": factor_name,
+                    "account_role": "static_scoring",
+                }
+            )
+            scoring_audits.append(audit)
+
+        fixed_comparator_path = offset_dir / "fixed-comparator.json"
+        fixed_comparator_result: dict[str, Any] | None = None
+        if resume and fixed_comparator_path.is_file():
+            try:
+                cached_payload = _read_json(fixed_comparator_path)
+            except (OSError, ValueError, TypeError, json.JSONDecodeError):
+                cached_payload = {}
+            fixed_comparator_result = _cached_fixed_comparator_result(
+                cached_payload,
+                run_fingerprint=run_fingerprint,
+                rebalance_offset_days=offset,
+                comparator_factor=fixed_comparator_name,
+                candidate_names=candidate_names,
+                evaluation_start_date=common_start_date,
+            )
+        if fixed_comparator_result is None:
+            fixed_comparator_result = portfolio_result(
+                fixed_comparator_factor,
+                fixed_comparator_validation,
+                fixed_comparator_signal,
+                features,
+                execution,
+                scoring_config,
+                research_config,
+            )
+            fixed_comparator_result = _runtime_composed_result(
+                fixed_comparator_result,
+                factor=fixed_comparator_factor,
+                execution_validation=fixed_comparator_validation,
+                composition_basis="fixed_registry_equal_weight_no_return_selection",
+            )
+            _write_json(
+                fixed_comparator_path,
+                {
+                    "run_fingerprint": run_fingerprint,
+                    "rebalance_offset_days": offset,
+                    "role": "equal_aum_fixed_comparator_scoring_account",
+                    "evaluation_start_date": common_start_date,
+                    "candidate_registry": candidate_names,
+                    "protocol": fixed_comparator_protocol,
+                    "result_sha256": _result_sha256(
+                        fixed_comparator_result
+                    ),
+                    "result": fixed_comparator_result,
+                },
+            )
+        fixed_audit = _equal_aum_account_audit(
+            fixed_comparator_result,
+            requested_start_date=common_start_date,
+            initial_nav=base_config.capital,
+        )
+        fixed_audit.update(
+            {
+                "rebalance_offset_days": offset,
+                "factor_name": fixed_comparator_name,
+                "account_role": "fixed_comparator_scoring",
+            }
+        )
+        scoring_audits.append(fixed_audit)
+
+        decisions = payload["decisions"]
+        dynamic_path = offset_dir / "dynamic.json"
+        dynamic_result: dict[str, Any] | None = None
+        if resume and dynamic_path.is_file():
+            try:
+                cached_payload = _read_json(dynamic_path)
+            except (OSError, ValueError, TypeError, json.JSONDecodeError):
+                cached_payload = {}
+            dynamic_result = _cached_dynamic_result(
+                cached_payload,
+                run_fingerprint=run_fingerprint,
+                rebalance_offset_days=offset,
+                dynamic_factor=dynamic_name,
+                fresh_decisions=decisions,
+                evaluation_start_date=common_start_date,
+            )
+        if dynamic_result is None:
+            dynamic_signal = build_dynamic_signal(
+                features,
+                candidate_signals=signals,
+                decisions=decisions,
+                control_factor=control.name,
+                date_column=base_config.date_column,
+            ).rename(dynamic_name)
+            dynamic_result = portfolio_result(
+                dynamic_factor,
+                dynamic_validation,
+                dynamic_signal,
+                features,
+                execution,
+                scoring_config,
+                research_config,
+            )
+            dynamic_result = _runtime_composed_result(
+                dynamic_result,
+                factor=dynamic_factor,
+                execution_validation=dynamic_validation,
+                composition_basis="causal_completed_portfolio_history",
+            )
+            _write_json(
+                dynamic_path,
+                {
+                    "run_fingerprint": run_fingerprint,
+                    "rebalance_offset_days": offset,
+                    "role": "equal_aum_dynamic_scoring_account",
+                    "evaluation_start_date": common_start_date,
+                    "decisions_sha256": payload["decisions_sha256"],
+                    "decisions_path": "decisions.json",
+                    "result_sha256": _result_sha256(dynamic_result),
+                    "result": dynamic_result,
+                },
+            )
+        dynamic_audit = _equal_aum_account_audit(
+            dynamic_result,
+            requested_start_date=common_start_date,
+            initial_nav=base_config.capital,
+        )
+        dynamic_audit.update(
+            {
+                "rebalance_offset_days": offset,
+                "factor_name": dynamic_name,
+                "account_role": "dynamic_scoring",
+            }
+        )
+        scoring_audits.append(dynamic_audit)
+        equal_aum_account_audits.extend(scoring_audits)
+        payload["scoring_static_results"] = scoring_static_results
+        payload["fixed_comparator_result"] = fixed_comparator_result
+        payload["dynamic_result"] = dynamic_result
+        payload["scoring_account_audits"] = scoring_audits
+
     metrics_by_strategy: dict[str, list[dict[str, Any]]] = {
         name: []
         for name in [*candidate_names, fixed_comparator_name, dynamic_name]
@@ -662,70 +1099,63 @@ def run_walk_forward_sweep(
     future_violations = 0
     for payload in offset_payloads:
         control_periods = list(
-            payload["static_results"][control.name].get("period_active_returns") or []
+            payload["scoring_static_results"][control.name].get(
+                "period_active_returns"
+            )
+            or []
         )
-        if common_start is not None:
-            control_periods = [
-                row
-                for row in control_periods
-                if pd.Timestamp(row["signal_date"]) >= common_start
-            ]
+        audit_by_strategy = {
+            str(row.get("factor_name")): row
+            for row in payload["scoring_account_audits"]
+        }
+
+        def attach_scoring_audit(
+            metrics: dict[str, Any], strategy_name: str
+        ) -> dict[str, Any]:
+            audit = dict(audit_by_strategy.get(strategy_name) or {})
+            metrics["equal_aum_account_audit_valid"] = audit.get("valid") is True
+            metrics["equal_aum_account_audit_reasons"] = list(
+                audit.get("reasons") or []
+            )
+            metrics["equal_aum_account_execution_integrity"] = list(
+                audit.get("common_window_execution_integrity") or []
+            )
+            return metrics
+
         per_strategy: dict[str, dict[str, Any]] = {}
         for name in candidate_names:
-            periods = list(
-                payload["static_results"][name].get("period_active_returns") or []
-            )
-            if common_start is not None:
-                periods = [
-                    row
-                    for row in periods
-                    if pd.Timestamp(row["signal_date"]) >= common_start
-                ]
             metrics = historical_metrics(
-                {"period_active_returns": periods},
+                payload["scoring_static_results"][name],
                 research_config,
                 periods_per_year=base_config.periods_per_year,
                 reference_periods=control_periods,
                 optimization_scope="post_selection_causal_simulation",
             )
+            metrics = attach_scoring_audit(metrics, name)
             metrics_by_strategy[name].append(metrics)
             per_strategy[name] = metrics
-        fixed_comparator_periods = list(
-            payload["fixed_comparator_result"].get("period_active_returns") or []
-        )
-        if common_start is not None:
-            fixed_comparator_periods = [
-                row
-                for row in fixed_comparator_periods
-                if pd.Timestamp(row["signal_date"]) >= common_start
-            ]
         fixed_comparator_metrics = historical_metrics(
-            {"period_active_returns": fixed_comparator_periods},
+            payload["fixed_comparator_result"],
             research_config,
             periods_per_year=base_config.periods_per_year,
             reference_periods=control_periods,
             optimization_scope="post_selection_causal_simulation",
+        )
+        fixed_comparator_metrics = attach_scoring_audit(
+            fixed_comparator_metrics, fixed_comparator_name
         )
         metrics_by_strategy[fixed_comparator_name].append(
             fixed_comparator_metrics
         )
         per_strategy[fixed_comparator_name] = fixed_comparator_metrics
-        dynamic_periods = list(
-            payload["dynamic_result"].get("period_active_returns") or []
-        )
-        if common_start is not None:
-            dynamic_periods = [
-                row
-                for row in dynamic_periods
-                if pd.Timestamp(row["signal_date"]) >= common_start
-            ]
         dynamic_metrics = historical_metrics(
-            {"period_active_returns": dynamic_periods},
+            payload["dynamic_result"],
             research_config,
             periods_per_year=base_config.periods_per_year,
             reference_periods=control_periods,
             optimization_scope="post_selection_causal_simulation",
         )
+        dynamic_metrics = attach_scoring_audit(dynamic_metrics, dynamic_name)
         metrics_by_strategy[dynamic_name].append(dynamic_metrics)
         per_strategy[dynamic_name] = dynamic_metrics
         decisions = payload["decisions"]
@@ -749,6 +1179,7 @@ def run_walk_forward_sweep(
                 "selection_counts_semantics": "selected_signal_date_count_legacy",
                 "selection_frequency_basis": "all_signal_dates_in_offset",
                 "selection_frequency": selection_frequency,
+                "scoring_account_audits": payload["scoring_account_audits"],
                 "metrics": per_strategy,
             }
         )
@@ -758,6 +1189,7 @@ def run_walk_forward_sweep(
         control_factor=control.name,
         dynamic_factor=dynamic_name,
         phase_quantile=phase_quantile,
+        benchmark_return_coverage_minimum=benchmark_coverage_minimum,
     )
     for row in rankings:
         if row["strategy_name"] == fixed_comparator_name:
@@ -825,11 +1257,20 @@ def run_walk_forward_sweep(
         float(row.get("period_coverage") or 0.0) >= 1.0
         for row in metrics_by_strategy[dynamic_name]
     )
+    expected_scoring_account_count = len(offsets) * (len(candidate_names) + 2)
+    equal_aum_violations = [
+        row for row in equal_aum_account_audits if not bool(row.get("valid"))
+    ]
+    equal_aum_scoring_valid = bool(
+        len(equal_aum_account_audits) == expected_scoring_account_count
+        and not equal_aum_violations
+    )
     causal_valid = bool(
         common_start is not None
         and future_violations == 0
         and len(offset_payloads) == base_config.rebalance_every_days
         and full_coverage
+        and equal_aum_scoring_valid
     )
     # This is a same-sample threshold diagnostic across correlated offsets,
     # not an independent reliability confirmation or an OOS validation.
@@ -899,6 +1340,7 @@ def run_walk_forward_sweep(
             "candidate_registry": candidate_names,
             "uses_realized_returns": False,
             "independent_cost_account_per_offset": True,
+            "equal_aum_common_start_scoring": True,
             "phase_ranking_eligible": fixed_comparator_phase_eligible,
             "phase_rank": fixed_comparator_ranking.get("rank")
             if fixed_comparator_ranking is not None
@@ -912,9 +1354,17 @@ def run_walk_forward_sweep(
         "dynamic_status": "experimental_account",
         "rebalance_offsets": list(offsets),
         "phase_quantile": phase_quantile,
+        "benchmark_return_coverage_minimum": benchmark_coverage_minimum,
         "common_evaluation_start": common_start.date().isoformat()
         if common_start is not None
         else None,
+        "scoring_account_protocol": "fresh_cash_equal_aum_common_start",
+        "scoring_initial_nav": float(base_config.capital),
+        "scoring_account_count": len(equal_aum_account_audits),
+        "expected_scoring_account_count": expected_scoring_account_count,
+        "equal_aum_scoring_valid": equal_aum_scoring_valid,
+        "equal_aum_scoring_violations": equal_aum_violations,
+        "shadow_account_role": "causal_selector_history_only_not_phase_scoring",
         "future_selection_violation_count": future_violations,
         "full_dynamic_period_coverage": full_coverage,
         "causal_history_valid": causal_valid,
@@ -922,12 +1372,16 @@ def run_walk_forward_sweep(
         "control_phase_ranking_eligible": control_phase_eligible,
         "dynamic_control_common_offset_count": dynamic_control_common_offset_count,
         "historical_diagnostic_passed": historical_diagnostic_passed,
-        "historical_diagnostic_scope": "same_sample_correlated_offset_thresholds",
+        "historical_diagnostic_scope": (
+            "same_sample_correlated_offset_thresholds_equal_aum_common_start"
+        ),
         "historical_diagnostic_criteria": {
             "causal_history_valid": True,
+            "equal_aum_scoring_valid": True,
             "control_phase_ranking_eligible": True,
             "dynamic_phase_ranking_eligible": True,
             "fixed_comparator_phase_ranking_eligible": True,
+            "benchmark_return_coverage_minimum": benchmark_coverage_minimum,
             "dynamic_control_common_offset_count": len(offsets),
             "dynamic_phase_q20_net_annual_return_gt": 0.0,
             "dynamic_phase_q20_net_sharpe_gt": 0.0,

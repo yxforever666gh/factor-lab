@@ -13,6 +13,11 @@ def test_cli_exposes_only_lightweight_mainline_commands() -> None:
     )
     assert enrich.data_command == "enrich"
     assert enrich.resume is True
+    suspensions = parser.parse_args(
+        ["data", "suspensions", "--from", "2017-01-01", "--to", "2026-08-21"]
+    )
+    assert suspensions.data_command == "suspensions"
+    assert suspensions.resume is True
 
 
 def test_walk_forward_is_the_default_research_suite() -> None:

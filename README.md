@@ -1,8 +1,7 @@
 # Factor Lab
 
-Factor Lab 是一条本地、可复现的 A 股 selector 内部因果 walk-forward 研究 framework：Parquet 数据 →
-固定方向截面排名 → 预注册 control/challenger 候选 → 仅使用已成熟成本后收益轮换 →
-真实成本多头回测 → 10 个调仓相位汇总。
+Factor Lab 是一条本地、可复现的 A 股组合研究链：Parquet 数据 → 固定方向截面排名 →
+逐日成交与账户核算 → fresh equal-AUM 比较 → 10 个相关调仓相位稳健性汇总 → 协议冻结。
 
 项目不再依赖 WebUI、Docker、PostgreSQL、MinIO、Dagster、Hermes 或自治 Agent。旧 Research OS 已完整归档在 Git tag `research-os-final-20260826`，不再进入当前主线。
 
@@ -42,6 +41,9 @@ factor-lab data build --full --apply-migration --hash
 # 增量同步三类 Tushare 日分区
 factor-lab data sync --from 2026-08-14 --to 2026-08-26 --resume
 
+# 下载并校验官方停复牌历史快照
+factor-lab data suspensions --from 2017-01-01 --to 2026-08-21 --resume
+
 # 续传 PIT 财务指标和历史月末名称/行业，并原子更新 canonical Parquet
 factor-lab data enrich --from 2017-01-01 --to 2026-08-13 --resume
 
@@ -67,49 +69,44 @@ factor-lab research status
 factor-lab report --run latest
 ```
 
-## 当前主线：Walk-forward 4.0
+## 当前主线：校正后的 Walk-forward 4.1
 
-`walk-forward` 是默认研究 framework；`causal_walk_forward_dynamic` 只是其中的动态实验
-账户，不是默认获胜策略，也不会因为 framework 升级而自动晋级。
+4.1 首先修复了 4.0 最关键的研究错误：旧 dynamic/static 账户在公共评分起点前已经拥有
+财富和持仓，而 fixed 账户从 5000 万现金开始，跨策略排名并不等资金可比。旧运行
+`97840d20b4a2ff71` 的 selector cutoff 仍没有读取未来收益，但绩效、排名和 gate 已作废。
 
-- 控制项仍是 `earnings_yield_over_pb`。候选只包括 `value_defensive_rank`、
-  `low_volatility` 和 `low_turnover`；控制项与三个候选的方向全部预注册为固定 `+1`，
-  历史收益不能翻转任何较早时点的方向。
-- 每个 challenger 只生成 30%、70% 两档预注册有向秩混合。challenger 缺失时回退
-  control，control 缺失时不产生组合信号；不连续优化因子权重。
-- 每个候选维护独立、连续、包含成本的影子账户。决策日只能使用
-  `end_date < signal_date` 的完整持有期；决策日当天结束的收益也明确排除。
-- 另设不读取收益、始终对同一 candidate registry 等权的 `fixed_registry_equal_weight`
-  成本后无择时基准；动态轮换的同样本历史阈值诊断必须相对它达标，不能只和较弱
-  control 比，但达标也不构成证明或独立验证。这里等权的是 control 加六个预注册混合
-  策略，不是四个原始因子等权。
-- 选择器回看 756 个交易日，必须有 60 个共同完成的 10 日持有期；至少间隔 63 个交易日，
-  并在该 offset 的下一个调仓信号日更新，只比较成本后 Sharpe。只有至少领先 control `0.10` 的 challenger 才能入选，
-  control 始终进入合格集合，再与越过 guard 的 challenger 一起按成绩取最多前三名等权；
-  若无 challenger 合格，则只使用 control。
-- 部署组合固定为 5000 万、Top-10、留仓缓冲 5、每 10 个交易日调仓。完整运行必须覆盖
-  offset `0..9`，从十个相位都完成 warmup 后的共同日期开始比较，并报告 Q20、median、
-  worst 与 IQR；不得选择表现最好的 offset。
-- 该协议保证模拟内部的选择只读取当时已成熟的收益，不会把已经反复看过的 2017–2026
-  数据重新变成盲测。真正更干净的确认只能来自协议冻结后的新增市场数据。
+校正协议有三条硬约束：
 
-这里的“因果”边界仅覆盖 selector 的成熟收益 cutoff 与预注册方向，并不自动证明输入数据
-在每个时点都保留了原始 revision vintage。退市/吸收合并的 ghost position 处置、候选间
-等 AUM 可比性和历史分段资本重置也仍需加固；十个 offset 共用同一市场路径，不是十份
-独立样本。详见 [CHANGELOG.md](CHANGELOG.md) 的 4.0 Known limitations。
+- 全历史、连续、含成本的影子账户只给 selector 提供 `end_date < signal_date` 的成熟反馈；
+  评分账户一律从同一个 `2019-08-16` 以 5000 万现金、空仓启动。
+- 七个静态候选、fixed comparator 与 dynamic 在十个 offset 上形成 90 个 fresh equal-AUM
+  账户。收益、年度/半年度指标和最大回撤来自完整逐日 NAV，不能用稀疏调仓边界替代。
+- 每个 execution session 都处理停复牌、退市和估值。生产研究只接受
+  `adjusted_total_return/open_adj`，拆股/分红影响已嵌入调整价格，不再叠加显式事件；
+  退市默认零回收，不允许脏停牌行情成交或估值。本次 90 个账户没有实际触发退市冲销，
+  因此该分支仍只有合同与测试证据。
 
-当前完整运行 `97840d20b4a2ff71` 在共同区间 2019-08-16 至 feature 决策数据末端
-2026-08-13（退出估值行情延伸至 2026-08-21）的十相位结果为：动态实验账户成本后年化
-收益 Q20 / median / worst 为 8.88% / 9.11% / 6.85%，Sharpe Q20 为 0.561、最大回撤
-Q20 为 -18.15%；选择违规为 0、周期覆盖为 100%，十个 offset 的年化均高于各自 control。
+完整校正运行 `6462d5550b459fb2` 的 90/90 个评分账户均通过起点、逐日路径、执行覆盖和
+期末复利对账；每个账户有 2,028 个 daily NAV 观测，未来输入违规和容量违规均为 0，
+benchmark 收益覆盖率最低 98.996%。manifest 的 181 个文件、大小、SHA-256 与自哈希也已
+独立复核。
 
-但 fixed comparator 的年化 Q20 / median / worst 为 9.50% / 10.22% / 8.84%，Sharpe
-Q20 为 0.587、最大回撤 Q20 为 -16.59%。逐 offset 配对后，dynamic − fixed 的年化、
-Sharpe、IR、最大回撤 Q20 分别为 -1.35 个百分点、-0.098、-0.043、-2.98 个百分点；
-动态仅在 5/10 个 offset 年化更高。因此 `historical_diagnostic_passed=false`，动态账户只
-排第 7，固定基准排第 4；当前证据支持候选篮子，不支持这套轮换逻辑。事后 phase 排名
-最强的 70% 防御价值静态候选 Q20 年化为 11.13%，但它同样不是独立 OOS 或可直接晋级的
-赢家。
+结果否决了 hard selector：dynamic 年化收益 Q20 / median / worst 为 8.90% / 9.25% /
+6.93%，相对 fixed 的配对年化、Sharpe、IR、最大回撤 Q20 分别为 -1.41 个百分点、
+-0.092、-0.045、-2.91 个百分点，只在 5/10 offset 年化更高。因此
+`historical_diagnostic_passed=false`。
+
+70% 防御价值静态候选在九个策略中排名第一，年化收益 Q20 / median / worst 为 11.16% /
+11.58% / 10.53%，Sharpe Q20 为 0.707、IR Q20 为 0.181、最大回撤 Q20 为 -18.29%。它
+相对 fixed 的配对年化和 Sharpe Q20 为 +1.22 个百分点和 +0.053，且 10/10 offset 年化
+改善，因此基于已观察的 4.1 结果被选作下一阶段固定核心。这个选择不是预注册 gate；它
+只用于冻结后续协议，仍是看过 2017–2026 历史后的 post-selection 结论，不是独立 OOS，
+也不证明未来盈利。
+
+当前 PIT lineage 会递归列出未验证 vintage 的 feature、execution、universe 和停复牌依赖，
+并保持 `investment_claim_allowed=false`。十个 offset 共用同一市场路径、不是十份独立样本；
+财务 revision vintage 和日内 ST 历史也不完整。详见 [CHANGELOG.md](CHANGELOG.md) 的 4.1
+Known limitations。
 
 ## 保留的旧研究协议
 

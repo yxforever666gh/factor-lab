@@ -7,7 +7,7 @@ market observations supplied by its caller.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import date, datetime
 from math import floor, isfinite, sqrt
 from typing import Any, Mapping
@@ -16,6 +16,30 @@ import pandas as pd
 
 
 _EPSILON = 1e-8
+
+
+def _remove_economically_zero_positions(account: "ExecutionAccount") -> None:
+    """Drop sub-cent floating-point residue before it becomes a ghost holding."""
+
+    for ticker, position in list(account.positions.items()):
+        if position.quantity <= 0.0 or position.market_value <= _EPSILON:
+            account.positions.pop(ticker, None)
+
+
+def _normalized_optional_date(
+    value: str | date | datetime | pd.Timestamp | None,
+    *,
+    name: str,
+) -> str | None:
+    if value is None:
+        return None
+    try:
+        timestamp = pd.Timestamp(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{name} must be a valid date") from exc
+    if pd.isna(timestamp):
+        raise ValueError(f"{name} must be a valid date")
+    return str(timestamp.date())
 
 
 @dataclass(frozen=True)
@@ -113,11 +137,17 @@ def calculate_trade_costs(
 
 
 def maximum_executable_notional(
-    adv: float, max_adv_participation: float = 0.05
+    adv: Any, max_adv_participation: float = 0.05
 ) -> float:
     if not 0 < float(max_adv_participation) <= 1:
         raise ValueError("max_adv_participation must be in (0, 1]")
-    return max(float(adv), 0.0) * float(max_adv_participation)
+    try:
+        daily_value = float(adv)
+    except (TypeError, ValueError):
+        return 0.0
+    if not isfinite(daily_value) or daily_value <= 0.0:
+        return 0.0
+    return daily_value * float(max_adv_participation)
 
 
 @dataclass
@@ -126,6 +156,8 @@ class ExecutionPosition:
     quantity: float
     last_price: float
     average_cost: float = 0.0
+    last_observation_date: str | date | datetime | pd.Timestamp | None = None
+    stale_since_date: str | date | datetime | pd.Timestamp | None = None
 
     def __post_init__(self) -> None:
         self.ticker = str(self.ticker)
@@ -139,6 +171,12 @@ class ExecutionPosition:
             raise ValueError("position accounting values must be finite")
         if self.quantity < -_EPSILON:
             raise ValueError("long-only position quantity cannot be negative")
+        self.last_observation_date = _normalized_optional_date(
+            self.last_observation_date, name="last_observation_date"
+        )
+        self.stale_since_date = _normalized_optional_date(
+            self.stale_since_date, name="stale_since_date"
+        )
 
     @property
     def market_value(self) -> float:
@@ -191,6 +229,7 @@ class ExecutionPolicy:
     costs: AShareCostPolicy | Mapping[str, Any] | Any = field(
         default_factory=AShareCostPolicy
     )
+    max_stale_position_age_days: int | None = None
 
     def __post_init__(self) -> None:
         participation = float(self.max_adv_participation)
@@ -201,6 +240,13 @@ class ExecutionPolicy:
             raise ValueError("max_position_weight must be in (0, 1]")
         if int(self.lot_size) < 0:
             raise ValueError("lot_size cannot be negative")
+        max_stale_age = self.max_stale_position_age_days
+        if max_stale_age is not None and (
+            isinstance(max_stale_age, bool)
+            or int(max_stale_age) != max_stale_age
+            or max_stale_age < 0
+        ):
+            raise ValueError("max_stale_position_age_days must be a non-negative integer")
 
 
 @dataclass(frozen=True)
@@ -208,6 +254,29 @@ class CorporateAction:
     action_type: str
     ticker: str
     payload: dict[str, float]
+
+
+@dataclass(frozen=True)
+class StalePositionDiagnostic:
+    ticker: str
+    blocked_reason: str
+    carrying_notional: float
+    age_days: int
+    last_observation_date: str | None
+    stale_since_date: str
+    action: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+class StalePositionViolation(RuntimeError):
+    """Fail-closed error for a position whose missing bar exceeded policy."""
+
+    def __init__(self, diagnostics: tuple[StalePositionDiagnostic, ...]) -> None:
+        self.diagnostics = diagnostics
+        tickers = ", ".join(row.ticker for row in diagnostics)
+        super().__init__(f"stale position age limit exceeded: {tickers}")
 
 
 @dataclass(frozen=True)
@@ -260,6 +329,7 @@ class ExecutionOrder:
 
 @dataclass(frozen=True)
 class ExecutionResult:
+    accounting_start_nav: float
     pretrade_nav: float
     posttrade_nav: float
     target_weights: dict[str, float]
@@ -270,6 +340,11 @@ class ExecutionResult:
     cash_weight: float
     capacity_violation_count: int
     capacity_usage: float
+    stale_position_count: int = 0
+    stale_position_notional: float = 0.0
+    max_stale_position_age_days: int = 0
+    stale_position_blocked_reasons: dict[str, int] = field(default_factory=dict)
+    stale_position_diagnostics: tuple[StalePositionDiagnostic, ...] = ()
 
     @property
     def blocked_trade_count(self) -> int:
@@ -288,6 +363,19 @@ class ExecutionResult:
         """Orders whose requested notional was clipped to the ADV budget."""
 
         return sum(order.capacity_limited for order in self.orders)
+
+
+@dataclass(frozen=True)
+class AccountObservationResult:
+    """No-order account observation after events and current-session marks."""
+
+    nav: float
+    corporate_actions: tuple[CorporateAction, ...]
+    stale_position_count: int = 0
+    stale_position_notional: float = 0.0
+    max_stale_position_age_days: int = 0
+    stale_position_blocked_reasons: dict[str, int] = field(default_factory=dict)
+    stale_position_diagnostics: tuple[StalePositionDiagnostic, ...] = ()
 
 
 def _truthy(value: Any) -> bool:
@@ -325,6 +413,121 @@ def _row_value(
     if not column:
         return default
     return row.get(column, default)
+
+
+def _stale_position_reason(
+    row: Mapping[str, Any] | None,
+    *,
+    columns: ExecutionColumns,
+) -> str | None:
+    if row is None:
+        return "missing_market_bar"
+    if _truthy(_row_value(row, columns.delisted)):
+        return "delisted"
+    if _truthy(_row_value(row, columns.suspended)):
+        return "suspended"
+    if _finite_positive(_row_value(row, columns.open)) is None:
+        return "missing_open"
+    return None
+
+
+def _stale_position_diagnostics(
+    account: ExecutionAccount,
+    rows: Mapping[str, Mapping[str, Any]],
+    *,
+    observation_date: pd.Timestamp,
+    columns: ExecutionColumns,
+    max_age_days: int | None,
+) -> tuple[StalePositionDiagnostic, ...]:
+    current_date = str(observation_date.date())
+    diagnostics: list[StalePositionDiagnostic] = []
+    for ticker, position in sorted(account.positions.items()):
+        reason = _stale_position_reason(rows.get(ticker), columns=columns)
+        if reason is None:
+            continue
+        stale_since = position.stale_since_date or current_date
+        age_reference = position.last_observation_date or stale_since
+        age_days = max(
+            (observation_date - pd.Timestamp(age_reference).normalize()).days,
+            0,
+        )
+        action = "write_down" if reason == "delisted" else "carry"
+        if (
+            reason in {"missing_market_bar", "missing_open"}
+            and max_age_days is not None
+            and age_days > max_age_days
+        ):
+            action = "violation"
+        diagnostics.append(
+            StalePositionDiagnostic(
+                ticker=ticker,
+                blocked_reason=reason,
+                carrying_notional=position.market_value,
+                age_days=age_days,
+                last_observation_date=position.last_observation_date,
+                stale_since_date=stale_since,
+                action=action,
+            )
+        )
+    return tuple(diagnostics)
+
+
+def _apply_stale_position_policy(
+    account: ExecutionAccount,
+    diagnostics: tuple[StalePositionDiagnostic, ...],
+    rows: Mapping[str, Mapping[str, Any]],
+    *,
+    observation_date: pd.Timestamp,
+    columns: ExecutionColumns,
+) -> tuple[CorporateAction, ...]:
+    violations = tuple(row for row in diagnostics if row.action == "violation")
+    if violations:
+        raise StalePositionViolation(violations)
+
+    diagnostic_by_ticker = {row.ticker: row for row in diagnostics}
+    actions: list[CorporateAction] = []
+    current_date = str(observation_date.date())
+    for ticker, position in list(account.positions.items()):
+        diagnostic = diagnostic_by_ticker.get(ticker)
+        if diagnostic is None:
+            if _finite_positive(_row_value(rows.get(ticker, {}), columns.open)) is not None:
+                position.last_observation_date = current_date
+                position.stale_since_date = None
+            continue
+        if diagnostic.action == "write_down":
+            account.positions.pop(ticker, None)
+            actions.append(
+                CorporateAction(
+                    "delist_write_down",
+                    ticker,
+                    {
+                        "quantity": position.quantity,
+                        "carrying_notional": diagnostic.carrying_notional,
+                        "cash_recovery": 0.0,
+                        "age_days": float(diagnostic.age_days),
+                    },
+                )
+            )
+            continue
+        if position.stale_since_date is None:
+            position.stale_since_date = current_date
+    return tuple(actions)
+
+
+def _stale_position_summary(
+    diagnostics: tuple[StalePositionDiagnostic, ...],
+) -> tuple[int, float, int, dict[str, int]]:
+    blocked_reasons: dict[str, int] = {}
+    for diagnostic in diagnostics:
+        blocked_reasons[diagnostic.blocked_reason] = (
+            blocked_reasons.get(diagnostic.blocked_reason, 0) + 1
+        )
+    return (
+        len(diagnostics),
+        sum(row.carrying_notional for row in diagnostics),
+        max((row.age_days for row in diagnostics), default=0),
+        dict(sorted(blocked_reasons.items())),
+    )
 
 
 def validate_long_only_targets(
@@ -430,6 +633,78 @@ def apply_corporate_actions(
     return tuple(actions)
 
 
+def process_account_observation(
+    account: ExecutionAccount,
+    market: Mapping[str, Mapping[str, Any]] | pd.DataFrame,
+    *,
+    observation_date: str | date | datetime | pd.Timestamp,
+    policy: ExecutionPolicy,
+    columns: ExecutionColumns = ExecutionColumns(),
+    ticker_column: str = "ticker",
+    mark_at_open: bool = False,
+    process_events: bool = True,
+    process_corporate_actions: bool = True,
+) -> AccountObservationResult:
+    """Apply one session's account events and marks without creating orders.
+
+    Security-event diagnostics and zero-recovery delist write-downs precede
+    split/dividend processing, and marking is always last.  Callers that have
+    already observed the same session may set ``process_events=False`` to mark
+    idempotently without applying events twice.
+    """
+
+    timestamp = pd.Timestamp(observation_date).normalize()
+    rows = _market_map(market, ticker_column=ticker_column)
+    _remove_economically_zero_positions(account)
+    stale_diagnostics: tuple[StalePositionDiagnostic, ...] = ()
+    actions: tuple[CorporateAction, ...] = ()
+    if process_events:
+        stale_diagnostics = _stale_position_diagnostics(
+            account,
+            rows,
+            observation_date=timestamp,
+            columns=columns,
+            max_age_days=policy.max_stale_position_age_days,
+        )
+        stale_actions = _apply_stale_position_policy(
+            account,
+            stale_diagnostics,
+            rows,
+            observation_date=timestamp,
+            columns=columns,
+        )
+        corporate_actions = (
+            apply_corporate_actions(account, rows, columns=columns)
+            if process_corporate_actions
+            else ()
+        )
+        actions = (*stale_actions, *corporate_actions)
+
+    mark_columns = replace(columns, mark=columns.open) if mark_at_open else columns
+    nav = mark_to_market(
+        account,
+        rows,
+        columns=mark_columns,
+        ticker_column=ticker_column,
+        observation_date=timestamp,
+    )
+    (
+        stale_position_count,
+        stale_position_notional,
+        max_stale_position_age_days,
+        stale_position_blocked_reasons,
+    ) = _stale_position_summary(stale_diagnostics)
+    return AccountObservationResult(
+        nav=nav,
+        corporate_actions=actions,
+        stale_position_count=stale_position_count,
+        stale_position_notional=stale_position_notional,
+        max_stale_position_age_days=max_stale_position_age_days,
+        stale_position_blocked_reasons=stale_position_blocked_reasons,
+        stale_position_diagnostics=stale_diagnostics,
+    )
+
+
 def _block_reason(
     row: Mapping[str, Any] | None,
     *,
@@ -438,12 +713,12 @@ def _block_reason(
 ) -> str | None:
     if row is None:
         return "missing_market_bar"
-    if _finite_positive(_row_value(row, columns.open)) is None:
-        return "missing_open"
-    if _truthy(_row_value(row, columns.suspended)):
-        return "suspended"
     if side == "buy" and _truthy(_row_value(row, columns.delisted)):
         return "delisted"
+    if _truthy(_row_value(row, columns.suspended)):
+        return "suspended"
+    if _finite_positive(_row_value(row, columns.open)) is None:
+        return "missing_open"
     if side == "buy" and _truthy(_row_value(row, columns.limit_up)):
         return "one_price_limit_up"
     if side == "sell" and _truthy(_row_value(row, columns.limit_down)):
@@ -500,6 +775,7 @@ def execute_rebalance(
     columns: ExecutionColumns = ExecutionColumns(),
     ticker_column: str = "ticker",
     process_corporate_actions: bool = True,
+    process_events: bool = True,
 ) -> ExecutionResult:
     """Execute one target at the supplied opening observations.
 
@@ -512,22 +788,26 @@ def execute_rebalance(
     )
     timestamp = pd.Timestamp(trade_date).normalize()
     rows = _market_map(market, ticker_column=ticker_column)
-    actions = (
-        apply_corporate_actions(account, rows, columns=columns)
-        if process_corporate_actions
-        else ()
+    _remove_economically_zero_positions(account)
+    # This is the prior accounting boundary before current-session marks,
+    # security events, or orders.  Portfolio-period returns must use it to
+    # remain continuous across rebalance gaps and delist write-downs.  Target
+    # sizing still uses ``pretrade_nav`` after those current-session events.
+    accounting_start_nav = account.nav()
+    if accounting_start_nav <= 0:
+        raise ValueError("accounting start NAV must be positive")
+    observation = process_account_observation(
+        account,
+        rows,
+        observation_date=timestamp,
+        policy=policy,
+        columns=columns,
+        ticker_column=ticker_column,
+        mark_at_open=True,
+        process_events=process_events,
+        process_corporate_actions=process_corporate_actions,
     )
-
-    for ticker, position in account.positions.items():
-        row = rows.get(ticker)
-        price = (
-            _finite_positive(_row_value(row, columns.open))
-            if row is not None
-            else None
-        )
-        if price is not None:
-            position.last_price = price
-    pretrade_nav = account.nav()
+    pretrade_nav = observation.nav
     if pretrade_nav <= 0:
         raise ValueError("pretrade NAV must be positive")
 
@@ -594,7 +874,7 @@ def execute_rebalance(
         position.quantity = max(position.quantity - quantity, 0.0)
         position.last_price = price
         account.cash += executed - fees["total"]
-        if position.quantity <= 1e-12:
+        if position.quantity <= 0.0 or position.market_value <= _EPSILON:
             account.positions.pop(ticker, None)
         orders.append(
             ExecutionOrder(
@@ -731,6 +1011,7 @@ def execute_rebalance(
                 quantity=quantity,
                 last_price=price,
                 average_cost=outlay / quantity,
+                last_observation_date=str(timestamp.date()),
             )
         else:
             old_quantity = position.quantity
@@ -738,6 +1019,8 @@ def execute_rebalance(
             position.quantity += quantity
             position.last_price = price
             position.average_cost = (old_cost + outlay) / position.quantity
+            position.last_observation_date = str(timestamp.date())
+            position.stale_since_date = None
         orders.append(
             ExecutionOrder(
                 date=str(timestamp.date()),
@@ -783,11 +1066,12 @@ def execute_rebalance(
     if capacity_violations:
         raise RuntimeError("execution kernel exceeded max_adv_participation")
     return ExecutionResult(
+        accounting_start_nav=accounting_start_nav,
         pretrade_nav=pretrade_nav,
         posttrade_nav=posttrade_nav,
         target_weights=normalized_targets,
         orders=tuple(orders),
-        corporate_actions=tuple(actions),
+        corporate_actions=observation.corporate_actions,
         costs=costs,
         weights=weights,
         cash_weight=max(account.cash / posttrade_nav, 0.0)
@@ -802,6 +1086,11 @@ def execute_rebalance(
             ),
             default=0.0,
         ),
+        stale_position_count=observation.stale_position_count,
+        stale_position_notional=observation.stale_position_notional,
+        max_stale_position_age_days=observation.max_stale_position_age_days,
+        stale_position_blocked_reasons=observation.stale_position_blocked_reasons,
+        stale_position_diagnostics=observation.stale_position_diagnostics,
     )
 
 
@@ -811,24 +1100,38 @@ def mark_to_market(
     *,
     columns: ExecutionColumns = ExecutionColumns(),
     ticker_column: str = "ticker",
+    observation_date: str | date | datetime | pd.Timestamp | None = None,
 ) -> float:
     """Update known marks without creating fills and return account NAV."""
 
     rows = _market_map(market, ticker_column=ticker_column)
+    normalized_observation_date = _normalized_optional_date(
+        observation_date, name="observation_date"
+    )
     for ticker, position in account.positions.items():
         row = rows.get(ticker)
         if row is None:
+            continue
+        # A security-event or otherwise stale row is not a trustworthy mark.
+        # In particular, suspension overlays can coincide with a vendor price
+        # row; carrying that row's stale positive open would silently revalue a
+        # position that the event policy explicitly says to carry unchanged.
+        if _stale_position_reason(row, columns=columns) is not None:
             continue
         price = _finite_positive(_row_value(row, columns.mark))
         if price is None:
             price = _finite_positive(_row_value(row, columns.open))
         if price is not None:
             position.last_price = price
+            if normalized_observation_date is not None:
+                position.last_observation_date = normalized_observation_date
+                position.stale_since_date = None
     return account.nav()
 
 
 __all__ = [
     "AShareCostPolicy",
+    "AccountObservationResult",
     "CorporateAction",
     "ExecutionAccount",
     "ExecutionColumns",
@@ -836,12 +1139,15 @@ __all__ = [
     "ExecutionPolicy",
     "ExecutionPosition",
     "ExecutionResult",
+    "StalePositionDiagnostic",
+    "StalePositionViolation",
     "TradeCostBreakdown",
     "apply_corporate_actions",
     "calculate_trade_costs",
     "execute_rebalance",
     "mark_to_market",
     "maximum_executable_notional",
+    "process_account_observation",
     "stamp_duty_rate",
     "validate_long_only_targets",
 ]

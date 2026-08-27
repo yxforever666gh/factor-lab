@@ -10,7 +10,102 @@
 
 ## [Unreleased]
 
+## [4.1] - 2026-08-28
+
+### Changed
+
+- Walk-forward 比较统一改为从 `2019-08-16` 开始的 fresh-cash、空仓、5000 万等 AUM
+  账户。七个静态候选、fixed comparator 与 dynamic 账户在十个 offset 上共形成 90 个
+  可比评分账户；全历史影子账户只向 selector 提供当时已完成的成本后收益，不再进入
+  phase 排名或绩效比较。
+- 组合账户改为逐个 execution session 处理估值、停复牌和退市；复权生产口径的公司行动
+  影响嵌入 `open_adj`，只有 `raw_with_actions` 测试/未来入口才逐日处理显式拆股与分红。
+  每日 NAV 路径成为收益、年度/半年度指标及最大回撤的权威来源，持有期稀疏边界只用于
+  周期归因。
+- 生产价格合同冻结为 `adjusted_total_return`：只使用 canonical `open_adj`，来源为 AkShare
+  HFQ 与 Tushare `raw × adj_factor` fallback，`lot_size=0`，并禁止同时处理非中性的显式
+  拆股/分红事件。`raw_with_actions` 只保留为测试和未来数据入口。
+- 研究 config 与 summary schema 升至 `4`、engine 升至 `factor-lab/research/v6`；运行指纹
+  纳入精确 Python/NumPy/Pandas/PyArrow/SciPy 身份，result envelope 记录角色、offset、共同
+  起点和决策 hash。
+- manifest 升至 schema `2`：按 canonical JSON 计算自哈希，逐文件登记 SHA-256 与大小，
+  运行前后重验输入以阻断 TOCTOU；缓存只有在 manifest、角色、共同起点及决策完全一致时
+  才可复用。
+
+### Added
+
+- 增加 `factor-lab data suspensions --from ... --to ... --resume`：按自然年切分
+  Tushare `suspend_d` 查询，并在每个窗口内用 `limit/offset=5000` 分页；输出标准化、
+  去重排序的 `runtime/data/top500/suspensions.parquet` 及带查询范围、行数、S/R 统计和
+  文件 SHA-256 的 `suspensions.meta.json`。续跑只有在范围覆盖、schema、统计及文件
+  hash 全部验证通过后才零请求复用。
+- 纳入官方停复牌快照：2017-01-03 至 2026-08-21 共 170,674 行、3,676 只证券，
+  其中停牌 163,700、复牌 6,974；空白停牌时段或覆盖 09:30 的停牌阻断开盘成交，09:30
+  后停牌与复牌标记不反向改写开盘状态，退市事件优先。
+- 增加 schema `3` 的递归 PIT lineage 合同，覆盖 feature、execution、停复牌、builder、
+  日历和 universe 依赖路径；任何生产必需字段未被 vintage 证明时均逐路径列出 blocker，
+  并保持 `investment_claim_allowed=false`。
+- 增加完整 daily NAV、停牌/陈旧行情诊断、benchmark 有效覆盖、账户起点及期末复利精确
+  对账；完整运行要求 270/270 个 train/validation/audit 窗口通过产物完整性检查。
+
+### Fixed
+
+- 纠正 4.0 运行 `97840d20b4a2ff71` 的核心可比性错误：dynamic/static 账户在共同评分
+  起点前已经积累财富和持仓，而 fixed 账户从 5000 万现金开始，起点 NAV 相差
+  12.16%–24.78%（中位数 16.73%）。该运行的 selector future-violation=0 仍只在狭义
+  cutoff 上成立，但其跨策略绩效、排名、配对差值和历史 gate 全部作废，由本版本 fresh
+  equal-AUM 结果替代。
+- 修正周期收益以错误的期末/边界资本为分母、稀疏持有期路径低估日内最大回撤、首日 NAV
+  不等于请求初始资本，以及复利收益与期末财富不能精确对账的问题。
+- 空的计划调仓信号改为 fail-closed；最后决策日之后的行情只允许退出估值，不再生成新
+  信号；`holding_days` 与真实 rebalance interval 统一。
+- 停牌期间不再使用脏行情标记或成交，缺失/无效 ADV 的容量为零；持仓超过 21 个交易日
+  无有效价格时明确标记 stale。退市按零回收冲销且不伪造卖出，零价值尘埃仓位被清理。
+- benchmark 拒绝停牌、退市、非正价格和无效端点；中途停复牌和退市即使不在调仓日也由
+  逐日执行链处理。生产复权口径通过调整价格承载拆股/分红，明确拒绝再叠加非中性显式
+  事件；显式事件的逐日会计只属于 `raw_with_actions` 测试/未来入口。
+- 增加互斥的组合价格口径合同。生产研究只接受
+  `adjusted_total_return`（canonical `open_adj`，混合 AkShare HFQ 与 Tushare
+  `raw × adj_factor` fallback），使用合成总回报单位、`lot_size=0`，并禁止在复权价格上
+  再处理任何非中性的拆股或现金分红字段，避免公司行动双算。显式事件会计仅保留为
+  `raw_with_actions` 测试/未来入口；它必须使用非复权执行价，且当前 runner 因缺少已证明的
+  raw 生产 artifact 而拒绝启用。
+- 修正 `open_adj` / `close_adj` 的保守 PIT lineage 描述：实际为混合 AkShare HFQ 与
+  Tushare 调整因子 fallback，而非把全部行错误描述为单一 `raw_open + adj_factor` 来源；
+  两条来源的历史 vintage 仍保持 unverified、fail-closed。
+
+### Research results
+
+- 校正后的完整运行 `6462d5550b459fb2` 覆盖 90/90 个等 AUM 评分账户；未来输入违规、
+  容量违规、账户对账错误均为 0，90 个账户均有 2,028 个完整 daily NAV 观测，benchmark
+  收益覆盖率最低 98.996%。181 个 manifest 文件及 manifest 自哈希全部通过复核。
+- dynamic 年化收益 Q20 / median / worst 为 8.90% / 9.25% / 6.93%，Sharpe Q20 为
+  0.562、IR Q20 为 0.093、最大回撤 Q20 为 -20.60%。相对 fixed 的配对年化 / Sharpe /
+  IR / 最大回撤 Q20 分别为 -1.41 个百分点 / -0.092 / -0.045 / -2.91 个百分点，且只在
+  5/10 offset 年化更高；`historical_diagnostic_passed=false`，hard selector 路线被否决。
+- 70% 防御价值静态候选在九个可比策略中排名第一：年化收益 Q20 / median / worst 为
+  11.16% / 11.58% / 10.53%，Sharpe Q20 为 0.707、IR Q20 为 0.181、最大回撤 Q20 为
+  -18.29%。它相对 fixed 的年化、Sharpe、最大回撤配对 Q20 为 +1.22 个百分点、
+  +0.053、+0.03 个百分点，10/10 offset 年化改善，因此基于 4.1 已观察结果被选作下一
+  方向的固定核心；这是明确的 post-selection 选择，不是预注册 gate 或独立 OOS。
+
+### Known limitations
+
+- 财务、复权与部分 universe 输入没有保存每次历史 revision vintage；PIT lineage 因此
+  正确地阻断投资声明。月末名称可以按时点核对，但日内 ST 历史仍不可用。
+- 十个 offset 是同一市场路径上的相关稳健性切片，不是十个独立样本；2017–2026 历史已被
+  反复使用。4.1 只能用于否决 hard selector、冻结下一协议及建立历史基线。
+- 固定核心相对 fixed 的 offset 8 最大回撤恶化 2.28 个百分点；总体配对 Q20 为正不能
+  抵消这一单点尾部风险，后续协议必须继续披露并单独归因。
+- 数据层虽注入 153 只退市证券及其后续 event-only sessions，本次 90 个评分账户没有持有
+  到需要实际触发退市零回收的证券；该机制已实现并有测试，但本次历史结果没有实证覆盖
+  这一分支，事件源 PIT vintage 也仍未验证。
+
 ## [4.0] - 2026-08-27
+
+> **4.1 更正：**本节引用的 `97840d20b4a2ff71` 跨策略结果存在不等 AUM 起点，相关排名、
+> 配对差值和 gate 已作废。selector 的收益截止规则仍无未来违规；可比绩效请以 4.1 的
+> fresh equal-AUM 运行 `6462d5550b459fb2` 为准。
 
 ### Changed
 
@@ -224,6 +319,7 @@
   移除这些实验层。
 
 [Unreleased]: https://github.com/yxforever666gh/factor-lab/commits/main
+[4.1]: https://github.com/yxforever666gh/factor-lab/tree/4.1
 [4.0]: https://github.com/yxforever666gh/factor-lab/tree/4.0
 [3.0]: https://github.com/yxforever666gh/factor-lab/tree/3.0
 [research-os-final-20260826]: https://github.com/yxforever666gh/factor-lab/tree/research-os-final-20260826

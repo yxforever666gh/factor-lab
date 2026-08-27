@@ -5,12 +5,494 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 
+from factor_lab.portfolio import (
+    ExecutionAccount,
+    ExecutionColumns,
+    ExecutionPolicy,
+    ExecutionPosition,
+    LongOnlyPortfolioConfig,
+    evaluate_long_only_portfolio,
+)
+from factor_lab.portfolio.execution import process_account_observation
 from factor_lab.research import runner as runner_module
 from factor_lab.research.contracts import FactorSpec, ValidationSpec
 from factor_lab.research.reporting import render_report
 from factor_lab.research.runner import run_research
 from factor_lab.research.validation import evaluate_stage_a
+
+
+def _write_suspension_snapshot(
+    path: Path,
+    rows: pd.DataFrame,
+    *,
+    query_start: str | None = None,
+    query_end: str | None = None,
+) -> pd.DataFrame:
+    """Write the canonical parquet+metadata pair expected by the runner."""
+
+    canonical = rows.loc[
+        :, ["ticker", "date", "suspend_type", "suspend_timing"]
+    ].copy()
+    canonical["ticker"] = canonical["ticker"].astype("string").str.strip()
+    canonical["date"] = pd.to_datetime(
+        canonical["date"], errors="raise"
+    ).dt.normalize()
+    canonical["suspend_type"] = (
+        canonical["suspend_type"].astype("string").str.strip().str.upper()
+    )
+    canonical["suspend_timing"] = (
+        canonical["suspend_timing"].astype("string").str.strip()
+    )
+    canonical = (
+        canonical.drop_duplicates(
+            ["ticker", "date", "suspend_type", "suspend_timing"]
+        )
+        .sort_values(
+            ["date", "ticker", "suspend_type", "suspend_timing"],
+            na_position="last",
+        )
+        .reset_index(drop=True)
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    canonical.to_parquet(path, index=False)
+    minimum = pd.Timestamp(canonical["date"].min()).date().isoformat()
+    maximum = pd.Timestamp(canonical["date"].max()).date().isoformat()
+    metadata_path = path.with_name("suspensions.meta.json")
+    metadata = {
+        "schema_version": 1,
+        "status": "complete",
+        "source": "tushare",
+        "endpoint": "suspend_d",
+        "query": {
+            "start_date": query_start or minimum,
+            "end_date": query_end or maximum,
+            "window": "calendar_year",
+            "limit": 5_000,
+        },
+        "retrieved_at_utc": "2026-08-27T00:00:00+00:00",
+        "rows": int(len(canonical)),
+        "date": {"min": minimum, "max": maximum},
+        "security": int(canonical["ticker"].nunique()),
+        "S": int(canonical["suspend_type"].eq("S").sum()),
+        "R": int(canonical["suspend_type"].eq("R").sum()),
+        "file": {
+            "path": str(path.resolve()),
+            "size_bytes": path.stat().st_size,
+            "sha256": runner_module._sha256_file(path),
+        },
+        "metadata_path": str(metadata_path.resolve()),
+    }
+    metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+    return canonical
+
+
+@pytest.mark.parametrize(
+    ("names", "message"),
+    [
+        (["alpha", "alpha"], "duplicate name"),
+        (["Alpha", "alpha"], "artifact normalization"),
+        (["x" * 100 + "a", "x" * 100 + "b"], "artifact normalization"),
+    ],
+)
+def test_factor_artifact_names_reject_duplicates_and_portable_collisions(
+    names: list[str],
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        runner_module._assert_unique_artifact_names(
+            names,
+            context="test factor artifact",
+        )
+
+
+def test_research_runner_rejects_unattested_raw_price_mode() -> None:
+    with pytest.raises(
+        ValueError,
+        match="raw_with_actions is not backed by an attested production artifact",
+    ):
+        runner_module._portfolio_config(
+            {
+                "portfolio": {
+                    "price_basis": "raw_with_actions",
+                    "open_column": "open",
+                }
+            }
+        )
+
+
+def test_factor_suite_rejects_duplicate_challenger_names(tmp_path: Path) -> None:
+    path = tmp_path / "factors.json"
+    path.write_text(
+        json.dumps(
+            {
+                "control": {
+                    "name": "control",
+                    "family": "test",
+                    "expression": "x",
+                },
+                "suites": {
+                    "duplicate": [
+                        {"name": "same", "family": "test", "expression": "x"},
+                        {"name": "same", "family": "test", "expression": "x + 1"},
+                    ]
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="duplicate name"):
+        runner_module.load_factor_suite(path, "duplicate")
+
+
+def test_execution_loader_injects_causal_event_only_delist_row(
+    tmp_path: Path,
+) -> None:
+    dates = pd.bdate_range("2026-05-04", periods=5)
+    execution_rows = []
+    for date in dates:
+        execution_rows.append(
+            {
+                "date": date,
+                "ticker": "B",
+                "open_adj": 10.0,
+                "adv_20": 1_000_000.0,
+                "volatility_20": 0.02,
+                "eligible": True,
+                "universe_member": True,
+                "share_split_ratio": 1.0,
+                "cash_dividend_per_share": 0.0,
+            }
+        )
+    for date in dates[:2]:
+        execution_rows.append(
+            {
+                "date": date,
+                "ticker": "A",
+                "open_adj": 10.0,
+                "adv_20": 1_000_000.0,
+                "volatility_20": 0.02,
+                "eligible": True,
+                "universe_member": True,
+                "share_split_ratio": 1.0,
+                "cash_dividend_per_share": 0.0,
+            }
+        )
+    execution_path = tmp_path / "execution.parquet"
+    pd.DataFrame(execution_rows).to_parquet(execution_path, index=False)
+    feature_path = tmp_path / "features.parquet"
+    pd.DataFrame(
+        {
+            "ticker": ["A", "A", "B"],
+            "delist_date": [dates[2], dates[2], pd.NaT],
+        }
+    ).to_parquet(feature_path, index=False)
+
+    loaded = runner_module._load_execution(
+        execution_path,
+        LongOnlyPortfolioConfig(),
+        feature_path=feature_path,
+    )
+
+    a_rows = loaded.loc[loaded["ticker"] == "A"].sort_values("date")
+    assert a_rows.loc[a_rows["date"] < dates[2], "is_delisted"].eq(False).all()
+    event = a_rows.loc[a_rows["date"] == dates[2]].iloc[0]
+    assert bool(event["is_delisted"]) is True
+    assert pd.isna(event["open_adj"])
+    assert bool(event["eligible"]) is False
+    assert a_rows.loc[a_rows["date"] >= dates[2], "is_delisted"].eq(True).all()
+    injection = loaded.attrs["security_event_injection"]
+    assert injection["status"] == "available"
+    assert injection["availability_rule"] == (
+        "every_execution_session_on_or_after_delist_date"
+    )
+    assert injection["delist_security_count"] == 1
+    assert injection["delist_flagged_session_count"] == 3
+    assert injection["event_only_row_count"] == 3
+    assert injection["cash_recovery_policy"] == (
+        "zero_unless_explicit_event_terms_exist"
+    )
+    assert injection["suspension_status"] == "unavailable"
+    assert injection["suspension_unavailable_reason"] == "artifact_not_configured"
+    lineage_fields = runner_module._execution_lineage_fields(
+        loaded,
+        LongOnlyPortfolioConfig(),
+    )
+    assert "share_split_ratio" in loaded.columns
+    assert "cash_dividend_per_share" in loaded.columns
+    assert "share_split_ratio" in lineage_fields
+    assert "cash_dividend_per_share" in lineage_fields
+
+
+def test_authoritative_suspensions_project_601088_gap_and_carry_stale_position(
+    tmp_path: Path,
+) -> None:
+    calendar = pd.bdate_range("2017-05-22", "2017-09-08")
+    suspension_dates = pd.bdate_range("2017-06-05", "2017-08-31")
+    assert len(suspension_dates) == 64
+    execution_rows = [
+        {
+            "date": date,
+            "ticker": "000001.SZ",
+            "open_adj": 10.0,
+            "adv_20": 100_000_000.0,
+            "volatility_20": 0.02,
+        }
+        for date in calendar
+    ]
+    execution_rows.append(
+        {
+            "date": pd.Timestamp("2017-05-22"),
+            "ticker": "601088.SH",
+            "open_adj": 10.0,
+            "adv_20": 100_000_000.0,
+            "volatility_20": 0.02,
+        }
+    )
+    execution_rows.extend(
+        {
+            "date": date,
+            "ticker": "601088.SH",
+            "open_adj": 10.1,
+            "adv_20": 100_000_000.0,
+            "volatility_20": 0.02,
+        }
+        for date in calendar[calendar >= pd.Timestamp("2017-09-01")]
+    )
+    execution_path = tmp_path / "execution.parquet"
+    pd.DataFrame(execution_rows).to_parquet(execution_path, index=False)
+    feature_path = tmp_path / "features.parquet"
+    pd.DataFrame(
+        {
+            "ticker": ["000001.SZ", "601088.SH"],
+            "delist_date": [pd.NaT, pd.NaT],
+        }
+    ).to_parquet(feature_path, index=False)
+    suspension_path = tmp_path / "suspensions.parquet"
+    _write_suspension_snapshot(
+        suspension_path,
+        pd.DataFrame(
+        {
+            "ticker": ["601088.SH"] * (len(suspension_dates) + 1),
+            "date": [*suspension_dates, pd.Timestamp("2017-09-01")],
+            "suspend_type": ["S"] * len(suspension_dates) + ["R"],
+            "suspend_timing": [None] * (len(suspension_dates) + 1),
+        }
+        ),
+        query_start=calendar.min().date().isoformat(),
+        query_end=calendar.max().date().isoformat(),
+    )
+
+    loaded = runner_module._load_execution(
+        execution_path,
+        LongOnlyPortfolioConfig(),
+        feature_path=feature_path,
+        suspension_path=suspension_path,
+    )
+
+    suspended = loaded.loc[
+        (loaded["ticker"] == "601088.SH")
+        & loaded["date"].isin(suspension_dates)
+    ]
+    assert len(suspended) == 64
+    assert suspended["is_suspended"].eq(True).all()
+    assert suspended["open_adj"].isna().all()
+    assert suspended["adv_20"].isna().all()
+    resumed = loaded.loc[
+        (loaded["ticker"] == "601088.SH")
+        & (loaded["date"] == pd.Timestamp("2017-09-01"))
+    ].iloc[0]
+    assert bool(resumed["is_suspended"]) is False
+    assert resumed["open_adj"] == 10.1
+
+    resumed_evaluation = evaluate_long_only_portfolio(
+        pd.DataFrame(
+            {
+                "date": [pd.Timestamp("2017-08-31")],
+                "ticker": ["601088.SH"],
+                "signal": [1.0],
+            }
+        ),
+        "signal",
+        LongOnlyPortfolioConfig(
+            capital=100_000.0,
+            holding_days=5,
+            rebalance_every_days=5,
+            position_count=1,
+            target_weight=1.0,
+            max_adv_participation=0.05,
+            open_column="open_adj",
+        ),
+        pricing_frame=loaded,
+    )
+    resume_fill = next(
+        row
+        for row in resumed_evaluation.trades
+        if row.get("status") == "executed"
+    )
+    assert resume_fill["date"] == "2017-09-01"
+    assert resume_fill["execution_input_date"] == "2017-05-22"
+    assert resume_fill["adv"] == 100_000_000.0
+    assert resume_fill["execution_input_complete"] is True
+    assert resumed_evaluation.max_execution_input_age_days == 102
+
+    account = ExecutionAccount(
+        cash=0.0,
+        positions={
+            "601088.SH": ExecutionPosition(
+                ticker="601088.SH",
+                quantity=512_600.0,
+                last_price=10.0,
+                last_observation_date="2017-05-22",
+            )
+        },
+    )
+    observation_date = pd.Timestamp("2017-06-21")
+    observation = process_account_observation(
+        account,
+        loaded.loc[loaded["date"] == observation_date],
+        observation_date=observation_date,
+        policy=ExecutionPolicy(max_stale_position_age_days=21),
+        columns=ExecutionColumns(
+            open="open_adj",
+            mark="open_adj",
+            adv="adv_20",
+            volatility="volatility_20",
+        ),
+    )
+    diagnostic = observation.stale_position_diagnostics[0]
+    assert diagnostic.ticker == "601088.SH"
+    assert diagnostic.blocked_reason == "suspended"
+    assert diagnostic.age_days == 30
+    assert diagnostic.action == "carry"
+    assert observation.nav == pytest.approx(5_126_000.0)
+
+    injection = loaded.attrs["security_event_injection"]
+    assert injection["suspension_status"] == "available"
+    assert injection["suspension_source"] == "tushare_suspend_d"
+    assert injection["suspension_source_row_count"] == 65
+    assert injection["suspension_full_day_session_count"] == 64
+    assert injection["suspension_open_intraday_session_count"] == 0
+    assert injection["suspension_ignored_after_open_session_count"] == 0
+    assert injection["suspension_resume_marker_count"] == 1
+    assert injection["suspension_flagged_session_count"] == 64
+    assert injection["suspension_security_count"] == 1
+    assert injection["suspension_event_only_row_count"] == 64
+
+
+def test_suspension_timing_blocks_0930_not_0931_and_delist_wins(
+    tmp_path: Path,
+) -> None:
+    dates = pd.bdate_range("2026-05-04", periods=3)
+    execution_path = tmp_path / "execution.parquet"
+    pd.DataFrame(
+        [
+            {
+                "date": date,
+                "ticker": "MARKET",
+                "open_adj": 10.0,
+                "adv_20": 1_000_000.0,
+                "volatility_20": 0.02,
+            }
+            for date in dates
+        ]
+        + [
+            {
+                "date": dates[1],
+                "ticker": "OPEN",
+                "open_adj": 11.0,
+                "adv_20": 1_000_000.0,
+                "volatility_20": 0.02,
+            }
+        ]
+    ).to_parquet(execution_path, index=False)
+    feature_path = tmp_path / "features.parquet"
+    pd.DataFrame(
+        {
+            "ticker": ["MARKET", "OPEN", "LATE", "FULL", "DELIST"],
+            "delist_date": [pd.NaT, pd.NaT, pd.NaT, pd.NaT, dates[0]],
+        }
+    ).to_parquet(feature_path, index=False)
+    suspension_path = tmp_path / "suspensions.parquet"
+    _write_suspension_snapshot(
+        suspension_path,
+        pd.DataFrame(
+            {
+                "ticker": [
+                    "OPEN",
+                    "OPEN",
+                    "LATE",
+                    "LATE",
+                    "FULL",
+                    "DELIST",
+                    "OPEN",
+                ],
+                "date": [
+                    dates[0],
+                    dates[0],
+                    dates[0],
+                    dates[0],
+                    dates[0],
+                    dates[0],
+                    dates[1],
+                ],
+                "suspend_type": ["S", "R", "S", "R", "S", "S", "R"],
+                "suspend_timing": [
+                    "09:30-10:00,10:01-14:57",
+                    None,
+                    "09:46-10:00",
+                    None,
+                    None,
+                    "09:30-10:00",
+                    None,
+                ],
+            }
+        ),
+        query_start=dates.min().date().isoformat(),
+        query_end=dates.max().date().isoformat(),
+    )
+
+    loaded = runner_module._load_execution(
+        execution_path,
+        LongOnlyPortfolioConfig(),
+        feature_path=feature_path,
+        suspension_path=suspension_path,
+    )
+
+    open_event = loaded.loc[
+        (loaded["ticker"] == "OPEN") & (loaded["date"] == dates[0])
+    ].iloc[0]
+    assert bool(open_event["is_suspended"]) is True
+    assert pd.isna(open_event["open_adj"])
+    assert loaded.loc[
+        (loaded["ticker"] == "LATE") & (loaded["date"] == dates[0])
+    ].empty
+    full_event = loaded.loc[
+        (loaded["ticker"] == "FULL") & (loaded["date"] == dates[0])
+    ].iloc[0]
+    assert bool(full_event["is_suspended"]) is True
+    delist_event = loaded.loc[
+        (loaded["ticker"] == "DELIST") & (loaded["date"] == dates[0])
+    ].iloc[0]
+    assert bool(delist_event["is_delisted"]) is True
+    assert bool(delist_event["is_suspended"]) is False
+    resume = loaded.loc[
+        (loaded["ticker"] == "OPEN") & (loaded["date"] == dates[1])
+    ].iloc[0]
+    assert bool(resume["is_suspended"]) is False
+    assert resume["open_adj"] == 11.0
+
+    injection = loaded.attrs["security_event_injection"]
+    assert injection["suspension_source_full_day_session_count"] == 1
+    assert injection["suspension_source_open_intraday_session_count"] == 2
+    assert injection["suspension_full_day_session_count"] == 1
+    assert injection["suspension_open_intraday_session_count"] == 1
+    assert injection["suspension_ignored_after_open_session_count"] == 1
+    assert injection["suspension_resume_marker_count"] == 3
+    assert injection["suspension_ignored_delisted_session_count"] == 1
+    assert injection["suspension_flagged_session_count"] == 2
 
 
 def _promotion_gate(**overrides: object) -> dict[str, object]:
@@ -102,6 +584,23 @@ def test_full_runner_writes_resumable_two_stage_outputs(tmp_path: Path) -> None:
     execution_path = tmp_path / "execution.parquet"
     features.to_parquet(feature_path, index=False)
     execution.to_parquet(execution_path, index=False)
+    suspension_path = (
+        tmp_path / "runtime" / "data" / "top500" / "suspensions.parquet"
+    )
+    suspension_rows = pd.DataFrame(
+        {
+            "ticker": [str(features.iloc[0]["ticker"])],
+            "date": [pd.Timestamp(features.iloc[0]["date"])],
+            "suspend_type": ["R"],
+            "suspend_timing": [None],
+        }
+    )
+    suspension_rows = _write_suspension_snapshot(
+        suspension_path,
+        suspension_rows,
+        query_start=pd.Timestamp(execution["date"].min()).date().isoformat(),
+        query_end=pd.Timestamp(execution["date"].max()).date().isoformat(),
+    )
     repository = Path(__file__).resolve().parents[2]
 
     result = run_research(
@@ -117,6 +616,22 @@ def test_full_runner_writes_resumable_two_stage_outputs(tmp_path: Path) -> None:
 
     assert result["status"] == "completed"
     assert result["control_factor"] == "earnings_yield_over_pb"
+    assert result["price_accounting"] == {
+        "price_basis": "adjusted_total_return",
+        "execution_price_column": "open_adj",
+        "price_source": (
+            "mixed_akshare_hfq_tushare_raw_times_adj_factor_fallback"
+        ),
+        "corporate_action_mode": "embedded_in_adjusted_prices",
+        "lot_size": 0,
+        "explicit_split_dividend_events_enabled": False,
+    }
+    assert result["stage_b"][0]["portfolio"]["price_basis"] == (
+        "adjusted_total_return"
+    )
+    assert result["stage_b"][0]["portfolio"]["corporate_action_mode"] == (
+        "embedded_in_adjusted_prices"
+    )
     assert 1 <= len(result["stage_b_selected"]) <= 4
     assert len(result["stage_a"]) == 5
     assert result["stage_a_selection"]["basis"] == "train_only"
@@ -127,6 +642,66 @@ def test_full_runner_writes_resumable_two_stage_outputs(tmp_path: Path) -> None:
     assert (run_dir / "summary.json").is_file()
     assert (run_dir / "report.md").is_file()
     assert (run_dir / "manifest.json").is_file()
+    lineage_path = run_dir / "pit-lineage.json"
+    assert lineage_path.is_file()
+    lineage = json.loads(lineage_path.read_text(encoding="utf-8"))
+    contract = lineage["contract"]
+    assert contract["artifact_sha256"] == result["data"]["feature_sha256"]
+    assert contract["execution_artifact_sha256"] == result["data"][
+        "execution_sha256"
+    ]
+    assert contract["suspension_artifact_sha256"] == result["data"][
+        "suspension_sha256"
+    ]
+    assert result["data"]["suspension_status"] == "available"
+    assert result["data"]["suspension_path"] == str(suspension_path.resolve())
+    assert result["data"]["suspension_metadata_sha256"] == (
+        runner_module._sha256_file(
+            suspension_path.with_name("suspensions.meta.json")
+        )
+    )
+    suspension_injection = result["data"]["security_event_injection"]
+    assert suspension_injection["suspension_status"] == "available"
+    assert suspension_injection["suspension_resume_marker_count"] == 1
+    assert suspension_injection["suspension_flagged_session_count"] == 0
+    assert lineage["audit"]["investment_claim_allowed"] is False
+    assert result["pit_lineage"]["investment_claim_allowed"] is False
+    assert result["pit_lineage"]["contract_sha256"] == (
+        runner_module._sha256_value(contract)
+    )
+    manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["manifest_sha256"] == runner_module._manifest_payload_sha256(
+        manifest
+    )
+    lineage_manifest_row = next(
+        row for row in manifest["files"] if row["path"] == "pit-lineage.json"
+    )
+    assert lineage_manifest_row["sha256"] == runner_module._sha256_file(
+        lineage_path
+    )
+    suspension_input = next(
+        row for row in manifest["inputs"] if row["role"] == "tushare_suspend_d"
+    )
+    suspension_metadata_path = suspension_path.with_name("suspensions.meta.json")
+    assert suspension_input["role"] == "tushare_suspend_d"
+    assert suspension_input["path"] == str(suspension_path.resolve())
+    assert suspension_input["status"] == "available"
+    assert suspension_input["size_bytes"] == suspension_path.stat().st_size
+    assert suspension_input["sha256"] == runner_module._sha256_file(
+        suspension_path
+    )
+    assert suspension_input["metadata_path"] == str(
+        suspension_metadata_path.resolve()
+    )
+    assert suspension_input["metadata_size_bytes"] == (
+        suspension_metadata_path.stat().st_size
+    )
+    assert suspension_input["metadata_sha256"] == runner_module._sha256_file(
+        suspension_metadata_path
+    )
+    assert suspension_input["audit"] == result["data"][
+        "suspension_snapshot_audit"
+    ]
     assert json.loads((tmp_path / "runtime" / "runs" / "latest.json").read_text())["run_id"] == result["run_id"]
     report = (run_dir / "report.md").read_text(encoding="utf-8")
     assert "Stage A：训练段筛选" in report
@@ -143,6 +718,172 @@ def test_full_runner_writes_resumable_two_stage_outputs(tmp_path: Path) -> None:
         run_robustness=False,
     )
     assert resumed["run_fingerprint"] == result["run_fingerprint"]
+
+    suspension_rows.loc[len(suspension_rows)] = {
+        "ticker": str(features.iloc[1]["ticker"]),
+        "date": pd.Timestamp(features.iloc[1]["date"]),
+        "suspend_type": "R",
+        "suspend_timing": None,
+    }
+    suspension_rows = _write_suspension_snapshot(
+        suspension_path,
+        suspension_rows,
+        query_start=pd.Timestamp(execution["date"].min()).date().isoformat(),
+        query_end=pd.Timestamp(execution["date"].max()).date().isoformat(),
+    )
+    changed_input = run_research(
+        project_root=tmp_path,
+        suite="next",
+        mode="full",
+        feature_path=feature_path,
+        execution_path=execution_path,
+        factors_path=repository / "configs" / "factors.json",
+        research_config_path=repository / "configs" / "research.json",
+        run_robustness=False,
+    )
+    assert changed_input["run_id"] != result["run_id"]
+    assert changed_input["data"]["suspension_sha256"] != result["data"][
+        "suspension_sha256"
+    ]
+
+
+def test_runtime_identity_changes_run_id_and_invalidates_completed_cache(
+    tmp_path: Path, monkeypatch
+) -> None:
+    features, execution = _frames()
+    feature_path = tmp_path / "features.parquet"
+    execution_path = tmp_path / "execution.parquet"
+    features.to_parquet(feature_path, index=False)
+    execution.to_parquet(execution_path, index=False)
+    repository = Path(__file__).resolve().parents[2]
+    arguments = {
+        "project_root": tmp_path,
+        "suite": "next",
+        "mode": "canary",
+        "feature_path": feature_path,
+        "execution_path": execution_path,
+        "factors_path": repository / "configs" / "factors.json",
+        "research_config_path": repository / "configs" / "research.json",
+        "run_robustness": False,
+    }
+    identity_a = {
+        "python": {"implementation": "CPython", "version": "3.10.1"},
+        "packages": {
+            "numpy": "1.0-a",
+            "pandas": "2.0-a",
+            "pyarrow": "3.0-a",
+            "scipy": "4.0-a",
+        },
+    }
+    identity_b = {
+        **identity_a,
+        "packages": {**identity_a["packages"], "pandas": "2.0-b"},
+    }
+    calls: list[str] = []
+    original_portfolio_result = runner_module._portfolio_result
+
+    def tracked_portfolio_result(*args, **kwargs):
+        factor = kwargs.get("factor") or args[0]
+        calls.append(str(factor.name))
+        return original_portfolio_result(*args, **kwargs)
+
+    monkeypatch.setattr(runner_module, "_portfolio_result", tracked_portfolio_result)
+    monkeypatch.setattr(runner_module, "_runtime_identity", lambda: identity_a)
+
+    first = run_research(**arguments)
+    assert first["runtime_identity"] == identity_a
+    assert calls
+
+    calls.clear()
+    resumed = run_research(**arguments)
+    assert resumed["run_id"] == first["run_id"]
+    assert calls == []
+
+    monkeypatch.setattr(runner_module, "_runtime_identity", lambda: identity_b)
+    changed_runtime = run_research(**arguments)
+
+    assert changed_runtime["runtime_identity"] == identity_b
+    assert changed_runtime["run_id"] != first["run_id"]
+    assert changed_runtime["run_fingerprint"] != first["run_fingerprint"]
+    assert calls
+
+
+@pytest.mark.parametrize(
+    "changed_role",
+    ("features", "execution", "suspensions", "suspensions_metadata"),
+)
+def test_runner_fails_closed_when_input_changes_during_load(
+    tmp_path: Path, monkeypatch, changed_role: str
+) -> None:
+    features, execution = _frames()
+    feature_path = tmp_path / "features.parquet"
+    execution_path = tmp_path / "execution.parquet"
+    features.to_parquet(feature_path, index=False)
+    execution.to_parquet(execution_path, index=False)
+    suspension_path = (
+        tmp_path / "runtime" / "data" / "top500" / "suspensions.parquet"
+    )
+    suspension_rows = _write_suspension_snapshot(
+        suspension_path,
+        pd.DataFrame(
+            {
+                "ticker": [str(features.iloc[0]["ticker"])],
+                "date": [pd.Timestamp(execution["date"].min())],
+                "suspend_type": ["R"],
+                "suspend_timing": [None],
+            }
+        ),
+        query_start=pd.Timestamp(execution["date"].min()).date().isoformat(),
+        query_end=pd.Timestamp(execution["date"].max()).date().isoformat(),
+    )
+    suspension_metadata_path = suspension_path.with_name("suspensions.meta.json")
+    original_load_execution = runner_module._load_execution
+
+    def load_then_change_input(*args, **kwargs):
+        loaded = original_load_execution(*args, **kwargs)
+        if changed_role == "features":
+            changed = features.copy()
+            changed.loc[0, "book_yield"] = float(changed.loc[0, "book_yield"]) + 1.0
+            changed.to_parquet(feature_path, index=False)
+        elif changed_role == "execution":
+            changed = execution.copy()
+            changed.loc[0, "open_adj"] = float(changed.loc[0, "open_adj"]) + 1.0
+            changed.to_parquet(execution_path, index=False)
+        elif changed_role == "suspensions":
+            changed = suspension_rows.copy()
+            changed.loc[len(changed)] = {
+                "ticker": "999999.SZ",
+                "date": pd.Timestamp(execution["date"].min()),
+                "suspend_type": "R",
+                "suspend_timing": None,
+            }
+            changed.to_parquet(suspension_path, index=False)
+        else:
+            metadata = json.loads(
+                suspension_metadata_path.read_text(encoding="utf-8")
+            )
+            metadata["race_marker"] = True
+            suspension_metadata_path.write_text(
+                json.dumps(metadata, sort_keys=True), encoding="utf-8"
+            )
+        return loaded
+
+    monkeypatch.setattr(runner_module, "_load_execution", load_then_change_input)
+    repository = Path(__file__).resolve().parents[2]
+
+    with pytest.raises(RuntimeError, match="research input changed"):
+        run_research(
+            project_root=tmp_path,
+            suite="next",
+            mode="canary",
+            feature_path=feature_path,
+            execution_path=execution_path,
+            factors_path=repository / "configs" / "factors.json",
+            research_config_path=repository / "configs" / "research.json",
+            run_robustness=False,
+        )
+
+    assert not list((tmp_path / "runtime" / "runs").glob("*/summary.json"))
 
 
 def test_registered_recovery_builtin_runs_through_stage_a(tmp_path: Path) -> None:
@@ -173,6 +914,11 @@ def test_registered_recovery_builtin_runs_through_stage_a(tmp_path: Path) -> Non
     }
     assert result["validated_count"] == 0
     assert result["search_status"] == "canary_smoke"
+    assert {
+        "eligible",
+        "universe_member",
+        "financial_available_date",
+    }.issubset(result["pit_lineage"]["required_fields"])
 
 
 def test_results_first_ranks_comparable_control_and_ensembles(tmp_path: Path) -> None:
@@ -268,7 +1014,7 @@ def _period(
         "benchmark_complete_return_count": 1,
         "benchmark_missing_start_count": 0,
         "benchmark_missing_end_count": 0,
-        "execution_input_policy": "previous_visible_ticker_row",
+        "execution_input_policy": "previous_valid_ticker_observation",
         "execution_input_min_date": signal_date,
         "execution_input_max_date": signal_date,
         "execution_input_required_count": 1,
@@ -354,9 +1100,44 @@ def test_window_metrics_report_uncertainty_coverage_and_annualized_turnover() ->
         for index in range(3)
     ]
     policy = ValidationSpec(bootstrap_samples=32, bootstrap_block_size=2)
+    account_nav_path: list[dict[str, object]] = []
+    nav = 1_000.0
+    for index, row in enumerate(periods):
+        start_sequence = len(account_nav_path)
+        account_nav_path.append(
+            {
+                "sequence": start_sequence,
+                "date": row["start_date"],
+                "phase": "accounting_boundary",
+                "nav": nav,
+            }
+        )
+        account_nav_path.append(
+            {
+                "sequence": len(account_nav_path),
+                "date": row["start_date"],
+                "phase": "posttrade",
+                "nav": nav,
+            }
+        )
+        nav *= 1.0 + float(row["net_return"])
+        end_sequence = len(account_nav_path)
+        account_nav_path.append(
+                {
+                    "sequence": end_sequence,
+                    "date": row["end_date"],
+                    "phase": "daily_end",
+                    "nav": nav,
+                }
+        )
+        periods[index]["account_nav_path_start_sequence"] = start_sequence
+        periods[index]["account_nav_path_end_sequence"] = end_sequence
+        periods[index]["daily_nav_observation_count"] = 1
+        periods[index]["accounting_boundary_date"] = row["start_date"]
 
     metrics = runner_module._window_metrics(
         periods,
+        account_nav_path=account_nav_path,
         start="2023-01-01",
         end="2023-12-31",
         periods_per_year=252 / 5,
@@ -385,6 +1166,89 @@ def test_window_metrics_report_uncertainty_coverage_and_annualized_turnover() ->
     )
     assert failed is False
     assert "validation_excess_bootstrap_lower_below_threshold" in blockers
+
+
+def test_daily_nav_drawdown_exposes_round_trip_loss_hidden_by_period_endpoints() -> None:
+    periods = [
+        {
+            **_period("2025-01-02", "2025-01-03", "2025-01-16", 0.0),
+            "account_nav_path_start_sequence": 0,
+                "account_nav_path_end_sequence": 3,
+                "daily_nav_observation_count": 2,
+                "accounting_boundary_date": "2025-01-03",
+        }
+    ]
+    account_nav_path = [
+        {
+            "sequence": 0,
+            "date": "2025-01-03",
+            "phase": "accounting_boundary",
+            "nav": 10.0,
+        },
+        {
+            "sequence": 1,
+            "date": "2025-01-03",
+            "phase": "posttrade",
+            "nav": 10.0,
+        },
+        {
+            "sequence": 2,
+            "date": "2025-01-08",
+            "phase": "daily_end",
+            "nav": 5.0,
+        },
+        {
+            "sequence": 3,
+            "date": "2025-01-16",
+            "phase": "daily_end",
+            "nav": 10.0,
+        },
+        # A later crash must not leak into the selected window.
+        {
+            "sequence": 4,
+            "date": "2025-01-17",
+            "phase": "accounting_boundary",
+            "nav": 1.0,
+        },
+    ]
+
+    window = runner_module._window_metrics(
+        periods,
+        account_nav_path=account_nav_path,
+        start="2025-01-01",
+        end="2025-01-16",
+        periods_per_year=25.2,
+    )
+    results_first = runner_module._results_first_metrics(
+        {
+            "period_active_returns": [
+                {
+                    "signal_date": "2025-01-02",
+                    "start_date": "2025-01-03",
+                    "end_date": "2025-01-16",
+                    "net_return": 0.0,
+                    "benchmark_return": 0.0,
+                    "active_return": 0.0,
+                    "benchmark_return_coverage": 1.0,
+                    "benchmark_endpoint_coverage": 1.0,
+                    "account_nav_path_start_sequence": 0,
+                        "account_nav_path_end_sequence": 3,
+                        "daily_nav_observation_count": 2,
+                        "accounting_boundary_date": "2025-01-03",
+                }
+            ],
+            "account_nav_path": account_nav_path,
+        },
+        {"results_first": {"incomplete_period_policy": "exclude_from_ranking"}},
+        periods_per_year=25.2,
+    )
+
+    assert window["net_return"] == 0.0
+    assert window["max_drawdown"] == -0.5
+    assert window["daily_nav_observations"] == 4
+    assert window["account_nav_path_end_sequence"] == 3
+    assert results_first["max_drawdown"] == -0.5
+    assert results_first["daily_nav_path_complete"] is True
 
 
 def test_control_improvement_requires_paired_simultaneous_confidence() -> None:
@@ -530,6 +1394,59 @@ def test_final_factor_state_manifest_recovery_and_robustness_fingerprint(
     assert factor_payload["result"]["validated"] is True
     assert runner_module._completed_run_valid(
         run_dir / "summary.json", run_dir, first["run_fingerprint"]
+    )
+
+    manifest_path = run_dir / "manifest.json"
+    summary_path = run_dir / "summary.json"
+    original_manifest_text = manifest_path.read_text(encoding="utf-8")
+    original_summary_text = summary_path.read_text(encoding="utf-8")
+
+    def write_resigned_manifest(payload: dict[str, object]) -> None:
+        payload["manifest_sha256"] = runner_module._manifest_payload_sha256(
+            payload
+        )
+        manifest_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    broken_digest = json.loads(original_manifest_text)
+    broken_digest["manifest_sha256"] = "0" * 64
+    manifest_path.write_text(json.dumps(broken_digest), encoding="utf-8")
+    assert not runner_module._completed_run_valid(
+        summary_path, run_dir, first["run_fingerprint"]
+    )
+
+    for field, value in (("algorithm", "sha512"), ("run_id", "0" * 16)):
+        tampered = json.loads(original_manifest_text)
+        tampered[field] = value
+        write_resigned_manifest(tampered)
+        assert not runner_module._completed_run_valid(
+            summary_path, run_dir, first["run_fingerprint"]
+        )
+
+    tampered_audit = json.loads(original_manifest_text)
+    tampered_audit["inputs"][0]["audit"] = {"status": "tampered"}
+    write_resigned_manifest(tampered_audit)
+    assert not runner_module._completed_run_valid(
+        summary_path, run_dir, first["run_fingerprint"]
+    )
+
+    tampered_summary = json.loads(original_summary_text)
+    tampered_summary["run_id"] = "0" * 16
+    summary_path.write_text(json.dumps(tampered_summary), encoding="utf-8")
+    resigned_for_summary = json.loads(original_manifest_text)
+    summary_row = next(
+        row for row in resigned_for_summary["files"] if row["path"] == "summary.json"
+    )
+    summary_row["size_bytes"] = summary_path.stat().st_size
+    summary_row["sha256"] = runner_module._sha256_file(summary_path)
+    write_resigned_manifest(resigned_for_summary)
+    assert not runner_module._completed_run_valid(
+        summary_path, run_dir, first["run_fingerprint"]
+    )
+
+    summary_path.write_text(original_summary_text, encoding="utf-8")
+    manifest_path.write_text(original_manifest_text, encoding="utf-8")
+    assert runner_module._completed_run_valid(
+        summary_path, run_dir, first["run_fingerprint"]
     )
 
     # A completed checkpoint with a modified artifact must not be trusted or
@@ -796,8 +1713,8 @@ def test_full_walk_forward_runs_every_offset_with_strictly_matured_history(
     research_path.write_text(
         json.dumps(
             {
-                "schema_version": 3,
-                "engine": "factor-lab/research/v5",
+                    "schema_version": 4,
+                    "engine": "factor-lab/research/v6",
                 "validation": {
                     "train_start": "2017-01-01",
                     "train_end": "2022-12-31",
@@ -881,6 +1798,12 @@ def test_full_walk_forward_runs_every_offset_with_strictly_matured_history(
     assert canary["walk_forward"]["fixed_comparator"]["factor_name"] == (
         "fixed_registry_equal_weight"
     )
+    assert all(
+        row["account_role"] == "engineering_smoke_account"
+        and row["cross_strategy_comparison_eligible"] is False
+        and row["authoritative_comparison_artifact"] is None
+        for row in canary["stage_b"]
+    )
 
     result = run_research(
         mode="full",
@@ -888,7 +1811,7 @@ def test_full_walk_forward_runs_every_offset_with_strictly_matured_history(
     )
 
     walk_forward = result["walk_forward"]
-    assert result["schema_version"] == 3
+    assert result["schema_version"] == 4
     assert result["evidence_class"] == "post_selection_causal_simulation"
     assert walk_forward["evidence_class"] == result["evidence_class"]
     assert walk_forward["protocol"] == "causal_walk_forward"
@@ -901,6 +1824,27 @@ def test_full_walk_forward_runs_every_offset_with_strictly_matured_history(
     assert walk_forward["future_selection_violation_count"] == 0
     assert walk_forward["causal_history_valid"] is True
     assert walk_forward["full_dynamic_period_coverage"] is True
+    assert walk_forward["scoring_account_protocol"] == (
+        "fresh_cash_equal_aum_common_start"
+    )
+    assert walk_forward["scoring_initial_nav"] == 1_000_000
+    assert walk_forward["scoring_account_count"] == (
+        walk_forward["expected_scoring_account_count"]
+    )
+    assert walk_forward["equal_aum_scoring_valid"] is True
+    assert walk_forward["equal_aum_scoring_violations"] == []
+    assert walk_forward["common_evaluation_start"] is not None
+    assert walk_forward["benchmark_return_coverage_minimum"] == 0.95
+    assert len(result["stage_b"]) == len(walk_forward["candidate_registry"])
+    assert walk_forward["dynamic_factor"] not in result["stage_b_selected"]
+    assert walk_forward["fixed_comparator_factor"] not in result["stage_b_selected"]
+    assert all(
+        row["account_role"] == "selector_shadow_full_history"
+        and row["cross_strategy_comparison_eligible"] is False
+        and row["authoritative_comparison_artifact"]
+        == "walk-forward/walk-forward-summary.json"
+        for row in result["stage_b"]
+    )
     fixed_name = walk_forward["fixed_comparator"]["factor_name"]
     assert fixed_name == "fixed_registry_equal_weight"
     assert fixed_name not in walk_forward["candidate_registry"]
@@ -911,6 +1855,35 @@ def test_full_walk_forward_runs_every_offset_with_strictly_matured_history(
         assert offset["signal_date_count"] > 0
         assert offset["update_count"] > 0
         assert offset["future_selection_violation_count"] == 0
+        assert len(offset["scoring_account_audits"]) == (
+            len(walk_forward["candidate_registry"]) + 2
+        )
+        assert all(
+            audit["valid"] is True
+            for audit in offset["scoring_account_audits"]
+        )
+        assert all(
+            audit["common_window_execution_integrity"]
+            and all(
+                window["valid"] is True
+                and window["execution_input_coverage"] == 1.0
+                and window["execution_input_future_violation_count"] == 0
+                and window["capacity_violation_count"] == 0
+                for window in audit["common_window_execution_integrity"]
+            )
+            for audit in offset["scoring_account_audits"]
+        )
+        assert all(
+            float(metrics["benchmark_return_coverage_min"])
+            >= walk_forward["benchmark_return_coverage_minimum"]
+            for metrics in offset["metrics"].values()
+        )
+        assert all(
+            metrics["daily_nav_path_complete"] is True
+            and metrics["max_drawdown_basis"] == "daily_account_nav"
+            and metrics["equal_aum_account_audit_valid"] is True
+            for metrics in offset["metrics"].values()
+        )
 
     run_dir = tmp_path / "runtime" / "runs" / result["run_id"]
     walk_root = run_dir / "walk-forward"
@@ -923,6 +1896,21 @@ def test_full_walk_forward_runs_every_offset_with_strictly_matured_history(
     assert walk_artifacts
     assert walk_artifacts <= manifest_paths
     assert "walk-forward/walk-forward-summary.json" in manifest_paths
+    assert (
+        f"factors/{walk_forward['dynamic_factor']}.json" not in manifest_paths
+    )
+    assert f"factors/{fixed_name}.json" not in manifest_paths
+    factor_artifacts = list((run_dir / "factors").glob("*.json"))
+    assert len(factor_artifacts) == len(walk_forward["candidate_registry"])
+    for path in factor_artifacts:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        assert payload["result"]["account_role"] == (
+            "selector_shadow_full_history"
+        )
+        assert payload["result"]["cross_strategy_comparison_eligible"] is False
+        assert payload["result"]["authoritative_comparison_artifact"] == (
+            "walk-forward/walk-forward-summary.json"
+        )
     assert runner_module._completed_run_valid(
         run_dir / "summary.json",
         run_dir,
@@ -938,16 +1926,64 @@ def test_full_walk_forward_runs_every_offset_with_strictly_matured_history(
         fixed_comparator = json.loads(
             (offset_dir / "fixed-comparator.json").read_text(encoding="utf-8")
         )
-        assert fixed_comparator["role"] == "fixed_registry_comparator"
+        decisions_payload = json.loads(
+            (offset_dir / "decisions.json").read_text(encoding="utf-8")
+        )
+        assert decisions_payload["role"] == "causal_selector_audit"
+        assert fixed_comparator["role"] == (
+            "equal_aum_fixed_comparator_scoring_account"
+        )
+        assert fixed_comparator["evaluation_start_date"] == (
+            walk_forward["common_evaluation_start"]
+        )
         assert fixed_comparator["result"]["factor_name"] == fixed_name
         assert fixed_comparator["result"]["portfolio"]["status"] == "ok"
         assert fixed_comparator["result"]["portfolio"]["total_cost"] > 0
-        assert dynamic["role"] == "causal_deployed_account"
+        assert dynamic["role"] == "equal_aum_dynamic_scoring_account"
+        assert dynamic["evaluation_start_date"] == (
+            walk_forward["common_evaluation_start"]
+        )
+        assert dynamic["decisions_path"] == "decisions.json"
+        assert "decisions" not in dynamic
+        assert dynamic["decisions_sha256"] == decisions_payload["decisions_sha256"]
         assert dynamic["result"]["factor_name"] == walk_forward["dynamic_factor"]
         assert dynamic["result"]["portfolio"]["status"] == "ok"
         assert dynamic["result"]["portfolio"]["trade_count"] > 0
         assert dynamic["result"]["portfolio"]["total_cost"] > 0
-        decisions = dynamic["decisions"]
+        for scoring_payload in (fixed_comparator, dynamic):
+            scoring_result = scoring_payload["result"]
+            portfolio = scoring_payload["result"]["portfolio"]
+            assert pd.Timestamp(portfolio["evaluation_start_date"]) >= pd.Timestamp(
+                walk_forward["common_evaluation_start"]
+            )
+            assert portfolio["initial_nav"] == walk_forward["scoring_initial_nav"]
+            assert portfolio["first_pretrade_nav"] == (
+                walk_forward["scoring_initial_nav"]
+            )
+            assert portfolio["end_nav"] > 0
+            account_nav_path = scoring_result["account_nav_path"]
+            assert account_nav_path[0]["date"] == (
+                walk_forward["common_evaluation_start"]
+            )
+            assert account_nav_path[0]["phase"] == "accounting_boundary"
+            assert [row["sequence"] for row in account_nav_path] == list(
+                range(len(account_nav_path))
+            )
+            assert account_nav_path[-1]["nav"] == pytest.approx(
+                portfolio["end_nav"]
+            )
+            assert all(
+                period["account_nav_path_start_sequence"]
+                <= period["account_nav_path_end_sequence"]
+                < len(account_nav_path)
+                for period in scoring_result["period_active_returns"]
+            )
+            assert all(
+                window["max_drawdown_basis"] == "daily_account_nav"
+                and window["daily_nav_path_complete"] is True
+                for window in scoring_result["windows"].values()
+            )
+        decisions = decisions_payload["decisions"]
         assert decisions["history_policy"] == (
             "end_date_strictly_before_signal_date"
         )
@@ -964,3 +2000,25 @@ def test_full_walk_forward_runs_every_offset_with_strictly_matured_history(
             == "causal_shadow_candidate"
             for path in static_files
         )
+        scoring_static_files = list(
+            (offset_dir / "scoring" / "static").glob("*.json")
+        )
+        assert len(scoring_static_files) == len(candidate_registry)
+        for path in scoring_static_files:
+            scoring_payload = json.loads(path.read_text(encoding="utf-8"))
+            assert scoring_payload["role"] == "equal_aum_static_scoring_account"
+            assert scoring_payload["evaluation_start_date"] == (
+                walk_forward["common_evaluation_start"]
+            )
+            assert scoring_payload["shadow_history_path"].startswith(
+                "../../static/"
+            )
+            portfolio = scoring_payload["result"]["portfolio"]
+            assert pd.Timestamp(portfolio["evaluation_start_date"]) >= pd.Timestamp(
+                walk_forward["common_evaluation_start"]
+            )
+            assert portfolio["initial_nav"] == walk_forward["scoring_initial_nav"]
+            assert portfolio["first_pretrade_nav"] == (
+                walk_forward["scoring_initial_nav"]
+            )
+            assert portfolio["end_nav"] > 0

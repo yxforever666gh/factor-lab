@@ -1,6 +1,8 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+.pytest-*/
+.tmp/
 .codex-test-tmp-*/
 runtime/
 test-runs/

@@ -1,6 +1,6 @@
 {
-  "schema_version": 3,
-  "engine": "factor-lab/research/v5",
+  "schema_version": 4,
+  "engine": "factor-lab/research/v6",
   "data_warning": "monthly_name_verified_daily_events_unavailable",
   "validation": {
     "train_start": "2017-01-01",
@@ -28,9 +28,13 @@
     "position_count": 50,
     "target_weight": 0.02,
     "max_adv_participation": 0.05,
+    "max_stale_position_age_days": 21,
     "retention_buffer": 25,
     "rebalance_offset_days": 0,
     "open_column": "open_adj",
+    "price_basis": "adjusted_total_return",
+    "price_source": "mixed_akshare_hfq_tushare_raw_times_adj_factor_fallback",
+    "lot_size": 0,
     "adv_column": "adv_20",
     "volatility_column": "volatility_20"
   },
