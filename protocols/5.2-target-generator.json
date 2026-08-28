@@ -1,0 +1,189 @@
+{
+  "schema_version": 1,
+  "kind": "prospective_target_generator_implementation",
+  "implementation_release": "5.2",
+  "activation_release": "5.0",
+  "does_not_replace_activation": true,
+  "activation_protocol_id": "factor-lab/5.0/adaptive-core-overlay",
+  "activation_protocol_sha256": "b41194c7f2b63e2dd5a39258457f4f933b646abeb516e9020521cce7ab42098e",
+  "frozen_route": "fixed_core_full",
+  "generator_id": "factor-lab/fixed-core-full-targets/5.2",
+  "generator_entrypoint": "factor_lab.prospective_targets:generate_fixed_core_targets",
+  "decision_plan_schema_version": 2,
+  "test_vectors": {
+    "path": "protocols/5.2-target-test-vectors.json",
+    "sha256": "3750f90b2c83add3eae872cb5fd1606f070a236aa9ec179e5b8b0c77be8592a3"
+  },
+  "calendar_prefix": {
+    "schema_version": 1,
+    "anchor": "2017-01-03",
+    "count": 2340,
+    "last_session": "2026-08-21",
+    "sha256": "49b71c0b4482569d56b00cca8d468c3ec417379ac2b03e2d3afea32e312ef67f",
+    "payload": "compact key-sorted UTF-8 JSON over {schema_version,anchor,count,sessions}"
+  },
+  "input_contract": {
+    "artifact_pattern": "runtime/prospective/5.0/inputs/<snapshot_sha256>",
+    "signal_columns": [
+      "date",
+      "ticker",
+      "eligible",
+      "universe_member",
+      "earnings_yield",
+      "pb",
+      "book_yield",
+      "volatility_20"
+    ],
+    "floating_point_encoding": "python_float_hex_ieee754_binary64",
+    "labels_and_unknown_columns_forbidden": true,
+    "official_calendar_extension_required_through_next_trade": true,
+    "availability_order": "implementation_tlog < signal_close <= input_max_available <= build_checkpoint <= decision_information_cutoff <= next_trade_09:15_Asia/Shanghai"
+  },
+  "signal_contract": {
+    "control_raw": "earnings_yield / pb",
+    "defensive_raw": "rank(book_yield) + rank(earnings_yield) + rank(-volatility_20)",
+    "control_direction": 1,
+    "challenger_direction": 1,
+    "challenger_weight_ppm": 700000,
+    "missing_challenger_policy": "fallback_control",
+    "binary64_operation": "(1.0 - weight) * control_rank + weight * challenger_rank",
+    "literal_0p3_rewrite_forbidden": true,
+    "rank_tie_break": "ticker_ascending"
+  },
+  "selection_contract": {
+    "absolute_offset_rule": "calendar_index % 10",
+    "offset_count": 10,
+    "position_count": 10,
+    "retention_exit_rank": 15,
+    "position_weight_ppm_within_sleeve": 100000,
+    "skipped_sessions": "explicit_and_never_reindexed"
+  },
+  "deployment_contract": {
+    "virtual_sleeve_count": 10,
+    "initial_capital_fen_per_sleeve": 500000000,
+    "initial_total_capital_fen": 5000000000,
+    "sleeve_master_weight_ppm": 100000,
+    "genesis": "all_sleeves_cash",
+    "first_due_session": "naked_top10_seed_for_due_sleeve_only",
+    "later_due_session": "top15_retention_uses_only_that_sleeves_prior_targets",
+    "uninitialized_sleeves": "remain_cash_until_their_first_genuinely_prospective_due_session",
+    "selection_state_and_accounting_state": "separate",
+    "historical_offsets": "robustness_accounts_only_and_never_imported_as_executed_holdings"
+  },
+  "historical_parity": {
+    "authoritative_run_id": "88009f1e5309b268",
+    "cohort_count": 2329,
+    "matched_count": 2329,
+    "mismatch_count": 0,
+    "cohort_sha256": "81c92f159532d0c701d7fe6a74df034de8ba8afcd2bc8e893b793ac1a4d540a8"
+  },
+  "admission_contract": {
+    "manual_targets_disabled": true,
+    "seal_reloads_content_addressed_input": true,
+    "seal_restores_genesis_or_previous_sealed_state": true,
+    "seal_reruns_generator_under_ledger_lock": true,
+    "next_state_becomes_authoritative_only_after_decision_seal": true,
+    "implementation_canary_required_before_first_signal_close": true,
+    "same_offset_maximum_open_cycles": 2,
+    "same_offset_outcome_order": "oldest_calendar_index_first",
+    "evaluation_due_policy": "block_new_decisions_allow_only_already_sealed_outcomes"
+  },
+  "membership_contract": {
+    "rule_id": "prospective_top500_membership_5_2",
+    "effective_month": "2026-09",
+    "liquidity_session_count": 60,
+    "minimum_positive_amount_observations": 20,
+    "membership_size": 500,
+    "amount_unit": "Tushare_thousand_CNY_times_1000",
+    "liquidity_statistic": "median_positive_amount_rmb",
+    "rank_order": "median_amount_60d_desc_then_ticker_asc",
+    "ineligible_member_policy": "retain_member_and_set_eligible_false_without_replacement",
+    "artifact_pattern": "runtime/prospective/5.0/membership/<YYYY-MM>/<artifact_sha256>"
+  },
+  "execution_contract": {
+    "engine_id": "factor-lab/prospective-execution/5.2",
+    "contract_sha256": "cce767248a9722739198e2dec9417f507726076bf6401e03f059c16345bce06f",
+    "signal_to_entry": "official_calendar_i_to_next_open_i_plus_1",
+    "holding_end": "open_i_plus_11",
+    "holding_days": 10,
+    "same_offset_boundary": "prior_end_open_equals_next_start_open",
+    "benchmark": "decision_time_frozen_eligible_universe_equal_weight_stateful_path",
+    "benchmark_start_missing_policy": "retain_equal_weight_allocation_as_cash_for_cycle",
+    "benchmark_later_event_policy": "suspension_carry_last_valid_open_delist_zero_no_endpoint_removal_or_reweight",
+    "minimum_benchmark_endpoint_coverage_ppm": 950000,
+    "outcome_status": "deterministic_complete_only",
+    "outcome_daily_path": "every_holding_session_posttrade_start_through_end",
+    "price_basis": "raw_open_times_current_adj_factor_times_frozen_bridge_calibration",
+    "selection_and_accounting_state": "strictly_separate_per_offset",
+    "artifact_pattern": "runtime/prospective/5.0/executions/<snapshot_sha256>"
+  },
+  "evidence_contract": {
+    "immutable_source_pattern": "runtime/prospective/5.0/source-artifacts/sha256=<bytes_sha256>/artifact",
+    "origin_read_count": 1,
+    "parse_from_immutable_copy": true,
+    "audit_and_public_load_materialization_forbidden": true,
+    "availability_fractional_second_policy": "ceil_to_next_whole_second",
+    "manual_outcome_scalars_disabled": true,
+    "outcome_recomputed_under_ledger_lock": true
+  },
+  "release_runner": {
+    "runner_id": "factor-lab/prospective-release-runner/1",
+    "capsule_pattern": "runtime/prospective/5.0/release-runners/<implementation_commit_oid>",
+    "source_origin": "exact_git_blob_bytes_from_published_annotated_tag_commit",
+    "process_isolation": "python_-B_-s_with_python_env_reset_and_capsule_src_first",
+    "operations": [
+      "build_membership",
+      "build_input",
+      "replay_target",
+      "build_execution",
+      "replay_outcome",
+      "evaluate",
+      "replay_history"
+    ],
+    "timeout_policy": {
+      "single_operation_seconds": 120,
+      "replay_history_base_seconds": 120,
+      "replay_history_per_operation_seconds": 5,
+      "replay_history_max_seconds": 3600
+    },
+    "audit_missing_capsule_policy": "fail_without_materialization",
+    "daily_replay_policy": "validate_structural_bundle_artifact_and_recursive_cas_bindings_then_replay_uncached_suffix",
+    "full_audit_policy": "bypass_cache_replay_complete_history_and_refresh_current_head_prefix"
+  },
+  "evaluation_contract": {
+    "evaluator_id": "factor-lab/prospective-evaluation/5.2",
+    "contract_sha256": "b3aff959751ae317f5783ec0e21fe98b03a2f047e8ec134053252feee8cb3a0c",
+    "terminal_insolvency_policy": "any_complete_cycle_ending_nav_fen_zero_reject_major_direction",
+    "engineering_cycle_count": 10,
+    "engineering_minimum_per_offset": 1,
+    "engineering_interpretation": "mechanical_closure_only_no_performance_claim",
+    "early_rejection_cycle_count": 60,
+    "early_rejection_minimum_per_offset": 6,
+    "early_rejection_positive_net_offset_maximum": 2,
+    "early_rejection_positive_active_offset_maximum": 2,
+    "early_stage_can_promote": false,
+    "one_year_directional_gate_cycle_count": 250,
+    "one_year_directional_gate_minimum_per_offset": 25,
+    "performance_promotion_claim_allowed": false,
+    "stable_profit_claim_allowed": false,
+    "cycles_per_year_ppm": 25200000,
+    "master_daily_periods_per_year_ppm": 252000000,
+    "one_year_directional_thresholds": {
+      "net_cagr_q20_ppb_strictly_greater_than": 0,
+      "net_sharpe_q20_ppb_strictly_greater_than": 0,
+      "active_cagr_q20_ppb_strictly_greater_than": 0,
+      "positive_net_offset_count_minimum": 8,
+      "positive_active_offset_count_minimum": 7,
+      "worst_holding_session_max_drawdown_ppm_minimum": -250000,
+      "master_terminal_wealth_strictly_greater_than_initial": true,
+      "master_net_cagr_ppb_strictly_greater_than": 0,
+      "master_active_cagr_ppb_strictly_greater_than": 0,
+      "master_daily_sharpe_ppb_strictly_greater_than": 0,
+      "master_daily_max_drawdown_ppm_minimum": -250000
+    },
+    "master_portfolio_cohort": "earliest_first_start_through_earliest_25th_end_unseeded_sleeves_cash_no_post_cohort_extrapolation",
+    "cross_offset_interpretation": "phase_robustness_only_not_independent_samples",
+    "all_one_year_directional_thresholds_required": true,
+    "failure_version_policy": "publish_next_major_and_switch_direction"
+  }
+}

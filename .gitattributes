@@ -1,2 +1,6 @@
 protocols/*.json text eol=lf
 .github/workflows/*.yml text eol=lf
+*.py text eol=lf
+*.toml text eol=lf
+*.json text eol=lf
+protocols/*-runtime-lock.txt text eol=lf

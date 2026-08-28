@@ -11,21 +11,97 @@ tag 和 GitHub 远端 tag；只在本地创建 tag 不算完成发布。
 
 ## 发布前
 
-1. 确认工作区干净，并从准备发布的提交运行完整测试：
-
-   ```powershell
-   python -m pytest tests/unit tests/data tests/integration -q
-   python -m compileall -q src/factor_lab
-   ```
-
-2. 将 `CHANGELOG.md` 的 `Unreleased` 条目移动到唯一的
+1. 将 `CHANGELOG.md` 的 `Unreleased` 条目移动到唯一的
    `## [<major.minor>] - YYYY-MM-DD` 版本段，并保留恰好一个新的空 `## [Unreleased]`
    段。脚本会拒绝无效日期、重复版本标题、重复 `Unreleased` 或发布前仍含内容的
    `Unreleased`。
-3. 同步更新 `pyproject.toml` 的 `project.version`。Git tag 使用 `<major>.<minor>`：研究
+2. 同步更新 `pyproject.toml` 的 `project.version`。Git tag 使用 `<major>.<minor>`：研究
    大方向变化时 `major + 1` 并将 minor 归零，小方向迭代时 `minor + 1`；Python 包版本
    使用等价的 `<major>.<minor>.0`，并同步 `src/factor_lab/__init__.py`。
-4. 提交发布变更，并记录 release commit SHA。
+3. 数字发布和前瞻运行只使用项目内的版本专用环境
+   `runtime/environments/<major.minor>`。必须用 manifest 将要绑定的精确 CPython build 创建
+   该环境，先把全部精确第三方 artifact 保存到该环境的 `wheelhouse` 并准备构建环境；源码
+   最终确定后以 `--no-build-isolation --no-deps` 构建一次当前项目 wheel，将其 SHA-256 连同
+   全部第三方 artifact 写入 `protocols/<major.minor>-runtime-lock.txt`。正式环境最终只从这份
+   完整 lock 安装，不保留 editable metadata。不得复用系统/user site-packages，也不得让
+   pip 在最终安装阶段临时联网解析：
+
+   ```powershell
+   $releaseEnv = "runtime/environments/<major.minor>"
+   $releasePython = (Resolve-Path `
+     "$releaseEnv/Scripts/python.exe").Path
+   $releaseWheelhouse = (Resolve-Path "$releaseEnv/wheelhouse").Path
+
+   # 源码最终确定后先提交一个 clean implementation candidate；从该 commit 的
+   # `git archive`（不是带 CRLF/未提交改动的工作树）展开临时源码，再用已锁定的
+   # setuptools/wheel 构建项目 wheel。计算 SHA-256，将
+   # factor-research-mvp==<version> 及该 hash 加入 runtime lock 后再做最终安装。
+   & $releasePython -m pip wheel --no-deps --no-build-isolation `
+     --wheel-dir $releaseWheelhouse <git-archive-source-directory>
+   & $releasePython -m pip install --force-reinstall --no-index `
+     --find-links $releaseWheelhouse --require-hashes `
+     -r "protocols/<major.minor>-runtime-lock.txt"
+
+   @'
+   from pathlib import Path
+   import importlib.metadata as metadata
+   import factor_lab
+
+   declared = next(
+       line.split("=", 1)[1].strip().strip(chr(34))
+       for line in Path("pyproject.toml").read_text(encoding="utf-8").splitlines()
+       if line.startswith("version = ")
+   )
+   installed = metadata.version("factor-research-mvp")
+   assert declared == factor_lab.__version__ == installed, (
+       declared,
+       factor_lab.__version__,
+       installed,
+   )
+   print(f"release version: {installed}")
+   '@ | & $releasePython -
+   ```
+
+   必须另建一个全新的项目内 smoke venv，重复上述离线 `--require-hashes` 安装并成功 import，
+   证明 wheelhouse 不是仅因当前环境残留而可用；逐字节比较 self-wheel 内所有
+   `factor_lab/*.py` 与最终 release commit 的 Git blob，且最终 commit 不得再修改 wheel
+   所含源码或 `pyproject.toml`。发布后保留版本 wheelhouse；
+   若同时发布 GitHub Release，则上传其归档并记录 SHA-256，不把大二进制写入 Git 历史。
+
+4. 确认除本次发布准备外没有无关改动，并运行完整测试。每次都生成全新的
+   `runtime/test-tmp/<unique>`，不得复用旧目录；同时关闭 pytest cache provider，避免 Windows
+   ACL 或历史缓存污染发布证据：
+
+   ```powershell
+   $releaseTestRun = "release-" + [guid]::NewGuid().ToString("N")
+   & $releasePython -m pytest tests/unit tests/data tests/integration -q `
+     --basetemp "runtime/test-tmp/$releaseTestRun" -p no:cacheprovider
+   & $releasePython -m compileall -q src/factor_lab
+   ```
+
+5. 若版本包含前瞻运行实现，在源文件、依赖 pin 和版本号都最终确定后刷新运行闭包，再重跑
+   完整测试；闭包会绑定全部 `src/factor_lab/**/*.py`、`configs/data.json`、`pyproject.toml`
+   与实际数值/数据依赖版本：
+
+   ```powershell
+   & $releasePython scripts/update-runtime-closure.py `
+     --manifest protocols/<version>-target-generator.json
+
+   $closureTestRun = "release-closure-" + [guid]::NewGuid().ToString("N")
+   & $releasePython -m pytest tests/unit tests/data tests/integration -q `
+     --basetemp "runtime/test-tmp/$closureTestRun" -p no:cacheprovider
+   & $releasePython -m compileall -q src/factor_lab
+   ```
+
+   刷新后不得再修改闭包内文件；如有修改必须再次刷新并重跑测试。manifest 自身不放进自引用
+   的 file list，而由发布 tag、manifest SHA 和 release capsule 单独逐字节绑定。
+6. 提交发布变更，并记录 release commit SHA。正式发布前确认工作区干净，并确认本地 `main`
+   与 `origin/main` 完全一致；发布脚本会再次强制核验这两项。
+
+若发布将启用前瞻实现，implementation canary 的可信 transparency-log 时间决定第一条不可
+跳过的官方 signal：canary Tlog 之后的首个官方收盘必须入账。发布 runbook 必须事先写明目标
+首信号及 canary 窗口；5.2 要保持 2026-08-31 为首信号，canary Tlog 必须位于
+2026-08-28 15:00（不含）至 2026-08-31 15:00（不含），时区均为 Asia/Shanghai。
 
 ## 创建并同步 tag
 

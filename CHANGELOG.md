@@ -10,6 +10,115 @@
 
 ## [Unreleased]
 
+## [5.2] - 2026-08-28
+
+### Added
+
+- 增加 `fixed_core_full` 的确定性 route→targets 生成器。它从内容寻址的单日 PIT 输入重建
+  70% 防御价值 / 30% control 排名，严格保留冻结的 binary64 运算顺序；历史 2,329 个
+  cohort 与 5.0 权威运行逐一一致，并单独固定两个 `0.3` 改写会改变边界证券的回归向量。
+- 增加十个相互独立的 500 万元虚拟 sleeve：绝对交易日索引决定 offset，首次轮到的 sleeve
+  从现金以裸 Top10 启动，此后只按该 sleeve 的 Top15 留仓缓冲调仓；未启动 sleeve 保持现金，
+  历史稳健性 offset 不会伪装成已执行持仓。选择状态和逐 offset 账户状态分开封存。
+- 增加 source-backed 执行与结算合同：信号日 `i`、次日开盘 `i+1`、第十个持有期后的共同
+  开盘边界 `i+11`，使用固定 A 股费用/冲击模型、因果 ADV/波动率、停复牌/退市事件、公司
+  行动连续复权价格和决策时点 benchmark。CLI 只能从 sealed decision 与不可变执行快照重算
+  outcome，不能再公开提交手工收益标量。
+- 增加从 2026-09 起生效的前向月度 Top500 builder：只使用月初前 60 个官方交易日、每只
+  至少 20 个正成交额观测，按 60 日正成交额中位数降序和 ticker 打破并列选择精确 500 只；ST、
+  未上市或已退市证券保留成员身份但标记为不可交易，不用事后替补改变集合。
+- 增加 10 / 60 / 250 条 confirmed outcome 的预注册评估阶段：10 条只确认工程闭环，60 条
+  只允许明显失败时提前否决、不得提前晋级，250 条且每 offset 至少 25 条后才运行绝对收益、
+  主动收益、Sharpe、完整持有期日频回撤和跨 offset 一致性的约一年方向 gate；同时构造十个
+  sleeve 合计 5,000 万元的真实日频 master portfolio，要求终值、绝对/主动 CAGR、日频
+  Sharpe 和日频最大回撤全部过线。通过仍不允许宣称稳定盈利或绩效晋级。
+- 增加由发布 commit 原始 Git blob 生成的 create-only release runner 胶囊。目标、输入、
+  membership、执行和结算在隔离 Python 子进程中使用对应 tag 的源码重放；当前 `main` 可以
+  继续演进，而不会要求旧周期偷偷改用新实现。
+- 增加项目内版本专用运行环境、完整 transitive distribution lock 和逐 artifact SHA-256
+  wheelhouse，Factor Lab 自身也从 clean Git archive 构建为带哈希的非 editable wheel。
+  运行闭包绑定精确 CPython build 字符串、平台标签、全部已安装 distributions、数据配置、
+  runtime lock 与全部包源码；干净 smoke venv 必须能完全离线重建后才可发布。
+
+### Changed
+
+- 前瞻 decision plan 升为 schema 2：计划只能引用内容寻址 signal snapshot；seal 在账本锁内
+  恢复 genesis 或上一条 selection state 并重跑生成器。一次可同时存在多个已见证、尚未到
+  结算日的周期；相同 offset 的账户状态必须连续，其他 offset 可按真实数据到达顺序结算。
+- `data sync` 可用 `--calendar-to` 先保存覆盖未来持有期的官方日历，同时只下载 `--to` 以内
+  的市场分区。Python、NumPy、Pandas、PyArrow、SciPy 及数据客户端改为精确版本绑定。
+- 实现升级新增独立 GitHub canary；第一条 signal 只接受严格晚于 2026-08-21、且 canary
+  可信 Tlog 早于该 signal 收盘的真正新数据。5.0 activation 与既有收据不重建、不回填。
+- outcome 不再暴露运行时选择的 `not_executed` 路径：证据不完整就 fail-closed，证据完整则
+  只能生成确定性的 complete outcome。250 条方向否决和 60 条早停会写入不可逆 evaluation
+  checkpoint 并停止后续 decision；未见证且尚无 decision 的错误实现升级只能显式放弃并留痕。
+- 全历史 audit 改为一次 capsule RPC 批量重放，避免每条 outcome 重启解释器造成的二次复杂度；
+  胶囊收据同时绑定 annotated tag 名称、tag object、peeled commit、manifest、源码文件集和
+  运行闭包，账本 audit/status 不会在缺失时隐式创建或修复证据。
+- 日常 status 和写入增加一次性、可丢弃的验证前缀缓存：结构链、见证 bundle、顶层 artifact
+  及递归引用的 source CAS 每次仍按当前字节复核，缓存响应仍走普通结果 validator，release
+  runner 只计算缺失 suffix；完整 audit 始终绕过缓存重放全部目标、outcome 和 evaluation，
+  并原子刷新当前 head 的唯一缓存文件。缓存损坏、旧 sidecar/CAS 缺失或胶囊变化都会退回
+  全量重放或 fail-closed，不把派生缓存当成证据。
+
+### Fixed
+
+- 修正未来公司行动日复权开盘价：使用冻结桥接校准乘数乘以当日 `adj_factor`，不再把信号日
+  的有效复权比例永久套到未来；拆股/送转造成 raw price 与 adjustment factor 同步变化时，
+  调整价格保持连续且不会双算。
+- signal、calendar、membership、raw daily/basic/adj、补充财务、停复牌和 execution source
+  全部先复制到按字节 SHA-256 寻址的 create-only store，再从该副本解析。以后 `--no-resume`
+  重抓、Parquet 编码变化或 checkpoint 更新不会破坏已经封存的历史周期；audit/read 不会为
+  缺失证据偷偷物化替代文件。
+- execution 构建现在查询官方 Tushare `stock_basic(list_status=D)`，把规范化的退市状态、
+  退市日期、查询合同和获取时间写入 immutable CAS；outcome 与 sealed execution 的加载、审计
+  和重放只读取并校验这份内容寻址证据，不会再次联网或用后来返回的当前状态改写已封存周期。
+- checkpoint 的真实完成时间通常含微秒；进入要求整秒的纯合同前现在一律向上取整，避免
+  向下截断而虚构证据提前可用，也避免真实执行快照因非 canonical timestamp 无法构建。
+- signal 对应的 membership 月份改由其“下一官方交易日”确定，而不是机械沿用 signal 自身
+  月份；因此 2026-08-31 的首条信号必须绑定 2026-09 集合。sealed replay 每次都从月度原始
+  CAS 全量复算，成员加载不再依赖可删除的别名文件；官方 `stock_basic(D)` 还要求两次独立
+  全表查询 canonical 一致，避免局部或当前幸存者集合悄悄进入历史状态。
+- decision-time benchmark 冻结完整 roster：起始缺少可交易 open 的份额全周期留在现金，
+  后续停牌沿用最后合法 open，退市永久归零，禁止 outcome 时删除缺失成分或给幸存者重配权重。
+  策略与 benchmark 都封存 11 个 holding-session 观测，共享调仓边界以新周期交易后 NAV 为准，
+  周期内暴跌不能再被仅看十日端点的回撤指标隐藏。
+- 任一确定性 complete cycle 若账户 NAV 归零，评价立即终止并否决当前 major 方向；不再因该
+  sleeve 无法继续生成第 6/25 个周期而让灾难性失败永久停留在 `accumulating`。公开
+  `CycleOutcome.to_ledger_v2_outcome()` 也改为真正的 schema-2 rich envelope，不再返回会被
+  当前账本拒绝的 legacy 13-scalar 形状。
+- 同一 offset 允许在共享换仓边界短暂保留两代 open cycle，但第三代计划必须等待最老 outcome；
+  execution、outcome builder 和账本 replay 又分别强制只能先关闭最老一代，不能跳过坏周期后
+  持续滚动较新幸存者。10/60/250 门槛一到即公开进入 `awaiting_evaluation` 并阻断新 decision，
+  方向已否决后仍可收完先前在途 outcome，但不会重新制造不可执行的 evaluation due。
+- benchmark endpoint coverage 的 builder 与 public loader 统一为：起止 open 均存在且两个端点
+  都不是停牌/退市才算 complete；不再依赖 builder 恰好把事件端点 open 置空来维持两条校验
+  路径表面一致。
+- 运行闭包对声明为 UTF-8 文本的 Python、TOML 和 JSON 先执行与 Git `text eol=lf` 一致的
+  CRLF→LF 规范化，再核对发布 commit 的原始 blob。Windows `core.autocrlf` 或混合换行不再
+  让工作树哈希绑定到一个 Git tag 中根本不存在的字节版本。
+
+### Known limitations
+
+- 5.2 发布时 confirmed prospective outcome 仍为 0；历史年化、Sharpe 和回撤只决定冻结路线，
+  不证明未来稳定盈利。十个 sleeve 共享同一市场路径且高度相关，正式方向判断必须等预注册
+  的 250 条门槛，不能把 10 条工程闭环或 60 条未触发早停解释成策略通过。
+- 当前只运行虚拟账户，不连接券商、不发送真实订单。成交价、容量、费用与事件处理是固定
+  模型而非券商回报；因此它能检验可执行的前瞻研究路线，但不是实盘盈亏凭证。
+- 5.2 wheelhouse、依赖和虚拟环境位于项目 `runtime/` 并会保留；基础 CPython 3.10.16
+  interpreter 本体仍由发布主机提供而未 vendored。完整 build 字符串和平台已 fail-closed
+  绑定，但 GitHub tag 本身不包含这些 gitignored 二进制；若本地 wheelhouse 或原解释器不可
+  再取得，需要新 tag 和显式运行环境迁移，不能让旧账本静默换解释器。相同版本的已安装
+  site-packages 若被原地篡改也不做每文件 RECORD 重验；逐 artifact lock 防止正常重装漂移，
+  但不把本方案描述为完整软件供应链取证。
+- 前向 membership 规则只从 2026-09 生效；2026-08 及更早月份继续使用已经绑定的 canonical
+  membership，不将新规则反算成伪历史。实现升级后若改变 selection/accounting schema，仍需
+  先封存显式状态迁移，不能把已有十 sleeve 状态重置为现金。
+- 5.2 假定自动化使用唯一默认 ledger root，并在官方证据首次可用时生成一次 execution。它不设
+  远端全局 registry 来阻止人为复制平行账本，也不阻止恶意操作者在首次 outcome 前反复替换
+  原始 checkpoint、制造多个自洽 execution artifact 后择优提交；这属于本地操作者信任边界，
+  后续若需要对抗应新增窄 execution-binding/远端唯一性版本，而不是把它误写成收益已验证。
+
 ## [5.1] - 2026-08-28
 
 ### Fixed
@@ -421,6 +530,9 @@
   移除这些实验层。
 
 [Unreleased]: https://github.com/yxforever666gh/factor-lab/commits/main
+[5.2]: https://github.com/yxforever666gh/factor-lab/tree/5.2
+[5.1]: https://github.com/yxforever666gh/factor-lab/tree/5.1
+[5.0]: https://github.com/yxforever666gh/factor-lab/tree/5.0
 [4.1]: https://github.com/yxforever666gh/factor-lab/tree/4.1
 [4.0]: https://github.com/yxforever666gh/factor-lab/tree/4.0
 [3.0]: https://github.com/yxforever666gh/factor-lab/tree/3.0

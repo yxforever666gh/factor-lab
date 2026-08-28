@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -173,6 +174,161 @@ def _write_parquet_atomic(path: Path, frame: pd.DataFrame) -> None:
     temporary = path.with_suffix(path.suffix + ".tmp")
     frame.to_parquet(temporary, index=False)
     temporary.replace(path)
+
+
+def _canonical_json_bytes(payload: Any) -> bytes:
+    return json.dumps(
+        payload,
+        ensure_ascii=False,
+        allow_nan=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+
+
+def _normalise_trade_calendar(
+    calendar: pd.DataFrame,
+    *,
+    exchange: str,
+    start_date: str,
+    end_date: str,
+) -> tuple[pd.DataFrame, list[dict[str, Any]], str]:
+    """Return one complete, deterministic official-calendar interval.
+
+    The raw API response is deliberately not trusted as a clock. Availability
+    is recorded separately in the checkpoint when this normalised artifact is
+    persisted.
+    """
+
+    required = {"cal_date", "is_open"}
+    missing = sorted(required - set(calendar.columns))
+    if missing:
+        raise ValueError(f"trade_cal response missing columns: {missing}")
+    work = calendar.copy()
+    work["cal_date"] = pd.to_datetime(
+        work["cal_date"].astype("string").str.replace("-", "", regex=False),
+        format="%Y%m%d",
+        errors="coerce",
+    )
+    work = work.loc[
+        work["cal_date"].between(pd.Timestamp(start_date), pd.Timestamp(end_date))
+    ].copy()
+    if work.empty or work["cal_date"].isna().any():
+        raise ValueError("trade calendar contains invalid or no in-range dates")
+    if bool(work.duplicated("cal_date").any()):
+        raise ValueError("trade calendar contains duplicate calendar dates")
+    expected_dates = pd.date_range(start_date, end_date, freq="D")
+    actual_dates = pd.DatetimeIndex(work["cal_date"].sort_values())
+    if not actual_dates.equals(expected_dates):
+        raise ValueError("trade calendar does not cover every requested calendar date")
+
+    numeric_open = pd.to_numeric(work["is_open"], errors="coerce")
+    textual_open = work["is_open"].astype("string").str.strip().str.casefold()
+    valid_open = numeric_open.isin([0, 1]) | textual_open.isin(["false", "true"])
+    if not bool(valid_open.all()):
+        raise ValueError("trade calendar contains invalid is_open values")
+    work["is_open"] = numeric_open.eq(1) | textual_open.eq("true")
+    if "exchange" not in work:
+        work["exchange"] = exchange
+    work["exchange"] = work["exchange"].astype("string").fillna(exchange).str.strip()
+    if bool(work["exchange"].ne(exchange).any()):
+        raise ValueError("trade calendar contains an unexpected exchange")
+    if "pretrade_date" not in work:
+        work["pretrade_date"] = pd.NaT
+    work["pretrade_date"] = pd.to_datetime(
+        work["pretrade_date"].astype("string").str.replace("-", "", regex=False),
+        format="%Y%m%d",
+        errors="coerce",
+    )
+    work = work[["exchange", "cal_date", "is_open", "pretrade_date"]].sort_values(
+        "cal_date", kind="mergesort"
+    )
+    work = work.reset_index(drop=True)
+    records = [
+        {
+            "cal_date": value.cal_date.date().isoformat(),
+            "exchange": str(value.exchange),
+            "is_open": bool(value.is_open),
+            "pretrade_date": (
+                value.pretrade_date.date().isoformat()
+                if not pd.isna(value.pretrade_date)
+                else None
+            ),
+        }
+        for value in work.itertuples(index=False)
+    ]
+    content_sha256 = hashlib.sha256(_canonical_json_bytes(records)).hexdigest()
+    return work, records, content_sha256
+
+
+def _persist_trade_calendar(
+    calendar: pd.DataFrame,
+    *,
+    raw_root: Path,
+    checkpoint_path: Path,
+    checkpoint: Mapping[str, Any],
+    exchange: str,
+    start_date: str,
+    end_date: str,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Persist an append-only, content-addressed official calendar artifact."""
+
+    normalised, records, content_sha256 = _normalise_trade_calendar(
+        calendar,
+        exchange=exchange,
+        start_date=start_date,
+        end_date=end_date,
+    )
+    artifact_dir = raw_root / "trade_cal" / f"calendar_sha256={content_sha256}"
+    artifact_path = artifact_dir / "part-000.parquet"
+    manifest_path = artifact_dir / "manifest.json"
+    calendars = dict(checkpoint.get("calendars") or {})
+    prior = calendars.get(content_sha256)
+    prior_valid = (
+        isinstance(prior, Mapping)
+        and prior.get("status") == "complete"
+        and artifact_path.is_file()
+        and str(prior.get("artifact_sha256") or "") == sha256_file(artifact_path)
+        and str(prior.get("calendar_content_sha256") or "") == content_sha256
+        and str(prior.get("completed_at_utc") or "").strip() != ""
+    )
+    if prior_valid:
+        entry = dict(prior)
+    else:
+        _write_parquet_atomic(artifact_path, normalised)
+        completed_at = datetime.now(timezone.utc).isoformat()
+        entry = {
+            "status": "complete",
+            "exchange": exchange,
+            "start_date": start_date,
+            "end_date": end_date,
+            "row_count": int(len(normalised)),
+            "open_day_count": int(normalised["is_open"].sum()),
+            "path": str(artifact_path),
+            "artifact_sha256": sha256_file(artifact_path),
+            "calendar_content_sha256": content_sha256,
+            "completed_at_utc": completed_at,
+        }
+        _write_json_atomic(
+            manifest_path,
+            {
+                "schema_version": 1,
+                **entry,
+                "records_sha256": hashlib.sha256(
+                    _canonical_json_bytes(records)
+                ).hexdigest(),
+            },
+        )
+        entry["manifest_path"] = str(manifest_path)
+        entry["manifest_sha256"] = sha256_file(manifest_path)
+    calendars[content_sha256] = entry
+    updated = {
+        "schema_version": int(checkpoint.get("schema_version") or 1),
+        "partitions": dict(checkpoint.get("partitions") or {}),
+        "calendars": calendars,
+    }
+    _write_json_atomic(checkpoint_path, updated)
+    return updated, entry
 
 
 def _checkpoint_entry_is_valid(entry: Any, path: Path, *, verify_hash: bool) -> bool:
@@ -583,6 +739,7 @@ def sync_data(
     start_date: str,
     end_date: str,
     *,
+    calendar_end_date: str | None = None,
     config_path: str | Path = DEFAULT_CONFIG_PATH,
     layout: RuntimeLayout | None = None,
     client: MarketDataClient | Any | None = None,
@@ -596,6 +753,9 @@ def sync_data(
     end = _date(end_date)
     if end < start:
         raise ValueError("end_date must be on or after start_date")
+    calendar_end = _date(calendar_end_date or end)
+    if calendar_end < end:
+        raise ValueError("calendar_end_date must be on or after end_date")
     config = load_data_config(config_path)
     resolved_layout = layout or RuntimeLayout.from_config(config, config_path=config_path)
     resolved_layout.ensure_directories()
@@ -605,34 +765,45 @@ def sync_data(
     if unknown:
         raise ValueError(f"unsupported datasets: {unknown}")
     resolved_client = client or _configured_tushare_client(sync_config, resolved_layout)
+    exchange = str(sync_config.get("exchange") or "SSE")
     calendar = _call(
         resolved_client,
         "trade_cal",
-        exchange=str(sync_config.get("exchange") or "SSE"),
+        exchange=exchange,
         start_date=_compact(start),
-        end_date=_compact(end),
+        end_date=_compact(calendar_end),
         fields="exchange,cal_date,is_open,pretrade_date",
     )
-    if not {"cal_date", "is_open"}.issubset(calendar.columns):
-        raise ValueError("trade_cal response requires cal_date and is_open")
-    open_flag = pd.to_numeric(calendar["is_open"], errors="coerce").eq(1)
-    open_flag |= calendar["is_open"].astype(str).str.lower().eq("true")
-    dates = (
-        pd.to_datetime(calendar.loc[open_flag, "cal_date"], errors="coerce")
-        .dropna()
-        .dt.strftime("%Y-%m-%d")
-        .drop_duplicates()
-        .sort_values()
-        .tolist()
+    normalised_calendar, _, _ = _normalise_trade_calendar(
+        calendar,
+        exchange=exchange,
+        start_date=start,
+        end_date=calendar_end,
     )
+    dates = normalised_calendar.loc[
+        normalised_calendar["is_open"]
+        & normalised_calendar["cal_date"].le(pd.Timestamp(end)),
+        "cal_date",
+    ].dt.strftime("%Y-%m-%d").tolist()
     if not dates:
         raise ValueError("trade calendar contains no open dates")
 
     checkpoint = _read_checkpoint(resolved_layout.checkpoint_path) if resume else {
         "schema_version": 1,
         "partitions": {},
+        "calendars": {},
     }
+    checkpoint, calendar_entry = _persist_trade_calendar(
+        calendar,
+        raw_root=resolved_layout.raw_root,
+        checkpoint_path=resolved_layout.checkpoint_path,
+        checkpoint=checkpoint,
+        exchange=exchange,
+        start_date=start,
+        end_date=calendar_end,
+    )
     entries = dict(checkpoint.get("partitions") or {})
+    calendar_entries = dict(checkpoint.get("calendars") or {})
     verify_hash = bool(sync_config.get("verify_hashes_on_resume", False))
     pending: list[tuple[str, str, Path, str]] = []
     completed_before = 0
@@ -667,7 +838,11 @@ def sync_data(
             "sha256": sha256_file(path),
             "completed_at_utc": datetime.now(timezone.utc).isoformat(),
         }
-        checkpoint = {"schema_version": 1, "partitions": entries}
+        checkpoint = {
+            "schema_version": 1,
+            "partitions": entries,
+            "calendars": calendar_entries,
+        }
         _write_json_atomic(resolved_layout.checkpoint_path, checkpoint)
         completed_now += 1
         if delay and completed_now < requested_count:
@@ -678,6 +853,10 @@ def sync_data(
         "source": "tushare",
         "start_date": dates[0],
         "end_date": dates[-1],
+        "partition_request_start_date": start,
+        "partition_request_end_date": end,
+        "calendar_start_date": start,
+        "calendar_end_date": calendar_end,
         "open_day_count": len(dates),
         "dataset_count": len(selected_datasets),
         "partition_count": len(dates) * len(selected_datasets),
@@ -685,6 +864,12 @@ def sync_data(
         "completed_this_run": completed_now,
         "remaining_partition_count": len(pending) - completed_now,
         "checkpoint_path": str(resolved_layout.checkpoint_path),
+        "calendar_path": str(calendar_entry["path"]),
+        "calendar_content_sha256": str(
+            calendar_entry["calendar_content_sha256"]
+        ),
+        "calendar_artifact_sha256": str(calendar_entry["artifact_sha256"]),
+        "calendar_completed_at_utc": str(calendar_entry["completed_at_utc"]),
         "raw_root": str(resolved_layout.raw_root),
     }
 

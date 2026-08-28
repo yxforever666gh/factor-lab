@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import date
 import json
 import subprocess
 from pathlib import Path
@@ -20,18 +21,31 @@ from factor_lab.data import (
     sync_suspensions,
 )
 from factor_lab.research.runner import latest_run, run_research
+from factor_lab.implementation_closure import verify_implementation_closure
 from factor_lab.prospective_attestation import API_VERSION, DEFAULT_REPOSITORY
+from factor_lab.prospective_evaluation import (
+    EVALUATION_CONTRACT_SHA256,
+    EVALUATOR_ID,
+)
 from factor_lab.prospective_ledger import (
     LedgerLayout,
+    abandon_implementation_upgrade,
     activate_protocol,
     append_correction,
+    append_implementation_upgrade,
     append_outcome,
     audit_ledger,
     build_decision_plan,
+    build_execution_evidence,
+    build_membership_evidence,
+    build_outcome_payload,
+    build_signal_input_evidence,
     canonical_json_bytes,
+    checkpoint_evaluation,
     create_only_file,
     ledger_status,
     seal_decision,
+    sha256_file,
     store_decision_plan,
     strict_load_canonical,
 )
@@ -67,6 +81,11 @@ def build_parser() -> argparse.ArgumentParser:
     sync = data_commands.add_parser("sync", help="Resume full-market Tushare daily partitions.")
     sync.add_argument("--from", dest="start_date", required=True)
     sync.add_argument("--to", dest="end_date", required=True)
+    sync.add_argument(
+        "--calendar-to",
+        dest="calendar_end_date",
+        help="Persist the official calendar through this date without downloading future partitions.",
+    )
     sync.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     sync.add_argument("--dataset", action="append", dest="datasets")
     sync.add_argument("--max-partitions", type=int)
@@ -152,19 +171,64 @@ def build_parser() -> argparse.ArgumentParser:
     )
     activation.add_argument("--protocol", type=Path)
     activation.add_argument("--release-tag", default="5.0")
-    plan = prospective_commands.add_parser(
-        "plan", help="Create a canonical decision plan without appending the ledger."
+    upgrade = prospective_commands.add_parser(
+        "upgrade",
+        help="Bind a published target-generator implementation to the activated protocol.",
     )
-    plan.add_argument("--input", type=Path, required=True)
+    upgrade.add_argument(
+        "--manifest",
+        type=Path,
+        default=Path("protocols/5.2-target-generator.json"),
+    )
+    upgrade.add_argument("--release-tag", default="5.2")
+    abandon_upgrade = prospective_commands.add_parser(
+        "abandon-upgrade",
+        help="Explicitly abandon an unattested implementation upgrade.",
+    )
+    abandon_upgrade.add_argument("--upgrade", required=True)
+    abandon_upgrade.add_argument("--reason", required=True)
+    signal_input = prospective_commands.add_parser(
+        "input",
+        help="Build a content-addressed point-in-time signal snapshot.",
+    )
+    signal_input.add_argument("--signal-date", required=True)
+    signal_input.add_argument("--available-at-utc")
+    signal_input.add_argument("--membership-snapshot", type=Path)
+    membership = prospective_commands.add_parser(
+        "membership",
+        help="Build a release-bound forward monthly Top-500 membership snapshot.",
+    )
+    membership.add_argument("--month", required=True)
+    membership.add_argument("--available-at-utc")
+    plan = prospective_commands.add_parser(
+        "plan", help="Generate a canonical decision plan from a verified signal snapshot."
+    )
+    plan.add_argument(
+        "--input",
+        type=Path,
+        required=True,
+        help="Content-addressed signal snapshot directory (or its manifest.json).",
+    )
     plan.add_argument("--output", type=Path)
     seal = prospective_commands.add_parser(
         "seal", help="Append a pre-deadline decision from a canonical plan."
     )
     seal.add_argument("--plan", type=Path, required=True)
-    outcome = prospective_commands.add_parser(
-        "outcome", help="Append a confirmed prospective outcome."
+    execution = prospective_commands.add_parser(
+        "execution",
+        help="Build immutable source-backed execution evidence for a sealed decision.",
     )
-    outcome.add_argument("--input", type=Path, required=True)
+    execution.add_argument("--decision", required=True)
+    execution.add_argument("--available-at-utc")
+    outcome = prospective_commands.add_parser(
+        "outcome", help="Recompute and append a source-backed prospective outcome."
+    )
+    outcome.add_argument("--decision", required=True)
+    outcome.add_argument(
+        "--execution",
+        required=True,
+        help="Execution snapshot SHA-256 or its canonical bundle directory.",
+    )
     correction = prospective_commands.add_parser(
         "correct", help="Append a correction without rewriting an outcome."
     )
@@ -181,13 +245,20 @@ def build_parser() -> argparse.ArgumentParser:
     attest.add_argument("--workflow-run-id", type=int)
     attest.add_argument(
         "--purpose",
-        choices=("activation_canary", "decision_anchor"),
+        choices=(
+            "activation_canary",
+            "implementation_upgrade_canary",
+            "decision_anchor",
+        ),
         required=True,
     )
     attest.add_argument("--decision-record-sha256")
     attest.add_argument("--admission-deadline-utc")
     attest.add_argument("--repository", default=DEFAULT_REPOSITORY)
     prospective_commands.add_parser("audit", help="Verify every record and snapshot.")
+    prospective_commands.add_parser(
+        "evaluate", help="Evaluate confirmed outcomes against the preregistered 5.2 gates."
+    )
     prospective_commands.add_parser("status", help="Show the current ledger phase.")
     return parser
 
@@ -220,6 +291,7 @@ def _data_command(arguments: argparse.Namespace) -> int:
         result = sync_data(
             arguments.start_date,
             arguments.end_date,
+            calendar_end_date=arguments.calendar_end_date,
             config_path=config_path,
             layout=layout,
             datasets=arguments.datasets,
@@ -525,6 +597,190 @@ def _prospective_snapshot_path(ledger_root: Path, requested: str) -> Path:
     return candidates[0]
 
 
+def _path_in_project(root: Path, requested: Path, *, label: str) -> tuple[Path, str]:
+    path = (requested if requested.is_absolute() else root / requested).resolve()
+    try:
+        relative = path.relative_to(root).as_posix()
+    except ValueError as exc:
+        raise ValueError(f"{label} must be inside the project root") from exc
+    if not path.is_file():
+        raise ValueError(f"missing {label}: {path}")
+    return path, relative
+
+
+def _require_file_at_commit(
+    root: Path,
+    path: Path,
+    relative_path: str,
+    commit_oid: str,
+    *,
+    label: str,
+) -> None:
+    """Require the local bytes to be the exact bytes published by a tag."""
+
+    try:
+        published = subprocess.run(
+            ["git", "show", f"{commit_oid}:{relative_path}"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+        ).stdout
+    except subprocess.CalledProcessError as exc:
+        raise ValueError(
+            f"{label} is absent from published commit {commit_oid}"
+        ) from exc
+    if path.read_bytes() != published:
+        raise ValueError(f"local {label} differs from published commit {commit_oid}")
+
+
+def _activation_payload(ledger_root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    audit = audit_ledger(ledger_root)
+    if not audit.get("valid"):
+        raise ValueError("prospective ledger is invalid")
+    records = audit.get("records")
+    if not isinstance(records, list) or not records:
+        raise ValueError("prospective ledger is not activated")
+    first_path = records[0].get("path")
+    if not isinstance(first_path, str):
+        raise ValueError("prospective activation record path is missing")
+    record = strict_load_canonical(Path(first_path).read_bytes())
+    if not isinstance(record, Mapping) or record.get("kind") != "protocol_activation":
+        raise ValueError("prospective activation record is invalid")
+    payload = record.get("payload")
+    if not isinstance(payload, Mapping):
+        raise ValueError("prospective activation payload is invalid")
+    state = audit.get("state")
+    if not isinstance(state, Mapping):
+        raise ValueError("prospective ledger state is invalid")
+    return dict(payload), dict(state)
+
+
+def _implementation_upgrade_payload(
+    root: Path,
+    ledger_root: Path,
+    manifest_request: Path,
+    release_tag: str,
+) -> dict[str, Any]:
+    manifest_path, manifest_relative = _path_in_project(
+        root, manifest_request, label="implementation manifest"
+    )
+    manifest = _json_object(manifest_path)
+    object_oid, commit_oid = _published_tag_oids(root, release_tag)
+    _require_file_at_commit(
+        root,
+        manifest_path,
+        manifest_relative,
+        commit_oid,
+        label="implementation manifest",
+    )
+    activation, state = _activation_payload(ledger_root)
+
+    required_manifest = {
+        "schema_version": 1,
+        "kind": "prospective_target_generator_implementation",
+        "implementation_release": release_tag,
+        "activation_release": activation["protocol_release"],
+        "does_not_replace_activation": True,
+        "activation_protocol_id": activation["protocol_id"],
+        "activation_protocol_sha256": activation["protocol_sha256"],
+        "frozen_route": activation["frozen_route"],
+        "decision_plan_schema_version": 2,
+    }
+    for field_name, expected in required_manifest.items():
+        if manifest.get(field_name) != expected:
+            raise ValueError(
+                f"implementation manifest {field_name} differs from {expected!r}"
+            )
+    for field_name in ("generator_id", "generator_entrypoint"):
+        if not isinstance(manifest.get(field_name), str) or not manifest[field_name]:
+            raise ValueError(f"implementation manifest {field_name} is missing")
+    verify_implementation_closure(
+        root,
+        manifest_path=manifest_path,
+        manifest_sha256=sha256_file(manifest_path),
+        implementation_commit_oid=commit_oid,
+        generator_id=str(manifest["generator_id"]),
+        generator_entrypoint=str(manifest["generator_entrypoint"]),
+    )
+    vectors = manifest.get("test_vectors")
+    if not isinstance(vectors, Mapping):
+        raise ValueError("implementation manifest test_vectors is missing")
+    vector_path, vector_relative = _path_in_project(
+        root, Path(str(vectors.get("path") or "")), label="generator test vectors"
+    )
+    vector_sha = str(vectors.get("sha256") or "")
+    if sha256_file(vector_path) != vector_sha:
+        raise ValueError("generator test-vector SHA-256 differs from the manifest")
+    _require_file_at_commit(
+        root,
+        vector_path,
+        vector_relative,
+        commit_oid,
+        label="generator test vectors",
+    )
+    evaluation = manifest.get("evaluation_contract")
+    if (
+        not isinstance(evaluation, Mapping)
+        or evaluation.get("evaluator_id") != EVALUATOR_ID
+        or evaluation.get("contract_sha256") != EVALUATION_CONTRACT_SHA256
+    ):
+        raise ValueError("implementation manifest evaluation contract differs")
+    return {
+        "schema_version": 1,
+        "activation_record_sha256": state["activation_record_sha256"],
+        "supersedes_implementation_upgrade_record_sha256": state.get(
+            "latest_implementation_upgrade_record_sha256"
+        ),
+        "protocol_id": activation["protocol_id"],
+        "protocol_sha256": activation["protocol_sha256"],
+        "frozen_route": activation["frozen_route"],
+        "implementation_release_tag": release_tag,
+        "implementation_release_tag_object_oid": object_oid,
+        "implementation_commit_oid": commit_oid,
+        "generator_id": manifest["generator_id"],
+        "generator_entrypoint": manifest["generator_entrypoint"],
+        "generator_manifest_path": manifest_relative,
+        "generator_manifest_sha256": sha256_file(manifest_path),
+        "generator_test_vector_sha256": vector_sha,
+        "evaluator_id": EVALUATOR_ID,
+        "evaluation_contract_sha256": EVALUATION_CONTRACT_SHA256,
+        "decision_plan_schema_version": 2,
+    }
+
+
+def _signal_snapshot_sha256(requested: Path) -> str:
+    path = requested.resolve()
+    if path.is_file() and path.name in {
+        "manifest.json",
+        "rows.json",
+        "build-receipt.json",
+    }:
+        path = path.parent
+    if not path.is_dir():
+        raise ValueError(f"missing prospective signal snapshot directory: {path}")
+    value = path.name
+    if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
+        raise ValueError("--input must be a canonical content-addressed snapshot path")
+    return value
+
+
+def _execution_snapshot_sha256(requested: str) -> str:
+    """Resolve a canonical execution bundle argument without trusting its JSON."""
+
+    value = str(requested)
+    candidate = Path(value).expanduser()
+    if candidate.exists():
+        candidate = candidate.resolve()
+        if candidate.is_file() and candidate.name in {"snapshot.json", "sources.json"}:
+            candidate = candidate.parent
+        if not candidate.is_dir():
+            raise ValueError(f"invalid execution snapshot path: {candidate}")
+        value = candidate.name
+    if len(value) != 64 or any(character not in "0123456789abcdef" for character in value):
+        raise ValueError("--execution must be a lowercase SHA-256 or canonical bundle path")
+    return value
+
+
 def _prospective_command(arguments: argparse.Namespace) -> int:
     root = arguments.root.resolve()
     ledger_root = _prospective_root(arguments)
@@ -553,26 +809,64 @@ def _prospective_command(arguments: argparse.Namespace) -> int:
             )
         )
         return 0
-    if command == "plan":
-        intent = _json_object(arguments.input.resolve())
-        if "frozen_route" in intent:
-            raise ValueError(
-                "decision intent cannot override the activation frozen_route"
+    if command == "upgrade":
+        upgrade = _implementation_upgrade_payload(
+            root,
+            ledger_root,
+            Path(arguments.manifest),
+            str(arguments.release_tag),
+        )
+        _json(append_implementation_upgrade(ledger_root, upgrade))
+        return 0
+    if command == "abandon-upgrade":
+        _json(
+            abandon_implementation_upgrade(
+                ledger_root,
+                implementation_upgrade_record_sha256=str(arguments.upgrade),
+                reason=str(arguments.reason),
             )
+        )
+        return 0
+    if command == "input":
+        try:
+            signal_date = date.fromisoformat(str(arguments.signal_date))
+        except ValueError as exc:
+            raise ValueError("--signal-date must be a canonical ISO date") from exc
+        if signal_date.isoformat() != str(arguments.signal_date):
+            raise ValueError("--signal-date must be a canonical ISO date")
+        # 2026-08-21 and earlier are the frozen historical bridge.  Admitting
+        # one of those dates through the operational CLI would manufacture a
+        # backfilled 'prospective' observation after the implementation tag.
+        if signal_date <= date(2026, 8, 21):
+            raise ValueError(
+                "prospective input signal date must be after the frozen 2026-08-21 cutoff"
+            )
+        membership = (
+            Path(arguments.membership_snapshot).resolve()
+            if arguments.membership_snapshot is not None
+            else None
+        )
+        snapshot = build_signal_input_evidence(
+            ledger_root,
+            signal_date=signal_date.isoformat(),
+            available_at_utc=arguments.available_at_utc,
+            membership_snapshot_path=membership,
+        )
+        _json(snapshot)
+        return 0
+    if command == "membership":
+        _json(
+            build_membership_evidence(
+                ledger_root,
+                membership_month=str(arguments.month),
+                available_at_utc=arguments.available_at_utc,
+            )
+        )
+        return 0
+    if command == "plan":
         plan = build_decision_plan(
             ledger_root,
-            decision_session=str(intent["decision_session"]),
-            information_cutoff_utc=str(intent["information_cutoff_utc"]),
-            input_max_available_at_utc=str(
-                intent["input_max_available_at_utc"]
-            ),
-            input_snapshot_sha256=str(intent["input_snapshot_sha256"]),
-            model_state_sha256=str(intent["model_state_sha256"]),
-            code_commit_oid=str(intent["code_commit_oid"]),
-            expected_nav_fen=int(intent["expected_nav_fen"]),
-            targets_ppm=dict(intent["targets_ppm"]),
-            cash_weight_ppm=int(intent.get("cash_weight_ppm", 0)),
-            planned_at_utc=intent.get("planned_at_utc"),
+            source_data_snapshot_sha256=_signal_snapshot_sha256(arguments.input),
         )
         stored = store_decision_plan(ledger_root, plan)
         if arguments.output is not None:
@@ -585,12 +879,24 @@ def _prospective_command(arguments: argparse.Namespace) -> int:
     if command == "seal":
         _json(seal_decision(ledger_root, arguments.plan.resolve()))
         return 0
-    if command == "outcome":
+    if command == "execution":
         _json(
-            append_outcome(
-                ledger_root, _json_object(arguments.input.resolve())
+            build_execution_evidence(
+                ledger_root,
+                decision_record_sha256=str(arguments.decision),
+                available_at_utc=arguments.available_at_utc,
             )
         )
+        return 0
+    if command == "outcome":
+        payload = build_outcome_payload(
+            ledger_root,
+            decision_record_sha256=str(arguments.decision),
+            execution_snapshot_sha256=_execution_snapshot_sha256(
+                str(arguments.execution)
+            ),
+        )
+        _json(append_outcome(ledger_root, payload))
         return 0
     if command == "correct":
         _json(
@@ -664,6 +970,9 @@ def _prospective_command(arguments: argparse.Namespace) -> int:
         audit = audit_ledger(ledger_root)
         _json(audit)
         return 0 if audit.get("valid") else 1
+    if command == "evaluate":
+        _json(checkpoint_evaluation(ledger_root))
+        return 0
     if command == "status":
         _json(ledger_status(ledger_root))
         return 0

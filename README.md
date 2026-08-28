@@ -5,10 +5,10 @@ Factor Lab 是一条本地、可复现的 A 股组合研究链：Parquet 数据 
 
 项目不再依赖 WebUI、Docker、PostgreSQL、MinIO、Dagster、Hermes 或自治 Agent。旧 Research OS 已完整归档在 Git tag `research-os-final-20260826`，不再进入当前主线。
 
-> 默认 `adaptive` 主线以 4.1 事后选出的防御价值核心为锚，在线权重只读取当时已结束的
-> 独立成本后影子收益，风险覆盖层只读取当日收盘及此前信息。但核心和 5.0 协议都建立在
-> 已反复观察的历史上，因此证据等级仍只是 `post_selection_adaptive_simulation`，不是
-> 独立 OOS。项目不连接券商、不下单，也不保证未来收益。
+> 5.2 执行 5.0 已冻结的 `fixed_core_full` 路线：历史只负责确定这一条待检验假设，新的
+> signal、targets、十个虚拟 sleeve、执行快照和 outcome 从 2026-08-21 之后开始不可回填地
+> 积累。confirmed outcome 达到预注册门槛前仍不能称为独立 OOS 验证。项目不连接券商、
+> 不下真实订单，也不保证未来收益。
 
 历史版本与当前未发布改动见 [CHANGELOG.md](CHANGELOG.md)。正式发布、Git tag 与 GitHub
 同步规则见 [RELEASING.md](RELEASING.md)。
@@ -19,12 +19,36 @@ GitHub CI 成功并在推送后核对远端 tag SHA。
 
 ## 安装
 
+普通历史诊断可以直接安装开发依赖：
+
 ```powershell
 python -m pip install -e ".[dev]"
 
 # 需要从 Tushare/AkShare 更新数据时
 python -m pip install -e ".[data,dev]"
 ```
+
+5.2 的发布、前瞻 decision、execution、outcome、replay 和 evaluate 必须使用项目内的专用
+运行环境 `runtime/environments/5.2`。该环境固定为当前发布主机的 CPython 3.10.16，并从
+`protocols/5.2-runtime-lock.txt` 与项目内 wheelhouse 按逐文件 SHA-256 离线安装；随后用
+同一 lock 中的项目 wheel 安装 Factor Lab 本身。不要使用 editable install，也不要让系统
+Python 或用户级 site-packages 参与前瞻证据：
+
+```powershell
+$factorLabPython = (Resolve-Path `
+  "runtime/environments/5.2/Scripts/python.exe").Path
+$wheelhouse = (Resolve-Path `
+  "runtime/environments/5.2/wheelhouse").Path
+
+& $factorLabPython -m pip install --no-index --find-links $wheelhouse `
+  --require-hashes -r protocols/5.2-runtime-lock.txt
+& $factorLabPython -c `
+  "import factor_lab; assert factor_lab.__version__ == '5.2.0'"
+```
+
+下文的 `python -m factor_lab.cli prospective ...` 表示应由 `$factorLabPython` 执行；发布
+胶囊还会再次核对完整 CPython build 字符串、平台标签、全部已安装 distributions、lock 和
+全部 `src/factor_lab/**/*.py` 的发布 Git blob，任一不一致都会停止。
 
 数据源凭据可使用本机环境变量 `TUSHARE_TOKEN`，也可放在配置指定的
 `runtime/secrets/settings/tushare_token`；运行数据、密钥和报告位于已忽略的
@@ -34,60 +58,94 @@ python -m pip install -e ".[data,dev]"
 
 ```powershell
 # 查看 canonical Parquet 是否就绪
-factor-lab data status
+python -m factor_lab.cli data status
 
 # 首次将现有冻结数据复制并校验到 runtime/data/top500
-factor-lab data build --full --apply-migration --hash
+python -m factor_lab.cli data build --full --apply-migration --hash
 
-# 增量同步三类 Tushare 日分区
-factor-lab data sync --from 2026-08-14 --to 2026-08-26 --resume
+# 增量同步三类 Tushare 日分区，并预存覆盖持有期的官方日历
+python -m factor_lab.cli data sync --from 2026-08-22 --to 2026-08-28 `
+  --calendar-to 2026-09-15 --resume
 
 # 下载并校验官方停复牌历史快照
-factor-lab data suspensions --from 2017-01-01 --to 2026-08-21 --resume
+python -m factor_lab.cli data suspensions --from 2017-01-01 --to 2026-08-21 --resume
 
 # 续传 PIT 财务指标和历史月末名称/行业，并原子更新 canonical Parquet
-factor-lab data enrich --from 2017-01-01 --to 2026-08-13 --resume
+python -m factor_lab.cli data enrich --from 2017-01-01 --to 2026-08-13 --resume
 
 # 默认主线 canary：冻结协议、四专家信号与执行入口 smoke
-factor-lab research run --canary --resume
+python -m factor_lab.cli research run --canary --resume
 
 # 5.0 全历史：40 个因果影子账户、50 个共同起点评分账户、冻结 gate 与路由
-factor-lab research run --suite adaptive --full --resume
+python -m factor_lab.cli research run --suite adaptive --full --resume
 
 # 4.1 hard-selector 纠正基线，仅用于复现历史诊断
-factor-lab research run --suite walk-forward --full --resume
+python -m factor_lab.cli research run --suite walk-forward --full --resume
 
 # 旧全历史方向/冠军榜，仅用于复现历史诊断
-factor-lab research run --suite results-first --full --resume
+python -m factor_lab.cli research run --suite results-first --full --resume
 
 # 旧保守 recovery 协议，仅保留为历史诊断
-factor-lab research run --suite recovery --full --resume
+python -m factor_lab.cli research run --suite recovery --full --resume
 
 # 已冻结的旧价值族实验，仅用于复现既有研究
-factor-lab research run --suite next --full --resume
+python -m factor_lab.cli research run --suite next --full --resume
 
 # 旧八因子数值回归
-factor-lab research run --suite legacy-regression --full --resume
+python -m factor_lab.cli research run --suite legacy-regression --full --resume
 
-factor-lab research status
-factor-lab report --run latest
+python -m factor_lab.cli research status
+python -m factor_lab.cli report --run latest
 
 # 5.0 tag 发布且权威 full run 绑定完成后，激活不可回填的前瞻账本
-factor-lab prospective activate --run <authoritative-run-id> --release-tag 5.0
+python -m factor_lab.cli prospective activate `
+  --run <authoritative-run-id> --release-tag 5.0
 # 5.1 修复后恢复已成功的精确远端 run；不得重新 dispatch activation canary
-factor-lab prospective attest --purpose activation_canary --release-tag 5.0 --workflow-run-id 33132845922
-factor-lab prospective status
-factor-lab prospective audit
+python -m factor_lab.cli prospective attest --purpose activation_canary `
+  --release-tag 5.0 --workflow-run-id 33132845922
+
+# 5.2 tag 与 GitHub 同步后，绑定并见证完整运行实现
+python -m factor_lab.cli prospective upgrade `
+  --manifest protocols/5.2-target-generator.json --release-tag 5.2
+# 为保持 2026-08-31 是第一条真实前瞻 signal，本次 implementation canary 的可信 Tlog
+# 必须晚于 2026-08-28 15:00 Asia/Shanghai，且早于 2026-08-31 15:00。
+python -m factor_lab.cli prospective attest `
+  --purpose implementation_upgrade_canary --release-tag 5.0
+
+# 为 signal 的“下一官方交易日所在月份”生成 Top500；input 不会隐式选择“最新”快照
+# 2026-08-31 的下一官方交易日在 9 月，因此首条 signal 就必须显式绑定 2026-09 membership
+$membershipSnapshot = python -m factor_lab.cli prospective membership `
+  --month 2026-09 | ConvertFrom-Json
+python -m factor_lab.cli prospective input --signal-date 2026-08-31 `
+  --membership-snapshot $($membershipSnapshot.membership_path)
+
+# 对上一步 JSON 返回的 directory 生成 create-only 计划，再封存并见证 decision
+python -m factor_lab.cli prospective plan --input <input-snapshot-directory>
+python -m factor_lab.cli prospective seal --plan <stored-plan-path>
+python -m factor_lab.cli prospective attest --purpose decision_anchor --release-tag 5.0 `
+  --decision-record-sha256 <decision-sha> --admission-deadline-utc <deadline-utc>
+
+# i+11开盘及停复牌资料到齐后，只能从decision哈希重建执行和结算
+python -m factor_lab.cli prospective execution --decision <decision-sha>
+python -m factor_lab.cli prospective outcome `
+  --decision <decision-sha> --execution <execution-snapshot-sha>
+python -m factor_lab.cli prospective status
+python -m factor_lab.cli prospective audit
+python -m factor_lab.cli prospective evaluate
 ```
 
-## 当前主线：固定核心、挑战者和前瞻账本 5.0
+上例的 2026-09 membership 可以把 effective/state date 记为 `2026-09-01`，但其
+`as_of_date` 必须不晚于 `2026-08-31` signal，且构建完成与全部输入可用时间仍必须早于
+该 decision 的 pretrade deadline；`input` 会验证这些边界并 fail-closed。
+
+## 当前主线：5.2 前瞻执行闭环
 
 5.0 不再让一组高度相关的价值信号做 hard switch。系统固定保留 4.1 事后观察到最稳健的
 70% 防御价值核心，同时把两个可能增加复杂度的机制隔离成挑战者：市场风险覆盖层和因果
 在线分配。协议 `protocols/5.0.json` 在首次历史执行前冻结十个 offset、五类账户、四组配对
 gate 和三分支路由；看到结果后不能改阈值、挑最好相位或重写路由。
 
-完整运行 `d97f124c47b2a5f9` 建立 40 个连续独立成本影子账户和 50 个从
+权威运行 `88009f1e5309b268` 建立 40 个连续独立成本影子账户和 50 个从
 `2018-09-03` 以 5000 万现金、空仓开始的 fresh equal-AUM 账户。40/40 影子与 50/50
 评分账户通过状态、目标 cohort、完整逐日 NAV、执行输入、容量、未来输入和期末复利对账；
 feedback/overlay 未来违规均为 0。该运行只用于提交前审计，不能成为发布权威；正式身份只
@@ -110,11 +168,34 @@ manifest、adaptive summary 与重算路由，避免在 tracked 文档里预填�
 账本从数据截止日之后的第一条新决策开始，确认观察数从 0 起步，历史记录不得回填；只有
 前瞻证据才能决定固定核心是否真的值得继续。
 
-5.0 activation 会把 clean full run、manifest、协议和 `fixed_core_full` 路由固化为零观察
-检查点；但当前尚未实现可验证的 route→targets 生成器，也没有冻结十个 offset 的实际资本
-编排。因而 activation canary 可以执行，第一条 decision 仍必须阻塞。5.1 只修复真实
-GitHub workflow-run 响应与本地见证校验器的兼容性，不重绑已经激活的 5.0 协议；
-route→targets 缺口仍须由后续小版本补齐，不能用手工 targets 冒充固定核心的前瞻结果。
+5.2 补齐了此前真正阻塞第一条 decision 的缺口。route→targets 只能由已发布 commit 的隔离
+runner 从内容寻址 PIT 输入重建；十个 500 万元 sleeve 从现金独立启动，选择状态与实际账户
+状态分离；执行和 outcome 只能读取封存的市场、日历、membership、停复牌和退市证据。
+发布后的主分支可以继续修 adapter 或增加下一版本，旧周期仍用旧 tag 胶囊重放，不靠冻结
+当前 checkout 维持一致性。
+
+真实 11-session 持有窗与 10-session 同 offset 间隔会在共同开盘边界短暂形成两代在途周期，
+所以每个 offset 最多允许两个 open cycle；第三代 admission 前必须先封存最老 outcome。同一
+offset 的 execution 和 outcome 也只能按 calendar index 从老到新关闭，不能挂起亏损旧周期、
+选择性结算较新的幸存周期。日常 status/写入仍逐条重放结构、收据及全部内容寻址 artifact，
+但可复用已经过胶囊验证且仍与完整递归 CAS 树一致的前缀，只让 release runner 计算新增 suffix；
+`audit` 永远绕过该缓存做全历史胶囊重放并刷新前缀。
+
+前瞻评价不会每日改门槛：10 条且每 offset 至少一条只说明机械闭环可运行；60 条且每 offset
+至少六条时只允许在绝对和主动复利都明显普遍失败时提前否决，不能提前宣布成功；250 条且
+每 offset 至少 25 条后才运行约一年的方向 gate。正式 gate 除了逐 offset 的绝对/主动 CAGR、
+Sharpe、完整持有期日频回撤和相位一致性，还要求真实 5,000 万元 master portfolio 的终值、
+绝对/主动 CAGR、日频 Sharpe 和日频最大回撤全部过线。未启动 sleeve 按现金计，benchmark
+冻结 decision-time roster：起点缺价留现金、停牌沿用最后价格、退市归零，不能事后删除或
+重配幸存者。即使全部通过，也只表示这一年没有否决该方向，不能宣称稳定盈利或晋级实盘；
+若失败则封存终止状态，下一步按版本规则发布新的 major 方向，而不是在同一段历史上微调
+5.x 因子。
+
+当前科学信任边界仍是假定自动化使用唯一默认账本并及时执行一次官方数据采集。人为复制隐藏
+ledger root，或在首次 outcome 前反复替换原始 checkpoint、生成多个自洽 execution snapshot
+再择优提交，属于本地对抗性操作，5.2 不用远端全局 registry 阻止。工作日自动化会固定使用
+默认根并在证据首次可得时立即构建；若将来需要抵抗恶意操作者，应另发版本增加远端唯一性或
+execution-binding 记录，而不是把这层安全取证继续塞进当前结果优先的主线。
 
 ## 4.1 纠正基线：否决 hard selector
 
@@ -206,25 +287,28 @@ runtime/prospective/5.0/
   records/             # create-only canonical JSON hash chain
   snapshots/           # 可提交 GitHub attestation 的 immutable snapshot
   bundles/             # 已验证的远端 attestation bundle
+  source-artifacts/    # 原始分区/日历/成员等逐字节SHA-256副本
+  membership/          # forward-only月度Top500快照
+  inputs/              # 单日窄PIT signal snapshot
+  executions/          # i+1..i+11 source-backed执行证据
+  release-runners/     # 对应发布commit的隔离源码胶囊
 ```
 
 ## 测试
 
 ```powershell
-python -m pytest tests/unit tests/data tests/integration -q
-python -m compileall -q src/factor_lab
-```
-
-Windows 上若系统 `%TEMP%` 的 pytest 目录 ACL 异常，可显式指定：
-
-```powershell
-python -m pytest tests/unit tests/data tests/integration -q `
-  --basetemp runtime/pytest-temp/local -p no:cacheprovider
+$factorLabPython = (Resolve-Path `
+  "runtime/environments/5.2/Scripts/python.exe").Path
+$localTestRun = "local-" + [guid]::NewGuid().ToString("N")
+& $factorLabPython -m pytest tests/unit tests/data tests/integration -q `
+  --basetemp "runtime/test-tmp/$localTestRun" -p no:cacheprovider
+& $factorLabPython -m compileall -q src/factor_lab
 ```
 
 ## 数据边界
 
-当前 canonical 样本为 2017-01-03 至 2026-08-13。ST 与名称状态来自当时可见的月末
+冻结历史桥接样本截至 2026-08-21；此后的 signal 只由新同步且带可用时间的分区扩展。ST 与
+名称状态来自当时可见的月末
 `bak_basic.name`，日内 ST 事件历史仍不可用，因此报告固定标记
 `monthly_name_verified_daily_events_unavailable`。缺失历史参考记录的股票/月会被明确排除，
 不会静默当作普通股票。当前 3 组经正式公告确认的证券代码迁移使用左闭右开的 PIT

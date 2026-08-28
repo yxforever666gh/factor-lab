@@ -42,6 +42,24 @@ from .pit_lineage import (
     conservative_default_contract,
     conservative_default_field_lineage,
 )
+from .prospective import (
+    ProspectiveDataError,
+    ProspectiveInputSnapshot,
+    build_prospective_input_snapshot,
+    load_prospective_input_snapshot,
+)
+from .prospective_execution import (
+    ProspectiveExecutionDataError,
+    ProspectiveExecutionDataSnapshot,
+    build_prospective_execution_snapshot,
+    load_prospective_execution_snapshot,
+)
+from .prospective_membership import (
+    ProspectiveMembershipError,
+    ProspectiveMembershipSnapshot,
+    build_prospective_membership_snapshot,
+    load_prospective_membership_snapshot,
+)
 from .sources import TushareClient, sync_data, sync_enrichment, turnover_amount_to_rmb
 from .suspensions import audit_suspensions_snapshot, sync_suspensions
 
@@ -155,6 +173,12 @@ __all__ = [
     "PIT_STATUS_VERIFIED",
     "PITFieldLineage",
     "PITLineageContract",
+    "ProspectiveDataError",
+    "ProspectiveExecutionDataError",
+    "ProspectiveExecutionDataSnapshot",
+    "ProspectiveInputSnapshot",
+    "ProspectiveMembershipError",
+    "ProspectiveMembershipSnapshot",
     "RuntimeLayout",
     "SampleDataGenerator",
     "SampleDataset",
@@ -166,11 +190,17 @@ __all__ = [
     "audit_top500_store",
     "build_data",
     "build_monthly_reference_state",
+    "build_prospective_input_snapshot",
+    "build_prospective_execution_snapshot",
+    "build_prospective_membership_snapshot",
     "canonical_trading_dates",
     "conservative_default_contract",
     "conservative_default_field_lineage",
     "enrich_top500_store",
     "load_data_config",
+    "load_prospective_input_snapshot",
+    "load_prospective_execution_snapshot",
+    "load_prospective_membership_snapshot",
     "normalize_legacy_amount_units",
     "parquet_status",
     "plan_feature_store_migration",

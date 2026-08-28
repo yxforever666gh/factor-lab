@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import subprocess
+from types import SimpleNamespace
 
 import pytest
 
@@ -21,16 +22,77 @@ AUTHORITATIVE_RUN = {
 }
 
 
+def test_data_sync_routes_calendar_extension_only_to_market_sync(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    calls: list[tuple[str, tuple, dict]] = []
+    fake_layout = SimpleNamespace()
+    monkeypatch.setattr(
+        "factor_lab.cli._data_layout",
+        lambda _root: ({}, fake_layout, tmp_path / "configs/data.json"),
+    )
+
+    def fake_sync(*args, **kwargs):
+        calls.append(("sync", args, kwargs))
+        return {"status": "complete"}
+
+    def fake_suspensions(*args, **kwargs):
+        calls.append(("suspensions", args, kwargs))
+        return {"status": "complete"}
+
+    monkeypatch.setattr("factor_lab.cli.sync_data", fake_sync)
+    monkeypatch.setattr("factor_lab.cli.sync_suspensions", fake_suspensions)
+    assert main(
+        [
+            "--root",
+            str(tmp_path),
+            "data",
+            "sync",
+            "--from",
+            "2026-08-24",
+            "--to",
+            "2026-08-28",
+            "--calendar-to",
+            "2026-09-15",
+        ]
+    ) == 0
+    capsys.readouterr()
+    assert calls[0][2]["calendar_end_date"] == "2026-09-15"
+
+    assert main(
+        [
+            "--root",
+            str(tmp_path),
+            "data",
+            "suspensions",
+            "--from",
+            "2026-08-24",
+            "--to",
+            "2026-08-28",
+        ]
+    ) == 0
+    capsys.readouterr()
+    assert "calendar_end_date" not in calls[1][2]
+
+
 def test_parser_exposes_prospective_lifecycle_commands() -> None:
     parser = build_parser()
     arguments = {
         "activate": ["--run", RUN_ID],
-        "plan": ["--input", "intent.json"],
+        "upgrade": [],
+        "abandon-upgrade": ["--upgrade", "1" * 64, "--reason", "canary failed"],
+        "membership": ["--month", "2026-09"],
+        "input": ["--signal-date", "2026-08-24"],
+        "plan": ["--input", "snapshot"],
         "seal": ["--plan", "plan.json"],
-        "outcome": ["--input", "outcome.json"],
+        "execution": ["--decision", "1" * 64],
+        "outcome": ["--decision", "1" * 64, "--execution", "2" * 64],
         "correct": ["--input", "correction.json"],
         "attest": ["--purpose", "activation_canary"],
         "audit": [],
+        "evaluate": [],
         "status": [],
     }
 
@@ -50,7 +112,7 @@ def test_parser_exposes_prospective_lifecycle_commands() -> None:
         parser.parse_args(["prospective", "activate"])
 
 
-def test_status_is_read_only_and_plan_does_not_append_ledger(
+def test_status_is_read_only_and_plan_uses_only_verified_snapshot(
     tmp_path: Path,
     monkeypatch,
     capsys,
@@ -81,23 +143,24 @@ def test_status_is_read_only_and_plan_does_not_append_ledger(
     activation = json.loads(capsys.readouterr().out)
     assert activation["created"] is True
 
-    intent_path = tmp_path / "decision-intent.json"
-    intent_path.write_text(
-        json.dumps(
-            {
-                "decision_session": "2026-08-24",
-                "information_cutoff_utc": "2026-08-21T07:00:00Z",
-                "input_max_available_at_utc": "2026-08-21T06:59:59Z",
-                "input_snapshot_sha256": "1" * 64,
-                "model_state_sha256": "2" * 64,
-                "code_commit_oid": "b" * 40,
-                "expected_nav_fen": 5_000_000_000,
-                "targets_ppm": {"000001.SZ": 900_000},
-                "cash_weight_ppm": 100_000,
-                "planned_at_utc": "2026-08-21T07:00:01Z",
-            }
-        ),
-        encoding="utf-8",
+    snapshot_path = tmp_path / "runtime/prospective/5.0/inputs" / ("1" * 64)
+    snapshot_path.mkdir(parents=True)
+    calls: list[dict] = []
+
+    def fake_build(ledger_root, **kwargs):
+        calls.append({"ledger_root": Path(ledger_root), **kwargs})
+        return {
+            "schema_version": 2,
+            "decision_session": "2026-08-25",
+            "source_data_snapshot_sha256": kwargs[
+                "source_data_snapshot_sha256"
+            ],
+        }
+
+    monkeypatch.setattr("factor_lab.cli.build_decision_plan", fake_build)
+    monkeypatch.setattr(
+        "factor_lab.cli.store_decision_plan",
+        lambda _root, _plan: {"plan_sha256": "2" * 64, "created": True},
     )
     assert main(
         [
@@ -106,19 +169,327 @@ def test_status_is_read_only_and_plan_does_not_append_ledger(
             "prospective",
             "plan",
             "--input",
-            str(intent_path),
+            str(snapshot_path),
         ]
     ) == 0
     planned = json.loads(capsys.readouterr().out)
-    assert planned["plan"]["targets"] == [
-        {"target_weight_ppm": 900_000, "ticker": "000001.SZ"}
+    assert planned["plan"]["decision_session"] == "2026-08-25"
+    assert planned["plan"]["source_data_snapshot_sha256"] == "1" * 64
+    assert calls == [
+        {
+            "ledger_root": tmp_path / "runtime/prospective/5.0",
+            "source_data_snapshot_sha256": "1" * 64,
+        }
     ]
-    assert planned["plan"]["frozen_route"] == "fixed_core_full"
 
     assert main(["--root", str(tmp_path), "prospective", "status"]) == 0
     status = json.loads(capsys.readouterr().out)
     assert status["record_count"] == 1
     assert status["status"] == "awaiting_new_data"
+
+
+def test_input_command_rejects_backfill_and_builds_future_snapshot(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    with pytest.raises(ValueError, match="after the frozen 2026-08-21 cutoff"):
+        main(
+            [
+                "--root",
+                str(tmp_path),
+                "prospective",
+                "input",
+                "--signal-date",
+                "2026-08-21",
+            ]
+        )
+
+    snapshot_path = tmp_path / "runtime/prospective/5.0/inputs" / ("3" * 64)
+    built = {
+        "signal_date": "2026-08-24",
+        "trade_date": "2026-08-25",
+        "source_data_snapshot_sha256": "3" * 64,
+        "directory": str(snapshot_path),
+        "manifest_path": str(snapshot_path / "manifest.json"),
+        "rows_path": str(snapshot_path / "rows.json"),
+        "build_receipt_path": str(snapshot_path / "build-receipt.json"),
+        "inputs_available_at_utc": "2026-08-24T07:01:00Z",
+        "build_completed_at_utc": "2026-08-24T07:02:00Z",
+    }
+    calls: list[tuple] = []
+
+    def fake_build(root, *, signal_date, **kwargs):
+        calls.append((Path(root), signal_date, kwargs))
+        return built
+
+    monkeypatch.setattr(
+        "factor_lab.cli.build_signal_input_evidence", fake_build
+    )
+    assert main(
+        [
+            "--root",
+            str(tmp_path),
+            "prospective",
+            "input",
+            "--signal-date",
+            "2026-08-24",
+            "--available-at-utc",
+            "2026-08-24T07:05:00Z",
+        ]
+    ) == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["source_data_snapshot_sha256"] == "3" * 64
+    assert calls == [
+        (
+            tmp_path / "runtime/prospective/5.0",
+            "2026-08-24",
+            {
+                "available_at_utc": "2026-08-24T07:05:00Z",
+                "membership_snapshot_path": None,
+            },
+        )
+    ]
+
+
+def test_execution_and_outcome_commands_accept_only_replayable_identifiers(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    decision_sha = "4" * 64
+    execution_sha = "5" * 64
+    calls: list[tuple[str, tuple, dict]] = []
+
+    def fake_execution(*args, **kwargs):
+        calls.append(("execution", args, kwargs))
+        return {"execution_snapshot_sha256": execution_sha}
+
+    def fake_outcome(*args, **kwargs):
+        calls.append(("build_outcome", args, kwargs))
+        return {
+            "schema_version": 2,
+            "decision_record_sha256": decision_sha,
+            "execution_snapshot_sha256": execution_sha,
+        }
+
+    def fake_append(*args, **kwargs):
+        calls.append(("append_outcome", args, kwargs))
+        return {"record_sha256": "6" * 64}
+
+    monkeypatch.setattr("factor_lab.cli.build_execution_evidence", fake_execution)
+    monkeypatch.setattr("factor_lab.cli.build_outcome_payload", fake_outcome)
+    monkeypatch.setattr("factor_lab.cli.append_outcome", fake_append)
+
+    assert main(
+        [
+            "--root",
+            str(tmp_path),
+            "prospective",
+            "execution",
+            "--decision",
+            decision_sha,
+            "--available-at-utc",
+            "2026-09-08T12:05:00Z",
+        ]
+    ) == 0
+    assert json.loads(capsys.readouterr().out)["execution_snapshot_sha256"] == execution_sha
+
+    assert main(
+        [
+            "--root",
+            str(tmp_path),
+            "prospective",
+            "outcome",
+            "--decision",
+            decision_sha,
+            "--execution",
+            execution_sha,
+        ]
+    ) == 0
+    assert json.loads(capsys.readouterr().out)["record_sha256"] == "6" * 64
+    ledger_root = tmp_path / "runtime/prospective/5.0"
+    assert calls[0] == (
+        "execution",
+        (ledger_root,),
+        {
+            "decision_record_sha256": decision_sha,
+            "available_at_utc": "2026-09-08T12:05:00Z",
+        },
+    )
+    assert calls[1] == (
+        "build_outcome",
+        (ledger_root,),
+        {
+            "decision_record_sha256": decision_sha,
+            "execution_snapshot_sha256": execution_sha,
+        },
+    )
+    assert calls[2][0] == "append_outcome"
+
+    with pytest.raises(SystemExit):
+        main(
+            [
+                "--root",
+                str(tmp_path),
+                "prospective",
+                "outcome",
+                "--decision",
+                decision_sha,
+                "--execution",
+                execution_sha,
+                "--status",
+                "not_executed",
+            ]
+        )
+
+    with pytest.raises(ValueError, match="lowercase SHA-256"):
+        main(
+            [
+                "--root",
+                str(tmp_path),
+                "prospective",
+                "outcome",
+                "--decision",
+                decision_sha,
+                "--execution",
+                "manual.json",
+            ]
+        )
+
+
+def test_membership_and_evaluate_use_only_the_verified_ledger_boundary(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    ledger_root = tmp_path / "runtime/prospective/5.0"
+    calls: list[tuple] = []
+
+    def fake_membership(root, **kwargs):
+        calls.append(("membership", Path(root), kwargs))
+        return {"membership_month": kwargs["membership_month"], "artifact_sha256": "7" * 64}
+
+    def fake_evaluate(root):
+        calls.append(("evaluate", Path(root)))
+        return {"status": "accumulating", "evaluation_sha256": "8" * 64}
+
+    monkeypatch.setattr("factor_lab.cli.build_membership_evidence", fake_membership)
+    monkeypatch.setattr("factor_lab.cli.checkpoint_evaluation", fake_evaluate)
+    assert main(
+        [
+            "--root",
+            str(tmp_path),
+            "prospective",
+            "membership",
+            "--month",
+            "2026-09",
+            "--available-at-utc",
+            "2026-08-31T10:00:00Z",
+        ]
+    ) == 0
+    assert json.loads(capsys.readouterr().out)["artifact_sha256"] == "7" * 64
+    assert main(["--root", str(tmp_path), "prospective", "evaluate"]) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "accumulating"
+    assert calls == [
+        (
+            "membership",
+            ledger_root,
+            {
+                "membership_month": "2026-09",
+                "available_at_utc": "2026-08-31T10:00:00Z",
+            },
+        ),
+        ("evaluate", ledger_root),
+    ]
+
+
+def test_upgrade_command_uses_published_manifest_binding(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    manifest = tmp_path / "protocols/5.2-target-generator.json"
+    expected = {
+        "schema_version": 1,
+        "implementation_release_tag": "5.2",
+    }
+    calls: list[tuple] = []
+
+    def fake_payload(root, ledger_root, requested, release_tag):
+        calls.append(
+            (
+                "payload",
+                Path(root),
+                Path(ledger_root),
+                Path(requested),
+                release_tag,
+            )
+        )
+        return dict(expected)
+
+    def fake_append(ledger_root, payload):
+        calls.append(("append", Path(ledger_root), payload))
+        return {"record_sha256": "4" * 64}
+
+    monkeypatch.setattr(
+        "factor_lab.cli._implementation_upgrade_payload", fake_payload
+    )
+    monkeypatch.setattr(
+        "factor_lab.cli.append_implementation_upgrade", fake_append
+    )
+    assert main(
+        [
+            "--root",
+            str(tmp_path),
+            "prospective",
+            "upgrade",
+            "--manifest",
+            str(manifest),
+            "--release-tag",
+            "5.2",
+        ]
+    ) == 0
+    assert json.loads(capsys.readouterr().out)["record_sha256"] == "4" * 64
+    assert calls == [
+        (
+            "payload",
+            tmp_path,
+            tmp_path / "runtime/prospective/5.0",
+            manifest,
+            "5.2",
+        ),
+        ("append", tmp_path / "runtime/prospective/5.0", expected),
+    ]
+
+    def fake_abandon(ledger_root, **kwargs):
+        calls.append(("abandon", Path(ledger_root), kwargs))
+        return {"record_sha256": "5" * 64}
+
+    monkeypatch.setattr(
+        "factor_lab.cli.abandon_implementation_upgrade", fake_abandon
+    )
+    assert main(
+        [
+            "--root",
+            str(tmp_path),
+            "prospective",
+            "abandon-upgrade",
+            "--upgrade",
+            "6" * 64,
+            "--reason",
+            "canary failed",
+        ]
+    ) == 0
+    assert json.loads(capsys.readouterr().out)["record_sha256"] == "5" * 64
+    assert calls[-1] == (
+        "abandon",
+        tmp_path / "runtime/prospective/5.0",
+        {
+            "implementation_upgrade_record_sha256": "6" * 64,
+            "reason": "canary failed",
+        },
+    )
 
 
 def test_attest_resolves_latest_and_forwards_resume_contract(

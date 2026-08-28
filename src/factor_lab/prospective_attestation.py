@@ -636,9 +636,9 @@ def build_receipt_payload(
             raise AttestationError(
                 "transparency-log timestamp is at or after prospective admission"
             )
-    elif purpose == "activation_canary":
+    elif purpose in {"activation_canary", "implementation_upgrade_canary"}:
         if decision_record_sha256 is not None or admission_deadline_utc is not None:
-            raise AttestationError("activation canary cannot reference a decision")
+            raise AttestationError(f"{purpose} cannot reference a decision")
     else:
         raise AttestationError("unsupported receipt purpose")
     return {

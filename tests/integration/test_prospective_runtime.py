@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from datetime import datetime
 import hashlib
 import json
 from pathlib import Path
@@ -18,9 +19,11 @@ from factor_lab.prospective_attestation import (
 from factor_lab.prospective_ledger import (
     activate_protocol,
     audit_ledger,
-    build_decision_plan,
+    canonical_json_bytes,
+    create_only_file,
     ledger_status,
-    seal_decision,
+    seal_snapshot,
+    sha256_bytes,
 )
 from factor_lab.prospective_runtime import (
     CommandResult,
@@ -50,6 +53,92 @@ AUTHORITATIVE_RUN = {
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _sigstore_bundle(
+    snapshot_path: Path,
+    *,
+    run_id: int,
+    run_attempt: int,
+    tlog_timestamp: str,
+) -> bytes:
+    snapshot_sha = snapshot_path.stem.removeprefix("prospective-snapshot-")
+    invocation = (
+        "https://github.com/yxforever666gh/factor-lab/"
+        f"actions/runs/{run_id}/attempts/{run_attempt}"
+    )
+    statement = {
+        "_type": "https://in-toto.io/Statement/v1",
+        "subject": [
+            {"name": snapshot_path.name, "digest": {"sha256": snapshot_sha}}
+        ],
+        "predicateType": "https://slsa.dev/provenance/v1",
+        "predicate": {
+            "buildDefinition": {
+                "buildType": (
+                    "https://actions.github.io/buildtypes/workflow/v1"
+                ),
+                "externalParameters": {
+                    "workflow": {
+                        "ref": "refs/tags/5.0",
+                        "repository": (
+                            "https://github.com/yxforever666gh/factor-lab"
+                        ),
+                        "path": ".github/workflows/prospective-attest.yml",
+                    }
+                },
+                "internalParameters": {},
+                "resolvedDependencies": [
+                    {
+                        "uri": (
+                            "git+https://github.com/yxforever666gh/"
+                            "factor-lab@refs/tags/5.0"
+                        ),
+                        "digest": {"gitCommit": COMMIT_OID},
+                    }
+                ],
+            },
+            "runDetails": {
+                "builder": {
+                    "id": (
+                        "https://github.com/yxforever666gh/factor-lab/"
+                        ".github/workflows/prospective-attest.yml@refs/tags/5.0"
+                    )
+                },
+                "metadata": {"invocationId": invocation},
+            },
+        },
+    }
+    integrated_time = str(
+        int(
+            datetime.fromisoformat(
+                tlog_timestamp[:-1] + "+00:00"
+            ).timestamp()
+        )
+    )
+    bundle = {
+        "mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json",
+        "verificationMaterial": {
+            "certificate": {"rawBytes": "dGVzdA=="},
+            "tlogEntries": [
+                {
+                    "logIndex": str(run_id),
+                    "logId": {"keyId": "dGVzdA=="},
+                    "kindVersion": {"kind": "dsse", "version": "0.0.1"},
+                    "integratedTime": integrated_time,
+                    "inclusionPromise": {"signedEntryTimestamp": "dGVzdA=="},
+                    "inclusionProof": {},
+                    "canonicalizedBody": "e30=",
+                }
+            ],
+        },
+        "dsseEnvelope": {
+            "payload": base64.b64encode(canonical_json_bytes(statement)).decode(),
+            "payloadType": "application/vnd.in-toto+json",
+            "signatures": [{"sig": "dGVzdA=="}],
+        },
+    }
+    return canonical_json_bytes(bundle) + b"\n"
 
 
 def _manifest_self_sha256(manifest: dict[str, Any]) -> str:
@@ -197,23 +286,62 @@ def _activate(ledger: Path) -> dict[str, Any]:
 
 
 def _decision(ledger: Path) -> dict[str, Any]:
-    plan = build_decision_plan(
-        ledger,
-        decision_session="2026-08-24",
-        information_cutoff_utc="2026-08-23T11:00:00Z",
-        input_max_available_at_utc="2026-08-23T10:00:00Z",
-        input_snapshot_sha256="1" * 64,
-        model_state_sha256="2" * 64,
-        code_commit_oid=COMMIT_OID,
-        expected_nav_fen=5_000_000_000,
-        targets_ppm={"000001.SZ": 600_000, "510300.SH": 400_000},
-        planned_at_utc="2026-08-23T12:00:00Z",
-    )
-    return seal_decision(
-        ledger,
-        plan,
-        recorded_at_utc="2026-08-23T12:01:00Z",
-    )
+    """Inject one replay-only v1 record for attestation transport tests.
+
+    Production sealing deliberately rejects this legacy manual-target schema;
+    these tests need only a historical decision snapshot to exercise remote
+    workflow resume and Tlog deadline validation.
+    """
+
+    activation_hash = str(ledger_status(ledger)["activation_record_sha256"])
+    plan = {
+        "schema_version": 1,
+        "plan_type": "prospective_decision",
+        "ledger_id": "factor-lab/prospective/5.0",
+        "activation_record_sha256": activation_hash,
+        "base_head_record_sha256": activation_hash,
+        "decision_id": "5.0/2026-08-24",
+        "decision_session": "2026-08-24",
+        "information_cutoff_utc": "2026-08-23T11:00:00Z",
+        "input_max_available_at_utc": "2026-08-23T10:00:00Z",
+        "input_snapshot_sha256": "1" * 64,
+        "model_state_sha256": "2" * 64,
+        "code_commit_oid": COMMIT_OID,
+        "expected_nav_fen": 5_000_000_000,
+        "cash_weight_ppm": 0,
+        "targets": [
+            {"ticker": "000001.SZ", "target_weight_ppm": 600_000},
+            {"ticker": "510300.SH", "target_weight_ppm": 400_000},
+        ],
+        "frozen_route": "fixed_core_full",
+        "admission_deadline_utc": "2026-08-24T01:15:00Z",
+        "planned_at_utc": "2026-08-23T12:00:00Z",
+        "clock_source": "local_system_clock_untrusted",
+    }
+    record = {
+        "schema_version": 1,
+        "ledger_id": "factor-lab/prospective/5.0",
+        "sequence": 2,
+        "kind": "decision",
+        "previous_record_sha256": activation_hash,
+        "recorded_at_utc": "2026-08-23T12:01:00Z",
+        "clock_source": "local_system_clock_untrusted",
+        "payload": {
+            "plan_sha256": sha256_bytes(canonical_json_bytes(plan)),
+            "plan": plan,
+        },
+    }
+    raw = canonical_json_bytes(record)
+    digest = sha256_bytes(raw)
+    path = ledger / "records" / f"{2:016d}-decision-{digest}.json"
+    create_only_file(path, raw)
+    return {
+        "sequence": 2,
+        "record_sha256": digest,
+        "path": str(path),
+        "record": record,
+        "snapshot": seal_snapshot(ledger),
+    }
 
 
 def _run_payload(
@@ -328,7 +456,15 @@ class FakeGitHub:
                 return CommandResult(1, b"", b"download unavailable")
             assert command.cwd is not None
             if self.failure != "no_bundle":
-                (command.cwd / "sha256-bundle.jsonl").write_bytes(b'{"bundle":true}\n')
+                snapshot_path = Path(command.argv[3])
+                (command.cwd / "sha256-bundle.jsonl").write_bytes(
+                    _sigstore_bundle(
+                        snapshot_path,
+                        run_id=RUN_ID,
+                        run_attempt=self.workflow_run_attempt,
+                        tlog_timestamp=self.tlog_timestamp,
+                    )
+                )
             if self.failure == "multiple_bundles":
                 (command.cwd / "other.jsonl").write_bytes(b'{"bundle":false}\n')
             return CommandResult(0, b"")

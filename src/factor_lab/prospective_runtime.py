@@ -607,11 +607,18 @@ def attest_snapshot(
     downloaded bundle, and local ``gh attestation verify`` result all pass.
     """
 
-    if purpose not in {"activation_canary", "decision_anchor"}:
-        raise ValueError("purpose must be activation_canary or decision_anchor")
-    if purpose == "activation_canary":
+    if purpose not in {
+        "activation_canary",
+        "implementation_upgrade_canary",
+        "decision_anchor",
+    }:
+        raise ValueError(
+            "purpose must be activation_canary, implementation_upgrade_canary, "
+            "or decision_anchor"
+        )
+    if purpose in {"activation_canary", "implementation_upgrade_canary"}:
         if decision_record_sha256 is not None or admission_deadline_utc is not None:
-            raise ValueError("activation_canary cannot carry decision admission fields")
+            raise ValueError(f"{purpose} cannot carry decision admission fields")
     else:
         if decision_record_sha256 is None:
             raise ValueError("decision_anchor requires decision_record_sha256")
