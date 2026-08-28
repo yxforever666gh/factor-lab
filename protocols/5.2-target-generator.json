@@ -206,7 +206,7 @@
       "decorator": "5.3.1",
       "et-xmlfile": "2.0.0",
       "exceptiongroup": "1.3.1",
-      "factor-research-mvp": "5.3.0",
+      "factor-research-mvp": "5.4.0",
       "html5lib": "1.1",
       "idna": "3.19",
       "iniconfig": "2.3.0",
@@ -250,19 +250,19 @@
       },
       {
         "path": "protocols/5.2-runtime-lock.txt",
-        "sha256": "5b0647db0464d06e6e4fa6b211601fffc91a363b7b89ff6261aba5731060c8d8"
+        "sha256": "0758e1ff6e5476508e031f89b1145d6a6bad199ebadcb17a07e3aeae5e25d053"
       },
       {
         "path": "pyproject.toml",
-        "sha256": "93cd78dcb83621d09cae88cb867b104e1badc48c6499e97394ad91a51c12a1a2"
+        "sha256": "4f25c29aa80bdec02246657bb5ca45805117c434b3be10713cdb119cc35e7c18"
       },
       {
         "path": "src/factor_lab/__init__.py",
-        "sha256": "d2c1bc546d6e3a24405688f5d53781e54bba40f41d11a650b3cc6f75bd52b7a3"
+        "sha256": "0ec07bcd397f15dd34b3eac3ec152333fc87171429efbd0d276874b4d75630ea"
       },
       {
         "path": "src/factor_lab/cli.py",
-        "sha256": "43a8052d51d62fd89d4818e16ef987060c101242fb1e2d86368def2e672a8dc5"
+        "sha256": "26a231337bf79852a74c7121321dc1cf453d3f82f245a26a8cc1a6c8e7120ad1"
       },
       {
         "path": "src/factor_lab/data/__init__.py",
@@ -334,11 +334,11 @@
       },
       {
         "path": "src/factor_lab/prospective_ledger.py",
-        "sha256": "79eb6ae23648aa2750a0d9ad2731a9a2a8f8dfdf5db2fbd999071d6a32f569b2"
+        "sha256": "948a8daea07ab6e03014a243d2e765ff56e9a65ded89eeef65f9fae1249a7290"
       },
       {
         "path": "src/factor_lab/prospective_release_runner.py",
-        "sha256": "774f8af5b871ee12fe9be1899cb2b5539bb55b99b179ebafed99493a497eb473"
+        "sha256": "5fe55422a246f965f4758cc945403531cdb9e653da4e20e79b7dc893158dcd11"
       },
       {
         "path": "src/factor_lab/prospective_runtime.py",
@@ -389,6 +389,6 @@
         "sha256": "a35e8fc2d70fd4f20994be799a33cabaca40814e6dcebf9f428daecc3985b165"
       }
     ],
-    "payload_sha256": "43cb0820d3c4366d23b34061c0b85731f7e1eebe1af0bf00ad39a081d3ac4c8f"
+    "payload_sha256": "4b282cdf19399f342a39ccfed7a40c8a6d79f46aa9c3f578cef4b0ba1ed36abb"
   }
 }
