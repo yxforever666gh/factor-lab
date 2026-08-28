@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "kind": "prospective_target_generator_implementation",
-  "implementation_release": "5.2",
+  "implementation_release": "5.4",
   "activation_release": "5.0",
   "does_not_replace_activation": true,
   "activation_protocol_id": "factor-lab/5.0/adaptive-core-overlay",

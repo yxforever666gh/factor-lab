@@ -276,6 +276,13 @@ def published_capsule(
                 "replay_history_max_seconds": 3600,
             },
             "audit_missing_capsule_policy": "fail_without_materialization",
+            "daily_replay_policy": (
+                "validate_structural_bundle_artifact_and_recursive_cas_bindings_"
+                "then_replay_uncached_suffix"
+            ),
+            "full_audit_policy": (
+                "bypass_cache_replay_complete_history_and_refresh_current_head_prefix"
+            ),
         },
         "runtime_closure": {
             **closure_payload,

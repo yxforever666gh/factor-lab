@@ -853,8 +853,11 @@ def _validate_implementation_upgrade(
     if implementation_release <= prior_release:
         raise LedgerStateError("implementation release must increase monotonically")
     if expected_supersedes is None:
+        if implementation_release < (5, 2):
+            raise LedgerStateError(
+                "first implementation_release_tag must be at least '5.2'"
+            )
         expected_first_binding = {
-            "implementation_release_tag": "5.2",
             "generator_id": "factor-lab/fixed-core-full-targets/5.2",
             "generator_entrypoint": (
                 "factor_lab.prospective_targets:generate_fixed_core_targets"

@@ -439,6 +439,8 @@ def _published_contract(
             "operations",
             "timeout_policy",
             "audit_missing_capsule_policy",
+            "daily_replay_policy",
+            "full_audit_policy",
         },
         label="implementation manifest release_runner",
     )
@@ -456,6 +458,13 @@ def _published_contract(
         != "python_-B_-s_with_python_env_reset_and_capsule_src_first"
         or release_runner["audit_missing_capsule_policy"]
         != "fail_without_materialization"
+        or release_runner["daily_replay_policy"]
+        != (
+            "validate_structural_bundle_artifact_and_recursive_cas_bindings_"
+            "then_replay_uncached_suffix"
+        )
+        or release_runner["full_audit_policy"]
+        != "bypass_cache_replay_complete_history_and_refresh_current_head_prefix"
     ):
         raise ReleaseRunnerError("implementation manifest release runner policy differs")
     timeout_policy = _exact_mapping(

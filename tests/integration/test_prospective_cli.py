@@ -102,7 +102,7 @@ def test_parser_exposes_prospective_lifecycle_commands() -> None:
         assert parsed.prospective_command == command
 
     upgrade = parser.parse_args(["prospective", "upgrade"])
-    assert upgrade.release_tag == "5.3"
+    assert upgrade.release_tag == "5.4"
 
     attest = parser.parse_args(
         ["prospective", "attest", "--purpose", "activation_canary"]

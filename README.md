@@ -5,7 +5,7 @@ Factor Lab 是一条本地、可复现的 A 股组合研究链：Parquet 数据 
 
 项目不再依赖 WebUI、Docker、PostgreSQL、MinIO、Dagster、Hermes 或自治 Agent。旧 Research OS 已完整归档在 Git tag `research-os-final-20260826`，不再进入当前主线。
 
-> 5.3 运行实现执行 5.0 已冻结、由 5.2 协议完整定义的 `fixed_core_full` 路线：历史只负责
+> 5.4 运行实现执行 5.0 已冻结、由 5.2 协议完整定义的 `fixed_core_full` 路线：历史只负责
 > 确定这一条待检验假设，新的
 > signal、targets、十个虚拟 sleeve、执行快照和 outcome 从 2026-08-21 之后开始不可回填地
 > 积累。confirmed outcome 达到预注册门槛前仍不能称为独立 OOS 验证。项目不连接券商、
@@ -29,22 +29,22 @@ python -m pip install -e ".[dev]"
 python -m pip install -e ".[data,dev]"
 ```
 
-5.3 的发布、前瞻 decision、execution、outcome、replay 和 evaluate 必须使用项目内的专用
-运行环境 `runtime/environments/5.3`。该环境固定为当前发布主机的 CPython 3.10.16，并从
+5.4 的发布、前瞻 decision、execution、outcome、replay 和 evaluate 必须使用项目内的专用
+运行环境 `runtime/environments/5.4`。该环境固定为当前发布主机的 CPython 3.10.16，并从
 `protocols/5.2-runtime-lock.txt` 与项目内 wheelhouse 按逐文件 SHA-256 离线安装；随后用
 同一 lock 中的项目 wheel 安装 Factor Lab 本身。不要使用 editable install，也不要让系统
 Python 或用户级 site-packages 参与前瞻证据：
 
 ```powershell
 $factorLabPython = (Resolve-Path `
-  "runtime/environments/5.3/Scripts/python.exe").Path
+  "runtime/environments/5.4/Scripts/python.exe").Path
 $wheelhouse = (Resolve-Path `
-  "runtime/environments/5.3/wheelhouse").Path
+  "runtime/environments/5.4/wheelhouse").Path
 
 & $factorLabPython -m pip install --no-index --find-links $wheelhouse `
   --require-hashes -r protocols/5.2-runtime-lock.txt
 & $factorLabPython -c `
-  "import factor_lab; assert factor_lab.__version__ == '5.3.0'"
+  "import factor_lab; assert factor_lab.__version__ == '5.4.0'"
 ```
 
 下文的 `python -m factor_lab.cli prospective ...` 表示应由 `$factorLabPython` 执行；发布
@@ -105,9 +105,9 @@ python -m factor_lab.cli prospective activate `
 python -m factor_lab.cli prospective attest --purpose activation_canary `
   --release-tag 5.0 --workflow-run-id 33132845922
 
-# 5.3 tag 与 GitHub 同步后，绑定并见证完整运行实现
+# 5.4 tag 与 GitHub 同步后，绑定并见证完整运行实现
 python -m factor_lab.cli prospective upgrade `
-  --manifest protocols/5.2-target-generator.json --release-tag 5.3
+  --manifest protocols/5.2-target-generator.json --release-tag 5.4
 # 为保持 2026-08-31 是第一条真实前瞻 signal，本次 implementation canary 的可信 Tlog
 # 必须晚于 2026-08-28 15:00 Asia/Shanghai，且早于 2026-08-31 15:00。
 python -m factor_lab.cli prospective attest `
@@ -299,7 +299,7 @@ runtime/prospective/5.0/
 
 ```powershell
 $factorLabPython = (Resolve-Path `
-  "runtime/environments/5.3/Scripts/python.exe").Path
+  "runtime/environments/5.4/Scripts/python.exe").Path
 $localTestRun = "local-" + [guid]::NewGuid().ToString("N")
 & $factorLabPython -m pytest tests/unit tests/data tests/integration -q `
   --basetemp "runtime/test-tmp/$localTestRun" -p no:cacheprovider

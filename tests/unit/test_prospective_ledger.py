@@ -1109,14 +1109,14 @@ def test_real_activation_prefix_stays_v1_bytes_and_upgrade_starts_v2(tmp_path: P
     assert canary["snapshot"]["snapshot"]["schema_version"] == 1
     upgrade = append_implementation_upgrade(
         ledger,
-        _upgrade_payload(activation["record_sha256"]),
+        _upgrade_payload(activation["record_sha256"], release_tag="5.4"),
         recorded_at_utc="2026-08-22T00:06:00Z",
     )
     snapshot = upgrade["snapshot"]["snapshot"]
     assert snapshot["schema_version"] == 2
     assert snapshot["release_tag"] == "5.0"
     assert snapshot["release_commit_oid"] == COMMIT_OID
-    assert snapshot["implementation_release_tag"] == "5.2"
+    assert snapshot["implementation_release_tag"] == "5.4"
     assert audit_ledger(ledger)["valid"] is True
 
 

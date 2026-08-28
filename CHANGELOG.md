@@ -10,6 +10,18 @@
 
 ## [Unreleased]
 
+## [5.4] - 2026-08-28
+
+### Fixed
+
+- 修正 5.2/5.3 发布 manifest 与 release runner 的精确 schema 漂移：manifest 已声明日常 suffix
+  replay 与完整 audit 两项策略，但 capsule materializer 漏接纳这两个键，导致实现升级在写账本
+  前正确失败。5.4 同时逐值验证两项策略，真实 tag capsule 必须能先物化并自检才可追加记录。
+- `implementation_release` 与 CLI 默认 tag 同步到 5.4；首次实现绑定仍固定 generator、entrypoint、
+  manifest、evaluator 与合同身份，但不再硬编码只能是已经发现运行缺陷的 5.2 tag。它要求同一
+  protocol major、版本至少 5.2 且单调递增，从而允许在没有任何 decision/outcome 前直接绑定
+  已发布的纠正版。5.2 与 5.3 tag 均保持不可变，且两次失败都发生在账本写入之前。
+
 ## [5.3] - 2026-08-28
 
 ### Fixed
@@ -544,6 +556,7 @@
   移除这些实验层。
 
 [Unreleased]: https://github.com/yxforever666gh/factor-lab/commits/main
+[5.4]: https://github.com/yxforever666gh/factor-lab/tree/5.4
 [5.3]: https://github.com/yxforever666gh/factor-lab/tree/5.3
 [5.2]: https://github.com/yxforever666gh/factor-lab/tree/5.2
 [5.1]: https://github.com/yxforever666gh/factor-lab/tree/5.1
