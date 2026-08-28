@@ -10,6 +10,17 @@
 
 ## [Unreleased]
 
+## [5.3] - 2026-08-28
+
+### Fixed
+
+- 修正 5.2 非 editable wheel 的默认项目根定位：CLI 不再按 `cli.py` 的固定父目录层数推断
+  checkout，否则正式环境会把默认账本错误地落到 venv 的 `Lib/runtime/prospective/5.0` 并看到
+  一条空平行链。5.3 会从安装文件与当前目录向上查找 `.git`、`pyproject.toml` 和冻结协议三重
+  标记；找不到就明确失败，显式 `--root` 始终可用且不会先触发自动发现。
+- 增加模拟项目内非 editable `site-packages` 布局的回归测试，并要求正式 wheel 的无参数
+  `prospective audit/status` 实际命中 checkout 下既有账本后才允许升级实现。
+
 ## [5.2] - 2026-08-28
 
 ### Added
@@ -533,6 +544,7 @@
   移除这些实验层。
 
 [Unreleased]: https://github.com/yxforever666gh/factor-lab/commits/main
+[5.3]: https://github.com/yxforever666gh/factor-lab/tree/5.3
 [5.2]: https://github.com/yxforever666gh/factor-lab/tree/5.2
 [5.1]: https://github.com/yxforever666gh/factor-lab/tree/5.1
 [5.0]: https://github.com/yxforever666gh/factor-lab/tree/5.0

@@ -53,7 +53,31 @@ from factor_lab.prospective_runtime import attest_snapshot, verify_authoritative
 
 
 def _root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    """Locate the checkout even when Factor Lab is installed as a wheel.
+
+    Editable installs happen to place ``__file__`` under ``<root>/src``.  A
+    normal wheel instead places it under ``<root>/runtime/environments/...``;
+    assuming a fixed parent depth would silently create a second runtime tree
+    inside site-packages.  Walk both the installed-file and current-directory
+    ancestry and require the repository's exact marker set.
+    """
+
+    starts = (Path(__file__).resolve().parent, Path.cwd().resolve())
+    seen: set[Path] = set()
+    for start in starts:
+        for candidate in (start, *start.parents):
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            if (
+                (candidate / ".git").exists()
+                and (candidate / "pyproject.toml").is_file()
+                and (candidate / "protocols" / "5.0.json").is_file()
+            ):
+                return candidate
+    raise SystemExit(
+        "cannot locate the Factor Lab checkout; run inside it or pass --root"
+    )
 
 
 def _json(value: Any) -> None:
@@ -69,7 +93,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="factor-lab",
         description="Local Parquet factor research and long-only backtesting.",
     )
-    parser.add_argument("--root", type=Path, default=_root(), help=argparse.SUPPRESS)
+    parser.add_argument("--root", type=Path, default=None, help=argparse.SUPPRESS)
     commands = parser.add_subparsers(dest="command", required=True)
 
     data = commands.add_parser("data", help="Inspect, sync, or build local Parquet data.")
@@ -180,7 +204,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("protocols/5.2-target-generator.json"),
     )
-    upgrade.add_argument("--release-tag", default="5.2")
+    upgrade.add_argument("--release-tag", default="5.3")
     abandon_upgrade = prospective_commands.add_parser(
         "abandon-upgrade",
         help="Explicitly abandon an unattested implementation upgrade.",
@@ -981,6 +1005,8 @@ def _prospective_command(arguments: argparse.Namespace) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = build_parser().parse_args(argv)
+    if arguments.root is None:
+        arguments.root = _root()
     if arguments.command == "data":
         return _data_command(arguments)
     if arguments.command == "research":
