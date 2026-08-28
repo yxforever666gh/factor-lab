@@ -97,6 +97,9 @@
 - 运行闭包对声明为 UTF-8 文本的 Python、TOML 和 JSON 先执行与 Git `text eol=lf` 一致的
   CRLF→LF 规范化，再核对发布 commit 的原始 blob。Windows `core.autocrlf` 或混合换行不再
   让工作树哈希绑定到一个 Git tag 中根本不存在的字节版本。
+- 账本单元测试不再从 gitignored 的本地 `runtime/data/top500/execution.parquet` 偷读冻结交易
+  日历；干净 Linux/Windows CI 现在用固定休市日重建同一 2,340 日前缀并复核其 SHA-256，避免
+  本机全绿而远端因缺少私有运行数据失败。
 
 ### Known limitations
 
