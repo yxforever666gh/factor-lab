@@ -64,12 +64,12 @@ python -m factor_lab.cli data status
 # 首次将现有冻结数据复制并校验到 runtime/data/top500
 python -m factor_lab.cli data build --full --apply-migration --hash
 
-# 增量同步三类 Tushare 日分区，并预存覆盖持有期的官方日历
+# 增量同步三类 Tushare 日分区，并预存同时覆盖持有期和 membership 整个生效月的官方日历
 python -m factor_lab.cli data sync --from 2026-08-22 --to 2026-08-28 `
-  --calendar-to 2026-09-15 --resume
+  --calendar-to 2026-09-30 --resume
 
-# 下载并校验官方停复牌历史快照
-python -m factor_lab.cli data suspensions --from 2017-01-01 --to 2026-08-21 --resume
+# 下载并校验官方停复牌历史快照；结束日期扩展时必须全量原子替换，不能 --resume
+python -m factor_lab.cli data suspensions --from 2017-01-01 --to 2026-08-28 --no-resume
 
 # 续传 PIT 财务指标和历史月末名称/行业，并原子更新 canonical Parquet
 python -m factor_lab.cli data enrich --from 2017-01-01 --to 2026-08-13 --resume
@@ -115,6 +115,9 @@ python -m factor_lab.cli prospective attest `
 
 # 为 signal 的“下一官方交易日所在月份”生成 Top500；input 不会隐式选择“最新”快照
 # 2026-08-31 的下一官方交易日在 9 月，因此首条 signal 就必须显式绑定 2026-09 membership
+# 必须从 2026-08-22 续接冻结日历；只从 2026-08-31 开始无法证明完整 60-session 窗口
+python -m factor_lab.cli data sync --from 2026-08-22 --to 2026-08-31 `
+  --calendar-to 2026-09-30 --resume
 $membershipSnapshot = python -m factor_lab.cli prospective membership `
   --month 2026-09 | ConvertFrom-Json
 python -m factor_lab.cli prospective input --signal-date 2026-08-31 `
@@ -126,7 +129,8 @@ python -m factor_lab.cli prospective seal --plan <stored-plan-path>
 python -m factor_lab.cli prospective attest --purpose decision_anchor --release-tag 5.0 `
   --decision-record-sha256 <decision-sha> --admission-deadline-utc <deadline-utc>
 
-# i+11开盘及停复牌资料到齐后，只能从decision哈希重建执行和结算
+# i+11 行情到齐后再抓覆盖整个持有期的停复牌快照，只能从 decision 哈希重建执行和结算
+python -m factor_lab.cli data suspensions --from 2017-01-01 --to 2026-09-15 --no-resume
 python -m factor_lab.cli prospective execution --decision <decision-sha>
 python -m factor_lab.cli prospective outcome `
   --decision <decision-sha> --execution <execution-snapshot-sha>
