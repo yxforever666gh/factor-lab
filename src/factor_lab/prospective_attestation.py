@@ -304,12 +304,27 @@ def validate_workflow_run(
     run_attempt = payload.get("run_attempt")
     if type(run_attempt) is not int or run_attempt <= 0:
         raise AttestationError("attestation workflow lacks a positive run attempt")
-    # The workflow-runs REST representation uses ``path@ref-name`` (for
-    # example ``.github/workflows/build.yml@main``), while the certificate and
-    # source-ref verification contracts use the fully qualified Git ref.
-    expected_path = f"{workflow_path}@{release_tag}"
-    if payload.get("path") != expected_path:
+    # GitHub's documented workflow-run examples use ``path@ref-name`` while
+    # current workflow-dispatch responses can return the canonical path alone.
+    # The ref is independently pinned below by head_branch/head_sha and later
+    # by the certificate source-ref contract, so accept only these two exact
+    # API encodings rather than weakening the workflow identity check.
+    accepted_paths = {workflow_path, f"{workflow_path}@{release_tag}"}
+    if payload.get("path") not in accepted_paths:
         raise AttestationError("attestation workflow path/ref differs from frozen workflow")
+    workflow_id = payload.get("workflow_id")
+    if type(workflow_id) is not int or workflow_id <= 0:
+        raise AttestationError("attestation workflow lacks a positive workflow id")
+    expected_workflow_url = (
+        f"https://api.github.com/repos/{repository}/actions/workflows/{workflow_id}"
+    )
+    if payload.get("workflow_url") != expected_workflow_url:
+        raise AttestationError("attestation workflow_url differs from workflow id")
+    run_repository = payload.get("repository")
+    if not isinstance(run_repository, Mapping) or (
+        run_repository.get("full_name") != repository
+    ):
+        raise AttestationError("attestation run repository differs from request")
     html_url = payload.get("html_url")
     expected_html_url = (
         f"https://github.com/{repository}/actions/runs/{workflow_run_id}"
@@ -381,7 +396,6 @@ def build_attestation_verify_command(
     _require_repository(repository)
     _require_release_tag(release_tag)
     _require_oid(release_commit_oid, "release_commit_oid")
-    signer = f"{repository}/{workflow_path}"
     identity = certificate_identity(
         repository=repository, release_tag=release_tag, workflow_path=workflow_path
     )
@@ -397,8 +411,6 @@ def build_attestation_verify_command(
             repository,
             "--cert-identity",
             identity,
-            "--signer-workflow",
-            signer,
             "--source-ref",
             f"refs/tags/{release_tag}",
             "--source-digest",

@@ -232,7 +232,13 @@ def _run_payload(
         "head_branch": "5.0",
         "display_title": display_title,
         "run_attempt": run_attempt,
-        "path": ".github/workflows/prospective-attest.yml@5.0",
+        "path": ".github/workflows/prospective-attest.yml",
+        "workflow_id": 344235268,
+        "workflow_url": (
+            "https://api.github.com/repos/yxforever666gh/factor-lab/"
+            "actions/workflows/344235268"
+        ),
+        "repository": {"full_name": "yxforever666gh/factor-lab"},
         "html_url": (
             "https://github.com/yxforever666gh/factor-lab/actions/runs/9345"
         ),

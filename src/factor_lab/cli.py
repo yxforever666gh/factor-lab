@@ -20,7 +20,7 @@ from factor_lab.data import (
     sync_suspensions,
 )
 from factor_lab.research.runner import latest_run, run_research
-from factor_lab.prospective_attestation import DEFAULT_REPOSITORY
+from factor_lab.prospective_attestation import API_VERSION, DEFAULT_REPOSITORY
 from factor_lab.prospective_ledger import (
     LedgerLayout,
     activate_protocol,
@@ -420,20 +420,84 @@ def _published_tag_oids(root: Path, tag: str) -> tuple[str, str]:
     if git("cat-file", "-t", object_oid) != "tag":
         raise ValueError(f"release tag must be annotated: {tag}")
     commit_oid = git("rev-parse", f"{reference}^{{}}")
-    remote_lines = git(
-        "-c",
-        "http.version=HTTP/1.1",
-        "ls-remote",
-        "origin",
-        reference,
-        f"{reference}^{{}}",
-    ).splitlines()
-    remote = {
-        name: oid
-        for line in remote_lines
-        for oid, name in [line.split("\t", maxsplit=1)]
-    }
-    if remote.get(reference) != object_oid or remote.get(f"{reference}^{{}}") != commit_oid:
+    try:
+        remote_lines = git(
+            "ls-remote",
+            "origin",
+            reference,
+            f"{reference}^{{}}",
+        ).splitlines()
+        remote = {
+            name: oid
+            for line in remote_lines
+            for oid, name in [line.split("\t", maxsplit=1)]
+        }
+        remote_object_oid = remote.get(reference)
+        remote_commit_oid = remote.get(f"{reference}^{{}}")
+    except subprocess.CalledProcessError:
+        # Git smart-HTTP can be unavailable even while the GitHub REST API is
+        # healthy.  The fallback preserves the same annotated-object and
+        # peeled-commit checks; it is not a contents-API or branch-name proxy.
+        repo_payload = json.loads(
+            subprocess.run(
+                ["gh", "repo", "view", "--json", "nameWithOwner"],
+                cwd=root,
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout
+        )
+        repository = repo_payload.get("nameWithOwner")
+        if not isinstance(repository, str) or not repository.strip():
+            raise ValueError("could not resolve the GitHub repository")
+
+        def github_api(endpoint: str) -> Mapping[str, Any]:
+            payload = json.loads(
+                subprocess.run(
+                    [
+                        "gh",
+                        "api",
+                        endpoint,
+                        "-H",
+                        "Accept: application/vnd.github+json",
+                        "-H",
+                        f"X-GitHub-Api-Version: {API_VERSION}",
+                    ],
+                    cwd=root,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                ).stdout
+            )
+            if not isinstance(payload, Mapping):
+                raise ValueError("GitHub tag response must be an object")
+            return payload
+
+        remote_ref = github_api(
+            f"repos/{repository.strip()}/git/ref/tags/{tag}"
+        )
+        remote_ref_object = remote_ref.get("object")
+        if remote_ref.get("ref") != reference or not isinstance(
+            remote_ref_object, Mapping
+        ):
+            raise ValueError(f"GitHub tag ref is invalid for {tag}")
+        if remote_ref_object.get("type") != "tag":
+            raise ValueError(f"GitHub release tag is not annotated: {tag}")
+        remote_object_oid = remote_ref_object.get("sha")
+        if not isinstance(remote_object_oid, str):
+            raise ValueError(f"GitHub tag object is missing for {tag}")
+
+        remote_tag = github_api(
+            f"repos/{repository.strip()}/git/tags/{remote_object_oid}"
+        )
+        remote_target = remote_tag.get("object")
+        if remote_tag.get("tag") != tag or not isinstance(remote_target, Mapping):
+            raise ValueError(f"GitHub annotated tag is invalid for {tag}")
+        if remote_target.get("type") != "commit":
+            raise ValueError(f"GitHub release tag does not target a commit: {tag}")
+        remote_commit_oid = remote_target.get("sha")
+
+    if remote_object_oid != object_oid or remote_commit_oid != commit_oid:
         raise ValueError(
             f"local and GitHub tag objects do not match for {tag}"
         )
@@ -545,6 +609,43 @@ def _prospective_command(arguments: argparse.Namespace) -> int:
         release_commit_oid = snapshot.get("release_commit_oid")
         if not isinstance(release_commit_oid, str) or not release_commit_oid:
             raise ValueError("prospective snapshot has no release commit oid")
+        release_tag = snapshot.get("release_tag")
+        if not isinstance(release_tag, str) or not release_tag:
+            raise ValueError("prospective snapshot has no release tag")
+        if str(arguments.release_tag) != release_tag:
+            raise ValueError(
+                "attestation release tag differs from the activated snapshot"
+            )
+        ledger_audit = audit_ledger(ledger_root)
+        if not ledger_audit.get("valid"):
+            raise ValueError("cannot attest an invalid prospective ledger")
+        records = ledger_audit.get("records")
+        if not isinstance(records, list) or not records:
+            raise ValueError("prospective ledger has no activation record")
+        activation_path = records[0].get("path")
+        if not isinstance(activation_path, str):
+            raise ValueError("prospective activation record path is missing")
+        activation = strict_load_canonical(Path(activation_path).read_bytes())
+        if not isinstance(activation, Mapping) or (
+            activation.get("kind") != "protocol_activation"
+        ):
+            raise ValueError("prospective activation record is invalid")
+        activation_payload = activation.get("payload")
+        if not isinstance(activation_payload, Mapping):
+            raise ValueError("prospective activation payload is invalid")
+        published_object_oid, published_commit_oid = _published_tag_oids(
+            root, release_tag
+        )
+        if (
+            activation_payload.get("release_tag_object_oid")
+            != published_object_oid
+            or activation_payload.get("release_commit_oid")
+            != published_commit_oid
+            or published_commit_oid != release_commit_oid
+        ):
+            raise ValueError(
+                "published release tag differs from the activation binding"
+            )
         _json(
             attest_snapshot(
                 ledger_root,
@@ -555,7 +656,7 @@ def _prospective_command(arguments: argparse.Namespace) -> int:
                 admission_deadline_utc=arguments.admission_deadline_utc,
                 workflow_run_id=arguments.workflow_run_id,
                 repository=str(arguments.repository),
-                release_tag=str(arguments.release_tag),
+                release_tag=release_tag,
             )
         )
         return 0

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import subprocess
 
 import pytest
 
-from factor_lab.cli import build_parser, main
+from factor_lab.cli import _published_tag_oids, build_parser, main
 
 
 RUN_ID = "c" * 16
@@ -205,3 +206,139 @@ def test_attest_resolves_latest_and_forwards_resume_contract(
     assert resume[2]["admission_deadline_utc"] == "2026-08-24T01:15:00Z"
     assert resume[2]["workflow_run_id"] == 9345
     assert resume[2]["repository"] == "example/factor-lab"
+
+    call_count = len(calls)
+    with pytest.raises(ValueError, match="differs from the activated snapshot"):
+        main(
+            [
+                "--root",
+                str(tmp_path),
+                "prospective",
+                "attest",
+                "--purpose",
+                "activation_canary",
+                "--release-tag",
+                "5.1",
+            ]
+        )
+    assert len(calls) == call_count
+
+    monkeypatch.setattr(
+        "factor_lab.cli._published_tag_oids",
+        lambda _root, _tag: ("d" * 40, "b" * 40),
+    )
+    with pytest.raises(ValueError, match="differs from the activation binding"):
+        main(
+            [
+                "--root",
+                str(tmp_path),
+                "prospective",
+                "attest",
+                "--purpose",
+                "activation_canary",
+                "--release-tag",
+                "5.0",
+            ]
+        )
+    assert len(calls) == call_count
+
+
+def test_published_tag_oids_falls_back_to_github_git_database(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    tag_oid = "a" * 40
+    commit_oid = "b" * 40
+    calls: list[tuple[str, ...]] = []
+
+    def fake_run(argv, *, cwd, check, capture_output, text):
+        command = tuple(argv)
+        calls.append(command)
+        assert Path(cwd) == tmp_path
+        assert check is True
+        assert capture_output is True
+        assert text is True
+        if command == ("git", "rev-parse", "refs/tags/5.0"):
+            stdout = f"{tag_oid}\n"
+        elif command == ("git", "cat-file", "-t", tag_oid):
+            stdout = "tag\n"
+        elif command == ("git", "rev-parse", "refs/tags/5.0^{}"):
+            stdout = f"{commit_oid}\n"
+        elif command == (
+            "git",
+            "ls-remote",
+            "origin",
+            "refs/tags/5.0",
+            "refs/tags/5.0^{}",
+        ):
+            raise subprocess.CalledProcessError(128, argv, stderr="transport down")
+        elif command == ("gh", "repo", "view", "--json", "nameWithOwner"):
+            stdout = json.dumps({"nameWithOwner": "example/factor-lab"})
+        elif command[:3] == (
+            "gh",
+            "api",
+            "repos/example/factor-lab/git/ref/tags/5.0",
+        ):
+            stdout = json.dumps(
+                {
+                    "ref": "refs/tags/5.0",
+                    "object": {"type": "tag", "sha": tag_oid},
+                }
+            )
+        elif command[:3] == (
+            "gh",
+            "api",
+            f"repos/example/factor-lab/git/tags/{tag_oid}",
+        ):
+            stdout = json.dumps(
+                {
+                    "tag": "5.0",
+                    "object": {"type": "commit", "sha": commit_oid},
+                }
+            )
+        else:
+            raise AssertionError(command)
+        return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr("factor_lab.cli.subprocess.run", fake_run)
+    assert _published_tag_oids(tmp_path, "5.0") == (tag_oid, commit_oid)
+    assert all("http.version=HTTP/1.1" not in call for call in calls)
+
+
+def test_published_tag_api_fallback_rejects_lightweight_remote_tag(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    tag_oid = "a" * 40
+    commit_oid = "b" * 40
+
+    def fake_run(argv, *, cwd, check, capture_output, text):
+        command = tuple(argv)
+        if command == ("git", "rev-parse", "refs/tags/5.0"):
+            stdout = f"{tag_oid}\n"
+        elif command == ("git", "cat-file", "-t", tag_oid):
+            stdout = "tag\n"
+        elif command == ("git", "rev-parse", "refs/tags/5.0^{}"):
+            stdout = f"{commit_oid}\n"
+        elif command[0:2] == ("git", "ls-remote"):
+            raise subprocess.CalledProcessError(128, argv, stderr="transport down")
+        elif command == ("gh", "repo", "view", "--json", "nameWithOwner"):
+            stdout = json.dumps({"nameWithOwner": "example/factor-lab"})
+        elif command[:3] == (
+            "gh",
+            "api",
+            "repos/example/factor-lab/git/ref/tags/5.0",
+        ):
+            stdout = json.dumps(
+                {
+                    "ref": "refs/tags/5.0",
+                    "object": {"type": "commit", "sha": commit_oid},
+                }
+            )
+        else:
+            raise AssertionError(command)
+        return subprocess.CompletedProcess(argv, 0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr("factor_lab.cli.subprocess.run", fake_run)
+    with pytest.raises(ValueError, match="not annotated"):
+        _published_tag_oids(tmp_path, "5.0")

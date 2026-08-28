@@ -74,6 +74,8 @@ factor-lab report --run latest
 
 # 5.0 tag 发布且权威 full run 绑定完成后，激活不可回填的前瞻账本
 factor-lab prospective activate --run <authoritative-run-id> --release-tag 5.0
+# 5.1 修复后恢复已成功的精确远端 run；不得重新 dispatch activation canary
+factor-lab prospective attest --purpose activation_canary --release-tag 5.0 --workflow-run-id 33132845922
 factor-lab prospective status
 factor-lab prospective audit
 ```
@@ -110,8 +112,9 @@ manifest、adaptive summary 与重算路由，避免在 tracked 文档里预填�
 
 5.0 activation 会把 clean full run、manifest、协议和 `fixed_core_full` 路由固化为零观察
 检查点；但当前尚未实现可验证的 route→targets 生成器，也没有冻结十个 offset 的实际资本
-编排。因而 activation canary 可以执行，第一条 decision 仍必须阻塞。这个缺口应作为 5.1
-的小版本目标先补齐，不能用手工 targets 冒充固定核心的前瞻结果。
+编排。因而 activation canary 可以执行，第一条 decision 仍必须阻塞。5.1 只修复真实
+GitHub workflow-run 响应与本地见证校验器的兼容性，不重绑已经激活的 5.0 协议；
+route→targets 缺口仍须由后续小版本补齐，不能用手工 targets 冒充固定核心的前瞻结果。
 
 ## 4.1 纠正基线：否决 hard selector
 

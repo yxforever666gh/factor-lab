@@ -10,6 +10,36 @@
 
 ## [Unreleased]
 
+## [5.1] - 2026-08-28
+
+### Fixed
+
+- 修正前瞻见证校验器对 GitHub Actions workflow-run `path` 字段的错误假设：真实
+  workflow-dispatch 响应返回 canonical workflow path，而官方示例也可能包含 `@ref-name`。
+  现在只接受这两种精确编码，同时仍独立锁定 dispatch run id、request title、tag、head SHA、
+  run attempt、证书 RunInvocationURI、source ref 与 Tlog 时间；不会因兼容响应格式而放宽身份。
+- Activation 核对远端 annotated tag 时移除强制 HTTP/1.1，并在 Git smart-HTTP 不可用时
+  使用 GitHub Git database API 复核同一 tag object 与 peeled commit。API fallback 不创建提交、
+  不移动 ref，也不把分支名或 contents API 响应当成发布 tag 证据。
+- 修正 `gh attestation verify` 同时传入互斥的 `--cert-identity` 与 `--signer-workflow`，导致
+  真实 GitHub CLI 在读取 bundle 前直接失败的问题。现在保留更严格的完整 certificate identity，
+  并继续锁定 repository、source tag、source commit、GitHub-hosted runner 与精确 run attempt。
+- 每次 attestation 在 dispatch/resume 前都会重验当前本地及 GitHub annotated tag object 和
+  peeled commit 与 activation record 完全一致；即使 tag 名和目标 commit 未变，替换 tag object
+  也会在任何网络 workflow 或账本写入前失败。
+
+### Operations
+
+- 5.0 零观察账本已绑定 clean 权威运行 `88009f1e5309b268`、annotated `5.0` tag 和冻结路线
+  `fixed_core_full`。首次 activation-canary workflow `33132845922` 在 GitHub 成功，但 5.0
+  本地校验器因上述 `path` 格式差异拒绝写入收据；5.1 必须恢复并验证这次精确 run，不能
+  重建账本、重发 workflow 或把失败尝试回填成新决策。
+
+### Known limitations
+
+- 5.1 是证据链兼容性修复，不改变 5.0 研究协议和历史路由。可验证的 route→targets 生成器
+  与十 offset 实际资本编排仍未实现，因此第一条前瞻 decision 继续阻塞。
+
 ## [5.0] - 2026-08-28
 
 ### Added

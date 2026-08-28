@@ -71,7 +71,13 @@ def _run_payload() -> dict:
         "head_branch": "5.0",
         "display_title": f"prospective-{request_id}",
         "run_attempt": 1,
-        "path": ".github/workflows/prospective-attest.yml@5.0",
+        "path": ".github/workflows/prospective-attest.yml",
+        "workflow_id": 344235268,
+        "workflow_url": (
+            "https://api.github.com/repos/yxforever666gh/factor-lab/"
+            "actions/workflows/344235268"
+        ),
+        "repository": {"full_name": REPOSITORY},
         "html_url": "https://github.com/yxforever666gh/factor-lab/actions/runs/123",
         "created_at": "2026-08-23T12:02:00Z",
         "updated_at": "2026-08-23T12:03:00Z",
@@ -172,6 +178,18 @@ def test_dispatch_response_and_workflow_run_are_strict() -> None:
     assert run["workflow_source_commit_oid"] == COMMIT_OID
     assert run["workflow_run_attempt"] == 1
 
+    documented_path_payload = _run_payload()
+    documented_path_payload["path"] = (
+        ".github/workflows/prospective-attest.yml@5.0"
+    )
+    assert validate_workflow_run(
+        documented_path_payload,
+        workflow_run_id=123,
+        request_id=build_dispatch_request(_snapshot()).request_id,
+        release_tag="5.0",
+        release_commit_oid=COMMIT_OID,
+    )["workflow_ref"] == "refs/tags/5.0"
+
     with pytest.raises(AttestationError, match="duplicate"):
         parse_dispatch_response(
             '{"workflow_run_id":123,"workflow_run_id":124,'
@@ -195,6 +213,9 @@ def test_dispatch_response_and_workflow_run_are_strict() -> None:
         ("display_title", "prospective-" + "0" * 64, "request id"),
         ("run_attempt", 0, "run attempt"),
         ("path", ".github/workflows/prospective-attest.yml@refs/heads/main", "path/ref"),
+        ("workflow_id", 0, "workflow id"),
+        ("workflow_url", "https://api.github.com/repos/x/y/actions/workflows/1", "workflow_url"),
+        ("repository", {"full_name": "x/y"}, "repository"),
         ("created_at", "2026-08-24T01:15:00Z", "at or after"),
     ],
 )
@@ -241,9 +262,11 @@ def test_download_verify_commands_and_verification_output_are_pinned(tmp_path: P
     arguments = list(verify.argv)
     assert arguments[arguments.index("--source-ref") + 1] == "refs/tags/5.0"
     assert arguments[arguments.index("--source-digest") + 1] == COMMIT_OID
-    assert arguments[arguments.index("--signer-workflow") + 1] == (
-        "yxforever666gh/factor-lab/.github/workflows/prospective-attest.yml"
+    assert arguments[arguments.index("--cert-identity") + 1] == (
+        "https://github.com/yxforever666gh/factor-lab/"
+        ".github/workflows/prospective-attest.yml@refs/tags/5.0"
     )
+    assert "--signer-workflow" not in arguments
     assert "--deny-self-hosted-runners" in arguments
 
     request = build_dispatch_request(_snapshot())
@@ -323,6 +346,27 @@ def test_verification_selects_only_the_exact_run_attempt_from_same_subject() -> 
     assert evidence["workflow_run_id"] == 123
     assert evidence["workflow_run_attempt"] == 2
     assert evidence["run_invocation_uri"].endswith("/runs/123/attempts/2")
+
+
+def test_verification_rejects_only_an_old_attempt_of_the_same_run() -> None:
+    request = build_dispatch_request(_snapshot())
+    old_attempt = _verification_payload(
+        request.snapshot_sha256,
+        request.snapshot_name,
+        workflow_run_id=123,
+        workflow_run_attempt=1,
+    )
+
+    with pytest.raises(AttestationError, match="exactly one strict"):
+        validate_verification_output(
+            old_attempt,
+            snapshot_sha256=request.snapshot_sha256,
+            snapshot_name=request.snapshot_name,
+            expected_certificate_identity=certificate_identity(),
+            repository=REPOSITORY,
+            workflow_run_id=123,
+            workflow_run_attempt=2,
+        )
 
 
 def test_verification_rejects_tampered_run_invocation_and_late_tlog() -> None:
