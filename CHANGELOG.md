@@ -10,6 +10,56 @@
 
 ## [Unreleased]
 
+## [5.8] - 2026-08-29
+
+### Added
+
+- 对冻结桥之后的 Tushare 日分区新增 provider-completion 合同：`daily`、`daily_basic` 与
+  `adj_factor` 必须在上海时间 17:10 这一协议工程门槛之后完成至少两轮顺序独立采样，三端完整
+  canonical fingerprint 跨轮稳定，`daily` 与 `daily_basic` ticker 集完全相同且被
+  `adj_factor` 覆盖，才能原子发布为 `complete`。proof 同时绑定请求 ID/时间、每端行数、ticker
+  与内容摘要、bundle 摘要和完整 evidence 摘要；17:10 明确不是供应商完整性 SLA。
+- guarded 分区新增 durable `reconciling` 中间态、原迁移 provenance、重试历史、共享 bundle
+  proof 与 revision-conflict 语义。崩溃最多留下可恢复 marker；采样/发布时钟回拨、canonical
+  symlink、错误 identity/path/row count、mixed proof、6000 行接口上限或供应商稳定修订均不会
+  发布成可消费的完整分区。
+- watchdog 新增 `continuous` 控制模式。5.8 Windows 任务在工作日覆盖收盘后及次日准入窗口，
+  周末每天六次粗粒度恢复，并在登录时补跑；注册器和 runner 都要求 `China Standard Time`，
+  所有实例继续共享文件句柄锁和 readiness 的唯一 `action.argv` 合同。
+
+### Changed
+
+- 5.8 是 5.7 首轮 provider 预演暴露问题后的同方向可靠性纠错；5.0/5.2 冻结的
+  `fixed_core_full`、prospective epoch、2026-08-31 首 signal、目标生成器、十个 sleeve、成本模型
+  和评价门槛均不改变，也不回填任何市场结果。
+- signal/input、月度 membership 与 i+11 execution/outcome 的 post-cutover 深层消费者现在都
+  逐字节验证 provider-completion proof；execution source readiness、直接 builder 与 fallback
+  全部要求并封存三端分区。持有期同步动作不再只请求 `daily`/`adj_factor`。
+- 首周期静态窗口任务与长期 continuous 任务分离：前者只负责 2026-08-31 首 signal 的软/硬
+  deadline，后者不再被 2026-09-01 的 `NotAfter` 永久短路，能够持续推进后续 decision、
+  execution、outcome 与 evaluation。
+
+### Fixed
+
+- 修复 5.7 在官方日线端点仍处 15:00–17:00 更新窗口时，把首次非空响应永久 checkpoint 为完整
+  数据的问题；partial universe 现在只会 waiting/reconcile，不能污染 Top-500 membership、input
+  或 outcome。
+- 修复缺 proof 与 present-but-null/string/list/损坏 proof 被混为同一种 legacy 状态的问题。仅
+  字段完全缺失可走精确 `--resume` reconcile；存在但非法的 proof 必须 blocked 且不覆盖旧 bytes。
+- 修复并发 subset writer、`--no-resume`、crash recovery 与 provider revision 可能产生混合 proof、
+  丢失原 checkpoint provenance 或留下消费者永久拒绝的 `complete` 状态的问题。
+- 修复 5.7 heartbeat 在首周期 `NotAfter` 之后永远退出 0、导致完整生命周期自动化实际停止的
+  控制器合同断层。
+
+### Known limitations
+
+- 5.8 发布时正式账本仍为 0 decision、0 confirmed outcome；这些修复提高的是数据与运行证据的
+  因果可靠性，没有新增盈利证据。方向是否成立仍必须由 10/60/250 个预注册前瞻 outcome 决定。
+- 17:10 与两轮稳定采样只能显著降低抢读 partial publication 的风险，不能证明供应商之后绝不
+  修订。若已 guarded 的完整 bundle 发生修订，系统会 blocked 而不是自动选新版本。
+- Windows 任务使用当前用户的 `Interactive/Limited` 凭据；整机断电、长期未登录、断网或凭据
+  失效仍会推迟推进，但周末恢复、登录 trigger、`StartWhenAvailable` 与 App heartbeat 提供冗余。
+
 ## [5.7] - 2026-08-29
 
 ### Added
@@ -744,6 +794,7 @@
   移除这些实验层。
 
 [Unreleased]: https://github.com/yxforever666gh/factor-lab/commits/main
+[5.8]: https://github.com/yxforever666gh/factor-lab/tree/5.8
 [5.7]: https://github.com/yxforever666gh/factor-lab/tree/5.7
 [5.6]: https://github.com/yxforever666gh/factor-lab/tree/5.6
 [5.5]: https://github.com/yxforever666gh/factor-lab/tree/5.5

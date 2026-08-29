@@ -45,7 +45,14 @@ from .prospective import (
     ProspectiveInputSnapshot,
     load_prospective_input_snapshot,
 )
-from .sources import DATASET_FIELDS, _call, _configured_tushare_client
+from .sources import (
+    DATASET_FIELDS,
+    PROVIDER_COMPLETION_DATASETS,
+    _call,
+    _configured_tushare_client,
+    provider_completion_required,
+    validate_provider_completion_evidence,
+)
 from .suspensions import SUSPENSION_PAGE_SIZE, audit_suspensions_snapshot
 
 
@@ -703,6 +710,18 @@ def _read_partition(
         if not bool(np.isfinite(factors).all()) or bool((factors <= 0).any()):
             raise ProspectiveExecutionDataError(f"partition {key} has invalid adjustment factors")
         result["adj_factor"] = factors
+    try:
+        completion_evidence = validate_provider_completion_evidence(
+            raw,
+            frame,
+            dataset=dataset,
+            trade_date=trade_date,
+            required_datasets=PROVIDER_COMPLETION_DATASETS,
+        )
+    except ValueError as exc:
+        raise ProspectiveExecutionDataError(
+            f"partition {key} lacks valid provider-completion evidence"
+        ) from exc
     source = {
         "role": "raw_partition",
         "checkpoint_key": key,
@@ -713,6 +732,8 @@ def _read_partition(
         "row_count": int(len(result)),
         "completed_at_utc": _utc_text(completed, label=f"{key}.completion"),
     }
+    if provider_completion_required(trade_date):
+        source["provider_completion"] = completion_evidence
     if sealed_source is not None and source != dict(sealed_source):
         raise ProspectiveExecutionDataError(
             f"sealed partition contract differs from CAS bytes for {key}"
@@ -726,7 +747,7 @@ def _inspect_checkpoint_partition(
     *,
     dataset: str,
     trade_date: str,
-) -> pd.Timestamp | None:
+) -> tuple[pd.Timestamp, str | None] | None:
     """Verify one mutable checkpoint origin without materialising CAS bytes."""
 
     key = f"{dataset}/{trade_date}"
@@ -737,6 +758,8 @@ def _inspect_checkpoint_partition(
         raise ProspectiveExecutionDataError(
             f"partition checkpoint entry must be an object for {key}"
         )
+    if raw.get("status") == "reconciling":
+        return None
     if (
         raw.get("status") != "complete"
         or raw.get("dataset") != dataset
@@ -820,7 +843,26 @@ def _inspect_checkpoint_partition(
             raise ProspectiveExecutionDataError(
                 f"partition {key} has invalid adjustment factors"
             )
-    return completed
+    try:
+        completion_evidence = validate_provider_completion_evidence(
+            raw,
+            frame,
+            dataset=dataset,
+            trade_date=trade_date,
+            required_datasets=PROVIDER_COMPLETION_DATASETS,
+        )
+    except ValueError as exc:
+        if str(exc) == "provider completion evidence is missing":
+            return None
+        raise ProspectiveExecutionDataError(
+            f"partition {key} has invalid provider-completion evidence"
+        ) from exc
+    bundle_sha = (
+        str(completion_evidence["evidence_sha256"])
+        if completion_evidence is not None
+        else None
+    )
+    return completed, bundle_sha
 
 
 def inspect_prospective_execution_sources(
@@ -909,8 +951,9 @@ def inspect_prospective_execution_sources(
             "calendar_source_sha256": str(
                 calendar_source["calendar_content_sha256"]
             ),
-            "required_datasets": ["daily", "adj_factor"],
-            "required_partition_count": len(window) * 2,
+            "required_datasets": list(PROVIDER_COMPLETION_DATASETS),
+            "required_partition_count": len(window)
+            * len(PROVIDER_COMPLETION_DATASETS),
             "missing_partition_keys": [],
             "future_partition_keys": [],
         }
@@ -925,21 +968,35 @@ def inspect_prospective_execution_sources(
     missing_keys: list[str] = []
     future_keys: list[str] = []
     completions: dict[str, pd.Timestamp] = {}
+    bundle_sha_by_session: dict[str, str] = {}
     for session in window:
-        for dataset in ("daily", "adj_factor"):
+        for dataset in PROVIDER_COMPLETION_DATASETS:
             key = f"{dataset}/{session}"
-            completed = _inspect_checkpoint_partition(
+            inspected = _inspect_checkpoint_partition(
                 root,
                 checkpoint,
                 dataset=dataset,
                 trade_date=session,
             )
-            if completed is None:
+            if inspected is None:
                 missing_keys.append(key)
             else:
+                completed, bundle_sha = inspected
                 completions[key] = completed
                 if completed > observed:
                     future_keys.append(key)
+                if provider_completion_required(session):
+                    if bundle_sha is None:
+                        missing_keys.append(key)
+                    elif session in bundle_sha_by_session and (
+                        bundle_sha_by_session[session] != bundle_sha
+                    ):
+                        raise ProspectiveExecutionDataError(
+                            "daily/adj_factor provider-completion proofs differ "
+                            f"for {session}"
+                        )
+                    else:
+                        bundle_sha_by_session[session] = bundle_sha
 
     base = {
         "schema_version": 1,
@@ -948,8 +1005,9 @@ def inspect_prospective_execution_sources(
         "holding_start_date": window[0],
         "holding_end_date": window[-1],
         "calendar_source_sha256": str(calendar_source["calendar_content_sha256"]),
-        "required_datasets": ["daily", "adj_factor"],
-        "required_partition_count": len(window) * 2,
+        "required_datasets": list(PROVIDER_COMPLETION_DATASETS),
+        "required_partition_count": len(window)
+        * len(PROVIDER_COMPLETION_DATASETS),
         "missing_partition_keys": missing_keys,
         "future_partition_keys": future_keys,
     }
@@ -959,8 +1017,8 @@ def inspect_prospective_execution_sources(
         return {**base, "status": "waiting", "reason": "market_data_not_yet_available"}
 
     end_completed = max(
-        completions[f"daily/{window[-1]}"],
-        completions[f"adj_factor/{window[-1]}"],
+        completions[f"{dataset}/{window[-1]}"]
+        for dataset in PROVIDER_COMPLETION_DATASETS
     )
     base["holding_end_market_completed_at_utc"] = _utc_text(
         end_completed, label="holding-end market completion"
@@ -1832,32 +1890,53 @@ def _fallback_execution_inputs(
     }
     sources: dict[str, dict[str, Any]] = {}
     for session in reversed(tuple(calendar_sessions[: signal_index + 1])):
-        daily, daily_source, _ = _read_partition(
-            root,
-            checkpoint,
-            dataset="daily",
-            trade_date=session,
-            availability_cap=deadline,
-            sealed_source=(
-                sealed_sources.get(f"daily/{session}")
-                if sealed_sources is not None
-                else None
-            ),
+        session_frames: dict[str, pd.DataFrame] = {}
+        session_sources: dict[str, dict[str, Any]] = {}
+        required_datasets = (
+            PROVIDER_COMPLETION_DATASETS
+            if provider_completion_required(session)
+            else ("daily", "adj_factor")
         )
-        adj, adj_source, _ = _read_partition(
-            root,
-            checkpoint,
-            dataset="adj_factor",
-            trade_date=session,
-            availability_cap=deadline,
-            sealed_source=(
-                sealed_sources.get(f"adj_factor/{session}")
-                if sealed_sources is not None
-                else None
-            ),
-        )
-        sources[daily_source["checkpoint_key"]] = daily_source
-        sources[adj_source["checkpoint_key"]] = adj_source
+        for dataset in required_datasets:
+            frame, source, _ = _read_partition(
+                root,
+                checkpoint,
+                dataset=dataset,
+                trade_date=session,
+                availability_cap=deadline,
+                sealed_source=(
+                    sealed_sources.get(f"{dataset}/{session}")
+                    if sealed_sources is not None
+                    else None
+                ),
+            )
+            session_frames[dataset] = frame
+            session_sources[dataset] = source
+            sources[source["checkpoint_key"]] = source
+        daily = session_frames["daily"]
+        adj = session_frames["adj_factor"]
+        if provider_completion_required(session):
+            evidence_shas = {
+                str(source.get("provider_completion", {}).get("evidence_sha256") or "")
+                for source in session_sources.values()
+                if isinstance(source.get("provider_completion"), Mapping)
+            }
+            daily_tickers = set(daily["ts_code"].astype(str))
+            basic_tickers = set(
+                session_frames["daily_basic"]["ts_code"].astype(str)
+            )
+            adj_tickers = set(adj["ts_code"].astype(str))
+            if (
+                len(evidence_shas) != 1
+                or "" in evidence_shas
+                or len(session_sources) != len(PROVIDER_COMPLETION_DATASETS)
+                or daily_tickers != basic_tickers
+                or not daily_tickers.issubset(adj_tickers)
+            ):
+                raise ProspectiveExecutionDataError(
+                    "fallback provider-completion bundle differs "
+                    f"for {session}"
+                )
         factors = adj.set_index("ts_code")["adj_factor"]
         for row in daily.loc[daily["ts_code"].isin(tickers)].itertuples(index=False):
             ticker = str(row.ts_code)
@@ -2306,12 +2385,21 @@ def build_prospective_execution_snapshot(
     raw_sources: dict[str, dict[str, Any]] = {}
     raw_completed: dict[str, list[pd.Timestamp]] = {session: [] for session in window}
     daily_frames: dict[str, pd.DataFrame] = {}
+    basic_frames: dict[str, pd.DataFrame] = {}
     adj_frames: dict[str, pd.DataFrame] = {}
+    completion_bundle_by_session: dict[str, str] = {}
     for session in window:
-        # daily_basic is already bound in the sealed decision snapshot.  It has
-        # no execution/outcome field, so requiring it again for every holding
-        # session would add failure modes without contributing evidence.
-        for dataset in ("daily", "adj_factor"):
+        if sealed_raw_by_key is None:
+            required_datasets = PROVIDER_COMPLETION_DATASETS
+        elif provider_completion_required(session) or (
+            f"daily_basic/{session}" in sealed_raw_by_key
+        ):
+            required_datasets = PROVIDER_COMPLETION_DATASETS
+        else:
+            # Only pre-cutover immutable 5.7 execution artifacts may replay a
+            # two-endpoint source closure.  Every new build captures all three.
+            required_datasets = ("daily", "adj_factor")
+        for dataset in required_datasets:
             frame, item, completed = _read_partition(
                 root,
                 checkpoint,
@@ -2326,10 +2414,38 @@ def build_prospective_execution_snapshot(
             )
             raw_sources[item["checkpoint_key"]] = item
             raw_completed[session].append(completed)
+            if provider_completion_required(session):
+                evidence = item.get("provider_completion")
+                if not isinstance(evidence, Mapping):
+                    raise ProspectiveExecutionDataError(
+                        f"partition {item['checkpoint_key']} lacks provider-completion evidence"
+                    )
+                bundle_sha = str(evidence.get("evidence_sha256") or "")
+                prior_bundle = completion_bundle_by_session.get(session)
+                if prior_bundle is not None and prior_bundle != bundle_sha:
+                    raise ProspectiveExecutionDataError(
+                        "provider-completion proofs differ "
+                        f"for {session}"
+                    )
+                completion_bundle_by_session[session] = bundle_sha
             if dataset == "daily":
                 daily_frames[session] = frame
+            elif dataset == "daily_basic":
+                basic_frames[session] = frame
             elif dataset == "adj_factor":
                 adj_frames[session] = frame
+        if provider_completion_required(session):
+            daily_tickers = set(daily_frames[session]["ts_code"].astype(str))
+            basic_tickers = set(basic_frames[session]["ts_code"].astype(str))
+            adj_tickers = set(adj_frames[session]["ts_code"].astype(str))
+            if (
+                daily_tickers != basic_tickers
+                or not daily_tickers.issubset(adj_tickers)
+            ):
+                raise ProspectiveExecutionDataError(
+                    "provider-complete execution universe differs for "
+                    f"{session}"
+                )
     start_completed = max(raw_completed[window[0]])
     end_completed = max(raw_completed[window[-1]])
     if start_completed > end_completed:

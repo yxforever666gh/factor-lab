@@ -13,6 +13,7 @@ import pytest
 
 from factor_lab.data.catalog import sha256_file
 from factor_lab.data import prospective_execution as execution_data
+import factor_lab.data.sources as sources
 from factor_lab.data.prospective_execution import (
     ProspectiveExecutionDataError,
     build_prospective_execution_snapshot,
@@ -563,6 +564,10 @@ def test_build_load_binds_sources_calendar_and_decision_roster(execution_root) -
     assert built.snapshot.calendar_sessions[-1] == sessions[12]
     assert len(built.snapshot.rows) == len(expected_benchmark) * 11
     assert max(row.date for row in built.snapshot.rows) == sessions[12]
+    assert len(built.source_contract["raw_partitions"]) == 33
+    assert {
+        row["dataset"] for row in built.source_contract["raw_partitions"]
+    } == set(sources.PROVIDER_COMPLETION_DATASETS)
     assert all(
         row.execution_input_date == generation.signal_date
         for row in built.snapshot.rows
@@ -1079,11 +1084,101 @@ def test_read_only_source_readiness_uses_sealed_calendar_and_exact_datasets(
     assert report["status"] == "complete"
     assert report["holding_start_date"] == sessions[2]
     assert report["holding_end_date"] == sessions[12]
-    assert report["required_datasets"] == ["daily", "adj_factor"]
-    assert report["required_partition_count"] == 22
+    assert report["required_datasets"] == [
+        "daily",
+        "daily_basic",
+        "adj_factor",
+    ]
+    assert report["required_partition_count"] == 33
     assert report["missing_partition_keys"] == []
     assert report["suspensions"]["query_start_date"] == "2017-01-01"
     assert report["suspensions"]["query_end_date"] == sessions[12]
+
+
+def test_direct_execution_partition_consumer_binds_and_requires_guard_evidence(
+    tmp_path: Path,
+) -> None:
+    trade_date = "2026-08-24"
+    tickers = ["000001.SZ", "600000.SH"]
+    checkpoint: dict[str, Any] = {
+        "schema_version": 1,
+        "partitions": {},
+        "calendars": {},
+    }
+    frames = {
+        "daily": _daily(tickers, trade_date, 1),
+        "daily_basic": _daily_basic(tickers, trade_date),
+        "adj_factor": _adj(tickers, trade_date),
+    }
+    for dataset in sources.PROVIDER_COMPLETION_DATASETS:
+        _partition(
+            tmp_path,
+            checkpoint,
+            dataset,
+            trade_date,
+            frames[dataset],
+            completed_at="2026-08-24T10:00:00Z",
+        )
+    evidence = sources._build_provider_completion_evidence(
+        trade_date,
+        [frames, {name: frame.copy() for name, frame in frames.items()}],
+        observations=[
+            {
+                "request_id": "execution-fixture-1",
+                "request_started_at_utc": "2026-08-24T09:20:00Z",
+                "response_completed_at_utc": "2026-08-24T09:20:01Z",
+            },
+            {
+                "request_id": "execution-fixture-2",
+                "request_started_at_utc": "2026-08-24T09:21:00Z",
+                "response_completed_at_utc": "2026-08-24T09:21:01Z",
+            },
+        ],
+    )
+    for dataset in sources.PROVIDER_COMPLETION_DATASETS:
+        checkpoint["partitions"][f"{dataset}/{trade_date}"][
+            "provider_completion"
+        ] = evidence
+
+    raw_sources = []
+    for dataset in sources.PROVIDER_COMPLETION_DATASETS:
+        _frame, source, _completed = execution_data._read_partition(
+            tmp_path,
+            checkpoint,
+            dataset=dataset,
+            trade_date=trade_date,
+            availability_cap=None,
+        )
+        raw_sources.append(source)
+    assert len(
+        {
+            source["provider_completion"]["evidence_sha256"]
+            for source in raw_sources
+        }
+    ) == 1
+    bound_digest = hashlib.sha256(
+        _bytes({"raw_partitions": raw_sources})
+    ).hexdigest()
+    tampered_sources = json.loads(json.dumps(raw_sources))
+    tampered_sources[0]["provider_completion"]["evidence_sha256"] = "0" * 64
+    assert hashlib.sha256(
+        _bytes({"raw_partitions": tampered_sources})
+    ).hexdigest() != bound_digest
+
+    checkpoint["partitions"][f"daily/{trade_date}"].pop(
+        "provider_completion"
+    )
+    with pytest.raises(
+        ProspectiveExecutionDataError,
+        match="provider-completion evidence",
+    ):
+        execution_data._read_partition(
+            tmp_path,
+            checkpoint,
+            dataset="daily",
+            trade_date=trade_date,
+            availability_cap=None,
+        )
 
 
 def test_read_only_source_readiness_routes_missing_i11_partition(

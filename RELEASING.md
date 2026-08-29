@@ -107,7 +107,7 @@ tag 和 GitHub 远端 tag；只在本地创建 tag 不算完成发布。
 跳过的官方 signal：canary Tlog 之后的首个官方收盘必须入账。发布 runbook 必须事先写明目标
 首信号及 canary 窗口；5.2 要保持 2026-08-31 为首信号，canary Tlog 必须位于
 2026-08-28 15:00（不含）至 2026-08-31 15:00（不含），时区均为 Asia/Shanghai。
-在首个 decision 前发布的 5.3、5.4、5.5、5.6、5.7 等纠错实现仍属于同一个不可变首信号纠错窗口，
+在首个 decision 前发布的 5.3、5.4、5.5、5.6、5.7、5.8 等纠错实现仍属于同一个不可变首信号纠错窗口，
 受完全相同的 canary 截止时间约束。
 首次 implementation canary 的可信 TLog 是不可变 prospective epoch；后续 canary 不能以较晚
 TLog 重基准首信号。若 active 纠错 canary 不早于该固定 signal 收盘，控制器必须 terminal，不能
@@ -118,10 +118,29 @@ implementation upgrade 生成的正式 release capsule 执行。Windows Task Sch
 upgrade、implementation canary 与 audit 全部完成后注册；App heartbeat 也必须调用同一个 capsule
 runner，确保两条调度路径共享互斥和完全相同的 `action.argv` 合同。
 
+5.8 及后续连续实现还必须分别验证 `first_cycle` 与 `continuous` 两种 controller mode：首周期
+仍受预注册 NotBefore/NotAfter 窗口约束，continuous 不得因首周期 NotAfter 到期而永久安静退出。
+两个模式必须固定到同一 release capsule、共享跨调度器互斥，并在注册和每次运行时确认 Windows
+时区精确为 `China Standard Time`。连续任务至少覆盖工作日收盘后数据恢复、夜间与下一交易日
+pretrade 窗口，并保留周末和用户登录恢复触发；注册后必须核对 action 参数、全部 trigger、
+按 mode 固定的并发策略（`first_cycle=IgnoreNew`、`continuous=Parallel`）、有限权限 principal 和
+最长运行时间，而不能只以“任务存在”作为成功证据。
+
 前瞻数据的 availability timestamp 必须不早于它所声明可用的 source artifact 持久化和对应
 checkpoint 原子 publish；provider 响应时间、下载开始时间、写入前采样时间或临时文件完成时间
 都不能冒充可用时间。发布验证必须覆盖这条因果顺序以及并发 writer/崩溃恢复，不能用较早时间
 回填来解锁 membership、input 或 admission deadline。
+
+冻结桥之后（交易日晚于 2026-08-21）的日分区必须按 `daily`、`daily_basic`、`adj_factor`
+三端共同完成，不能把任一端首个非空响应当作完整 universe。每轮采样开始必须不早于
+Asia/Shanghai 17:10，至少两轮顺序独立采样的 canonical fingerprint 必须稳定；`daily` 与
+`daily_basic` ticker 集必须相等，且 `daily` 必须是 `adj_factor` ticker 集的子集。17:10 是本项目
+保守工程门槛，不是供应商完整性 SLA，门槛后仍不完整必须返回 waiting。完全缺失 completion
+proof 时允许用 readiness 生成的 exact-date 三端 `--resume` 动作 reconcile；proof 已存在但
+malformed、revision conflict、mixed bundle 或物理集合关系不符时必须 blocked，不得覆盖旧 bytes。
+readiness、membership、input、execution、fallback、sealed replay 与 outcome 都必须独立深验同一
+proof 和物理源，不能只相信 checkpoint 中的布尔字段。发布测试至少覆盖 row-cap 歧义、时钟回拨、
+canonical path/symlink/row-count/hash 篡改、崩溃恢复、并发 writer 与下游绕过。
 
 跨版本 implementation transition 只允许尚无任何 sealed decision 的账本。历史 capsule 必须
 静态验证 annotated tag、Git blobs、closure、receipt 与完整 capsule tree，最终 active capsule

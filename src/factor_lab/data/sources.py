@@ -6,11 +6,13 @@ from contextlib import contextmanager
 from datetime import datetime, time as wall_time, timezone
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
 import time
 from typing import Any, Callable, Iterator, Mapping, Protocol, Sequence
+import uuid
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -26,6 +28,21 @@ DATASET_FIELDS = {
     ),
     "adj_factor": "ts_code,trade_date,adj_factor",
 }
+
+# Prospective raw partitions after the frozen bridge are not considered
+# provider-complete merely because Tushare returned a non-empty frame.  The
+# documented endpoint windows end no later than 17:00 Asia/Shanghai for this
+# bundle, but that is not a provider completeness guarantee.  17:10 is a
+# protocol-chosen conservative observation gate, followed by independent
+# stable sampling and cross-endpoint universe checks.
+PROVIDER_COMPLETION_CONTRACT_ID = (
+    "factor-lab/tushare-eod-stable-bundle/1"
+)
+PROVIDER_COMPLETION_CUTOVER_DATE = "2026-08-21"
+PROVIDER_COMPLETION_TIMEZONE = "Asia/Shanghai"
+PROVIDER_COMPLETION_NOT_BEFORE_LOCAL_TIME = "17:10:00"
+PROVIDER_COMPLETION_MINIMUM_SAMPLES = 2
+PROVIDER_COMPLETION_DATASETS = ("daily", "daily_basic", "adj_factor")
 
 # These endpoints use a different partition axis from the daily market files:
 # financial indicators are fetched once per report quarter, while the two
@@ -136,6 +153,98 @@ def _date(value: str) -> str:
 
 def _compact(value: str) -> str:
     return _date(value).replace("-", "")
+
+
+def _now_utc() -> datetime:
+    """Return the local observation clock used by provider sampling."""
+
+    return datetime.now(timezone.utc)
+
+
+def provider_completion_required(trade_date: str) -> bool:
+    """Whether a raw session is inside the prospective provider-guard era."""
+
+    return _date(trade_date) > PROVIDER_COMPLETION_CUTOVER_DATE
+
+
+def provider_completion_not_before_utc(trade_date: str) -> datetime:
+    """Return the protocol observation gate for one Shanghai session.
+
+    This timestamp is an engineering policy boundary, not a claim that the
+    provider guarantees complete data at or after this instant.
+    """
+
+    local = datetime.combine(
+        pd.Timestamp(_date(trade_date)).date(),
+        wall_time.fromisoformat(PROVIDER_COMPLETION_NOT_BEFORE_LOCAL_TIME),
+        tzinfo=ZoneInfo(PROVIDER_COMPLETION_TIMEZONE),
+    )
+    return local.astimezone(timezone.utc)
+
+
+def _provider_reconciling_entry_valid(
+    entry: Any,
+    *,
+    dataset: str,
+    trade_date: str,
+    expected_path: Path,
+) -> bool:
+    """Validate the durable pre-publish marker used for crash recovery."""
+
+    if not isinstance(entry, Mapping) or entry.get("status") != "reconciling":
+        return False
+    try:
+        recorded_path = Path(str(entry.get("path") or "")).expanduser().resolve()
+    except (OSError, RuntimeError, ValueError):
+        return False
+    reconciliation = entry.get("reconciliation")
+    if not isinstance(reconciliation, Mapping):
+        return False
+    attempts = reconciliation.get("attempts")
+    resume_count = reconciliation.get("resume_count")
+    target_bundle = str(entry.get("target_bundle_content_sha256") or "")
+    if (
+        entry.get("dataset") != dataset
+        or entry.get("trade_date") != _date(trade_date)
+        or recorded_path != expected_path.expanduser().resolve()
+        or entry.get("reconcile_contract_id")
+        != PROVIDER_COMPLETION_CONTRACT_ID
+        or reconciliation.get("contract_id")
+        != PROVIDER_COMPLETION_CONTRACT_ID
+        or not re.fullmatch(r"[0-9a-f]{64}", target_bundle)
+        or type(resume_count) is not int
+        or int(resume_count) < 0
+        or not isinstance(attempts, list)
+        or len(attempts) != int(resume_count) + 1
+        or not all(isinstance(value, Mapping) for value in attempts)
+    ):
+        return False
+    if any(
+        value.get("target_bundle_content_sha256") != target_bundle
+        or not re.fullmatch(
+            r"[0-9a-f]{64}",
+            str(value.get("published_evidence_sha256") or ""),
+        )
+        for value in attempts
+    ):
+        return False
+    try:
+        started_values = [
+            _completed_at_utc(
+                value.get("started_at_utc"),
+                label="provider reconciliation attempt started_at_utc",
+            )
+            for value in attempts
+        ]
+    except ValueError:
+        return False
+    return (
+        started_values == sorted(started_values)
+        and reconciliation.get("started_at_utc")
+        == attempts[0].get("started_at_utc")
+        and entry.get("reconcile_started_at_utc")
+        == reconciliation.get("started_at_utc")
+    )
 
 
 def _partition_path(raw_root: Path, dataset: str, trade_date: str) -> Path:
@@ -318,6 +427,8 @@ def _checkpoint_value_sha256(value: Any) -> str:
 def _write_checkpoint_with_conservative_completion(
     checkpoint_path: Path,
     payload_factory: Callable[[str], Mapping[str, Any]],
+    *,
+    minimum_completion_utc: datetime | None = None,
 ) -> dict[str, Any]:
     """Publish a checkpoint whose completion time bounds the commit from above.
 
@@ -338,6 +449,13 @@ def _write_checkpoint_with_conservative_completion(
         candidate = datetime.fromtimestamp(seconds, timezone.utc).replace(
             microsecond=nanoseconds // 1_000
         )
+        if (
+            minimum_completion_utc is not None
+            and candidate < minimum_completion_utc.astimezone(timezone.utc)
+        ):
+            raise ValueError(
+                "checkpoint completion clock precedes its provider evidence"
+            )
         completed_at = candidate.isoformat()
         payload = dict(payload_factory(completed_at))
         _write_json_atomic(checkpoint_path, payload)
@@ -527,7 +645,18 @@ def _persist_trade_calendar(
 
 
 def _checkpoint_entry_is_valid(entry: Any, path: Path, *, verify_hash: bool) -> bool:
-    if not isinstance(entry, Mapping) or entry.get("status") != "complete" or not path.is_file():
+    if (
+        not isinstance(entry, Mapping)
+        or entry.get("status") != "complete"
+        or not path.is_file()
+        or path.is_symlink()
+    ):
+        return False
+    try:
+        recorded_path = Path(str(entry.get("path") or "")).expanduser().resolve()
+    except (OSError, RuntimeError, ValueError):
+        return False
+    if recorded_path != path.expanduser().resolve():
         return False
     if int(entry.get("row_count") or 0) <= 0 or int(entry.get("size_bytes") or -1) != path.stat().st_size:
         return False
@@ -552,6 +681,352 @@ def _audit_partition(frame: pd.DataFrame, dataset: str, trade_date: str) -> None
         raise ValueError(f"{dataset}/{trade_date} contains mismatched trade dates")
     if bool(frame.duplicated(["ts_code", "trade_date"]).any()):
         raise ValueError(f"{dataset}/{trade_date} contains duplicate securities")
+
+
+def _canonical_sample_scalar(value: Any) -> Any:
+    if value is None or bool(pd.isna(value)):
+        return None
+    if isinstance(value, pd.Timestamp):
+        return value.isoformat()
+    item = value.item() if hasattr(value, "item") else value
+    if isinstance(item, float):
+        if not math.isfinite(item):
+            raise ValueError("provider sample contains a non-finite number")
+        return float(item)
+    if isinstance(item, (bool, int, str)):
+        return item
+    return str(item)
+
+
+def provider_partition_fingerprint(
+    frame: pd.DataFrame,
+    dataset: str,
+    trade_date: str,
+) -> dict[str, Any]:
+    """Canonical content/ticker evidence for one provider response.
+
+    Row order and provider column order do not affect the digest.  All returned
+    columns are bound, while downstream dataset-specific schema checks remain
+    responsible for their stronger numeric contracts.
+    """
+
+    if dataset not in DATASET_FIELDS:
+        raise ValueError(f"unsupported provider-completion dataset: {dataset}")
+    _audit_partition(frame, dataset, _date(trade_date))
+    work = frame.copy()
+    work["ts_code"] = work["ts_code"].astype("string").str.strip()
+    if work["ts_code"].isna().any() or work["ts_code"].eq("").any():
+        raise ValueError(f"{dataset}/{trade_date} contains blank securities")
+    parsed_dates = pd.to_datetime(
+        work["trade_date"].astype("string").str.replace("-", "", regex=False),
+        format="%Y%m%d",
+        errors="coerce",
+    )
+    if parsed_dates.isna().any():
+        raise ValueError(f"{dataset}/{trade_date} contains invalid trade dates")
+    work["trade_date"] = parsed_dates.dt.strftime("%Y%m%d")
+    columns = sorted(str(column) for column in work.columns)
+    work = work.loc[:, columns].sort_values(
+        ["ts_code", "trade_date"], kind="mergesort"
+    ).reset_index(drop=True)
+    records = [
+        {
+            column: _canonical_sample_scalar(value)
+            for column, value in zip(columns, row, strict=True)
+        }
+        for row in work.itertuples(index=False, name=None)
+    ]
+    tickers = sorted(work["ts_code"].astype(str).tolist())
+    return {
+        "content_sha256": hashlib.sha256(
+            _canonical_json_bytes(records)
+        ).hexdigest(),
+        "row_count": len(records),
+        "ticker_count": len(tickers),
+        "ticker_set_sha256": hashlib.sha256(
+            _canonical_json_bytes(tickers)
+        ).hexdigest(),
+        "tickers": tickers,
+    }
+
+
+def _build_provider_completion_evidence(
+    trade_date: str,
+    samples: Sequence[Mapping[str, pd.DataFrame]],
+    *,
+    observations: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Build auditable stable-sampling evidence for one endpoint bundle."""
+
+    date_text = _date(trade_date)
+    if len(samples) < PROVIDER_COMPLETION_MINIMUM_SAMPLES:
+        raise ValueError("provider completion requires at least two samples")
+    dataset_set = tuple(sorted(samples[0]))
+    if dataset_set != tuple(sorted(PROVIDER_COMPLETION_DATASETS)):
+        raise ValueError("provider completion sample dataset set is invalid")
+    if any(tuple(sorted(sample)) != dataset_set for sample in samples):
+        raise ValueError("provider completion samples use different dataset sets")
+    not_before = provider_completion_not_before_utc(date_text)
+    if len(observations) != len(samples):
+        raise ValueError("provider sample observations differ from sample count")
+
+    sample_rows: list[dict[str, Any]] = []
+    ticker_sets: list[dict[str, set[str]]] = []
+    request_ids: set[str] = set()
+    previous_completed: datetime | None = None
+    for index, (sample, observation) in enumerate(
+        zip(samples, observations, strict=True), start=1
+    ):
+        if not isinstance(observation, Mapping):
+            raise ValueError("provider_sample_observation_invalid")
+        request_id = str(observation.get("request_id") or "")
+        try:
+            started = _completed_at_utc(
+                observation.get("request_started_at_utc"),
+                label="provider sample request_started_at_utc",
+            )
+            completed = _completed_at_utc(
+                observation.get("response_completed_at_utc"),
+                label="provider sample response_completed_at_utc",
+            )
+        except ValueError as exc:
+            raise ValueError("provider_sample_observation_invalid") from exc
+        if (
+            not request_id
+            or request_id in request_ids
+            or started < not_before
+            or completed < started
+            or (
+                previous_completed is not None
+                and started < previous_completed
+            )
+        ):
+            raise ValueError("provider_sample_observation_invalid")
+        request_ids.add(request_id)
+        previous_completed = completed
+        datasets: dict[str, dict[str, Any]] = {}
+        sets: dict[str, set[str]] = {}
+        for dataset in dataset_set:
+            fingerprint = provider_partition_fingerprint(
+                sample[dataset], dataset, date_text
+            )
+            if dataset in {"daily", "daily_basic"} and int(
+                fingerprint["row_count"]
+            ) >= 6_000:
+                raise ValueError("provider_response_at_row_limit")
+            sets[dataset] = set(fingerprint.pop("tickers"))
+            datasets[dataset] = fingerprint
+        sample_rows.append(
+            {
+                "sample_index": index,
+                "request_id": request_id,
+                "request_started_at_utc": started.isoformat(),
+                "response_completed_at_utc": completed.isoformat(),
+                "datasets": datasets,
+            }
+        )
+        ticker_sets.append(sets)
+
+    canonical_first = sample_rows[0]["datasets"]
+    if any(row["datasets"] != canonical_first for row in sample_rows[1:]):
+        raise ValueError("provider_response_unstable")
+    daily_equals_basic = (
+        "daily" not in dataset_set
+        or "daily_basic" not in dataset_set
+        or ticker_sets[0]["daily"] == ticker_sets[0]["daily_basic"]
+    )
+    daily_subset_adj = (
+        "daily" not in dataset_set
+        or "adj_factor" not in dataset_set
+        or ticker_sets[0]["daily"].issubset(ticker_sets[0]["adj_factor"])
+    )
+    if not daily_equals_basic or not daily_subset_adj:
+        raise ValueError("provider_universe_incomplete")
+    bundle_payload = {
+        "trade_date": date_text,
+        "datasets": canonical_first,
+    }
+    completed_values = [
+        _completed_at_utc(
+            row["response_completed_at_utc"],
+            label="provider sample response_completed_at_utc",
+        )
+        for row in sample_rows
+    ]
+    evidence = {
+        "contract_id": PROVIDER_COMPLETION_CONTRACT_ID,
+        "source": "tushare",
+        "trade_date": date_text,
+        "timezone": PROVIDER_COMPLETION_TIMEZONE,
+        "not_before_local_time": PROVIDER_COMPLETION_NOT_BEFORE_LOCAL_TIME,
+        "not_before_utc": not_before.isoformat(),
+        "not_before_basis": (
+            "protocol_chosen_conservative_gate_not_provider_completeness_sla"
+        ),
+        "sample_count": len(sample_rows),
+        "minimum_sample_count": PROVIDER_COMPLETION_MINIMUM_SAMPLES,
+        "datasets": list(dataset_set),
+        "bundle_content_sha256": hashlib.sha256(
+            _canonical_json_bytes(bundle_payload)
+        ).hexdigest(),
+        "stable_at_utc": max(completed_values).isoformat(),
+        "relations": {
+            "daily_equals_daily_basic": daily_equals_basic,
+            "daily_subset_of_adj_factor": daily_subset_adj,
+        },
+        "samples": sample_rows,
+    }
+    evidence["evidence_sha256"] = hashlib.sha256(
+        _canonical_json_bytes(evidence)
+    ).hexdigest()
+    return evidence
+
+
+def validate_provider_completion_evidence(
+    entry: Mapping[str, Any],
+    frame: pd.DataFrame,
+    *,
+    dataset: str,
+    trade_date: str,
+    required_datasets: Sequence[str],
+) -> dict[str, Any] | None:
+    """Validate one checkpoint/sealed source against its stable bundle proof.
+
+    Historical frozen-bridge inputs remain compatible and return ``None``.
+    Every later partition must bind the exact canonical bytes to at least two
+    independently recorded samples from the required endpoint bundle.
+    """
+
+    date_text = _date(trade_date)
+    if not provider_completion_required(date_text):
+        return None
+    if (
+        entry.get("dataset") != dataset
+        or entry.get("trade_date") != date_text
+        or type(entry.get("row_count")) is not int
+        or int(entry["row_count"]) != len(frame)
+    ):
+        raise ValueError("provider completion checkpoint identity is invalid")
+    if "provider_completion" not in entry:
+        raise ValueError("provider completion evidence is missing")
+    evidence = entry["provider_completion"]
+    if not isinstance(evidence, Mapping):
+        raise ValueError("provider completion evidence is malformed")
+    required = set(required_datasets)
+    datasets = evidence.get("datasets")
+    samples = evidence.get("samples")
+    if (
+        evidence.get("contract_id") != PROVIDER_COMPLETION_CONTRACT_ID
+        or evidence.get("source") != "tushare"
+        or evidence.get("trade_date") != date_text
+        or evidence.get("timezone") != PROVIDER_COMPLETION_TIMEZONE
+        or evidence.get("not_before_local_time")
+        != PROVIDER_COMPLETION_NOT_BEFORE_LOCAL_TIME
+        or evidence.get("not_before_basis")
+        != "protocol_chosen_conservative_gate_not_provider_completeness_sla"
+        or type(evidence.get("sample_count")) is not int
+        or int(evidence["sample_count"]) < PROVIDER_COMPLETION_MINIMUM_SAMPLES
+        or evidence.get("minimum_sample_count")
+        != PROVIDER_COMPLETION_MINIMUM_SAMPLES
+        or not isinstance(datasets, list)
+        or datasets != sorted(set(str(value) for value in datasets))
+        or set(datasets) != required
+        or not isinstance(samples, list)
+        or len(samples) != evidence["sample_count"]
+    ):
+        raise ValueError("provider completion evidence identity is invalid")
+    evidence_without_sha = {
+        key: value for key, value in evidence.items() if key != "evidence_sha256"
+    }
+    if evidence.get("evidence_sha256") != hashlib.sha256(
+        _canonical_json_bytes(evidence_without_sha)
+    ).hexdigest():
+        raise ValueError("provider completion evidence digest is invalid")
+    not_before = provider_completion_not_before_utc(date_text)
+    recorded_not_before = _completed_at_utc(
+        evidence.get("not_before_utc"), label="provider completion not_before_utc"
+    )
+    if recorded_not_before != not_before:
+        raise ValueError("provider completion gate differs from protocol")
+    request_ids: set[str] = set()
+    first_datasets: Mapping[str, Any] | None = None
+    response_times: list[datetime] = []
+    previous_completed: datetime | None = None
+    for index, row in enumerate(samples, start=1):
+        if not isinstance(row, Mapping) or row.get("sample_index") != index:
+            raise ValueError("provider completion samples are not canonical")
+        request_id = str(row.get("request_id") or "")
+        if not request_id or request_id in request_ids:
+            raise ValueError("provider completion requests are not independent")
+        request_ids.add(request_id)
+        started = _completed_at_utc(
+            row.get("request_started_at_utc"),
+            label="provider sample request_started_at_utc",
+        )
+        completed = _completed_at_utc(
+            row.get("response_completed_at_utc"),
+            label="provider sample response_completed_at_utc",
+        )
+        if (
+            started < not_before
+            or completed < started
+            or (
+                previous_completed is not None
+                and started < previous_completed
+            )
+        ):
+            raise ValueError("provider sample precedes completion gate")
+        previous_completed = completed
+        response_times.append(completed)
+        row_datasets = row.get("datasets")
+        if not isinstance(row_datasets, Mapping) or set(row_datasets) != set(datasets):
+            raise ValueError("provider sample dataset evidence is invalid")
+        if first_datasets is None:
+            first_datasets = row_datasets
+        elif row_datasets != first_datasets:
+            raise ValueError("provider response samples are unstable")
+    assert first_datasets is not None
+    fingerprint = provider_partition_fingerprint(frame, dataset, date_text)
+    fingerprint.pop("tickers")
+    if dataset in {"daily", "daily_basic"} and int(
+        fingerprint["row_count"]
+    ) >= 6_000:
+        raise ValueError("provider response reached ambiguous row limit")
+    if first_datasets.get(dataset) != fingerprint:
+        raise ValueError("partition differs from provider completion sample")
+    expected_bundle = hashlib.sha256(
+        _canonical_json_bytes(
+            {"trade_date": date_text, "datasets": dict(first_datasets)}
+        )
+    ).hexdigest()
+    if evidence.get("bundle_content_sha256") != expected_bundle:
+        raise ValueError("provider completion bundle digest is invalid")
+    relations = evidence.get("relations")
+    if not isinstance(relations, Mapping):
+        raise ValueError("provider completion universe relations are missing")
+    if {"daily", "daily_basic"}.issubset(required) and (
+        relations.get("daily_equals_daily_basic") is not True
+        or first_datasets["daily"].get("ticker_set_sha256")
+        != first_datasets["daily_basic"].get("ticker_set_sha256")
+        or first_datasets["daily"].get("ticker_count")
+        != first_datasets["daily_basic"].get("ticker_count")
+    ):
+        raise ValueError("daily and daily_basic provider universes differ")
+    if {"daily", "adj_factor"}.issubset(required) and (
+        relations.get("daily_subset_of_adj_factor") is not True
+    ):
+        raise ValueError("daily provider universe is not covered by adj_factor")
+    stable = _completed_at_utc(
+        evidence.get("stable_at_utc"), label="provider completion stable_at_utc"
+    )
+    if stable != max(response_times):
+        raise ValueError("provider completion stable timestamp is invalid")
+    published = _completed_at_utc(
+        entry.get("completed_at_utc"), label="partition completed_at_utc"
+    )
+    if published < stable:
+        raise ValueError("partition completion precedes stable provider evidence")
+    return dict(evidence)
 
 
 def audit_enrichment_partition(frame: pd.DataFrame, dataset: str, value: str) -> None:
@@ -1050,6 +1525,13 @@ def _exact_daily_universe(
         raise ValueError(f"{key} checkpoint completion is in the future")
     frame = pd.read_parquet(expected)
     _audit_partition(frame, "daily", trade_date)
+    validate_provider_completion_evidence(
+        entry,
+        frame,
+        dataset="daily",
+        trade_date=trade_date,
+        required_datasets=PROVIDER_COMPLETION_DATASETS,
+    )
     if type(entry.get("row_count")) is not int or int(entry["row_count"]) != len(
         frame
     ):
@@ -1428,6 +1910,102 @@ def sync_exact_reference(
     }
 
 
+def _provider_bundle_checkpoint_valid(
+    entries: Mapping[str, Any],
+    *,
+    raw_root: Path,
+    trade_date: str,
+    datasets: Sequence[str],
+    required_evidence_datasets: Sequence[str] | None = None,
+    verify_hash: bool,
+) -> tuple[bool, str | None]:
+    """Verify all selected entries and their shared completion evidence."""
+
+    bundle_sha: str | None = None
+    evidence_sha: str | None = None
+    selected = tuple(sorted(set(datasets)))
+    required = tuple(
+        sorted(set(required_evidence_datasets or selected))
+    )
+    for dataset in selected:
+        key = f"{dataset}/{trade_date}"
+        path = _partition_path(raw_root, dataset, trade_date)
+        entry = entries.get(key)
+        if not _checkpoint_entry_is_valid(
+            entry, path, verify_hash=verify_hash
+        ):
+            return False, None
+        try:
+            frame = pd.read_parquet(path)
+            evidence = validate_provider_completion_evidence(
+                entry,
+                frame,
+                dataset=dataset,
+                trade_date=trade_date,
+                required_datasets=required,
+            )
+        except (OSError, TypeError, ValueError):
+            return False, None
+        if evidence is None:
+            return False, None
+        current = str(evidence.get("bundle_content_sha256") or "")
+        if not re.fullmatch(r"[0-9a-f]{64}", current):
+            return False, None
+        if bundle_sha is None:
+            bundle_sha = current
+        elif current != bundle_sha:
+            return False, None
+        current_evidence = str(evidence.get("evidence_sha256") or "")
+        if not re.fullmatch(r"[0-9a-f]{64}", current_evidence):
+            return False, None
+        if evidence_sha is None:
+            evidence_sha = current_evidence
+        elif current_evidence != evidence_sha:
+            return False, None
+    return True, bundle_sha
+
+
+def _provider_waiting_result(
+    *,
+    reason: str,
+    dataset: str,
+    trade_date: str,
+    start: str,
+    end: str,
+    calendar_end: str,
+    completed_before: int,
+    completed_now: int,
+    remaining: int,
+    layout: RuntimeLayout,
+    calendar_entry: Mapping[str, Any],
+    details: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "status": "waiting",
+        "reason": reason,
+        "source": "tushare",
+        "dataset": dataset,
+        "trade_date": trade_date,
+        "partition_request_start_date": start,
+        "partition_request_end_date": end,
+        "calendar_start_date": start,
+        "calendar_end_date": calendar_end,
+        "completed_before": completed_before,
+        "completed_this_run": completed_now,
+        "remaining_partition_count": remaining,
+        "checkpoint_path": str(layout.checkpoint_path),
+        "calendar_path": str(calendar_entry["path"]),
+        "calendar_content_sha256": str(
+            calendar_entry["calendar_content_sha256"]
+        ),
+        "calendar_artifact_sha256": str(calendar_entry["artifact_sha256"]),
+        "calendar_completed_at_utc": str(calendar_entry["completed_at_utc"]),
+        "raw_root": str(layout.raw_root),
+        **dict(details or {}),
+    }
+
+
 def sync_data(
     start_date: str,
     end_date: str,
@@ -1513,86 +2091,520 @@ def sync_data(
     )
     entries = dict(checkpoint.get("partitions") or {})
     verify_hash = bool(sync_config.get("verify_hashes_on_resume", False))
-    pending: list[tuple[str, str, Path, str, str]] = []
+    pending_work: list[tuple[str, Any, int]] = []
     completed_before = 0
     for trade_date in dates:
+        if provider_completion_required(trade_date):
+            valid, _bundle_sha = _provider_bundle_checkpoint_valid(
+                entries,
+                raw_root=resolved_layout.raw_root,
+                trade_date=trade_date,
+                datasets=selected_datasets,
+                required_evidence_datasets=PROVIDER_COMPLETION_DATASETS,
+                verify_hash=True,
+            )
+            if resume and valid:
+                completed_before += len(selected_datasets)
+            else:
+                pending_work.append(
+                    (
+                        "guarded_bundle",
+                        (trade_date, tuple(sorted(selected_datasets))),
+                        len(selected_datasets),
+                    )
+                )
+            continue
         for dataset in selected_datasets:
             key = f"{dataset}/{trade_date}"
             path = _partition_path(resolved_layout.raw_root, dataset, trade_date)
-            if resume and _checkpoint_entry_is_valid(entries.get(key), path, verify_hash=verify_hash):
+            if resume and _checkpoint_entry_is_valid(
+                entries.get(key), path, verify_hash=verify_hash
+            ):
                 completed_before += 1
             else:
-                pending.append(
+                pending_work.append(
                     (
-                        dataset,
-                        trade_date,
-                        path,
-                        key,
-                        _checkpoint_value_sha256(baseline_partitions.get(key)),
+                        "historical_partition",
+                        (
+                            dataset,
+                            trade_date,
+                            path,
+                            key,
+                            _checkpoint_value_sha256(
+                                baseline_partitions.get(key)
+                            ),
+                        ),
+                        1,
                     )
                 )
-    requested_count = len(pending) if max_partitions is None else min(len(pending), max(0, max_partitions))
-    rate = max(0.0, float(sync_config.get("request_rate_per_minute") or 0.0))
+
+    pending_partition_count = sum(item[2] for item in pending_work)
+    budget = (
+        pending_partition_count
+        if max_partitions is None
+        else max(0, int(max_partitions))
+    )
+    requested_work: list[tuple[str, Any, int]] = []
+    requested_count = 0
+    for item in pending_work:
+        cost = item[2]
+        if requested_count + cost > budget:
+            break
+        requested_work.append(item)
+        requested_count += cost
+
+    rate = max(
+        0.0, float(sync_config.get("request_rate_per_minute") or 0.0)
+    )
     delay = 60.0 / rate if rate else 0.0
-    completed_now = 0
-    for dataset, trade_date, path, key, baseline_sha256 in pending[:requested_count]:
-        frame = _call(
-            resolved_client,
-            dataset,
-            trade_date=_compact(trade_date),
-            fields=DATASET_FIELDS[dataset],
+    sample_count = int(
+        sync_config.get(
+            "provider_completion_stability_samples",
+            PROVIDER_COMPLETION_MINIMUM_SAMPLES,
         )
-        if frame.empty:
-            return {
-                "schema_version": 1,
-                "status": "waiting",
-                "reason": "provider_empty",
-                "source": "tushare",
-                "dataset": dataset,
-                "trade_date": trade_date,
-                "partition_request_start_date": start,
-                "partition_request_end_date": end,
-                "calendar_start_date": start,
-                "calendar_end_date": calendar_end,
-                "completed_before": completed_before,
-                "completed_this_run": completed_now,
-                "remaining_partition_count": len(pending) - completed_now,
-                "checkpoint_path": str(resolved_layout.checkpoint_path),
-                "calendar_path": str(calendar_entry["path"]),
-                "calendar_content_sha256": str(
-                    calendar_entry["calendar_content_sha256"]
-                ),
-                "calendar_artifact_sha256": str(
-                    calendar_entry["artifact_sha256"]
-                ),
-                "calendar_completed_at_utc": str(
-                    calendar_entry["completed_at_utc"]
-                ),
-                "raw_root": str(resolved_layout.raw_root),
-            }
-        _audit_partition(frame, dataset, trade_date)
+    )
+    if sample_count < PROVIDER_COMPLETION_MINIMUM_SAMPLES:
+        raise ValueError(
+            "sync.provider_completion_stability_samples must be at least 2"
+        )
+    completed_now = 0
+    completed_concurrently = 0
+    request_number = 0
+    for kind, payload, cost in requested_work:
+        if kind == "historical_partition":
+            dataset, trade_date, path, key, baseline_sha256 = payload
+            frame = _call(
+                resolved_client,
+                dataset,
+                trade_date=_compact(trade_date),
+                fields=DATASET_FIELDS[dataset],
+            )
+            request_number += 1
+            if frame.empty:
+                return _provider_waiting_result(
+                    reason="provider_empty",
+                    dataset=dataset,
+                    trade_date=trade_date,
+                    start=start,
+                    end=end,
+                    calendar_end=calendar_end,
+                    completed_before=completed_before,
+                    completed_now=completed_now,
+                    remaining=pending_partition_count - completed_now,
+                    layout=resolved_layout,
+                    calendar_entry=calendar_entry,
+                )
+            _audit_partition(frame, dataset, trade_date)
+            with _checkpoint_lock(resolved_layout.checkpoint_path):
+                latest = _read_checkpoint(resolved_layout.checkpoint_path)
+                latest_entries = dict(latest.get("partitions") or {})
+                concurrent = latest_entries.get(key)
+                concurrent_valid = _checkpoint_entry_is_valid(
+                    concurrent,
+                    path,
+                    verify_hash=verify_hash if resume else True,
+                )
+                changed_since_start = (
+                    _checkpoint_value_sha256(concurrent) != baseline_sha256
+                )
+                publish = not (resume and concurrent_valid)
+                if not resume and changed_since_start:
+                    if not concurrent_valid:
+                        raise ValueError(
+                            f"{key} checkpoint changed during no-resume refresh"
+                        )
+                    publish = False
+                if publish:
+                    _write_parquet_atomic(path, frame)
+                    entry_without_completion = {
+                        "status": "complete",
+                        "dataset": dataset,
+                        "trade_date": trade_date,
+                        "path": str(path),
+                        "row_count": int(len(frame)),
+                        "size_bytes": int(path.stat().st_size),
+                        "sha256": sha256_file(path),
+                    }
+
+                    def raw_checkpoint_payload(
+                        completed_at_utc: str,
+                    ) -> Mapping[str, Any]:
+                        published_entry = {
+                            **entry_without_completion,
+                            "completed_at_utc": completed_at_utc,
+                        }
+                        return {
+                            **dict(latest),
+                            "schema_version": int(
+                                latest.get("schema_version") or 1
+                            ),
+                            "partitions": {
+                                **latest_entries,
+                                key: published_entry,
+                            },
+                            "calendars": dict(
+                                latest.get("calendars") or {}
+                            ),
+                        }
+
+                    _write_checkpoint_with_conservative_completion(
+                        resolved_layout.checkpoint_path,
+                        raw_checkpoint_payload,
+                    )
+            completed_now += 1
+            if delay and request_number < requested_count * sample_count:
+                time.sleep(delay)
+            continue
+
+        trade_date, publish_datasets = payload
+        sample_datasets = PROVIDER_COMPLETION_DATASETS
+        observed = _now_utc()
+        not_before = provider_completion_not_before_utc(trade_date)
+        if observed < not_before:
+            return _provider_waiting_result(
+                reason="before_provider_completion_gate",
+                dataset="provider_completion_bundle",
+                trade_date=trade_date,
+                start=start,
+                end=end,
+                calendar_end=calendar_end,
+                completed_before=completed_before,
+                completed_now=completed_now,
+                remaining=pending_partition_count - completed_now,
+                layout=resolved_layout,
+                calendar_entry=calendar_entry,
+                details={
+                    "provider_completion_contract_id": (
+                        PROVIDER_COMPLETION_CONTRACT_ID
+                    ),
+                    "provider_completion_not_before_utc": (
+                        not_before.isoformat()
+                    ),
+                    "provider_completion_not_before_basis": (
+                        "protocol_chosen_conservative_gate_not_provider_completeness_sla"
+                    ),
+                },
+            )
+        samples: list[dict[str, pd.DataFrame]] = []
+        observations: list[dict[str, Any]] = []
+        for sample_index in range(sample_count):
+            started = _now_utc()
+            sample: dict[str, pd.DataFrame] = {}
+            request_id = uuid.uuid4().hex
+            for dataset in sample_datasets:
+                frame = _call(
+                    resolved_client,
+                    dataset,
+                    trade_date=_compact(trade_date),
+                    fields=DATASET_FIELDS[dataset],
+                )
+                request_number += 1
+                if frame.empty:
+                    return _provider_waiting_result(
+                        reason="provider_empty",
+                        dataset=dataset,
+                        trade_date=trade_date,
+                        start=start,
+                        end=end,
+                        calendar_end=calendar_end,
+                        completed_before=completed_before,
+                        completed_now=completed_now,
+                        remaining=pending_partition_count - completed_now,
+                        layout=resolved_layout,
+                        calendar_entry=calendar_entry,
+                        details={
+                            "provider_completion_sample_index": sample_index + 1
+                        },
+                    )
+                _audit_partition(frame, dataset, trade_date)
+                sample[dataset] = frame
+                if delay:
+                    time.sleep(delay)
+            completed = _now_utc()
+            samples.append(sample)
+            observations.append(
+                {
+                    "request_id": request_id,
+                    "request_started_at_utc": started.isoformat(),
+                    "response_completed_at_utc": completed.isoformat(),
+                }
+            )
+        try:
+            evidence = _build_provider_completion_evidence(
+                trade_date, samples, observations=observations
+            )
+        except ValueError as exc:
+            reason = str(exc)
+            if reason not in {
+                "provider_sample_observation_invalid",
+                "provider_response_unstable",
+                "provider_universe_incomplete",
+                "provider_response_at_row_limit",
+            }:
+                raise
+            return _provider_waiting_result(
+                reason=reason,
+                dataset="provider_completion_bundle",
+                trade_date=trade_date,
+                start=start,
+                end=end,
+                calendar_end=calendar_end,
+                completed_before=completed_before,
+                completed_now=completed_now,
+                remaining=pending_partition_count - completed_now,
+                layout=resolved_layout,
+                calendar_entry=calendar_entry,
+                details={
+                    "provider_completion_contract_id": (
+                        PROVIDER_COMPLETION_CONTRACT_ID
+                    ),
+                    "provider_completion_sample_count": sample_count,
+                },
+            )
+
+        live_bundle_sha = str(evidence["bundle_content_sha256"])
         with _checkpoint_lock(resolved_layout.checkpoint_path):
             latest = _read_checkpoint(resolved_layout.checkpoint_path)
-            entries = dict(latest.get("partitions") or {})
-            concurrent = entries.get(key)
-            concurrent_valid = _checkpoint_entry_is_valid(
-                concurrent,
-                path,
-                verify_hash=verify_hash if resume else True,
-            )
-            changed_since_start = (
-                _checkpoint_value_sha256(concurrent) != baseline_sha256
-            )
-            publish = not (resume and concurrent_valid)
-            if not resume and changed_since_start:
-                if not concurrent_valid:
-                    raise ValueError(
-                        f"{key} checkpoint changed during no-resume refresh"
+            latest_entries = dict(latest.get("partitions") or {})
+            protected_evidence: Mapping[str, Any] | None = None
+            protected_evidence_sha: str | None = None
+            datasets_to_publish: list[str] = []
+            conflict: str | None = None
+            selected_for_publish = set(publish_datasets)
+            for dataset in PROVIDER_COMPLETION_DATASETS:
+                key = f"{dataset}/{trade_date}"
+                prior = latest_entries.get(key)
+                if prior is None:
+                    if dataset in selected_for_publish:
+                        datasets_to_publish.append(dataset)
+                    continue
+                if isinstance(prior, Mapping) and prior.get("status") == "reconciling":
+                    expected_path = _partition_path(
+                        resolved_layout.raw_root, dataset, trade_date
                     )
-                publish = False
-            if publish:
+                    if (
+                        not _provider_reconciling_entry_valid(
+                            prior,
+                            dataset=dataset,
+                            trade_date=trade_date,
+                            expected_path=expected_path,
+                        )
+                        or prior.get("target_bundle_content_sha256")
+                        != live_bundle_sha
+                    ):
+                        conflict = (
+                            "reconciling checkpoint state is malformed or its "
+                            f"provider bundle changed for {key}"
+                        )
+                        break
+                    if dataset in selected_for_publish:
+                        datasets_to_publish.append(dataset)
+                    continue
+                if (
+                    isinstance(prior, Mapping)
+                    and prior.get("status") == "complete"
+                    and "provider_completion" not in prior
+                ):
+                    if dataset in selected_for_publish:
+                        datasets_to_publish.append(dataset)
+                    continue
+                if not isinstance(prior, Mapping) or prior.get("status") != "complete":
+                    conflict = f"unsupported checkpoint state for {key}"
+                    break
+                path = _partition_path(
+                    resolved_layout.raw_root, dataset, trade_date
+                )
+                if not _checkpoint_entry_is_valid(
+                    prior, path, verify_hash=True
+                ):
+                    conflict = f"guarded checkpoint bytes are invalid for {key}"
+                    break
+                try:
+                    prior_frame = pd.read_parquet(path)
+                    prior_evidence = validate_provider_completion_evidence(
+                        prior,
+                        prior_frame,
+                        dataset=dataset,
+                        trade_date=trade_date,
+                        required_datasets=PROVIDER_COMPLETION_DATASETS,
+                    )
+                except (OSError, TypeError, ValueError) as exc:
+                    conflict = (
+                        f"guarded checkpoint evidence is invalid for {key}: "
+                        f"{type(exc).__name__}"
+                    )
+                    break
+                assert prior_evidence is not None
+                prior_bundle_sha = str(
+                    prior_evidence["bundle_content_sha256"]
+                )
+                current_evidence_sha = str(prior_evidence["evidence_sha256"])
+                if prior_bundle_sha != live_bundle_sha:
+                    conflict = (
+                        "stable provider revision conflicts with an already "
+                        f"guarded partition bundle for {trade_date}"
+                    )
+                    break
+                if protected_evidence_sha is None:
+                    protected_evidence = prior_evidence
+                    protected_evidence_sha = current_evidence_sha
+                elif protected_evidence_sha != current_evidence_sha:
+                    conflict = (
+                        f"guarded partition entries bind mixed proofs for {trade_date}"
+                    )
+                    break
+            if conflict is not None:
+                blocked = _provider_waiting_result(
+                    reason="provider_revision_conflict",
+                    dataset="provider_completion_bundle",
+                    trade_date=trade_date,
+                    start=start,
+                    end=end,
+                    calendar_end=calendar_end,
+                    completed_before=completed_before,
+                    completed_now=completed_now,
+                    remaining=pending_partition_count - completed_now,
+                    layout=resolved_layout,
+                    calendar_entry=calendar_entry,
+                    details={
+                        "error": conflict,
+                        "live_bundle_content_sha256": live_bundle_sha,
+                    },
+                )
+                blocked["status"] = "blocked"
+                return blocked
+            if not datasets_to_publish:
+                completed_concurrently += cost
+                continue
+
+            publication_evidence = dict(protected_evidence or evidence)
+            stable_at = _completed_at_utc(
+                publication_evidence["stable_at_utc"],
+                label="provider completion stable_at_utc",
+            )
+            reconcile_started_at = _now_utc()
+            if reconcile_started_at < stable_at:
+                return _provider_waiting_result(
+                    reason="provider_sample_observation_invalid",
+                    dataset="provider_completion_bundle",
+                    trade_date=trade_date,
+                    start=start,
+                    end=end,
+                    calendar_end=calendar_end,
+                    completed_before=completed_before,
+                    completed_now=completed_now,
+                    remaining=pending_partition_count - completed_now,
+                    layout=resolved_layout,
+                    calendar_entry=calendar_entry,
+                    details={
+                        "error": "publication clock precedes stable sample"
+                    },
+                )
+            reconcile_started = reconcile_started_at.isoformat()
+            reconciling_entries = dict(latest_entries)
+            reconciliation_by_dataset: dict[str, dict[str, Any]] = {}
+            for dataset in datasets_to_publish:
+                key = f"{dataset}/{trade_date}"
+                prior = latest_entries.get(key)
+                attempt = {
+                    "started_at_utc": reconcile_started,
+                    "target_bundle_content_sha256": live_bundle_sha,
+                    "published_evidence_sha256": publication_evidence[
+                        "evidence_sha256"
+                    ],
+                }
+                existing_reconciliation = (
+                    prior.get("reconciliation")
+                    if isinstance(prior, Mapping)
+                    and prior.get("status") == "reconciling"
+                    else None
+                )
+                if isinstance(existing_reconciliation, Mapping):
+                    reconciliation = dict(existing_reconciliation)
+                    raw_attempts = reconciliation.get("attempts")
+                    attempts = (
+                        [dict(value) for value in raw_attempts]
+                        if isinstance(raw_attempts, list)
+                        and all(isinstance(value, Mapping) for value in raw_attempts)
+                        else []
+                    )
+                    attempts.append(attempt)
+                    reconciliation["attempts"] = attempts
+                    reconciliation["resume_count"] = int(
+                        reconciliation.get("resume_count") or 0
+                    ) + 1
+                    reconciliation["last_resumed_at_utc"] = reconcile_started
+                    reconciliation["published_evidence_sha256"] = (
+                        publication_evidence["evidence_sha256"]
+                    )
+                else:
+                    reconciliation = {
+                        "contract_id": PROVIDER_COMPLETION_CONTRACT_ID,
+                        "started_at_utc": reconcile_started,
+                        "reason": (
+                            "legacy_or_incomplete_provider_completion_evidence"
+                        ),
+                        "previous_checkpoint_entry_sha256": (
+                            _checkpoint_value_sha256(prior)
+                        ),
+                        "previous_status": (
+                            prior.get("status")
+                            if isinstance(prior, Mapping)
+                            else None
+                        ),
+                        "previous_artifact_sha256": (
+                            prior.get("sha256")
+                            if isinstance(prior, Mapping)
+                            else None
+                        ),
+                        "published_evidence_sha256": publication_evidence[
+                            "evidence_sha256"
+                        ],
+                        "attempts": [attempt],
+                        "resume_count": 0,
+                    }
+                reconciliation_by_dataset[dataset] = reconciliation
+                reconciling_entries[key] = {
+                    "status": "reconciling",
+                    "dataset": dataset,
+                    "trade_date": trade_date,
+                    "path": str(
+                        _partition_path(
+                            resolved_layout.raw_root, dataset, trade_date
+                        )
+                    ),
+                    "reconcile_contract_id": (
+                        PROVIDER_COMPLETION_CONTRACT_ID
+                    ),
+                    "reconcile_started_at_utc": reconciliation[
+                        "started_at_utc"
+                    ],
+                    "reconcile_resumed_at_utc": (
+                        reconcile_started
+                        if existing_reconciliation is not None
+                        else None
+                    ),
+                    "target_bundle_content_sha256": live_bundle_sha,
+                    "reconciliation": reconciliation,
+                }
+            reconciling_checkpoint = {
+                **dict(latest),
+                "schema_version": int(latest.get("schema_version") or 1),
+                "partitions": reconciling_entries,
+                "calendars": dict(latest.get("calendars") or {}),
+            }
+            _write_json_atomic(
+                resolved_layout.checkpoint_path, reconciling_checkpoint
+            )
+
+            published_without_completion: dict[str, dict[str, Any]] = {}
+            for dataset in datasets_to_publish:
+                frame = samples[-1][dataset]
+                path = _partition_path(
+                    resolved_layout.raw_root, dataset, trade_date
+                )
                 _write_parquet_atomic(path, frame)
-                entry_without_completion = {
+                published_without_completion[dataset] = {
                     "status": "complete",
                     "dataset": dataset,
                     "trade_date": trade_date,
@@ -1600,34 +2612,57 @@ def sync_data(
                     "row_count": int(len(frame)),
                     "size_bytes": int(path.stat().st_size),
                     "sha256": sha256_file(path),
+                    "provider_completion": publication_evidence,
+                    "reconciliation": reconciliation_by_dataset[dataset],
                 }
 
-                def raw_checkpoint_payload(
-                    completed_at_utc: str,
-                ) -> Mapping[str, Any]:
-                    published_entry = {
-                        **entry_without_completion,
+            def guarded_checkpoint_payload(
+                completed_at_utc: str,
+            ) -> Mapping[str, Any]:
+                complete_entries = dict(reconciling_entries)
+                for dataset in datasets_to_publish:
+                    key = f"{dataset}/{trade_date}"
+                    complete_entries[key] = {
+                        **published_without_completion[dataset],
                         "completed_at_utc": completed_at_utc,
                     }
-                    return {
-                        **dict(latest),
-                        "schema_version": int(
-                            latest.get("schema_version") or 1
-                        ),
-                        "partitions": {**entries, key: published_entry},
-                        "calendars": dict(latest.get("calendars") or {}),
-                    }
+                return {
+                    **dict(reconciling_checkpoint),
+                    "schema_version": int(
+                        reconciling_checkpoint.get("schema_version") or 1
+                    ),
+                    "partitions": complete_entries,
+                    "calendars": dict(
+                        reconciling_checkpoint.get("calendars") or {}
+                    ),
+                }
 
-                _write_checkpoint_with_conservative_completion(
-                    resolved_layout.checkpoint_path,
-                    raw_checkpoint_payload,
+            published_checkpoint = _write_checkpoint_with_conservative_completion(
+                resolved_layout.checkpoint_path,
+                guarded_checkpoint_payload,
+                minimum_completion_utc=stable_at,
+            )
+            published_entries = dict(published_checkpoint["partitions"])
+            valid, bundle_sha = _provider_bundle_checkpoint_valid(
+                published_entries,
+                raw_root=resolved_layout.raw_root,
+                trade_date=trade_date,
+                datasets=publish_datasets,
+                required_evidence_datasets=PROVIDER_COMPLETION_DATASETS,
+                verify_hash=True,
+            )
+            if not valid or bundle_sha != live_bundle_sha:
+                raise ValueError(
+                    f"provider completion durable publish failed for {trade_date}"
                 )
-        completed_now += 1
-        if delay and completed_now < requested_count:
-            time.sleep(delay)
+        completed_now += cost
     return {
         "schema_version": 1,
-        "status": "complete" if requested_count == len(pending) else "partial",
+        "status": (
+            "complete"
+            if pending_partition_count - completed_now - completed_concurrently == 0
+            else "partial"
+        ),
         "source": "tushare",
         "start_date": dates[0],
         "end_date": dates[-1],
@@ -1640,7 +2675,10 @@ def sync_data(
         "partition_count": len(dates) * len(selected_datasets),
         "completed_before": completed_before,
         "completed_this_run": completed_now,
-        "remaining_partition_count": len(pending) - completed_now,
+        "completed_concurrently": completed_concurrently,
+        "remaining_partition_count": (
+            pending_partition_count - completed_now - completed_concurrently
+        ),
         "checkpoint_path": str(resolved_layout.checkpoint_path),
         "calendar_path": str(calendar_entry["path"]),
         "calendar_content_sha256": str(
@@ -1658,11 +2696,21 @@ __all__ = [
     "ENRICHMENT_DATASET_FIELDS",
     "EXACT_REFERENCE_CONTRACT_ID",
     "MarketDataClient",
+    "PROVIDER_COMPLETION_CONTRACT_ID",
+    "PROVIDER_COMPLETION_CUTOVER_DATE",
+    "PROVIDER_COMPLETION_DATASETS",
+    "PROVIDER_COMPLETION_MINIMUM_SAMPLES",
+    "PROVIDER_COMPLETION_NOT_BEFORE_LOCAL_TIME",
+    "PROVIDER_COMPLETION_TIMEZONE",
     "TushareClient",
     "audit_enrichment_partition",
     "enrichment_partition_path",
+    "provider_completion_not_before_utc",
+    "provider_completion_required",
+    "provider_partition_fingerprint",
     "sync_data",
     "sync_enrichment",
     "sync_exact_reference",
     "turnover_amount_to_rmb",
+    "validate_provider_completion_evidence",
 ]

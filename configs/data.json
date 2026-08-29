@@ -33,6 +33,7 @@
     ],
     "checkpoint_file": "checkpoint.json",
     "request_rate_per_minute": 300,
+    "provider_completion_stability_samples": 2,
     "verify_hashes_on_resume": false
   },
   "enrichment": {

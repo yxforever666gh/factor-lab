@@ -4,6 +4,8 @@ param(
     [string]$RuntimePython,
     [ValidateSet("task", "heartbeat")]
     [string]$Origin = "task",
+    [ValidateSet("first_cycle", "continuous")]
+    [string]$ControllerMode = "first_cycle",
     [DateTimeOffset]$NotBeforeUtc = [DateTimeOffset]::Parse("2026-08-31T07:00:00Z"),
     [DateTimeOffset]$NotAfterUtc = [DateTimeOffset]::Parse("2026-09-01T01:15:00Z"),
     [DateTimeOffset]$SoftDeadlineUtc = [DateTimeOffset]::Parse("2026-09-01T00:55:00Z"),
@@ -16,7 +18,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$ContractId = "factor-lab/prospective-readiness/5.7"
+$ContractId = "factor-lab/prospective-readiness/5.8"
 $FirstSignalDate = "2026-08-31"
 $script:RunWriter = $null
 $script:RunStream = $null
@@ -57,6 +59,7 @@ function Write-RunRecord {
         run_id = $script:RunId
         recorded_at_utc = [DateTimeOffset]::UtcNow.ToString("o")
         origin = $Origin
+        controller_mode = $ControllerMode
     }
     foreach ($entry in $Record.GetEnumerator()) {
         $base[$entry.Key] = $entry.Value
@@ -90,6 +93,7 @@ function Write-CreateOnlyAlert {
         alert_id = $alertId
         run_id = $script:RunId
         origin = $Origin
+        controller_mode = $ControllerMode
         created_at_utc = [DateTimeOffset]::UtcNow.ToString("o")
         exit_code = $ExitCode
         reason = $Reason
@@ -225,6 +229,7 @@ function Complete-Watchdog {
     $exitCode = $ProposedExitCode
     $finalReason = $Reason
     if (
+        $ControllerMode -eq "first_cycle" -and
         $exitCode -ne 4 -and
         [DateTimeOffset]::UtcNow -ge $SoftDeadlineUtc.ToUniversalTime() -and
         -not (Test-FirstDecisionComplete -Readiness $LastReadiness)
@@ -248,26 +253,27 @@ try {
     if ($PSVersionTable.PSVersion.Major -lt 7) {
         throw "PowerShell 7 or newer is required"
     }
-    if ($NotBeforeUtc -gt $SoftDeadlineUtc -or $SoftDeadlineUtc -gt $NotAfterUtc) {
-        throw "NotBeforeUtc, SoftDeadlineUtc, and NotAfterUtc are not ordered"
-    }
-
     $now = [DateTimeOffset]::UtcNow
-    if ($now -lt $NotBeforeUtc.ToUniversalTime() -or $now -gt $NotAfterUtc.ToUniversalTime()) {
-        exit 0
+    if ($ControllerMode -eq "first_cycle") {
+        if ($NotBeforeUtc -gt $SoftDeadlineUtc -or $SoftDeadlineUtc -gt $NotAfterUtc) {
+            throw "NotBeforeUtc, SoftDeadlineUtc, and NotAfterUtc are not ordered"
+        }
+        if ($now -lt $NotBeforeUtc.ToUniversalTime() -or $now -gt $NotAfterUtc.ToUniversalTime()) {
+            exit 0
+        }
     }
 
     $rootItem = Get-Item -LiteralPath $ProjectRoot -ErrorAction Stop
     if (-not $rootItem.PSIsContainer) { throw "ProjectRoot is not a directory" }
     $ProjectRoot = $rootItem.FullName
     if ([string]::IsNullOrWhiteSpace($RuntimePython)) {
-        $RuntimePython = Join-Path $ProjectRoot "runtime/environments/5.7/Scripts/python.exe"
+        $RuntimePython = Join-Path $ProjectRoot "runtime/environments/5.8/Scripts/python.exe"
     }
     $pythonItem = Get-Item -LiteralPath $RuntimePython -ErrorAction Stop
     if ($pythonItem.PSIsContainer) { throw "RuntimePython is not a file" }
     $RuntimePython = $pythonItem.FullName
 
-    $operationsDirectory = Join-Path $ProjectRoot "runtime/operations/prospective-watchdog-5.7"
+    $operationsDirectory = Join-Path $ProjectRoot "runtime/operations/prospective-watchdog-5.8"
     $runsDirectory = Join-Path $operationsDirectory "runs"
     $script:AlertsDirectory = Join-Path $operationsDirectory "alerts"
     [void][IO.Directory]::CreateDirectory($runsDirectory)
@@ -290,9 +296,14 @@ try {
         runtime_python_sha256 = Get-Sha256Text -Text $RuntimePython
         max_actions = $MaxActions
         command_timeout_seconds = $CommandTimeoutSeconds
+        first_cycle_window_enforced = ($ControllerMode -eq "first_cycle")
         not_before_utc = $NotBeforeUtc.ToUniversalTime().ToString("o")
         not_after_utc = $NotAfterUtc.ToUniversalTime().ToString("o")
         soft_deadline_utc = $SoftDeadlineUtc.ToUniversalTime().ToString("o")
+        local_time_zone_id = [TimeZoneInfo]::Local.Id
+    }
+    if ([TimeZoneInfo]::Local.Id -ne "China Standard Time") {
+        exit (Complete-Watchdog -ProposedExitCode 3 -Reason "local_time_zone_invalid" -LastReadiness $null)
     }
 
     $prefix = @("-I", "-m", "factor_lab.cli", "--root", $ProjectRoot)

@@ -16,7 +16,7 @@ pytestmark = pytest.mark.skipif(os.name != "nt", reason="Windows watchdog integr
 ROOT = Path(__file__).resolve().parents[2]
 INVOKE = ROOT / "scripts" / "invoke-prospective-watchdog.ps1"
 REGISTER = ROOT / "scripts" / "register-prospective-watchdog.ps1"
-CONTRACT = "factor-lab/prospective-readiness/5.7"
+CONTRACT = "factor-lab/prospective-readiness/5.8"
 
 
 def _pwsh() -> str:
@@ -129,6 +129,25 @@ def _report(status: str, *, action: list[str] | None = None, complete: bool = Fa
     )
 
 
+def _later_cycle_report(status: str) -> str:
+    return json.dumps(
+        {
+            "schema_version": 2,
+            "kind": "prospective_readiness",
+            "contract_id": CONTRACT,
+            "status": status,
+            "reason": f"later_cycle_{status}",
+            "action": None,
+            "ledger": {
+                "decision_count": 2,
+                "last_decision_signal_date": "2026-09-01",
+                "phase": "awaiting_receipt",
+            },
+        },
+        separators=(",", ":"),
+    )
+
+
 def _response(exit_code: int, stdout: str, *, stderr: str = "", sleep_ms: int = 0) -> str:
     encode = lambda value: base64.b64encode(value.encode()).decode()
     return f"{exit_code}|{sleep_ms}|{encode(stdout)}|{encode(stderr)}"
@@ -178,7 +197,7 @@ def _argv_calls(root: Path) -> list[list[str]]:
 
 
 def _run_records(root: Path) -> list[dict[str, object]]:
-    files = list((root / "runtime/operations/prospective-watchdog-5.7/runs").glob("*.jsonl"))
+    files = list((root / "runtime/operations/prospective-watchdog-5.8/runs").glob("*.jsonl"))
     assert len(files) == 1
     return [json.loads(line) for line in files[0].read_text(encoding="utf-8").splitlines()]
 
@@ -225,7 +244,7 @@ def test_propagates_readiness_exit_codes_and_only_alerts_for_three_or_four(
     completed = _invoke(tmp_path, fake_python)
 
     assert completed.returncode == exit_code
-    alerts = list((tmp_path / "runtime/operations/prospective-watchdog-5.7/alerts").glob("*.json"))
+    alerts = list((tmp_path / "runtime/operations/prospective-watchdog-5.8/alerts").glob("*.json"))
     assert len(alerts) == (1 if exit_code in {3, 4} else 0)
     if alerts:
         assert json.loads(alerts[0].read_text(encoding="utf-8"))["exit_code"] == exit_code
@@ -249,7 +268,7 @@ def test_twelve_action_limit_has_a_thirteenth_observation_only(
     assert sum(call[-2:-1] == ["action"] for call in calls) == 12
     assert all("must" not in call for call in calls)
     assert json.loads((tmp_path / "fake-counter.txt").read_text()) == 25
-    alert = next((tmp_path / "runtime/operations/prospective-watchdog-5.7/alerts").glob("*.json"))
+    alert = next((tmp_path / "runtime/operations/prospective-watchdog-5.8/alerts").glob("*.json"))
     assert json.loads(alert.read_text(encoding="utf-8"))["reason"] == "max_actions_exhausted_while_ready"
 
 
@@ -265,7 +284,7 @@ def test_bad_json_or_contract_fails_closed_with_create_only_alert(
     completed = _invoke(tmp_path, fake_python)
 
     assert completed.returncode == 3
-    alerts = list((tmp_path / "runtime/operations/prospective-watchdog-5.7/alerts").glob("*.json"))
+    alerts = list((tmp_path / "runtime/operations/prospective-watchdog-5.8/alerts").glob("*.json"))
     assert len(alerts) == 1
     assert json.loads(alerts[0].read_text(encoding="utf-8"))["reason"] == "invalid_readiness_json_or_contract"
 
@@ -287,7 +306,7 @@ def test_controller_lock_makes_second_runner_wait(
         encoding="utf-8",
         errors="replace",
     )
-    lock = tmp_path / "runtime/operations/prospective-watchdog-5.7/controller.lock"
+    lock = tmp_path / "runtime/operations/prospective-watchdog-5.8/controller.lock"
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline and not lock.exists():
         time.sleep(0.05)
@@ -352,8 +371,44 @@ def test_soft_deadline_is_checked_after_waiting_and_requires_receipt_completion(
     )
 
     assert completed.returncode == 3
-    alert = next((tmp_path / "runtime/operations/prospective-watchdog-5.7/alerts").glob("*.json"))
+    alert = next((tmp_path / "runtime/operations/prospective-watchdog-5.8/alerts").glob("*.json"))
     assert json.loads(alert.read_text(encoding="utf-8"))["reason"] == "first_decision_soft_deadline_unmet"
+
+
+@pytest.mark.parametrize("exit_code,status", [(2, "waiting"), (4, "terminal")])
+def test_continuous_mode_ignores_expired_first_cycle_window_and_uses_readiness_status(
+    tmp_path: Path, fake_python: Path, exit_code: int, status: str
+) -> None:
+    _write_responses(tmp_path, [_response(exit_code, _later_cycle_report(status))])
+
+    completed = subprocess.run(
+        [
+            _pwsh(), "-NoProfile", "-File", str(INVOKE),
+            "-ProjectRoot", str(tmp_path), "-RuntimePython", str(fake_python),
+            "-ControllerMode", "continuous",
+            "-NotBeforeUtc", "2020-01-01T00:00:00Z",
+            "-SoftDeadlineUtc", "2020-01-01T00:30:00Z",
+            "-NotAfterUtc", "2020-01-01T01:00:00Z",
+        ],
+        text=True,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=15,
+    )
+
+    assert completed.returncode == exit_code, completed.stderr
+    records = _run_records(tmp_path)
+    assert all(record["controller_mode"] == "continuous" for record in records)
+    start = next(record for record in records if record["event"] == "start")
+    assert start["first_cycle_window_enforced"] is False
+    assert start["local_time_zone_id"] == "China Standard Time"
+    finish = next(record for record in records if record["event"] == "finish")
+    assert finish["reason"] == f"readiness_{status}"
+    alerts = list((tmp_path / "runtime/operations/prospective-watchdog-5.8/alerts").glob("*.json"))
+    assert len(alerts) == (1 if exit_code == 4 else 0)
+    if alerts:
+        assert json.loads(alerts[0].read_text(encoding="utf-8"))["controller_mode"] == "continuous"
 
 
 def test_process_timeout_kills_tree_and_fails_closed(tmp_path: Path, fake_python: Path) -> None:
@@ -366,7 +421,7 @@ def test_process_timeout_kills_tree_and_fails_closed(tmp_path: Path, fake_python
     assert time.monotonic() - started < 5
     process_record = next(row for row in _run_records(tmp_path) if row["event"] == "process")
     assert process_record["timed_out"] is True
-    assert list((tmp_path / "runtime/operations/prospective-watchdog-5.7/alerts").glob("*.json"))
+    assert list((tmp_path / "runtime/operations/prospective-watchdog-5.8/alerts").glob("*.json"))
 
 
 def test_register_fails_when_annotated_release_capsule_is_missing(tmp_path: Path) -> None:
@@ -377,7 +432,7 @@ def test_register_fails_when_annotated_release_capsule_is_missing(tmp_path: Path
     marker.write_text("release\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(tmp_path), "add", "marker.txt"], check=True)
     subprocess.run(["git", "-C", str(tmp_path), "commit", "-m", "release"], check=True, capture_output=True)
-    subprocess.run(["git", "-C", str(tmp_path), "tag", "-a", "5.7", "-m", "5.7"], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "tag", "-a", "5.8", "-m", "5.8"], check=True)
     runtime = tmp_path / "runtime-python.exe"
     runtime.write_bytes(b"placeholder")
 
@@ -395,3 +450,88 @@ def test_register_fails_when_annotated_release_capsule_is_missing(tmp_path: Path
 
     assert completed.returncode != 0
     assert "release capsule" in completed.stderr
+
+
+def test_register_continuous_plan_has_weekday_deadlines_and_weekend_recovery(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "-b", "main", str(tmp_path)], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "test@example.invalid"], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "Test"], check=True)
+    marker = tmp_path / "marker.txt"
+    marker.write_text("release\n", encoding="utf-8")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "marker.txt"], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "commit", "-m", "release"], check=True, capture_output=True)
+    subprocess.run(["git", "-C", str(tmp_path), "tag", "-a", "5.8", "-m", "5.8"], check=True)
+    release_commit = subprocess.run(
+        ["git", "-C", str(tmp_path), "rev-parse", "5.8^{commit}"],
+        check=True,
+        text=True,
+        capture_output=True,
+    ).stdout.strip()
+    capsule_script = (
+        tmp_path
+        / "runtime/prospective/5.0/release-runners"
+        / release_commit
+        / "scripts/invoke-prospective-watchdog.ps1"
+    )
+    capsule_script.parent.mkdir(parents=True)
+    shutil.copyfile(INVOKE, capsule_script)
+    runtime = tmp_path / "runtime-python.exe"
+    runtime.write_bytes(b"placeholder")
+
+    completed = subprocess.run(
+        [
+            _pwsh(), "-NoProfile", "-File", str(REGISTER),
+            "-ProjectRoot", str(tmp_path), "-RuntimePython", str(runtime),
+            "-ReleaseTag", "5.8", "-ControllerMode", "continuous", "-PlanOnly",
+        ],
+        text=True,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=15,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    plan = json.loads(completed.stdout)
+    assert plan["registered"] is False
+    assert plan["controller_mode"] == "continuous"
+    assert plan["schedule_kind"] == "continuous_with_weekend_recovery"
+    assert plan["multiple_instances"] == "Parallel"
+    assert plan["trigger_count"] == 35
+    assert plan["local_time_zone_id"] == "China Standard Time"
+    assert plan["logon_trigger_enabled"] is True
+    assert plan["scheduled_days"] == [
+        "Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+    ]
+    assert "-ControllerMode continuous" in plan["action_arguments"]
+    assert plan["scheduled_times_local"] == [
+        "00:30",
+        *[f"{hour:02d}:{minute:02d}" for hour, minute in (
+            divmod(value, 60) for value in range(475, 556, 5)
+        )],
+        "15:00", "16:30",
+        "17:30", "18:00", "18:30", "19:00", "19:30", "20:00", "20:30",
+        "23:30",
+    ]
+    assert plan["weekend_scheduled_days"] == ["Saturday", "Sunday"]
+    assert plan["weekend_scheduled_times_local"] == [
+        "00:30", "08:30", "16:30", "18:00", "20:30", "23:30",
+    ]
+
+
+def test_register_rejects_continuous_mode_for_first_cycle_capsule(tmp_path: Path) -> None:
+    completed = subprocess.run(
+        [
+            _pwsh(), "-NoProfile", "-File", str(REGISTER),
+            "-ProjectRoot", str(tmp_path / "missing"),
+            "-ReleaseTag", "5.7", "-ControllerMode", "continuous", "-PlanOnly",
+        ],
+        text=True,
+        capture_output=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=10,
+    )
+
+    assert completed.returncode != 0
+    assert "requires release tag 5.8 or newer" in completed.stderr

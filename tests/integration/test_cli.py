@@ -46,7 +46,7 @@ def test_default_root_finds_checkout_above_noneditable_wheel(
     (project / "protocols" / "5.0.json").write_text("{}\n", encoding="utf-8")
     installed = (
         project
-        / "runtime/environments/5.7/Lib/site-packages/factor_lab/cli.py"
+        / "runtime/environments/5.8/Lib/site-packages/factor_lab/cli.py"
     )
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()

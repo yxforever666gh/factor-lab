@@ -5,11 +5,11 @@ Factor Lab 是一条本地、可复现的 A 股组合研究链：Parquet 数据 
 
 项目不再依赖 WebUI、Docker、PostgreSQL、MinIO、Dagster、Hermes 或自治 Agent。旧 Research OS 已完整归档在 Git tag `research-os-final-20260826`，不再进入当前主线。
 
-> 5.7 软件不改变 5.0 已冻结、由 5.2 协议完整定义的 `fixed_core_full` 研究方向；它把 5.6 的
-> 首轮机器动作链延伸到持有期行情、停复牌、execution、outcome 和 evaluate，并修复执行证据的
-> 崩溃恢复与 create-only 发布语义。历史只负责确定这一条待检验假设，新的
+> 5.8 软件不改变 5.0 已冻结、由 5.2 协议完整定义的 `fixed_core_full` 研究方向；它把 5.7 的
+> 单周期机器动作链改成可长期恢复的连续 controller，并封闭供应商“首个非空响应即完成”造成的
+> 部分 universe 永久发布风险。历史只负责确定这一条待检验假设，新的
 > signal、targets、十个虚拟 sleeve、执行快照和 outcome 从 2026-08-21 之后开始不可回填地
-> 积累。截至 5.7 发布仍为 0 decision、0 outcome，没有新增盈利证据；confirmed outcome 达到
+> 积累。截至 5.8 发布前仍为 0 decision、0 outcome，没有新增盈利证据；confirmed outcome 达到
 > 预注册门槛前仍不能称为独立 OOS 验证。项目不连接券商、不下真实订单，也不保证未来收益。
 
 历史版本与当前未发布改动见 [CHANGELOG.md](CHANGELOG.md)。正式发布、Git tag 与 GitHub
@@ -30,8 +30,8 @@ python -m pip install -e ".[dev]"
 python -m pip install -e ".[data,dev]"
 ```
 
-5.7 的发布及其 canary 完成后的前瞻 decision、execution、outcome、replay 和 evaluate 必须
-使用项目内的专用运行环境 `runtime/environments/5.7`。该环境固定为当前发布主机的
+5.8 的发布及其 canary 完成后的前瞻 decision、execution、outcome、replay 和 evaluate 必须
+使用项目内的专用运行环境 `runtime/environments/5.8`。该环境固定为当前发布主机的
 CPython 3.10.16，并从
 `protocols/5.2-runtime-lock.txt` 与项目内 wheelhouse 按逐文件 SHA-256 离线安装；随后用
 同一 lock 中的项目 wheel 安装 Factor Lab 本身。不要使用 editable install，也不要让系统
@@ -39,14 +39,14 @@ Python 或用户级 site-packages 参与前瞻证据：
 
 ```powershell
 $factorLabPython = (Resolve-Path `
-  "runtime/environments/5.7/Scripts/python.exe").Path
+  "runtime/environments/5.8/Scripts/python.exe").Path
 $wheelhouse = (Resolve-Path `
-  "runtime/environments/5.7/wheelhouse").Path
+  "runtime/environments/5.8/wheelhouse").Path
 
 & $factorLabPython -m pip install --no-index --find-links $wheelhouse `
   --require-hashes -r protocols/5.2-runtime-lock.txt
 & $factorLabPython -c `
-  "import factor_lab; assert factor_lab.__version__ == '5.7.0'"
+  "import factor_lab; assert factor_lab.__version__ == '5.8.0'"
 ```
 
 下文的 `python -m factor_lab.cli prospective ...` 表示应由 `$factorLabPython` 执行；发布
@@ -127,9 +127,15 @@ python -m factor_lab.cli prospective upgrade `
 python -m factor_lab.cli prospective attest `
   --purpose implementation_upgrade_canary --release-tag 5.0
 
-# 5.7 tag 与 GitHub 同步后，仅在仍为 0 decision、0 outcome 时追加纠错升级并见证 canary
+# 已完成的 5.7 历史步骤；正式账本中的实现升级与 canary receipt 不可改写
 python -m factor_lab.cli prospective upgrade `
   --manifest protocols/5.2-target-generator.json --release-tag 5.7
+python -m factor_lab.cli prospective attest `
+  --purpose implementation_upgrade_canary --release-tag 5.0
+
+# 5.8 tag 与 GitHub 同步后，仅在仍为 0 decision、0 outcome 时追加纠错升级并见证 canary
+python -m factor_lab.cli prospective upgrade `
+  --manifest protocols/5.2-target-generator.json --release-tag 5.8
 python -m factor_lab.cli prospective attest `
   --purpose implementation_upgrade_canary --release-tag 5.0
 
@@ -164,7 +170,7 @@ for ($step = 0; $step -lt 12; $step++) {
   }
 }
 # 正常首轮路径为：data sync → data reference → membership → input → resumable admit → attest；
-# 成熟周期路径为：daily/adj_factor sync → suspensions → execution → outcome；evaluation due 时
+# 成熟周期路径为：daily/daily_basic/adj_factor sync → suspensions → execution → outcome；evaluation due 时
 # readiness 会直接给出 evaluate。多个待结算周期按 calendar index、decision SHA 的稳定顺序关闭。
 # record 已提交但 snapshot 发布中断时会先出现 repair-snapshots；deadline 后只会出现已有
 # dispatch 证据的 attestation recovery，不会新派发远端运行。
@@ -172,26 +178,35 @@ python -m factor_lab.cli prospective status
 python -m factor_lab.cli prospective audit
 ```
 
-5.7 的首周期还使用同一个 controller runner 消除 App heartbeat 单点。runner 本身属于 runtime
+5.8 使用同一个 controller runner 同时承担首周期推进和持续恢复。runner 本身属于 runtime
 closure；implementation upgrade 后，它由正式 release capsule 逐字节提供，并通过文件句柄锁与
 heartbeat/其他 Task Scheduler 实例互斥。发布、upgrade、canary 和 audit 全部完成后注册当前用户的
-Windows 任务：
+首周期与连续 Windows 任务：
 
 ```powershell
 & pwsh -NoProfile -File scripts/register-prospective-watchdog.ps1 `
-  -ProjectRoot (Resolve-Path .).Path -ReleaseTag 5.7
+  -ProjectRoot (Resolve-Path .).Path -ReleaseTag 5.8 -ControllerMode first_cycle
+& pwsh -NoProfile -File scripts/register-prospective-watchdog.ps1 `
+  -ProjectRoot (Resolve-Path .).Path -ReleaseTag 5.8 -ControllerMode continuous
 ```
 
-任务固定执行 annotated `5.7` tag 对应 capsule 中的 runner，而不是可变 working tree 文件；从
-2026-08-31 15:00 到次日 09:15 每 30 分钟运行，07:55 后加密为每 5 分钟，并在当前用户登录时
-补跑。它只执行 `action.argv`，单轮最多 12 个动作；退出 2 表示安静等待或已有实例持锁，3 表示
-blocked/controller 警报，4 表示正式 terminal。每轮的实际 argv、状态和 stdout/stderr 字节数与
-SHA-256 写入 `runtime/operations/prospective-watchdog-5.7/`，不保存 provider 输出或环境变量。
-任务使用当前用户的 `Interactive/Limited` 凭据以访问本机 token/keyring；首周期必须保持用户登录、
-电脑接通交流电且 PowerShell 7 可用。卸载任务时保留运行日志：
+两个任务都固定执行 annotated `5.8` tag 对应 capsule 中的 runner，而不是可变 working tree 文件。
+`first_cycle` 从 2026-08-31 15:00 到次日 09:15 每 30 分钟运行，07:55 后加密为每 5 分钟；
+`continuous` 在工作日覆盖收盘前、17:10 数据完整性门槛后、夜间和次日 pretrade 窗口，周末保留
+六次恢复触发；两者都在当前用户登录时补跑。注册和运行均要求 Windows 时区为
+`China Standard Time`，时区不满足就 fail closed。任务只执行 `action.argv`，单轮最多
+12 个动作；退出 2 表示安静等待或已有实例持锁，3 表示 blocked/controller 警报，4 表示正式
+terminal。每轮的实际 argv、状态和 stdout/stderr 字节数与 SHA-256 写入
+`runtime/operations/prospective-watchdog-5.8/`，不保存 provider 输出或环境变量。任务使用当前
+用户的 `Interactive/Limited` 凭据以访问本机 token/keyring；机器必须保持当前用户可登录、电脑
+接通交流电且 PowerShell 7 可用。卸载任务时保留运行日志：
 
 ```powershell
 Unregister-ScheduledTask -TaskName "Factor Lab Prospective Watchdog 5.7" `
+  -TaskPath "\" -Confirm:$false
+Unregister-ScheduledTask -TaskName "Factor Lab Prospective Watchdog 5.8" `
+  -TaskPath "\" -Confirm:$false
+Unregister-ScheduledTask -TaskName "Factor Lab Prospective Continuous Watchdog 5.8" `
   -TaskPath "\" -Confirm:$false
 ```
 
@@ -206,8 +221,16 @@ universe，并绑定该 daily 分区的 SHA-256 与 ticker count。已有 artifa
 hash 与 deadline 参数的 `prospective attest`。`ready` 只表示对应 `action.argv` 可以尝试，不表示
 provider/builder 必然成功、decision 已见证、独立 OOS 已验证或收益已确认。
 
+冻结桥之后（交易日晚于 2026-08-21）的分区不能再以首个非空响应宣告完成。每个日期必须在
+Asia/Shanghai 17:10 之后按 `daily`、`daily_basic`、`adj_factor` 三件套完成至少两轮顺序独立
+采样；两轮 canonical fingerprint 必须稳定，`daily` 与 `daily_basic` ticker 集必须相等，且
+`daily` 必须是 `adj_factor` ticker 集的子集。17:10 只是本项目的工程门槛，不是供应商完整性
+SLA；若届时仍未满足，动作以 waiting 退出并继续恢复。完全缺失 completion proof 时只能用
+readiness 给出的 exact-date 三件套 `--resume` 动作重建；proof 已存在但损坏、出现供应商修订、
+混合版本或跨端集合冲突时一律 blocked，不能覆盖已发布字节。
+
 结算动作从 sealed decision 的日历 CAS 推导 holding window，不接受 controller 手工指定日期。
-readiness 先要求持有期末的 `daily` 与 `adj_factor` immutable source 完整，再要求覆盖 holding end
+readiness 先要求持有期末的 `daily`、`daily_basic` 与 `adj_factor` immutable source 完整，再要求覆盖 holding end
 的全历史停复牌快照，然后只接受唯一、完整且与 decision 匹配的 execution bundle；缺失时生成，
 完整时幂等复用，损坏或出现多个匹配 bundle 时 blocked。outcome 封存后，达到预注册门槛才开放
 `prospective evaluate`，不能因新 signal 或同 offset 容量等待而饿死更老的待结算周期。
@@ -235,7 +258,7 @@ reconcile/poll，绝不创建新 dispatch。远端可见性宽限是有界的，
 自然月末只用于证明日历完整覆盖。构建完成与全部输入可用时间仍必须早于该 decision 的
 pretrade deadline；`input` 与 readiness 会通过封存 CAS 重放验证这些边界并 fail-closed。
 
-## 当前主线：5.x 前瞻执行闭环（协议自 5.2 冻结，当前实现 5.7）
+## 当前主线：5.x 前瞻执行闭环（协议自 5.2 冻结，当前实现 5.8）
 
 5.0 不再让一组高度相关的价值信号做 hard switch。系统固定保留 4.1 事后观察到最稳健的
 70% 防御价值核心，同时把两个可能增加复杂度的机制隔离成挑战者：市场风险覆盖层和因果
@@ -395,7 +418,7 @@ runtime/prospective/5.0/
 
 ```powershell
 $factorLabPython = (Resolve-Path `
-  "runtime/environments/5.7/Scripts/python.exe").Path
+  "runtime/environments/5.8/Scripts/python.exe").Path
 $localTestRun = "local-" + [guid]::NewGuid().ToString("N")
 & $factorLabPython -m pytest tests/unit tests/data tests/integration -q `
   --basetemp "runtime/test-tmp/$localTestRun" -p no:cacheprovider

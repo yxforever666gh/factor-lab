@@ -40,8 +40,11 @@ from .prospective import (
 from .sources import (
     ENRICHMENT_DATASET_FIELDS,
     EXACT_REFERENCE_CONTRACT_ID,
+    PROVIDER_COMPLETION_DATASETS,
     _normalise_trade_calendar,
+    provider_completion_required,
     turnover_amount_to_rmb,
+    validate_provider_completion_evidence,
 )
 
 
@@ -345,6 +348,8 @@ def _checkpoint_entry_digest(entry: Mapping[str, Any]) -> str:
             "calendar_content_sha256",
             "manifest_path",
             "manifest_sha256",
+            "provider_completion",
+            "reconciliation",
         )
         if key in entry
     }
@@ -725,6 +730,18 @@ def _daily_sources(
             raise ProspectiveMembershipError(f"{key} has blank or duplicate securities")
         if len(frame) != int(entry.get("row_count") or -1):
             raise ProspectiveMembershipError(f"{key} row-count mismatch")
+        try:
+            completion_evidence = validate_provider_completion_evidence(
+                entry,
+                frame,
+                dataset="daily",
+                trade_date=date,
+                required_datasets=PROVIDER_COMPLETION_DATASETS,
+            )
+        except ValueError as exc:
+            raise ProspectiveMembershipError(
+                f"{key} lacks valid provider-completion evidence"
+            ) from exc
         amount = turnover_amount_to_rmb(frame["amount"], source="tushare_daily")
         if bool(np.isinf(amount.to_numpy(dtype=float, na_value=np.nan)).any()):
             raise ProspectiveMembershipError(f"{key} contains infinite amount")
@@ -746,6 +763,8 @@ def _daily_sources(
             "checkpoint_entry_sha256": _checkpoint_entry_digest(entry),
             "availability_basis": "checkpoint.completed_at_utc",
         }
+        if provider_completion_required(date):
+            source["provider_completion"] = completion_evidence
         if sealed_sources is not None:
             # The checkpoint entry itself is deliberately not re-read.  The
             # sealed source contract and exact CAS bytes are the replay input.

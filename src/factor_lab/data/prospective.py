@@ -27,7 +27,12 @@ import pandas as pd
 import pyarrow.parquet as pq
 
 from .catalog import sha256_file
-from .sources import turnover_amount_to_rmb
+from .sources import (
+    PROVIDER_COMPLETION_DATASETS,
+    provider_completion_required,
+    turnover_amount_to_rmb,
+    validate_provider_completion_evidence,
+)
 
 
 SCHEMA_VERSION = 1
@@ -1058,6 +1063,18 @@ def _checkpoint_partition(
         raise ProspectiveDataError(f"raw partition date mismatch for {key}")
     if frame["ts_code"].astype("string").duplicated().any():
         raise ProspectiveDataError(f"raw partition duplicate securities for {key}")
+    try:
+        completion_evidence = validate_provider_completion_evidence(
+            raw,
+            frame,
+            dataset=dataset,
+            trade_date=date_text,
+            required_datasets=PROVIDER_COMPLETION_DATASETS,
+        )
+    except ValueError as exc:
+        raise ProspectiveDataError(
+            f"raw partition provider completion evidence is invalid for {key}"
+        ) from exc
     frame = frame.copy()
     frame["trade_date"] = parsed_dates
     source = {
@@ -1070,6 +1087,8 @@ def _checkpoint_partition(
         "completed_at_utc": _utc_text(completed),
         "availability_basis": "checkpoint_completed_at_utc",
     }
+    if provider_completion_required(date_text):
+        source["provider_completion"] = completion_evidence
     if sealed_source is not None and source != dict(sealed_source):
         raise ProspectiveDataError(f"sealed raw partition contract differs for {key}")
     return frame, source, completed
@@ -1756,6 +1775,33 @@ def build_prospective_input_snapshot(
             collection.append(frame)
             raw_sources.append(source)
             raw_availability.append(completed)
+    proofs_by_date: dict[str, set[str]] = {}
+    datasets_by_date: dict[str, set[str]] = {}
+    for source in raw_sources:
+        source_date = str(source.get("trade_date") or "")
+        if not provider_completion_required(source_date):
+            continue
+        evidence = source.get("provider_completion")
+        if not isinstance(evidence, Mapping):
+            raise ProspectiveDataError(
+                f"raw source lacks provider-completion proof for {source_date}"
+            )
+        proofs_by_date.setdefault(source_date, set()).add(
+            str(evidence.get("evidence_sha256") or "")
+        )
+        datasets_by_date.setdefault(source_date, set()).add(
+            str(source.get("dataset") or "")
+        )
+    for source_date, proofs in proofs_by_date.items():
+        if (
+            len(proofs) != 1
+            or "" in proofs
+            or datasets_by_date[source_date]
+            != set(PROVIDER_COMPLETION_DATASETS)
+        ):
+            raise ProspectiveDataError(
+                f"raw sources bind mixed or incomplete provider proofs for {source_date}"
+            )
     if date > FROZEN_BRIDGE_END and not future_open_dates:
         raise ProspectiveDataError("calendar has no future raw interval for signal date")
     raw_daily = pd.concat(daily_frames, ignore_index=True)
@@ -1769,6 +1815,27 @@ def build_prospective_input_snapshot(
         if adj_frames
         else pd.DataFrame(columns=["ts_code", "trade_date", "adj_factor"])
     )
+    for open_date in future_open_dates:
+        daily_set = set(
+            raw_daily.loc[
+                raw_daily["trade_date"].eq(open_date), "ts_code"
+            ].astype(str)
+        )
+        basic_set = set(
+            raw_basic.loc[
+                raw_basic["trade_date"].eq(open_date), "ts_code"
+            ].astype(str)
+        )
+        adj_set = set(
+            raw_adj.loc[
+                raw_adj["trade_date"].eq(open_date), "ts_code"
+            ].astype(str)
+        )
+        if daily_set != basic_set or not daily_set.issubset(adj_set):
+            raise ProspectiveDataError(
+                "provider-complete raw universe relation differs for "
+                f"{open_date.date().isoformat()}"
+            )
     frame, signal_audit = _build_signal_frame(
         members,
         bridge_price,

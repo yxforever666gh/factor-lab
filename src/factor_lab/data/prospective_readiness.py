@@ -21,9 +21,16 @@ from zoneinfo import ZoneInfo
 import pandas as pd
 import pyarrow.parquet as pq
 
+from .sources import (
+    PROVIDER_COMPLETION_CONTRACT_ID,
+    PROVIDER_COMPLETION_DATASETS,
+    provider_completion_required,
+    validate_provider_completion_evidence,
+)
+
 
 SCHEMA_VERSION = 2
-CONTRACT_ID = "factor-lab/prospective-readiness/5.7"
+CONTRACT_ID = "factor-lab/prospective-readiness/5.8"
 LEDGER_ID = "factor-lab/prospective/5.0"
 FROZEN_BRIDGE_END = "2026-08-21"
 CANONICAL_CALENDAR_ANCHOR = "2017-01-03"
@@ -755,7 +762,16 @@ def _partition_result(
     entries = checkpoint.get("partitions")
     key = f"{dataset}/{trade_date}"
     entry = entries.get(key) if isinstance(entries, Mapping) else None
-    result = {"key": key, "date": trade_date, "status": "missing", "completed_at_utc": None}
+    result = {
+        "key": key,
+        "date": trade_date,
+        "status": "missing",
+        "completed_at_utc": None,
+        "provider_completion_contract_id": None,
+    }
+    if isinstance(entry, Mapping) and entry.get("status") == "reconciling":
+        result["status"] = "reconcile"
+        return result
     if not isinstance(entry, Mapping) or entry.get("status") != "complete":
         return result
     try:
@@ -786,8 +802,7 @@ def _partition_result(
         required = _PARTITION_COLUMNS[dataset]
         if not required.issubset(parquet.schema.names):
             raise ValueError("columns")
-        table = parquet.read(columns=["ts_code", "trade_date"])
-        frame = table.to_pandas()
+        frame = parquet.read().to_pandas()
         dates = pd.to_datetime(
             frame["trade_date"].astype("string").str.replace("-", "", regex=False),
             format="%Y%m%d",
@@ -796,6 +811,64 @@ def _partition_result(
         tickers = frame["ts_code"].astype("string").str.strip()
         if dates.isna().any() or bool(dates.ne(trade_date).any()) or tickers.isna().any() or tickers.eq("").any() or tickers.duplicated().any():
             raise ValueError("contents")
+        try:
+            completion_evidence = validate_provider_completion_evidence(
+                entry,
+                frame,
+                dataset=dataset,
+                trade_date=trade_date,
+                required_datasets=PROVIDER_COMPLETION_DATASETS,
+            )
+        except ValueError as exc:
+            if str(exc) == "provider completion evidence is missing":
+                result["status"] = "reconcile"
+                return result
+            raise
+        if completion_evidence is not None:
+            evidence_sha = str(
+                completion_evidence.get("evidence_sha256") or ""
+            )
+            for sibling_dataset in PROVIDER_COMPLETION_DATASETS:
+                sibling = entries.get(f"{sibling_dataset}/{trade_date}")
+                if (
+                    not isinstance(sibling, Mapping)
+                    or sibling.get("status") == "reconciling"
+                    or sibling.get("status") != "complete"
+                    or "provider_completion" not in sibling
+                ):
+                    result["status"] = "reconcile"
+                    return result
+                sibling_evidence = sibling.get("provider_completion")
+                if (
+                    not isinstance(sibling_evidence, Mapping)
+                    or sibling_evidence.get("evidence_sha256") != evidence_sha
+                ):
+                    raise ValueError("provider completion bundles differ")
+            ticker_sets: dict[str, set[str]] = {}
+            for sibling_dataset in PROVIDER_COMPLETION_DATASETS:
+                sibling_path = (
+                    root
+                    / "runtime/data/raw"
+                    / sibling_dataset
+                    / f"trade_date={trade_date}"
+                    / "part-000.parquet"
+                )
+                sibling_frame = pq.ParquetFile(sibling_path).read(
+                    columns=["ts_code"]
+                ).to_pandas()
+                ticker_sets[sibling_dataset] = set(
+                    sibling_frame["ts_code"].astype("string").str.strip()
+                )
+            if (
+                ticker_sets["daily"] != ticker_sets["daily_basic"]
+                or not ticker_sets["daily"].issubset(
+                    ticker_sets["adj_factor"]
+                )
+            ):
+                raise ValueError("provider completion universe relation differs")
+            result["provider_completion_contract_id"] = (
+                PROVIDER_COMPLETION_CONTRACT_ID
+            )
         result["status"] = "complete"
         return result
     except Exception:
@@ -816,6 +889,7 @@ def _coverage(
         "required_dates": list(dates),
         "missing_dates": [key for key, value in statuses.items() if value == "missing"],
         "not_yet_available_dates": [key for key, value in statuses.items() if value == "not_yet_available"],
+        "reconcile_dates": [key for key, value in statuses.items() if value == "reconcile"],
         "invalid_dates": [key for key, value in statuses.items() if value == "invalid"],
         "complete": not statuses
         or all(value == "complete" for value in statuses.values()),
@@ -1687,6 +1761,15 @@ def inspect_prospective_readiness(
                     ]
                 }
             )
+            reconcile = sorted(
+                {
+                    value
+                    for name in names
+                    for value in report["coverage"][name][
+                        "reconcile_dates"
+                    ]
+                }
+            )
             invalid = sorted(
                 {
                     value
@@ -1695,7 +1778,7 @@ def inspect_prospective_readiness(
                 }
             )
             code_prefix = dataset.upper()
-            if missing or future:
+            if missing or future or reconcile:
                 issues.append(
                     _issue(
                         f"{code_prefix}_PARTITION_MISSING",
@@ -1706,6 +1789,7 @@ def inspect_prospective_readiness(
                         details={
                             "missing_dates": missing,
                             "not_yet_available_dates": future,
+                            "reconcile_dates": reconcile,
                         },
                     )
                 )
@@ -1838,7 +1922,10 @@ def inspect_prospective_readiness(
         {
             value
             for coverage in report["coverage"].values()
-            for value in coverage.get("missing_dates", [])
+            for value in (
+                list(coverage.get("missing_dates", []))
+                + list(coverage.get("reconcile_dates", []))
+            )
         }
     )
     future_market_dates = sorted(

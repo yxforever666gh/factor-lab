@@ -589,3 +589,375 @@ def test_enrichment_loser_cannot_delete_quarantine_winner(
         "fina_indicator_vip/period=2023-12-31"
     ]
     assert entry["quarantine_sha256"] == client.winner_quarantine_sha256
+
+
+GUARDED_DATE = "2026-08-24"
+GUARDED_COMPACT = "20260824"
+GUARDED_TICKERS = ("000001.SZ", "600000.SH")
+
+
+def _guarded_calendar() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "exchange": ["SSE"],
+            "cal_date": [GUARDED_COMPACT],
+            "is_open": [1],
+            "pretrade_date": ["20260821"],
+        }
+    )
+
+
+def _guarded_frame(dataset: str, tickers=GUARDED_TICKERS) -> pd.DataFrame:
+    fields = DATASET_FIELDS[dataset].split(",")
+    rows = []
+    for index, ticker in enumerate(tickers, start=1):
+        row = {field: float(index) for field in fields}
+        row["ts_code"] = ticker
+        row["trade_date"] = GUARDED_COMPACT
+        rows.append(row)
+    return pd.DataFrame(rows, columns=fields)
+
+
+class GuardBundleClient:
+    def __init__(
+        self,
+        *,
+        tickers=GUARDED_TICKERS,
+        first_request_barrier: threading.Barrier | None = None,
+    ) -> None:
+        self.frames = {
+            dataset: _guarded_frame(dataset, tickers)
+            for dataset in sources.PROVIDER_COMPLETION_DATASETS
+        }
+        self.first_request_barrier = first_request_barrier
+        self.waited = False
+
+    def query(self, endpoint: str, **_kwargs: Any) -> pd.DataFrame:
+        if endpoint == "trade_cal":
+            return _guarded_calendar()
+        if self.first_request_barrier is not None and not self.waited:
+            self.waited = True
+            self.first_request_barrier.wait(timeout=10)
+        return self.frames[endpoint].copy()
+
+
+def test_guarded_bundle_crash_leaves_reconciling_marker_and_resume_recovers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path, layout = _config(tmp_path)
+    real_write = sources._write_parquet_atomic
+    legacy_entries: dict[str, dict[str, Any]] = {}
+    legacy_shas: dict[str, str] = {}
+    for dataset in sources.PROVIDER_COMPLETION_DATASETS:
+        path = sources._partition_path(layout.raw_root, dataset, GUARDED_DATE)
+        real_write(path, _guarded_frame(dataset, GUARDED_TICKERS[:1]))
+        legacy_shas[dataset] = sha256_file(path)
+        legacy_entries[f"{dataset}/{GUARDED_DATE}"] = {
+            "status": "complete",
+            "dataset": dataset,
+            "trade_date": GUARDED_DATE,
+            "path": str(path),
+            "row_count": 1,
+            "size_bytes": path.stat().st_size,
+            "sha256": legacy_shas[dataset],
+            "completed_at_utc": "2026-08-24T08:00:00Z",
+        }
+    layout.checkpoint_path.write_text(
+        json.dumps({"schema_version": 1, "partitions": legacy_entries}),
+        encoding="utf-8",
+    )
+    provider_writes = 0
+
+    def crash_second_provider_write(path: Path, frame: pd.DataFrame) -> None:
+        nonlocal provider_writes
+        if any(dataset in path.parts for dataset in sources.PROVIDER_COMPLETION_DATASETS):
+            provider_writes += 1
+            if provider_writes == 2:
+                raise RuntimeError("simulated provider bundle crash")
+        real_write(path, frame)
+
+    monkeypatch.setattr(sources, "_write_parquet_atomic", crash_second_provider_write)
+    with pytest.raises(RuntimeError, match="simulated provider bundle crash"):
+        sync_data(
+            GUARDED_DATE,
+            GUARDED_DATE,
+            config_path=config_path,
+            layout=layout,
+            client=GuardBundleClient(),
+            datasets=sources.PROVIDER_COMPLETION_DATASETS,
+        )
+
+    checkpoint = json.loads(layout.checkpoint_path.read_text(encoding="utf-8"))
+    assert {
+        checkpoint["partitions"][f"{dataset}/{GUARDED_DATE}"]["status"]
+        for dataset in sources.PROVIDER_COMPLETION_DATASETS
+    } == {"reconciling"}
+    original_reconciliation = {
+        dataset: dict(
+            checkpoint["partitions"][f"{dataset}/{GUARDED_DATE}"][
+                "reconciliation"
+            ]
+        )
+        for dataset in sources.PROVIDER_COMPLETION_DATASETS
+    }
+    for dataset, reconciliation in original_reconciliation.items():
+        assert reconciliation["previous_status"] == "complete"
+        assert reconciliation["previous_artifact_sha256"] == legacy_shas[dataset]
+        assert reconciliation["resume_count"] == 0
+        assert len(reconciliation["attempts"]) == 1
+
+    monkeypatch.setattr(sources, "_write_parquet_atomic", real_write)
+    recovered = sync_data(
+        GUARDED_DATE,
+        GUARDED_DATE,
+        config_path=config_path,
+        layout=layout,
+        client=GuardBundleClient(),
+        datasets=sources.PROVIDER_COMPLETION_DATASETS,
+        resume=True,
+    )
+    assert recovered["status"] == "complete"
+    checkpoint = json.loads(layout.checkpoint_path.read_text(encoding="utf-8"))
+    assert {
+        checkpoint["partitions"][f"{dataset}/{GUARDED_DATE}"]["status"]
+        for dataset in sources.PROVIDER_COMPLETION_DATASETS
+    } == {"complete"}
+    for dataset in sources.PROVIDER_COMPLETION_DATASETS:
+        reconciliation = checkpoint["partitions"][
+            f"{dataset}/{GUARDED_DATE}"
+        ]["reconciliation"]
+        assert reconciliation["started_at_utc"] == original_reconciliation[
+            dataset
+        ]["started_at_utc"]
+        assert reconciliation["previous_checkpoint_entry_sha256"] == (
+            original_reconciliation[dataset]["previous_checkpoint_entry_sha256"]
+        )
+        assert reconciliation["previous_artifact_sha256"] == legacy_shas[dataset]
+        assert reconciliation["resume_count"] == 1
+        assert len(reconciliation["attempts"]) == 2
+
+
+def test_crashed_reconcile_blocks_a_later_provider_revision_without_mutation(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path, layout = _config(tmp_path)
+    real_write = sources._write_parquet_atomic
+    provider_writes = 0
+
+    def crash_second_provider_write(path: Path, frame: pd.DataFrame) -> None:
+        nonlocal provider_writes
+        if any(dataset in path.parts for dataset in sources.PROVIDER_COMPLETION_DATASETS):
+            provider_writes += 1
+            if provider_writes == 2:
+                raise RuntimeError("simulated provider bundle crash")
+        real_write(path, frame)
+
+    monkeypatch.setattr(sources, "_write_parquet_atomic", crash_second_provider_write)
+    with pytest.raises(RuntimeError, match="simulated provider bundle crash"):
+        sync_data(
+            GUARDED_DATE,
+            GUARDED_DATE,
+            config_path=config_path,
+            layout=layout,
+            client=GuardBundleClient(),
+            datasets=sources.PROVIDER_COMPLETION_DATASETS,
+        )
+    before = json.loads(layout.checkpoint_path.read_text(encoding="utf-8"))[
+        "partitions"
+    ]
+    before_bytes = {
+        dataset: path.read_bytes()
+        for dataset in sources.PROVIDER_COMPLETION_DATASETS
+        if (
+            path := sources._partition_path(
+                layout.raw_root, dataset, GUARDED_DATE
+            )
+        ).is_file()
+    }
+
+    monkeypatch.setattr(sources, "_write_parquet_atomic", real_write)
+    blocked = sync_data(
+        GUARDED_DATE,
+        GUARDED_DATE,
+        config_path=config_path,
+        layout=layout,
+        client=GuardBundleClient(tickers=("000001.SZ", "300001.SZ")),
+        datasets=sources.PROVIDER_COMPLETION_DATASETS,
+        resume=True,
+    )
+
+    assert blocked["status"] == "blocked"
+    assert blocked["reason"] == "provider_revision_conflict"
+    assert json.loads(layout.checkpoint_path.read_text(encoding="utf-8"))[
+        "partitions"
+    ] == before
+    assert {
+        dataset: sources._partition_path(
+            layout.raw_root, dataset, GUARDED_DATE
+        ).read_bytes()
+        for dataset in before_bytes
+    } == before_bytes
+
+
+def test_completion_clock_rollback_after_marker_never_publishes_complete(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config_path, layout = _config(tmp_path)
+    real_write_json = sources._write_json_atomic
+    real_time_ns = sources.time.time_ns
+    marker_written = False
+
+    def track_marker(path: Path, payload: dict[str, Any]) -> None:
+        nonlocal marker_written
+        real_write_json(path, payload)
+        partitions = payload.get("partitions")
+        if isinstance(partitions, dict) and any(
+            isinstance(entry, dict) and entry.get("status") == "reconciling"
+            for entry in partitions.values()
+        ):
+            marker_written = True
+
+    rollback_ns = int(pd.Timestamp("2026-08-24T09:00:00Z").timestamp() * 1e9)
+    monkeypatch.setattr(sources, "_write_json_atomic", track_marker)
+    monkeypatch.setattr(
+        sources.time,
+        "time_ns",
+        lambda: rollback_ns if marker_written else real_time_ns(),
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="completion clock precedes its provider evidence",
+    ):
+        sync_data(
+            GUARDED_DATE,
+            GUARDED_DATE,
+            config_path=config_path,
+            layout=layout,
+            client=GuardBundleClient(),
+            datasets=sources.PROVIDER_COMPLETION_DATASETS,
+        )
+
+    checkpoint = json.loads(layout.checkpoint_path.read_text(encoding="utf-8"))
+    assert marker_written is True
+    assert {
+        checkpoint["partitions"][f"{dataset}/{GUARDED_DATE}"]["status"]
+        for dataset in sources.PROVIDER_COMPLETION_DATASETS
+    } == {"reconciling"}
+    assert all(
+        "completed_at_utc"
+        not in checkpoint["partitions"][f"{dataset}/{GUARDED_DATE}"]
+        for dataset in sources.PROVIDER_COMPLETION_DATASETS
+    )
+
+    monkeypatch.setattr(sources, "_write_json_atomic", real_write_json)
+    monkeypatch.setattr(sources.time, "time_ns", real_time_ns)
+    recovered = sync_data(
+        GUARDED_DATE,
+        GUARDED_DATE,
+        config_path=config_path,
+        layout=layout,
+        client=GuardBundleClient(),
+        datasets=sources.PROVIDER_COMPLETION_DATASETS,
+        resume=True,
+    )
+    assert recovered["status"] == "complete"
+
+
+def test_concurrent_subset_publishers_adopt_one_shared_full_bundle_proof(
+    tmp_path: Path,
+) -> None:
+    config_path, layout = _config(tmp_path)
+    barrier = threading.Barrier(2)
+
+    def run(dataset: str) -> dict[str, Any]:
+        return sync_data(
+            GUARDED_DATE,
+            GUARDED_DATE,
+            config_path=config_path,
+            layout=layout,
+            client=GuardBundleClient(first_request_barrier=barrier),
+            datasets=(dataset,),
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(run, ("daily", "adj_factor")))
+
+    assert [result["status"] for result in results] == ["complete", "complete"]
+    checkpoint = json.loads(layout.checkpoint_path.read_text(encoding="utf-8"))
+    proofs = {
+        checkpoint["partitions"][f"{dataset}/{GUARDED_DATE}"][
+            "provider_completion"
+        ]["evidence_sha256"]
+        for dataset in ("daily", "adj_factor")
+    }
+    assert len(proofs) == 1
+
+    completed = sync_data(
+        GUARDED_DATE,
+        GUARDED_DATE,
+        config_path=config_path,
+        layout=layout,
+        client=GuardBundleClient(),
+        datasets=sources.PROVIDER_COMPLETION_DATASETS,
+        resume=True,
+    )
+    assert completed["status"] == "complete"
+    checkpoint = json.loads(layout.checkpoint_path.read_text(encoding="utf-8"))
+    assert len(
+        {
+            checkpoint["partitions"][f"{dataset}/{GUARDED_DATE}"][
+                "provider_completion"
+            ]["evidence_sha256"]
+            for dataset in sources.PROVIDER_COMPLETION_DATASETS
+        }
+    ) == 1
+
+
+def test_guarded_no_resume_does_not_overwrite_a_stable_provider_revision(
+    tmp_path: Path,
+) -> None:
+    config_path, layout = _config(tmp_path)
+    first = sync_data(
+        GUARDED_DATE,
+        GUARDED_DATE,
+        config_path=config_path,
+        layout=layout,
+        client=GuardBundleClient(),
+        datasets=sources.PROVIDER_COMPLETION_DATASETS,
+    )
+    assert first["status"] == "complete"
+    before_partitions = json.loads(
+        layout.checkpoint_path.read_text(encoding="utf-8")
+    )["partitions"]
+    before_artifacts = {
+        dataset: sources._partition_path(
+            layout.raw_root, dataset, GUARDED_DATE
+        ).read_bytes()
+        for dataset in sources.PROVIDER_COMPLETION_DATASETS
+    }
+
+    conflict = sync_data(
+        GUARDED_DATE,
+        GUARDED_DATE,
+        config_path=config_path,
+        layout=layout,
+        client=GuardBundleClient(tickers=("000001.SZ", "300001.SZ")),
+        datasets=sources.PROVIDER_COMPLETION_DATASETS,
+        resume=False,
+    )
+
+    assert conflict["status"] == "blocked"
+    assert conflict["reason"] == "provider_revision_conflict"
+    assert json.loads(
+        layout.checkpoint_path.read_text(encoding="utf-8")
+    )["partitions"] == before_partitions
+    assert {
+        dataset: sources._partition_path(
+            layout.raw_root, dataset, GUARDED_DATE
+        ).read_bytes()
+        for dataset in sources.PROVIDER_COMPLETION_DATASETS
+    } == before_artifacts

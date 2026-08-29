@@ -345,7 +345,7 @@ def test_unmatured_open_cycle_does_not_preempt_decision_readiness(
     ) is None
 
 
-def test_missing_holding_data_returns_exact_daily_adj_factor_action(
+def test_missing_holding_data_returns_exact_provider_complete_bundle_action(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     action = _post_cycle(
@@ -373,6 +373,8 @@ def test_missing_holding_data_returns_exact_daily_adj_factor_action(
         "2026-09-09",
         "--dataset",
         "daily",
+        "--dataset",
+        "daily_basic",
         "--dataset",
         "adj_factor",
         "--resume",

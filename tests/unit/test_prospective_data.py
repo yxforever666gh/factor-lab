@@ -14,13 +14,14 @@ import pytest
 from factor_lab.data.catalog import sha256_file
 from factor_lab.data import RuntimeLayout, sync_data
 from factor_lab.data import prospective
+import factor_lab.data.sources as sources
 from factor_lab.data.sources import DATASET_FIELDS
 
 
 TICKERS = [f"{index:06d}.SZ" for index in range(1, 11)]
 CUTOFF = pd.Timestamp("2026-08-13")
 BRIDGE_END = pd.Timestamp("2026-08-21")
-COMPLETED_AT = "2026-08-25T08:00:00Z"
+COMPLETED_AT = "2026-08-25T10:00:00Z"
 
 
 def _canonical_bytes(payload: object) -> bytes:
@@ -157,6 +158,11 @@ def _partition(
     frame: pd.DataFrame,
 ) -> None:
     text = date.date().isoformat()
+    frame = frame.copy()
+    for field in DATASET_FIELDS[dataset].split(","):
+        if field not in frame:
+            frame[field] = 1.0
+    frame = frame.loc[:, DATASET_FIELDS[dataset].split(",")]
     path = root / "runtime/data/raw" / dataset / f"trade_date={text}" / "part-000.parquet"
     path.parent.mkdir(parents=True, exist_ok=True)
     frame.to_parquet(path, index=False)
@@ -170,6 +176,33 @@ def _partition(
         "sha256": sha256_file(path),
         "completed_at_utc": COMPLETED_AT,
     }
+    if sources.provider_completion_required(text):
+        keys = [
+            f"{name}/{text}" for name in sources.PROVIDER_COMPLETION_DATASETS
+        ]
+        if all(key in checkpoint["partitions"] for key in keys):
+            sample = {
+                name: pd.read_parquet(checkpoint["partitions"][f"{name}/{text}"]["path"])
+                for name in sources.PROVIDER_COMPLETION_DATASETS
+            }
+            evidence = sources._build_provider_completion_evidence(
+                text,
+                [sample, {name: value.copy() for name, value in sample.items()}],
+                observations=[
+                    {
+                        "request_id": f"input-fixture-{text}-1",
+                        "request_started_at_utc": f"{text}T09:20:00Z",
+                        "response_completed_at_utc": f"{text}T09:20:01Z",
+                    },
+                    {
+                        "request_id": f"input-fixture-{text}-2",
+                        "request_started_at_utc": f"{text}T09:21:00Z",
+                        "response_completed_at_utc": f"{text}T09:21:01Z",
+                    },
+                ],
+            )
+            for key in keys:
+                checkpoint["partitions"][key]["provider_completion"] = evidence
 
 
 def _calendar(root: Path, checkpoint: dict) -> None:
@@ -397,8 +430,84 @@ def test_input_bundle_publishes_manifest_last_and_returns_after_completion_bound
         result.build_completed_at_utc
     )
     assert pd.Timestamp(result.build_completed_at_utc) <= pd.Timestamp.now(tz="UTC")
+    guarded_sources = [
+        row
+        for row in result.manifest["inputs"]
+        if row.get("role") == "raw_partition"
+        and row.get("trade_date") == "2026-08-24"
+    ]
+    assert {row["dataset"] for row in guarded_sources} == set(
+        sources.PROVIDER_COMPLETION_DATASETS
+    )
+    assert len(
+        {
+            row["provider_completion"]["evidence_sha256"]
+            for row in guarded_sources
+        }
+    ) == 1
+    assert result.manifest["target_adapter"][
+        "input_sources_sha256"
+    ] == hashlib.sha256(_canonical_bytes(result.manifest["inputs"])).hexdigest()
     loaded = prospective.load_prospective_input_snapshot(result.directory)
     assert loaded.build_completed_at_utc == result.build_completed_at_utc
+
+
+def test_direct_input_builder_rejects_missing_post_cutover_completion_evidence(
+    data_root,
+) -> None:
+    root, _, _ = data_root
+    checkpoint_path = root / "runtime/data/raw/checkpoint.json"
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint["partitions"]["daily/2026-08-24"].pop(
+        "provider_completion"
+    )
+    _write_json(checkpoint_path, checkpoint)
+
+    with pytest.raises(
+        prospective.ProspectiveDataError,
+        match="provider completion evidence is invalid",
+    ):
+        prospective.build_prospective_input_snapshot(root, "2026-08-24")
+
+
+def test_direct_input_builder_rejects_mixed_valid_completion_proofs(
+    data_root,
+) -> None:
+    root, _, _ = data_root
+    checkpoint_path = root / "runtime/data/raw/checkpoint.json"
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    sample = {
+        dataset: pd.read_parquet(
+            checkpoint["partitions"][f"{dataset}/2026-08-24"]["path"]
+        )
+        for dataset in sources.PROVIDER_COMPLETION_DATASETS
+    }
+    alternate = sources._build_provider_completion_evidence(
+        "2026-08-24",
+        [sample, {name: value.copy() for name, value in sample.items()}],
+        observations=[
+            {
+                "request_id": "alternate-input-proof-1",
+                "request_started_at_utc": "2026-08-24T09:22:00Z",
+                "response_completed_at_utc": "2026-08-24T09:22:01Z",
+            },
+            {
+                "request_id": "alternate-input-proof-2",
+                "request_started_at_utc": "2026-08-24T09:23:00Z",
+                "response_completed_at_utc": "2026-08-24T09:23:01Z",
+            },
+        ],
+    )
+    checkpoint["partitions"]["daily_basic/2026-08-24"][
+        "provider_completion"
+    ] = alternate
+    _write_json(checkpoint_path, checkpoint)
+
+    with pytest.raises(
+        prospective.ProspectiveDataError,
+        match="mixed or incomplete provider proofs",
+    ):
+        prospective.build_prospective_input_snapshot(root, "2026-08-24")
 
 
 def test_null_cutoff_input_is_immediately_ready_after_builder_returns(
@@ -410,7 +519,7 @@ def test_null_cutoff_input_is_immediately_ready_after_builder_returns(
     root, _, _ = data_root
     checkpoint_path = root / "runtime/data/raw/checkpoint.json"
     checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
-    observed_input_at = "2026-08-24T08:00:00Z"
+    observed_input_at = "2026-08-24T10:00:00Z"
     for entry in checkpoint["partitions"].values():
         entry["completed_at_utc"] = observed_input_at
     for entry in checkpoint["calendars"].values():
@@ -423,7 +532,7 @@ def test_null_cutoff_input_is_immediately_ready_after_builder_returns(
     _write_json(checkpoint_path, checkpoint)
 
     monotonic_start = time.monotonic()
-    witnessed_start = pd.Timestamp("2026-08-24T08:01:00Z")
+    witnessed_start = pd.Timestamp("2026-08-24T10:01:00Z")
 
     def witnessed_now() -> pd.Timestamp:
         return witnessed_start + pd.Timedelta(

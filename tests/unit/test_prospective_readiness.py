@@ -11,6 +11,7 @@ import pandas as pd
 import pytest
 
 import factor_lab.data.prospective_readiness as readiness
+import factor_lab.data.sources as sources
 from factor_lab.data.prospective_readiness import (
     inspect_prospective_readiness,
     prospective_readiness_exit_code,
@@ -74,25 +75,68 @@ def _calendar_records(start: str, end: str) -> tuple[pd.DataFrame, list[dict[str
 def _partition_frame(dataset: str, trade_date: str) -> pd.DataFrame:
     tickers = ["000001.SZ", "000002.SZ"]
     compact = trade_date.replace("-", "")
-    common: dict[str, Any] = {"ts_code": tickers, "trade_date": compact}
+    fields = sources.DATASET_FIELDS[dataset].split(",")
+    rows: list[dict[str, Any]] = []
+    for index, ticker in enumerate(tickers, start=1):
+        row = {field: float(index) for field in fields}
+        row["ts_code"] = ticker
+        row["trade_date"] = compact
+        rows.append(row)
+    frame = pd.DataFrame(rows, columns=fields)
     if dataset == "daily":
-        return pd.DataFrame(
-            {
-                **common,
-                "open": [10.0, 20.0],
-                "high": [11.0, 21.0],
-                "low": [9.0, 19.0],
-                "close": [10.5, 20.5],
-                "pre_close": [10.0, 20.0],
-                "pct_chg": [5.0, 2.5],
-                "amount": [1000.0, 2000.0],
-            }
-        )
+        frame["open"] = [10.0, 20.0]
+        frame["high"] = [11.0, 21.0]
+        frame["low"] = [9.0, 19.0]
+        frame["close"] = [10.5, 20.5]
+        frame["pre_close"] = [10.0, 20.0]
+        frame["pct_chg"] = [5.0, 2.5]
+        frame["amount"] = [1000.0, 2000.0]
+        return frame
     if dataset == "daily_basic":
-        return pd.DataFrame({**common, "pe_ttm": [10.0, 20.0], "pb": [1.0, 2.0]})
+        frame["pe_ttm"] = [10.0, 20.0]
+        frame["pb"] = [1.0, 2.0]
+        return frame
     if dataset == "adj_factor":
-        return pd.DataFrame({**common, "adj_factor": [1.0, 1.0]})
+        frame["adj_factor"] = [1.0, 1.0]
+        return frame
     raise AssertionError(dataset)
+
+
+def _attach_provider_completion(
+    root: Path, checkpoint: dict[str, Any], trade_date: str
+) -> None:
+    if not sources.provider_completion_required(trade_date):
+        return
+    keys = [
+        f"{dataset}/{trade_date}"
+        for dataset in sources.PROVIDER_COMPLETION_DATASETS
+    ]
+    if not all(key in checkpoint["partitions"] for key in keys):
+        return
+    sample = {
+        dataset: pd.read_parquet(
+            checkpoint["partitions"][f"{dataset}/{trade_date}"]["path"]
+        )
+        for dataset in sources.PROVIDER_COMPLETION_DATASETS
+    }
+    evidence = sources._build_provider_completion_evidence(
+        trade_date,
+        [sample, {name: frame.copy() for name, frame in sample.items()}],
+        observations=[
+            {
+                "request_id": "readiness-fixture-1",
+                "request_started_at_utc": f"{trade_date}T09:20:00Z",
+                "response_completed_at_utc": f"{trade_date}T09:20:01Z",
+            },
+            {
+                "request_id": "readiness-fixture-2",
+                "request_started_at_utc": f"{trade_date}T09:21:00Z",
+                "response_completed_at_utc": f"{trade_date}T09:21:01Z",
+            },
+        ],
+    )
+    for key in keys:
+        checkpoint["partitions"][key]["provider_completion"] = evidence
 
 
 def _write_partition(
@@ -123,6 +167,7 @@ def _write_partition(
         "sha256": _sha256(path),
         "completed_at_utc": completed_at_utc,
     }
+    _attach_provider_completion(root, checkpoint, trade_date)
 
 
 def _write_reference(root: Path, trade_date: str) -> None:
@@ -173,7 +218,7 @@ def _write_reference(root: Path, trade_date: str) -> None:
                 "row_count": len(frame),
                 "size_bytes": path.stat().st_size,
                 "sha256": _sha256(path),
-                "completed_at_utc": "2026-08-31T07:40:00Z",
+                "completed_at_utc": "2026-08-31T10:10:00Z",
                 "exact_source_required": True,
                 "stability_sample_count": 2,
                 "daily_partition_sha256": daily_sha,
@@ -311,7 +356,7 @@ def _write_case(
             completed_at_utc=(
                 "2026-08-28T14:00:00Z"
                 if trade_date < signal
-                else "2026-08-31T07:30:00Z"
+                else "2026-08-31T10:00:00Z"
             ),
         )
     _write_json(root / "runtime/data/raw/checkpoint.json", raw_checkpoint)
@@ -343,7 +388,7 @@ def _install_mock_membership(
         "as_of_date": "2026-08-31",
         "effective_start_date": "2026-09-01",
         "effective_end_date": "2026-09-30",
-        "completed_at_utc": "2026-08-31T07:45:00Z",
+        "completed_at_utc": "2026-08-31T10:15:00Z",
         "artifact_sha256": artifact_sha,
     }
     _write_json(manifest_path, manifest, canonical=True)
@@ -351,7 +396,7 @@ def _install_mock_membership(
     def load(path, *, project_root, available_at_utc):
         assert Path(path).resolve() == artifact_path.resolve()
         assert Path(project_root).resolve() == root.resolve()
-        assert available_at_utc == "2026-08-31T08:00:00Z"
+        assert available_at_utc == "2026-08-31T10:30:00Z"
         if reject_replay:
             raise ValueError("forged membership")
         return SimpleNamespace(
@@ -398,8 +443,8 @@ def _install_mock_input(
             signal_date="2026-08-31",
             trade_date="2026-09-01",
             snapshot_sha256=snapshot_sha,
-            inputs_available_at_utc="2026-08-31T07:30:00Z",
-            build_completed_at_utc="2026-08-31T07:45:00Z",
+            inputs_available_at_utc="2026-08-31T10:00:00Z",
+            build_completed_at_utc="2026-08-31T10:15:00Z",
             membership_artifact_sha256=(
                 membership_sha
                 if loaded_membership_sha is None
@@ -552,7 +597,7 @@ def test_complete_evidence_opens_membership_build_after_signal_close(
     _write_case(tmp_path, monkeypatch)
 
     report = inspect_prospective_readiness(
-        tmp_path, observed_at_utc="2026-08-31T08:00:00Z"
+        tmp_path, observed_at_utc="2026-08-31T10:30:00Z"
     )
 
     assert report["status"] == "ready"
@@ -585,7 +630,7 @@ def test_reference_fallback_is_invalid_instead_of_actionable(
     _write_json(checkpoint_path, checkpoint)
 
     report = inspect_prospective_readiness(
-        tmp_path, observed_at_utc="2026-08-31T08:00:00Z"
+        tmp_path, observed_at_utc="2026-08-31T10:30:00Z"
     )
 
     assert report["status"] == "blocked"
@@ -612,7 +657,7 @@ def test_reference_checkpoint_ticker_count_must_match_parquet(
     _write_json(checkpoint_path, checkpoint)
 
     report = inspect_prospective_readiness(
-        tmp_path, observed_at_utc="2026-08-31T08:00:00Z"
+        tmp_path, observed_at_utc="2026-08-31T10:30:00Z"
     )
 
     assert report["status"] == "blocked"
@@ -628,7 +673,7 @@ def test_membership_complete_without_input_only_enables_input_build(
     artifact_sha = _install_mock_membership(tmp_path, monkeypatch)
 
     report = inspect_prospective_readiness(
-        tmp_path, observed_at_utc="2026-08-31T08:00:00Z"
+        tmp_path, observed_at_utc="2026-08-31T10:30:00Z"
     )
 
     assert report["status"] == "ready"
@@ -678,7 +723,7 @@ def test_verified_input_waits_for_authoritative_target_replay(
     )
 
     report = inspect_prospective_readiness(
-        tmp_path, observed_at_utc="2026-08-31T08:00:00Z"
+        tmp_path, observed_at_utc="2026-08-31T10:30:00Z"
     )
 
     assert report["status"] == "waiting"
@@ -705,7 +750,7 @@ def test_sealed_input_replay_does_not_depend_on_mutable_raw_checkpoint(
     before = _tree_snapshot(tmp_path)
 
     report = inspect_prospective_readiness(
-        tmp_path, observed_at_utc="2026-08-31T08:00:00Z"
+        tmp_path, observed_at_utc="2026-08-31T10:30:00Z"
     )
 
     assert report["status"] == "waiting"
@@ -735,7 +780,7 @@ def test_old_sealed_calendar_does_not_hide_a_longer_live_calendar(
     )
 
     report = inspect_prospective_readiness(
-        tmp_path, observed_at_utc="2026-08-31T08:00:00Z"
+        tmp_path, observed_at_utc="2026-08-31T10:30:00Z"
     )
 
     assert report["reason"] == "authoritative_target_replay_required"
@@ -830,7 +875,7 @@ def test_build_gate_rejects_a_mixed_invalid_live_calendar_checkpoint(
     _write_json(checkpoint_path, checkpoint)
 
     report = inspect_prospective_readiness(
-        tmp_path, observed_at_utc="2026-08-31T08:00:00Z"
+        tmp_path, observed_at_utc="2026-08-31T10:30:00Z"
     )
 
     assert report["status"] == "blocked"
@@ -863,7 +908,7 @@ def test_sealed_admission_ignores_unrelated_invalid_live_calendar_entry(
     _write_json(checkpoint_path, checkpoint)
 
     report = inspect_prospective_readiness(
-        tmp_path, observed_at_utc="2026-08-31T08:00:00Z"
+        tmp_path, observed_at_utc="2026-08-31T10:30:00Z"
     )
 
     assert report["status"] == "waiting"
@@ -884,7 +929,7 @@ def test_wrong_membership_input_cannot_unlock_admission(
     )
 
     report = inspect_prospective_readiness(
-        tmp_path, observed_at_utc="2026-08-31T08:00:00Z"
+        tmp_path, observed_at_utc="2026-08-31T10:30:00Z"
     )
 
     assert report["status"] == "blocked"
@@ -900,7 +945,7 @@ def test_authoritative_membership_replay_rejects_a_forged_manifest(
     _install_mock_membership(tmp_path, monkeypatch, reject_replay=True)
 
     report = inspect_prospective_readiness(
-        tmp_path, observed_at_utc="2026-08-31T08:00:00Z"
+        tmp_path, observed_at_utc="2026-08-31T10:30:00Z"
     )
 
     assert report["status"] == "blocked"
@@ -916,7 +961,7 @@ def test_missing_raw_calendar_routes_to_bounded_bootstrap_sync(
     before = _tree_snapshot(tmp_path)
 
     report = inspect_prospective_readiness(
-        tmp_path, observed_at_utc="2026-08-31T08:00:00Z"
+        tmp_path, observed_at_utc="2026-08-31T10:30:00Z"
     )
 
     assert report["status"] == "ready"
@@ -938,7 +983,7 @@ def test_incomplete_month_calendar_routes_to_calendar_extension(
     _write_case(tmp_path, monkeypatch, calendar_end="2026-09-15")
 
     report = inspect_prospective_readiness(
-        tmp_path, observed_at_utc="2026-08-31T08:00:00Z"
+        tmp_path, observed_at_utc="2026-08-31T10:30:00Z"
     )
 
     assert report["status"] == "ready"
@@ -971,7 +1016,7 @@ def test_post_bridge_calendar_prefix_gap_routes_to_exact_gap_start(
     _write_case(tmp_path, monkeypatch, calendar_start="2026-08-23")
 
     report = inspect_prospective_readiness(
-        tmp_path, observed_at_utc="2026-08-31T08:00:00Z"
+        tmp_path, observed_at_utc="2026-08-31T10:30:00Z"
     )
 
     assert report["status"] == "ready"
@@ -1001,7 +1046,7 @@ def test_each_required_partition_type_routes_to_market_sync(
     _install_mock_membership(tmp_path, monkeypatch)
 
     report = inspect_prospective_readiness(
-        tmp_path, observed_at_utc="2026-08-31T08:00:00Z"
+        tmp_path, observed_at_utc="2026-08-31T10:30:00Z"
     )
 
     assert report["status"] == "ready"
@@ -1047,6 +1092,102 @@ def test_each_required_partition_type_routes_to_market_sync(
         if item["code"] == code
     )
     assert prospective_readiness_exit_code(report) == 0
+
+
+@pytest.mark.parametrize("legacy_status", ["complete", "reconciling"])
+def test_post_cutover_missing_guard_routes_to_exact_resume_reconcile_action(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    legacy_status: str,
+) -> None:
+    _write_case(tmp_path, monkeypatch)
+    checkpoint_path = tmp_path / "runtime/data/raw/checkpoint.json"
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    for dataset in sources.PROVIDER_COMPLETION_DATASETS:
+        entry = checkpoint["partitions"][f"{dataset}/2026-08-31"]
+        entry.pop("provider_completion", None)
+        entry["status"] = legacy_status
+    _write_json(checkpoint_path, checkpoint)
+
+    report = inspect_prospective_readiness(
+        tmp_path, observed_at_utc="2026-08-31T10:30:00Z"
+    )
+
+    assert report["status"] == "ready"
+    assert report["reason"] == "market_data_sync_ready"
+    assert report["next_action"] == "sync_market_data"
+    assert report["action"]["arguments"] == {
+        "start_date": "2026-08-31",
+        "end_date": "2026-08-31",
+        "calendar_end_date": "2026-09-30",
+        "datasets": ["daily", "daily_basic", "adj_factor"],
+        "resume": True,
+    }
+    assert report["action"]["argv"] == [
+        "data",
+        "sync",
+        "--from",
+        "2026-08-31",
+        "--to",
+        "2026-08-31",
+        "--calendar-to",
+        "2026-09-30",
+        "--dataset",
+        "daily",
+        "--dataset",
+        "daily_basic",
+        "--dataset",
+        "adj_factor",
+        "--resume",
+    ]
+
+
+def test_post_cutover_malformed_guard_is_invalid_not_reusable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_case(tmp_path, monkeypatch)
+    checkpoint_path = tmp_path / "runtime/data/raw/checkpoint.json"
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint["partitions"]["daily/2026-08-31"]["provider_completion"][
+        "evidence_sha256"
+    ] = "0" * 64
+    _write_json(checkpoint_path, checkpoint)
+
+    report = inspect_prospective_readiness(
+        tmp_path, observed_at_utc="2026-08-31T10:30:00Z"
+    )
+
+    assert report["status"] == "blocked"
+    assert report["reason"] == "evidence_invalid"
+    assert report["coverage"]["liquidity_daily"]["invalid_dates"] == [
+        "2026-08-31"
+    ]
+
+
+@pytest.mark.parametrize("malformed", [None, "forged", []])
+def test_present_non_object_guard_is_invalid_not_reconcile(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    malformed: object,
+) -> None:
+    _write_case(tmp_path, monkeypatch)
+    checkpoint_path = tmp_path / "runtime/data/raw/checkpoint.json"
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint["partitions"]["daily/2026-08-31"][
+        "provider_completion"
+    ] = malformed
+    _write_json(checkpoint_path, checkpoint)
+
+    report = inspect_prospective_readiness(
+        tmp_path, observed_at_utc="2026-08-31T10:30:00Z"
+    )
+
+    assert report["status"] == "blocked"
+    assert report["reason"] == "evidence_invalid"
+    assert report["coverage"]["liquidity_daily"]["reconcile_dates"] == []
+    assert report["coverage"]["liquidity_daily"]["invalid_dates"] == [
+        "2026-08-31"
+    ]
 
 
 def test_deadline_is_terminal_and_cannot_be_reopened_by_complete_data(
@@ -1151,7 +1292,7 @@ def test_full_membership_and_input_replay_is_byte_for_byte_zero_write(
     before = _tree_snapshot(tmp_path)
 
     report = inspect_prospective_readiness(
-        tmp_path, observed_at_utc="2026-08-31T08:00:00Z"
+        tmp_path, observed_at_utc="2026-08-31T10:30:00Z"
     )
 
     assert report["reason"] == "authoritative_target_replay_required"
@@ -1169,7 +1310,7 @@ def test_report_has_stable_top_level_and_issue_schema(
     )
 
     assert report["schema_version"] == 2
-    assert report["contract_id"] == "factor-lab/prospective-readiness/5.7"
+    assert report["contract_id"] == "factor-lab/prospective-readiness/5.8"
     assert report["action"] is None
     assert set(report) == {
         "schema_version",

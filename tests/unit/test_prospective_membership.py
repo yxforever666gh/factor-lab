@@ -13,6 +13,7 @@ import pytest
 
 from factor_lab.data.catalog import sha256_file
 from factor_lab.data import prospective, prospective_membership
+import factor_lab.data.sources as sources
 from factor_lab.data.prospective import ProspectiveDataError, _membership_source
 from factor_lab.data.prospective_membership import (
     EXPECTED_MEMBERSHIP_SIZE,
@@ -23,6 +24,7 @@ from factor_lab.data.prospective_membership import (
     load_prospective_membership_snapshot,
 )
 from factor_lab.data.sources import (
+    DATASET_FIELDS,
     ENRICHMENT_DATASET_FIELDS,
     EXACT_REFERENCE_CONTRACT_ID,
 )
@@ -197,13 +199,16 @@ def _write_sources(
             root / "runtime/data/raw/daily" / f"trade_date={date}" / "part-000.parquet"
         )
         path.parent.mkdir(parents=True, exist_ok=True)
-        pd.DataFrame(
+        daily = pd.DataFrame(
             {
-                "ts_code": tickers,
-                "trade_date": date.replace("-", ""),
-                "amount": amounts,
+                field: [1.0] * len(tickers)
+                for field in DATASET_FIELDS["daily"].split(",")
             }
-        ).to_parquet(path, index=False)
+        )
+        daily["ts_code"] = tickers
+        daily["trade_date"] = date.replace("-", "")
+        daily["amount"] = amounts
+        daily.to_parquet(path, index=False)
         completed = (
             late_partition_at
             if late_partition_at is not None and position == len(sessions) - 1
@@ -220,6 +225,39 @@ def _write_sources(
             "sha256": sha256_file(path),
             "completed_at_utc": completed,
         }
+        if sources.provider_completion_required(date):
+            sample: dict[str, pd.DataFrame] = {"daily": daily}
+            for dataset in ("daily_basic", "adj_factor"):
+                frame = pd.DataFrame(
+                    {
+                        field: [1.0] * len(tickers)
+                        for field in DATASET_FIELDS[dataset].split(",")
+                    }
+                )
+                frame["ts_code"] = tickers
+                frame["trade_date"] = date.replace("-", "")
+                sample[dataset] = frame
+            partitions[key]["provider_completion"] = (
+                sources._build_provider_completion_evidence(
+                    date,
+                    [
+                        sample,
+                        {name: frame.copy() for name, frame in sample.items()},
+                    ],
+                    observations=[
+                        {
+                            "request_id": f"membership-fixture-{date}-1",
+                            "request_started_at_utc": f"{date}T09:20:00Z",
+                            "response_completed_at_utc": f"{date}T09:20:01Z",
+                        },
+                        {
+                            "request_id": f"membership-fixture-{date}-2",
+                            "request_started_at_utc": f"{date}T09:21:00Z",
+                            "response_completed_at_utc": f"{date}T09:21:01Z",
+                        },
+                    ],
+                )
+            )
 
     # A huge post-as-of print must be irrelevant and must never be opened.
     future_path = root / "runtime/data/raw/daily/trade_date=2026-09-01/part-000.parquet"
@@ -345,6 +383,24 @@ def test_build_freezes_causal_top500_tie_units_and_separate_eligibility(
         source.get("trade_date") == "2026-09-01"
         for source in result.manifest["input_sources"]
     )
+    guarded_daily = [
+        source
+        for source in result.manifest["input_sources"]
+        if source.get("role") == "liquidity_daily_partition"
+        and sources.provider_completion_required(source["trade_date"])
+    ]
+    assert guarded_daily
+    checkpoint = json.loads(
+        (tmp_path / "runtime/data/raw/checkpoint.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    for source in guarded_daily:
+        entry = checkpoint["partitions"][source["checkpoint_key"]]
+        assert source["provider_completion"] == entry["provider_completion"]
+        assert source["checkpoint_entry_sha256"] == (
+            prospective_membership._checkpoint_entry_digest(entry)
+        )
     accepted, source, _ = _membership_source(
         tmp_path,
         pd.Timestamp("2026-08-31"),
@@ -354,6 +410,28 @@ def test_build_freezes_causal_top500_tie_units_and_separate_eligibility(
     )
     assert len(accepted) == EXPECTED_MEMBERSHIP_SIZE
     assert source["kind"] == "content_addressed_monthly_snapshot"
+
+
+def test_direct_membership_builder_rejects_missing_post_cutover_guard(
+    tmp_path: Path,
+) -> None:
+    _write_sources(tmp_path)
+    checkpoint_path = tmp_path / "runtime/data/raw/checkpoint.json"
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint["partitions"]["daily/2026-08-31"].pop(
+        "provider_completion"
+    )
+    checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+
+    with pytest.raises(
+        ProspectiveMembershipError,
+        match="provider-completion evidence",
+    ):
+        build_prospective_membership_snapshot(
+            tmp_path,
+            "2026-09",
+            available_at_utc=AVAILABLE_AT,
+        )
 
 
 def test_null_cutoff_membership_publish_is_durable_manifest_last_and_immediately_visible(

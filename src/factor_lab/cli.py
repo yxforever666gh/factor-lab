@@ -218,7 +218,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("protocols/5.2-target-generator.json"),
     )
-    upgrade.add_argument("--release-tag", default="5.7")
+    upgrade.add_argument("--release-tag", default="5.8")
     abandon_upgrade = prospective_commands.add_parser(
         "abandon-upgrade",
         help="Explicitly abandon an unattested implementation upgrade.",

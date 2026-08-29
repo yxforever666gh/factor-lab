@@ -5405,7 +5405,7 @@ def _post_cycle_readiness(
                 "start_date": start_date,
                 "end_date": holding_end,
                 "calendar_end_date": holding_end,
-                "datasets": ["daily", "adj_factor"],
+                "datasets": ["daily", "daily_basic", "adj_factor"],
                 "resume": True,
             },
             argv=[
@@ -5419,6 +5419,8 @@ def _post_cycle_readiness(
                 holding_end,
                 "--dataset",
                 "daily",
+                "--dataset",
+                "daily_basic",
                 "--dataset",
                 "adj_factor",
                 "--resume",
