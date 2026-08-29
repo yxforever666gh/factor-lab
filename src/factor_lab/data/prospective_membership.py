@@ -11,7 +11,7 @@ never remove or replace one of the 500 selected securities.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime
 import hashlib
 import json
 import math
@@ -23,17 +23,23 @@ from typing import Any, Mapping, Sequence
 import numpy as np
 import pandas as pd
 
-from .catalog import DEFAULT_CONFIG_PATH, RuntimeLayout, load_data_config, sha256_file
+from .catalog import DEFAULT_CONFIG_PATH, sha256_file
 from .prospective import (
     IMMUTABLE_SOURCE_RELATIVE_ROOT,
+    ProspectiveDataError,
+    _bundle_lock,
     _capture_immutable_artifact,
+    _fsync_directory,
+    _now_utc,
+    _publication_upper_bound,
     _resolve_immutable_artifact,
+    _verify_publication_upper_bound,
+    _wait_through_publication_upper_bound,
     _write_verified,
 )
 from .sources import (
     ENRICHMENT_DATASET_FIELDS,
-    _call,
-    _configured_tushare_client,
+    EXACT_REFERENCE_CONTRACT_ID,
     _normalise_trade_calendar,
     turnover_amount_to_rmb,
 )
@@ -287,7 +293,7 @@ def _source_contract() -> dict[str, Any]:
             "availability_timestamp_rounding": "ceil_to_next_whole_second",
         },
         "eligibility_rule": {
-            "reference": "exact-as_of checkpointed_or_captured_tushare_bak_basic",
+            "reference": "stable_exact_as_of_checkpointed_tushare_bak_basic",
             "minimum_selected_reference_coverage": MINIMUM_REFERENCE_COVERAGE,
             "provider_universe_basis": "exact_as_of_official_daily_tickers",
             "minimum_provider_universe_coverage_ppm": (
@@ -314,6 +320,18 @@ def _checkpoint_entry_digest(entry: Mapping[str, Any]) -> str:
             "status",
             "dataset",
             "trade_date",
+            "request_trade_date",
+            "source_trade_date",
+            "capture_contract_id",
+            "capture_mode",
+            "fallback_used",
+            "fields",
+            "exact_source_required",
+            "stability_sample_count",
+            "daily_partition_sha256",
+            "daily_ticker_count",
+            "covered_ticker_count",
+            "reference_ticker_count",
             "path",
             "row_count",
             "size_bytes",
@@ -795,9 +813,9 @@ def _normalise_reference(frame: pd.DataFrame, *, as_of: pd.Timestamp) -> pd.Data
             format="%Y%m%d",
             errors="coerce",
         )
-        if source_dates.isna().any() or bool(source_dates.gt(as_of).any()):
+        if source_dates.isna().any() or bool(source_dates.ne(as_of).any()):
             raise ProspectiveMembershipError(
-                "bak_basic source_trade_date is after as_of"
+                "bak_basic source_trade_date is not the exact as_of date"
             )
     if "trade_date" in work:
         dates = pd.to_datetime(
@@ -805,9 +823,9 @@ def _normalise_reference(frame: pd.DataFrame, *, as_of: pd.Timestamp) -> pd.Data
             format="%Y%m%d",
             errors="coerce",
         ).dt.normalize()
-        if dates.isna().any() or bool(dates.gt(as_of).any()):
+        if dates.isna().any() or bool(dates.ne(as_of).any()):
             raise ProspectiveMembershipError(
-                "bak_basic contains future trade_date values"
+                "bak_basic trade_date is not the exact as_of date"
             )
     return work.sort_values("ts_code", kind="mergesort").reset_index(drop=True)
 
@@ -870,6 +888,33 @@ def _reference_source(
             if isinstance(candidate, Mapping) and candidate.get("status") == "complete":
                 entry = candidate
     if entry is not None:
+        if (
+            entry.get("dataset") != "bak_basic"
+            or entry.get("trade_date") != date
+            or entry.get("request_trade_date") != date
+            or entry.get("source_trade_date") != date
+            or entry.get("capture_contract_id")
+            != EXACT_REFERENCE_CONTRACT_ID
+            or entry.get("capture_mode") != "exact_only"
+            or entry.get("fallback_used") is not False
+            or entry.get("fields") != ENRICHMENT_DATASET_FIELDS["bak_basic"]
+            or entry.get("exact_source_required") is not True
+            or type(entry.get("stability_sample_count")) is not int
+            or int(entry["stability_sample_count"]) < 2
+            or type(entry.get("daily_ticker_count")) is not int
+            or type(entry.get("covered_ticker_count")) is not int
+            or entry.get("daily_ticker_count")
+            != entry.get("covered_ticker_count")
+            or type(entry.get("reference_ticker_count")) is not int
+            or int(entry["reference_ticker_count"]) <= 0
+        ):
+            raise ProspectiveMembershipError(
+                "bak_basic checkpoint is not a stable exact-as-of capture"
+            )
+        _require_sha(
+            entry.get("daily_partition_sha256"),
+            label="bak_basic bound daily partition SHA",
+        )
         completed = _utc(
             entry.get("completed_at_utc"), label="bak_basic completed_at_utc"
         )
@@ -906,6 +951,8 @@ def _reference_source(
         raw = pd.read_parquet(immutable_path)
         if len(raw) != int(entry.get("row_count") or -1):
             raise ProspectiveMembershipError("bak_basic source row-count mismatch")
+        if len(raw) != int(entry["reference_ticker_count"]):
+            raise ProspectiveMembershipError("bak_basic reference ticker count mismatch")
         source = {
             "role": "point_in_time_reference",
             "kind": "checkpointed_bak_basic",
@@ -918,41 +965,20 @@ def _reference_source(
             "checkpoint_key": f"bak_basic/trade_date={date}",
             "checkpoint_entry_sha256": _checkpoint_entry_digest(entry),
             "availability_basis": "checkpoint.completed_at_utc",
+            "capture_contract_id": entry["capture_contract_id"],
+            "capture_mode": entry["capture_mode"],
+            "fallback_used": entry["fallback_used"],
+            "source_trade_date": entry["source_trade_date"],
+            "stability_sample_count": entry["stability_sample_count"],
+            "daily_partition_sha256": entry["daily_partition_sha256"],
+            "daily_ticker_count": entry["daily_ticker_count"],
+            "covered_ticker_count": entry["covered_ticker_count"],
         }
     else:
-        config = load_data_config(config_path)
-        # A release capsule may carry an immutable copy of data.json.  It is
-        # used only for Tushare credentials/settings; all runtime paths remain
-        # pinned to the caller's project root.
-        layout = RuntimeLayout.from_config(
-            config,
-            config_path=config_path,
-            repo_root=root,
-            runtime_root=root / "runtime",
+        raise ProspectiveMembershipError(
+            "stable exact-as-of checkpointed bak_basic reference is required; "
+            "run data reference first"
         )
-        resolved_client = client or _configured_tushare_client(
-            dict(config.get("sync") or {}), layout
-        )
-        raw = _call(
-            resolved_client,
-            "bak_basic",
-            trade_date=date.replace("-", ""),
-            fields=ENRICHMENT_DATASET_FIELDS["bak_basic"],
-        )
-        completed = pd.Timestamp(datetime.now(timezone.utc))
-        if available_at is not None and completed > available_at:
-            raise ProspectiveMembershipError(
-                "captured bak_basic response completed after the requested cutoff"
-            )
-        source = {
-            "role": "point_in_time_reference",
-            "kind": "captured_bak_basic_response",
-            "endpoint": "bak_basic",
-            "request_trade_date": date,
-            "source_row_count": int(len(raw)),
-            "completed_at_utc": _utc_text(completed),
-            "availability_basis": "captured_during_create_only_build",
-        }
     normalised = _normalise_reference(raw, as_of=as_of)
     raw_payload = {
         "schema_version": 1,
@@ -1083,17 +1109,10 @@ def _build_membership_frame(
 
 
 def _write_create_only(path: Path, payload: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists():
-        if not path.is_file() or path.read_bytes() != payload:
-            raise ProspectiveMembershipError(f"create-only collision at {path}")
-        return
     try:
-        with path.open("xb") as handle:
-            handle.write(payload)
-    except FileExistsError:
-        if not path.is_file() or path.read_bytes() != payload:
-            raise ProspectiveMembershipError(f"create-only collision at {path}")
+        _write_verified(path, payload)
+    except ProspectiveDataError as exc:
+        raise ProspectiveMembershipError(f"create-only collision at {path}") from exc
 
 
 def _manifest_core(manifest: Mapping[str, Any]) -> dict[str, Any]:
@@ -1132,9 +1151,10 @@ def build_prospective_membership_snapshot(
 ) -> ProspectiveMembershipSnapshot:
     """Build one create-only future monthly membership snapshot.
 
-    ``available_at_utc`` is both the source-availability cutoff and the build
-    completion time recorded in the manifest.  Production callers normally
-    omit it; tests and witnessed replays may supply an explicit UTC instant.
+    ``available_at_utc`` is an optional hard cutoff for both source evidence
+    and durable bundle completion.  The manifest records the actual
+    conservative publication bound, not the caller's cutoff.  Production
+    callers normally omit it; tests and witnessed replays may supply one.
     """
 
     root = Path(project_root).expanduser().resolve()
@@ -1162,7 +1182,7 @@ def build_prospective_membership_snapshot(
         if available_at_utc is None
         else _utc(available_at_utc, label="available_at_utc")
     )
-    source_cutoff = explicit_cap or pd.Timestamp(datetime.now(timezone.utc))
+    source_cutoff = explicit_cap or _now_utc()
     calendar = _calendar_selection(root, period, available_at=source_cutoff)
     if calendar.as_of_date >= period.start_time.normalize():
         raise ProspectiveMembershipError("membership as_of is not strictly pre-month")
@@ -1179,31 +1199,57 @@ def build_prospective_membership_snapshot(
         available_at=explicit_cap,
         config_path=resolved_config_path,
     )
-    reference_source["provider_universe_coverage"] = _provider_reference_coverage(
+    provider_coverage = _provider_reference_coverage(
         reference,
         daily,
         as_of=calendar.as_of_date,
     )
+    as_of_daily_sources = [
+        source
+        for source in daily_sources
+        if source.get("trade_date") == calendar.as_of_date.date().isoformat()
+    ]
+    if len(as_of_daily_sources) != 1:
+        raise ProspectiveMembershipError(
+            "exact-as-of daily source binding is missing or duplicated"
+        )
+    as_of_daily_source = as_of_daily_sources[0]
+    if (
+        reference_source.get("daily_partition_sha256")
+        != as_of_daily_source.get("sha256")
+        or reference_source.get("daily_ticker_count")
+        != provider_coverage["as_of_daily_ticker_count"]
+        or reference_source.get("covered_ticker_count")
+        != provider_coverage["covered_ticker_count"]
+        or reference_source.get("source_row_count")
+        != provider_coverage["reference_ticker_count"]
+    ):
+        raise ProspectiveMembershipError(
+            "bak_basic checkpoint daily-universe binding differs from exact source bytes"
+        )
+    reference_source["provider_universe_coverage"] = provider_coverage
     frame = _build_membership_frame(
         selected,
         reference,
         period=period,
         calendar=calendar,
     )
-    completed_candidates = [pd.Timestamp(datetime.now(timezone.utc))]
+    completed_candidates: list[pd.Timestamp] = []
     for source in (*calendar.sources, *daily_sources, reference_source):
         if source.get("completed_at_utc") is not None:
             completed_candidates.append(
                 _utc(source["completed_at_utc"], label="source completed_at_utc")
             )
-    completed_at = max(completed_candidates)
-    if explicit_cap is not None and completed_at > explicit_cap:
+    if not completed_candidates:
         raise ProspectiveMembershipError(
-            "membership sources/build completed after the requested cutoff"
+            "membership has no checkpointed source completion evidence"
         )
 
     month_root = root / PROSPECTIVE_MEMBERSHIP_ROOT / str(period)
+    month_root_was_missing = not month_root.exists()
     month_root.mkdir(parents=True, exist_ok=True)
+    if month_root_was_missing:
+        _fsync_directory(month_root.parent)
     temporary_name: str | None = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -1222,62 +1268,87 @@ def build_prospective_membership_snapshot(
     reference_path = directory / "bak-basic-raw.json"
     source_contract_path = directory / "source-contract.json"
     manifest_path = directory / "manifest.json"
-    # The Parquet bytes are the artifact address.  If an identical output was
-    # already sealed, keep its original availability evidence instead of
-    # trying to rewrite the manifest with a later wall-clock time.
-    if membership_path.is_file() and manifest_path.is_file():
-        return load_prospective_membership_snapshot(
-            membership_path,
-            project_root=root,
-            available_at_utc=explicit_cap or completed_at,
-        )
     contract = _source_contract()
     contract_bytes = _canonical_json_bytes(contract)
     output_records_sha = _sha256_bytes(_canonical_json_bytes(_records(frame)))
     input_sources = [*calendar.sources, *daily_sources, reference_source]
     input_sources_sha = _sha256_bytes(_canonical_json_bytes(input_sources))
-    manifest: dict[str, Any] = {
-        "schema_version": SCHEMA_VERSION,
-        "rule_id": RULE_ID,
-        "membership_month": str(period),
-        "as_of_date": calendar.as_of_date.date().isoformat(),
-        "effective_start_date": calendar.effective_start_date.date().isoformat(),
-        "effective_end_date": calendar.effective_end_date.date().isoformat(),
-        "liquidity_window_start": calendar.liquidity_sessions[0].date().isoformat(),
-        "liquidity_window_end": calendar.liquidity_sessions[-1].date().isoformat(),
-        "liquidity_session_count": len(calendar.liquidity_sessions),
-        "minimum_liquidity_observations": MINIMUM_LIQUIDITY_OBSERVATIONS,
-        "row_count": int(len(frame)),
-        "eligible_count": int(frame["eligible"].sum()),
-        "artifact_path": _relative(membership_path, root),
-        "artifact_sha256": artifact_sha,
-        "output_records_sha256": output_records_sha,
-        "completed_at_utc": _utc_text(completed_at),
-        "source_contract_path": _relative(source_contract_path, root),
-        "source_contract_sha256": _sha256_bytes(contract_bytes),
-        "reference_raw_path": _relative(reference_path, root),
-        "reference_raw_sha256": _sha256_bytes(reference_bytes),
-        "input_sources": input_sources,
-        "input_sources_sha256": input_sources_sha,
-        "selected_tickers_sha256": _sha256_bytes(
-            _canonical_json_bytes(frame["ts_code"].astype(str).tolist())
-        ),
-        "amount_unit": "RMB",
-        "historical_equivalence_claimed": False,
-    }
-    manifest["manifest_core_sha256"] = _sha256_bytes(
-        _canonical_json_bytes(_manifest_core(manifest))
-    )
-    manifest_bytes = _canonical_json_bytes(manifest)
-    _write_create_only(membership_path, membership_bytes)
-    _write_create_only(reference_path, reference_bytes)
-    _write_create_only(source_contract_path, contract_bytes)
-    _write_create_only(manifest_path, manifest_bytes)
-    return load_prospective_membership_snapshot(
-        membership_path,
-        project_root=root,
-        available_at_utc=explicit_cap or completed_at,
-    )
+    lock_path = month_root / f".{artifact_sha}.lock"
+    with _bundle_lock(lock_path):
+        # The manifest is published last and is the only commit marker.  Once
+        # present it is never deleted or rewritten; an idempotent builder keeps
+        # the original completion evidence.
+        if manifest_path.is_file():
+            loaded = load_prospective_membership_snapshot(
+                membership_path,
+                project_root=root,
+                available_at_utc=explicit_cap,
+            )
+            if explicit_cap is None:
+                _wait_through_publication_upper_bound(
+                    _utc(
+                        loaded.completed_at_utc,
+                        label="existing membership completed_at_utc",
+                    )
+                )
+            return loaded
+
+        _write_create_only(membership_path, membership_bytes)
+        _write_create_only(reference_path, reference_bytes)
+        _write_create_only(source_contract_path, contract_bytes)
+
+        publication_bound = _publication_upper_bound()
+        completed_at = max(publication_bound, *completed_candidates)
+        if explicit_cap is not None and completed_at > explicit_cap:
+            raise ProspectiveMembershipError(
+                "membership sources/build completed after the requested cutoff"
+            )
+        manifest: dict[str, Any] = {
+            "schema_version": SCHEMA_VERSION,
+            "rule_id": RULE_ID,
+            "membership_month": str(period),
+            "as_of_date": calendar.as_of_date.date().isoformat(),
+            "effective_start_date": calendar.effective_start_date.date().isoformat(),
+            "effective_end_date": calendar.effective_end_date.date().isoformat(),
+            "liquidity_window_start": calendar.liquidity_sessions[0].date().isoformat(),
+            "liquidity_window_end": calendar.liquidity_sessions[-1].date().isoformat(),
+            "liquidity_session_count": len(calendar.liquidity_sessions),
+            "minimum_liquidity_observations": MINIMUM_LIQUIDITY_OBSERVATIONS,
+            "row_count": int(len(frame)),
+            "eligible_count": int(frame["eligible"].sum()),
+            "artifact_path": _relative(membership_path, root),
+            "artifact_sha256": artifact_sha,
+            "output_records_sha256": output_records_sha,
+            "completed_at_utc": _utc_text(completed_at),
+            "source_contract_path": _relative(source_contract_path, root),
+            "source_contract_sha256": _sha256_bytes(contract_bytes),
+            "reference_raw_path": _relative(reference_path, root),
+            "reference_raw_sha256": _sha256_bytes(reference_bytes),
+            "input_sources": input_sources,
+            "input_sources_sha256": input_sources_sha,
+            "selected_tickers_sha256": _sha256_bytes(
+                _canonical_json_bytes(frame["ts_code"].astype(str).tolist())
+            ),
+            "amount_unit": "RMB",
+            "historical_equivalence_claimed": False,
+        }
+        manifest["manifest_core_sha256"] = _sha256_bytes(
+            _canonical_json_bytes(_manifest_core(manifest))
+        )
+        manifest_bytes = _canonical_json_bytes(manifest)
+        _write_create_only(manifest_path, manifest_bytes)
+        try:
+            _verify_publication_upper_bound(
+                completed_at, label="membership bundle"
+            )
+        except ProspectiveDataError as exc:
+            raise ProspectiveMembershipError(str(exc)) from exc
+        _wait_through_publication_upper_bound(publication_bound)
+        return load_prospective_membership_snapshot(
+            membership_path,
+            project_root=root,
+            available_at_utc=explicit_cap or completed_at,
+        )
 
 
 def _verify_recorded_source_file(
@@ -1777,40 +1848,55 @@ def load_prospective_membership_snapshot(
         "reference_raw_sha256"
     ):
         raise ProspectiveMembershipError("captured reference source binding mismatch")
-    if reference_source.get("kind") == "checkpointed_bak_basic":
-        try:
-            immutable_source_path = _resolve_immutable_artifact(
-                root,
-                reference_source,
-                sha_field="source_sha256",
-                path_field="immutable_source_path",
-                size_field="source_size_bytes",
-                media_field="source_media_type",
-            )
-            source_frame = pd.read_parquet(immutable_source_path)
-        except Exception as exc:
-            raise ProspectiveMembershipError(
-                "checkpointed bak_basic CAS bytes are unreadable"
-            ) from exc
-        if len(source_frame) != int(reference_source.get("source_row_count") or -1):
-            raise ProspectiveMembershipError("checkpointed bak_basic CAS row count differs")
-        rebuilt_reference = _normalise_reference(source_frame, as_of=as_of)
-        rebuilt_payload = {
-            "schema_version": 1,
-            "endpoint": "bak_basic",
-            "request": {
-                "trade_date": as_of.strftime("%Y%m%d"),
-                "fields": ENRICHMENT_DATASET_FIELDS["bak_basic"],
-            },
-            "columns": sorted(str(column) for column in rebuilt_reference.columns),
-            "records": _reference_records(
-                rebuilt_reference.loc[:, sorted(rebuilt_reference.columns)]
-            ),
-        }
-        if _canonical_json_bytes(rebuilt_payload) != reference_bytes:
-            raise ProspectiveMembershipError(
-                "checkpointed bak_basic CAS does not rebuild captured response"
-            )
+    if (
+        reference_source.get("kind") != "checkpointed_bak_basic"
+        or reference_source.get("capture_contract_id")
+        != EXACT_REFERENCE_CONTRACT_ID
+        or reference_source.get("capture_mode") != "exact_only"
+        or reference_source.get("fallback_used") is not False
+        or reference_source.get("source_trade_date")
+        != as_of.date().isoformat()
+        or type(reference_source.get("stability_sample_count")) is not int
+        or int(reference_source["stability_sample_count"]) < 2
+        or reference_source.get("daily_ticker_count")
+        != reference_source.get("covered_ticker_count")
+    ):
+        raise ProspectiveMembershipError(
+            "membership reference is not a stable checkpointed exact capture"
+        )
+    try:
+        immutable_source_path = _resolve_immutable_artifact(
+            root,
+            reference_source,
+            sha_field="source_sha256",
+            path_field="immutable_source_path",
+            size_field="source_size_bytes",
+            media_field="source_media_type",
+        )
+        source_frame = pd.read_parquet(immutable_source_path)
+    except Exception as exc:
+        raise ProspectiveMembershipError(
+            "checkpointed bak_basic CAS bytes are unreadable"
+        ) from exc
+    if len(source_frame) != int(reference_source.get("source_row_count") or -1):
+        raise ProspectiveMembershipError("checkpointed bak_basic CAS row count differs")
+    rebuilt_reference = _normalise_reference(source_frame, as_of=as_of)
+    rebuilt_payload = {
+        "schema_version": 1,
+        "endpoint": "bak_basic",
+        "request": {
+            "trade_date": as_of.strftime("%Y%m%d"),
+            "fields": ENRICHMENT_DATASET_FIELDS["bak_basic"],
+        },
+        "columns": sorted(str(column) for column in rebuilt_reference.columns),
+        "records": _reference_records(
+            rebuilt_reference.loc[:, sorted(rebuilt_reference.columns)]
+        ),
+    }
+    if _canonical_json_bytes(rebuilt_payload) != reference_bytes:
+        raise ProspectiveMembershipError(
+            "checkpointed bak_basic CAS does not rebuild captured response"
+        )
     reference = _normalise_reference(pd.DataFrame(reference_records), as_of=as_of)
     recorded_coverage = reference_source.get("provider_universe_coverage")
     rebuilt_coverage = _provider_reference_coverage(
@@ -1818,6 +1904,29 @@ def load_prospective_membership_snapshot(
         daily,
         as_of=as_of,
     )
+    as_of_daily_sources = [
+        source
+        for source in input_sources
+        if source.get("role") == "liquidity_daily_partition"
+        and source.get("trade_date") == as_of.date().isoformat()
+    ]
+    if len(as_of_daily_sources) != 1:
+        raise ProspectiveMembershipError(
+            "sealed exact-as-of daily source binding is missing or duplicated"
+        )
+    if (
+        reference_source.get("daily_partition_sha256")
+        != as_of_daily_sources[0].get("sha256")
+        or reference_source.get("daily_ticker_count")
+        != rebuilt_coverage["as_of_daily_ticker_count"]
+        or reference_source.get("covered_ticker_count")
+        != rebuilt_coverage["covered_ticker_count"]
+        or reference_source.get("source_row_count")
+        != rebuilt_coverage["reference_ticker_count"]
+    ):
+        raise ProspectiveMembershipError(
+            "sealed bak_basic daily-universe binding differs from source replay"
+        )
     if recorded_coverage != rebuilt_coverage:
         raise ProspectiveMembershipError(
             "captured reference provider-universe coverage differs"

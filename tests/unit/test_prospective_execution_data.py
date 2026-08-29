@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -426,9 +426,9 @@ def execution_root(
         target_rows_sha256=target_rows_sha,
         input_sources_sha256=inputs_sha,
         membership_artifact_sha256=membership_sha,
-        source_build_checkpoint_utc=source.inputs_available_at_utc,
+        source_build_checkpoint_utc=source.build_completed_at_utc,
         max_available_at_utc=source.inputs_available_at_utc,
-        information_cutoff_utc=source.inputs_available_at_utc,
+        information_cutoff_utc=source.build_completed_at_utc,
         signal_close_utc=f"{signal_date}T07:00:00Z",
         admission_deadline_utc=f"{trade_date}T01:15:00Z",
     )
@@ -500,6 +500,12 @@ def test_build_load_binds_sources_calendar_and_decision_roster(execution_root) -
     assert built.snapshot.generation_result_sha256 == generation.result_sha256
     assert built.source_contract["source_data_snapshot_sha256"] == source.snapshot_sha256
     assert built.source_contract["target_input_snapshot_sha256"] == generation.input_snapshot_sha256
+    assert built.source_contract["decision_input"]["inputs_available_at_utc"] == (
+        source.inputs_available_at_utc
+    )
+    assert built.source_contract["decision_input"]["build_completed_at_utc"] == (
+        source.build_completed_at_utc
+    )
     expected_benchmark = tuple(
         sorted(source.frame.loc[source.frame["eligible"], "ticker"])
     )
@@ -523,6 +529,48 @@ def test_build_load_binds_sources_calendar_and_decision_roster(execution_root) -
     loaded = load_prospective_execution_snapshot(built.directory, generation)
     assert loaded.snapshot.to_dict() == built.snapshot.to_dict()
     assert loaded.sources_path.read_bytes() == built.sources_path.read_bytes()
+
+
+def test_target_replay_hashes_build_completion_not_only_input_availability(
+    execution_root,
+) -> None:
+    _root, generation, source, _sessions, _checkpoint = execution_root
+    rebuilt = execution_data._verify_generation_input_binding(
+        generation,
+        source,
+        deadline=f"{source.trade_date}T01:15:00Z",
+    )
+    assert rebuilt.max_available_at_utc == source.inputs_available_at_utc
+    assert rebuilt.source_build_checkpoint_utc == source.build_completed_at_utc
+    assert rebuilt.information_cutoff_utc == source.build_completed_at_utc
+
+    changed_receipt = replace(
+        source,
+        build_completed_at_utc=f"{source.signal_date}T08:31:00Z",
+    )
+    with pytest.raises(
+        ProspectiveExecutionDataError,
+        match="generation is not bound to this decision source",
+    ):
+        execution_data._verify_generation_input_binding(
+            generation,
+            changed_receipt,
+            deadline=f"{source.trade_date}T01:15:00Z",
+        )
+
+    after_deadline = replace(
+        source,
+        build_completed_at_utc=f"{source.trade_date}T01:15:01Z",
+    )
+    with pytest.raises(
+        ProspectiveExecutionDataError,
+        match="cannot rebuild the target input",
+    ):
+        execution_data._verify_generation_input_binding(
+            generation,
+            after_deadline,
+            deadline=f"{source.trade_date}T01:15:00Z",
+        )
 
 
 def test_future_delist_is_officially_captured_and_replayed_from_cas(

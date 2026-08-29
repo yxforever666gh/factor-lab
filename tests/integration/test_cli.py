@@ -22,6 +22,11 @@ def test_cli_exposes_only_lightweight_mainline_commands() -> None:
     )
     assert suspensions.data_command == "suspensions"
     assert suspensions.resume is True
+    reference = parser.parse_args(
+        ["data", "reference", "--trade-date", "2026-08-31"]
+    )
+    assert reference.data_command == "reference"
+    assert reference.trade_date == "2026-08-31"
 
 
 def test_adaptive_is_the_default_research_suite() -> None:
@@ -41,7 +46,7 @@ def test_default_root_finds_checkout_above_noneditable_wheel(
     (project / "protocols" / "5.0.json").write_text("{}\n", encoding="utf-8")
     installed = (
         project
-        / "runtime/environments/5.5/Lib/site-packages/factor_lab/cli.py"
+        / "runtime/environments/5.6/Lib/site-packages/factor_lab/cli.py"
     )
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()

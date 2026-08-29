@@ -13,7 +13,7 @@ import binascii
 from contextlib import contextmanager
 from copy import deepcopy
 from dataclasses import dataclass, field
-from datetime import date, datetime, time as wall_time, timezone
+from datetime import date, datetime, time as wall_time, timedelta, timezone
 import hashlib
 import json
 import os
@@ -53,6 +53,7 @@ EVALUATION_MILESTONES = (
     ("one_year_directional_gate", 250, 25),
 )
 VERIFICATION_CACHE_SCHEMA_VERSION = 1
+DISPATCH_INTENT_RECOVERY_WINDOW = timedelta(hours=24)
 RECORD_NAME_RE = re.compile(
     r"^(?P<sequence>[0-9]{16})-(?P<kind>[a-z][a-z0-9_]*)-"
     r"(?P<sha256>[0-9a-f]{64})\.json$"
@@ -2625,9 +2626,18 @@ def _record_metadata(path: Path, record: Mapping[str, Any], digest: str) -> dict
 
 
 def _load_record_chain(layout: LedgerLayout) -> tuple[list[dict[str, Any]], _LedgerState]:
+    if layout.records.is_symlink():
+        raise LedgerIntegrityError("records path is not a regular directory")
     if not layout.records.exists():
         return [], _LedgerState()
-    candidates = sorted(path for path in layout.records.iterdir() if path.is_file())
+    if not layout.records.is_dir():
+        raise LedgerIntegrityError("records path is not a regular directory")
+    candidates = sorted(layout.records.iterdir())
+    for path in candidates:
+        if path.is_symlink() or not path.is_file():
+            raise LedgerIntegrityError(
+                f"unexpected entry in records directory: {path.name}"
+            )
     records: list[dict[str, Any]] = []
     state = _LedgerState()
     previous_hash: str | None = None
@@ -3524,8 +3534,11 @@ def seal_decision(
 ) -> dict[str, Any]:
     layout = LedgerLayout.at(ledger_root, ledger_id=ledger_id)
     resolved_plan, raw = _load_plan(plan)
-    sealed_time = _utc_text(recorded_at_utc)
     with _exclusive_lock(layout):
+        # The authoritative record time belongs to the append critical section.
+        # Capturing it before a contended lock could backdate a decision across
+        # its immutable admission deadline.
+        sealed_time = _utc_text(recorded_at_utc)
         records, state, _generated = _load_verified_record_chain(layout)
         if not records:
             raise LedgerStateError("prospective ledger is not activated")
@@ -3947,32 +3960,30 @@ def _audit_snapshots(
     layout: LedgerLayout,
     records: Sequence[Mapping[str, Any]],
 ) -> list[dict[str, str]]:
-    issues: list[dict[str, str]] = []
-    expected: dict[int, tuple[str, bytes, Path]] = {}
-    replay_state = _LedgerState()
-    prefix: list[Mapping[str, Any]] = []
-    for row in records:
-        _apply_record(
-            replay_state,
-            row["record"],
-            str(row["record_sha256"]),
-        )
-        prefix.append(row)
-        expected_raw = canonical_json_bytes(_snapshot_payload(layout, prefix, replay_state))
-        expected_digest = sha256_bytes(expected_raw)
-        sequence = int(row["sequence"])
-        expected[sequence] = (
-            expected_digest,
-            expected_raw,
-            layout.snapshots / f"{sequence:016d}-{expected_digest}.json",
-        )
+    expected = _expected_snapshot_prefixes(layout, records)
+    if layout.snapshots.is_symlink() or (
+        layout.snapshots.exists() and not layout.snapshots.is_dir()
+    ):
+        return [
+            {
+                "code": "invalid_snapshot_directory",
+                "path": str(layout.snapshots),
+            }
+        ]
     if not layout.snapshots.exists():
         return [
             {"code": "missing_snapshot", "path": str(path)}
             for _digest, _raw, path in expected.values()
         ]
+
+    issues: list[dict[str, str]] = []
     seen_sequences: set[int] = set()
-    for path in sorted(item for item in layout.snapshots.iterdir() if item.is_file()):
+    for path in sorted(layout.snapshots.iterdir()):
+        if path.is_symlink() or not path.is_file():
+            issues.append(
+                {"code": "unexpected_snapshot_file", "path": str(path)}
+            )
+            continue
         match = SNAPSHOT_NAME_RE.fullmatch(path.name)
         if match is None:
             issues.append({"code": "unexpected_snapshot_file", "path": str(path)})
@@ -4003,6 +4014,92 @@ def _audit_snapshots(
         if sequence not in seen_sequences:
             issues.append({"code": "missing_snapshot", "path": str(path)})
     return issues
+
+
+def _expected_snapshot_prefixes(
+    layout: LedgerLayout,
+    records: Sequence[Mapping[str, Any]],
+) -> dict[int, tuple[str, bytes, Path]]:
+    expected: dict[int, tuple[str, bytes, Path]] = {}
+    replay_state = _LedgerState()
+    prefix: list[Mapping[str, Any]] = []
+    for row in records:
+        _apply_record(
+            replay_state,
+            row["record"],
+            str(row["record_sha256"]),
+        )
+        prefix.append(row)
+        expected_raw = canonical_json_bytes(_snapshot_payload(layout, prefix, replay_state))
+        expected_digest = sha256_bytes(expected_raw)
+        sequence = int(row["sequence"])
+        expected[sequence] = (
+            expected_digest,
+            expected_raw,
+            layout.snapshots / f"{sequence:016d}-{expected_digest}.json",
+        )
+    return expected
+
+
+def repair_snapshots(
+    ledger_root: str | Path,
+    *,
+    ledger_id: str = DEFAULT_LEDGER_ID,
+) -> dict[str, Any]:
+    """Create only deterministic snapshots missing after a record-first crash."""
+
+    layout = LedgerLayout.at(ledger_root, ledger_id=ledger_id)
+    with _exclusive_lock(layout):
+        records, _state, _generated = _load_verified_record_chain(
+            layout,
+            refresh_cache=False,
+        )
+        if not records:
+            raise LedgerStateError("cannot repair snapshots for an empty ledger")
+        expected = _expected_snapshot_prefixes(layout, records)
+        issues = _audit_snapshots(layout, records)
+        unsafe = [issue for issue in issues if issue.get("code") != "missing_snapshot"]
+        if unsafe:
+            raise LedgerIntegrityError(
+                f"snapshot repair refused non-missing evidence: {unsafe}"
+            )
+        missing_paths = {str(issue["path"]) for issue in issues}
+        expected_missing = {
+            str(path)
+            for _sequence, (_digest, _raw, path) in expected.items()
+            if not path.exists() and not path.is_symlink()
+        }
+        if missing_paths != expected_missing:
+            raise LedgerIntegrityError(
+                "snapshot repair issue set differs from deterministic prefix replay"
+            )
+        repaired: list[dict[str, Any]] = []
+        for sequence, (digest, raw, path) in expected.items():
+            if str(path) not in missing_paths:
+                continue
+            created = create_only_file(path, raw)
+            repaired.append(
+                {
+                    "sequence": sequence,
+                    "snapshot_sha256": digest,
+                    "path": str(path),
+                    "created": created,
+                }
+            )
+        remaining = _audit_snapshots(layout, records)
+        if remaining:
+            raise LedgerIntegrityError(
+                f"snapshot repair did not restore the canonical set: {remaining}"
+            )
+        return {
+            "schema_version": 1,
+            "ledger_id": ledger_id,
+            "ledger_root": str(layout.root),
+            "record_count": len(records),
+            "head_record_sha256": records[-1]["record_sha256"],
+            "repaired_count": len(repaired),
+            "snapshots": repaired,
+        }
 
 
 def _verification_cache_capsule_identity(
@@ -4963,12 +5060,57 @@ def _override_readiness(
         reason=reason,
         ready=False,
         next_action="wait" if status == "waiting" else "none",
+        action=None,
     )
     report["ready_for"] = {
         "membership_build": False,
         "input_build": False,
         "decision_admission": False,
     }
+    return report
+
+
+def _snapshot_repair_readiness(
+    report: dict[str, Any],
+    layout: LedgerLayout,
+    records: Sequence[Mapping[str, Any]],
+    issues: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    missing_paths = sorted(str(issue["path"]) for issue in issues)
+    report["issues"] = [
+        _readiness_issue(
+            "DETERMINISTIC_SNAPSHOTS_MISSING",
+            "wait",
+            "ledger",
+            "canonical record prefixes are missing deterministic snapshots",
+            retryable=True,
+        )
+    ]
+    report["ready_for"] = {
+        "membership_build": False,
+        "input_build": False,
+        "decision_admission": False,
+    }
+    report.update(
+        status="ready",
+        reason="snapshot_repair_ready",
+        ready=True,
+        next_action="repair_snapshots",
+        action={
+            "command": "prospective repair-snapshots",
+            "arguments": {
+                "ledger_root": str(layout.root),
+                "missing_snapshots": missing_paths,
+            },
+            "argv": ["prospective", "repair-snapshots"],
+        },
+    )
+    if records:
+        report["ledger_repair_head"] = {
+            "head_sequence": int(records[-1]["sequence"]),
+            "head_record_sha256": str(records[-1]["record_sha256"]),
+            "missing_snapshot_count": len(missing_paths),
+        }
     return report
 
 
@@ -4993,6 +5135,7 @@ def prospective_readiness(
     records: list[dict[str, Any]] = []
     state = _LedgerState()
     strict_error: Exception | None = None
+    snapshot_issues: list[dict[str, str]] = []
     try:
         with _existing_read_lock(layout):
             try:
@@ -5001,7 +5144,10 @@ def prospective_readiness(
                     refresh_cache=False,
                 )
                 snapshot_issues = _audit_snapshots(layout, records)
-                if snapshot_issues:
+                if snapshot_issues and any(
+                    issue.get("code") != "missing_snapshot"
+                    for issue in snapshot_issues
+                ):
                     raise LedgerIntegrityError(
                         f"prospective readiness snapshot audit failed: {snapshot_issues}"
                     )
@@ -5036,8 +5182,6 @@ def prospective_readiness(
                 retryable=False,
             ),
         )
-
-    last_signal, last_index = _latest_decision_coordinates(records)
     try:
         ledger_relative = layout.root.relative_to(project).as_posix()
     except ValueError as exc:
@@ -5053,6 +5197,35 @@ def prospective_readiness(
                 retryable=False,
             ),
         )
+    if snapshot_issues:
+        expected = _expected_snapshot_prefixes(layout, records)
+        missing_paths = {str(issue["path"]) for issue in snapshot_issues}
+        expected_missing = {
+            str(path)
+            for _sequence, (_digest, _raw, path) in expected.items()
+            if not path.exists() and not path.is_symlink()
+        }
+        if missing_paths != expected_missing:
+            return _override_readiness(
+                report,
+                status="blocked",
+                reason="authoritative_ledger_invalid",
+                issue=_readiness_issue(
+                    "AUTHORITATIVE_LEDGER_INVALID",
+                    "error",
+                    "ledger",
+                    "missing snapshot set differs from deterministic prefix replay",
+                    retryable=False,
+                ),
+            )
+        return _snapshot_repair_readiness(
+            report,
+            layout,
+            records,
+            snapshot_issues,
+        )
+
+    last_signal, last_index = _latest_decision_coordinates(records)
     snapshot_sha = sha256_bytes(
         canonical_json_bytes(_snapshot_payload(layout, records, state))
     )
@@ -5195,6 +5368,179 @@ def prospective_readiness(
                 ),
             )
         return None
+
+    if state.phase == "awaiting_receipt":
+        changed = final_stable_gate()
+        if changed is not None:
+            return changed
+        plan = state.pending_decision_plan
+        decision_sha = state.current_decision_hash
+        if not isinstance(plan, Mapping) or decision_sha is None:
+            return _override_readiness(
+                report,
+                status="blocked",
+                reason="pending_attestation_invalid",
+                issue=_readiness_issue(
+                    "PENDING_ATTESTATION_INVALID",
+                    "error",
+                    "ledger",
+                    "awaiting-receipt state lacks its exact decision plan binding",
+                    retryable=False,
+                ),
+            )
+        deadline_text = str(plan["admission_deadline_utc"])
+        deadline = _parse_evidence_utc(deadline_text)
+        observed_text = report.get("observed_at_utc")
+        if observed_text is None:
+            observed_text = observed_at_utc
+        if observed_text is None:
+            return _override_readiness(
+                report,
+                status="blocked",
+                reason="pending_attestation_clock_missing",
+                issue=_readiness_issue(
+                    "PENDING_ATTESTATION_CLOCK_MISSING",
+                    "error",
+                    "clock",
+                    "awaiting-receipt readiness lacks an observation instant",
+                    retryable=True,
+                ),
+            )
+        observed = _parse_evidence_utc(str(observed_text))
+        snapshot_sha = str(expected_ledger["snapshot_sha256"])
+        snapshot_path = (
+            layout.snapshots
+            / f"{len(records):016d}-{snapshot_sha}.json"
+        ).resolve()
+        pending = {
+            "snapshot": str(snapshot_path),
+            "snapshot_sha256": snapshot_sha,
+            "decision_record_sha256": decision_sha,
+            "admission_deadline_utc": deadline_text,
+            "purpose": "decision_anchor",
+            "release_tag": str(state.activation["release_tag"]),
+        }
+        try:
+            from .prospective_runtime import inspect_dispatch_evidence
+
+            dispatch_evidence = inspect_dispatch_evidence(
+                layout.root,
+                snapshot_path,
+                release_tag=str(state.activation["release_tag"]),
+                ledger_id=ledger_id,
+            )
+        except Exception as exc:
+            return _override_readiness(
+                report,
+                status="blocked",
+                reason="dispatch_evidence_invalid",
+                issue=_readiness_issue(
+                    "DISPATCH_EVIDENCE_INVALID",
+                    "error",
+                    "attestation",
+                    str(exc),
+                    retryable=False,
+                ),
+            )
+        report["pending_attestation"] = pending
+        report["issues"] = []
+        report["ready_for"] = {
+            "membership_build": False,
+            "input_build": False,
+            "decision_admission": False,
+        }
+        recovery_ready = False
+        if observed >= deadline:
+            binding = dispatch_evidence.get("binding")
+            intent = dispatch_evidence.get("intent")
+            if isinstance(binding, Mapping):
+                recovery_ready = True
+            elif isinstance(intent, Mapping):
+                intent_created = _parse_evidence_utc(intent.get("created_at_utc"))
+                if intent_created >= deadline:
+                    return _override_readiness(
+                        report,
+                        status="blocked",
+                        reason="dispatch_evidence_invalid",
+                        issue=_readiness_issue(
+                            "DISPATCH_EVIDENCE_INVALID",
+                            "error",
+                            "attestation",
+                            "dispatch intent was not created before the decision deadline",
+                            retryable=False,
+                        ),
+                    )
+                recovery_ready = observed < (
+                    deadline + DISPATCH_INTENT_RECOVERY_WINDOW
+                )
+            if recovery_ready:
+                report.update(
+                    status="ready",
+                    reason="decision_attestation_recovery_ready",
+                    ready=True,
+                    next_action="attest_decision",
+                    action={
+                        "command": "prospective attest",
+                        "arguments": pending,
+                        "argv": [
+                            "prospective",
+                            "attest",
+                            "--snapshot",
+                            str(snapshot_path),
+                            "--purpose",
+                            "decision_anchor",
+                            "--release-tag",
+                            str(state.activation["release_tag"]),
+                            "--decision-record-sha256",
+                            decision_sha,
+                            "--admission-deadline-utc",
+                            deadline_text,
+                        ],
+                    },
+                )
+                return report
+            issue = _readiness_issue(
+                "DECISION_ATTESTATION_DEADLINE_MISSED",
+                "fatal",
+                "attestation",
+                "the sealed decision was not attested before its immutable deadline",
+                retryable=False,
+            )
+            report["issues"] = [issue]
+            report.update(
+                status="terminal",
+                reason="decision_attestation_deadline_missed",
+                ready=False,
+                next_action="none",
+                action=None,
+            )
+            return report
+        argv = [
+            "prospective",
+            "attest",
+            "--snapshot",
+            str(snapshot_path),
+            "--purpose",
+            "decision_anchor",
+            "--release-tag",
+            str(state.activation["release_tag"]),
+            "--decision-record-sha256",
+            decision_sha,
+            "--admission-deadline-utc",
+            deadline_text,
+        ]
+        report.update(
+            status="ready",
+            reason="decision_attestation_ready",
+            ready=True,
+            next_action="attest_decision",
+            action={
+                "command": "prospective attest",
+                "arguments": pending,
+                "argv": argv,
+            },
+        )
+        return report
 
     if state.direction_rejected or state.insolvent:
         return _override_readiness(
@@ -5408,6 +5754,15 @@ def prospective_readiness(
         deployment_sha256=checked_generation["deployment_sha256"],
         generator_id=checked_generation["generator_id"],
     )
+    input_directory = input_view.get("directory")
+    if not isinstance(input_directory, str) or not input_directory:
+        input_directory = str(
+            (
+                project
+                / "runtime/prospective/5.0/inputs"
+                / source_snapshot_sha
+            ).resolve()
+        )
     report["ready_for"] = {
         "membership_build": False,
         "input_build": False,
@@ -5417,7 +5772,19 @@ def prospective_readiness(
         status="ready",
         reason="decision_admission_ready",
         ready=True,
-        next_action="build_plan",
+        next_action="admit_decision",
+        action={
+            "command": "prospective admit",
+            "arguments": {
+                "input": input_directory,
+            },
+            "argv": [
+                "prospective",
+                "admit",
+                "--input",
+                input_directory,
+            ],
+        },
     )
     return report
 
@@ -5499,6 +5866,7 @@ __all__ = [
     "evaluate_ledger",
     "implementation_transition_status",
     "prospective_readiness",
+    "repair_snapshots",
     "route_target_plan_payload_sha256",
     "seal_decision",
     "seal_snapshot",

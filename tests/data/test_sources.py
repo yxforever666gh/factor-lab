@@ -105,7 +105,7 @@ def test_sync_writes_daily_partitions_and_resumes_verified_checkpoint(tmp_path: 
     assert [name for name, _ in second_client.calls if name != "trade_cal"] == []
 
 
-def test_sync_rejects_empty_open_market_partition(tmp_path: Path) -> None:
+def test_sync_treats_empty_open_market_partition_as_retryable(tmp_path: Path) -> None:
     config_path, payload = _config(tmp_path)
     layout = RuntimeLayout.from_config(payload, config_path=config_path)
 
@@ -115,16 +115,47 @@ def test_sync_rejects_empty_open_market_partition(tmp_path: Path) -> None:
                 return super().query(endpoint, **kwargs)
             return pd.DataFrame(columns=DATASET_FIELDS[endpoint].split(","))
 
-    try:
-        sync_data(
-            "2024-01-02",
-            "2024-01-02",
-            config_path=config_path,
-            layout=layout,
-            client=EmptyClient(),
-            datasets=("daily",),
-        )
-    except ValueError as exc:
-        assert "returned no rows" in str(exc)
-    else:  # pragma: no cover
-        raise AssertionError("empty partition unexpectedly accepted")
+    result = sync_data(
+        "2024-01-02",
+        "2024-01-02",
+        config_path=config_path,
+        layout=layout,
+        client=EmptyClient(),
+        datasets=("daily",),
+    )
+
+    assert result["status"] == "waiting"
+    assert result["reason"] == "provider_empty"
+    assert result["dataset"] == "daily"
+    assert result["trade_date"] == "2024-01-02"
+    assert result["completed_this_run"] == 0
+    assert result["remaining_partition_count"] == 1
+    checkpoint = json.loads(layout.checkpoint_path.read_text(encoding="utf-8"))
+    assert "daily/2024-01-02" not in checkpoint["partitions"]
+
+
+def test_sync_treats_empty_trade_calendar_as_retryable(tmp_path: Path) -> None:
+    config_path, payload = _config(tmp_path)
+    layout = RuntimeLayout.from_config(payload, config_path=config_path)
+
+    class EmptyCalendarClient(FixtureClient):
+        def query(self, endpoint: str, **kwargs) -> pd.DataFrame:
+            if endpoint == "trade_cal":
+                return pd.DataFrame(
+                    columns=["exchange", "cal_date", "is_open", "pretrade_date"]
+                )
+            return super().query(endpoint, **kwargs)
+
+    result = sync_data(
+        "2024-01-02",
+        "2024-01-02",
+        config_path=config_path,
+        layout=layout,
+        client=EmptyCalendarClient(),
+        datasets=("daily",),
+    )
+
+    assert result["status"] == "waiting"
+    assert result["reason"] == "provider_empty"
+    assert result["dataset"] == "trade_cal"
+    assert result["completed_this_run"] == 0

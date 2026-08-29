@@ -154,8 +154,20 @@ def test_dispatch_request_is_exact_and_deterministic() -> None:
         "--input",
         "-",
     )
+    assert request.command.stdin == canonical_json_bytes(
+        {
+            "ref": "5.0",
+            "return_run_details": True,
+            "inputs": {
+                "request_id": request.request_id,
+                "snapshot_b64": base64.b64encode(snapshot).decode("ascii"),
+                "snapshot_sha256": request.snapshot_sha256,
+            },
+        }
+    )
     body = json.loads(request.command.stdin)
     assert body["ref"] == "5.0"
+    assert body["return_run_details"] is True
     assert body["inputs"]["request_id"] == request.request_id
     assert body["inputs"]["snapshot_sha256"] == request.snapshot_sha256
     assert base64.b64decode(body["inputs"]["snapshot_b64"], validate=True) == snapshot

@@ -8,6 +8,7 @@ mtimes are never used as evidence of availability.
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
@@ -16,7 +17,9 @@ import math
 import os
 from pathlib import Path
 import re
-from typing import Any, Mapping, Sequence
+import threading
+import time
+from typing import Any, Iterator, Mapping, Sequence
 from uuid import uuid4
 
 import numpy as np
@@ -41,6 +44,8 @@ _SHA256 = re.compile(r"[0-9a-f]{64}")
 _SUPPLEMENT_DATASETS = ("akshare_hfq", "tushare_daily_basic")
 _PRICE_COLUMNS = ("open_hfq", "high_hfq", "low_hfq", "close_hfq")
 _BASIC_COLUMNS = ("pe_ttm", "pb")
+_BUNDLE_LOCKS_GUARD = threading.Lock()
+_BUNDLE_LOCKS: dict[str, threading.RLock] = {}
 
 
 class ProspectiveDataError(ValueError):
@@ -288,10 +293,14 @@ def _canonical_execution_calendar(
 def _write_verified(path: Path, payload: bytes) -> None:
     """Create one immutable file, accepting only an idempotent byte replay."""
 
+    parent_was_missing = not path.parent.exists()
     path.parent.mkdir(parents=True, exist_ok=True)
+    if parent_was_missing:
+        _fsync_directory(path.parent.parent)
     if path.exists():
         if not path.is_file() or path.read_bytes() != payload:
             raise ProspectiveDataError(f"content-address collision at {path}")
+        _fsync_directory(path.parent)
         return
     temporary = path.parent / f".pending-{os.getpid()}-{uuid4().hex}.tmp"
     try:
@@ -304,11 +313,140 @@ def _write_verified(path: Path, payload: bytes) -> None:
         except FileExistsError:
             if not path.is_file() or path.read_bytes() != payload:
                 raise ProspectiveDataError(f"content-address collision at {path}")
+        _fsync_directory(path.parent)
     finally:
         try:
             temporary.unlink()
         except FileNotFoundError:
             pass
+
+
+def _fsync_directory(directory: Path) -> None:
+    """Durably publish directory entries where the platform exposes a handle."""
+
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    try:
+        descriptor = os.open(directory, flags)
+    except OSError:
+        if os.name == "nt":
+            return
+        raise
+    try:
+        try:
+            os.fsync(descriptor)
+        except OSError:
+            if os.name != "nt":
+                raise
+    finally:
+        os.close(descriptor)
+
+
+def _now_utc() -> pd.Timestamp:
+    return pd.Timestamp(datetime.now(timezone.utc))
+
+
+def _publication_upper_bound(*minimums: pd.Timestamp) -> pd.Timestamp:
+    """Reserve a near-future whole-second bound for a durable commit.
+
+    A completion timestamp embedded in the file being committed cannot be
+    sampled after that same file is durable.  Reserving two seconds plus the
+    next whole-second boundary makes the recorded value an upper, rather than
+    lower, bound.  Callers must verify the reservation after their last
+    directory fsync.
+    """
+
+    reserved = (_now_utc() + pd.Timedelta(seconds=2)).ceil("s")
+    return max((reserved, *minimums))
+
+
+def _verify_publication_upper_bound(
+    completed_at: pd.Timestamp, *, label: str
+) -> None:
+    if _now_utc() > completed_at:
+        raise ProspectiveDataError(
+            f"{label} exceeded its reserved durable-publication upper bound"
+        )
+
+
+def _wait_through_publication_upper_bound(completed_at: pd.Timestamp) -> None:
+    """Do not return evidence while its conservative bound is still future."""
+
+    while True:
+        remaining = (completed_at - _now_utc()).total_seconds()
+        if remaining <= 0:
+            return
+        time.sleep(min(remaining, 0.05))
+
+
+def _remove_uncommitted_file(path: Path) -> None:
+    """Remove one file only while its bundle has no commit marker."""
+
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
+    _fsync_directory(path.parent)
+
+
+@contextmanager
+def _bundle_lock(
+    lock_path: Path, *, timeout_seconds: float = 60.0
+) -> Iterator[None]:
+    """Serialize one content-addressed bundle across threads and processes."""
+
+    parent_was_missing = not lock_path.parent.exists()
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    if parent_was_missing:
+        _fsync_directory(lock_path.parent.parent)
+    key = str(lock_path.resolve()).casefold()
+    with _BUNDLE_LOCKS_GUARD:
+        thread_lock = _BUNDLE_LOCKS.setdefault(key, threading.RLock())
+    with thread_lock:
+        descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+        try:
+            if os.fstat(descriptor).st_size == 0:
+                os.write(descriptor, b"\0")
+                os.fsync(descriptor)
+                _fsync_directory(lock_path.parent)
+            started = time.monotonic()
+            if os.name == "nt":
+                import msvcrt
+
+                while True:
+                    try:
+                        os.lseek(descriptor, 0, os.SEEK_SET)
+                        msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+                        break
+                    except OSError:
+                        if time.monotonic() - started >= timeout_seconds:
+                            raise TimeoutError(
+                                f"timed out acquiring bundle lock: {lock_path}"
+                            )
+                        time.sleep(0.05)
+                try:
+                    yield
+                finally:
+                    os.lseek(descriptor, 0, os.SEEK_SET)
+                    msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+            else:
+                import fcntl
+
+                while True:
+                    try:
+                        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        break
+                    except BlockingIOError:
+                        if time.monotonic() - started >= timeout_seconds:
+                            raise TimeoutError(
+                                f"timed out acquiring bundle lock: {lock_path}"
+                            )
+                        time.sleep(0.05)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(descriptor, fcntl.LOCK_UN)
+        finally:
+            os.close(descriptor)
 
 
 def _media_type(path: Path) -> str:
@@ -1433,6 +1571,7 @@ def build_prospective_input_snapshot(
     membership_snapshot_path: str | Path | None = None,
     _materialize: bool = True,
     _sealed_manifest: Mapping[str, Any] | None = None,
+    _sealed_build_completed_at_utc: str | pd.Timestamp | None = None,
 ) -> ProspectiveInputSnapshot:
     """Build and persist one deterministic, causally truncated signal snapshot.
 
@@ -1448,6 +1587,12 @@ def build_prospective_input_snapshot(
         if available_at_utc is not None
         else None
     )
+    if _sealed_build_completed_at_utc is not None and (
+        _sealed_manifest is None or _materialize
+    ):
+        raise ProspectiveDataError(
+            "sealed build completion is valid only for a pure sealed replay"
+        )
     sealed_inputs: list[Mapping[str, Any]] = []
     if _sealed_manifest is not None:
         raw_inputs = _sealed_manifest.get("inputs")
@@ -1640,6 +1785,10 @@ def build_prospective_input_snapshot(
     inputs_available = max(availability_values)
     if cap is not None and inputs_available > cap:
         raise ProspectiveDataError("snapshot inputs exceed requested availability cutoff")
+    if cap is None and inputs_available > _now_utc():
+        raise ProspectiveDataError(
+            "snapshot inputs claim availability after the build observation"
+        )
     rows = _frame_records(frame)
     rows_bytes = _canonical_json_bytes(rows)
     rows_sha = _sha256_bytes(rows_bytes)
@@ -1696,7 +1845,10 @@ def build_prospective_input_snapshot(
             "raw_and_calendar_availability": "checkpoint_completed_at_utc",
             "supplement_availability": "pre_activation_frozen_bridge",
             "membership_availability": membership_source["availability_basis"],
-            "build_completed_at": "non_authoritative_build_receipt_not_part_of_snapshot_hash",
+            "build_completed_at": (
+                "durable_bundle_publication_upper_bound_in_build_receipt;"
+                "not_part_of_source_snapshot_hash_but_bound_by_target_snapshot"
+            ),
             "deadline_enforcement": "caller_or_prospective_ledger",
             "note": (
                 "inputs_available_at_utc may be later than signal close; this module proves "
@@ -1744,6 +1896,22 @@ def build_prospective_input_snapshot(
         # rebuilding provenance.  A source mutation must be reported without
         # first creating a second, newly content-addressed bundle as a side
         # effect of an audit/read operation.
+        if _sealed_manifest is not None and _sealed_build_completed_at_utc is None:
+            raise ProspectiveDataError(
+                "pure sealed replay requires the verified build completion receipt"
+            )
+        replay_completed = (
+            inputs_available
+            if _sealed_build_completed_at_utc is None
+            else _utc_timestamp(
+                _sealed_build_completed_at_utc,
+                label="sealed build completed",
+            )
+        )
+        if replay_completed < inputs_available:
+            raise ProspectiveDataError(
+                "sealed build completion precedes maximum input availability"
+            )
         return ProspectiveInputSnapshot(
             signal_date=date.date().isoformat(),
             trade_date=next_trade.date().isoformat(),
@@ -1752,15 +1920,62 @@ def build_prospective_input_snapshot(
             manifest_path=manifest_path,
             rows_path=rows_path,
             build_receipt_path=receipt_path,
-            build_completed_at_utc=_utc_text(inputs_available),
+            build_completed_at_utc=_utc_text(replay_completed),
             inputs_available_at_utc=_utc_text(inputs_available),
             frame=frame,
             manifest=manifest,
         )
-    _write_verified(rows_path, rows_bytes)
-    _write_verified(manifest_path, manifest_bytes)
-    if not receipt_path.is_file():
-        built_at = pd.Timestamp(datetime.now(timezone.utc))
+    lock_path = directory.parent / f".{snapshot_sha}.lock"
+    with _bundle_lock(lock_path):
+        # A manifest is the sole commit marker.  Once it exists, no committed
+        # sidecar is ever removed.  This also preserves the first successful
+        # build receipt on an idempotent replay.
+        if manifest_path.is_file() and receipt_path.is_file():
+            loaded = _load_prospective_input_snapshot_files(directory)
+            if cap is None:
+                _wait_through_publication_upper_bound(
+                    _utc_timestamp(
+                        loaded.build_completed_at_utc,
+                        label="existing build completed",
+                    )
+                )
+            return loaded
+
+        # A process may have crashed after durably publishing the receipt but
+        # before the manifest.  Under the per-snapshot lock the receipt cannot
+        # belong to a still-running publisher, and without the commit marker it
+        # is safe to discard and reserve a new completion bound.
+        if receipt_path.is_file() and not manifest_path.is_file():
+            orphan = _load_json(receipt_path, label="uncommitted snapshot build receipt")
+            if (
+                set(orphan)
+                != {
+                    "schema_version",
+                    "snapshot_sha256",
+                    "build_completed_at_utc",
+                    "authoritative_for_snapshot_hash",
+                }
+                or type(orphan.get("schema_version")) is not int
+                or orphan.get("schema_version") != 1
+                or orphan.get("snapshot_sha256") != snapshot_sha
+                or orphan.get("authoritative_for_snapshot_hash") is not False
+                or receipt_path.read_bytes() != _canonical_json_bytes(orphan)
+            ):
+                raise ProspectiveDataError(
+                    "uncommitted snapshot build receipt is not a recoverable publisher artifact"
+                )
+            _utc_timestamp(
+                orphan.get("build_completed_at_utc"),
+                label="uncommitted build completed",
+            )
+            _remove_uncommitted_file(receipt_path)
+
+        # Normal publication order is rows -> receipt -> manifest.  Readiness
+        # therefore never mistakes a crash between sidecars for a committed,
+        # invalid candidate.
+        _write_verified(rows_path, rows_bytes)
+        publication_bound = _publication_upper_bound()
+        built_at = max(inputs_available, publication_bound)
         receipt = {
             "schema_version": 1,
             "snapshot_sha256": snapshot_sha,
@@ -1768,10 +1983,12 @@ def build_prospective_input_snapshot(
             "authoritative_for_snapshot_hash": False,
         }
         _write_verified(receipt_path, _canonical_json_bytes(receipt))
-    # Return only through the same strict loader used by later decisions.  In
-    # particular, an already-existing receipt must satisfy the full canonical
-    # schema rather than receiving a weaker fast-path check during rebuild.
-    return _load_prospective_input_snapshot_files(directory)
+        _write_verified(manifest_path, manifest_bytes)
+        _verify_publication_upper_bound(built_at, label="snapshot bundle")
+        _wait_through_publication_upper_bound(publication_bound)
+
+        # Return only through the same strict loader used by later decisions.
+        return _load_prospective_input_snapshot_files(directory)
 
 
 def _load_prospective_input_snapshot_files(path: str | Path) -> ProspectiveInputSnapshot:
@@ -1871,6 +2088,13 @@ def _load_prospective_input_snapshot_files(path: str | Path) -> ProspectiveInput
     ):
         raise ProspectiveDataError("snapshot build receipt binding mismatch")
     built = _utc_timestamp(receipt.get("build_completed_at_utc"), label="build completed")
+    inputs_available = _utc_timestamp(
+        manifest.get("inputs_available_at_utc"), label="inputs available"
+    )
+    if built < inputs_available:
+        raise ProspectiveDataError(
+            "snapshot build completion precedes its maximum input availability"
+        )
     return ProspectiveInputSnapshot(
         signal_date=str(manifest["signal_date"]),
         trade_date=str(manifest["official_trade_date"]),
@@ -1907,8 +2131,12 @@ def load_prospective_input_snapshot(path: str | Path) -> ProspectiveInputSnapsho
         available_at_utc=loaded.inputs_available_at_utc,
         _materialize=False,
         _sealed_manifest=loaded.manifest,
+        _sealed_build_completed_at_utc=loaded.build_completed_at_utc,
     )
-    if rebuilt.snapshot_sha256 != loaded.snapshot_sha256:
+    if (
+        rebuilt.snapshot_sha256 != loaded.snapshot_sha256
+        or rebuilt.build_completed_at_utc != loaded.build_completed_at_utc
+    ):
         raise ProspectiveDataError(
             "snapshot does not match an independent point-in-time source rebuild"
         )

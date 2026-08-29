@@ -5,12 +5,12 @@ Factor Lab 是一条本地、可复现的 A 股组合研究链：Parquet 数据 
 
 项目不再依赖 WebUI、Docker、PostgreSQL、MinIO、Dagster、Hermes 或自治 Agent。旧 Research OS 已完整归档在 Git tag `research-os-final-20260826`，不再进入当前主线。
 
-> 5.5 软件不改变 5.0 已冻结、由 5.2 协议完整定义的 `fixed_core_full` 研究方向；它新增
-> 零写入 readiness、月度 membership 的跨周期校验，以及仅限尚无 sealed decision 账本的
-> 跨版本运行控制。历史只负责确定这一条待检验假设，新的
+> 5.6 软件不改变 5.0 已冻结、由 5.2 协议完整定义的 `fixed_core_full` 研究方向；它修复
+> 5.5 在首轮 controller 演练中暴露的 deadlock，把 exact-as-of reference、artifact 构建、
+> decision admission 和 attestation 收敛为可恢复的机器动作链。历史只负责确定这一条待检验假设，新的
 > signal、targets、十个虚拟 sleeve、执行快照和 outcome 从 2026-08-21 之后开始不可回填地
-> 积累。confirmed outcome 达到预注册门槛前仍不能称为独立 OOS 验证。项目不连接券商、
-> 不下真实订单，也不保证未来收益。
+> 积累。截至 5.6 发布仍为 0 decision、0 outcome，没有新增盈利证据；confirmed outcome 达到
+> 预注册门槛前仍不能称为独立 OOS 验证。项目不连接券商、不下真实订单，也不保证未来收益。
 
 历史版本与当前未发布改动见 [CHANGELOG.md](CHANGELOG.md)。正式发布、Git tag 与 GitHub
 同步规则见 [RELEASING.md](RELEASING.md)。
@@ -30,8 +30,8 @@ python -m pip install -e ".[dev]"
 python -m pip install -e ".[data,dev]"
 ```
 
-5.5 的发布及其 canary 完成后的前瞻 decision、execution、outcome、replay 和 evaluate 必须
-使用项目内的专用运行环境 `runtime/environments/5.5`。该环境固定为当前发布主机的
+5.6 的发布及其 canary 完成后的前瞻 decision、execution、outcome、replay 和 evaluate 必须
+使用项目内的专用运行环境 `runtime/environments/5.6`。该环境固定为当前发布主机的
 CPython 3.10.16，并从
 `protocols/5.2-runtime-lock.txt` 与项目内 wheelhouse 按逐文件 SHA-256 离线安装；随后用
 同一 lock 中的项目 wheel 安装 Factor Lab 本身。不要使用 editable install，也不要让系统
@@ -39,14 +39,14 @@ Python 或用户级 site-packages 参与前瞻证据：
 
 ```powershell
 $factorLabPython = (Resolve-Path `
-  "runtime/environments/5.5/Scripts/python.exe").Path
+  "runtime/environments/5.6/Scripts/python.exe").Path
 $wheelhouse = (Resolve-Path `
-  "runtime/environments/5.5/wheelhouse").Path
+  "runtime/environments/5.6/wheelhouse").Path
 
 & $factorLabPython -m pip install --no-index --find-links $wheelhouse `
   --require-hashes -r protocols/5.2-runtime-lock.txt
 & $factorLabPython -c `
-  "import factor_lab; assert factor_lab.__version__ == '5.5.0'"
+  "import factor_lab; assert factor_lab.__version__ == '5.6.0'"
 ```
 
 下文的 `python -m factor_lab.cli prospective ...` 表示应由 `$factorLabPython` 执行；发布
@@ -115,32 +115,51 @@ python -m factor_lab.cli prospective upgrade `
 python -m factor_lab.cli prospective attest `
   --purpose implementation_upgrade_canary --release-tag 5.0
 
-# 5.5 tag 与 GitHub 同步后，仅在仍为 0 decision 时追加单调实现升级并见证 canary
+# 已完成的 5.5 历史步骤；正式账本中的实现升级与 canary receipt 不可改写
 python -m factor_lab.cli prospective upgrade `
   --manifest protocols/5.2-target-generator.json --release-tag 5.5
 python -m factor_lab.cli prospective attest `
   --purpose implementation_upgrade_canary --release-tag 5.0
 
+# 5.6 tag 与 GitHub 同步后，仅在仍为 0 decision、0 outcome 时追加纠错升级并见证 canary
+python -m factor_lab.cli prospective upgrade `
+  --manifest protocols/5.2-target-generator.json --release-tag 5.6
+python -m factor_lab.cli prospective attest `
+  --purpose implementation_upgrade_canary --release-tag 5.0
+
 # 严格只读：不创建 membership、input、cache 或 ledger record
 python -m factor_lab.cli prospective readiness
-# 退出码：0 ready、2 waiting、3 blocked、4 terminal；只能执行 JSON 的 next_action。
+# 退出码：0 ready、2 waiting、3 blocked、4 terminal；只能执行 JSON 的 action.argv。
 # --observed-at-utc 只用于确定性诊断，不会把调用者时间变成可信时间证据。
 
-# 为 signal 的“下一官方交易日所在月份”生成 Top500；input 不会隐式选择“最新”快照
-# 2026-08-31 的下一官方交易日在 9 月，因此首条 signal 就必须显式绑定 2026-09 membership
-# 必须从 2026-08-22 续接冻结日历；只从 2026-08-31 开始无法证明完整 60-session 窗口
-python -m factor_lab.cli data sync --from 2026-08-22 --to 2026-08-31 `
-  --calendar-to 2026-09-30 --resume
-$membershipSnapshot = python -m factor_lab.cli prospective membership `
-  --month 2026-09 | ConvertFrom-Json
-python -m factor_lab.cli prospective input --signal-date 2026-08-31 `
-  --membership-snapshot $($membershipSnapshot.membership_path)
-
-# 对上一步 JSON 返回的 directory 生成 create-only 计划，再封存并见证 decision
-python -m factor_lab.cli prospective plan --input <input-snapshot-directory>
-python -m factor_lab.cli prospective seal --plan <stored-plan-path>
-python -m factor_lab.cli prospective attest --purpose decision_anchor --release-tag 5.0 `
-  --decision-record-sha256 <decision-sha> --admission-deadline-utc <deadline-utc>
+# 首轮只按 readiness 的机器动作推进；每一步完成后重新观察，不手工拼接或修正参数。
+# 一次 controller 运行最多推进六步；provider 暂未就绪时保留现状，下一次从当前阶段续跑。
+for ($step = 0; $step -lt 6; $step++) {
+  $readinessJson = & $factorLabPython -m factor_lab.cli prospective readiness
+  $readinessExit = $LASTEXITCODE
+  if ($readinessExit -eq 2) {
+    break
+  }
+  if ($readinessExit -ne 0) {
+    throw "prospective readiness blocked or terminal: exit $readinessExit"
+  }
+  $readiness = $readinessJson | ConvertFrom-Json
+  if (-not $readiness.ready -or -not $readiness.action.argv) {
+    throw "ready response lacks an executable action"
+  }
+  $actionArgv = @($readiness.action.argv)
+  & $factorLabPython -m factor_lab.cli @actionArgv
+  $actionExit = $LASTEXITCODE
+  if ($actionExit -eq 2) {
+    break
+  }
+  if ($actionExit -ne 0) {
+    throw "$($readiness.action.command) failed: exit $actionExit"
+  }
+}
+# 正常首轮路径为：data sync → data reference → membership → input → resumable admit → attest。
+# record 已提交但 snapshot 发布中断时会先出现 repair-snapshots；deadline 后只会出现已有
+# dispatch 证据的 attestation recovery，不会新派发远端运行。
 
 # i+11 行情到齐后再抓覆盖整个持有期的停复牌快照，只能从 decision 哈希重建执行和结算
 python -m factor_lab.cli data suspensions --from 2017-01-01 --to 2026-09-15 --no-resume
@@ -152,10 +171,26 @@ python -m factor_lab.cli prospective audit
 python -m factor_lab.cli prospective evaluate
 ```
 
-readiness 按当前阶段依次检查 `membership_build`、`input_build` 和 `decision_admission`；已有
-artifact 必须通过完整不可变源重放，最终 admission 还必须在 active 发布胶囊中重放 target
-generator。`ready` 只表示对应 `next_action` 可以尝试，不表示 builder 必然成功、decision 已
-封存、独立 OOS 已验证或收益已确认。
+readiness 先从原始数据层给出 `data sync` 或 exact-date `data reference`，再依次进入
+`membership_build`、`input_build`、`decision_admission` 和 `awaiting_receipt`。reference 不允许
+回退到前一交易日：同一 as-of 必须至少两次独立全量采样 canonical 一致、覆盖该日完整 daily
+universe，并绑定该 daily 分区的 SHA-256 与 ticker count。已有 artifact 必须通过完整不可变源
+重放，最终 admission 还必须在 active 发布胶囊中重放 target generator；单一
+`prospective admit` action 完成 plan、create-only store 与 ledger seal，避免 controller 在 plan
+和 seal 之间拆分推进。进入 `awaiting_receipt` 后，readiness 才返回包含完整 snapshot、decision
+hash 与 deadline 参数的 `prospective attest`。`ready` 只表示对应 `action.argv` 可以尝试，不表示
+provider/builder 必然成功、decision 已见证、独立 OOS 已验证或收益已确认。
+
+日历/checkpoint 缺失或 horizon 不足时也会返回带精确 `--calendar-to` 的 `data sync` action；
+尚不能推导 candidate 时只同步最近最多 31 个已完成自然日，并把日历预存到未来 62 日所在月末。
+供应商暂时返回空 calendar/partition 时该 action 输出 `waiting` 并以 2 退出，controller 保留已完成
+checkpoint，下一轮继续 resume，而不是把短暂数据空窗当作永久错误。
+
+异常恢复也是机器合同的一部分：若 ledger record 已提交而 snapshot 尚未发布，readiness 只开放
+`prospective repair-snapshots`，从已验证 record prefix 确定性重建；若 attestation 在 deadline 前
+已有本地 binding，或存在 deadline 前 intent 且仍在 24 小时恢复窗内，deadline 后只允许继续
+reconcile/poll，绝不创建新 dispatch。远端可见性宽限是有界的，系统不声称分布式 exactly-once；
+重复匹配会 fail closed，而不是任选一个 run。
 
 首次通过 canary 的可信 TLog 会永久建立 prospective epoch；后续纠错版本不会重设首个 signal。
 如果 active 纠错 canary 已晚于这个固定 signal 的收盘，readiness 会 terminal，而不是静默跳到
@@ -169,7 +204,7 @@ generator。`ready` 只表示对应 `next_action` 可以尝试，不表示 build
 自然月末只用于证明日历完整覆盖。构建完成与全部输入可用时间仍必须早于该 decision 的
 pretrade deadline；`input` 与 readiness 会通过封存 CAS 重放验证这些边界并 fail-closed。
 
-## 当前主线：5.2 前瞻执行闭环
+## 当前主线：5.x 前瞻执行闭环（协议自 5.2 冻结，当前实现 5.6）
 
 5.0 不再让一组高度相关的价值信号做 hard switch。系统固定保留 4.1 事后观察到最稳健的
 70% 防御价值核心，同时把两个可能增加复杂度的机制隔离成挑战者：市场风险覆盖层和因果
@@ -179,9 +214,9 @@ gate 和三分支路由；看到结果后不能改阈值、挑最好相位或重
 权威运行 `88009f1e5309b268` 建立 40 个连续独立成本影子账户和 50 个从
 `2018-09-03` 以 5000 万现金、空仓开始的 fresh equal-AUM 账户。40/40 影子与 50/50
 评分账户通过状态、目标 cohort、完整逐日 NAV、执行输入、容量、未来输入和期末复利对账；
-feedback/overlay 未来违规均为 0。该运行只用于提交前审计，不能成为发布权威；正式身份只
-认 clean `5.0` tag target 上的完整运行，并由 activation record 同时绑定 run fingerprint、
-manifest、adaptive summary 与重算路由，避免在 tracked 文档里预填一个循环失效的 run id。
+feedback/overlay 未来违规均为 0。它最初由发布前审计生成，随后由 clean `5.0` tag target 和
+正式 activation record 共同绑定为权威身份；权威性来自 tag、run fingerprint、manifest、
+adaptive summary 与重算路由的逐值一致，而不是 README 中的 run id 文本。
 
 冻结 gate 全部拒绝新增复杂度，历史路由为 `fixed_core_full`：
 
@@ -329,7 +364,7 @@ runtime/prospective/5.0/
 
 ```powershell
 $factorLabPython = (Resolve-Path `
-  "runtime/environments/5.5/Scripts/python.exe").Path
+  "runtime/environments/5.6/Scripts/python.exe").Path
 $localTestRun = "local-" + [guid]::NewGuid().ToString("N")
 & $factorLabPython -m pytest tests/unit tests/data tests/integration -q `
   --basetemp "runtime/test-tmp/$localTestRun" -p no:cacheprovider

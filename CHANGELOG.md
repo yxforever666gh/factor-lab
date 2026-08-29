@@ -10,6 +10,80 @@
 
 ## [Unreleased]
 
+## [5.6] - 2026-08-29
+
+### Added
+
+- 新增 raw-only `data reference --trade-date <exact-as-of>` 捕获路径。它不允许向前一交易日
+  fallback；同一官方 as-of 至少两次独立全量采样必须 canonical 一致，且 reference ticker
+  集合必须覆盖该日完整 daily universe。发布的 reference checkpoint 同时绑定 daily
+  partition SHA-256、ticker count、采样合同和 immutable source artifact，任一缺失、漂移或
+  部分 universe 都 fail closed。
+- readiness 的下一步升级为稳定机器合同：每个可运行阶段同时返回 `action.command`、结构化
+  `action.arguments` 和可直接传给 CLI 的 `action.argv`。首轮因果链固定为 `data sync` →
+  `data reference` → `prospective membership` → `prospective input` → `prospective admit` →
+  `prospective attest`；controller 不再根据人类说明猜参数或跳步。
+- 新增单一 `prospective admit --input` 准入 action，在一次 controller 动作中完成 target plan
+  构造、create-only plan store 和 ledger seal。它取代首轮运行手册中可被拆开的 `plan`/`seal`
+  两步，重复调用仍由内容身份与单调账本约束。
+- 权威账本进入 `awaiting_receipt` 时，readiness 现在返回 `attest_decision` ready action，并逐值
+  携带 snapshot、purpose、activation release tag、decision hash 和 admission deadline。deadline
+  前走正常见证路径；deadline 后只允许恢复已持久化 binding，或在 24 小时窗口内 reconcile
+  deadline 前的 intent，绝不新建 dispatch；没有这些先存证据才进入 terminal。
+- 新增 `prospective repair-snapshots`：如果 ledger record 已耐久追加而对应 snapshot 尚未发布，
+  readiness 返回这一确定性修复动作；它只从已验证 record prefix 重建精确 snapshot，遇到多余、
+  错配或无效 snapshot 一律拒绝修复。
+
+### Changed
+
+- 5.6 是 5.5 首轮 controller 演练暴露问题后的同方向纠错版本：5.0/5.2 冻结的
+  `fixed_core_full`、首个 signal、目标生成器、十个 sleeve 与预注册评价门槛均不改变。
+- attestation dispatch 在本地 request lock 内先持久化确定性 intent，并优先按
+  `prospective-<request-id>` 查询远端 workflow run；dispatch API 显式请求返回 run details，并把
+  run id 立刻绑定到本地。已有 binding/receipt 的恢复不会再次 dispatch；缺失 binding 的 intent
+  最多做 5 次、间隔 30 秒的远端 reconcile。这个有界协议不宣称跨主机 exactly-once：deadline 前
+  若远端可见性异常超过宽限期，补发仍可能形成重复候选，后续会因多个匹配 run fail closed；
+  deadline 后则只恢复、不补发。远端 identity 漂移或调用者提供冲突 run id 同样 fail closed。
+
+### Fixed
+
+- 修复 5.5 首轮 controller deadlock：零写 readiness 能指出 daily/reference 不完整，却没有提供
+  可执行的 raw capture action；strict membership 又拒绝缺失的 exact reference，因此 controller
+  无法在 deadline 前因果推进。5.6 把 raw observer 和 authoritative ledger observer 串成上述
+  action chain，同时保持观察本身零写入。
+- 修复 raw checkpoint 的 lost-update 竞争：calendar、daily namespaces 和 exact reference 分别在
+  对应锁内重新加载最新 checkpoint，再原子发布合并结果；并发 writer 已完成的其他日期、数据集和
+  calendar 不会被旧内存视图覆盖。相同分区/reference 的并发结果只在逐字节身份与完整验证通过时
+  幂等复用，否则明确报冲突。
+- exact reference 在同时持有 raw/reference checkpoint 锁时重新核对真实 as-of daily 分区；daily
+  SHA 或 ticker count 在采样期间变化就不发布 reference。membership builder 也逐值比对 checkpoint
+  中绑定的 daily SHA/count 与 immutable as-of daily source，禁止把旧 reference 配到新 daily。
+- 修复 artifact availability 倒置：membership 和 input 的完成时间现在是各自 sidecar 与 commit
+  marker 完成原子发布、目录耐久化之后的保守上界，发布者等待该上界后才返回。membership 以
+  manifest-last 提交；input 以 rows → build receipt → manifest-last 提交，崩溃遗留的未提交 receipt
+  只能在同一 snapshot 锁内验证并清理。真实 `build_completed_at_utc` 被 target snapshot、execution
+  与 attestation 输入绑定，不再用 `inputs_available_at_utc` 冒充构建完成时间。
+- 修复 ledger record 已提交、snapshot 尚未提交时永久阻塞的问题；readiness 现在只在唯一的
+  `missing_snapshot` 证据形态下开放确定性修复。`seal_decision` 的默认记录时间也移到 ledger lock
+  内采样，避免等待锁跨过 admission deadline 后仍携带过早时间。
+- 修复 deadline 后一刀切 terminal 导致合法远端 run 无法回收的问题：deadline 前 intent/run 可以
+  按上述 recovery-only 合同完成见证；无先存 dispatch 证据时 runtime 在 deadline 后拒绝网络派发。
+- 修复 readiness 把 input manifest 中合法有限浮点误当成账本非法浮点的问题。input manifest 仍须
+  canonical 且拒绝 NaN/Infinity；权威 ledger record/snapshot 继续执行无浮点合同。
+- readiness 现在核对 reference checkpoint 的 ticker count 与 Parquet 行数/唯一 ticker 数一致；
+  自动生成的 market sync argv 也显式列出 `daily`、`daily_basic`、`adj_factor`，不再依赖配置默认值。
+- 修复官方日历缺失/跨度不足、行情分区本身齐全时 controller 无动作可执行的问题；readiness 现在
+  返回精确 `--calendar-to` 的同步 argv。尚无法推导 candidate 时只回看最多 31 个已完成自然日，
+  并把日历扩展到未来 62 日所在月末；已知冻结桥接前缀有缺口时则从首个缺失日开始。`data sync`
+  遇到 provider 暂时返回空 calendar/partition 时返回结构化 `waiting` 和退出码 2，保留已完成
+  checkpoint 供下次 resume，而不是把可重试状态升级成永久失败。
+
+### Known limitations
+
+- 5.6 发布时 prospective ledger 仍为 0 decision、0 outcome；这些控制器、并发和证据合同修复
+  没有产生新的市场结果，也没有新增盈利证据。`ready` 与工程测试通过仍不等于独立 OOS 验证、
+  策略收益确认或实盘就绪。
+
 ## [5.5] - 2026-08-29
 
 ### Added
@@ -621,6 +695,7 @@
   移除这些实验层。
 
 [Unreleased]: https://github.com/yxforever666gh/factor-lab/commits/main
+[5.6]: https://github.com/yxforever666gh/factor-lab/tree/5.6
 [5.5]: https://github.com/yxforever666gh/factor-lab/tree/5.5
 [5.4]: https://github.com/yxforever666gh/factor-lab/tree/5.4
 [5.3]: https://github.com/yxforever666gh/factor-lab/tree/5.3

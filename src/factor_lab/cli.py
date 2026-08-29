@@ -18,6 +18,7 @@ from factor_lab.data import (
     plan_feature_store_migration,
     sync_data,
     sync_enrichment,
+    sync_exact_reference,
     sync_suspensions,
 )
 from factor_lab.research.runner import latest_run, run_research
@@ -46,6 +47,7 @@ from factor_lab.prospective_ledger import (
     implementation_transition_status,
     ledger_status,
     prospective_readiness,
+    repair_snapshots,
     seal_decision,
     sha256_file,
     store_decision_plan,
@@ -118,6 +120,12 @@ def build_parser() -> argparse.ArgumentParser:
     sync.add_argument("--resume", action=argparse.BooleanOptionalAction, default=True)
     sync.add_argument("--dataset", action="append", dest="datasets")
     sync.add_argument("--max-partitions", type=int)
+
+    reference = data_commands.add_parser(
+        "reference",
+        help="Capture one stable exact-as-of raw bak_basic reference partition.",
+    )
+    reference.add_argument("--trade-date", required=True)
 
     suspensions = data_commands.add_parser(
         "suspensions", help="Synchronize Tushare daily suspension/resumption events."
@@ -209,7 +217,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("protocols/5.2-target-generator.json"),
     )
-    upgrade.add_argument("--release-tag", default="5.5")
+    upgrade.add_argument("--release-tag", default="5.6")
     abandon_upgrade = prospective_commands.add_parser(
         "abandon-upgrade",
         help="Explicitly abandon an unattested implementation upgrade.",
@@ -239,6 +247,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Content-addressed signal snapshot directory (or its manifest.json).",
     )
     plan.add_argument("--output", type=Path)
+    admit = prospective_commands.add_parser(
+        "admit",
+        help="Build, store, and seal one generated decision before its deadline.",
+    )
+    admit.add_argument(
+        "--input",
+        type=Path,
+        required=True,
+        help="Content-addressed signal snapshot directory (or its manifest.json).",
+    )
     seal = prospective_commands.add_parser(
         "seal", help="Append a pre-deadline decision from a canonical plan."
     )
@@ -285,6 +303,10 @@ def build_parser() -> argparse.ArgumentParser:
     attest.add_argument("--admission-deadline-utc")
     attest.add_argument("--repository", default=DEFAULT_REPOSITORY)
     prospective_commands.add_parser("audit", help="Verify every record and snapshot.")
+    prospective_commands.add_parser(
+        "repair-snapshots",
+        help="Create only deterministic snapshots missing after a ledger append crash.",
+    )
     prospective_commands.add_parser(
         "evaluate", help="Evaluate confirmed outcomes against the preregistered 5.2 gates."
     )
@@ -336,7 +358,34 @@ def _data_command(arguments: argparse.Namespace) -> int:
             max_partitions=arguments.max_partitions,
         )
         _json(result)
-        return 0 if result.get("status") in {"complete", "partial"} else 1
+        status = str(result.get("status") or "")
+        if status in {"complete", "partial"}:
+            return 0
+        if status == "waiting":
+            return 2
+        if status == "blocked":
+            return 3
+        return 1
+    if arguments.data_command == "reference":
+        try:
+            result = sync_exact_reference(
+                arguments.trade_date,
+                config_path=config_path,
+                layout=layout,
+            )
+        except ValueError as exc:
+            result = {
+                "schema_version": 1,
+                "status": "blocked",
+                "reason": "reference_evidence_invalid",
+                "error": str(exc),
+            }
+        _json(result)
+        return {
+            "complete": 0,
+            "waiting": 2,
+            "blocked": 3,
+        }.get(str(result.get("status")), 1)
     if arguments.data_command == "suspensions":
         result = sync_suspensions(
             arguments.start_date,
@@ -913,6 +962,29 @@ def _prospective_command(arguments: argparse.Namespace) -> int:
             stored["requested_output_created"] = created
         _json({"plan": plan, "stored": stored})
         return 0
+    if command == "admit":
+        plan = build_decision_plan(
+            ledger_root,
+            source_data_snapshot_sha256=_signal_snapshot_sha256(arguments.input),
+        )
+        stored = store_decision_plan(ledger_root, plan)
+        decision = seal_decision(ledger_root, Path(stored["path"]).resolve())
+        _json(
+            {
+                "status": "sealed_pending_attestation",
+                "plan": plan,
+                "stored": stored,
+                "decision": decision,
+                "attestation": {
+                    "snapshot": decision["snapshot"]["path"],
+                    "purpose": "decision_anchor",
+                    "release_tag": decision["snapshot"]["snapshot"]["release_tag"],
+                    "decision_record_sha256": decision["record_sha256"],
+                    "admission_deadline_utc": plan["admission_deadline_utc"],
+                },
+            }
+        )
+        return 0
     if command == "seal":
         _json(seal_decision(ledger_root, arguments.plan.resolve()))
         return 0
@@ -1007,6 +1079,9 @@ def _prospective_command(arguments: argparse.Namespace) -> int:
         audit = audit_ledger(ledger_root)
         _json(audit)
         return 0 if audit.get("valid") else 1
+    if command == "repair-snapshots":
+        _json(repair_snapshots(ledger_root))
+        return 0
     if command == "evaluate":
         _json(checkpoint_evaluation(ledger_root))
         return 0

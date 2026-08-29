@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 from pathlib import Path
+import threading
+import time
 from typing import Any
 
 import pandas as pd
 import pytest
 
 from factor_lab.data.catalog import sha256_file
+from factor_lab.data import prospective, prospective_membership
 from factor_lab.data.prospective import ProspectiveDataError, _membership_source
 from factor_lab.data.prospective_membership import (
     EXPECTED_MEMBERSHIP_SIZE,
@@ -17,6 +21,10 @@ from factor_lab.data.prospective_membership import (
     ProspectiveMembershipError,
     build_prospective_membership_snapshot,
     load_prospective_membership_snapshot,
+)
+from factor_lab.data.sources import (
+    ENRICHMENT_DATASET_FIELDS,
+    EXACT_REFERENCE_CONTRACT_ID,
 )
 
 
@@ -248,7 +256,49 @@ def _write_sources(
         encoding="utf-8",
     )
     reference_tickers = [*original, twenty_day, nineteen_day]
-    return FakeClient(_reference(reference_tickers))
+    reference = _reference(reference_tickers)
+    reference["source_trade_date"] = reference["trade_date"]
+    reference_path = (
+        root
+        / "runtime/data/raw/bak_basic/trade_date=2026-08-31/part-000.parquet"
+    )
+    reference_path.parent.mkdir(parents=True, exist_ok=True)
+    reference.to_parquet(reference_path, index=False)
+    daily_entry = partitions["daily/2026-08-31"]
+    reference_entry = {
+        "status": "complete",
+        "dataset": "bak_basic",
+        "trade_date": "2026-08-31",
+        "request_trade_date": "2026-08-31",
+        "source_trade_date": "2026-08-31",
+        "capture_contract_id": EXACT_REFERENCE_CONTRACT_ID,
+        "capture_mode": "exact_only",
+        "fallback_used": False,
+        "fields": ENRICHMENT_DATASET_FIELDS["bak_basic"],
+        "path": str(reference_path.resolve()),
+        "row_count": len(reference),
+        "size_bytes": reference_path.stat().st_size,
+        "sha256": sha256_file(reference_path),
+        "completed_at_utc": "2026-08-31T15:30:00Z",
+        "exact_source_required": True,
+        "stability_sample_count": 2,
+        "daily_partition_sha256": daily_entry["sha256"],
+        "daily_ticker_count": daily_entry["row_count"],
+        "covered_ticker_count": daily_entry["row_count"],
+        "reference_ticker_count": len(reference),
+    }
+    (root / "runtime/data/raw/enrichment-checkpoint.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "partitions": {
+                    "bak_basic/trade_date=2026-08-31": reference_entry
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    return FakeClient(reference)
 
 
 def test_build_freezes_causal_top500_tie_units_and_separate_eligibility(
@@ -288,7 +338,7 @@ def test_build_freezes_causal_top500_tie_units_and_separate_eligibility(
     assert not bool(frame.loc["000003.SZ", "eligible"])
     assert frame.loc["000003.SZ", "eligibility_reason"] == "delisted_at_as_of"
     assert len(frame) == 500  # ineligible members were not replaced
-    assert client.calls[0][1]["trade_date"] == "20260831"
+    assert client.calls == []
     assert result.manifest["liquidity_window_end"] == "2026-08-31"
     assert result.manifest["historical_equivalence_claimed"] is False
     assert not any(
@@ -304,6 +354,85 @@ def test_build_freezes_causal_top500_tie_units_and_separate_eligibility(
     )
     assert len(accepted) == EXPECTED_MEMBERSHIP_SIZE
     assert source["kind"] == "content_addressed_monthly_snapshot"
+
+
+def test_null_cutoff_membership_publish_is_durable_manifest_last_and_immediately_visible(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _write_sources(tmp_path)
+    monotonic_start = time.monotonic()
+    witnessed_start = pd.Timestamp("2026-09-01T02:00:00Z")
+
+    def witnessed_now() -> pd.Timestamp:
+        return witnessed_start + pd.Timedelta(
+            seconds=time.monotonic() - monotonic_start
+        )
+
+    monkeypatch.setattr(prospective, "_now_utc", witnessed_now)
+    monkeypatch.setattr(prospective_membership, "_now_utc", witnessed_now)
+    original = prospective_membership._write_verified
+    publication_order: list[str] = []
+
+    def record(path: Path, payload: bytes) -> None:
+        if (
+            path.parent.parent.name == "2026-09"
+            and path.parent.parent.parent.name == "membership"
+        ):
+            publication_order.append(path.name)
+        original(path, payload)
+
+    monkeypatch.setattr(prospective_membership, "_write_verified", record)
+    result = build_prospective_membership_snapshot(
+        tmp_path,
+        "2026-09",
+        available_at_utc=None,
+    )
+
+    assert publication_order[-4:] == [
+        "membership.parquet",
+        "bak-basic-raw.json",
+        "source-contract.json",
+        "manifest.json",
+    ]
+    assert pd.Timestamp(result.completed_at_utc) <= witnessed_now()
+    assert load_prospective_membership_snapshot(
+        result.membership_path,
+        project_root=tmp_path,
+        available_at_utc=witnessed_now(),
+    ).artifact_sha256 == result.artifact_sha256
+
+
+def test_concurrent_membership_publishers_share_one_manifest(tmp_path: Path) -> None:
+    _write_sources(tmp_path)
+    barrier = threading.Barrier(2)
+
+    def build() -> str:
+        barrier.wait(timeout=10)
+        return build_prospective_membership_snapshot(
+            tmp_path,
+            "2026-09",
+            available_at_utc=AVAILABLE_AT,
+        ).completed_at_utc
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first_future = pool.submit(build)
+        second_future = pool.submit(build)
+        first = first_future.result(timeout=90)
+        second = second_future.result(timeout=90)
+
+    assert first == second
+    candidates = [
+        path
+        for path in (
+            tmp_path / "runtime/prospective/5.0/membership/2026-09"
+        ).iterdir()
+        if path.is_dir()
+    ]
+    assert len(candidates) == 1
+    assert load_prospective_membership_snapshot(
+        candidates[0], project_root=tmp_path, available_at_utc=AVAILABLE_AT
+    ).completed_at_utc == first
 
 
 def test_loader_independently_rebuilds_and_build_is_idempotent(tmp_path: Path) -> None:
@@ -430,9 +559,24 @@ def test_provider_reference_must_cover_the_full_asof_daily_universe(
     client = _write_sources(tmp_path)
     # This low-liquidity name is not selected into the Top-500, so the old
     # selected-only 99% check would not notice its absence.
-    client.reference = client.reference.loc[
+    incomplete = client.reference.loc[
         client.reference["ts_code"].ne("000510.SZ")
     ].copy()
+    path = (
+        tmp_path
+        / "runtime/data/raw/bak_basic/trade_date=2026-08-31/part-000.parquet"
+    )
+    incomplete.to_parquet(path, index=False)
+    checkpoint_path = tmp_path / "runtime/data/raw/enrichment-checkpoint.json"
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    entry = checkpoint["partitions"]["bak_basic/trade_date=2026-08-31"]
+    entry.update(
+        row_count=len(incomplete),
+        size_bytes=path.stat().st_size,
+        sha256=sha256_file(path),
+        reference_ticker_count=len(incomplete),
+    )
+    checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
 
     with pytest.raises(ProspectiveMembershipError, match="provider-universe coverage"):
         build_prospective_membership_snapshot(
@@ -441,6 +585,44 @@ def test_provider_reference_must_cover_the_full_asof_daily_universe(
             client=client,
             available_at_utc=AVAILABLE_AT,
         )
+
+
+@pytest.mark.parametrize(
+    "binding",
+    ["daily_partition_sha256", "daily_ticker_count"],
+    ids=("daily-sha", "daily-ticker-count"),
+)
+def test_build_rejects_reference_binding_that_differs_from_asof_daily(
+    tmp_path: Path,
+    binding: str,
+) -> None:
+    _write_sources(tmp_path)
+    checkpoint_path = tmp_path / "runtime/data/raw/enrichment-checkpoint.json"
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    entry = checkpoint["partitions"]["bak_basic/trade_date=2026-08-31"]
+    if binding == "daily_partition_sha256":
+        observed_sha = str(entry[binding])
+        replacement = "0" if observed_sha[0] != "0" else "1"
+        entry[binding] = replacement + observed_sha[1:]
+    else:
+        wrong_count = int(entry[binding]) + 1
+        entry[binding] = wrong_count
+        entry["covered_ticker_count"] = wrong_count
+    checkpoint_path.write_text(json.dumps(checkpoint), encoding="utf-8")
+
+    with pytest.raises(
+        ProspectiveMembershipError,
+        match="daily-universe binding differs from exact source bytes",
+    ):
+        build_prospective_membership_snapshot(
+            tmp_path,
+            "2026-09",
+            available_at_utc=AVAILABLE_AT,
+        )
+
+    assert not (
+        tmp_path / "runtime/prospective/5.0/membership/2026-09"
+    ).exists()
 
 
 def test_sealed_membership_replays_every_monthly_source_cas(tmp_path: Path) -> None:
@@ -557,32 +739,10 @@ def test_build_rejects_source_unavailable_by_cutoff(tmp_path: Path) -> None:
 def test_checkpointed_reference_replays_from_cas_after_checkpoint_mutation(
     tmp_path: Path,
 ) -> None:
-    client = _write_sources(tmp_path)
-    path = (
-        tmp_path / "runtime/data/raw/bak_basic/trade_date=2026-08-31/part-000.parquet"
-    )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    client.reference.to_parquet(path, index=False)
-    entry = {
-        "status": "complete",
-        "dataset": "bak_basic",
-        "trade_date": "2026-08-31",
-        "path": str(path.resolve()),
-        "row_count": len(client.reference),
-        "size_bytes": path.stat().st_size,
-        "sha256": sha256_file(path),
-        "completed_at_utc": "2026-08-31T15:30:00Z",
-    }
+    _write_sources(tmp_path)
     checkpoint_path = tmp_path / "runtime/data/raw/enrichment-checkpoint.json"
-    checkpoint_path.write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "partitions": {"bak_basic/trade_date=2026-08-31": entry},
-            }
-        ),
-        encoding="utf-8",
-    )
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    entry = dict(checkpoint["partitions"]["bak_basic/trade_date=2026-08-31"])
     result = build_prospective_membership_snapshot(
         tmp_path, "2026-09", available_at_utc=AVAILABLE_AT
     )
@@ -594,13 +754,9 @@ def test_checkpointed_reference_replays_from_cas_after_checkpoint_mutation(
     assert reference_source["kind"] == "checkpointed_bak_basic"
 
     entry["completed_at_utc"] = "2026-08-31T15:29:59Z"
+    checkpoint["partitions"]["bak_basic/trade_date=2026-08-31"] = entry
     checkpoint_path.write_text(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "partitions": {"bak_basic/trade_date=2026-08-31": entry},
-            }
-        ),
+        json.dumps(checkpoint),
         encoding="utf-8",
     )
     loaded = load_prospective_membership_snapshot(

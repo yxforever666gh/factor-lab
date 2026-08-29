@@ -242,12 +242,13 @@ def _verify_generation_input_binding(
             target_rows_sha256=source.target_rows_sha256,
             input_sources_sha256=source.input_sources_sha256,
             membership_artifact_sha256=source.membership_artifact_sha256,
-            # The build receipt is deliberately non-authoritative and is not
-            # part of the source snapshot hash.  Only checkpointed input
-            # availability may enter the sealed target-input identity.
-            source_build_checkpoint_utc=source.inputs_available_at_utc,
+            # The source manifest remains content-addressed independently of
+            # its receipt, but the target snapshot must hash the durable build
+            # boundary.  Otherwise a bundle published after the admission
+            # deadline could replay as if only its earlier inputs mattered.
+            source_build_checkpoint_utc=source.build_completed_at_utc,
             max_available_at_utc=source.inputs_available_at_utc,
-            information_cutoff_utc=source.inputs_available_at_utc,
+            information_cutoff_utc=source.build_completed_at_utc,
             signal_close_utc=_signal_close(source.signal_date),
             admission_deadline_utc=deadline,
         )
@@ -1648,8 +1649,13 @@ def build_prospective_execution_snapshot(
     source_inputs_available = _utc(
         source.inputs_available_at_utc, label="decision inputs availability"
     )
-    if source_inputs_available > deadline:
-        raise ProspectiveExecutionDataError("decision inputs were unavailable by the trade deadline")
+    source_build_completed = _utc(
+        source.build_completed_at_utc, label="decision build completion"
+    )
+    if not source_inputs_available <= source_build_completed <= deadline:
+        raise ProspectiveExecutionDataError(
+            "decision input bundle was not durably published by the trade deadline"
+        )
 
     checkpoint_path = root / "runtime/data/raw/checkpoint.json"
     sealed_calendar_sources: list[Mapping[str, Any]] | None = None
@@ -1821,6 +1827,7 @@ def build_prospective_execution_snapshot(
             "path": _relative(source.directory, root),
             "snapshot_sha256": source.snapshot_sha256,
             "inputs_available_at_utc": source.inputs_available_at_utc,
+            "build_completed_at_utc": source.build_completed_at_utc,
         },
         "calendar": calendar_source,
         "raw_partitions": sorted(
@@ -1948,7 +1955,12 @@ def _load_snapshot_files(path: str | Path) -> ProspectiveExecutionDataSnapshot:
         }
         or not isinstance(decision_input, Mapping)
         or set(decision_input)
-        != {"path", "snapshot_sha256", "inputs_available_at_utc"}
+        != {
+            "path",
+            "snapshot_sha256",
+            "inputs_available_at_utc",
+            "build_completed_at_utc",
+        }
         or not isinstance(suspensions, Mapping)
         or "artifact_sha256" not in suspensions
         or not isinstance(sources_value.get("raw_partitions"), list)

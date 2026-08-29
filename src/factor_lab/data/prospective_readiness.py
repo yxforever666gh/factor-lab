@@ -22,8 +22,8 @@ import pandas as pd
 import pyarrow.parquet as pq
 
 
-SCHEMA_VERSION = 1
-CONTRACT_ID = "factor-lab/prospective-readiness/5.5"
+SCHEMA_VERSION = 2
+CONTRACT_ID = "factor-lab/prospective-readiness/5.6"
 LEDGER_ID = "factor-lab/prospective/5.0"
 FROZEN_BRIDGE_END = "2026-08-21"
 CANONICAL_CALENDAR_ANCHOR = "2017-01-03"
@@ -106,12 +106,19 @@ def _reject_constant(token: str) -> Any:
     raise ValueError(f"non-finite JSON token is forbidden: {token}")
 
 
-def _load_json(path: Path, *, canonical: bool = False) -> dict[str, Any]:
+def _load_json(
+    path: Path,
+    *,
+    canonical: bool = False,
+    allow_finite_floats: bool = False,
+) -> dict[str, Any]:
     try:
         raw = path.read_bytes()
         options: dict[str, Any] = {"object_pairs_hook": _unique_pairs}
         if canonical:
-            options.update(parse_float=_reject_float, parse_constant=_reject_constant)
+            options["parse_constant"] = _reject_constant
+            if not allow_finite_floats:
+                options["parse_float"] = _reject_float
         value = json.loads(raw.decode("utf-8", errors="strict"), **options)
     except (OSError, UnicodeError, json.JSONDecodeError, ValueError) as exc:
         raise _InspectionError(
@@ -832,7 +839,21 @@ def _reference_view(
     if not isinstance(entry, Mapping) or entry.get("status") != "complete":
         return result
     try:
-        if entry.get("dataset") != "bak_basic" or entry.get("trade_date") != as_of:
+        if (
+            entry.get("dataset") != "bak_basic"
+            or entry.get("trade_date") != as_of
+            or entry.get("request_trade_date") != as_of
+            or entry.get("source_trade_date") != as_of
+            or entry.get("capture_contract_id")
+            != "factor-lab/exact-bak-basic-raw/1"
+            or entry.get("capture_mode") != "exact_only"
+            or entry.get("fallback_used") is not False
+            or entry.get("fields")
+            != "trade_date,ts_code,name,industry,list_date"
+            or entry.get("exact_source_required") is not True
+            or type(entry.get("stability_sample_count")) is not int
+            or int(entry["stability_sample_count"]) < 2
+        ):
             raise ValueError("identity")
         completed = _utc(entry.get("completed_at_utc"), label=f"{key} completed_at_utc")
         result["completed_at_utc"] = _utc_text(completed)
@@ -851,17 +872,66 @@ def _reference_view(
         ):
             raise ValueError("bytes")
         parquet = pq.ParquetFile(path)
-        if parquet.metadata.num_rows != entry.get("row_count") or not _REFERENCE_COLUMNS.issubset(parquet.schema.names):
+        if (
+            parquet.metadata.num_rows != entry.get("row_count")
+            or parquet.metadata.num_rows <= 0
+            or not _REFERENCE_COLUMNS.issubset(parquet.schema.names)
+        ):
             raise ValueError("schema")
-        frame = parquet.read(columns=["trade_date", "ts_code"]).to_pandas()
+        if "source_trade_date" not in parquet.schema.names:
+            raise ValueError("exact source evidence")
+        frame = parquet.read(
+            columns=["trade_date", "source_trade_date", "ts_code"]
+        ).to_pandas()
         dates = pd.to_datetime(
             frame["trade_date"].astype("string").str.replace("-", "", regex=False),
             format="%Y%m%d",
             errors="coerce",
         ).dt.strftime("%Y-%m-%d")
         tickers = frame["ts_code"].astype("string").str.strip()
-        if dates.isna().any() or bool(dates.ne(as_of).any()) or tickers.eq("").any() or tickers.duplicated().any():
+        source_dates = pd.to_datetime(
+            frame["source_trade_date"]
+            .astype("string")
+            .str.replace("-", "", regex=False),
+            format="%Y%m%d",
+            errors="coerce",
+        ).dt.strftime("%Y-%m-%d")
+        if (
+            dates.isna().any()
+            or bool(dates.ne(as_of).any())
+            or source_dates.isna().any()
+            or bool(source_dates.ne(as_of).any())
+            or tickers.isna().any()
+            or tickers.eq("").any()
+            or tickers.duplicated().any()
+        ):
             raise ValueError("contents")
+        raw_checkpoint = _load_json(root / "runtime/data/raw/checkpoint.json")
+        raw_partitions = raw_checkpoint.get("partitions")
+        daily_key = f"daily/{as_of}"
+        daily_entry = (
+            raw_partitions.get(daily_key)
+            if isinstance(raw_partitions, Mapping)
+            else None
+        )
+        if (
+            not isinstance(daily_entry, Mapping)
+            or entry.get("daily_partition_sha256") != daily_entry.get("sha256")
+            or type(entry.get("daily_ticker_count")) is not int
+            or type(entry.get("covered_ticker_count")) is not int
+            or entry.get("daily_ticker_count") != entry.get("covered_ticker_count")
+        ):
+            raise ValueError("daily universe binding")
+        daily_path = root / "runtime/data/raw/daily" / f"trade_date={as_of}" / "part-000.parquet"
+        daily = pq.ParquetFile(daily_path).read(columns=["ts_code"]).to_pandas()
+        daily_tickers = set(daily["ts_code"].astype("string").str.strip())
+        if (
+            len(daily_tickers) != entry.get("daily_ticker_count")
+            or entry.get("reference_ticker_count") != len(set(tickers))
+            or entry.get("reference_ticker_count") != parquet.metadata.num_rows
+            or not daily_tickers.issubset(set(tickers))
+        ):
+            raise ValueError("daily universe coverage")
         result.update(
             status="complete",
             row_count=int(parquet.metadata.num_rows),
@@ -888,6 +958,7 @@ def _membership_view(
         "completed_at_utc": None,
         "row_count": None,
         "candidate_count": 0,
+        "path": None,
     }
     if not month_root.is_dir():
         return result
@@ -935,6 +1006,7 @@ def _membership_view(
                     "manifest_sha256": _sha256_file(manifest_path),
                     "completed_at_utc": _utc_text(completed),
                     "row_count": int(len(verified.frame)),
+                    "path": str(artifact_path.resolve()),
                 }
             )
         except Exception:
@@ -967,6 +1039,7 @@ def _input_snapshot_view(
         "inputs_available_at_utc": None,
         "build_completed_at_utc": None,
         "candidate_count": 0,
+        "directory": None,
     }
     if not input_root.is_dir():
         return result
@@ -982,7 +1055,15 @@ def _input_snapshot_view(
             continue
         claimed = False
         try:
-            manifest = _load_json(manifest_path, canonical=True)
+            # Signal manifests intentionally contain finite IEEE-754 values
+            # (for example ``signal_coverage_ratio``).  They remain
+            # byte-canonical and reject NaN/Infinity, while authoritative
+            # ledger records continue to use the no-float parser above.
+            manifest = _load_json(
+                manifest_path,
+                canonical=True,
+                allow_finite_floats=True,
+            )
             if manifest.get("signal_date") != candidate["signal_date"]:
                 continue
             claimed = True
@@ -1023,6 +1104,7 @@ def _input_snapshot_view(
                     "membership_artifact_sha256": loaded.membership_artifact_sha256,
                     "inputs_available_at_utc": _utc_text(inputs_available),
                     "build_completed_at_utc": _utc_text(built),
+                    "directory": str(directory.resolve()),
                 }
             )
         except Exception:
@@ -1057,6 +1139,7 @@ def _empty_report(
         "reason": "inspection_incomplete",
         "ready": False,
         "next_action": "none",
+        "action": None,
         "ready_for": {
             "membership_build": False,
             "input_build": False,
@@ -1138,6 +1221,7 @@ def _empty_report(
             "completed_at_utc": None,
             "row_count": None,
             "candidate_count": 0,
+            "path": None,
         },
         "input_snapshot": {
             "status": "unknown",
@@ -1148,6 +1232,7 @@ def _empty_report(
             "inputs_available_at_utc": None,
             "build_completed_at_utc": None,
             "candidate_count": 0,
+            "directory": None,
         },
         "target_replay": {
             "status": "not_run",
@@ -1748,16 +1833,237 @@ def inspect_prospective_readiness(
 
     fatal = any(item["severity"] == "fatal" for item in issues)
     error = any(item["severity"] == "error" for item in issues)
+    codes = {item["code"] for item in issues}
+    missing_market_dates = sorted(
+        {
+            value
+            for coverage in report["coverage"].values()
+            for value in coverage.get("missing_dates", [])
+        }
+    )
+    future_market_dates = sorted(
+        {
+            value
+            for coverage in report["coverage"].values()
+            for value in coverage.get("not_yet_available_dates", [])
+        }
+    )
+    candidate = report.get("candidate")
     if fatal:
         report.update(status="terminal", reason="admission_deadline_missed", ready=False, next_action="none")
     elif error:
         report.update(status="blocked", reason="evidence_invalid", ready=False, next_action="none")
+    elif (
+        codes
+        & {
+            "RAW_CHECKPOINT_MISSING",
+            "CALENDAR_NOT_AVAILABLE",
+            "CALENDAR_HORIZON_INSUFFICIENT",
+            "CANDIDATE_UNAVAILABLE",
+        }
+        and observed.astimezone(_SHANGHAI).date()
+        >= (pd.Timestamp(FROZEN_BRIDGE_END) + pd.Timedelta(days=1)).date()
+    ):
+        local_observed = observed.astimezone(_SHANGHAI)
+        completed_day = local_observed.date()
+        if local_observed.time() < time(16, 0):
+            completed_day -= pd.Timedelta(days=1).to_pytimedelta()
+        bridge_start = (
+            pd.Timestamp(FROZEN_BRIDGE_END) + pd.Timedelta(days=1)
+        ).date()
+        end_day = max(bridge_start, completed_day)
+        start_day = max(bridge_start, end_day - pd.Timedelta(days=31).to_pytimedelta())
+        horizon_anchor = pd.Timestamp(end_day) + pd.Timedelta(days=62)
+        calendar_end = horizon_anchor.to_period("M").end_time.date().isoformat()
+        start_date = start_day.isoformat()
+        end_date = end_day.isoformat()
+        report.update(
+            status="ready",
+            reason="calendar_bootstrap_ready",
+            ready=True,
+            next_action="sync_market_data",
+            action={
+                "command": "data sync",
+                "arguments": {
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "calendar_end_date": calendar_end,
+                    "datasets": ["daily", "daily_basic", "adj_factor"],
+                    "resume": True,
+                },
+                "argv": [
+                    "data",
+                    "sync",
+                    "--from",
+                    start_date,
+                    "--to",
+                    end_date,
+                    "--calendar-to",
+                    calendar_end,
+                    "--dataset",
+                    "daily",
+                    "--dataset",
+                    "daily_basic",
+                    "--dataset",
+                    "adj_factor",
+                    "--resume",
+                ],
+            },
+        )
+    elif (
+        "BEFORE_SIGNAL_CLOSE" not in codes
+        and codes
+        & {
+            "CALENDAR_PREFIX_GAP",
+            "CALENDAR_MONTH_INCOMPLETE",
+            "CALENDAR_BUILD_HORIZON_INSUFFICIENT",
+        }
+        and isinstance(candidate, Mapping)
+        and isinstance(candidate.get("signal_date"), str)
+        and isinstance(candidate.get("membership_calendar_end_date"), str)
+    ):
+        signal_date = str(candidate["signal_date"])
+        start_date = (
+            (pd.Timestamp(FROZEN_BRIDGE_END) + pd.Timedelta(days=1))
+            .date()
+            .isoformat()
+            if "CALENDAR_PREFIX_GAP" in codes
+            else signal_date
+        )
+        calendar_end = str(candidate["membership_calendar_end_date"])
+        report.update(
+            status="ready",
+            reason="calendar_sync_ready",
+            ready=True,
+            next_action="sync_market_data",
+            action={
+                "command": "data sync",
+                "arguments": {
+                    "start_date": start_date,
+                    "end_date": signal_date,
+                    "calendar_end_date": calendar_end,
+                    "datasets": ["daily", "daily_basic", "adj_factor"],
+                    "resume": True,
+                },
+                "argv": [
+                    "data",
+                    "sync",
+                    "--from",
+                    start_date,
+                    "--to",
+                    signal_date,
+                    "--calendar-to",
+                    calendar_end,
+                    "--dataset",
+                    "daily",
+                    "--dataset",
+                    "daily_basic",
+                    "--dataset",
+                    "adj_factor",
+                    "--resume",
+                ],
+            },
+        )
+    elif (
+        "BEFORE_SIGNAL_CLOSE" not in codes
+        and missing_market_dates
+        and not future_market_dates
+        and isinstance(candidate, Mapping)
+        and isinstance(candidate.get("signal_date"), str)
+        and isinstance(candidate.get("membership_calendar_end_date"), str)
+    ):
+        start_date = missing_market_dates[0]
+        end_date = str(candidate["signal_date"])
+        calendar_end = str(candidate["membership_calendar_end_date"])
+        report.update(
+            status="ready",
+            reason="market_data_sync_ready",
+            ready=True,
+            next_action="sync_market_data",
+            action={
+                "command": "data sync",
+                "arguments": {
+                    "start_date": start_date,
+                    "end_date": end_date,
+                    "calendar_end_date": calendar_end,
+                    "datasets": ["daily", "daily_basic", "adj_factor"],
+                    "resume": True,
+                },
+                "argv": [
+                    "data",
+                    "sync",
+                    "--from",
+                    start_date,
+                    "--to",
+                    end_date,
+                    "--calendar-to",
+                    calendar_end,
+                    "--dataset",
+                    "daily",
+                    "--dataset",
+                    "daily_basic",
+                    "--dataset",
+                    "adj_factor",
+                    "--resume",
+                ],
+            },
+        )
+    elif (
+        "BEFORE_SIGNAL_CLOSE" not in codes
+        and report["reference"].get("status") == "missing"
+        and isinstance(candidate, Mapping)
+        and isinstance(candidate.get("membership_as_of_date"), str)
+    ):
+        trade_date = str(candidate["membership_as_of_date"])
+        report.update(
+            status="ready",
+            reason="reference_sync_ready",
+            ready=True,
+            next_action="sync_reference",
+            action={
+                "command": "data reference",
+                "arguments": {"trade_date": trade_date},
+                "argv": ["data", "reference", "--trade-date", trade_date],
+            },
+        )
     elif report["ready_for"]["input_build"]:
-        report.update(status="ready", reason="input_build_ready", ready=True, next_action="build_input")
+        signal_date = str(candidate["signal_date"])
+        membership_path = str(report["membership"]["path"])
+        report.update(
+            status="ready",
+            reason="input_build_ready",
+            ready=True,
+            next_action="build_input",
+            action={
+                "command": "prospective input",
+                "arguments": {
+                    "signal_date": signal_date,
+                    "membership_snapshot": membership_path,
+                },
+                "argv": [
+                    "prospective",
+                    "input",
+                    "--signal-date",
+                    signal_date,
+                    "--membership-snapshot",
+                    membership_path,
+                ],
+            },
+        )
     elif report["ready_for"]["membership_build"]:
-        report.update(status="ready", reason="membership_build_ready", ready=True, next_action="build_membership")
+        month = str(candidate["membership_month"])
+        report.update(
+            status="ready",
+            reason="membership_build_ready",
+            ready=True,
+            next_action="build_membership",
+            action={
+                "command": "prospective membership",
+                "arguments": {"month": month},
+                "argv": ["prospective", "membership", "--month", month],
+            },
+        )
     else:
-        codes = {item["code"] for item in issues}
         reason = (
             "before_signal_close"
             if "BEFORE_SIGNAL_CLOSE" in codes

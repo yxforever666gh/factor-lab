@@ -126,6 +126,18 @@ def _write_partition(
 
 
 def _write_reference(root: Path, trade_date: str) -> None:
+    raw_checkpoint = json.loads(
+        (root / "runtime/data/raw/checkpoint.json").read_text(encoding="utf-8")
+    )
+    daily_entry = raw_checkpoint["partitions"].get(f"daily/{trade_date}")
+    daily_sha = (
+        daily_entry["sha256"] if isinstance(daily_entry, dict) else None
+    )
+    daily_count = (
+        int(daily_entry["row_count"])
+        if isinstance(daily_entry, dict)
+        else 0
+    )
     path = (
         root
         / "runtime/data/raw/bak_basic"
@@ -136,6 +148,7 @@ def _write_reference(root: Path, trade_date: str) -> None:
     frame = pd.DataFrame(
         {
             "trade_date": trade_date.replace("-", ""),
+            "source_trade_date": trade_date.replace("-", ""),
             "ts_code": ["000001.SZ", "000002.SZ"],
             "name": ["一号", "二号"],
             "industry": ["测试", "测试"],
@@ -150,12 +163,23 @@ def _write_reference(root: Path, trade_date: str) -> None:
                 "status": "complete",
                 "dataset": "bak_basic",
                 "trade_date": trade_date,
+                "request_trade_date": trade_date,
                 "source_trade_date": trade_date,
+                "capture_contract_id": "factor-lab/exact-bak-basic-raw/1",
+                "capture_mode": "exact_only",
+                "fallback_used": False,
+                "fields": "trade_date,ts_code,name,industry,list_date",
                 "path": str(path.resolve()),
                 "row_count": len(frame),
                 "size_bytes": path.stat().st_size,
                 "sha256": _sha256(path),
                 "completed_at_utc": "2026-08-31T07:40:00Z",
+                "exact_source_required": True,
+                "stability_sample_count": 2,
+                "daily_partition_sha256": daily_sha,
+                "daily_ticker_count": daily_count,
+                "covered_ticker_count": daily_count,
+                "reference_ticker_count": len(frame),
             }
         },
     }
@@ -360,6 +384,7 @@ def _install_mock_input(
         "kind": "prospective_signal_input_snapshot",
         "signal_date": "2026-08-31",
         "official_trade_date": "2026-09-01",
+        "signal_audit": {"signal_coverage_ratio": 1.0},
     }
     if calendar_sources is not None:
         manifest["calendar"] = {"sources": calendar_sources}
@@ -464,6 +489,7 @@ def test_current_golden_waits_for_close_and_august_31_evidence(
     assert report["status"] == "waiting"
     assert report["reason"] == "before_signal_close"
     assert report["next_action"] == "wait"
+    assert report["action"] is None
     assert report["candidate"] == {
         "signal_date": "2026-08-31",
         "signal_close_utc": "2026-08-31T07:00:00Z",
@@ -532,6 +558,12 @@ def test_complete_evidence_opens_membership_build_after_signal_close(
     assert report["status"] == "ready"
     assert report["reason"] == "membership_build_ready"
     assert report["next_action"] == "build_membership"
+    assert report["action"] == {
+        "command": "prospective membership",
+        "arguments": {"month": "2026-09"},
+        "argv": ["prospective", "membership", "--month", "2026-09"],
+    }
+    assert report["reference"]["status"] == "complete"
     assert report["ready_for"] == {
         "membership_build": True,
         "input_build": False,
@@ -539,6 +571,54 @@ def test_complete_evidence_opens_membership_build_after_signal_close(
     }
     assert report["issues"] == []
     assert prospective_readiness_exit_code(report) == 0
+
+
+def test_reference_fallback_is_invalid_instead_of_actionable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_case(tmp_path, monkeypatch)
+    checkpoint_path = tmp_path / "runtime/data/raw/enrichment-checkpoint.json"
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint["partitions"][
+        "bak_basic/trade_date=2026-08-31"
+    ]["fallback_used"] = True
+    _write_json(checkpoint_path, checkpoint)
+
+    report = inspect_prospective_readiness(
+        tmp_path, observed_at_utc="2026-08-31T08:00:00Z"
+    )
+
+    assert report["status"] == "blocked"
+    assert report["reason"] == "evidence_invalid"
+    assert report["reference"]["status"] == "invalid"
+    assert report["next_action"] == "none"
+    assert report["action"] is None
+    assert "REFERENCE_INVALID" in _codes(report)
+    assert report["ready_for"] == {
+        "membership_build": False,
+        "input_build": False,
+        "decision_admission": False,
+    }
+
+
+def test_reference_checkpoint_ticker_count_must_match_parquet(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_case(tmp_path, monkeypatch)
+    checkpoint_path = tmp_path / "runtime/data/raw/enrichment-checkpoint.json"
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    entry = checkpoint["partitions"]["bak_basic/trade_date=2026-08-31"]
+    entry["reference_ticker_count"] += 1
+    _write_json(checkpoint_path, checkpoint)
+
+    report = inspect_prospective_readiness(
+        tmp_path, observed_at_utc="2026-08-31T08:00:00Z"
+    )
+
+    assert report["status"] == "blocked"
+    assert report["reference"]["status"] == "invalid"
+    assert report["action"] is None
+    assert "REFERENCE_INVALID" in _codes(report)
 
 
 def test_membership_complete_without_input_only_enables_input_build(
@@ -554,6 +634,29 @@ def test_membership_complete_without_input_only_enables_input_build(
     assert report["status"] == "ready"
     assert report["reason"] == "input_build_ready"
     assert report["next_action"] == "build_input"
+    membership_path = str(
+        (
+            tmp_path
+            / "runtime/prospective/5.0/membership/2026-09"
+            / artifact_sha
+            / "membership.parquet"
+        ).resolve()
+    )
+    assert report["action"] == {
+        "command": "prospective input",
+        "arguments": {
+            "signal_date": "2026-08-31",
+            "membership_snapshot": membership_path,
+        },
+        "argv": [
+            "prospective",
+            "input",
+            "--signal-date",
+            "2026-08-31",
+            "--membership-snapshot",
+            membership_path,
+        ],
+    }
     assert report["membership"]["artifact_sha256"] == artifact_sha
     assert report["input_snapshot"]["status"] == "not_built"
     assert report["ready_for"] == {
@@ -580,6 +683,7 @@ def test_verified_input_waits_for_authoritative_target_replay(
 
     assert report["status"] == "waiting"
     assert report["reason"] == "authoritative_target_replay_required"
+    assert report["action"] is None
     assert report["input_snapshot"]["snapshot_sha256"] == snapshot_sha
     assert report["ready_for"]["decision_admission"] is False
     assert report["target_replay"]["status"] == "not_run"
@@ -804,7 +908,31 @@ def test_authoritative_membership_replay_rejects_a_forged_manifest(
     assert "MEMBERSHIP_INVALID" in _codes(report)
 
 
-def test_incomplete_month_calendar_waits_even_when_i11_exists(
+def test_missing_raw_calendar_routes_to_bounded_bootstrap_sync(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_case(tmp_path, monkeypatch)
+    (tmp_path / "runtime/data/raw/checkpoint.json").unlink()
+    before = _tree_snapshot(tmp_path)
+
+    report = inspect_prospective_readiness(
+        tmp_path, observed_at_utc="2026-08-31T08:00:00Z"
+    )
+
+    assert report["status"] == "ready"
+    assert report["reason"] == "calendar_bootstrap_ready"
+    assert "RAW_CHECKPOINT_MISSING" in _codes(report)
+    assert report["action"]["arguments"] == {
+        "start_date": "2026-08-22",
+        "end_date": "2026-08-31",
+        "calendar_end_date": "2026-11-30",
+        "datasets": ["daily", "daily_basic", "adj_factor"],
+        "resume": True,
+    }
+    assert _tree_snapshot(tmp_path) == before
+
+
+def test_incomplete_month_calendar_routes_to_calendar_extension(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _write_case(tmp_path, monkeypatch, calendar_end="2026-09-15")
@@ -813,13 +941,31 @@ def test_incomplete_month_calendar_waits_even_when_i11_exists(
         tmp_path, observed_at_utc="2026-08-31T08:00:00Z"
     )
 
-    assert report["status"] == "waiting"
+    assert report["status"] == "ready"
+    assert report["reason"] == "calendar_sync_ready"
     assert report["calendar"]["covers_i_plus_11"] is True
     assert report["calendar"]["full_membership_month"] is False
     assert "CALENDAR_MONTH_INCOMPLETE" in _codes(report)
+    assert report["action"]["argv"] == [
+        "data",
+        "sync",
+        "--from",
+        "2026-08-31",
+        "--to",
+        "2026-08-31",
+        "--calendar-to",
+        "2026-09-30",
+        "--dataset",
+        "daily",
+        "--dataset",
+        "daily_basic",
+        "--dataset",
+        "adj_factor",
+        "--resume",
+    ]
 
 
-def test_post_bridge_calendar_prefix_gap_waits_fail_closed(
+def test_post_bridge_calendar_prefix_gap_routes_to_exact_gap_start(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _write_case(tmp_path, monkeypatch, calendar_start="2026-08-23")
@@ -828,9 +974,13 @@ def test_post_bridge_calendar_prefix_gap_waits_fail_closed(
         tmp_path, observed_at_utc="2026-08-31T08:00:00Z"
     )
 
-    assert report["status"] == "waiting"
+    assert report["status"] == "ready"
+    assert report["reason"] == "calendar_sync_ready"
     assert report["calendar"]["prefix_contiguous"] is False
     assert "CALENDAR_PREFIX_GAP" in _codes(report)
+    assert report["action"]["arguments"]["start_date"] == "2026-08-22"
+    assert report["action"]["arguments"]["end_date"] == "2026-08-31"
+    assert report["action"]["arguments"]["calendar_end_date"] == "2026-09-30"
 
 
 @pytest.mark.parametrize(
@@ -841,7 +991,7 @@ def test_post_bridge_calendar_prefix_gap_waits_fail_closed(
         ("adj_factor", "ADJ_FACTOR_PARTITION_MISSING"),
     ],
 )
-def test_each_required_partition_type_is_independently_fail_closed(
+def test_each_required_partition_type_routes_to_market_sync(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     dataset: str,
@@ -854,14 +1004,49 @@ def test_each_required_partition_type_is_independently_fail_closed(
         tmp_path, observed_at_utc="2026-08-31T08:00:00Z"
     )
 
-    assert report["status"] == "waiting"
-    assert report["ready"] is False
+    assert report["status"] == "ready"
+    assert report["reason"] == "market_data_sync_ready"
+    assert report["ready"] is True
+    assert report["next_action"] == "sync_market_data"
+    assert report["ready_for"] == {
+        "membership_build": False,
+        "input_build": False,
+        "decision_admission": False,
+    }
+    assert report["action"] == {
+        "command": "data sync",
+        "arguments": {
+            "start_date": "2026-08-31",
+            "end_date": "2026-08-31",
+            "calendar_end_date": "2026-09-30",
+            "datasets": ["daily", "daily_basic", "adj_factor"],
+            "resume": True,
+        },
+        "argv": [
+            "data",
+            "sync",
+            "--from",
+            "2026-08-31",
+            "--to",
+            "2026-08-31",
+            "--calendar-to",
+            "2026-09-30",
+            "--dataset",
+            "daily",
+            "--dataset",
+            "daily_basic",
+            "--dataset",
+            "adj_factor",
+            "--resume",
+        ],
+    }
     assert code in _codes(report)
     assert "2026-08-31" in next(
         item["details"]["missing_dates"]
         for item in report["issues"]
         if item["code"] == code
     )
+    assert prospective_readiness_exit_code(report) == 0
 
 
 def test_deadline_is_terminal_and_cannot_be_reopened_by_complete_data(
@@ -983,6 +1168,9 @@ def test_report_has_stable_top_level_and_issue_schema(
         tmp_path, observed_at_utc="2026-08-29T00:00:00Z"
     )
 
+    assert report["schema_version"] == 2
+    assert report["contract_id"] == "factor-lab/prospective-readiness/5.6"
+    assert report["action"] is None
     assert set(report) == {
         "schema_version",
         "kind",
@@ -994,6 +1182,7 @@ def test_report_has_stable_top_level_and_issue_schema(
         "reason",
         "ready",
         "next_action",
+        "action",
         "ready_for",
         "ledger",
         "candidate",

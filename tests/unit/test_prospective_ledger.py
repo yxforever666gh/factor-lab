@@ -39,6 +39,7 @@ from factor_lab.prospective_ledger import (
     implementation_transition_status,
     ledger_status,
     prospective_readiness,
+    repair_snapshots,
     seal_decision,
     seal_snapshot,
     sha256_bytes,
@@ -244,9 +245,9 @@ def _run_test_release_operation(
             target_rows_sha256=source.target_rows_sha256,
             input_sources_sha256=source.input_sources_sha256,
             membership_artifact_sha256=source.membership_artifact_sha256,
-            source_build_checkpoint_utc=source.inputs_available_at_utc,
+            source_build_checkpoint_utc=source.build_completed_at_utc,
             max_available_at_utc=source.inputs_available_at_utc,
-            information_cutoff_utc=source.inputs_available_at_utc,
+            information_cutoff_utc=source.build_completed_at_utc,
             signal_close_utc=f"{source.signal_date}T07:00:00Z",
             admission_deadline_utc=deadline,
         )
@@ -786,9 +787,9 @@ def _plan_case(
         target_rows_sha256=source.target_rows_sha256,
         input_sources_sha256=source.input_sources_sha256,
         membership_artifact_sha256=source.membership_artifact_sha256,
-        source_build_checkpoint_utc=source.inputs_available_at_utc,
+        source_build_checkpoint_utc=source.build_completed_at_utc,
         max_available_at_utc=source.inputs_available_at_utc,
-        information_cutoff_utc=source.inputs_available_at_utc,
+        information_cutoff_utc=source.build_completed_at_utc,
         signal_close_utc=f"{signal}T07:00:00Z",
         admission_deadline_utc=f"{session}T01:15:00Z",
     )
@@ -1389,6 +1390,7 @@ def test_authoritative_readiness_replays_target_before_admission(
             "input_snapshot": {
                 "status": "complete",
                 "snapshot_sha256": case["source_path"].name,
+                "directory": str(case["source_path"]),
             },
             "target_replay": {
                 "status": "not_run",
@@ -1412,7 +1414,17 @@ def test_authoritative_readiness_replays_target_before_admission(
 
     assert report["status"] == "ready"
     assert report["reason"] == "decision_admission_ready"
-    assert report["next_action"] == "build_plan"
+    assert report["next_action"] == "admit_decision"
+    assert report["action"] == {
+        "command": "prospective admit",
+        "arguments": {"input": str(case["source_path"])},
+        "argv": [
+            "prospective",
+            "admit",
+            "--input",
+            str(case["source_path"]),
+        ],
+    }
     assert report["ready_for"] == {
         "membership_build": False,
         "input_build": False,
@@ -1713,7 +1725,7 @@ def test_late_corrective_canary_makes_the_frozen_first_signal_terminal(
     )
 
 
-def test_missed_deadline_dominates_awaiting_decision_receipt(
+def test_attestation_deadline_dominates_awaiting_decision_receipt(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1729,10 +1741,13 @@ def test_missed_deadline_dominates_awaiting_decision_receipt(
 
     def observer(_project_root, **_kwargs):
         return {
+            "observed_at_utc": "2026-08-25T01:15:00Z",
+            "clock_source": "caller_supplied",
             "status": "terminal",
             "reason": "admission_deadline_missed",
             "ready": False,
             "next_action": "none",
+            "action": None,
             "ready_for": {
                 "membership_build": False,
                 "input_build": False,
@@ -1765,11 +1780,151 @@ def test_missed_deadline_dominates_awaiting_decision_receipt(
 
     assert expected_ledger["decision_generation_ready"] is False
     assert report["status"] == "terminal"
-    assert report["reason"] == "admission_deadline_missed"
-    assert not any(
-        issue["code"] == "AUTHORITATIVE_LEDGER_NOT_READY"
-        for issue in report["issues"]
+    assert report["reason"] == "decision_attestation_deadline_missed"
+    assert report["next_action"] == "none"
+    assert report["action"] is None
+    assert [issue["code"] for issue in report["issues"]] == [
+        "DECISION_ATTESTATION_DEADLINE_MISSED"
+    ]
+
+
+def test_readiness_keeps_a_persisted_binding_recoverable_after_deadline(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from factor_lab.prospective_attestation import build_dispatch_request
+    import factor_lab.prospective_runtime as prospective_runtime
+
+    ledger = tmp_path / "runtime/prospective/5.0"
+    _ready(ledger)
+    case = _plan_case(ledger)
+    decision = _seal_case(
+        ledger,
+        case,
+        recorded_at="2026-08-24T12:01:00Z",
     )
+    expected_ledger = _authoritative_readiness_ledger_view(ledger)
+    snapshot_path = Path(decision["snapshot"]["path"])
+    request = build_dispatch_request(snapshot_path.read_bytes())
+    prospective_runtime._store_dispatch_binding(
+        prospective_ledger.LedgerLayout.at(ledger),
+        request,
+        {
+            "workflow_run_id": 9345,
+            "run_url": (
+                "https://api.github.com/repos/yxforever666gh/factor-lab/"
+                "actions/runs/9345"
+            ),
+            "html_url": (
+                "https://github.com/yxforever666gh/factor-lab/actions/runs/9345"
+            ),
+        },
+    )
+
+    def observer(_project_root: Path, **kwargs: Any) -> dict[str, Any]:
+        return {
+            "observed_at_utc": kwargs["observed_at_utc"],
+            "clock_source": "caller_supplied",
+            "stable_view": True,
+            "status": "terminal",
+            "reason": "admission_deadline_missed",
+            "ready": False,
+            "next_action": "none",
+            "action": None,
+            "ready_for": {
+                "membership_build": False,
+                "input_build": False,
+                "decision_admission": False,
+            },
+            "ledger": dict(expected_ledger),
+            "candidate": {"due_offset": case["result"].due_offset},
+            "issues": [],
+        }
+
+    monkeypatch.setattr(
+        "factor_lab.data.prospective_readiness.inspect_prospective_readiness",
+        observer,
+    )
+    report = prospective_readiness(
+        ledger,
+        project_root=tmp_path,
+        observed_at_utc="2026-08-30T01:15:00Z",
+    )
+
+    assert report["status"] == "ready"
+    assert report["reason"] == "decision_attestation_recovery_ready"
+    assert report["next_action"] == "attest_decision"
+    assert report["action"]["argv"][0:2] == ["prospective", "attest"]
+
+
+def test_readiness_gives_predeadline_intent_a_full_day_recovery_window(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from factor_lab.prospective_attestation import build_dispatch_request
+    import factor_lab.prospective_runtime as prospective_runtime
+
+    ledger = tmp_path / "runtime/prospective/5.0"
+    _ready(ledger)
+    case = _plan_case(ledger)
+    decision = _seal_case(
+        ledger,
+        case,
+        recorded_at="2026-08-24T12:01:00Z",
+    )
+    expected_ledger = _authoritative_readiness_ledger_view(ledger)
+    snapshot_path = Path(decision["snapshot"]["path"])
+    request = build_dispatch_request(snapshot_path.read_bytes())
+    monkeypatch.setattr(
+        prospective_runtime,
+        "_runtime_now_utc",
+        lambda: datetime(2026, 8, 24, 12, tzinfo=timezone.utc),
+    )
+    assert prospective_runtime._store_dispatch_intent(
+        prospective_ledger.LedgerLayout.at(ledger),
+        request,
+    ) is True
+
+    def observer(_project_root: Path, **kwargs: Any) -> dict[str, Any]:
+        return {
+            "observed_at_utc": kwargs["observed_at_utc"],
+            "clock_source": "caller_supplied",
+            "stable_view": True,
+            "status": "terminal",
+            "reason": "admission_deadline_missed",
+            "ready": False,
+            "next_action": "none",
+            "action": None,
+            "ready_for": {
+                "membership_build": False,
+                "input_build": False,
+                "decision_admission": False,
+            },
+            "ledger": dict(expected_ledger),
+            "candidate": {"due_offset": case["result"].due_offset},
+            "issues": [],
+        }
+
+    monkeypatch.setattr(
+        "factor_lab.data.prospective_readiness.inspect_prospective_readiness",
+        observer,
+    )
+    recoverable = prospective_readiness(
+        ledger,
+        project_root=tmp_path,
+        observed_at_utc="2026-08-26T01:14:59Z",
+    )
+    expired = prospective_readiness(
+        ledger,
+        project_root=tmp_path,
+        observed_at_utc="2026-08-26T01:15:00Z",
+    )
+
+    assert case["plan"]["admission_deadline_utc"] == "2026-08-25T01:15:00Z"
+    assert recoverable["status"] == "ready"
+    assert recoverable["reason"] == "decision_attestation_recovery_ready"
+    assert expired["status"] == "terminal"
+    assert expired["reason"] == "decision_attestation_deadline_missed"
 
 
 def test_runtime_abandonment_is_static_and_leaves_execution_fail_closed(
@@ -3035,6 +3190,40 @@ def test_record_chain_replay_rejects_a_late_forged_decision(tmp_path: Path) -> N
     assert "before admission" in audited["issues"][0]["detail"]
 
 
+def test_seal_captures_default_record_time_inside_append_lock(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = tmp_path / "ledger"
+    _ready(ledger)
+    case = _plan_case(ledger)
+    real_lock = prospective_ledger._exclusive_lock
+    real_utc_text = prospective_ledger._utc_text
+    state = {"inside": False}
+
+    @contextmanager
+    def observed_lock(layout: Any):
+        with real_lock(layout):
+            state["inside"] = True
+            try:
+                yield
+            finally:
+                state["inside"] = False
+
+    def observed_utc_text(value: Any = None) -> str:
+        if value is None:
+            assert state["inside"] is True
+            return str(case["plan"]["planned_at_utc"])
+        return real_utc_text(value)
+
+    monkeypatch.setattr(prospective_ledger, "_exclusive_lock", observed_lock)
+    monkeypatch.setattr(prospective_ledger, "_utc_text", observed_utc_text)
+
+    sealed = seal_decision(ledger, case["plan"])
+
+    assert sealed["record"]["recorded_at_utc"] == case["plan"]["planned_at_utc"]
+
+
 def test_seal_recomputes_genesis_and_rejects_bundle_or_result_forgery(
     tmp_path: Path,
 ) -> None:
@@ -3073,7 +3262,7 @@ def test_seal_recomputes_genesis_and_rejects_bundle_or_result_forgery(
         )
 
 
-def test_unhashed_build_receipt_time_cannot_change_generated_targets(
+def test_build_receipt_time_changes_hashed_target_cutoff(
     tmp_path: Path,
 ) -> None:
     ledger = tmp_path / "ledger"
@@ -3081,7 +3270,7 @@ def test_unhashed_build_receipt_time_cannot_change_generated_targets(
     case = _plan_case(ledger)
     receipt_path = case["source_path"] / "build-receipt.json"
     receipt = strict_load_canonical(receipt_path.read_bytes())
-    receipt["build_completed_at_utc"] = "2026-08-24T23:59:59Z"
+    receipt["build_completed_at_utc"] = "2026-08-24T10:31:00Z"
     receipt_path.write_bytes(canonical_json_bytes(receipt))
     rebuilt = build_decision_plan(
         ledger,
@@ -3089,9 +3278,13 @@ def test_unhashed_build_receipt_time_cannot_change_generated_targets(
         source_data_snapshot_sha256=case["input_snapshot"].source_data_snapshot_sha256,
         planned_at_utc="2026-08-24T12:00:00Z",
     )
-    assert rebuilt == case["plan"]
-    assert rebuilt["input_build_checkpoint_utc"] == "2026-08-24T10:00:00Z"
-    assert rebuilt["information_cutoff_utc"] == "2026-08-24T10:00:00Z"
+    assert rebuilt != case["plan"]
+    assert rebuilt["input_build_checkpoint_utc"] == "2026-08-24T10:31:00Z"
+    assert rebuilt["information_cutoff_utc"] == "2026-08-24T10:31:00Z"
+    assert (
+        rebuilt["route_target_plan"]["input_snapshot_sha256"]
+        != case["plan"]["route_target_plan"]["input_snapshot_sha256"]
+    )
 
 
 def test_public_source_loader_rejects_a_self_consistent_handmade_bundle(
@@ -3139,6 +3332,116 @@ def test_snapshot_audit_rejects_missing_extra_and_replaced_bytes(tmp_path: Path)
         issue["code"] == "invalid_record_chain"
         for issue in audit_ledger(ledger)["issues"]
     )
+
+
+def test_repair_snapshots_recovers_record_first_crash_idempotently(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = tmp_path / "ledger"
+    _ready(ledger)
+    case = _plan_case(ledger)
+    real_seal = prospective_ledger._seal_snapshot_unlocked
+
+    def crash_after_record(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        raise RuntimeError("simulated crash before snapshot publication")
+
+    monkeypatch.setattr(
+        prospective_ledger,
+        "_seal_snapshot_unlocked",
+        crash_after_record,
+    )
+    with pytest.raises(RuntimeError, match="before snapshot publication"):
+        _seal_case(
+            ledger,
+            case,
+            recorded_at="2026-08-24T12:01:00Z",
+        )
+
+    damaged = audit_ledger(ledger)
+    assert damaged["valid"] is False
+    assert [issue["code"] for issue in damaged["issues"]] == [
+        "missing_snapshot"
+    ]
+    monkeypatch.setattr(
+        prospective_ledger,
+        "_seal_snapshot_unlocked",
+        real_seal,
+    )
+
+    repaired = repair_snapshots(ledger)
+    assert repaired["repaired_count"] == 1
+    assert repaired["snapshots"][0]["sequence"] == damaged["record_count"]
+    assert repaired["snapshots"][0]["created"] is True
+    assert audit_ledger(ledger)["valid"] is True
+
+    repeated = repair_snapshots(ledger)
+    assert repeated["repaired_count"] == 0
+    assert repeated["snapshots"] == []
+    assert audit_ledger(ledger)["valid"] is True
+
+
+def test_repair_snapshots_refuses_any_unexpected_or_invalid_snapshot(
+    tmp_path: Path,
+) -> None:
+    ledger = tmp_path / "ledger"
+    _ready(ledger)
+    victim = sorted((ledger / "snapshots").glob("*.json"))[-1]
+    original = victim.read_bytes()
+    victim.unlink()
+    unexpected = ledger / "snapshots" / "unexpected.json"
+    unexpected.write_bytes(b"{}")
+
+    with pytest.raises(LedgerIntegrityError, match="non-missing evidence"):
+        repair_snapshots(ledger)
+
+    assert not victim.exists()
+    unexpected.unlink()
+    victim.write_bytes(original + b" ")
+    with pytest.raises(LedgerIntegrityError, match="non-missing evidence"):
+        repair_snapshots(ledger)
+
+
+def test_readiness_returns_only_the_snapshot_repair_action_for_missing_prefix(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = tmp_path / "runtime/prospective/5.0"
+    _ready(ledger)
+    victim = sorted((ledger / "snapshots").glob("*.json"))[-1]
+    victim.unlink()
+
+    def observer(_project_root: Path, **_kwargs: Any) -> dict[str, Any]:
+        return {
+            "status": "blocked",
+            "reason": "evidence_invalid",
+            "ready": False,
+            "next_action": "none",
+            "action": None,
+            "ready_for": {
+                "membership_build": False,
+                "input_build": False,
+                "decision_admission": False,
+            },
+            "issues": [],
+        }
+
+    monkeypatch.setattr(
+        "factor_lab.data.prospective_readiness.inspect_prospective_readiness",
+        observer,
+    )
+    report = prospective_readiness(
+        ledger,
+        project_root=tmp_path,
+        observed_at_utc="2026-08-24T08:00:00Z",
+    )
+
+    assert report["status"] == "ready"
+    assert report["reason"] == "snapshot_repair_ready"
+    assert report["next_action"] == "repair_snapshots"
+    assert report["action"]["argv"] == ["prospective", "repair-snapshots"]
+    assert report["action"]["arguments"]["missing_snapshots"] == [str(victim)]
+    assert report["issues"][0]["code"] == "DETERMINISTIC_SNAPSHOTS_MISSING"
 
 
 def test_legacy_plan_records_replay_but_new_seal_rejects_them(tmp_path: Path) -> None:

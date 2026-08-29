@@ -84,6 +84,141 @@ def test_data_sync_routes_calendar_extension_only_to_market_sync(
     assert "calendar_end_date" not in calls[1][2]
 
 
+@pytest.mark.parametrize(
+    ("status", "expected_exit"),
+    (("complete", 0), ("partial", 0), ("waiting", 2), ("blocked", 3)),
+)
+def test_data_sync_preserves_the_retryable_exit_contract(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+    status: str,
+    expected_exit: int,
+) -> None:
+    fake_layout = SimpleNamespace()
+    monkeypatch.setattr(
+        "factor_lab.cli._data_layout",
+        lambda _root: ({}, fake_layout, tmp_path / "configs/data.json"),
+    )
+    monkeypatch.setattr(
+        "factor_lab.cli.sync_data",
+        lambda *_args, **_kwargs: {
+            "schema_version": 1,
+            "status": status,
+        },
+    )
+
+    exit_code = main(
+        [
+            "--root",
+            str(tmp_path),
+            "data",
+            "sync",
+            "--from",
+            "2026-08-31",
+            "--to",
+            "2026-08-31",
+        ]
+    )
+
+    assert exit_code == expected_exit
+    assert json.loads(capsys.readouterr().out)["status"] == status
+
+
+@pytest.mark.parametrize(
+    ("status", "expected_exit"),
+    (("complete", 0), ("waiting", 2), ("blocked", 3)),
+)
+def test_data_reference_preserves_the_capture_exit_contract(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+    status: str,
+    expected_exit: int,
+) -> None:
+    fake_layout = SimpleNamespace()
+    config_path = tmp_path / "configs/data.json"
+    calls: list[tuple[str, dict]] = []
+    monkeypatch.setattr(
+        "factor_lab.cli._data_layout",
+        lambda _root: ({}, fake_layout, config_path),
+    )
+
+    def reference(trade_date, **kwargs):
+        calls.append((trade_date, dict(kwargs)))
+        return {
+            "schema_version": 1,
+            "status": status,
+            "trade_date": trade_date,
+        }
+
+    monkeypatch.setattr("factor_lab.cli.sync_exact_reference", reference)
+
+    exit_code = main(
+        [
+            "--root",
+            str(tmp_path),
+            "data",
+            "reference",
+            "--trade-date",
+            "2026-08-31",
+        ]
+    )
+
+    assert exit_code == expected_exit
+    assert json.loads(capsys.readouterr().out) == {
+        "schema_version": 1,
+        "status": status,
+        "trade_date": "2026-08-31",
+    }
+    assert calls == [
+        (
+            "2026-08-31",
+            {"config_path": config_path, "layout": fake_layout},
+        )
+    ]
+
+
+def test_data_reference_value_error_fails_closed(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+) -> None:
+    fake_layout = SimpleNamespace()
+    config_path = tmp_path / "configs/data.json"
+    monkeypatch.setattr(
+        "factor_lab.cli._data_layout",
+        lambda _root: ({}, fake_layout, config_path),
+    )
+
+    def invalid_reference(_trade_date, **_kwargs):
+        raise ValueError("exact reference samples disagree")
+
+    monkeypatch.setattr(
+        "factor_lab.cli.sync_exact_reference",
+        invalid_reference,
+    )
+
+    exit_code = main(
+        [
+            "--root",
+            str(tmp_path),
+            "data",
+            "reference",
+            "--trade-date",
+            "2026-08-31",
+        ]
+    )
+
+    assert exit_code == 3
+    assert json.loads(capsys.readouterr().out) == {
+        "schema_version": 1,
+        "status": "blocked",
+        "reason": "reference_evidence_invalid",
+        "error": "exact reference samples disagree",
+    }
+
+
 def test_parser_exposes_prospective_lifecycle_commands() -> None:
     parser = build_parser()
     arguments = {
@@ -93,12 +228,14 @@ def test_parser_exposes_prospective_lifecycle_commands() -> None:
         "membership": ["--month", "2026-09"],
         "input": ["--signal-date", "2026-08-24"],
         "plan": ["--input", "snapshot"],
+        "admit": ["--input", "snapshot"],
         "seal": ["--plan", "plan.json"],
         "execution": ["--decision", "1" * 64],
         "outcome": ["--decision", "1" * 64, "--execution", "2" * 64],
         "correct": ["--input", "correction.json"],
         "attest": ["--purpose", "activation_canary"],
         "audit": [],
+        "repair-snapshots": [],
         "evaluate": [],
         "status": [],
         "readiness": [],
@@ -110,7 +247,12 @@ def test_parser_exposes_prospective_lifecycle_commands() -> None:
         assert parsed.prospective_command == command
 
     upgrade = parser.parse_args(["prospective", "upgrade"])
-    assert upgrade.release_tag == "5.5"
+    assert upgrade.release_tag == "5.6"
+
+    admit = parser.parse_args(
+        ["prospective", "admit", "--input", "snapshot"]
+    )
+    assert admit.input == Path("snapshot")
 
     attest = parser.parse_args(
         ["prospective", "attest", "--purpose", "activation_canary"]
@@ -121,6 +263,31 @@ def test_parser_exposes_prospective_lifecycle_commands() -> None:
     assert attest.workflow_run_id is None
     with pytest.raises(SystemExit):
         parser.parse_args(["prospective", "activate"])
+
+
+def test_repair_snapshots_command_forwards_the_canonical_ledger_root(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    calls: list[Path] = []
+
+    def repair(ledger_root: Path) -> dict[str, Any]:
+        calls.append(Path(ledger_root))
+        return {"schema_version": 1, "repaired_count": 1}
+
+    monkeypatch.setattr("factor_lab.cli.repair_snapshots", repair)
+
+    assert main(
+        [
+            "--root",
+            str(tmp_path),
+            "prospective",
+            "repair-snapshots",
+        ]
+    ) == 0
+    assert calls == [tmp_path / "runtime/prospective/5.0"]
+    assert json.loads(capsys.readouterr().out)["repaired_count"] == 1
 
 
 def test_current_release_metadata_and_upgrade_default_are_consistent() -> None:

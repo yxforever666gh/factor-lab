@@ -107,10 +107,16 @@ tag 和 GitHub 远端 tag；只在本地创建 tag 不算完成发布。
 跳过的官方 signal：canary Tlog 之后的首个官方收盘必须入账。发布 runbook 必须事先写明目标
 首信号及 canary 窗口；5.2 要保持 2026-08-31 为首信号，canary Tlog 必须位于
 2026-08-28 15:00（不含）至 2026-08-31 15:00（不含），时区均为 Asia/Shanghai。
-在首个 decision 前发布的 5.3、5.4、5.5 等纠错实现仍受同一首信号窗口约束。
+在首个 decision 前发布的 5.3、5.4、5.5、5.6 等纠错实现仍属于同一个不可变首信号纠错窗口，
+受完全相同的 canary 截止时间约束。
 首次 implementation canary 的可信 TLog 是不可变 prospective epoch；后续 canary 不能以较晚
 TLog 重基准首信号。若 active 纠错 canary 不早于该固定 signal 收盘，控制器必须 terminal，不能
 把该 signal 记为 skipped 或推进到下一交易日。
+
+前瞻数据的 availability timestamp 必须不早于它所声明可用的 source artifact 持久化和对应
+checkpoint 原子 publish；provider 响应时间、下载开始时间、写入前采样时间或临时文件完成时间
+都不能冒充可用时间。发布验证必须覆盖这条因果顺序以及并发 writer/崩溃恢复，不能用较早时间
+回填来解锁 membership、input 或 admission deadline。
 
 跨版本 implementation transition 只允许尚无任何 sealed decision 的账本。历史 capsule 必须
 静态验证 annotated tag、Git blobs、closure、receipt 与完整 capsule tree，最终 active capsule

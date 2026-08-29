@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import base64
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
 import subprocess
 import sys
+import threading
 from typing import Any
 
 import pytest
 
+import factor_lab.prospective_runtime as prospective_runtime
 from factor_lab.prospective_attestation import (
     CommandSpec,
     build_dispatch_request,
@@ -385,6 +387,7 @@ class FakeGitHub:
         failure: str | None = None,
         allow_dispatch: bool = True,
         request_id: str | None = None,
+        remote_runs: list[dict[str, Any]] | None = None,
         tlog_timestamp: str = "2026-08-23T12:03:00Z",
         include_other_attestation: bool = False,
     ) -> None:
@@ -392,6 +395,7 @@ class FakeGitHub:
         self.failure = failure
         self.allow_dispatch = allow_dispatch
         self.request_id = request_id
+        self.remote_runs = [dict(run) for run in (remote_runs or [])]
         self.tlog_timestamp = tlog_timestamp
         self.include_other_attestation = include_other_attestation
         self.workflow_run_attempt = 1
@@ -403,6 +407,24 @@ class FakeGitHub:
         assert isinstance(command.argv, tuple)
         assert command.argv[:1] == ("gh",)
 
+        if (
+            command.argv[1:2] == ("api",)
+            and "/actions/workflows/" in command.argv[2]
+            and "/runs?" in command.argv[2]
+        ):
+            assert command.argv[-2:] == ("--paginate", "--slurp")
+            return CommandResult(
+                0,
+                json.dumps(
+                    [
+                        {
+                            "total_count": len(self.remote_runs),
+                            "workflow_runs": self.remote_runs,
+                        }
+                    ]
+                ).encode(),
+            )
+
         if command.argv[1:2] == ("api",) and command.argv[2].endswith(
             "/dispatches"
         ):
@@ -412,9 +434,14 @@ class FakeGitHub:
                 return CommandResult(1, b"", b"dispatch unavailable")
             assert command.stdin is not None
             body = json.loads(command.stdin)
+            assert set(body) == {"inputs", "ref", "return_run_details"}
+            assert body["return_run_details"] is True
             self.request_id = body["inputs"]["request_id"]
             self.dispatched_snapshot = base64.b64decode(
                 body["inputs"]["snapshot_b64"], validate=True
+            )
+            self.remote_runs.append(
+                _run_payload(display_title=f"prospective-{self.request_id}")
             )
             return CommandResult(
                 0,
@@ -705,6 +732,7 @@ def test_activation_canary_runs_full_fake_gh_flow_and_appends_last(tmp_path: Pat
         "api",
         "api",
         "api",
+        "api",
         "attestation",
         "attestation",
     ]
@@ -805,6 +833,269 @@ def test_decision_anchor_rejects_tlog_at_the_admission_deadline(
     assert audit_ledger(ledger)["record_count"] == 2
 
 
+def test_decision_deadline_forbids_dispatch_without_local_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = tmp_path / "ledger"
+    _activate(ledger)
+    decision = _decision(ledger)
+    request_id = build_dispatch_request(
+        Path(decision["snapshot"]["path"]).read_bytes()
+    ).request_id
+    monkeypatch.setattr(
+        prospective_runtime,
+        "_runtime_now_utc",
+        lambda: datetime(2026, 8, 24, 1, 15, tzinfo=timezone.utc),
+    )
+    fake = FakeGitHub(request_id=request_id)
+
+    with pytest.raises(ProspectiveRuntimeError, match="before local dispatch evidence"):
+        attest_snapshot(
+            ledger,
+            decision["snapshot"]["path"],
+            purpose="decision_anchor",
+            decision_record_sha256=decision["record_sha256"],
+            admission_deadline_utc="2026-08-24T01:15:00Z",
+            release_commit_oid=COMMIT_OID,
+            command_runner=fake,
+            sleeper=lambda _: None,
+        )
+
+    assert fake.calls == []
+    assert not (ledger / "dispatch" / f"{request_id}.intent.json").exists()
+    assert not (ledger / "dispatch" / f"{request_id}.json").exists()
+    assert audit_ledger(ledger)["record_count"] == 2
+
+
+def test_decision_binding_resumes_after_deadline_without_redispatch(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = tmp_path / "ledger"
+    _activate(ledger)
+    decision = _decision(ledger)
+    monkeypatch.setattr(
+        prospective_runtime,
+        "_runtime_now_utc",
+        lambda: datetime(2026, 8, 23, 12, tzinfo=timezone.utc),
+    )
+    first = FakeGitHub(
+        run_payloads=[_run_payload(status="queued", conclusion=None)]
+    )
+    with pytest.raises(ProspectiveRuntimeError, match="did not complete"):
+        attest_snapshot(
+            ledger,
+            decision["snapshot"]["path"],
+            purpose="decision_anchor",
+            decision_record_sha256=decision["record_sha256"],
+            admission_deadline_utc="2026-08-24T01:15:00Z",
+            release_commit_oid=COMMIT_OID,
+            command_runner=first,
+            sleeper=lambda _: None,
+            max_poll_attempts=1,
+        )
+
+    assert first.request_id is not None
+    binding_path = ledger / "dispatch" / f"{first.request_id}.json"
+    assert binding_path.is_file()
+    monkeypatch.setattr(
+        prospective_runtime,
+        "_runtime_now_utc",
+        lambda: datetime(2026, 8, 25, 2, tzinfo=timezone.utc),
+    )
+    retry = FakeGitHub(allow_dispatch=False, request_id=first.request_id)
+
+    recovered = attest_snapshot(
+        ledger,
+        decision["snapshot"]["path"],
+        purpose="decision_anchor",
+        decision_record_sha256=decision["record_sha256"],
+        admission_deadline_utc="2026-08-24T01:15:00Z",
+        release_commit_oid=COMMIT_OID,
+        recorded_at_utc="2026-08-25T02:01:00Z",
+        command_runner=retry,
+        sleeper=lambda _: None,
+    )
+
+    assert recovered["resumed"] is True
+    assert all(not call.argv[2].endswith("/dispatches") for call in retry.calls)
+    assert audit_ledger(ledger)["record_count"] == 3
+
+
+def test_predeadline_intent_reconciles_its_remote_run_after_deadline(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = tmp_path / "ledger"
+    _activate(ledger)
+    decision = _decision(ledger)
+    monkeypatch.setattr(
+        prospective_runtime,
+        "_runtime_now_utc",
+        lambda: datetime(2026, 8, 23, 12, tzinfo=timezone.utc),
+    )
+    fake = FakeGitHub()
+    real_store = prospective_runtime._store_dispatch_binding
+
+    def crash_before_binding(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        raise ProspectiveRuntimeError("simulated crash before binding publication")
+
+    monkeypatch.setattr(
+        prospective_runtime,
+        "_store_dispatch_binding",
+        crash_before_binding,
+    )
+    with pytest.raises(ProspectiveRuntimeError, match="simulated crash"):
+        attest_snapshot(
+            ledger,
+            decision["snapshot"]["path"],
+            purpose="decision_anchor",
+            decision_record_sha256=decision["record_sha256"],
+            admission_deadline_utc="2026-08-24T01:15:00Z",
+            release_commit_oid=COMMIT_OID,
+            command_runner=fake,
+            sleeper=lambda _: None,
+        )
+
+    assert fake.request_id is not None
+    intent_path = ledger / "dispatch" / f"{fake.request_id}.intent.json"
+    assert json.loads(intent_path.read_bytes())["created_at_utc"] == (
+        "2026-08-23T12:00:00Z"
+    )
+    monkeypatch.setattr(
+        prospective_runtime,
+        "_store_dispatch_binding",
+        real_store,
+    )
+    monkeypatch.setattr(
+        prospective_runtime,
+        "_runtime_now_utc",
+        lambda: datetime(2026, 8, 25, 2, tzinfo=timezone.utc),
+    )
+    fake.allow_dispatch = False
+
+    recovered = attest_snapshot(
+        ledger,
+        decision["snapshot"]["path"],
+        purpose="decision_anchor",
+        decision_record_sha256=decision["record_sha256"],
+        admission_deadline_utc="2026-08-24T01:15:00Z",
+        release_commit_oid=COMMIT_OID,
+        recorded_at_utc="2026-08-25T02:01:00Z",
+        command_runner=fake,
+        sleeper=lambda _: None,
+    )
+
+    dispatch_calls = [
+        call
+        for call in fake.calls
+        if call.argv[1:2] == ("api",) and call.argv[2].endswith("/dispatches")
+    ]
+    assert len(dispatch_calls) == 1
+    assert recovered["resumed"] is True
+    assert audit_ledger(ledger)["record_count"] == 3
+
+
+def test_predeadline_intent_without_remote_run_never_dispatches_after_deadline(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = tmp_path / "ledger"
+    _activate(ledger)
+    decision = _decision(ledger)
+    request_id = build_dispatch_request(
+        Path(decision["snapshot"]["path"]).read_bytes()
+    ).request_id
+    monkeypatch.setattr(
+        prospective_runtime,
+        "_runtime_now_utc",
+        lambda: datetime(2026, 8, 23, 12, tzinfo=timezone.utc),
+    )
+    before_crash = FakeGitHub(request_id=request_id)
+
+    def crash_before_dispatch(command: CommandSpec) -> CommandResult:
+        if command.argv[1:2] == ("api",) and command.argv[2].endswith(
+            "/dispatches"
+        ):
+            raise RuntimeError("simulated crash before network dispatch")
+        return before_crash(command)
+
+    with pytest.raises(ProspectiveRuntimeError, match="dispatch failed"):
+        attest_snapshot(
+            ledger,
+            decision["snapshot"]["path"],
+            purpose="decision_anchor",
+            decision_record_sha256=decision["record_sha256"],
+            admission_deadline_utc="2026-08-24T01:15:00Z",
+            release_commit_oid=COMMIT_OID,
+            command_runner=crash_before_dispatch,
+            sleeper=lambda _: None,
+        )
+
+    monkeypatch.setattr(
+        prospective_runtime,
+        "_runtime_now_utc",
+        lambda: datetime(2026, 8, 25, 2, tzinfo=timezone.utc),
+    )
+    retry = FakeGitHub(allow_dispatch=False, request_id=request_id)
+    with pytest.raises(ProspectiveRuntimeError, match="forbids a new workflow dispatch"):
+        attest_snapshot(
+            ledger,
+            decision["snapshot"]["path"],
+            purpose="decision_anchor",
+            decision_record_sha256=decision["record_sha256"],
+            admission_deadline_utc="2026-08-24T01:15:00Z",
+            release_commit_oid=COMMIT_OID,
+            command_runner=retry,
+            sleeper=lambda _: None,
+        )
+
+    assert len(
+        [call for call in retry.calls if "/runs?" in call.argv[2]]
+    ) == prospective_runtime.DEFAULT_DISPATCH_RECONCILE_ATTEMPTS
+    assert all(not call.argv[2].endswith("/dispatches") for call in retry.calls)
+    assert audit_ledger(ledger)["record_count"] == 2
+
+
+def test_postdeadline_intent_is_not_recovery_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = tmp_path / "ledger"
+    _activate(ledger)
+    decision = _decision(ledger)
+    request = build_dispatch_request(
+        Path(decision["snapshot"]["path"]).read_bytes()
+    )
+    prospective_runtime._store_dispatch_intent(
+        prospective_runtime.LedgerLayout.at(ledger),
+        request,
+        created_at_utc=datetime(2026, 8, 24, 1, 15, tzinfo=timezone.utc),
+    )
+    monkeypatch.setattr(
+        prospective_runtime,
+        "_runtime_now_utc",
+        lambda: datetime(2026, 8, 25, 2, tzinfo=timezone.utc),
+    )
+    fake = FakeGitHub(allow_dispatch=False, request_id=request.request_id)
+
+    with pytest.raises(ProspectiveRuntimeError, match="not created before its deadline"):
+        attest_snapshot(
+            ledger,
+            decision["snapshot"]["path"],
+            purpose="decision_anchor",
+            decision_record_sha256=decision["record_sha256"],
+            admission_deadline_utc="2026-08-24T01:15:00Z",
+            release_commit_oid=COMMIT_OID,
+            command_runner=fake,
+            sleeper=lambda _: None,
+        )
+
+    assert fake.calls == []
+    assert audit_ledger(ledger)["record_count"] == 2
+
+
 def test_other_same_subject_attestations_do_not_block_the_current_run(
     tmp_path: Path,
 ) -> None:
@@ -893,6 +1184,503 @@ def test_poll_exhaustion_never_downloads_or_appends(tmp_path: Path) -> None:
 
     assert sleeps == [0.0]
     assert all(call.argv[1:3] != ("attestation", "download") for call in fake.calls)
+    assert audit_ledger(ledger)["record_count"] == 1
+
+
+def test_poll_timeout_persists_dispatch_and_automatically_resumes(
+    tmp_path: Path,
+) -> None:
+    ledger = tmp_path / "ledger"
+    activation = _activate(ledger)
+    request_id = build_dispatch_request(
+        Path(activation["snapshot"]["path"]).read_bytes()
+    ).request_id
+    fake = FakeGitHub(
+        run_payloads=[
+            _run_payload(status="queued", conclusion=None),
+            _run_payload(status="in_progress", conclusion=None),
+        ]
+    )
+
+    with pytest.raises(ProspectiveRuntimeError, match="did not complete"):
+        attest_snapshot(
+            ledger,
+            activation["snapshot"]["path"],
+            purpose="activation_canary",
+            release_commit_oid=COMMIT_OID,
+            command_runner=fake,
+            sleeper=lambda _: None,
+            poll_interval_seconds=0,
+            max_poll_attempts=2,
+        )
+
+    binding_path = ledger / "dispatch" / f"{request_id}.json"
+    binding = json.loads(binding_path.read_bytes())
+    assert binding["request_id"] == request_id
+    assert binding["workflow_run_id"] == RUN_ID
+    assert audit_ledger(ledger)["record_count"] == 1
+
+    fake.allow_dispatch = False
+    result = attest_snapshot(
+        ledger,
+        activation["snapshot"]["path"],
+        purpose="activation_canary",
+        release_commit_oid=COMMIT_OID,
+        recorded_at_utc="2026-08-23T12:04:00Z",
+        command_runner=fake,
+        sleeper=lambda _: None,
+    )
+
+    dispatch_calls = [
+        call
+        for call in fake.calls
+        if call.argv[1:2] == ("api",) and call.argv[2].endswith("/dispatches")
+    ]
+    assert len(dispatch_calls) == 1
+    assert result["resumed"] is True
+    assert result["workflow_run_id"] == RUN_ID
+    assert audit_ledger(ledger)["record_count"] == 2
+
+
+def test_pre_dispatch_intent_reconciles_after_binding_store_crash(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = tmp_path / "ledger"
+    activation = _activate(ledger)
+    request_id = build_dispatch_request(
+        Path(activation["snapshot"]["path"]).read_bytes()
+    ).request_id
+    fake = FakeGitHub()
+    real_store = prospective_runtime._store_dispatch_binding
+
+    def crash_after_dispatch(*_args: object, **_kwargs: object) -> dict[str, Any]:
+        raise ProspectiveRuntimeError("simulated crash before binding publication")
+
+    monkeypatch.setattr(
+        prospective_runtime,
+        "_store_dispatch_binding",
+        crash_after_dispatch,
+    )
+    with pytest.raises(ProspectiveRuntimeError, match="simulated crash"):
+        attest_snapshot(
+            ledger,
+            activation["snapshot"]["path"],
+            purpose="activation_canary",
+            release_commit_oid=COMMIT_OID,
+            command_runner=fake,
+            sleeper=lambda _: None,
+        )
+
+    intent_path = ledger / "dispatch" / f"{request_id}.intent.json"
+    binding_path = ledger / "dispatch" / f"{request_id}.json"
+    assert intent_path.is_file()
+    assert not binding_path.exists()
+    monkeypatch.setattr(
+        prospective_runtime,
+        "_store_dispatch_binding",
+        real_store,
+    )
+    fake.allow_dispatch = False
+    remote_runs = list(fake.remote_runs)
+    fake.remote_runs.clear()
+    retry_queries = 0
+    reconcile_sleeps: list[float] = []
+
+    def delayed_visibility_runner(command: CommandSpec) -> CommandResult:
+        nonlocal retry_queries
+        if (
+            command.argv[1:2] == ("api",)
+            and "/actions/workflows/" in command.argv[2]
+            and "/runs?" in command.argv[2]
+        ):
+            retry_queries += 1
+            if retry_queries == 2:
+                fake.remote_runs.extend(remote_runs)
+        return fake(command)
+
+    result = attest_snapshot(
+        ledger,
+        activation["snapshot"]["path"],
+        purpose="activation_canary",
+        release_commit_oid=COMMIT_OID,
+        recorded_at_utc="2026-08-23T12:04:00Z",
+        command_runner=delayed_visibility_runner,
+        sleeper=reconcile_sleeps.append,
+    )
+
+    dispatch_calls = [
+        call
+        for call in fake.calls
+        if call.argv[1:2] == ("api",) and call.argv[2].endswith("/dispatches")
+    ]
+    query_calls = [
+        call
+        for call in fake.calls
+        if call.argv[1:2] == ("api",) and "/runs?" in call.argv[2]
+    ]
+    assert len(dispatch_calls) == 1
+    assert len(query_calls) == 3
+    assert retry_queries == 2
+    assert reconcile_sleeps == [
+        prospective_runtime.DEFAULT_DISPATCH_RECONCILE_INTERVAL_SECONDS
+    ]
+    assert result["resumed"] is True
+    assert result["workflow_run_id"] == RUN_ID
+    assert binding_path.is_file()
+    assert audit_ledger(ledger)["record_count"] == 2
+
+
+def test_intent_owner_crash_before_network_eventually_redispatches(
+    tmp_path: Path,
+) -> None:
+    ledger = tmp_path / "ledger"
+    activation = _activate(ledger)
+    request_id = build_dispatch_request(
+        Path(activation["snapshot"]["path"]).read_bytes()
+    ).request_id
+    before_crash = FakeGitHub()
+
+    def crash_before_dispatch(command: CommandSpec) -> CommandResult:
+        if command.argv[1:2] == ("api",) and command.argv[2].endswith(
+            "/dispatches"
+        ):
+            raise RuntimeError("simulated process death before network dispatch")
+        return before_crash(command)
+
+    with pytest.raises(ProspectiveRuntimeError, match="dispatch failed"):
+        attest_snapshot(
+            ledger,
+            activation["snapshot"]["path"],
+            purpose="activation_canary",
+            release_commit_oid=COMMIT_OID,
+            command_runner=crash_before_dispatch,
+            sleeper=lambda _: None,
+        )
+
+    intent_path = ledger / "dispatch" / f"{request_id}.intent.json"
+    binding_path = ledger / "dispatch" / f"{request_id}.json"
+    assert intent_path.is_file()
+    assert not binding_path.exists()
+    retry = FakeGitHub(request_id=request_id)
+    reconcile_sleeps: list[float] = []
+
+    result = attest_snapshot(
+        ledger,
+        activation["snapshot"]["path"],
+        purpose="activation_canary",
+        release_commit_oid=COMMIT_OID,
+        recorded_at_utc="2026-08-23T12:04:00Z",
+        command_runner=retry,
+        sleeper=reconcile_sleeps.append,
+    )
+
+    query_calls = [
+        call
+        for call in retry.calls
+        if call.argv[1:2] == ("api",) and "/runs?" in call.argv[2]
+    ]
+    dispatch_calls = [
+        call
+        for call in retry.calls
+        if call.argv[1:2] == ("api",) and call.argv[2].endswith("/dispatches")
+    ]
+    assert len(query_calls) == (
+        prospective_runtime.DEFAULT_DISPATCH_RECONCILE_ATTEMPTS
+    )
+    assert len(dispatch_calls) == 1
+    assert reconcile_sleeps == [
+        prospective_runtime.DEFAULT_DISPATCH_RECONCILE_INTERVAL_SECONDS
+    ] * (prospective_runtime.DEFAULT_DISPATCH_RECONCILE_ATTEMPTS - 1)
+    assert result["resumed"] is False
+    assert result["workflow_run_id"] == RUN_ID
+    assert binding_path.is_file()
+    assert audit_ledger(ledger)["record_count"] == 2
+
+
+def test_reconciliation_rejects_multiple_matching_remote_runs(
+    tmp_path: Path,
+) -> None:
+    ledger = tmp_path / "ledger"
+    activation = _activate(ledger)
+    request_id = build_dispatch_request(
+        Path(activation["snapshot"]["path"]).read_bytes()
+    ).request_id
+    first = _run_payload(display_title=f"prospective-{request_id}")
+    second = dict(first)
+    second["id"] = RUN_ID + 1
+    second["html_url"] = (
+        f"https://github.com/yxforever666gh/factor-lab/actions/runs/{RUN_ID + 1}"
+    )
+    fake = FakeGitHub(
+        allow_dispatch=False,
+        request_id=request_id,
+        remote_runs=[first, second],
+    )
+
+    with pytest.raises(ProspectiveRuntimeError, match="reconciliation failed") as caught:
+        attest_snapshot(
+            ledger,
+            activation["snapshot"]["path"],
+            purpose="activation_canary",
+            release_commit_oid=COMMIT_OID,
+            command_runner=fake,
+            sleeper=lambda _: None,
+        )
+
+    assert "multiple workflow runs" in str(caught.value.__cause__)
+    assert len(fake.calls) == 1
+    assert audit_ledger(ledger)["record_count"] == 1
+
+
+def test_wrong_explicit_run_id_does_not_poison_dispatch_binding(
+    tmp_path: Path,
+) -> None:
+    ledger = tmp_path / "ledger"
+    activation = _activate(ledger)
+    request_id = build_dispatch_request(
+        Path(activation["snapshot"]["path"]).read_bytes()
+    ).request_id
+    binding_path = ledger / "dispatch" / f"{request_id}.json"
+    wrong = FakeGitHub(
+        allow_dispatch=False,
+        request_id=request_id,
+        run_payloads=[
+            _run_payload(display_title=f"prospective-{'0' * 64}")
+        ],
+    )
+
+    with pytest.raises(ProspectiveRuntimeError, match="before resume binding"):
+        attest_snapshot(
+            ledger,
+            activation["snapshot"]["path"],
+            purpose="activation_canary",
+            release_commit_oid=COMMIT_OID,
+            workflow_run_id=RUN_ID,
+            command_runner=wrong,
+            sleeper=lambda _: None,
+        )
+
+    assert not binding_path.exists()
+    correct = FakeGitHub(
+        allow_dispatch=False,
+        request_id=request_id,
+    )
+    result = attest_snapshot(
+        ledger,
+        activation["snapshot"]["path"],
+        purpose="activation_canary",
+        release_commit_oid=COMMIT_OID,
+        workflow_run_id=RUN_ID,
+        recorded_at_utc="2026-08-23T12:04:00Z",
+        command_runner=correct,
+        sleeper=lambda _: None,
+    )
+
+    assert binding_path.is_file()
+    assert result["workflow_run_id"] == RUN_ID
+    assert audit_ledger(ledger)["record_count"] == 2
+
+
+@pytest.mark.parametrize("slot", ["binding", "intent", "lock"])
+def test_dangling_dispatch_symlink_fails_closed_before_network(
+    tmp_path: Path,
+    slot: str,
+) -> None:
+    ledger = tmp_path / "ledger"
+    activation = _activate(ledger)
+    request_id = build_dispatch_request(
+        Path(activation["snapshot"]["path"]).read_bytes()
+    ).request_id
+    filename = {
+        "binding": f"{request_id}.json",
+        "intent": f"{request_id}.intent.json",
+        "lock": f".{request_id}.lock",
+    }[slot]
+    path = ledger / "dispatch" / filename
+    try:
+        path.symlink_to(path.with_name("missing-dispatch-evidence.json"))
+    except OSError as exc:  # pragma: no cover - depends on Windows privilege
+        pytest.skip(f"symlink creation unavailable: {exc}")
+    fake = FakeGitHub()
+
+    with pytest.raises(ProspectiveRuntimeError, match="not a regular file"):
+        attest_snapshot(
+            ledger,
+            activation["snapshot"]["path"],
+            purpose="activation_canary",
+            release_commit_oid=COMMIT_OID,
+            command_runner=fake,
+            sleeper=lambda _: None,
+        )
+
+    assert fake.calls == []
+    assert audit_ledger(ledger)["record_count"] == 1
+
+
+def test_retry_after_receipt_append_returns_existing_success_without_network(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = tmp_path / "ledger"
+    activation = _activate(ledger)
+    first = FakeGitHub()
+    real_append = prospective_runtime.append_attestation_receipt
+    appended: list[dict[str, Any]] = []
+
+    def append_then_crash(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        receipt = real_append(*args, **kwargs)
+        appended.append(receipt)
+        raise RuntimeError("simulated crash after durable receipt append")
+
+    monkeypatch.setattr(
+        prospective_runtime,
+        "append_attestation_receipt",
+        append_then_crash,
+    )
+    with pytest.raises(ProspectiveRuntimeError, match="could not be appended"):
+        attest_snapshot(
+            ledger,
+            activation["snapshot"]["path"],
+            purpose="activation_canary",
+            release_commit_oid=COMMIT_OID,
+            recorded_at_utc="2026-08-23T12:04:00Z",
+            command_runner=first,
+            sleeper=lambda _: None,
+        )
+
+    assert len(appended) == 1
+    assert first.request_id is not None
+    assert audit_ledger(ledger)["record_count"] == 2
+    monkeypatch.setattr(
+        prospective_runtime,
+        "append_attestation_receipt",
+        real_append,
+    )
+    retry = FakeGitHub(allow_dispatch=False, request_id=first.request_id)
+
+    recovered = attest_snapshot(
+        ledger,
+        activation["snapshot"]["path"],
+        purpose="activation_canary",
+        release_commit_oid=COMMIT_OID,
+        command_runner=retry,
+        sleeper=lambda _: None,
+    )
+
+    assert retry.calls == []
+    assert recovered["resumed"] is True
+    assert recovered["workflow_run_id"] == RUN_ID
+    assert recovered["receipt"]["record_sha256"] == (
+        appended[0]["record_sha256"]
+    )
+    assert audit_ledger(ledger)["record_count"] == 2
+
+
+def test_per_request_lock_serializes_concurrent_identical_attestation(
+    tmp_path: Path,
+) -> None:
+    ledger = tmp_path / "ledger"
+    activation = _activate(ledger)
+    dispatch_started = threading.Event()
+    release_dispatch = threading.Event()
+
+    class BlockingFakeGitHub(FakeGitHub):
+        def __call__(self, command: CommandSpec) -> CommandResult:
+            if command.argv[1:2] == ("api",) and command.argv[2].endswith(
+                "/dispatches"
+            ):
+                dispatch_started.set()
+                if not release_dispatch.wait(timeout=5):
+                    raise AssertionError("timed out waiting to release fake dispatch")
+            return super().__call__(command)
+
+    fake = BlockingFakeGitHub()
+    results: list[dict[str, Any]] = []
+    errors: list[BaseException] = []
+
+    def run_attestation() -> None:
+        try:
+            results.append(
+                attest_snapshot(
+                    ledger,
+                    activation["snapshot"]["path"],
+                    purpose="activation_canary",
+                    release_commit_oid=COMMIT_OID,
+                    recorded_at_utc="2026-08-23T12:04:00Z",
+                    command_runner=fake,
+                    sleeper=lambda _: None,
+                )
+            )
+        except BaseException as exc:  # pragma: no cover - asserted below
+            errors.append(exc)
+
+    first_thread = threading.Thread(target=run_attestation)
+    second_thread = threading.Thread(target=run_attestation)
+    first_thread.start()
+    assert dispatch_started.wait(timeout=5)
+    second_thread.start()
+    release_dispatch.set()
+    first_thread.join(timeout=10)
+    second_thread.join(timeout=10)
+
+    assert not first_thread.is_alive()
+    assert not second_thread.is_alive()
+    assert errors == []
+    assert len(results) == 2
+    dispatch_calls = [
+        call
+        for call in fake.calls
+        if call.argv[1:2] == ("api",) and call.argv[2].endswith("/dispatches")
+    ]
+    assert len(dispatch_calls) == 1
+    assert results[0]["receipt"]["record_sha256"] == (
+        results[1]["receipt"]["record_sha256"]
+    )
+    assert audit_ledger(ledger)["record_count"] == 2
+
+
+def test_tampered_dispatch_binding_fails_closed_before_network(
+    tmp_path: Path,
+) -> None:
+    ledger = tmp_path / "ledger"
+    activation = _activate(ledger)
+    first_attempt = FakeGitHub(
+        run_payloads=[_run_payload(status="queued", conclusion=None)]
+    )
+
+    with pytest.raises(ProspectiveRuntimeError, match="did not complete"):
+        attest_snapshot(
+            ledger,
+            activation["snapshot"]["path"],
+            purpose="activation_canary",
+            release_commit_oid=COMMIT_OID,
+            command_runner=first_attempt,
+            sleeper=lambda _: None,
+            max_poll_attempts=1,
+        )
+
+    assert first_attempt.request_id is not None
+    binding_path = ledger / "dispatch" / f"{first_attempt.request_id}.json"
+    binding = json.loads(binding_path.read_bytes())
+    binding["release_tag"] = "5.1"
+    binding_path.write_bytes(canonical_json_bytes(binding))
+    resumed_attempt = FakeGitHub(
+        allow_dispatch=False,
+        request_id=first_attempt.request_id,
+    )
+
+    with pytest.raises(ProspectiveRuntimeError, match="dispatch binding identity differs"):
+        attest_snapshot(
+            ledger,
+            activation["snapshot"]["path"],
+            purpose="activation_canary",
+            release_commit_oid=COMMIT_OID,
+            command_runner=resumed_attempt,
+            sleeper=lambda _: None,
+        )
+
+    assert resumed_attempt.calls == []
     assert audit_ledger(ledger)["record_count"] == 1
 
 

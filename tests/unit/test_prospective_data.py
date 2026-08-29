@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 import hashlib
 import json
 from pathlib import Path
+import threading
+import time
 
 import numpy as np
 import pandas as pd
@@ -365,6 +368,197 @@ def test_bridge_snapshot_reproduces_fixed_core_fields(data_root) -> None:
     assert [value.hex() for value in loaded.frame["earnings_yield"]] == [
         value.hex() for value in result.frame["earnings_yield"]
     ]
+
+
+def test_input_bundle_publishes_manifest_last_and_returns_after_completion_bound(
+    data_root,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, _, _ = data_root
+    original = prospective._write_verified
+    publication_order: list[str] = []
+
+    def record(path: Path, payload: bytes) -> None:
+        if path.parent.parent.name == "inputs":
+            publication_order.append(path.name)
+        original(path, payload)
+
+    monkeypatch.setattr(prospective, "_write_verified", record)
+    result = prospective.build_prospective_input_snapshot(
+        root, "2026-08-24", available_at_utc=None
+    )
+
+    assert publication_order[-3:] == [
+        "rows.json",
+        "build-receipt.json",
+        "manifest.json",
+    ]
+    assert pd.Timestamp(result.inputs_available_at_utc) <= pd.Timestamp(
+        result.build_completed_at_utc
+    )
+    assert pd.Timestamp(result.build_completed_at_utc) <= pd.Timestamp.now(tz="UTC")
+    loaded = prospective.load_prospective_input_snapshot(result.directory)
+    assert loaded.build_completed_at_utc == result.build_completed_at_utc
+
+
+def test_null_cutoff_input_is_immediately_ready_after_builder_returns(
+    data_root,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from factor_lab.data.prospective_readiness import _input_snapshot_view
+
+    root, _, _ = data_root
+    checkpoint_path = root / "runtime/data/raw/checkpoint.json"
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    observed_input_at = "2026-08-24T08:00:00Z"
+    for entry in checkpoint["partitions"].values():
+        entry["completed_at_utc"] = observed_input_at
+    for entry in checkpoint["calendars"].values():
+        entry["completed_at_utc"] = observed_input_at
+        manifest_path = Path(entry["manifest_path"])
+        calendar_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        calendar_manifest["completed_at_utc"] = observed_input_at
+        _write_json(manifest_path, calendar_manifest)
+        entry["manifest_sha256"] = sha256_file(manifest_path)
+    _write_json(checkpoint_path, checkpoint)
+
+    monotonic_start = time.monotonic()
+    witnessed_start = pd.Timestamp("2026-08-24T08:01:00Z")
+
+    def witnessed_now() -> pd.Timestamp:
+        return witnessed_start + pd.Timedelta(
+            seconds=time.monotonic() - monotonic_start
+        )
+
+    monkeypatch.setattr(prospective, "_now_utc", witnessed_now)
+    built = prospective.build_prospective_input_snapshot(
+        root, "2026-08-24", available_at_utc=None
+    )
+    candidate = {
+        "signal_date": built.signal_date,
+        "entry_date": built.trade_date,
+        "signal_close_utc": "2026-08-24T07:00:00Z",
+        "admission_deadline_utc": "2026-08-25T01:15:00Z",
+    }
+    membership = {
+        "status": "complete",
+        "artifact_sha256": built.membership_artifact_sha256,
+    }
+    readiness = _input_snapshot_view(
+        root,
+        candidate,
+        membership,
+        witnessed_now().to_pydatetime(),
+    )
+
+    assert readiness["status"] == "complete"
+    assert readiness["snapshot_sha256"] == built.snapshot_sha256
+    assert pd.Timestamp(readiness["build_completed_at_utc"]) <= witnessed_now()
+
+
+def test_input_bundle_recovers_receipt_after_crash_before_manifest(
+    data_root,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, _, _ = data_root
+    original = prospective._write_verified
+    crashed = False
+
+    def crash_before_manifest(path: Path, payload: bytes) -> None:
+        nonlocal crashed
+        if (
+            not crashed
+            and path.name == "manifest.json"
+            and path.parent.parent.name == "inputs"
+        ):
+            crashed = True
+            assert (path.parent / "rows.json").is_file()
+            assert (path.parent / "build-receipt.json").is_file()
+            raise RuntimeError("simulated crash before commit marker")
+        original(path, payload)
+
+    monkeypatch.setattr(prospective, "_write_verified", crash_before_manifest)
+    with pytest.raises(RuntimeError, match="simulated crash"):
+        prospective.build_prospective_input_snapshot(root, "2026-08-24")
+
+    input_root = root / "runtime/prospective/5.0/inputs"
+    incomplete = [path for path in input_root.iterdir() if path.is_dir()]
+    assert len(incomplete) == 1
+    assert (incomplete[0] / "rows.json").is_file()
+    assert (incomplete[0] / "build-receipt.json").is_file()
+    assert not (incomplete[0] / "manifest.json").exists()
+
+    monkeypatch.setattr(prospective, "_write_verified", original)
+    recovered = prospective.build_prospective_input_snapshot(root, "2026-08-24")
+    assert recovered.directory == incomplete[0]
+    assert recovered.manifest_path.is_file()
+    assert pd.Timestamp(recovered.build_completed_at_utc) <= pd.Timestamp.now(
+        tz="UTC"
+    )
+    assert prospective.load_prospective_input_snapshot(
+        recovered.directory
+    ).snapshot_sha256 == recovered.snapshot_sha256
+
+
+def test_concurrent_input_publishers_share_one_committed_receipt(data_root) -> None:
+    root, _, _ = data_root
+    barrier = threading.Barrier(2)
+
+    def build() -> prospective.ProspectiveInputSnapshot:
+        barrier.wait(timeout=10)
+        return prospective.build_prospective_input_snapshot(root, "2026-08-24")
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first_future = pool.submit(build)
+        second_future = pool.submit(build)
+        first = first_future.result(timeout=60)
+        second = second_future.result(timeout=60)
+
+    assert first.snapshot_sha256 == second.snapshot_sha256
+    assert first.build_completed_at_utc == second.build_completed_at_utc
+    assert first.build_receipt_path.read_bytes() == second.build_receipt_path.read_bytes()
+    assert prospective.load_prospective_input_snapshot(
+        first.directory
+    ).snapshot_sha256 == first.snapshot_sha256
+
+
+def test_pure_replay_requires_and_preserves_verified_build_completion(data_root) -> None:
+    root, _, _ = data_root
+    built = prospective.build_prospective_input_snapshot(root, "2026-08-24")
+
+    replayed = prospective.build_prospective_input_snapshot(
+        root,
+        built.signal_date,
+        available_at_utc=built.inputs_available_at_utc,
+        _materialize=False,
+        _sealed_manifest=built.manifest,
+        _sealed_build_completed_at_utc=built.build_completed_at_utc,
+    )
+    assert replayed.build_completed_at_utc == built.build_completed_at_utc
+
+    with pytest.raises(
+        prospective.ProspectiveDataError,
+        match="requires the verified build completion receipt",
+    ):
+        prospective.build_prospective_input_snapshot(
+            root,
+            built.signal_date,
+            available_at_utc=built.inputs_available_at_utc,
+            _materialize=False,
+            _sealed_manifest=built.manifest,
+        )
+    with pytest.raises(
+        prospective.ProspectiveDataError,
+        match="precedes maximum input availability",
+    ):
+        prospective.build_prospective_input_snapshot(
+            root,
+            built.signal_date,
+            available_at_utc=built.inputs_available_at_utc,
+            _materialize=False,
+            _sealed_manifest=built.manifest,
+            _sealed_build_completed_at_utc="2026-08-25T07:59:59Z",
+        )
 
 
 def test_future_partition_does_not_change_old_snapshot_hash(data_root) -> None:

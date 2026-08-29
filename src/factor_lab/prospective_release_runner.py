@@ -975,9 +975,9 @@ def _replay_target(payload: Mapping[str, Any]) -> dict[str, Any]:
         target_rows_sha256=source.target_rows_sha256,
         input_sources_sha256=source.input_sources_sha256,
         membership_artifact_sha256=source.membership_artifact_sha256,
-        source_build_checkpoint_utc=source.inputs_available_at_utc,
+        source_build_checkpoint_utc=source.build_completed_at_utc,
         max_available_at_utc=source.inputs_available_at_utc,
-        information_cutoff_utc=source.inputs_available_at_utc,
+        information_cutoff_utc=source.build_completed_at_utc,
         signal_close_utc=signal_close.strftime("%Y-%m-%dT%H:%M:%SZ"),
         admission_deadline_utc=admission_deadline,
     )

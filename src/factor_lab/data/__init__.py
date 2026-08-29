@@ -60,7 +60,13 @@ from .prospective_membership import (
     build_prospective_membership_snapshot,
     load_prospective_membership_snapshot,
 )
-from .sources import TushareClient, sync_data, sync_enrichment, turnover_amount_to_rmb
+from .sources import (
+    TushareClient,
+    sync_data,
+    sync_enrichment,
+    sync_exact_reference,
+    turnover_amount_to_rmb,
+)
 from .suspensions import audit_suspensions_snapshot, sync_suspensions
 
 
@@ -207,6 +213,7 @@ __all__ = [
     "prepare_financial_pit",
     "sync_data",
     "sync_enrichment",
+    "sync_exact_reference",
     "sync_suspensions",
     "turnover_amount_to_rmb",
 ]

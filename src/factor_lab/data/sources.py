@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from contextlib import contextmanager
+from datetime import datetime, time as wall_time, timezone
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
 import time
-from typing import Any, Mapping, Protocol, Sequence
+from typing import Any, Callable, Iterator, Mapping, Protocol, Sequence
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -39,6 +41,7 @@ ENRICHMENT_DATASET_FIELDS = {
     "bak_basic": "trade_date,ts_code,name,industry,list_date",
     "stock_st": "ts_code,name,trade_date,type,type_name",
 }
+EXACT_REFERENCE_CONTRACT_ID = "factor-lab/exact-bak-basic-raw/1"
 
 AMOUNT_TO_RMB_MULTIPLIERS = {
     "tushare_daily": 1000.0,
@@ -160,20 +163,140 @@ def _read_checkpoint(path: Path) -> dict[str, Any]:
     return payload
 
 
+def _fsync_directory(directory: Path) -> None:
+    """Durably publish a directory entry when the platform supports it.
+
+    POSIX filesystems are expected to support directory ``fsync`` and failures
+    remain fatal.  Windows does not expose a portable directory handle through
+    ``os.open``; only that platform has the deliberately bounded compatibility
+    fallback.
+    """
+
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    try:
+        descriptor = os.open(directory, flags)
+    except OSError:
+        if os.name == "nt":
+            return
+        raise
+    try:
+        try:
+            os.fsync(descriptor)
+        except OSError:
+            if os.name != "nt":
+                raise
+    finally:
+        os.close(descriptor)
+
+
 def _write_json_atomic(path: Path, payload: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8"
+    temporary = path.with_name(
+        f".{path.name}.{os.getpid()}.{time.time_ns()}.tmp"
     )
-    temporary.replace(path)
+    try:
+        temporary.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        with temporary.open("r+b") as handle:
+            os.fsync(handle.fileno())
+        temporary.replace(path)
+        _fsync_directory(path.parent)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def _write_parquet_atomic(path: Path, frame: pd.DataFrame) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    frame.to_parquet(temporary, index=False)
-    temporary.replace(path)
+    temporary = path.with_name(
+        f".{path.name}.{os.getpid()}.{time.time_ns()}.tmp"
+    )
+    try:
+        frame.to_parquet(temporary, index=False)
+        with temporary.open("r+b") as handle:
+            os.fsync(handle.fileno())
+        temporary.replace(path)
+        _fsync_directory(path.parent)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+@contextmanager
+def _checkpoint_lock(
+    checkpoint_path: Path, *, timeout_seconds: float = 15.0
+) -> Iterator[None]:
+    """Serialize checkpoint read/merge/write cycles across processes.
+
+    The reference synchronizer is intentionally independent of the historical
+    enrichment planner.  Both may nevertheless target the same checkpoint, so
+    a byte-range lock prevents a concurrent exact capture from losing an
+    already-published partition entry.
+    """
+
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = checkpoint_path.with_suffix(checkpoint_path.suffix + ".lock")
+    descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        if os.fstat(descriptor).st_size == 0:
+            os.write(descriptor, b"\0")
+            os.fsync(descriptor)
+        started = time.monotonic()
+        if os.name == "nt":
+            import msvcrt
+
+            while True:
+                try:
+                    os.lseek(descriptor, 0, os.SEEK_SET)
+                    msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+                    break
+                except OSError:
+                    if time.monotonic() - started >= timeout_seconds:
+                        raise TimeoutError(
+                            f"timed out acquiring data checkpoint lock: {lock_path}"
+                        )
+                    time.sleep(0.05)
+            try:
+                yield
+            finally:
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            while True:
+                try:
+                    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.monotonic() - started >= timeout_seconds:
+                        raise TimeoutError(
+                            f"timed out acquiring data checkpoint lock: {lock_path}"
+                        )
+                    time.sleep(0.05)
+            try:
+                yield
+            finally:
+                fcntl.flock(descriptor, fcntl.LOCK_UN)
+    finally:
+        os.close(descriptor)
+
+
+@contextmanager
+def _raw_reference_checkpoint_locks(
+    raw_checkpoint_path: Path,
+    reference_checkpoint_path: Path,
+) -> Iterator[None]:
+    """Lock exact-reference inputs in the one permitted cross-file order."""
+
+    raw = raw_checkpoint_path.expanduser().resolve()
+    reference = reference_checkpoint_path.expanduser().resolve()
+    with _checkpoint_lock(raw):
+        if reference == raw:
+            yield
+        else:
+            with _checkpoint_lock(reference):
+                yield
 
 
 def _canonical_json_bytes(payload: Any) -> bytes:
@@ -184,6 +307,48 @@ def _canonical_json_bytes(payload: Any) -> bytes:
         separators=(",", ":"),
         sort_keys=True,
     ).encode("utf-8")
+
+
+def _checkpoint_value_sha256(value: Any) -> str:
+    """Return a stable CAS token for one checkpoint value, including null."""
+
+    return hashlib.sha256(_canonical_json_bytes(value)).hexdigest()
+
+
+def _write_checkpoint_with_conservative_completion(
+    checkpoint_path: Path,
+    payload_factory: Callable[[str], Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Publish a checkpoint whose completion time bounds the commit from above.
+
+    The candidate timestamp is rounded into the future.  If atomic replace and
+    directory durability cross that candidate, the checkpoint is immediately
+    rewritten with a wider bound.  A successful writer waits through the bound
+    before returning, so its own strict validation never observes future-dated
+    evidence.
+    """
+
+    base_quantum_ns = 10_000_000
+    attempt = 0
+    while True:
+        quantum_ns = base_quantum_ns * (2 ** min(attempt, 11))
+        now_ns = time.time_ns()
+        candidate_ns = ((now_ns // quantum_ns) + 2) * quantum_ns
+        seconds, nanoseconds = divmod(candidate_ns, 1_000_000_000)
+        candidate = datetime.fromtimestamp(seconds, timezone.utc).replace(
+            microsecond=nanoseconds // 1_000
+        )
+        completed_at = candidate.isoformat()
+        payload = dict(payload_factory(completed_at))
+        _write_json_atomic(checkpoint_path, payload)
+        published_at = datetime.now(timezone.utc)
+        if published_at <= candidate:
+            while True:
+                remaining = (candidate - datetime.now(timezone.utc)).total_seconds()
+                if remaining <= 0:
+                    return payload
+                time.sleep(min(remaining, 0.05))
+        attempt += 1
 
 
 def _normalise_trade_calendar(
@@ -266,7 +431,8 @@ def _persist_trade_calendar(
     *,
     raw_root: Path,
     checkpoint_path: Path,
-    checkpoint: Mapping[str, Any],
+    baseline_calendars: Mapping[str, Any],
+    resume: bool,
     exchange: str,
     start_date: str,
     end_date: str,
@@ -282,22 +448,35 @@ def _persist_trade_calendar(
     artifact_dir = raw_root / "trade_cal" / f"calendar_sha256={content_sha256}"
     artifact_path = artifact_dir / "part-000.parquet"
     manifest_path = artifact_dir / "manifest.json"
-    calendars = dict(checkpoint.get("calendars") or {})
-    prior = calendars.get(content_sha256)
-    prior_valid = (
-        isinstance(prior, Mapping)
-        and prior.get("status") == "complete"
-        and artifact_path.is_file()
-        and str(prior.get("artifact_sha256") or "") == sha256_file(artifact_path)
-        and str(prior.get("calendar_content_sha256") or "") == content_sha256
-        and str(prior.get("completed_at_utc") or "").strip() != ""
-    )
-    if prior_valid:
-        entry = dict(prior)
-    else:
+    with _checkpoint_lock(checkpoint_path):
+        latest = _read_checkpoint(checkpoint_path)
+        calendars = dict(latest.get("calendars") or {})
+        prior = calendars.get(content_sha256)
+        prior_valid = (
+            isinstance(prior, Mapping)
+            and prior.get("status") == "complete"
+            and artifact_path.is_file()
+            and str(prior.get("artifact_sha256") or "")
+            == sha256_file(artifact_path)
+            and str(prior.get("calendar_content_sha256") or "")
+            == content_sha256
+            and str(prior.get("completed_at_utc") or "").strip() != ""
+        )
+        baseline = baseline_calendars.get(content_sha256)
+        changed_since_start = _checkpoint_value_sha256(
+            prior
+        ) != _checkpoint_value_sha256(baseline)
+        if resume and prior_valid:
+            return dict(latest), dict(prior)
+        elif not resume and changed_since_start:
+            if not prior_valid:
+                raise ValueError(
+                    "trade calendar checkpoint changed during no-resume refresh"
+                )
+            return dict(latest), dict(prior)
+
         _write_parquet_atomic(artifact_path, normalised)
-        completed_at = datetime.now(timezone.utc).isoformat()
-        entry = {
+        entry_without_completion = {
             "status": "complete",
             "exchange": exchange,
             "start_date": start_date,
@@ -307,27 +486,43 @@ def _persist_trade_calendar(
             "path": str(artifact_path),
             "artifact_sha256": sha256_file(artifact_path),
             "calendar_content_sha256": content_sha256,
-            "completed_at_utc": completed_at,
         }
-        _write_json_atomic(
-            manifest_path,
-            {
-                "schema_version": 1,
-                **entry,
-                "records_sha256": hashlib.sha256(
-                    _canonical_json_bytes(records)
-                ).hexdigest(),
-            },
+        records_sha256 = hashlib.sha256(
+            _canonical_json_bytes(records)
+        ).hexdigest()
+
+        def calendar_checkpoint_payload(
+            completed_at_utc: str,
+        ) -> Mapping[str, Any]:
+            published_entry = {
+                **entry_without_completion,
+                "completed_at_utc": completed_at_utc,
+            }
+            _write_json_atomic(
+                manifest_path,
+                {
+                    "schema_version": 1,
+                    **published_entry,
+                    "records_sha256": records_sha256,
+                },
+            )
+            published_entry["manifest_path"] = str(manifest_path)
+            published_entry["manifest_sha256"] = sha256_file(manifest_path)
+            return {
+                **dict(latest),
+                "schema_version": int(latest.get("schema_version") or 1),
+                "partitions": dict(latest.get("partitions") or {}),
+                "calendars": {
+                    **calendars,
+                    content_sha256: published_entry,
+                },
+            }
+
+        updated = _write_checkpoint_with_conservative_completion(
+            checkpoint_path,
+            calendar_checkpoint_payload,
         )
-        entry["manifest_path"] = str(manifest_path)
-        entry["manifest_sha256"] = sha256_file(manifest_path)
-    calendars[content_sha256] = entry
-    updated = {
-        "schema_version": int(checkpoint.get("schema_version") or 1),
-        "partitions": dict(checkpoint.get("partitions") or {}),
-        "calendars": calendars,
-    }
-    _write_json_atomic(checkpoint_path, updated)
+        entry = dict(updated["calendars"][content_sha256])
     return updated, entry
 
 
@@ -537,6 +732,31 @@ def sync_enrichment(
     if unknown:
         raise ValueError(f"unsupported enrichment datasets: {unknown}")
     resolved_client = client or _configured_tushare_client(sync_config, resolved_layout)
+    checkpoint_paths = {
+        "fina_indicator_vip": resolved_layout.raw_root
+        / str(
+            fundamentals_config.get("checkpoint_file")
+            or "fundamentals-checkpoint.json"
+        ),
+        "bak_basic": resolved_layout.raw_root
+        / str(
+            reference_config.get("checkpoint_file")
+            or "reference-snapshots-checkpoint.json"
+        ),
+        "stock_st": resolved_layout.raw_root
+        / str(
+            reference_config.get("checkpoint_file")
+            or "reference-snapshots-checkpoint.json"
+        ),
+    }
+    checkpoint_payloads: dict[Path, dict[str, Any]] = {}
+    for path in sorted(set(checkpoint_paths.values()), key=str):
+        with _checkpoint_lock(path):
+            checkpoint_payloads[path] = _read_checkpoint(path)
+    entries_by_path = {
+        path: dict(payload.get("partitions") or {})
+        for path, payload in checkpoint_payloads.items()
+    }
 
     configured_start_period = str(fundamentals_config.get("start_period") or "").strip()
     if configured_start_period:
@@ -569,33 +789,6 @@ def sync_enrichment(
             ),
         )
     as_of_dates = _membership_as_of_dates(resolved_layout.membership_path, start, end)
-    checkpoint_paths = {
-        "fina_indicator_vip": resolved_layout.raw_root
-        / str(fundamentals_config.get("checkpoint_file") or "fundamentals-checkpoint.json"),
-        "bak_basic": resolved_layout.raw_root
-        / str(
-            reference_config.get("checkpoint_file")
-            or "reference-snapshots-checkpoint.json"
-        ),
-        "stock_st": resolved_layout.raw_root
-        / str(
-            reference_config.get("checkpoint_file")
-            or "reference-snapshots-checkpoint.json"
-        ),
-    }
-    checkpoint_payloads = {
-        path: (
-            _read_checkpoint(path)
-            if resume
-            else {"schema_version": 1, "partitions": {}}
-        )
-        for path in set(checkpoint_paths.values())
-    }
-    entries_by_path = {
-        path: dict(payload.get("partitions") or {})
-        for path, payload in checkpoint_payloads.items()
-    }
-
     planned: list[tuple[str, str, Path, str, Path]] = []
     for dataset in selected_datasets:
         values = quarter_dates if dataset == "fina_indicator_vip" else as_of_dates
@@ -612,7 +805,7 @@ def sync_enrichment(
                 )
             )
 
-    pending: list[tuple[str, str, Path, str, Path]] = []
+    pending: list[tuple[str, str, Path, str, Path, str]] = []
     completed_before = 0
     for dataset, value, path, key, checkpoint_path in planned:
         dataset_config = (
@@ -631,14 +824,32 @@ def sync_enrichment(
         ):
             completed_before += 1
         else:
-            pending.append((dataset, value, path, key, checkpoint_path))
+            pending.append(
+                (
+                    dataset,
+                    value,
+                    path,
+                    key,
+                    checkpoint_path,
+                    _checkpoint_value_sha256(
+                        entries_by_path[checkpoint_path].get(key)
+                    ),
+                )
+            )
     requested_count = (
         len(pending)
         if max_partitions is None
         else min(len(pending), max(0, int(max_partitions)))
     )
     completed_now = 0
-    for dataset, value, path, key, checkpoint_path in pending[:requested_count]:
+    for (
+        dataset,
+        value,
+        path,
+        key,
+        checkpoint_path,
+        baseline_sha256,
+    ) in pending[:requested_count]:
         argument = "period" if dataset == "fina_indicator_vip" else "trade_date"
         source_value = value
         frame = _call(
@@ -669,36 +880,80 @@ def sync_enrichment(
             frame["source_trade_date"] = frame["trade_date"]
             frame["trade_date"] = _compact(value)
         quarantine_path: Path | None = None
+        candidate_quarantine: Path | None = None
         quarantined = frame.iloc[0:0].copy()
         if dataset == "fina_indicator_vip":
             frame, quarantined = _quarantine_early_financial_announcements(frame)
             candidate_quarantine = path.with_name("part-000.quarantine.parquet")
             if not quarantined.empty:
                 quarantine_path = candidate_quarantine
-                _write_parquet_atomic(quarantine_path, quarantined)
-            else:
-                candidate_quarantine.unlink(missing_ok=True)
         audit_enrichment_partition(frame, dataset, value)
-        _write_parquet_atomic(path, frame)
-        entries = entries_by_path[checkpoint_path]
-        entries[key] = {
-            "status": "complete",
-            "dataset": dataset,
-            argument: value,
-            "source_trade_date": source_value if dataset == "bak_basic" else None,
-            "path": str(path),
-            "row_count": int(len(frame)),
-            "size_bytes": int(path.stat().st_size),
-            "sha256": sha256_file(path),
-            "quarantine_row_count": int(len(quarantined)),
-            "quarantine_path": str(quarantine_path) if quarantine_path else None,
-            "quarantine_sha256": sha256_file(quarantine_path) if quarantine_path else None,
-            "completed_at_utc": datetime.now(timezone.utc).isoformat(),
-        }
-        _write_json_atomic(
-            checkpoint_path,
-            {"schema_version": 1, "partitions": entries},
-        )
+        with _checkpoint_lock(checkpoint_path):
+            latest = _read_checkpoint(checkpoint_path)
+            entries = dict(latest.get("partitions") or {})
+            concurrent = entries.get(key)
+            concurrent_valid = _checkpoint_entry_is_valid(
+                concurrent, path, verify_hash=True
+            )
+            changed_since_start = (
+                _checkpoint_value_sha256(concurrent) != baseline_sha256
+            )
+            publish = not (resume and concurrent_valid)
+            if not resume and changed_since_start:
+                if not concurrent_valid:
+                    raise ValueError(
+                        f"{key} checkpoint changed during no-resume refresh"
+                    )
+                publish = False
+            if publish:
+                if candidate_quarantine is not None:
+                    if quarantine_path is not None:
+                        _write_parquet_atomic(quarantine_path, quarantined)
+                    elif candidate_quarantine.exists():
+                        candidate_quarantine.unlink()
+                        _fsync_directory(candidate_quarantine.parent)
+                _write_parquet_atomic(path, frame)
+                entry_without_completion = {
+                    "status": "complete",
+                    "dataset": dataset,
+                    argument: value,
+                    "source_trade_date": (
+                        source_value if dataset == "bak_basic" else None
+                    ),
+                    "path": str(path),
+                    "row_count": int(len(frame)),
+                    "size_bytes": int(path.stat().st_size),
+                    "sha256": sha256_file(path),
+                    "quarantine_row_count": int(len(quarantined)),
+                    "quarantine_path": (
+                        str(quarantine_path) if quarantine_path else None
+                    ),
+                    "quarantine_sha256": (
+                        sha256_file(quarantine_path) if quarantine_path else None
+                    ),
+                }
+
+                def enrichment_checkpoint_payload(
+                    completed_at_utc: str,
+                ) -> Mapping[str, Any]:
+                    published_entry = {
+                        **entry_without_completion,
+                        "completed_at_utc": completed_at_utc,
+                    }
+                    return {
+                        **dict(latest),
+                        "schema_version": 1,
+                        "partitions": {**entries, key: published_entry},
+                    }
+
+                published_checkpoint = (
+                    _write_checkpoint_with_conservative_completion(
+                        checkpoint_path,
+                        enrichment_checkpoint_payload,
+                    )
+                )
+                entries = dict(published_checkpoint["partitions"])
+            entries_by_path[checkpoint_path] = entries
         completed_now += 1
         dataset_config = (
             fundamentals_config if dataset == "fina_indicator_vip" else reference_config
@@ -735,6 +990,444 @@ def sync_enrichment(
     }
 
 
+def _reference_checkpoint_path(
+    config: Mapping[str, Any], layout: RuntimeLayout
+) -> Path:
+    enrichment = dict(config.get("enrichment") or {})
+    reference = dict(config.get("reference_snapshots") or enrichment)
+    return layout.raw_root / str(
+        reference.get("checkpoint_file") or "enrichment-checkpoint.json"
+    )
+
+
+def _market_close_utc(trade_date: str) -> datetime:
+    local = datetime.combine(
+        pd.Timestamp(_date(trade_date)).date(),
+        wall_time(hour=15),
+        tzinfo=ZoneInfo("Asia/Shanghai"),
+    )
+    return local.astimezone(timezone.utc)
+
+
+def _completed_at_utc(value: Any, *, label: str) -> datetime:
+    try:
+        parsed = pd.Timestamp(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{label} must be an ISO-8601 timestamp") from exc
+    if parsed.tzinfo is None:
+        raise ValueError(f"{label} must include a UTC offset")
+    return parsed.tz_convert("UTC").to_pydatetime()
+
+
+def _exact_daily_universe(
+    layout: RuntimeLayout, trade_date: str
+) -> tuple[set[str], dict[str, Any]]:
+    """Load a hash-verified exact daily universe from the raw checkpoint."""
+
+    checkpoint = _read_checkpoint(layout.checkpoint_path)
+    entries = checkpoint.get("partitions")
+    key = f"daily/{trade_date}"
+    entry = entries.get(key) if isinstance(entries, Mapping) else None
+    expected = _partition_path(layout.raw_root, "daily", trade_date)
+    if (
+        not isinstance(entry, Mapping)
+        or entry.get("status") != "complete"
+        or entry.get("dataset") != "daily"
+        or entry.get("trade_date") != trade_date
+        or Path(str(entry.get("path") or "")).expanduser().resolve()
+        != expected.resolve()
+        or not _checkpoint_entry_is_valid(entry, expected, verify_hash=True)
+    ):
+        raise ValueError(
+            f"exact reference requires a valid checkpointed {key} partition"
+        )
+    completed = _completed_at_utc(
+        entry.get("completed_at_utc"), label=f"{key} completed_at_utc"
+    )
+    if completed < _market_close_utc(trade_date):
+        raise ValueError(f"{key} checkpoint completion precedes market close")
+    if completed > datetime.now(timezone.utc):
+        raise ValueError(f"{key} checkpoint completion is in the future")
+    frame = pd.read_parquet(expected)
+    _audit_partition(frame, "daily", trade_date)
+    if type(entry.get("row_count")) is not int or int(entry["row_count"]) != len(
+        frame
+    ):
+        raise ValueError(f"{key} checkpoint row count differs from its artifact")
+    ticker_values = frame["ts_code"].astype("string").str.strip()
+    if ticker_values.isna().any() or ticker_values.eq("").any():
+        raise ValueError("exact daily universe contains blank securities")
+    tickers = set(ticker_values)
+    tickers.discard("")
+    if not tickers:
+        raise ValueError("exact daily universe is empty")
+    return tickers, dict(entry)
+
+
+def _normalise_exact_bak_basic(
+    frame: pd.DataFrame, *, trade_date: str
+) -> pd.DataFrame:
+    """Canonicalize one exact response without historical prior-day fallback."""
+
+    audit_enrichment_partition(frame, "bak_basic", trade_date)
+    columns = ENRICHMENT_DATASET_FIELDS["bak_basic"].split(",")
+    work = frame.loc[:, columns].copy()
+    work["ts_code"] = work["ts_code"].astype("string").str.strip()
+    source_dates = work["trade_date"].astype("string").str.replace(
+        "-", "", regex=False
+    )
+    work["source_trade_date"] = source_dates
+    work["trade_date"] = _compact(trade_date)
+    return work.sort_values("ts_code", kind="mergesort").reset_index(drop=True)
+
+
+def _validate_exact_reference_entry(
+    entry: Any,
+    *,
+    path: Path,
+    trade_date: str,
+    daily_tickers: set[str],
+    daily_sha256: str,
+) -> dict[str, Any]:
+    if (
+        not isinstance(entry, Mapping)
+        or entry.get("status") != "complete"
+        or entry.get("dataset") != "bak_basic"
+        or entry.get("trade_date") != trade_date
+        or entry.get("request_trade_date") != trade_date
+        or entry.get("source_trade_date") != trade_date
+        or entry.get("capture_contract_id") != EXACT_REFERENCE_CONTRACT_ID
+        or entry.get("capture_mode") != "exact_only"
+        or entry.get("fallback_used") is not False
+        or entry.get("fields") != ENRICHMENT_DATASET_FIELDS["bak_basic"]
+        or entry.get("exact_source_required") is not True
+        or type(entry.get("stability_sample_count")) is not int
+        or int(entry["stability_sample_count"]) < 2
+        or entry.get("daily_partition_sha256") != daily_sha256
+        or entry.get("daily_ticker_count") != len(daily_tickers)
+        or entry.get("covered_ticker_count") != len(daily_tickers)
+        or Path(str(entry.get("path") or "")).expanduser().resolve()
+        != path.resolve()
+        or path.is_symlink()
+        or not _checkpoint_entry_is_valid(entry, path, verify_hash=True)
+    ):
+        raise ValueError("exact reference checkpoint identity or bytes are invalid")
+    completed = _completed_at_utc(
+        entry.get("completed_at_utc"),
+        label=f"bak_basic/trade_date={trade_date} completed_at_utc",
+    )
+    if completed < _market_close_utc(trade_date):
+        raise ValueError("exact reference checkpoint completion precedes market close")
+    if completed > datetime.now(timezone.utc):
+        raise ValueError("exact reference checkpoint completion is in the future")
+    frame = pd.read_parquet(path)
+    audit_enrichment_partition(frame, "bak_basic", trade_date)
+    if "source_trade_date" not in frame.columns:
+        raise ValueError("exact reference lacks source_trade_date evidence")
+    source_dates = frame["source_trade_date"].astype("string").str.replace(
+        "-", "", regex=False
+    )
+    if not bool(source_dates.eq(_compact(trade_date)).all()):
+        raise ValueError("exact reference used a non-exact provider snapshot")
+    reference_tickers = set(frame["ts_code"].astype("string").str.strip())
+    if frame["ts_code"].isna().any() or "" in reference_tickers:
+        raise ValueError("exact reference contains blank securities")
+    missing = sorted(daily_tickers - reference_tickers)
+    if entry.get("reference_ticker_count") != len(reference_tickers):
+        raise ValueError("exact reference ticker count differs from checkpoint")
+    if missing:
+        raise ValueError(
+            "exact reference does not cover the complete daily universe; "
+            f"missing tickers include {missing[:5]}"
+        )
+    return {
+        "entry": dict(entry),
+        "daily_ticker_count": len(daily_tickers),
+        "reference_ticker_count": len(reference_tickers),
+        "covered_ticker_count": len(daily_tickers),
+    }
+
+
+def sync_exact_reference(
+    trade_date: str,
+    *,
+    config_path: str | Path = DEFAULT_CONFIG_PATH,
+    layout: RuntimeLayout | None = None,
+    client: MarketDataClient | Any | None = None,
+    stability_samples: int = 2,
+) -> dict[str, Any]:
+    """Capture one exact, stable, full-universe ``bak_basic`` partition.
+
+    This operation is deliberately raw-only: it never reads the frozen
+    historical membership planner and never applies enrichment to canonical
+    Top-500 files.  Unlike the historical archive synchronizer, it forbids a
+    prior-day fallback because a prospective monthly membership must bind the
+    provider's exact as-of response.  The checkpoint ``completed_at_utc`` is a
+    conservative publication-completion bound: it follows partition durability
+    and is never earlier than checkpoint replace plus directory durability.
+    """
+
+    as_of = _date(trade_date)
+    if type(stability_samples) is not int or stability_samples < 2:
+        raise ValueError("stability_samples must be an integer of at least 2")
+    captured = datetime.now(timezone.utc)
+    if captured < _market_close_utc(as_of):
+        return {
+            "schema_version": 1,
+            "status": "waiting",
+            "reason": "before_market_close",
+            "source": "tushare",
+            "dataset": "bak_basic",
+            "trade_date": as_of,
+            "exact_source_required": True,
+            "completed_before": 0,
+            "completed_this_run": 0,
+        }
+
+    config = load_data_config(config_path)
+    resolved_layout = layout or RuntimeLayout.from_config(
+        config, config_path=config_path
+    )
+    resolved_layout.ensure_directories()
+    checkpoint_path = _reference_checkpoint_path(config, resolved_layout)
+    key = f"bak_basic/trade_date={as_of}"
+    path = enrichment_partition_path(resolved_layout.raw_root, "bak_basic", as_of)
+    raw_checkpoint_path = resolved_layout.checkpoint_path
+
+    with _raw_reference_checkpoint_locks(raw_checkpoint_path, checkpoint_path):
+        daily_tickers, daily_entry = _exact_daily_universe(
+            resolved_layout, as_of
+        )
+        checkpoint = _read_checkpoint(checkpoint_path)
+        partitions = checkpoint.get("partitions")
+        existing = partitions.get(key) if isinstance(partitions, Mapping) else None
+        if existing is not None:
+            verified = _validate_exact_reference_entry(
+                existing,
+                path=path,
+                trade_date=as_of,
+                daily_tickers=daily_tickers,
+                daily_sha256=str(daily_entry["sha256"]),
+            )
+            return {
+                "schema_version": 1,
+                "status": "complete",
+                "source": "tushare",
+                "dataset": "bak_basic",
+                "trade_date": as_of,
+                "exact_source_required": True,
+                "stability_sample_count": int(
+                    existing.get("stability_sample_count") or 1
+                ),
+                "completed_before": 1,
+                "completed_this_run": 0,
+                "checkpoint_path": str(checkpoint_path),
+                "partition_path": str(path),
+                **{name: verified[name] for name in (
+                    "daily_ticker_count",
+                    "reference_ticker_count",
+                    "covered_ticker_count",
+                )},
+            }
+
+    sync_config = dict(config.get("sync") or {})
+    reference_config = dict(
+        config.get("reference_snapshots") or config.get("enrichment") or {}
+    )
+    resolved_client = client or _configured_tushare_client(
+        sync_config, resolved_layout
+    )
+    samples: list[pd.DataFrame] = []
+    rate = max(
+        0.0,
+        float(
+            reference_config.get(
+                "request_rate_per_minute",
+                sync_config.get("request_rate_per_minute") or 0.0,
+            )
+        ),
+    )
+    for index in range(stability_samples):
+        raw = _call(
+            resolved_client,
+            "bak_basic",
+            trade_date=_compact(as_of),
+            fields=ENRICHMENT_DATASET_FIELDS["bak_basic"],
+        )
+        if raw.empty:
+            return {
+                "schema_version": 1,
+                "status": "waiting",
+                "reason": "provider_empty",
+                "source": "tushare",
+                "dataset": "bak_basic",
+                "trade_date": as_of,
+                "exact_source_required": True,
+                "completed_before": 0,
+                "completed_this_run": 0,
+                "checkpoint_path": str(checkpoint_path),
+                "partition_path": str(path),
+            }
+        sample = _normalise_exact_bak_basic(raw, trade_date=as_of)
+        missing = sorted(
+            daily_tickers
+            - set(sample["ts_code"].astype("string").str.strip())
+        )
+        if missing:
+            return {
+                "schema_version": 1,
+                "status": "waiting",
+                "reason": "provider_universe_incomplete",
+                "source": "tushare",
+                "dataset": "bak_basic",
+                "trade_date": as_of,
+                "exact_source_required": True,
+                "missing_tickers": missing[:5],
+                "completed_before": 0,
+                "completed_this_run": 0,
+                "checkpoint_path": str(checkpoint_path),
+                "partition_path": str(path),
+            }
+        if samples and not sample.equals(samples[0]):
+            return {
+                "schema_version": 1,
+                "status": "waiting",
+                "reason": "provider_response_unstable",
+                "source": "tushare",
+                "dataset": "bak_basic",
+                "trade_date": as_of,
+                "exact_source_required": True,
+                "completed_before": 0,
+                "completed_this_run": 0,
+                "checkpoint_path": str(checkpoint_path),
+                "partition_path": str(path),
+            }
+        samples.append(sample)
+        if rate and index + 1 < stability_samples:
+            time.sleep(60.0 / rate)
+
+    frame = samples[0]
+    initial_daily_sha256 = str(daily_entry["sha256"])
+    with _raw_reference_checkpoint_locks(raw_checkpoint_path, checkpoint_path):
+        latest_daily_tickers, latest_daily_entry = _exact_daily_universe(
+            resolved_layout, as_of
+        )
+        latest_daily_sha256 = str(latest_daily_entry["sha256"])
+        if (
+            latest_daily_sha256 != initial_daily_sha256
+            or len(latest_daily_tickers) != len(daily_tickers)
+            or latest_daily_tickers != daily_tickers
+        ):
+            return {
+                "schema_version": 1,
+                "status": "waiting",
+                "reason": "daily_universe_changed_during_capture",
+                "source": "tushare",
+                "dataset": "bak_basic",
+                "trade_date": as_of,
+                "exact_source_required": True,
+                "initial_daily_partition_sha256": initial_daily_sha256,
+                "current_daily_partition_sha256": latest_daily_sha256,
+                "completed_before": 0,
+                "completed_this_run": 0,
+                "checkpoint_path": str(checkpoint_path),
+                "partition_path": str(path),
+            }
+        daily_tickers = latest_daily_tickers
+        daily_entry = latest_daily_entry
+        checkpoint = _read_checkpoint(checkpoint_path)
+        entries = dict(checkpoint.get("partitions") or {})
+        concurrent = entries.get(key)
+        if concurrent is not None:
+            verified = _validate_exact_reference_entry(
+                concurrent,
+                path=path,
+                trade_date=as_of,
+                daily_tickers=daily_tickers,
+                daily_sha256=str(daily_entry["sha256"]),
+            )
+            entry = dict(concurrent)
+            completed_before = 1
+            completed_this_run = 0
+        else:
+            _write_parquet_atomic(path, frame)
+            partition_size = int(path.stat().st_size)
+            partition_sha256 = sha256_file(path)
+            entry_without_completion = {
+                "status": "complete",
+                "dataset": "bak_basic",
+                "trade_date": as_of,
+                "request_trade_date": as_of,
+                "source_trade_date": as_of,
+                "capture_contract_id": EXACT_REFERENCE_CONTRACT_ID,
+                "capture_mode": "exact_only",
+                "fallback_used": False,
+                "fields": ENRICHMENT_DATASET_FIELDS["bak_basic"],
+                "path": str(path),
+                "row_count": int(len(frame)),
+                "size_bytes": partition_size,
+                "sha256": partition_sha256,
+                "quarantine_row_count": 0,
+                "quarantine_path": None,
+                "quarantine_sha256": None,
+                "exact_source_required": True,
+                "stability_sample_count": stability_samples,
+                "daily_partition_sha256": str(daily_entry["sha256"]),
+                "daily_ticker_count": len(daily_tickers),
+                "covered_ticker_count": len(daily_tickers),
+                "reference_ticker_count": int(len(frame)),
+            }
+
+            def exact_checkpoint_payload(
+                completed_at_utc: str,
+            ) -> Mapping[str, Any]:
+                published_entry = {
+                    **entry_without_completion,
+                    "completed_at_utc": completed_at_utc,
+                }
+                return {
+                    **dict(checkpoint),
+                    "schema_version": 1,
+                    "partitions": {**entries, key: published_entry},
+                }
+
+            published_checkpoint = _write_checkpoint_with_conservative_completion(
+                checkpoint_path,
+                exact_checkpoint_payload,
+            )
+            entry = dict(published_checkpoint["partitions"][key])
+            verified = _validate_exact_reference_entry(
+                entry,
+                path=path,
+                trade_date=as_of,
+                daily_tickers=daily_tickers,
+                daily_sha256=str(daily_entry["sha256"]),
+            )
+            completed_before = 0
+            completed_this_run = 1
+
+    return {
+        "schema_version": 1,
+        "status": "complete",
+        "source": "tushare",
+        "dataset": "bak_basic",
+        "trade_date": as_of,
+        "exact_source_required": True,
+        "stability_sample_count": int(
+            entry.get("stability_sample_count") or stability_samples
+        ),
+        "completed_before": completed_before,
+        "completed_this_run": completed_this_run,
+        "checkpoint_path": str(checkpoint_path),
+        "partition_path": str(path),
+        **{name: verified[name] for name in (
+            "daily_ticker_count",
+            "reference_ticker_count",
+            "covered_ticker_count",
+        )},
+    }
+
+
 def sync_data(
     start_date: str,
     end_date: str,
@@ -766,6 +1459,10 @@ def sync_data(
         raise ValueError(f"unsupported datasets: {unknown}")
     resolved_client = client or _configured_tushare_client(sync_config, resolved_layout)
     exchange = str(sync_config.get("exchange") or "SSE")
+    with _checkpoint_lock(resolved_layout.checkpoint_path):
+        baseline_checkpoint = _read_checkpoint(resolved_layout.checkpoint_path)
+    baseline_partitions = dict(baseline_checkpoint.get("partitions") or {})
+    baseline_calendars = dict(baseline_checkpoint.get("calendars") or {})
     calendar = _call(
         resolved_client,
         "trade_cal",
@@ -774,6 +1471,22 @@ def sync_data(
         end_date=_compact(calendar_end),
         fields="exchange,cal_date,is_open,pretrade_date",
     )
+    if calendar.empty:
+        return {
+            "schema_version": 1,
+            "status": "waiting",
+            "reason": "provider_empty",
+            "source": "tushare",
+            "dataset": "trade_cal",
+            "partition_request_start_date": start,
+            "partition_request_end_date": end,
+            "calendar_start_date": start,
+            "calendar_end_date": calendar_end,
+            "completed_before": 0,
+            "completed_this_run": 0,
+            "checkpoint_path": str(resolved_layout.checkpoint_path),
+            "raw_root": str(resolved_layout.raw_root),
+        }
     normalised_calendar, _, _ = _normalise_trade_calendar(
         calendar,
         exchange=exchange,
@@ -788,24 +1501,19 @@ def sync_data(
     if not dates:
         raise ValueError("trade calendar contains no open dates")
 
-    checkpoint = _read_checkpoint(resolved_layout.checkpoint_path) if resume else {
-        "schema_version": 1,
-        "partitions": {},
-        "calendars": {},
-    }
     checkpoint, calendar_entry = _persist_trade_calendar(
         calendar,
         raw_root=resolved_layout.raw_root,
         checkpoint_path=resolved_layout.checkpoint_path,
-        checkpoint=checkpoint,
+        baseline_calendars=baseline_calendars,
+        resume=resume,
         exchange=exchange,
         start_date=start,
         end_date=calendar_end,
     )
     entries = dict(checkpoint.get("partitions") or {})
-    calendar_entries = dict(checkpoint.get("calendars") or {})
     verify_hash = bool(sync_config.get("verify_hashes_on_resume", False))
-    pending: list[tuple[str, str, Path, str]] = []
+    pending: list[tuple[str, str, Path, str, str]] = []
     completed_before = 0
     for trade_date in dates:
         for dataset in selected_datasets:
@@ -814,36 +1522,106 @@ def sync_data(
             if resume and _checkpoint_entry_is_valid(entries.get(key), path, verify_hash=verify_hash):
                 completed_before += 1
             else:
-                pending.append((dataset, trade_date, path, key))
+                pending.append(
+                    (
+                        dataset,
+                        trade_date,
+                        path,
+                        key,
+                        _checkpoint_value_sha256(baseline_partitions.get(key)),
+                    )
+                )
     requested_count = len(pending) if max_partitions is None else min(len(pending), max(0, max_partitions))
     rate = max(0.0, float(sync_config.get("request_rate_per_minute") or 0.0))
     delay = 60.0 / rate if rate else 0.0
     completed_now = 0
-    for dataset, trade_date, path, key in pending[:requested_count]:
+    for dataset, trade_date, path, key, baseline_sha256 in pending[:requested_count]:
         frame = _call(
             resolved_client,
             dataset,
             trade_date=_compact(trade_date),
             fields=DATASET_FIELDS[dataset],
         )
+        if frame.empty:
+            return {
+                "schema_version": 1,
+                "status": "waiting",
+                "reason": "provider_empty",
+                "source": "tushare",
+                "dataset": dataset,
+                "trade_date": trade_date,
+                "partition_request_start_date": start,
+                "partition_request_end_date": end,
+                "calendar_start_date": start,
+                "calendar_end_date": calendar_end,
+                "completed_before": completed_before,
+                "completed_this_run": completed_now,
+                "remaining_partition_count": len(pending) - completed_now,
+                "checkpoint_path": str(resolved_layout.checkpoint_path),
+                "calendar_path": str(calendar_entry["path"]),
+                "calendar_content_sha256": str(
+                    calendar_entry["calendar_content_sha256"]
+                ),
+                "calendar_artifact_sha256": str(
+                    calendar_entry["artifact_sha256"]
+                ),
+                "calendar_completed_at_utc": str(
+                    calendar_entry["completed_at_utc"]
+                ),
+                "raw_root": str(resolved_layout.raw_root),
+            }
         _audit_partition(frame, dataset, trade_date)
-        _write_parquet_atomic(path, frame)
-        entries[key] = {
-            "status": "complete",
-            "dataset": dataset,
-            "trade_date": trade_date,
-            "path": str(path),
-            "row_count": int(len(frame)),
-            "size_bytes": int(path.stat().st_size),
-            "sha256": sha256_file(path),
-            "completed_at_utc": datetime.now(timezone.utc).isoformat(),
-        }
-        checkpoint = {
-            "schema_version": 1,
-            "partitions": entries,
-            "calendars": calendar_entries,
-        }
-        _write_json_atomic(resolved_layout.checkpoint_path, checkpoint)
+        with _checkpoint_lock(resolved_layout.checkpoint_path):
+            latest = _read_checkpoint(resolved_layout.checkpoint_path)
+            entries = dict(latest.get("partitions") or {})
+            concurrent = entries.get(key)
+            concurrent_valid = _checkpoint_entry_is_valid(
+                concurrent,
+                path,
+                verify_hash=verify_hash if resume else True,
+            )
+            changed_since_start = (
+                _checkpoint_value_sha256(concurrent) != baseline_sha256
+            )
+            publish = not (resume and concurrent_valid)
+            if not resume and changed_since_start:
+                if not concurrent_valid:
+                    raise ValueError(
+                        f"{key} checkpoint changed during no-resume refresh"
+                    )
+                publish = False
+            if publish:
+                _write_parquet_atomic(path, frame)
+                entry_without_completion = {
+                    "status": "complete",
+                    "dataset": dataset,
+                    "trade_date": trade_date,
+                    "path": str(path),
+                    "row_count": int(len(frame)),
+                    "size_bytes": int(path.stat().st_size),
+                    "sha256": sha256_file(path),
+                }
+
+                def raw_checkpoint_payload(
+                    completed_at_utc: str,
+                ) -> Mapping[str, Any]:
+                    published_entry = {
+                        **entry_without_completion,
+                        "completed_at_utc": completed_at_utc,
+                    }
+                    return {
+                        **dict(latest),
+                        "schema_version": int(
+                            latest.get("schema_version") or 1
+                        ),
+                        "partitions": {**entries, key: published_entry},
+                        "calendars": dict(latest.get("calendars") or {}),
+                    }
+
+                _write_checkpoint_with_conservative_completion(
+                    resolved_layout.checkpoint_path,
+                    raw_checkpoint_payload,
+                )
         completed_now += 1
         if delay and completed_now < requested_count:
             time.sleep(delay)
@@ -878,11 +1656,13 @@ __all__ = [
     "AMOUNT_TO_RMB_MULTIPLIERS",
     "DATASET_FIELDS",
     "ENRICHMENT_DATASET_FIELDS",
+    "EXACT_REFERENCE_CONTRACT_ID",
     "MarketDataClient",
     "TushareClient",
     "audit_enrichment_partition",
     "enrichment_partition_path",
     "sync_data",
     "sync_enrichment",
+    "sync_exact_reference",
     "turnover_amount_to_rmb",
 ]

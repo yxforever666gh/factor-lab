@@ -187,6 +187,7 @@ def build_dispatch_request(
     body = canonical_json_bytes(
         {
             "ref": release_tag,
+            "return_run_details": True,
             "inputs": {
                 "request_id": request_id,
                 "snapshot_b64": base64.b64encode(snapshot).decode("ascii"),
@@ -271,7 +272,40 @@ def build_workflow_run_command(
     )
 
 
-def validate_workflow_run(
+def build_workflow_runs_query_command(
+    *,
+    repository: str = DEFAULT_REPOSITORY,
+    workflow: str = DEFAULT_WORKFLOW,
+) -> CommandSpec:
+    """Enumerate every dispatch run for the frozen workflow.
+
+    ``--paginate --slurp`` deliberately returns one JSON array containing all
+    API pages.  Runtime reconciliation then enforces a unique deterministic
+    request title locally instead of trusting a truncated first page.
+    """
+
+    _require_repository(repository)
+    _require_workflow(workflow)
+    endpoint = (
+        f"repos/{repository}/actions/workflows/{workflow}/runs"
+        "?event=workflow_dispatch&per_page=100"
+    )
+    return CommandSpec(
+        argv=(
+            "gh",
+            "api",
+            endpoint,
+            "-H",
+            "Accept: application/vnd.github+json",
+            "-H",
+            f"X-GitHub-Api-Version: {API_VERSION}",
+            "--paginate",
+            "--slurp",
+        )
+    )
+
+
+def validate_workflow_run_identity(
     value: bytes | str | Mapping[str, Any],
     *,
     workflow_run_id: int,
@@ -282,6 +316,8 @@ def validate_workflow_run(
     workflow_path: str = WORKFLOW_PATH,
     admission_deadline_utc: str | None = None,
 ) -> dict[str, Any]:
+    """Validate immutable run identity without requiring terminal success."""
+
     _require_repository(repository)
     _require_sha256(request_id, "request_id")
     _require_release_tag(release_tag)
@@ -293,8 +329,6 @@ def validate_workflow_run(
         raise AttestationError("workflow run id differs from dispatch receipt")
     if payload.get("event") != "workflow_dispatch":
         raise AttestationError("attestation run was not triggered by workflow_dispatch")
-    if payload.get("status") != "completed" or payload.get("conclusion") != "success":
-        raise AttestationError("attestation workflow is not completed successfully")
     if payload.get("head_sha") != release_commit_oid:
         raise AttestationError("attestation workflow head SHA differs from release commit")
     if payload.get("head_branch") != release_tag:
@@ -332,9 +366,9 @@ def validate_workflow_run(
     if html_url != expected_html_url:
         raise AttestationError("workflow run html_url is not a GitHub URL")
     created = _parse_utc(payload.get("created_at"), "workflow created_at")
-    completed = _parse_utc(payload.get("updated_at"), "workflow updated_at")
-    if completed < created:
-        raise AttestationError("workflow completion timestamp precedes creation")
+    updated = _parse_utc(payload.get("updated_at"), "workflow updated_at")
+    if updated < created:
+        raise AttestationError("workflow update timestamp precedes creation")
     if admission_deadline_utc is not None:
         deadline = _parse_utc(admission_deadline_utc, "admission_deadline_utc")
         if created >= deadline:
@@ -351,6 +385,34 @@ def validate_workflow_run(
         "workflow_ref": f"refs/tags/{release_tag}",
         "workflow_source_commit_oid": release_commit_oid,
     }
+
+
+def validate_workflow_run(
+    value: bytes | str | Mapping[str, Any],
+    *,
+    workflow_run_id: int,
+    request_id: str,
+    repository: str = DEFAULT_REPOSITORY,
+    release_tag: str,
+    release_commit_oid: str,
+    workflow_path: str = WORKFLOW_PATH,
+    admission_deadline_utc: str | None = None,
+) -> dict[str, Any]:
+    payload = _load_response(value) if isinstance(value, (bytes, str)) else value
+    if not isinstance(payload, Mapping):
+        raise AttestationError("workflow run response must be an object")
+    if payload.get("status") != "completed" or payload.get("conclusion") != "success":
+        raise AttestationError("attestation workflow is not completed successfully")
+    return validate_workflow_run_identity(
+        payload,
+        workflow_run_id=workflow_run_id,
+        request_id=request_id,
+        repository=repository,
+        release_tag=release_tag,
+        release_commit_oid=release_commit_oid,
+        workflow_path=workflow_path,
+        admission_deadline_utc=admission_deadline_utc,
+    )
 
 
 def build_attestation_download_command(
@@ -686,9 +748,11 @@ __all__ = [
     "build_dispatch_request",
     "build_receipt_payload",
     "build_workflow_run_command",
+    "build_workflow_runs_query_command",
     "certificate_identity",
     "parse_dispatch_response",
     "store_attestation_bundle",
     "validate_verification_output",
     "validate_workflow_run",
+    "validate_workflow_run_identity",
 ]

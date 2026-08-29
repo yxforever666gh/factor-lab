@@ -658,6 +658,15 @@ def test_capsule_runs_all_operations_from_published_bytes(
         target["input_snapshot"]["admission_deadline_utc"]
         == "2026-08-25T01:15:00Z"
     )
+    assert target["input_snapshot"]["max_available_at_utc"] == (
+        "2026-08-24T07:01:00Z"
+    )
+    assert target["input_snapshot"]["source_build_checkpoint_utc"] == (
+        "2026-08-24T07:02:00Z"
+    )
+    assert target["input_snapshot"]["information_cutoff_utc"] == (
+        "2026-08-24T07:02:00Z"
+    )
 
     exact_deadline = _target_payload(project)
     exact_deadline["admission_deadline_utc"] = "2026-08-25T01:15:00Z"
