@@ -206,7 +206,7 @@
       "decorator": "5.3.1",
       "et-xmlfile": "2.0.0",
       "exceptiongroup": "1.3.1",
-      "factor-research-mvp": "5.4.0",
+      "factor-research-mvp": "5.5.0",
       "html5lib": "1.1",
       "idna": "3.19",
       "iniconfig": "2.3.0",
@@ -250,19 +250,19 @@
       },
       {
         "path": "protocols/5.2-runtime-lock.txt",
-        "sha256": "0758e1ff6e5476508e031f89b1145d6a6bad199ebadcb17a07e3aeae5e25d053"
+        "sha256": "f349c98ce59c5d60363b24dd837b03279e1ecbe42fffac6f2c5fa20a0bb7dfdc"
       },
       {
         "path": "pyproject.toml",
-        "sha256": "4f25c29aa80bdec02246657bb5ca45805117c434b3be10713cdb119cc35e7c18"
+        "sha256": "029e177fa7c78ce41801eb3a4166662ee3d57825495ce236f86c182cba20b5ed"
       },
       {
         "path": "src/factor_lab/__init__.py",
-        "sha256": "0ec07bcd397f15dd34b3eac3ec152333fc87171429efbd0d276874b4d75630ea"
+        "sha256": "3137afa826a69fd911c34ac56e151539aa360202bab3d6e6bb80f39df52e84bc"
       },
       {
         "path": "src/factor_lab/cli.py",
-        "sha256": "26a231337bf79852a74c7121321dc1cf453d3f82f245a26a8cc1a6c8e7120ad1"
+        "sha256": "ece81825b456e1065c1779e381b0945e659376a8b99dd46edd5e05c72858287c"
       },
       {
         "path": "src/factor_lab/data/__init__.py",
@@ -295,6 +295,10 @@
       {
         "path": "src/factor_lab/data/prospective_membership.py",
         "sha256": "defe153c5dd9b5f47ecebbe37a92db1ac2ffbe4786990394bdadfa08775f45e4"
+      },
+      {
+        "path": "src/factor_lab/data/prospective_readiness.py",
+        "sha256": "83c06437d69c6efb78afd936c8b8f7f4f84ee6bffc8834d7b3d47253524a9ecf"
       },
       {
         "path": "src/factor_lab/data/sources.py",
@@ -334,11 +338,11 @@
       },
       {
         "path": "src/factor_lab/prospective_ledger.py",
-        "sha256": "948a8daea07ab6e03014a243d2e765ff56e9a65ded89eeef65f9fae1249a7290"
+        "sha256": "8f8c1cba52102ae6587bd87f7793f88ace9140b7cc5669580fa87cfdb527bac3"
       },
       {
         "path": "src/factor_lab/prospective_release_runner.py",
-        "sha256": "5fe55422a246f965f4758cc945403531cdb9e653da4e20e79b7dc893158dcd11"
+        "sha256": "b4db8341693c209748b369d8c1cdc746702314d632db24b82cb61a056f3209f3"
       },
       {
         "path": "src/factor_lab/prospective_runtime.py",
@@ -389,6 +393,6 @@
         "sha256": "a35e8fc2d70fd4f20994be799a33cabaca40814e6dcebf9f428daecc3985b165"
       }
     ],
-    "payload_sha256": "4b282cdf19399f342a39ccfed7a40c8a6d79f46aa9c3f578cef4b0ba1ed36abb"
+    "payload_sha256": "0021e53621fa55137916179e82b59d091793d65548d3b96079452bc6ceadd543"
   }
 }
