@@ -250,27 +250,67 @@
       },
       {
         "path": "protocols/5.2-runtime-lock.txt",
-        "sha256": "d15cc1ceb9ee85c5d89dbb868a3a8da2ebca093d785f9e0f23b56e931c73099e"
+        "sha256": "2c75fe71b08a21626261a84e116d44721cca8a17b0aa762595f63ebb81309a41"
       },
       {
         "path": "pyproject.toml",
-        "sha256": "1d58ce58add7a0f6bdadd3d0b0392167a223bad9b2f1fe31c077ed76dc975be8"
+        "sha256": "b09fbc9b606af2bc1568538dd9334dbe4c5f8e5974cc02629c963b23b21a68bc"
       },
       {
         "path": "scripts/invoke-prospective-watchdog.ps1",
-        "sha256": "d88e2faf9615e815e24a6fc03f6237cf9a38236335dac860631913b29780e8c1"
+        "sha256": "feb563b5e8ede43df983c0113762d96a248b41ed256e1eecc2e07946e979fd3d"
       },
       {
         "path": "src/factor_lab/__init__.py",
-        "sha256": "5ecc3857399f810a2fcdd7d764ef4c015e5476dea372a31ae0d08fe8865b3b9a"
+        "sha256": "73be8e3baec3d5777c52408982966bf82eee7840070b4f3e65438f1a34c42fa4"
+      },
+      {
+        "path": "src/factor_lab/adaptive_shadow.py",
+        "sha256": "d6aa2e85466f6c9c93e5093db2a8359c0db5ef924a236698310cff5209ff05f1"
+      },
+      {
+        "path": "src/factor_lab/adaptive_shadow_checkpoint.py",
+        "sha256": "8f0b9e7943bb03a0e3dc0125c4ef3247a277f829e8a240338fda8d261f2e8716"
+      },
+      {
+        "path": "src/factor_lab/adaptive_shadow_controller.py",
+        "sha256": "b00fa4e9c42fe1bd7abbc04fe617a5c0e66e4a683c28fb78bf91b503bb977664"
+      },
+      {
+        "path": "src/factor_lab/adaptive_shadow_evaluation.py",
+        "sha256": "c1191d2488f858675952dc02c98656cf3718b785d2fbd72ef051482079f5240a"
+      },
+      {
+        "path": "src/factor_lab/adaptive_shadow_evidence.py",
+        "sha256": "d09954073563171b3191d232eb75c181f0e4a961bfab127d3e146dd17ad6892b"
+      },
+      {
+        "path": "src/factor_lab/adaptive_shadow_execution.py",
+        "sha256": "3a89c8c3a7dea70b4c59b06ccf4cbc8e88e13b7f53694b090220a2b590799e7e"
+      },
+      {
+        "path": "src/factor_lab/adaptive_shadow_planning.py",
+        "sha256": "4d4148fbf2cc55d27819d06e7d95fbb490ad5efac6dd423963ef4589a0ccc57d"
+      },
+      {
+        "path": "src/factor_lab/adaptive_shadow_runtime.py",
+        "sha256": "a280bf7f012e876840b6137ce9e72192fff674bbaba8be158edad2fd7ec4a5a3"
+      },
+      {
+        "path": "src/factor_lab/adaptive_shadow_store.py",
+        "sha256": "bbae09e4af3060ce7bde8b503491a41489c5ec354f6e874906f8feea4b491c1a"
       },
       {
         "path": "src/factor_lab/cli.py",
-        "sha256": "0faaaab5761142a6a16806649c6c3b6fac4d7f0d5f9728aaef6d45eeb75ddf2f"
+        "sha256": "37b56498507fc00991dcfb39ba51108e0506d0578cc4bf283ce2b7046167b9d5"
       },
       {
         "path": "src/factor_lab/data/__init__.py",
         "sha256": "b15884ee668d446f164a0b25e0e10a17ebcaeef6c29b04d351945a20c9eec210"
+      },
+      {
+        "path": "src/factor_lab/data/adaptive_shadow_execution.py",
+        "sha256": "a8a3a41ba471c85c3c656c9ac8ccc90a29a78b0f9f4b28736eb98abfdbb15cfc"
       },
       {
         "path": "src/factor_lab/data/build.py",
@@ -290,11 +330,11 @@
       },
       {
         "path": "src/factor_lab/data/prospective.py",
-        "sha256": "94201cc68941484e03484250d5b6eeaf842960aec8558ed74a248f62ddfb83b8"
+        "sha256": "db35a014d1b3ff5364f84d1b8d17f36813b14bc42e90f96335eab8cdcec5795e"
       },
       {
         "path": "src/factor_lab/data/prospective_execution.py",
-        "sha256": "ad8f016b95d6e0719ed98f0efd3128fd08be315698ada26c9694661d1ddbc7ee"
+        "sha256": "7fdaab9eb9a3bac8b7cfc7b7c2c1b85a2daaf682001c471a03e2d2d8abb5ffc3"
       },
       {
         "path": "src/factor_lab/data/prospective_membership.py",
@@ -302,7 +342,7 @@
       },
       {
         "path": "src/factor_lab/data/prospective_readiness.py",
-        "sha256": "de219311545c50d68efaa25eb91a41f667fb62dd3a3fc2e4f324099dca1aeba9"
+        "sha256": "3d20ae367927cbfbe7c485c4262121f86a45734ae1d140271ac99f0d89e9f717"
       },
       {
         "path": "src/factor_lab/data/sources.py",
@@ -342,7 +382,7 @@
       },
       {
         "path": "src/factor_lab/prospective_ledger.py",
-        "sha256": "d6b6ba718255fdbbc05baafb9c05588dda8cdae030360954853b5c9f8762ff2b"
+        "sha256": "3101889386428159382bfcf019fb1ebacabb80e629a19aba67840deb8771ceee"
       },
       {
         "path": "src/factor_lab/prospective_release_runner.py",
@@ -397,6 +437,6 @@
         "sha256": "a35e8fc2d70fd4f20994be799a33cabaca40814e6dcebf9f428daecc3985b165"
       }
     ],
-    "payload_sha256": "db90e95d05257f325af44e052fa468ad419371d5ec2924852ef5a78cd88d5355"
+    "payload_sha256": "82386828696a97bfc75b6ca5cd67fe4c2f4a7c7c8e469fa0cf79faeaa6112eda"
   }
 }
