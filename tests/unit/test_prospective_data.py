@@ -68,6 +68,7 @@ def _market_history() -> tuple[pd.DataFrame, pd.DataFrame]:
                     "trade_date": date,
                     "pe_ttm": 8.0 + ticker_index * 0.2 + date_index * 0.001,
                     "pb": 0.8 + ticker_index * 0.03 + date_index * 0.001,
+                    "turnover_rate": 0.5 + ticker_index * 0.01 + date_index * 0.001,
                 }
             )
     return pd.DataFrame(price_rows), pd.DataFrame(basic_rows)
@@ -138,6 +139,7 @@ def _future_frames(
                 "trade_date": date.strftime("%Y%m%d"),
                 "pe_ttm": float(latest_basic.loc[ticker, "pe_ttm"]) + 0.1,
                 "pb": float(latest_basic.loc[ticker, "pb"]) + 0.01,
+                "turnover_rate": float(latest_basic.loc[ticker, "turnover_rate"]),
             }
         )
         adj_rows.append(
@@ -306,6 +308,7 @@ def data_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, pd
             "amount_akshare": boundary["amount_akshare"],
             "pe_ttm": boundary["pe_ttm"],
             "pb": boundary["pb"],
+            "turnover_rate": boundary["turnover_rate"],
             "earnings_yield": 1.0 / boundary["pe_ttm"],
             "book_yield": 1.0 / boundary["pb"],
             "volatility_20": boundary["volatility_20"],

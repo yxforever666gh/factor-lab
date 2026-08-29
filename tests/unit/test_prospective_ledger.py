@@ -2539,6 +2539,26 @@ def test_verification_cache_replays_only_suffix_and_audit_refreshes_full_history
     monkeypatch.setattr(
         prospective_ledger, "_run_active_release_operation", recording_operation
     )
+    before = {
+        path.relative_to(ledger).as_posix(): path.read_bytes()
+        for path in ledger.rglob("*")
+        if path.is_file()
+    }
+    assert audit_ledger(
+        ledger,
+        refresh_verification_cache=False,
+    )["valid"] is True
+    assert ledger_status(
+        ledger,
+        refresh_verification_cache=False,
+    )["valid"] is True
+    after = {
+        path.relative_to(ledger).as_posix(): path.read_bytes()
+        for path in ledger.rglob("*")
+        if path.is_file()
+    }
+    assert after == before
+    calls.clear()
     audited = audit_ledger(ledger)
     assert audited["valid"] is True
     full = [payload for operation, payload in calls if operation == "replay_history"]

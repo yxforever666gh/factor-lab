@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "protocol_version": "5.9-adaptive-shadow-v1",
+  "implementation_release": "5.9",
+  "runtime_relative_root": "runtime/adaptive-shadow/1",
+  "evidence_class": "prospective_shadow_hypotheses_only",
+  "capital_authority": "none",
+  "formal_route": {
+    "protocol_version": "5.0",
+    "route": "fixed_core_full",
+    "ledger_relative_root": "runtime/prospective/5.0",
+    "mutation_allowed": false,
+    "automatic_promotion_allowed": false
+  },
+  "registry": {
+    "maximum_challengers": 3,
+    "ordered_candidates": [
+      "low_turnover_20_v1",
+      "low_volatility_252_v1"
+    ],
+    "candidates": [
+      {
+        "id": "low_turnover_20_v1",
+        "version": 1,
+        "hypothesis": "Stocks with lower mean daily turnover over the trailing 20 official observations exhibit slower ownership rotation and lower implementation churn over the fixed holding horizon.",
+        "formula": "-mean(turnover_rate[i], i=t-19..t)",
+        "required_fields": [
+          "turnover_rate"
+        ],
+        "lookback_sessions": 20,
+        "minimum_observations": 20,
+        "direction": "higher_is_better",
+        "signal_cutoff": "provider_complete_signal_close",
+        "entry_rule": "next_official_session_open",
+        "position_count": 10,
+        "retention_buffer": 5,
+        "selection_disclosure": "Its definition was frozen as a finalist before the 2025-2026 audit was opened, but this two-candidate registry was authored after that audit and is therefore explicitly post-selected. The unverified-vintage historical bridge and the 2017-2022 train / 2023-2024 validation / 2025-2026 audit diagnostics did not establish robust superiority to formal fixed_core_full. No historical-winner claim is allowed; only timely signals sealed after activation count toward evaluation."
+      },
+      {
+        "id": "low_volatility_252_v1",
+        "version": 1,
+        "hypothesis": "Stocks with lower realized volatility over the trailing 252 adjusted-close returns may preserve capital over the fixed holding horizon, with incremental value assessed against the defensive formal route.",
+        "formula": "-std(log(close_hfq[i] / close_hfq[i-1]), i=t-251..t, ddof=1)",
+        "required_fields": [
+          "close_hfq"
+        ],
+        "lookback_sessions": 253,
+        "minimum_observations": 253,
+        "direction": "higher_is_better",
+        "signal_cutoff": "provider_complete_signal_close",
+        "entry_rule": "next_official_session_open",
+        "position_count": 10,
+        "retention_buffer": 5,
+        "selection_disclosure": "Its definition was frozen as a finalist before the 2025-2026 audit was opened, but this two-candidate registry was authored after that audit and is therefore explicitly post-selected. This defensive score overlaps the formal route's low-volatility exposure, and the unverified-vintage 2017-2026 diagnostics did not establish robust superiority to formal fixed_core_full. No historical-winner claim is allowed; only timely signals sealed after activation count toward evaluation."
+      }
+    ],
+    "candidate_change_policy": "new_minor_release_before_next_signal_no_backfill",
+    "selection_freeze": {
+      "artifact_relative_path": "protocols/5.9-selection-freeze.json",
+      "artifact_sha256": "8c6211633904e3d3075602ae32dc1d96eca32ad27401a500726ea1e655d64679",
+      "finalist_definition_payload_sha256": "14d471e13d189a6657f8f76295054524ec97dfc4e0dfaa68ceea882549d098ae",
+      "selection_data_end": "2024-12-31",
+      "audit_start": "2025-01-01",
+      "candidate_parameters_changed_after_audit": false,
+      "registry_composition_selected_after_audit": true,
+      "post_selected": true,
+      "historical_winner_claim_allowed": false
+    }
+  },
+  "comparison": {
+    "control": "formal_fixed_core_full",
+    "same_signal_date": true,
+    "same_membership_snapshot": true,
+    "same_execution_calendar": true,
+    "same_initial_capital_fen": true,
+    "same_cost_model": true,
+    "same_holding_window": true,
+    "same_offset_schedule": true,
+    "cohort_unit": "candidate_control_pair",
+    "complete_candidate_control_pairs_only": true,
+    "cross_candidate_completeness_required": false,
+    "single_candidate_offset_miss_effect": "permanently_terminate_only_that_candidate_offset",
+    "healthy_candidate_offsets_continue": true
+  },
+  "admission": {
+    "registry_start_rule": "signal_date_strictly_after_activation_start_after",
+    "plan_rule": "create_only_at_or_before_formal_trade_deadline",
+    "planning_atomicity": "one_predeadline_intent_seals_every_active_candidate_plan_before_individual_plan_records",
+    "crash_recovery_rule": "after_deadline_only_exact_plan_bytes_presealed_by_the_durable_intent_may_be_recovered",
+    "missed_deadline_rule": "append_candidate_offset_missed_and_forbid_only_that_candidate_offset_backfill_forever",
+    "major_review_after_any_candidate_offset_miss": "permanently_ineligible_for_that_candidate",
+    "formal_input_reference_required": true,
+    "formal_decision_reference_required": true
+  },
+  "feature_lineage": {
+    "initial_history": "frozen_bridge_plus_provider_complete_extensions",
+    "initial_history_evidence_grade": "implementation_only_not_investment_grade_PIT",
+    "pristine_candidate_history_after_activation_sessions": 253,
+    "no_financial_features": true,
+    "no_future_labels": true
+  },
+  "evaluation": {
+    "allowed_conclusions": [
+      "continue",
+      "retire",
+      "eligible_for_major_review"
+    ],
+    "automatic_promotion_allowed": false,
+    "minimum_common_cycles_for_diagnostic": 60,
+    "minimum_common_cycles_for_major_review": 250,
+    "minimum_cycles_per_offset_for_major_review": 25,
+    "minimum_positive_offsets": 8,
+    "minimum_consecutive_monthly_passes": 3,
+    "monthly_pass_definition": "last_checkpoint_state_for_each_natural_month",
+    "monthly_close_rule": "only_months_strictly_before_the_Asia_Shanghai_evaluation_month_count",
+    "same_month_update_rule": "later_checkpoint_replaces_earlier_state",
+    "familywise_alpha_ppm": 50000,
+    "multiplicity_method": "holm_bonferroni_over_registered_challengers",
+    "significance_test": "one_sided_Newey_West_HAC_on_paired_daily_master_NAV_returns",
+    "newey_west_lag": 10,
+    "master_nav_timeline": "union_of_sealed_daily_paths_all_offsets_updated_before_daily_mean",
+    "unstarted_offset_wealth": 1,
+    "maximum_drawdown_degradation_ppm": 30000,
+    "requires_positive_absolute_net_return": true,
+    "requires_positive_active_net_return": true,
+    "requires_zero_PIT_violations": true,
+    "requires_zero_integrity_violations": true,
+    "requires_zero_capacity_violations": true,
+    "requires_zero_candidate_blocked_orders": true,
+    "requires_zero_candidate_missed_deadlines": true,
+    "requires_zero_candidate_terminated_offsets": true,
+    "major_transition": "a_separate_6.0_release_is_required"
+  },
+  "known_limits": [
+    "No prospective market outcome existed when this registry was authored.",
+    "The frozen historical price bridge has unverified provider vintage and cannot prove historical tradability.",
+    "The registry tests hypotheses; it neither authorizes capital nor guarantees profitability.",
+    "The low-turnover bridge requires 20 finite daily turnover observations, and the low-volatility bridge requires 253 positive adjusted closes for 252 log returns.",
+    "The registry composition is post-selected from historical diagnostics; its definitions are frozen only for future 5.9 signals and cannot support a historical-winner claim.",
+    "A 253-session post-activation history is required before low_volatility_252_v1 has pristine prospective feature lineage.",
+    "Any missed admission deadline permanently removes that candidate/offset from future planning and permanently blocks that candidate from major review; healthy candidate/offset accounts continue independently."
+  ]
+}

@@ -374,7 +374,7 @@ def test_parser_exposes_prospective_lifecycle_commands() -> None:
         assert parsed.prospective_command == command
 
     upgrade = parser.parse_args(["prospective", "upgrade"])
-    assert upgrade.release_tag == "5.8"
+    assert upgrade.release_tag == "5.9"
 
     admit = parser.parse_args(
         ["prospective", "admit", "--input", "snapshot"]

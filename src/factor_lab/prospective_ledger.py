@@ -4721,6 +4721,8 @@ def _load_verified_record_chain(
 def _audit_external_evidence(
     layout: LedgerLayout,
     records: Sequence[Mapping[str, Any]],
+    *,
+    refresh_cache: bool = True,
 ) -> list[dict[str, str]]:
     """Report a fail-closed external target/execution replay."""
 
@@ -4729,7 +4731,7 @@ def _audit_external_evidence(
             layout,
             records,
             use_cache=False,
-            refresh_cache=True,
+            refresh_cache=refresh_cache,
         )
     except (OSError, LedgerError, ValueError) as exc:
         return [
@@ -4767,6 +4769,7 @@ def audit_ledger(
     ledger_root: str | Path,
     *,
     ledger_id: str = DEFAULT_LEDGER_ID,
+    refresh_verification_cache: bool = True,
 ) -> dict[str, Any]:
     layout = LedgerLayout.at(ledger_root, ledger_id=ledger_id)
     with _exclusive_lock(layout):
@@ -4788,7 +4791,13 @@ def audit_ledger(
         if not issues:
             issues.extend(_audit_attestation_bundles(layout, records))
         if not issues:
-            issues.extend(_audit_external_evidence(layout, records))
+            issues.extend(
+                _audit_external_evidence(
+                    layout,
+                    records,
+                    refresh_cache=refresh_verification_cache,
+                )
+            )
         return {
             "schema_version": 1,
             "ledger_id": ledger_id,
@@ -4948,6 +4957,7 @@ def ledger_status(
     ledger_root: str | Path,
     *,
     ledger_id: str = DEFAULT_LEDGER_ID,
+    refresh_verification_cache: bool = True,
 ) -> dict[str, Any]:
     layout = LedgerLayout.at(ledger_root, ledger_id=ledger_id)
     records: list[dict[str, Any]] = []
@@ -4955,7 +4965,10 @@ def ledger_status(
     issues: list[dict[str, str]] = []
     with _exclusive_lock(layout):
         try:
-            records, state, _generated = _load_verified_record_chain(layout)
+            records, state, _generated = _load_verified_record_chain(
+                layout,
+                refresh_cache=refresh_verification_cache,
+            )
         except (OSError, LedgerError, ValueError) as exc:
             issues.append(
                 {

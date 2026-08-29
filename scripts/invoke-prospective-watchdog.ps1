@@ -18,7 +18,7 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$ContractId = "factor-lab/prospective-readiness/5.8"
+$ContractId = "factor-lab/prospective-readiness/5.9"
 $FirstSignalDate = "2026-08-31"
 $script:RunWriter = $null
 $script:RunStream = $null
@@ -207,6 +207,23 @@ function Convert-Readiness {
     return $report
 }
 
+function Convert-ShadowSync {
+    param([string]$Text)
+    try {
+        $report = $Text | ConvertFrom-Json -Depth 100
+    }
+    catch {
+        throw "adaptive-shadow sync stdout is not one JSON document"
+    }
+    if ($null -eq $report -or [int]$report.schema_version -ne 1) {
+        throw "adaptive-shadow sync schema_version is invalid"
+    }
+    if ([string]$report.status -notin @("advanced", "planned", "missed", "waiting", "blocked")) {
+        throw "adaptive-shadow sync status is invalid"
+    }
+    return $report
+}
+
 function Test-FirstDecisionComplete {
     param([AllowNull()][object]$Readiness)
     if ($null -eq $Readiness -or $null -eq $Readiness.ledger) {
@@ -267,13 +284,13 @@ try {
     if (-not $rootItem.PSIsContainer) { throw "ProjectRoot is not a directory" }
     $ProjectRoot = $rootItem.FullName
     if ([string]::IsNullOrWhiteSpace($RuntimePython)) {
-        $RuntimePython = Join-Path $ProjectRoot "runtime/environments/5.8/Scripts/python.exe"
+        $RuntimePython = Join-Path $ProjectRoot "runtime/environments/5.9/Scripts/python.exe"
     }
     $pythonItem = Get-Item -LiteralPath $RuntimePython -ErrorAction Stop
     if ($pythonItem.PSIsContainer) { throw "RuntimePython is not a file" }
     $RuntimePython = $pythonItem.FullName
 
-    $operationsDirectory = Join-Path $ProjectRoot "runtime/operations/prospective-watchdog-5.8"
+    $operationsDirectory = Join-Path $ProjectRoot "runtime/operations/prospective-watchdog-5.9"
     $runsDirectory = Join-Path $operationsDirectory "runs"
     $script:AlertsDirectory = Join-Path $operationsDirectory "alerts"
     [void][IO.Directory]::CreateDirectory($runsDirectory)
@@ -307,6 +324,7 @@ try {
     }
 
     $prefix = @("-I", "-m", "factor_lab.cli", "--root", $ProjectRoot)
+    $shadowStore = Join-Path $ProjectRoot "runtime/adaptive-shadow/1"
     $actionsExecuted = 0
     $lastReadiness = $null
     while ($true) {
@@ -335,6 +353,49 @@ try {
             action_command = if ($null -ne $lastReadiness.action) { [string]$lastReadiness.action.command } else { $null }
         }
 
+        if (
+            $observed.ExitCode -eq 2 -and
+            (Test-Path -LiteralPath $shadowStore -PathType Container)
+        ) {
+            while ($actionsExecuted -lt $MaxActions) {
+                $shadow = Invoke-PythonProcess -Role "shadow_sync" -Argv @(
+                    $prefix + @("adaptive-shadow", "sync")
+                )
+                if ($shadow.TimedOut) {
+                    exit (Complete-Watchdog -ProposedExitCode 3 -Reason "shadow_sync_timeout" -LastReadiness $lastReadiness)
+                }
+                try {
+                    $shadowReport = Convert-ShadowSync -Text $shadow.Stdout
+                }
+                catch {
+                    Write-RunRecord -Record @{ event = "invalid_shadow_sync"; reason = $_.Exception.Message }
+                    exit (Complete-Watchdog -ProposedExitCode 3 -Reason "invalid_shadow_sync_json_or_contract" -LastReadiness $lastReadiness)
+                }
+                Write-RunRecord -Record @{
+                    event = "shadow_observation"
+                    action_number = $actionsExecuted + 1
+                    shadow_exit_code = $shadow.ExitCode
+                    status = [string]$shadowReport.status
+                    reason = [string]$shadowReport.reason
+                    action = if ($null -ne $shadowReport.action) { [string]$shadowReport.action } else { $null }
+                }
+                if ($shadow.ExitCode -eq 0) {
+                    if ([string]$shadowReport.status -notin @("advanced", "planned", "missed")) {
+                        exit (Complete-Watchdog -ProposedExitCode 3 -Reason "shadow_sync_exit_status_mismatch" -LastReadiness $lastReadiness)
+                    }
+                    $actionsExecuted += 1
+                    continue
+                }
+                if ($shadow.ExitCode -eq 2 -and [string]$shadowReport.status -eq "waiting") {
+                    exit (Complete-Watchdog -ProposedExitCode 2 -Reason "readiness_waiting_shadow_waiting" -LastReadiness $lastReadiness)
+                }
+                if ($shadow.ExitCode -eq 3 -and [string]$shadowReport.status -eq "blocked") {
+                    exit (Complete-Watchdog -ProposedExitCode 3 -Reason "shadow_sync_blocked" -LastReadiness $lastReadiness)
+                }
+                exit (Complete-Watchdog -ProposedExitCode 3 -Reason "shadow_sync_exit_status_mismatch" -LastReadiness $lastReadiness)
+            }
+            exit (Complete-Watchdog -ProposedExitCode 3 -Reason "max_actions_exhausted_while_shadow_ready" -LastReadiness $lastReadiness)
+        }
         if ($observed.ExitCode -ne 0) {
             exit (Complete-Watchdog -ProposedExitCode $observed.ExitCode -Reason "readiness_$($lastReadiness.status)" -LastReadiness $lastReadiness)
         }

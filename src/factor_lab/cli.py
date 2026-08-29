@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import argparse
-from datetime import date
+from datetime import date, datetime, timezone
 import json
 import subprocess
 from pathlib import Path
 from typing import Any, Mapping, Sequence
+from zoneinfo import ZoneInfo
 
 from factor_lab.data import (
     RuntimeLayout,
@@ -58,6 +59,24 @@ from factor_lab.data.prospective_readiness import (
     prospective_readiness_exit_code,
 )
 from factor_lab.prospective_runtime import attest_snapshot, verify_authoritative_run
+from factor_lab.adaptive_shadow_runtime import (
+    activate_shadow_runtime,
+    plan_shadow_runtime,
+)
+from factor_lab.adaptive_shadow_controller import (
+    AdaptiveShadowControllerError,
+    advance_adaptive_shadow,
+    audit_adaptive_shadow_runtime,
+)
+from factor_lab.adaptive_shadow_checkpoint import (
+    AdaptiveShadowCheckpointError,
+    checkpoint_adaptive_shadow_evaluation,
+)
+from factor_lab.adaptive_shadow_store import (
+    ShadowStoreError,
+    audit_shadow_store,
+    shadow_store_status,
+)
 
 
 def _root() -> Path:
@@ -218,7 +237,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("protocols/5.2-target-generator.json"),
     )
-    upgrade.add_argument("--release-tag", default="5.8")
+    upgrade.add_argument("--release-tag", default="5.9")
     abandon_upgrade = prospective_commands.add_parser(
         "abandon-upgrade",
         help="Explicitly abandon an unattested implementation upgrade.",
@@ -320,6 +339,39 @@ def build_parser() -> argparse.ArgumentParser:
         "--observed-at-utc",
         help="Override the observation clock for deterministic diagnostics.",
     )
+
+    adaptive_shadow = commands.add_parser(
+        "adaptive-shadow",
+        help="Manage the release-bound 5.9 prospective shadow tournament.",
+    )
+    adaptive_shadow.add_argument("--store-root", type=Path, help=argparse.SUPPRESS)
+    adaptive_shadow.add_argument(
+        "--formal-ledger-root", type=Path, help=argparse.SUPPRESS
+    )
+    shadow_commands = adaptive_shadow.add_subparsers(
+        dest="adaptive_shadow_command", required=True
+    )
+    shadow_activation = shadow_commands.add_parser(
+        "activate",
+        help="Bind an empty shadow store to a published registry and formal head.",
+    )
+    shadow_activation.add_argument("--release-tag", default="5.9")
+    shadow_activation.add_argument(
+        "--protocol", type=Path, default=Path("protocols/5.9-adaptive-shadow.json")
+    )
+    shadow_plan = shadow_commands.add_parser(
+        "plan",
+        help="Seal both challenger plans or permanently record a missed deadline.",
+    )
+    shadow_plan.add_argument("--formal-plan", type=Path, required=True)
+    shadow_plan.add_argument("--formal-decision", required=True)
+    shadow_plan.add_argument("--input", type=Path, required=True)
+    shadow_sync = shadow_commands.add_parser(
+        "sync",
+        help="Advance at most one due shadow plan, missed deadline, outcome, or evaluation.",
+    )
+    shadow_commands.add_parser("status", help="Show the shadow store phase.")
+    shadow_commands.add_parser("audit", help="Verify the shadow hash chain.")
     return parser
 
 
@@ -582,6 +634,24 @@ def _prospective_root(arguments: argparse.Namespace) -> Path:
     )
 
 
+def _adaptive_shadow_root(arguments: argparse.Namespace) -> Path:
+    configured = getattr(arguments, "store_root", None)
+    return (
+        Path(configured).resolve()
+        if configured is not None
+        else (arguments.root.resolve() / "runtime" / "adaptive-shadow" / "1")
+    )
+
+
+def _adaptive_shadow_formal_root(arguments: argparse.Namespace) -> Path:
+    configured = getattr(arguments, "formal_ledger_root", None)
+    return (
+        Path(configured).resolve()
+        if configured is not None
+        else (arguments.root.resolve() / "runtime" / "prospective" / "5.0")
+    )
+
+
 def _published_tag_oids(root: Path, tag: str) -> tuple[str, str]:
     def git(*values: str) -> str:
         completed = subprocess.run(
@@ -680,6 +750,35 @@ def _published_tag_oids(root: Path, tag: str) -> tuple[str, str]:
             f"local and GitHub tag objects do not match for {tag}"
         )
     return object_oid, commit_oid
+
+
+def _published_tag_metadata(root: Path, tag: str) -> tuple[str, str, str]:
+    """Return verified tag identities plus its immutable annotated tagger time."""
+
+    object_oid, commit_oid = _published_tag_oids(root, tag)
+    completed = subprocess.run(
+        [
+            "git",
+            "for-each-ref",
+            "--format=%(taggerdate:iso-strict)",
+            f"refs/tags/{tag}",
+        ],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    raw = completed.stdout.strip()
+    try:
+        parsed = datetime.fromisoformat(raw)
+    except ValueError as exc:
+        raise ValueError(f"annotated release tag has no valid tagger time: {tag}") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError(f"annotated release tag has no timezone-aware tagger time: {tag}")
+    released = parsed.astimezone(timezone.utc).isoformat(timespec="seconds").replace(
+        "+00:00", "Z"
+    )
+    return object_oid, commit_oid, released
 
 
 def _prospective_snapshot_path(ledger_root: Path, requested: str) -> Path:
@@ -1119,6 +1218,140 @@ def _prospective_command(arguments: argparse.Namespace) -> int:
     raise AssertionError(command)
 
 
+def _adaptive_shadow_command(arguments: argparse.Namespace) -> int:
+    root = arguments.root.resolve()
+    shadow_root = _adaptive_shadow_root(arguments)
+    command = arguments.adaptive_shadow_command
+    if command == "activate":
+        object_oid, commit_oid, released_at_utc = _published_tag_metadata(
+            root, str(arguments.release_tag)
+        )
+        observed = datetime.now(timezone.utc)
+        released = datetime.fromisoformat(released_at_utc.replace("Z", "+00:00"))
+        if observed < released:
+            raise ValueError("local observation clock predates the published release tag")
+        recorded_at_utc = observed.isoformat(timespec="microseconds").replace(
+            "+00:00", "Z"
+        )
+        start_after = observed.astimezone(ZoneInfo("Asia/Shanghai")).date().isoformat()
+        result = activate_shadow_runtime(
+            root,
+            shadow_root,
+            _adaptive_shadow_formal_root(arguments),
+            protocol_path=Path(arguments.protocol),
+            release_tag=str(arguments.release_tag),
+            release_tag_object_oid=object_oid,
+            release_commit_oid=commit_oid,
+            start_after=start_after,
+            released_at_utc=released_at_utc,
+            recorded_at_utc=recorded_at_utc,
+        )
+        _json(result)
+        return 0
+    if command == "plan":
+        result = plan_shadow_runtime(
+            root,
+            shadow_root,
+            _adaptive_shadow_formal_root(arguments),
+            formal_plan_path=arguments.formal_plan.resolve(),
+            formal_decision_record_sha256=str(arguments.formal_decision),
+            input_snapshot_path=arguments.input.resolve(),
+            created_at_utc=None,
+        )
+        _json(result)
+        return 0 if result.get("status") == "planned" else 2
+    if command == "sync":
+        try:
+            result = advance_adaptive_shadow(
+                root,
+                _adaptive_shadow_formal_root(arguments),
+                shadow_root,
+                observed_at_utc=None,
+            )
+            if (
+                result.get("status") == "waiting"
+                and result.get("reason") != "shadow_not_activated"
+            ):
+                evaluation = checkpoint_adaptive_shadow_evaluation(
+                    root,
+                    _adaptive_shadow_formal_root(arguments),
+                    shadow_root,
+                    observed_at_utc=str(result["observed_at_utc"]),
+                )
+                if evaluation.get("status") in {
+                    "checkpointed",
+                    "already_checkpointed",
+                }:
+                    result = {
+                        "schema_version": 1,
+                        "status": "advanced",
+                        "reason": "shadow_evaluation_checkpointed",
+                        "action": "evaluation",
+                        "observed_at_utc": result["observed_at_utc"],
+                        "evaluation": evaluation,
+                    }
+                else:
+                    result = {**result, "evaluation": evaluation}
+        except (
+            AdaptiveShadowCheckpointError,
+            AdaptiveShadowControllerError,
+            OSError,
+            ShadowStoreError,
+            ValueError,
+        ) as exc:
+            _json(
+                {
+                    "schema_version": 1,
+                    "status": "blocked",
+                    "reason": "shadow_controller_error",
+                    "action": None,
+                    "detail": str(exc),
+                }
+            )
+            return 3
+        _json(result)
+        if result.get("status") in {"advanced", "planned", "missed"}:
+            return 0
+        return 2 if result.get("status") == "waiting" else 3
+    if command in {"status", "audit"}:
+        try:
+            report = (
+                shadow_store_status(shadow_root)
+                if command == "status"
+                else audit_adaptive_shadow_runtime(
+                    root,
+                    _adaptive_shadow_formal_root(arguments),
+                    shadow_root,
+                )
+            )
+        except (
+            AdaptiveShadowControllerError,
+            OSError,
+            ShadowStoreError,
+            ValueError,
+        ) as exc:
+            report = {
+                "schema_version": 1,
+                "status": "invalid",
+                "integrity_valid": False,
+                "shadow_root": str(shadow_root),
+                "issues": [
+                    {
+                        "code": "invalid_shadow_store",
+                        "detail": str(exc),
+                    }
+                ],
+            }
+            _json(report)
+            return 1
+        _json(report)
+        return 0 if (
+            report.get("integrity_valid") is True
+            and (command == "status" or report.get("valid") is True)
+        ) else 1
+    raise AssertionError(command)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = build_parser().parse_args(argv)
     if arguments.root is None:
@@ -1131,6 +1364,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _report_command(arguments)
     if arguments.command == "prospective":
         return _prospective_command(arguments)
+    if arguments.command == "adaptive-shadow":
+        return _adaptive_shadow_command(arguments)
     raise AssertionError(arguments.command)
 
 

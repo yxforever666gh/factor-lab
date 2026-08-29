@@ -16,7 +16,7 @@ pytestmark = pytest.mark.skipif(os.name != "nt", reason="Windows watchdog integr
 ROOT = Path(__file__).resolve().parents[2]
 INVOKE = ROOT / "scripts" / "invoke-prospective-watchdog.ps1"
 REGISTER = ROOT / "scripts" / "register-prospective-watchdog.ps1"
-CONTRACT = "factor-lab/prospective-readiness/5.8"
+CONTRACT = "factor-lab/prospective-readiness/5.9"
 
 
 def _pwsh() -> str:
@@ -153,6 +153,18 @@ def _response(exit_code: int, stdout: str, *, stderr: str = "", sleep_ms: int = 
     return f"{exit_code}|{sleep_ms}|{encode(stdout)}|{encode(stderr)}"
 
 
+def _shadow_report(status: str, *, action: str | None = None) -> str:
+    return json.dumps(
+        {
+            "schema_version": 1,
+            "status": status,
+            "reason": f"test_shadow_{status}",
+            "action": action,
+        },
+        separators=(",", ":"),
+    )
+
+
 def _write_responses(root: Path, responses: list[str]) -> None:
     root.mkdir(parents=True, exist_ok=True)
     (root / "fake-responses.txt").write_text("\n".join(responses) + "\n", encoding="utf-8")
@@ -197,7 +209,7 @@ def _argv_calls(root: Path) -> list[list[str]]:
 
 
 def _run_records(root: Path) -> list[dict[str, object]]:
-    files = list((root / "runtime/operations/prospective-watchdog-5.8/runs").glob("*.jsonl"))
+    files = list((root / "runtime/operations/prospective-watchdog-5.9/runs").glob("*.jsonl"))
     assert len(files) == 1
     return [json.loads(line) for line in files[0].read_text(encoding="utf-8").splitlines()]
 
@@ -235,6 +247,85 @@ def test_executes_action_argv_element_for_element_and_redacts_output(
     assert dispatch["action_argv"] == action
 
 
+def test_waiting_formal_controller_advances_shadow_until_it_waits(
+    tmp_path: Path,
+    fake_python: Path,
+) -> None:
+    (tmp_path / "runtime/adaptive-shadow/1").mkdir(parents=True)
+    _write_responses(
+        tmp_path,
+        [
+            _response(2, _report("waiting", complete=True)),
+            _response(0, _shadow_report("planned", action="plan")),
+            _response(0, _shadow_report("advanced", action="outcome")),
+            _response(2, _shadow_report("waiting")),
+        ],
+    )
+
+    completed = _invoke(tmp_path, fake_python)
+
+    assert completed.returncode == 2, completed.stderr
+    prefix = ["-I", "-m", "factor_lab.cli", "--root", str(tmp_path)]
+    assert _argv_calls(tmp_path) == [
+        [*prefix, "prospective", "readiness"],
+        [*prefix, "adaptive-shadow", "sync"],
+        [*prefix, "adaptive-shadow", "sync"],
+        [*prefix, "adaptive-shadow", "sync"],
+    ]
+    observations = [
+        row for row in _run_records(tmp_path) if row["event"] == "shadow_observation"
+    ]
+    assert [row["status"] for row in observations] == [
+        "planned",
+        "advanced",
+        "waiting",
+    ]
+    assert _run_records(tmp_path)[-1]["reason"] == "readiness_waiting_shadow_waiting"
+
+
+def test_shadow_blocked_or_exit_contract_mismatch_fails_closed(
+    tmp_path: Path,
+    fake_python: Path,
+) -> None:
+    (tmp_path / "runtime/adaptive-shadow/1").mkdir(parents=True)
+    _write_responses(
+        tmp_path,
+        [
+            _response(2, _report("waiting", complete=True)),
+            _response(3, _shadow_report("blocked")),
+        ],
+    )
+
+    completed = _invoke(tmp_path, fake_python)
+
+    assert completed.returncode == 3, completed.stderr
+    alert = next(
+        (tmp_path / "runtime/operations/prospective-watchdog-5.9/alerts").glob("*.json")
+    )
+    assert json.loads(alert.read_text(encoding="utf-8"))["reason"] == "shadow_sync_blocked"
+
+
+def test_shadow_action_limit_is_shared_with_formal_actions(
+    tmp_path: Path,
+    fake_python: Path,
+) -> None:
+    (tmp_path / "runtime/adaptive-shadow/1").mkdir(parents=True)
+    _write_responses(
+        tmp_path,
+        [
+            _response(0, _report("ready", action=["formal", "action"])),
+            _response(0, "ok"),
+            _response(2, _report("waiting", complete=True)),
+        ],
+    )
+
+    completed = _invoke(tmp_path, fake_python, "-MaxActions", "1")
+
+    assert completed.returncode == 3, completed.stderr
+    assert len(_argv_calls(tmp_path)) == 3
+    assert _run_records(tmp_path)[-1]["reason"] == "max_actions_exhausted_while_shadow_ready"
+
+
 @pytest.mark.parametrize("exit_code,status", [(2, "waiting"), (3, "blocked"), (4, "terminal")])
 def test_propagates_readiness_exit_codes_and_only_alerts_for_three_or_four(
     tmp_path: Path, fake_python: Path, exit_code: int, status: str
@@ -244,7 +335,7 @@ def test_propagates_readiness_exit_codes_and_only_alerts_for_three_or_four(
     completed = _invoke(tmp_path, fake_python)
 
     assert completed.returncode == exit_code
-    alerts = list((tmp_path / "runtime/operations/prospective-watchdog-5.8/alerts").glob("*.json"))
+    alerts = list((tmp_path / "runtime/operations/prospective-watchdog-5.9/alerts").glob("*.json"))
     assert len(alerts) == (1 if exit_code in {3, 4} else 0)
     if alerts:
         assert json.loads(alerts[0].read_text(encoding="utf-8"))["exit_code"] == exit_code
@@ -268,7 +359,7 @@ def test_twelve_action_limit_has_a_thirteenth_observation_only(
     assert sum(call[-2:-1] == ["action"] for call in calls) == 12
     assert all("must" not in call for call in calls)
     assert json.loads((tmp_path / "fake-counter.txt").read_text()) == 25
-    alert = next((tmp_path / "runtime/operations/prospective-watchdog-5.8/alerts").glob("*.json"))
+    alert = next((tmp_path / "runtime/operations/prospective-watchdog-5.9/alerts").glob("*.json"))
     assert json.loads(alert.read_text(encoding="utf-8"))["reason"] == "max_actions_exhausted_while_ready"
 
 
@@ -284,7 +375,7 @@ def test_bad_json_or_contract_fails_closed_with_create_only_alert(
     completed = _invoke(tmp_path, fake_python)
 
     assert completed.returncode == 3
-    alerts = list((tmp_path / "runtime/operations/prospective-watchdog-5.8/alerts").glob("*.json"))
+    alerts = list((tmp_path / "runtime/operations/prospective-watchdog-5.9/alerts").glob("*.json"))
     assert len(alerts) == 1
     assert json.loads(alerts[0].read_text(encoding="utf-8"))["reason"] == "invalid_readiness_json_or_contract"
 
@@ -306,7 +397,7 @@ def test_controller_lock_makes_second_runner_wait(
         encoding="utf-8",
         errors="replace",
     )
-    lock = tmp_path / "runtime/operations/prospective-watchdog-5.8/controller.lock"
+    lock = tmp_path / "runtime/operations/prospective-watchdog-5.9/controller.lock"
     deadline = time.monotonic() + 10
     while time.monotonic() < deadline and not lock.exists():
         time.sleep(0.05)
@@ -371,7 +462,7 @@ def test_soft_deadline_is_checked_after_waiting_and_requires_receipt_completion(
     )
 
     assert completed.returncode == 3
-    alert = next((tmp_path / "runtime/operations/prospective-watchdog-5.8/alerts").glob("*.json"))
+    alert = next((tmp_path / "runtime/operations/prospective-watchdog-5.9/alerts").glob("*.json"))
     assert json.loads(alert.read_text(encoding="utf-8"))["reason"] == "first_decision_soft_deadline_unmet"
 
 
@@ -405,7 +496,7 @@ def test_continuous_mode_ignores_expired_first_cycle_window_and_uses_readiness_s
     assert start["local_time_zone_id"] == "China Standard Time"
     finish = next(record for record in records if record["event"] == "finish")
     assert finish["reason"] == f"readiness_{status}"
-    alerts = list((tmp_path / "runtime/operations/prospective-watchdog-5.8/alerts").glob("*.json"))
+    alerts = list((tmp_path / "runtime/operations/prospective-watchdog-5.9/alerts").glob("*.json"))
     assert len(alerts) == (1 if exit_code == 4 else 0)
     if alerts:
         assert json.loads(alerts[0].read_text(encoding="utf-8"))["controller_mode"] == "continuous"
@@ -421,7 +512,7 @@ def test_process_timeout_kills_tree_and_fails_closed(tmp_path: Path, fake_python
     assert time.monotonic() - started < 5
     process_record = next(row for row in _run_records(tmp_path) if row["event"] == "process")
     assert process_record["timed_out"] is True
-    assert list((tmp_path / "runtime/operations/prospective-watchdog-5.8/alerts").glob("*.json"))
+    assert list((tmp_path / "runtime/operations/prospective-watchdog-5.9/alerts").glob("*.json"))
 
 
 def test_register_fails_when_annotated_release_capsule_is_missing(tmp_path: Path) -> None:
@@ -432,7 +523,7 @@ def test_register_fails_when_annotated_release_capsule_is_missing(tmp_path: Path
     marker.write_text("release\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(tmp_path), "add", "marker.txt"], check=True)
     subprocess.run(["git", "-C", str(tmp_path), "commit", "-m", "release"], check=True, capture_output=True)
-    subprocess.run(["git", "-C", str(tmp_path), "tag", "-a", "5.8", "-m", "5.8"], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "tag", "-a", "5.9", "-m", "5.9"], check=True)
     runtime = tmp_path / "runtime-python.exe"
     runtime.write_bytes(b"placeholder")
 
@@ -460,9 +551,9 @@ def test_register_continuous_plan_has_weekday_deadlines_and_weekend_recovery(tmp
     marker.write_text("release\n", encoding="utf-8")
     subprocess.run(["git", "-C", str(tmp_path), "add", "marker.txt"], check=True)
     subprocess.run(["git", "-C", str(tmp_path), "commit", "-m", "release"], check=True, capture_output=True)
-    subprocess.run(["git", "-C", str(tmp_path), "tag", "-a", "5.8", "-m", "5.8"], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "tag", "-a", "5.9", "-m", "5.9"], check=True)
     release_commit = subprocess.run(
-        ["git", "-C", str(tmp_path), "rev-parse", "5.8^{commit}"],
+        ["git", "-C", str(tmp_path), "rev-parse", "5.9^{commit}"],
         check=True,
         text=True,
         capture_output=True,
@@ -482,7 +573,7 @@ def test_register_continuous_plan_has_weekday_deadlines_and_weekend_recovery(tmp
         [
             _pwsh(), "-NoProfile", "-File", str(REGISTER),
             "-ProjectRoot", str(tmp_path), "-RuntimePython", str(runtime),
-            "-ReleaseTag", "5.8", "-ControllerMode", "continuous", "-PlanOnly",
+            "-ControllerMode", "continuous", "-PlanOnly",
         ],
         text=True,
         capture_output=True,
@@ -494,6 +585,8 @@ def test_register_continuous_plan_has_weekday_deadlines_and_weekend_recovery(tmp
     assert completed.returncode == 0, completed.stderr
     plan = json.loads(completed.stdout)
     assert plan["registered"] is False
+    assert plan["task_name"] == "Factor Lab Prospective Continuous Watchdog 5.9"
+    assert plan["release_tag"] == "5.9"
     assert plan["controller_mode"] == "continuous"
     assert plan["schedule_kind"] == "continuous_with_weekend_recovery"
     assert plan["multiple_instances"] == "Parallel"

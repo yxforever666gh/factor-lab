@@ -5,12 +5,13 @@ Factor Lab 是一条本地、可复现的 A 股组合研究链：Parquet 数据 
 
 项目不再依赖 WebUI、Docker、PostgreSQL、MinIO、Dagster、Hermes 或自治 Agent。旧 Research OS 已完整归档在 Git tag `research-os-final-20260826`，不再进入当前主线。
 
-> 5.8 软件不改变 5.0 已冻结、由 5.2 协议完整定义的 `fixed_core_full` 研究方向；它把 5.7 的
-> 单周期机器动作链改成可长期恢复的连续 controller，并封闭供应商“首个非空响应即完成”造成的
-> 部分 universe 永久发布风险。历史只负责确定这一条待检验假设，新的
-> signal、targets、十个虚拟 sleeve、执行快照和 outcome 从 2026-08-21 之后开始不可回填地
-> 积累。截至 5.8 发布前仍为 0 decision、0 outcome，没有新增盈利证据；confirmed outcome 达到
-> 预注册门槛前仍不能称为独立 OOS 验证。项目不连接券商、不下真实订单，也不保证未来收益。
+> 5.9 不改变 5.0 已冻结、由 5.2 协议完整定义的正式 `fixed_core_full` 路由，并保留 5.8 的
+> 连续 controller 与 provider-complete 数据门。它另建无资金权限的自适应影子锦标赛，预注册
+> 一个换手率 Challenger 和一个价格波动率 Challenger，与正式路由共用 signal、membership、
+> 日历、成本、持有窗和十个 offset；只有激活后按时封存且严格成熟的 outcome 才能进入配对评价，
+> 历史桥只用于初始化特征，
+> 不算赢家证据。锦标赛不会自动替换正式路由，任何方向切换都必须另发 6.0。截至协议写入时仍为
+> 0 个新增前瞻市场 outcome，没有新增盈利证据；项目不连接券商、不下真实订单，也不保证未来收益。
 
 历史版本与当前未发布改动见 [CHANGELOG.md](CHANGELOG.md)。正式发布、Git tag 与 GitHub
 同步规则见 [RELEASING.md](RELEASING.md)。
@@ -30,8 +31,8 @@ python -m pip install -e ".[dev]"
 python -m pip install -e ".[data,dev]"
 ```
 
-5.8 的发布及其 canary 完成后的前瞻 decision、execution、outcome、replay 和 evaluate 必须
-使用项目内的专用运行环境 `runtime/environments/5.8`。该环境固定为当前发布主机的
+5.9 的发布及其 canary 完成后的前瞻 decision、execution、outcome、replay 和 evaluate 必须
+使用项目内的专用运行环境 `runtime/environments/5.9`。该环境固定为当前发布主机的
 CPython 3.10.16，并从
 `protocols/5.2-runtime-lock.txt` 与项目内 wheelhouse 按逐文件 SHA-256 离线安装；随后用
 同一 lock 中的项目 wheel 安装 Factor Lab 本身。不要使用 editable install，也不要让系统
@@ -39,14 +40,14 @@ Python 或用户级 site-packages 参与前瞻证据：
 
 ```powershell
 $factorLabPython = (Resolve-Path `
-  "runtime/environments/5.8/Scripts/python.exe").Path
+  "runtime/environments/5.9/Scripts/python.exe").Path
 $wheelhouse = (Resolve-Path `
-  "runtime/environments/5.8/wheelhouse").Path
+  "runtime/environments/5.9/wheelhouse").Path
 
 & $factorLabPython -m pip install --no-index --find-links $wheelhouse `
   --require-hashes -r protocols/5.2-runtime-lock.txt
 & $factorLabPython -c `
-  "import factor_lab; assert factor_lab.__version__ == '5.8.0'"
+  "import factor_lab; assert factor_lab.__version__ == '5.9.0'"
 ```
 
 下文的 `python -m factor_lab.cli prospective ...` 表示应由 `$factorLabPython` 执行；发布
@@ -133,9 +134,15 @@ python -m factor_lab.cli prospective upgrade `
 python -m factor_lab.cli prospective attest `
   --purpose implementation_upgrade_canary --release-tag 5.0
 
-# 5.8 tag 与 GitHub 同步后，仅在仍为 0 decision、0 outcome 时追加纠错升级并见证 canary
+# 已完成的 5.8 历史步骤；正式账本中的实现升级与 canary receipt 不可改写
 python -m factor_lab.cli prospective upgrade `
   --manifest protocols/5.2-target-generator.json --release-tag 5.8
+python -m factor_lab.cli prospective attest `
+  --purpose implementation_upgrade_canary --release-tag 5.0
+
+# 5.9 tag 与 GitHub 同步后，仅在仍为 0 decision、0 outcome 时追加纠错升级并见证 canary
+python -m factor_lab.cli prospective upgrade `
+  --manifest protocols/5.2-target-generator.json --release-tag 5.9
 python -m factor_lab.cli prospective attest `
   --purpose implementation_upgrade_canary --release-tag 5.0
 
@@ -178,35 +185,33 @@ python -m factor_lab.cli prospective status
 python -m factor_lab.cli prospective audit
 ```
 
-5.8 使用同一个 controller runner 同时承担首周期推进和持续恢复。runner 本身属于 runtime
+5.9 使用同一个 controller runner 同时承担首周期推进和持续恢复。runner 本身属于 runtime
 closure；implementation upgrade 后，它由正式 release capsule 逐字节提供，并通过文件句柄锁与
 heartbeat/其他 Task Scheduler 实例互斥。发布、upgrade、canary 和 audit 全部完成后注册当前用户的
 首周期与连续 Windows 任务：
 
 ```powershell
 & pwsh -NoProfile -File scripts/register-prospective-watchdog.ps1 `
-  -ProjectRoot (Resolve-Path .).Path -ReleaseTag 5.8 -ControllerMode first_cycle
+  -ProjectRoot (Resolve-Path .).Path -ReleaseTag 5.9 -ControllerMode first_cycle
 & pwsh -NoProfile -File scripts/register-prospective-watchdog.ps1 `
-  -ProjectRoot (Resolve-Path .).Path -ReleaseTag 5.8 -ControllerMode continuous
+  -ProjectRoot (Resolve-Path .).Path -ReleaseTag 5.9 -ControllerMode continuous
 ```
 
-两个任务都固定执行 annotated `5.8` tag 对应 capsule 中的 runner，而不是可变 working tree 文件。
+两个任务都固定执行 annotated `5.9` tag 对应 capsule 中的 runner，而不是可变 working tree 文件。
 `first_cycle` 从 2026-08-31 15:00 到次日 09:15 每 30 分钟运行，07:55 后加密为每 5 分钟；
 `continuous` 在工作日覆盖收盘前、17:10 数据完整性门槛后、夜间和次日 pretrade 窗口，周末保留
 六次恢复触发；两者都在当前用户登录时补跑。注册和运行均要求 Windows 时区为
 `China Standard Time`，时区不满足就 fail closed。任务只执行 `action.argv`，单轮最多
 12 个动作；退出 2 表示安静等待或已有实例持锁，3 表示 blocked/controller 警报，4 表示正式
 terminal。每轮的实际 argv、状态和 stdout/stderr 字节数与 SHA-256 写入
-`runtime/operations/prospective-watchdog-5.8/`，不保存 provider 输出或环境变量。任务使用当前
+`runtime/operations/prospective-watchdog-5.9/`，不保存 provider 输出或环境变量。任务使用当前
 用户的 `Interactive/Limited` 凭据以访问本机 token/keyring；机器必须保持当前用户可登录、电脑
 接通交流电且 PowerShell 7 可用。卸载任务时保留运行日志：
 
 ```powershell
-Unregister-ScheduledTask -TaskName "Factor Lab Prospective Watchdog 5.7" `
+Unregister-ScheduledTask -TaskName "Factor Lab Prospective Watchdog 5.9" `
   -TaskPath "\" -Confirm:$false
-Unregister-ScheduledTask -TaskName "Factor Lab Prospective Watchdog 5.8" `
-  -TaskPath "\" -Confirm:$false
-Unregister-ScheduledTask -TaskName "Factor Lab Prospective Continuous Watchdog 5.8" `
+Unregister-ScheduledTask -TaskName "Factor Lab Prospective Continuous Watchdog 5.9" `
   -TaskPath "\" -Confirm:$false
 ```
 
@@ -258,7 +263,7 @@ reconcile/poll，绝不创建新 dispatch。远端可见性宽限是有界的，
 自然月末只用于证明日历完整覆盖。构建完成与全部输入可用时间仍必须早于该 decision 的
 pretrade deadline；`input` 与 readiness 会通过封存 CAS 重放验证这些边界并 fail-closed。
 
-## 当前主线：5.x 前瞻执行闭环（协议自 5.2 冻结，当前实现 5.8）
+## 当前正式主线：5.x 前瞻执行闭环（协议自 5.2 冻结，当前实现 5.9）
 
 5.0 不再让一组高度相关的价值信号做 hard switch。系统固定保留 4.1 事后观察到最稳健的
 70% 防御价值核心，同时把两个可能增加复杂度的机制隔离成挑战者：市场风险覆盖层和因果
@@ -316,6 +321,46 @@ ledger root，或在首次 outcome 前反复替换原始 checkpoint、生成多�
 再择优提交，属于本地对抗性操作，5.2 不用远端全局 registry 阻止。工作日自动化会固定使用
 默认根并在证据首次可得时立即构建；若将来需要抵抗恶意操作者，应另发版本增加远端唯一性或
 execution-binding 记录，而不是把这层安全取证继续塞进当前结果优先的主线。
+
+## 5.9 前瞻影子 Challenger 实验
+
+`protocols/5.9-adaptive-shadow.json` 注册 `low_turnover_20_v1` 与
+`low_volatility_252_v1`。它们来自 31 个因果 trailing 公式的 2017–2022 train、2023–2024
+validation 和定义冻结后的 2025–2026 audit；三段都没有稳定战胜正式 `fixed_core_full`，因此
+这里明确是 post-selected 防御假设，不是历史赢家。先前考虑的 price-anchor 与 5 日反转已在发布前
+正式执行诊断中被否决：二者 10-offset net CAGR median 分别约 -8.75% 与 -23.78%，而重构 control
+约 +8.18%；结果 payload SHA-256 为
+`f31b9921047c314c5c7a3d753136ee7231b36fa9eabb07e9b99d1615edfd52bd`。
+新登记的低换手与低波动在相同全成本 exact execution 中虽然各自 10/10 offset 绝对 CAGR 为正，
+但相对 control 都是 0/10 offset 为正，相对 CAGR median 分别为 -0.93 与 -1.97 个百分点；结果
+payload SHA-256 为 `127143d38edafe7b14c643783bcc9dfbaf0203fb0d46b9da7abc34e4d07cca50`。
+因此 5.9 发布的是可证伪机制和负对照，不是新 alpha。
+
+每个正式 decision 的全部活跃 Challenger target 会先在 deadline 前写入一个 create-only planning
+intent，再派生单候选 plan。即使进程在第一个 plan 后崩溃，deadline 后也只能恢复 intent 中原封
+字节，不能重新计算或回填。若连 intent 都错过，该 candidate/offset 永久终止，并永久失去 major
+review 资格；其他候选和 offset 仍可独立形成与 control 的配对诊断。影子账户复用正式执行口径，
+但不会修改 `runtime/prospective/5.0`，也没有资本授权或在线 allocator。
+
+outcome 同时封存正式 execution SHA、route-neutral market wrapper、source contract 和 bundle；
+`sync`、`audit` 与 evaluation checkpoint 都会从正式 bundle、fallback raw partitions、停复牌和
+退市 CAS 深重放。评价把十个 offset 当作十个并行 sleeve：每个 cycle-end 事件只更新对应 sleeve，
+master NAV 是十条 wealth 的均值：把每个 sealed 11 点 `daily_path` 跨周期连续拼接，同一天先更新
+所有可见 offset，再计算组合 NAV；未启动 offset 按现金 wealth=1。收益、持有期内回撤以及候选与
+control 的 daily master active return 都来自这条日频路径，后者使用 lag=10 的单侧
+Newey–West/HAC，再对注册候选做 Holm 校正。250 个配对周期、
+每 offset 25 个、8/10 正相位、连续三个已闭自然月和零 missed/PIT/integrity/blocked-order 只是
+`eligible_for_major_review` 门槛，不能自动晋级。
+
+发布并完成正式 5.9 implementation upgrade 后，公开写路径只读取本机当前时钟；CLI 不接受
+activation、plan 或 sync 的历史时间覆盖：
+
+```powershell
+factor-lab adaptive-shadow activate --release-tag 5.9
+factor-lab adaptive-shadow sync
+factor-lab adaptive-shadow status
+factor-lab adaptive-shadow audit
+```
 
 ## 4.1 纠正基线：否决 hard selector
 
@@ -412,13 +457,18 @@ runtime/prospective/5.0/
   inputs/              # 单日窄PIT signal snapshot
   executions/          # i+1..i+11 source-backed执行证据
   release-runners/     # 对应发布commit的隔离源码胶囊
+
+runtime/adaptive-shadow/1/
+  records/             # activation/plan/missed/outcome/evaluation hash chain
+  artifacts/           # record 引用的内容寻址 canonical payload
+  market-windows/      # 复用正式来源的紧凑影子执行快照与 source manifest
 ```
 
 ## 测试
 
 ```powershell
 $factorLabPython = (Resolve-Path `
-  "runtime/environments/5.8/Scripts/python.exe").Path
+  "runtime/environments/5.9/Scripts/python.exe").Path
 $localTestRun = "local-" + [guid]::NewGuid().ToString("N")
 & $factorLabPython -m pytest tests/unit tests/data tests/integration -q `
   --basetemp "runtime/test-tmp/$localTestRun" -p no:cacheprovider

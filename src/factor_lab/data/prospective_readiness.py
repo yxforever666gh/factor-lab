@@ -30,7 +30,7 @@ from .sources import (
 
 
 SCHEMA_VERSION = 2
-CONTRACT_ID = "factor-lab/prospective-readiness/5.8"
+CONTRACT_ID = "factor-lab/prospective-readiness/5.9"
 LEDGER_ID = "factor-lab/prospective/5.0"
 FROZEN_BRIDGE_END = "2026-08-21"
 CANONICAL_CALENDAR_ANCHOR = "2017-01-03"

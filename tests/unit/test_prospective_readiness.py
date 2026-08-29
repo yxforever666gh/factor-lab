@@ -1310,7 +1310,7 @@ def test_report_has_stable_top_level_and_issue_schema(
     )
 
     assert report["schema_version"] == 2
-    assert report["contract_id"] == "factor-lab/prospective-readiness/5.8"
+    assert report["contract_id"] == "factor-lab/prospective-readiness/5.9"
     assert report["action"] is None
     assert set(report) == {
         "schema_version",

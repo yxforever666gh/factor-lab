@@ -1788,6 +1788,7 @@ def _delist_dates(
     tickers: set[str],
     *,
     sealed_source: Mapping[str, Any] | None = None,
+    allow_sealed_projection: bool = False,
 ) -> tuple[dict[str, str], dict[str, Any], pd.Timestamp]:
     frozen_dates, frozen_source = _frozen_delist_dates(root, source, tickers)
     sealed_official: Mapping[str, Any] | None = None
@@ -1797,7 +1798,29 @@ def _delist_dates(
             raise ProspectiveExecutionDataError(
                 "sealed combined delist source does not have the exact schema"
             )
-        if sealed_source.get("frozen_projection") != frozen_source:
+        sealed_frozen = sealed_source.get("frozen_projection")
+        if not isinstance(sealed_frozen, Mapping):
+            raise ProspectiveExecutionDataError("sealed frozen delist projection is invalid")
+        if allow_sealed_projection:
+            frozen_identity = {
+                key: value
+                for key, value in sealed_frozen.items()
+                if key != "selected_security_count"
+            }
+            rebuilt_identity = {
+                key: value
+                for key, value in frozen_source.items()
+                if key != "selected_security_count"
+            }
+            if (
+                frozen_identity != rebuilt_identity
+                or type(sealed_frozen.get("selected_security_count")) is not int
+                or sealed_frozen["selected_security_count"] < 0
+            ):
+                raise ProspectiveExecutionDataError(
+                    "sealed frozen delist artifact identity differs"
+                )
+        elif sealed_frozen != frozen_source:
             raise ProspectiveExecutionDataError("sealed frozen delist projection differs")
         official_value = sealed_source.get("official_stock_basic")
         if not isinstance(official_value, Mapping):
@@ -1825,7 +1848,11 @@ def _delist_dates(
         "frozen_projection": frozen_source,
         "official_stock_basic": official_source,
     }
-    if sealed_source is not None and contract != sealed_source:
+    if (
+        sealed_source is not None
+        and not allow_sealed_projection
+        and contract != sealed_source
+    ):
         raise ProspectiveExecutionDataError("combined delist source differs from sealed bytes")
     return dates, contract, retrieved
 
@@ -1978,9 +2005,12 @@ def _fallback_execution_inputs(
     return result, list(sources.values())
 
 
-def _build_observations(
+def _build_route_neutral_observations(
     source: ProspectiveInputSnapshot,
-    generation: GenerationResult,
+    *,
+    signal_date: str,
+    benchmark_tickers: Sequence[str],
+    target_tickers: set[str],
     window: Sequence[str],
     daily_frames: Mapping[str, pd.DataFrame],
     adj_frames: Mapping[str, pd.DataFrame],
@@ -1989,8 +2019,15 @@ def _build_observations(
     previous: SleeveAccountState | None,
     fallback_execution_inputs: Mapping[str, tuple[float, float, str]],
 ) -> tuple[tuple[str, ...], tuple[ExecutionObservation, ...]]:
+    """Build a market rectangle without coupling target identity to a route.
+
+    The formal wrapper below supplies its frozen ``GenerationResult`` fields;
+    adaptive shadow callers supply an independently sealed target set while
+    retaining the exact decision-time benchmark and source snapshot.
+    """
+
     decision = _source_rows(source)
-    benchmark = tuple(
+    decision_benchmark = tuple(
         sorted(
             decision.loc[
                 decision["universe_member"].fillna(False).astype(bool)
@@ -1999,15 +2036,16 @@ def _build_observations(
             ].astype(str)
         )
     )
-    if not benchmark or len(set(benchmark)) != len(benchmark):
+    benchmark = tuple(str(value) for value in benchmark_tickers)
+    if (
+        not benchmark
+        or len(set(benchmark)) != len(benchmark)
+        or benchmark != decision_benchmark
+    ):
         raise ProspectiveExecutionDataError("decision-derived benchmark roster is empty or duplicated")
-    due_targets = set(generation.sleeve_plans[generation.due_offset]["targets_ppm"])
+    due_targets = {str(value) for value in target_tickers}
     prior_tickers: set[str] = set()
     if previous is not None:
-        if previous.deployment_sha256 != generation.deployment_sha256:
-            raise ProspectiveExecutionDataError("previous account uses a different deployment")
-        if previous.offset != generation.due_offset:
-            raise ProspectiveExecutionDataError("previous account is for another offset")
         prior_tickers = {row.ticker for row in previous.positions}
     row_tickers = set(benchmark) | due_targets | prior_tickers
     if not due_targets.issubset(set(decision["ticker"].astype(str))):
@@ -2122,7 +2160,7 @@ def _build_observations(
                 if anchor is not None:
                     adv_value = anchor["adv_20"]
                     volatility_value = anchor["volatility_20"]
-                    input_date: str | None = generation.signal_date
+                    input_date: str | None = signal_date
                 elif ticker in fallback_execution_inputs:
                     adv_value, volatility_value, input_date = fallback_execution_inputs[ticker]
                 else:
@@ -2160,6 +2198,50 @@ def _build_observations(
                 )
             )
     return benchmark, tuple(rows)
+
+
+def _build_observations(
+    source: ProspectiveInputSnapshot,
+    generation: GenerationResult,
+    window: Sequence[str],
+    daily_frames: Mapping[str, pd.DataFrame],
+    adj_frames: Mapping[str, pd.DataFrame],
+    suspension_frame: pd.DataFrame,
+    delists: Mapping[str, str],
+    previous: SleeveAccountState | None,
+    fallback_execution_inputs: Mapping[str, tuple[float, float, str]],
+) -> tuple[tuple[str, ...], tuple[ExecutionObservation, ...]]:
+    """Formal adapter whose output remains frozen to ``GenerationResult``."""
+
+    if previous is not None:
+        if previous.deployment_sha256 != generation.deployment_sha256:
+            raise ProspectiveExecutionDataError("previous account uses a different deployment")
+        if previous.offset != generation.due_offset:
+            raise ProspectiveExecutionDataError("previous account is for another offset")
+    decision = _source_rows(source)
+    benchmark = tuple(
+        sorted(
+            decision.loc[
+                decision["universe_member"].fillna(False).astype(bool)
+                & decision["eligible"].fillna(False).astype(bool),
+                "ticker",
+            ].astype(str)
+        )
+    )
+    targets = set(generation.sleeve_plans[generation.due_offset]["targets_ppm"])
+    return _build_route_neutral_observations(
+        source,
+        signal_date=generation.signal_date,
+        benchmark_tickers=benchmark,
+        target_tickers=targets,
+        window=window,
+        daily_frames=daily_frames,
+        adj_frames=adj_frames,
+        suspension_frame=suspension_frame,
+        delists=delists,
+        previous=previous,
+        fallback_execution_inputs=fallback_execution_inputs,
+    )
 
 
 def _benchmark_endpoint_pair_complete(

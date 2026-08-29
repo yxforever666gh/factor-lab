@@ -2,7 +2,7 @@
 param(
     [string]$ProjectRoot = (Split-Path -Parent $PSScriptRoot),
     [string]$RuntimePython,
-    [string]$ReleaseTag = "5.8",
+    [string]$ReleaseTag = "5.9",
     [string]$TaskName,
     [ValidateSet("first_cycle", "continuous")]
     [string]$ControllerMode = "first_cycle",

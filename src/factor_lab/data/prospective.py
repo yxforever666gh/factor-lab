@@ -49,6 +49,28 @@ _SHA256 = re.compile(r"[0-9a-f]{64}")
 _SUPPLEMENT_DATASETS = ("akshare_hfq", "tushare_daily_basic")
 _PRICE_COLUMNS = ("open_hfq", "high_hfq", "low_hfq", "close_hfq")
 _BASIC_COLUMNS = ("pe_ttm", "pb")
+_SHADOW_BASIC_COLUMNS = ("turnover_rate",)
+_SHADOW_HISTORY_PRIOR_SESSIONS = 300
+_SHADOW_TARGET_COLUMNS = (
+    "date",
+    "ticker",
+    "shadow_eligible",
+    "universe_member",
+    "low_turnover_20_v1",
+    "low_volatility_252_v1",
+)
+_SHADOW_FORMULAS: Mapping[str, Mapping[str, Any]] = {
+    "low_turnover_20_v1": {
+        "formula": "-mean(turnover_rate[i], i=t-19..t)",
+        "min_obs": 20,
+        "direction": "higher_is_better",
+    },
+    "low_volatility_252_v1": {
+        "formula": "-std(log(close_hfq[i] / close_hfq[i-1]), i=t-251..t, ddof=1)",
+        "min_obs": 253,
+        "direction": "higher_is_better",
+    },
+}
 _BUNDLE_LOCKS_GUARD = threading.Lock()
 _BUNDLE_LOCKS: dict[str, threading.RLock] = {}
 
@@ -99,6 +121,28 @@ class ProspectiveInputSnapshot:
     @property
     def target_frame(self) -> pd.DataFrame:
         columns = [str(value) for value in self.target_adapter["columns"]]
+        return self.frame.loc[:, columns].copy()
+
+    @property
+    def shadow_target_adapter(self) -> Mapping[str, Any]:
+        adapter = self.manifest.get("shadow_target_adapter")
+        if not isinstance(adapter, Mapping):
+            raise ProspectiveDataError("snapshot has no verified shadow target adapter")
+        return adapter
+
+    @property
+    def shadow_target_rows_sha256(self) -> str:
+        return str(self.shadow_target_adapter["target_rows_sha256"])
+
+    @property
+    def shadow_target_sha256(self) -> str:
+        """Compatibility alias for the projected shadow-row digest."""
+
+        return self.shadow_target_rows_sha256
+
+    @property
+    def shadow_target_frame(self) -> pd.DataFrame:
+        columns = [str(value) for value in self.shadow_target_adapter["columns"]]
         return self.frame.loc[:, columns].copy()
 
 
@@ -293,6 +337,68 @@ def _canonical_execution_calendar(
                 )
     source.update(derived)
     return [pd.Timestamp(value) for value in sessions], source
+
+
+def _shadow_history_window(
+    canonical_sessions: Sequence[pd.Timestamp],
+    official_sessions: Sequence[pd.Timestamp],
+    *,
+    canonical_cutoff: pd.Timestamp,
+    signal_date: pd.Timestamp,
+) -> tuple[pd.Timestamp, dict[str, Any]]:
+    """Select a calendar-bound history start without a calendar-day proxy.
+
+    The longest shadow factor needs 253 observations for 252 returns, while
+    the source bundle retains at least 300 sessions before the signal whenever
+    that much canonical and
+    provider-complete history exists.  A separate 20-return boundary window is
+    retained so the frozen canonical volatility calibration remains exact even
+    after the signal moves more than 300 sessions beyond activation.
+    """
+
+    cutoff = _normalise_date(canonical_cutoff, label="canonical cutoff")
+    signal = _normalise_date(signal_date, label="shadow signal date")
+    canonical = sorted(
+        {
+            _normalise_date(value, label="canonical execution session")
+            for value in canonical_sessions
+        }
+    )
+    official = [
+        _normalise_date(value, label="official execution session")
+        for value in official_sessions
+    ]
+    combined = sorted(
+        {
+            *[value for value in canonical if value <= signal],
+            *[value for value in official if value <= signal],
+        }
+    )
+    if signal not in combined:
+        raise ProspectiveDataError("shadow signal date is absent from execution calendar")
+    canonical_cutoffs = [index for index, value in enumerate(canonical) if value == cutoff]
+    if len(canonical_cutoffs) != 1:
+        raise ProspectiveDataError("canonical cutoff is absent from execution calendar")
+
+    signal_index = combined.index(signal)
+    signal_start_index = max(0, signal_index - _SHADOW_HISTORY_PRIOR_SESSIONS)
+    signal_history_start = combined[signal_start_index]
+
+    # Twenty returns require twenty-one consecutive price observations.
+    cutoff_index = canonical_cutoffs[0]
+    calibration_start = canonical[max(0, cutoff_index - 20)]
+    selected_start = min(signal_history_start, calibration_start)
+    selected_count = sum(selected_start <= value <= signal for value in combined)
+    prior_count = signal_index - signal_start_index
+    return selected_start, {
+        "minimum_prior_sessions": _SHADOW_HISTORY_PRIOR_SESSIONS,
+        "available_prior_sessions": prior_count,
+        "requirement_satisfied": prior_count >= _SHADOW_HISTORY_PRIOR_SESSIONS,
+        "signal_history_start": signal_history_start.date().isoformat(),
+        "selected_supplement_start": selected_start.date().isoformat(),
+        "selected_calendar_session_count": selected_count,
+        "selection_basis": "canonical_execution_sessions_plus_official_extension",
+    }
 
 
 def _write_verified(path: Path, payload: bytes) -> None:
@@ -1206,6 +1312,7 @@ def _supplement_files(
                     "row_count": int(parquet.metadata.num_rows),
                     "artifact_start_date": start.date().isoformat(),
                     "artifact_end_date": end.date().isoformat(),
+                    "selected_min_date": minimum_date.date().isoformat(),
                     "selected_max_date": maximum_date.date().isoformat(),
                     "availability_basis": "pre_activation_frozen_bridge",
                 }
@@ -1220,7 +1327,7 @@ def _supplement_files(
         required = {"ts_code", "trade_date"} | (
             set(_PRICE_COLUMNS) | {"amount_akshare", "price_source"}
             if name == "akshare_hfq"
-            else set(_BASIC_COLUMNS)
+            else set(_BASIC_COLUMNS) | set(_SHADOW_BASIC_COLUMNS)
         )
         missing = sorted(required - set(frame.columns))
         if missing:
@@ -1258,7 +1365,7 @@ def _calibrate_canonical_boundary(
         suffixes=("_canonical", "_bridge"),
         validate="one_to_one",
     ).merge(
-        boundary_basic[["ts_code", *_BASIC_COLUMNS]],
+        boundary_basic[["ts_code", *_BASIC_COLUMNS, *_SHADOW_BASIC_COLUMNS]],
         left_on="ticker",
         right_on="ts_code",
         suffixes=("", "_basic"),
@@ -1272,6 +1379,7 @@ def _calibrate_canonical_boundary(
         ("amount_akshare_canonical", "amount_akshare_bridge"),
         ("pe_ttm", "pe_ttm_basic"),
         ("pb", "pb_basic"),
+        ("turnover_rate", "turnover_rate_basic"),
     ]
     for left, right in comparisons:
         if not _close_enough(merged[left], merged[right], rtol=1e-12, atol=1e-12):
@@ -1334,6 +1442,79 @@ def _raw_daily_audit(frame: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
+def _shadow_price_history(
+    frame: pd.DataFrame,
+    *,
+    signal_date: pd.Timestamp,
+) -> pd.DataFrame:
+    """Causally truncate, sort, and add the frozen market-data shadow fields."""
+
+    required = {"ts_code", "trade_date", "close_hfq", "turnover_rate"}
+    missing = sorted(required - set(frame.columns))
+    if missing:
+        raise ProspectiveDataError(
+            "shadow price history missing columns: " + ", ".join(missing)
+        )
+    signal = _normalise_date(signal_date, label="shadow signal date")
+    work = frame.copy()
+    work["trade_date"] = pd.to_datetime(work["trade_date"], errors="coerce")
+    if work["trade_date"].isna().any() or work["ts_code"].isna().any():
+        raise ProspectiveDataError("shadow price history has invalid keys")
+    work = work.loc[work["trade_date"].le(signal)].copy()
+    if work.duplicated(["ts_code", "trade_date"]).any():
+        raise ProspectiveDataError("shadow price history has duplicate ticker/date keys")
+    work["ts_code"] = work["ts_code"].astype("string")
+    work["close_hfq"] = pd.to_numeric(work["close_hfq"], errors="coerce")
+    work["turnover_rate"] = pd.to_numeric(
+        work["turnover_rate"], errors="coerce"
+    )
+    work = work.sort_values(["ts_code", "trade_date"], kind="mergesort").reset_index(
+        drop=True
+    )
+
+    closes = work.groupby("ts_code", sort=False)["close_hfq"]
+    turnover = work.groupby("ts_code", sort=False)["turnover_rate"]
+    turnover_count = turnover.transform(
+        lambda values: values.rolling(window=20, min_periods=20).count()
+    )
+    turnover_mean = turnover.transform(
+        lambda values: values.rolling(window=20, min_periods=20).mean()
+    )
+    close_count = closes.transform(
+        lambda values: values.rolling(window=253, min_periods=253).count()
+    )
+    positive_log_close = np.log(work["close_hfq"].where(work["close_hfq"].gt(0)))
+    log_return = positive_log_close.groupby(work["ts_code"], sort=False).diff()
+    log_volatility = log_return.groupby(work["ts_code"], sort=False).transform(
+        lambda values: values.rolling(window=252, min_periods=252).std(ddof=1)
+    )
+    work["low_turnover_20_v1"] = (-turnover_mean).where(turnover_count.eq(20))
+    work["low_volatility_252_v1"] = (-log_volatility).where(close_count.eq(253))
+    for column in ("low_turnover_20_v1", "low_volatility_252_v1"):
+        values = pd.to_numeric(work[column], errors="coerce")
+        work[column] = values.where(np.isfinite(values))
+    return work
+
+
+def _shadow_eligibility(frame: pd.DataFrame) -> pd.Series:
+    """Use one common finite universe without changing formal eligibility."""
+
+    required = {"eligible", "low_turnover_20_v1", "low_volatility_252_v1"}
+    missing = sorted(required - set(frame.columns))
+    if missing:
+        raise ProspectiveDataError(
+            "shadow eligibility missing columns: " + ", ".join(missing)
+        )
+    finite = (
+        frame[["low_turnover_20_v1", "low_volatility_252_v1"]]
+        .apply(pd.to_numeric, errors="coerce")
+        .replace([np.inf, -np.inf], np.nan)
+        .notna()
+        .all(axis=1)
+    )
+    return frame["eligible"].fillna(False).astype(bool) & finite
+
+
 def _build_signal_frame(
     members: pd.DataFrame,
     price: pd.DataFrame,
@@ -1345,9 +1526,24 @@ def _build_signal_frame(
     signal_date: pd.Timestamp,
 ) -> tuple[pd.DataFrame, dict[str, Any]]:
     member_set = set(members["ts_code"].astype(str))
-    prices = price.loc[price["ts_code"].astype(str).isin(member_set)].copy()
+    prices = price.copy()
+    prices["trade_date"] = pd.to_datetime(prices["trade_date"], errors="coerce")
+    if prices["trade_date"].isna().any():
+        raise ProspectiveDataError("bridge price history contains invalid dates")
+    prices = prices.loc[prices["trade_date"].le(signal_date)].copy()
     prices = prices.sort_values(["ts_code", "trade_date"], kind="mergesort")
-    daily = _raw_daily_audit(raw_daily.loc[raw_daily["ts_code"].astype(str).isin(member_set)])
+    history_tickers = set(prices["ts_code"].astype(str))
+    daily_input = raw_daily.copy()
+    daily_input["trade_date"] = pd.to_datetime(
+        daily_input["trade_date"], errors="coerce"
+    )
+    if daily_input["trade_date"].isna().any():
+        raise ProspectiveDataError("raw daily history contains invalid dates")
+    daily_input = daily_input.loc[
+        daily_input["trade_date"].le(signal_date)
+        & daily_input["ts_code"].astype(str).isin(history_tickers)
+    ]
+    daily = _raw_daily_audit(daily_input)
     daily = daily.sort_values(["ts_code", "trade_date"], kind="mergesort")
 
     bridge_daily = daily.loc[daily["trade_date"].le(FROZEN_BRIDGE_END)].copy()
@@ -1392,8 +1588,21 @@ def _build_signal_frame(
             history[column] = raw_values[column].reindex(keys).to_numpy()
         history["effective_adj_multiplier"] = history["close_hfq"] / history["close"]
 
-    future_daily = daily.loc[daily["trade_date"].gt(FROZEN_BRIDGE_END)].copy()
-    future_adj = raw_adj.loc[raw_adj["ts_code"].astype(str).isin(member_set)].copy()
+    future_daily = daily.loc[
+        daily["trade_date"].gt(FROZEN_BRIDGE_END)
+        & daily["ts_code"].astype(str).isin(member_set)
+    ].copy()
+    future_adj = raw_adj.copy()
+    if not future_adj.empty:
+        future_adj["trade_date"] = pd.to_datetime(
+            future_adj["trade_date"], errors="coerce"
+        )
+        if future_adj["trade_date"].isna().any():
+            raise ProspectiveDataError("raw adj_factor history contains invalid dates")
+        future_adj = future_adj.loc[
+            future_adj["trade_date"].le(signal_date)
+            & future_adj["ts_code"].astype(str).isin(member_set)
+        ].copy()
     if not future_daily.empty:
         if not {"ts_code", "trade_date", "adj_factor"}.issubset(future_adj.columns):
             raise ProspectiveDataError("future adj_factor partition schema is incomplete")
@@ -1467,7 +1676,46 @@ def _build_signal_frame(
                 previous_adjusted = adjusted_close
         history = pd.concat([history, pd.DataFrame(built_rows)], ignore_index=True, sort=False)
 
-    history = history.sort_values(["ts_code", "trade_date"], kind="mergesort")
+    basic_history_parts: list[pd.DataFrame] = []
+    for label, source, after_bridge in (
+        ("bridge", basic_bridge, False),
+        ("provider-complete", raw_basic, True),
+    ):
+        required_basic = {"ts_code", "trade_date", *_SHADOW_BASIC_COLUMNS}
+        missing_basic = sorted(required_basic - set(source.columns))
+        if missing_basic:
+            raise ProspectiveDataError(
+                f"{label} daily_basic history missing columns: {missing_basic}"
+            )
+        selected_basic = source[["ts_code", "trade_date", *_SHADOW_BASIC_COLUMNS]].copy()
+        selected_basic["trade_date"] = pd.to_datetime(
+            selected_basic["trade_date"], errors="coerce"
+        )
+        if selected_basic["trade_date"].isna().any():
+            raise ProspectiveDataError(f"{label} daily_basic history has invalid dates")
+        selected_basic = selected_basic.loc[
+            selected_basic["trade_date"].le(signal_date)
+            & selected_basic["ts_code"].astype(str).isin(history_tickers)
+        ]
+        if after_bridge:
+            selected_basic = selected_basic.loc[
+                selected_basic["trade_date"].gt(FROZEN_BRIDGE_END)
+            ]
+        else:
+            selected_basic = selected_basic.loc[
+                selected_basic["trade_date"].le(FROZEN_BRIDGE_END)
+            ]
+        basic_history_parts.append(selected_basic)
+    basic_history = pd.concat(basic_history_parts, ignore_index=True)
+    if basic_history.duplicated(["ts_code", "trade_date"]).any():
+        raise ProspectiveDataError("shadow daily_basic history has duplicate ticker/date keys")
+    history = history.merge(
+        basic_history,
+        on=["ts_code", "trade_date"],
+        how="left",
+        validate="one_to_one",
+    )
+    history = _shadow_price_history(history, signal_date=signal_date)
     history["return_1d"] = history.groupby("ts_code", sort=False)["close_hfq"].pct_change(
         fill_method=None
     )
@@ -1477,7 +1725,12 @@ def _build_signal_frame(
     history["adv_20"] = history.groupby("ts_code", sort=False)["amount_rmb"].transform(
         lambda values: values.rolling(20, min_periods=20).mean()
     )
-    signal_prices = history.loc[history["trade_date"].eq(signal_date)].copy()
+    # Time-series transforms are deliberately complete before the signal-month
+    # membership filter is applied.
+    signal_prices = history.loc[
+        history["trade_date"].eq(signal_date)
+        & history["ts_code"].astype(str).isin(member_set)
+    ].copy()
 
     if signal_date <= FROZEN_BRIDGE_END:
         signal_basic = basic_bridge.loc[basic_bridge["trade_date"].eq(signal_date)].copy()
@@ -1488,7 +1741,12 @@ def _build_signal_frame(
             & raw_basic["ts_code"].astype(str).isin(member_set)
         ].copy()
         basic_source = "checkpointed_tushare_daily_basic"
-    if not {"ts_code", "trade_date", *_BASIC_COLUMNS}.issubset(signal_basic.columns):
+    if not {
+        "ts_code",
+        "trade_date",
+        *_BASIC_COLUMNS,
+        *_SHADOW_BASIC_COLUMNS,
+    }.issubset(signal_basic.columns):
         raise ProspectiveDataError("signal daily_basic schema is incomplete")
     signal = signal_prices.merge(
         signal_basic[["ts_code", "trade_date", *_BASIC_COLUMNS]],
@@ -1497,7 +1755,11 @@ def _build_signal_frame(
         validate="one_to_one",
     )
     observed_daily = set(
-        daily.loc[daily["trade_date"].eq(signal_date), "ts_code"].astype(str)
+        daily.loc[
+            daily["trade_date"].eq(signal_date)
+            & daily["ts_code"].astype(str).isin(member_set),
+            "ts_code",
+        ].astype(str)
     )
     if set(signal["ts_code"].astype(str)) != observed_daily:
         raise ProspectiveDataError("signal daily/basic/price security sets do not match")
@@ -1519,6 +1781,7 @@ def _build_signal_frame(
         .all(axis=1)
     )
     signal["eligible"] = signal["eligible"].fillna(False).astype(bool) & valid
+    signal["shadow_eligible"] = _shadow_eligibility(signal)
     signal["universe_member"] = True
     signal["is_one_price_limit_up"] = (
         np.isclose(signal["high"], signal["low"], equal_nan=False) & signal["pct_chg"].gt(0)
@@ -1537,6 +1800,7 @@ def _build_signal_frame(
         "membership_month",
         "universe_member",
         "eligible",
+        "shadow_eligible",
         "open",
         "high",
         "low",
@@ -1559,11 +1823,14 @@ def _build_signal_frame(
         "basic_source",
         "pe_ttm",
         "pb",
+        "turnover_rate",
         "earnings_yield",
         "book_yield",
         "return_1d",
         "volatility_20",
         "adv_20",
+        "low_turnover_20_v1",
+        "low_volatility_252_v1",
         "is_one_price_limit_up",
         "is_one_price_limit_down",
     ]
@@ -1577,6 +1844,20 @@ def _build_signal_frame(
         "signal_coverage_ratio": round(len(result) / EXPECTED_MEMBERSHIP_SIZE, 8),
         "volatility_lookback": 20,
         "volatility_ddof": 1,
+        "shadow_feature_coverage": {
+            column: int(result[column].notna().sum())
+            for column in ("low_turnover_20_v1", "low_volatility_252_v1")
+        },
+        "shadow_common_finite_count": int(
+            result[["low_turnover_20_v1", "low_volatility_252_v1"]]
+            .notna()
+            .all(axis=1)
+            .sum()
+        ),
+        "shadow_eligible_count": int(result["shadow_eligible"].sum()),
+        "shadow_excluded_from_formal_count": int(
+            (result["eligible"] & ~result["shadow_eligible"]).sum()
+        ),
         "amount_unit": "RMB",
     }
     return result, audit
@@ -1697,6 +1978,7 @@ def build_prospective_input_snapshot(
         "amount_akshare",
         "pe_ttm",
         "pb",
+        "turnover_rate",
         "earnings_yield",
         "book_yield",
         "volatility_20",
@@ -1711,7 +1993,12 @@ def build_prospective_input_snapshot(
     canonical_tickers = set(canonical["ticker"].astype("string"))
     current_tickers = set(members["ts_code"].astype("string"))
     supplement_tickers = sorted(canonical_tickers | current_tickers)
-    lookback_start = cutoff - pd.Timedelta(days=90)
+    lookback_start, shadow_history_audit = _shadow_history_window(
+        canonical_sessions,
+        open_dates,
+        canonical_cutoff=cutoff,
+        signal_date=date,
+    )
     selected_bridge_end = min(date, FROZEN_BRIDGE_END)
     bridge_price, bridge_basic, supplement_sources = _supplement_files(
         root,
@@ -1845,6 +2132,7 @@ def build_prospective_input_snapshot(
         raw_adj,
         signal_date=date,
     )
+    signal_audit["shadow_history"] = shadow_history_audit
 
     availability_values = membership_availability + calendar_availability + raw_availability
     if not availability_values:
@@ -1876,6 +2164,11 @@ def build_prospective_input_snapshot(
     ]
     target_rows = _frame_records(frame[target_columns])
     target_rows_sha = _sha256_bytes(_canonical_json_bytes(target_rows))
+    shadow_target_columns = list(_SHADOW_TARGET_COLUMNS)
+    shadow_target_rows = _frame_records(frame[shadow_target_columns])
+    shadow_target_rows_sha = _sha256_bytes(
+        _canonical_json_bytes(shadow_target_rows)
+    )
     features_source["selected_max_date"] = cutoff.date().isoformat()
     if sealed_features is not None and features_source != dict(sealed_features):
         raise ProspectiveDataError("sealed canonical features contract differs from CAS bytes")
@@ -1947,6 +2240,26 @@ def build_prospective_input_snapshot(
             "canonical_calendar_prefix_sha256": execution_source[
                 "calendar_prefix_sha256"
             ],
+            "rows_selection": "rows.json projected to columns in this exact order",
+        },
+        "shadow_target_adapter": {
+            "columns": shadow_target_columns,
+            "target_rows_sha256": shadow_target_rows_sha,
+            "eligibility_column": "shadow_eligible",
+            "formal_eligibility_column": "eligible",
+            "common_universe_rule": (
+                "formal eligible and both frozen shadow scores are finite"
+            ),
+            "formulas": {
+                name: dict(specification)
+                for name, specification in _SHADOW_FORMULAS.items()
+            },
+            "history_lineage": "frozen_bridge_plus_provider_complete",
+            "history_calendar": shadow_history_audit,
+            "pristine_after_activation_sessions": 253,
+            "signal_availability": "signal_t_close",
+            "execution_availability": "t_plus_1_open",
+            "future_labels_used": False,
             "rows_selection": "rows.json projected to columns in this exact order",
         },
         "inputs": input_sources,
@@ -2058,6 +2371,67 @@ def build_prospective_input_snapshot(
         return _load_prospective_input_snapshot_files(directory)
 
 
+def _verify_shadow_target_adapter(
+    manifest: Mapping[str, Any],
+    rows: Sequence[Mapping[str, Any]],
+    row_columns: Sequence[str],
+) -> None:
+    """Verify the optional 5.9 shadow projection without breaking older bundles."""
+
+    raw_adapter = manifest.get("shadow_target_adapter")
+    if raw_adapter is None:
+        return
+    if not isinstance(raw_adapter, Mapping):
+        raise ProspectiveDataError("snapshot shadow target adapter is invalid")
+    columns = raw_adapter.get("columns")
+    if columns != list(_SHADOW_TARGET_COLUMNS) or not set(columns).issubset(row_columns):
+        raise ProspectiveDataError("snapshot shadow target adapter columns are invalid")
+    if (
+        raw_adapter.get("eligibility_column") != "shadow_eligible"
+        or raw_adapter.get("formal_eligibility_column") != "eligible"
+        or raw_adapter.get("history_lineage")
+        != "frozen_bridge_plus_provider_complete"
+        or raw_adapter.get("pristine_after_activation_sessions") != 253
+        or raw_adapter.get("signal_availability") != "signal_t_close"
+        or raw_adapter.get("execution_availability") != "t_plus_1_open"
+        or raw_adapter.get("future_labels_used") is not False
+        or raw_adapter.get("formulas")
+        != {name: dict(value) for name, value in _SHADOW_FORMULAS.items()}
+    ):
+        raise ProspectiveDataError("snapshot shadow target adapter contract differs")
+    encoded_rows = [{column: row[column] for column in columns} for row in rows]
+    if _sha256_bytes(_canonical_json_bytes(encoded_rows)) != str(
+        raw_adapter.get("target_rows_sha256") or ""
+    ):
+        raise ProspectiveDataError("snapshot shadow target rows binding mismatch")
+
+    for row in rows:
+        formal_eligible = row.get("eligible")
+        shadow_eligible = row.get("shadow_eligible")
+        if type(formal_eligible) is not bool or type(shadow_eligible) is not bool:
+            raise ProspectiveDataError("snapshot shadow eligibility is not boolean")
+        score_values = [
+            row.get("low_turnover_20_v1"),
+            row.get("low_volatility_252_v1"),
+        ]
+        finite = True
+        for value in score_values:
+            try:
+                number = (
+                    float.fromhex(value)
+                    if isinstance(value, str)
+                    else float(value)
+                )
+            except (TypeError, ValueError, OverflowError):
+                finite = False
+                break
+            if not math.isfinite(number):
+                finite = False
+                break
+        if shadow_eligible is not (formal_eligible and finite):
+            raise ProspectiveDataError("snapshot shadow eligibility binding mismatch")
+
+
 def _load_prospective_input_snapshot_files(path: str | Path) -> ProspectiveInputSnapshot:
     """Verify the bundle bytes themselves without trusting external sources."""
 
@@ -2108,6 +2482,7 @@ def _load_prospective_input_snapshot_files(path: str | Path) -> ProspectiveInput
         adapter.get("target_rows_sha256") or ""
     ):
         raise ProspectiveDataError("snapshot target rows binding mismatch")
+    _verify_shadow_target_adapter(manifest, rows, columns)
     inputs = manifest.get("inputs")
     if not isinstance(inputs, list) or _sha256_bytes(_canonical_json_bytes(inputs)) != str(
         manifest.get("input_sources_sha256") or ""

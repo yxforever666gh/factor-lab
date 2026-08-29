@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "factor-research-mvp"
-version = "5.8.0"
+version = "5.9.0"
 description = "A-share point-in-time research with prospective execution and evidence logging"
 requires-python = ">=3.10"
 dependencies = [

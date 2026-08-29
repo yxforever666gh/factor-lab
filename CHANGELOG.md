@@ -10,6 +10,56 @@
 
 ## [Unreleased]
 
+## [5.9] - 2026-08-30
+
+### Added
+
+- 新增 5.9 独立前瞻 shadow Challenger 协议，注册 `low_turnover_20_v1` 与
+  `low_volatility_252_v1`。随协议提交的 selection-freeze artifact 记录 31 个因果 trailing 公式的
+  train/validation 后 finalist 定义、audit 边界及 registry composition 的 post-selection；两项
+  Challenger 都明确禁止历史赢家表述。
+- 前瞻 signal snapshot 新增独立 shadow adapter：在完整 ticker 历史上分别计算 trailing 20-session
+  平均换手率的负值和 252 个 adjusted-close log return 的负波动率，再筛月度 Top-500；正式 5.2
+  target adapter 的八列输入与摘要合同保持不变。
+- 新增十 offset 并行 wealth 的配对评价器。每个 sealed 11 点 daily path 跨周期连续拼接，同日先
+  更新全部可见 offset、未启动 offset 按现金 wealth=1，再取十条 wealth 均值；候选-control daily
+  master active return 使用冻结 lag=10 的单侧
+  Newey–West/HAC，并做 Holm–Bonferroni。major review 还要求 250 个配对周期、每 offset 25 个、
+  8/10 正 offset、连续三个已闭自然月及零 missed/PIT/integrity/blocked-order。
+- 新增与正式账本物理隔离的 `runtime/adaptive-shadow/1` create-only 哈希链，记录 activation、
+  planning intent、plan、missed deadline、outcome 与 evaluation。每个 intent 在正式 deadline 前
+  一次封存全部活跃候选计划，使部分写崩溃只能恢复原字节，不能在 deadline 后重算。
+- 新增 route-neutral shadow market bundle、source contract 和独立深重放：outcome 同时绑定正式
+  execution、shadow wrapper、fallback raw partitions、停复牌与退市 CAS；CLI audit、controller
+  与 evaluation checkpoint 都会验证完整来源树。
+
+### Changed
+
+- 5.9 是不改变资本路线的小版本：正式 5.0 账本继续只执行 `fixed_core_full`，shadow 成败不得
+  写入、回填或自动替换正式路线；若共同前瞻证据最终过门，仍须另发 6.0 才能切换大方向。
+- shadow 与正式路线共享 signal、membership、官方日历、次日开盘、十 offset、持有窗、初始
+  资本与成本模型。删除没有历史增量依据、也未形成独立组合账户的 50% softmax allocator；5.9
+  只比较单个 Challenger 与正式 control，不宣称在线分配表现。
+- shadow 对正式 ledger 的 audit/status/replay 全部使用不刷新 verification-cache 的只读路径；带
+  rich decision/outcome 的测试逐字节证明读取前后正式树不变。公开 activation/plan/sync CLI 也不再
+  接受 caller-supplied 历史时钟；release 时间来自已同步 annotated tag，其他时间取调用时 UTC。
+- 若某个 signal 连 deadline 前 planning intent 都没有，该 candidate/offset fail-stop，后续周期只记
+  terminated missed，且永久阻断 major review；合法 intent 的缺失 plan suffix 则可在 deadline 后
+  从原封 payload 恢复，不算 missed。
+
+### Known limitations
+
+- 发布前 exact execution 诊断否决了原 price-anchor 与 5 日反转：10-offset net CAGR median 约
+  -8.75% / -23.78%，相对约 +8.18% control 明显失败，结果 payload SHA-256 为
+  `f31b9921047c314c5c7a3d753136ee7231b36fa9eabb07e9b99d1615edfd52bd`。替代的低换手与低波动
+  在全成本 exact execution 中绝对 CAGR 仍为正，但相对 control 都是 0/10 offset 为正；相对 CAGR
+  median 分别为 -0.93 / -1.97 个百分点，结果 payload SHA-256 为
+  `127143d38edafe7b14c643783bcc9dfbaf0203fb0d46b9da7abc34e4d07cca50`。两者没有在
+  train/validation/audit 三段稳定胜 control，只用于新的前瞻证伪。
+- 5.9 发布时仍没有真实前瞻 shadow outcome，冻结历史桥的 provider vintage 未验证；低换手需要
+  20 个有限 daily turnover 观测，低波动需要 253 个正 adjusted close。5.9 没有资本授权、不会
+  自动晋级；增加或替换候选必须发布新小版本且不能回填。
+
 ## [5.8] - 2026-08-30
 
 ### Added
@@ -794,6 +844,7 @@
   移除这些实验层。
 
 [Unreleased]: https://github.com/yxforever666gh/factor-lab/commits/main
+[5.9]: https://github.com/yxforever666gh/factor-lab/tree/5.9
 [5.8]: https://github.com/yxforever666gh/factor-lab/tree/5.8
 [5.7]: https://github.com/yxforever666gh/factor-lab/tree/5.7
 [5.6]: https://github.com/yxforever666gh/factor-lab/tree/5.6
