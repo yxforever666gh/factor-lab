@@ -579,7 +579,10 @@ def test_register_continuous_plan_has_weekday_deadlines_and_weekend_recovery(tmp
         capture_output=True,
         encoding="utf-8",
         errors="replace",
-        timeout=15,
+        # GitHub's shared Windows runners can take longer than 15 seconds to
+        # materialize the 35 ScheduledTask trigger objects used by PlanOnly.
+        # This is a process-hang guard, not a performance assertion.
+        timeout=60,
     )
 
     assert completed.returncode == 0, completed.stderr
