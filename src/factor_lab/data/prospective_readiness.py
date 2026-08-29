@@ -23,7 +23,7 @@ import pyarrow.parquet as pq
 
 
 SCHEMA_VERSION = 2
-CONTRACT_ID = "factor-lab/prospective-readiness/5.6"
+CONTRACT_ID = "factor-lab/prospective-readiness/5.7"
 LEDGER_ID = "factor-lab/prospective/5.0"
 FROZEN_BRIDGE_END = "2026-08-21"
 CANONICAL_CALENDAR_ANCHOR = "2017-01-03"

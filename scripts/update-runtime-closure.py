@@ -40,7 +40,8 @@ def _canonical_json_bytes(value: Any) -> bytes:
 def _git_lf_text_bytes(path: Path) -> bytes:
     """Return the bytes Git stores for the closure's declared text files.
 
-    Every closure path is UTF-8 Python, TOML, or JSON and is declared
+    Every closure path is UTF-8 Python, TOML, JSON, lock text, or the
+    prospective watchdog PowerShell runner and is declared
     ``text eol=lf`` in ``.gitattributes``.  A Windows working tree may still
     contain CRLF or mixed newlines before the next checkout.  Hashing those
     raw bytes would bind a representation that Git never publishes, so mirror
@@ -65,6 +66,7 @@ def _closure_files() -> list[Path]:
         ROOT / "pyproject.toml",
         ROOT / "configs/data.json",
         runtime_lock,
+        ROOT / "scripts/invoke-prospective-watchdog.ps1",
     ]
     package = list((ROOT / "src/factor_lab").rglob("*.py"))
     files = sorted(

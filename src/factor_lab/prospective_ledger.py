@@ -5013,6 +5013,465 @@ def _latest_decision_coordinates(
     return signal, calendar_index
 
 
+def _readiness_action(
+    report: dict[str, Any],
+    *,
+    reason: str,
+    next_action: str,
+    command: str,
+    arguments: Mapping[str, Any],
+    argv: Sequence[str],
+    post_cycle: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    report["issues"] = []
+    report["ready_for"] = {
+        "membership_build": False,
+        "input_build": False,
+        "decision_admission": False,
+    }
+    report.update(
+        status="ready",
+        reason=reason,
+        ready=True,
+        next_action=next_action,
+        action={
+            "command": command,
+            "arguments": dict(arguments),
+            "argv": [str(value) for value in argv],
+        },
+    )
+    if post_cycle is not None:
+        report["post_cycle"] = dict(post_cycle)
+    return report
+
+
+def _execution_bundle_readiness(
+    layout: LedgerLayout,
+    state: _LedgerState,
+    *,
+    decision_record_sha256: str,
+    generation: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Resolve zero or one strict execution bundle for one open decision."""
+
+    from .data import prospective_execution as execution_data
+
+    previous = _previous_account_state(state, generation)
+    previous_sha = None if previous is None else str(previous["state_sha256"])
+    source_sha = str(
+        state.open_cycles[decision_record_sha256]["plan"][
+            "source_data_snapshot_sha256"
+        ]
+    )
+    if not layout.executions.exists():
+        return {"status": "missing"}
+    if layout.executions.is_symlink() or not layout.executions.is_dir():
+        raise LedgerIntegrityError("execution store is not a canonical directory")
+
+    matches: list[dict[str, Any]] = []
+    for directory in sorted(layout.executions.iterdir(), key=lambda path: path.name):
+        if (
+            directory.is_symlink()
+            or not directory.is_dir()
+            or SHA256_RE.fullmatch(directory.name) is None
+        ):
+            raise LedgerIntegrityError(
+                f"execution store contains an invalid entry: {directory}"
+            )
+        snapshot_path = directory / "snapshot.json"
+        sources_path = directory / "sources.json"
+        snapshot_present = snapshot_path.exists() or snapshot_path.is_symlink()
+        sources_present = sources_path.exists() or sources_path.is_symlink()
+        if not snapshot_present and not sources_present:
+            # Atomic file publication may leave an empty, uncommitted
+            # content-addressed directory if the process dies before its first
+            # link.  It claims no identity and is never treated as evidence.
+            continue
+        if snapshot_present and not sources_present:
+            raise LedgerIntegrityError(
+                f"execution bundle exposes snapshot before sources: {directory}"
+            )
+        if sources_path.is_symlink() or not sources_path.is_file():
+            raise LedgerIntegrityError(
+                f"execution source contract is not a regular file: {sources_path}"
+            )
+        try:
+            sources = strict_load_canonical(sources_path.read_bytes())
+        except (OSError, LedgerError, ValueError) as exc:
+            raise LedgerIntegrityError(
+                f"execution source contract is invalid: {sources_path}"
+            ) from exc
+        if (
+            not isinstance(sources, Mapping)
+            or set(sources) != execution_data._EXECUTION_SOURCE_KEYS
+        ):
+            raise LedgerIntegrityError(
+                f"execution source contract has a non-exact schema: {sources_path}"
+            )
+        identity = (
+            sources.get("generation_result_sha256"),
+            sources.get("source_data_snapshot_sha256"),
+            sources.get("previous_account_state_sha256"),
+        )
+        expected_identity = (
+            generation["result_sha256"],
+            source_sha,
+            previous_sha,
+        )
+        try:
+            if snapshot_present:
+                if snapshot_path.is_symlink() or not snapshot_path.is_file():
+                    raise LedgerIntegrityError(
+                        f"execution snapshot is not a regular file: {snapshot_path}"
+                    )
+                execution_data._load_snapshot_files(directory)
+        except Exception as exc:
+            if isinstance(exc, LedgerIntegrityError):
+                raise
+            raise LedgerIntegrityError(
+                f"execution bundle is malformed: {directory}"
+            ) from exc
+        if identity != expected_identity:
+            continue
+
+        try:
+            if snapshot_present:
+                loaded = execution_data.load_prospective_execution_snapshot(
+                    directory,
+                    generation,
+                    previous_account_state=previous,
+                )
+            else:
+                suspensions = sources.get("suspensions")
+                if not isinstance(suspensions, Mapping):
+                    raise LedgerIntegrityError(
+                        "partial execution source lacks its suspension binding"
+                    )
+                rebuilt = execution_data.build_prospective_execution_snapshot(
+                    _implementation_project_root(layout),
+                    generation,
+                    source_data_snapshot_sha256=source_sha,
+                    previous_account_state=previous,
+                    _materialize=False,
+                    _suspension_artifact_sha256=str(
+                        suspensions.get("artifact_sha256") or ""
+                    ),
+                    _sealed_source_contract=sources,
+                    _resume_existing=False,
+                )
+                if rebuilt.directory != directory:
+                    raise LedgerIntegrityError(
+                        "partial execution directory differs from sealed rebuild"
+                    )
+                loaded = rebuilt
+        except Exception as exc:
+            if isinstance(exc, LedgerIntegrityError):
+                raise
+            raise LedgerIntegrityError(
+                f"matching execution bundle fails source replay: {directory}"
+            ) from exc
+        matches.append(
+            {
+                "status": "complete" if snapshot_present else "partial",
+                "execution_snapshot_sha256": directory.name,
+                "observation_available_at_utc": (
+                    loaded.snapshot.observation_available_at_utc
+                ),
+                "directory": str(directory),
+            }
+        )
+    if len(matches) > 1:
+        raise LedgerIntegrityError(
+            "multiple execution bundles match one sealed decision"
+        )
+    return matches[0] if matches else {"status": "missing"}
+
+
+def _post_cycle_readiness(
+    report: dict[str, Any],
+    layout: LedgerLayout,
+    state: _LedgerState,
+    generated: Mapping[str, Mapping[str, Any]],
+    *,
+    project: Path,
+) -> dict[str, Any] | None:
+    """Return the next machine action for evaluation or one mature open cycle."""
+
+    if state.evaluation_due is not None:
+        milestone = str(state.evaluation_due)
+        return _readiness_action(
+            report,
+            reason="evaluation_checkpoint_ready",
+            next_action="evaluate",
+            command="prospective evaluate",
+            arguments={"milestone": milestone},
+            argv=["prospective", "evaluate"],
+            post_cycle={"evaluation_due": milestone},
+        )
+    if not state.open_cycles:
+        return None
+    legacy = [
+        decision_sha
+        for decision_sha, cycle in state.open_cycles.items()
+        if bool(cycle["legacy_single_slot"])
+    ]
+    if legacy:
+        report["issues"] = []
+        return _override_readiness(
+            report,
+            status="blocked",
+            reason="legacy_open_cycle_requires_manual_outcome",
+            issue=_readiness_issue(
+                "LEGACY_OPEN_CYCLE_UNSUPPORTED",
+                "error",
+                "ledger",
+                "machine readiness cannot close a legacy scalar outcome",
+                retryable=False,
+            ),
+        )
+    decision_sha, cycle = min(
+        state.open_cycles.items(),
+        key=lambda row: (int(row[1]["calendar_index"]), row[0]),
+    )
+    generation = generated.get(decision_sha)
+    if not isinstance(generation, Mapping):
+        report["issues"] = []
+        return _override_readiness(
+            report,
+            status="blocked",
+            reason="open_cycle_replay_missing",
+            issue=_readiness_issue(
+                "OPEN_CYCLE_REPLAY_MISSING",
+                "error",
+                "ledger",
+                "oldest open cycle has no verified target replay",
+                retryable=False,
+            ),
+        )
+    observed_text = report.get("observed_at_utc")
+    if not isinstance(observed_text, str):
+        report["issues"] = []
+        return _override_readiness(
+            report,
+            status="blocked",
+            reason="post_cycle_clock_missing",
+            issue=_readiness_issue(
+                "POST_CYCLE_CLOCK_MISSING",
+                "error",
+                "clock",
+                "post-cycle readiness lacks an observation instant",
+                retryable=True,
+            ),
+        )
+    post_view: dict[str, Any] = {
+        "decision_record_sha256": decision_sha,
+        "calendar_index": int(cycle["calendar_index"]),
+        "due_offset": int(cycle["due_offset"]),
+    }
+    try:
+        execution = _execution_bundle_readiness(
+            layout,
+            state,
+            decision_record_sha256=decision_sha,
+            generation=generation,
+        )
+    except (OSError, LedgerError, ValueError) as exc:
+        report["issues"] = []
+        return _override_readiness(
+            report,
+            status="blocked",
+            reason="execution_evidence_invalid",
+            issue=_readiness_issue(
+                "EXECUTION_EVIDENCE_INVALID",
+                "error",
+                "execution",
+                str(exc),
+                retryable=False,
+            ),
+        )
+    execution_status = str(execution["status"])
+    if execution_status in {"complete", "partial"}:
+        available = _parse_evidence_utc(
+            str(execution["observation_available_at_utc"])
+        )
+        if _parse_evidence_utc(observed_text) < available:
+            report["issues"] = []
+            report["post_cycle"] = {**post_view, "execution": execution}
+            return _override_readiness(
+                report,
+                status="waiting",
+                reason="execution_not_yet_available",
+                issue=_readiness_issue(
+                    "EXECUTION_NOT_YET_AVAILABLE",
+                    "wait",
+                    "execution",
+                    "sealed execution evidence is later than the observation instant",
+                    retryable=True,
+                ),
+            )
+        if execution_status == "complete":
+            execution_sha = str(execution["execution_snapshot_sha256"])
+            return _readiness_action(
+                report,
+                reason="outcome_append_ready",
+                next_action="append_outcome",
+                command="prospective outcome",
+                arguments={
+                    "decision_record_sha256": decision_sha,
+                    "execution_snapshot_sha256": execution_sha,
+                },
+                argv=[
+                    "prospective",
+                    "outcome",
+                    "--decision",
+                    decision_sha,
+                    "--execution",
+                    execution_sha,
+                ],
+                post_cycle={**post_view, "execution": execution},
+            )
+        return _readiness_action(
+            report,
+            reason="execution_resume_ready",
+            next_action="build_execution",
+            command="prospective execution",
+            arguments={"decision_record_sha256": decision_sha},
+            argv=["prospective", "execution", "--decision", decision_sha],
+            post_cycle={**post_view, "execution": execution},
+        )
+
+    try:
+        from .data.prospective_execution import (
+            SUSPENSION_FULL_START_DATE,
+            inspect_prospective_execution_sources,
+        )
+
+        sources = inspect_prospective_execution_sources(
+            project,
+            generation,
+            source_data_snapshot_sha256=str(
+                cycle["plan"]["source_data_snapshot_sha256"]
+            ),
+            observed_at_utc=observed_text,
+        )
+    except Exception as exc:
+        report["issues"] = []
+        return _override_readiness(
+            report,
+            status="blocked",
+            reason="outcome_source_evidence_invalid",
+            issue=_readiness_issue(
+                "OUTCOME_SOURCE_EVIDENCE_INVALID",
+                "error",
+                "execution",
+                str(exc),
+                retryable=False,
+            ),
+        )
+    source_status = str(sources.get("status"))
+    post_view["sources"] = sources
+    if source_status == "not_mature":
+        return None
+    if source_status == "waiting":
+        report["issues"] = []
+        report["post_cycle"] = post_view
+        return _override_readiness(
+            report,
+            status="waiting",
+            reason=str(sources.get("reason") or "outcome_sources_waiting"),
+            issue=_readiness_issue(
+                "OUTCOME_SOURCES_WAITING",
+                "wait",
+                "execution",
+                "outcome sources are not yet available at the observation instant",
+                retryable=True,
+            ),
+        )
+    holding_end = str(sources["holding_end_date"])
+    if source_status == "market_data_missing":
+        missing_keys = list(sources.get("missing_partition_keys") or [])
+        missing_dates = sorted({str(value).split("/", 1)[1] for value in missing_keys})
+        if not missing_dates:
+            raise LedgerIntegrityError(
+                "market-data readiness omitted its missing partition dates"
+            )
+        start_date = missing_dates[0]
+        return _readiness_action(
+            report,
+            reason="outcome_market_data_sync_ready",
+            next_action="sync_outcome_market_data",
+            command="data sync",
+            arguments={
+                "start_date": start_date,
+                "end_date": holding_end,
+                "calendar_end_date": holding_end,
+                "datasets": ["daily", "adj_factor"],
+                "resume": True,
+            },
+            argv=[
+                "data",
+                "sync",
+                "--from",
+                start_date,
+                "--to",
+                holding_end,
+                "--calendar-to",
+                holding_end,
+                "--dataset",
+                "daily",
+                "--dataset",
+                "adj_factor",
+                "--resume",
+            ],
+            post_cycle=post_view,
+        )
+    if source_status == "suspensions_missing":
+        return _readiness_action(
+            report,
+            reason="outcome_suspensions_sync_ready",
+            next_action="sync_suspensions",
+            command="data suspensions",
+            arguments={
+                "start_date": SUSPENSION_FULL_START_DATE,
+                "end_date": holding_end,
+                "resume": False,
+            },
+            argv=[
+                "data",
+                "suspensions",
+                "--from",
+                SUSPENSION_FULL_START_DATE,
+                "--to",
+                holding_end,
+                "--no-resume",
+            ],
+            post_cycle=post_view,
+        )
+    if source_status != "complete":
+        report["issues"] = []
+        return _override_readiness(
+            report,
+            status="blocked",
+            reason="outcome_source_state_invalid",
+            issue=_readiness_issue(
+                "OUTCOME_SOURCE_STATE_INVALID",
+                "error",
+                "execution",
+                f"unsupported outcome source state: {source_status}",
+                retryable=False,
+            ),
+        )
+    return _readiness_action(
+        report,
+        reason="execution_build_ready",
+        next_action="build_execution",
+        command="prospective execution",
+        arguments={"decision_record_sha256": decision_sha},
+        argv=["prospective", "execution", "--decision", decision_sha],
+        post_cycle=post_view,
+    )
+
+
 def _readiness_issue(
     code: str,
     severity: str,
@@ -5134,12 +5593,13 @@ def prospective_readiness(
     report: dict[str, Any] | None = None
     records: list[dict[str, Any]] = []
     state = _LedgerState()
+    generated: dict[str, Any] = {}
     strict_error: Exception | None = None
     snapshot_issues: list[dict[str, str]] = []
     try:
         with _existing_read_lock(layout):
             try:
-                records, state, _generated = _load_verified_record_chain(
+                records, state, generated = _load_verified_record_chain(
                     layout,
                     refresh_cache=False,
                 )
@@ -5541,6 +6001,45 @@ def prospective_readiness(
             },
         )
         return report
+
+    if state.evaluation_due is not None or state.open_cycles:
+        changed = final_stable_gate()
+        if changed is not None:
+            return changed
+        post_cycle = _post_cycle_readiness(
+            deepcopy(report),
+            layout,
+            state,
+            generated,
+            project=project,
+        )
+        if post_cycle is not None:
+            if post_cycle.get("status") == "ready" and post_cycle.get("action"):
+                changed = final_stable_gate()
+                if changed is not None:
+                    return changed
+                confirmed = _post_cycle_readiness(
+                    deepcopy(report),
+                    layout,
+                    state,
+                    generated,
+                    project=project,
+                )
+                if confirmed != post_cycle:
+                    report["stable_view"] = False
+                    return _override_readiness(
+                        report,
+                        status="waiting",
+                        reason="post_cycle_evidence_changed_during_readiness",
+                        issue=_readiness_issue(
+                            "POST_CYCLE_EVIDENCE_CHANGED",
+                            "wait",
+                            "execution",
+                            "post-cycle evidence changed before the action gate opened",
+                            retryable=True,
+                        ),
+                    )
+            return post_cycle
 
     if state.direction_rejected or state.insolvent:
         return _override_readiness(

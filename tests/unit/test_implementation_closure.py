@@ -276,6 +276,7 @@ def test_update_script_hashes_the_git_lf_form_of_crlf_closure_text(
         "pyproject.toml": b'[project]\r\nversion = "5.2.0"\r\n',
         "configs/data.json": b'{\r\n  "schema_version": 1\r\n}\r\n',
         "protocols/5.2-runtime-lock.txt": b"numeric-runtime==1.2.3\r\n",
+        "scripts/invoke-prospective-watchdog.ps1": b"exit 0\r\n",
         "src/factor_lab/__init__.py": b'__version__ = "5.2.0"\r\n',
     }
     for relative, raw in sources.items():

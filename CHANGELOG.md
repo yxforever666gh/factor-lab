@@ -10,6 +10,55 @@
 
 ## [Unreleased]
 
+## [5.7] - 2026-08-29
+
+### Added
+
+- readiness 的机器动作合同覆盖完整前瞻生命周期：除 signal 日的 raw sync、exact reference、
+  membership、input、admit 与 attest 外，现在还会从 sealed decision 的日历 CAS 确定性推导
+  holding window，并依次开放持有期 `daily`/`adj_factor` 同步、全范围停复牌捕获、execution、
+  outcome 与到期 evaluation。多个成熟周期按 `(calendar_index, decision_sha)` 稳定排序，旧周期
+  不会被新 signal 或同 offset capacity wait 饿死。
+- 新增完整生命周期的 controller、CLI 状态码、崩溃恢复与多周期顺序测试；自动化只需重复执行
+  readiness 返回的 `action.argv`，不再手工拼接 decision、execution SHA 或日期边界。
+- 新增由正式 release capsule 提供的 PowerShell 7 watchdog 与可重复的 Windows Task Scheduler
+  注册器。App heartbeat 和 OS task 共享 create/open 文件句柄锁；runner 逐元素执行唯一
+  `action.argv`、每个动作后重观察、最多推进 12 步，并以 create-only JSONL/alert 记录退出状态、
+  argv 及输出长度/哈希而不保存 provider 正文或凭据。
+
+### Changed
+
+- 5.7 是 5.6 首轮 controller 演练后的同方向可靠性纠错；5.0/5.2 冻结的 `fixed_core_full`、
+  prospective epoch、首个 signal、目标生成器、十个 sleeve 与预注册评价门槛均不改变。
+- `data suspensions` 将 provider 暂不可用映射为退出码 2、证据冲突/非法状态映射为退出码 3，
+  与统一 controller 的 waiting/blocked 语义一致。
+- 首周期 watchdog 在收盘至 admission deadline 每 30 分钟运行，deadline 前最后 80 分钟加密为
+  每 5 分钟；08:55 后首 decision 尚未完成 receipt 会生成 blocked alert，09:15 后不自行补发。
+
+### Fixed
+
+- 修复 5.6 只生成首轮 decision/attestation 动作、却要求自动化在 i+11 后手工构造
+  suspensions、execution、outcome 和 evaluate 参数的合同断层。
+- execution source/bundle 的就绪检查改为严格零写入并拒绝模糊匹配；部分发布可以确定性恢复，
+  多个或损坏的匹配 bundle 会 fail closed，而不是任选一个结果。
+- execution snapshot 的 create-only 发布改为同目录临时文件、文件耐久化、非覆盖原子发布与
+  winner 逐字节验证；POSIX 额外同步父目录，Windows 的并发和进程崩溃恢复由专项测试覆盖，
+  不再留下可被误判为完整结果的最终文件。
+- 修复停复牌全量刷新在 Parquet 已替换、metadata 尚未提交时让 controller 永久 blocked 的问题；
+  首次单边文件或可证明由旧 metadata 造成的 torn pair 会重新开放同一 `--no-resume` 动作，当前
+  metadata 损坏、symlink、非法路径或不可证明的冲突仍 fail closed。
+
+### Known limitations
+
+- 5.7 发布时 prospective ledger 仍为 0 decision、0 outcome；完整生命周期自动化与耐久发布修复
+  没有产生新的市场结果，也没有新增盈利证据。首周期仍依赖官方数据按时可用、本机持续运行与
+  GitHub attestation 在 deadline 前完成。OS watchdog 不能抵抗整机断电/断网；当前任务使用
+  Interactive 用户凭据，因此首周期需要保持登录和交流电供电。
+- Windows 没有可移植的目录 `fsync`，因此 execution create-only publish 尚未证明突然断电后的
+  目录项耐久性；它已证明非覆盖原子性、并发单一 winner 和进程崩溃后的可恢复性。
+- controller 发出的 stale/首次停复牌刷新可从 torn pair 自动恢复；若操作员对一个当前有效 pair
+  手工强制 `--no-resume` 并恰在 Parquet 与 metadata 两次提交之间中断，仍会 blocked 并需人工核验。
+
 ## [5.6] - 2026-08-29
 
 ### Added
@@ -695,6 +744,7 @@
   移除这些实验层。
 
 [Unreleased]: https://github.com/yxforever666gh/factor-lab/commits/main
+[5.7]: https://github.com/yxforever666gh/factor-lab/tree/5.7
 [5.6]: https://github.com/yxforever666gh/factor-lab/tree/5.6
 [5.5]: https://github.com/yxforever666gh/factor-lab/tree/5.5
 [5.4]: https://github.com/yxforever666gh/factor-lab/tree/5.4

@@ -4,3 +4,4 @@ protocols/*.json text eol=lf
 *.toml text eol=lf
 *.json text eol=lf
 protocols/*-runtime-lock.txt text eol=lf
+scripts/invoke-prospective-watchdog.ps1 text eol=lf

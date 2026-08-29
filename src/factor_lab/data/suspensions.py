@@ -26,6 +26,41 @@ SUSPENSION_FIELDS = "ts_code,trade_date,suspend_type,suspend_timing"
 SUSPENSION_PAGE_SIZE = 5_000
 
 
+class SuspensionProviderWaitingError(RuntimeError):
+    """A retryable provider transport failure with no publishable evidence."""
+
+
+class SuspensionConfigurationError(ValueError):
+    """A local provider configuration failure that cannot be retried unchanged."""
+
+
+def _is_temporary_provider_error(error: Exception) -> bool:
+    if isinstance(error, (ConnectionError, TimeoutError, OSError)):
+        return True
+    module = type(error).__module__.lower()
+    if module.startswith(("httpx", "httpcore", "requests", "urllib3")):
+        return True
+    message = str(error).lower()
+    return any(
+        marker in message
+        for marker in (
+            "timeout",
+            "timed out",
+            "temporarily unavailable",
+            "connection reset",
+            "connection aborted",
+            "connection refused",
+            "too many requests",
+            "rate limit",
+            "网络",
+            "连接",
+            "频率",
+            "稍后",
+            "服务不可用",
+        )
+    )
+
+
 def _calendar_year_windows(start: str, end: str) -> list[tuple[str, str]]:
     cursor = pd.Timestamp(start)
     finish = pd.Timestamp(end)
@@ -322,7 +357,12 @@ def sync_suspensions(
             }
 
     sync_config = dict(config.get("sync") or {})
-    resolved_client = client or _configured_tushare_client(sync_config, resolved_layout)
+    try:
+        resolved_client = client or _configured_tushare_client(
+            sync_config, resolved_layout
+        )
+    except RuntimeError as exc:
+        raise SuspensionConfigurationError(str(exc)) from exc
     rate = max(0.0, float(sync_config.get("request_rate_per_minute") or 0.0))
     delay = 60.0 / rate if rate else 0.0
     pages: list[pd.DataFrame] = []
@@ -333,15 +373,22 @@ def sync_suspensions(
         while True:
             if delay and request_count:
                 time.sleep(delay)
-            page = _call(
-                resolved_client,
-                "suspend_d",
-                start_date=_compact(window_start),
-                end_date=_compact(window_end),
-                fields=SUSPENSION_FIELDS,
-                limit=SUSPENSION_PAGE_SIZE,
-                offset=offset,
-            )
+            try:
+                page = _call(
+                    resolved_client,
+                    "suspend_d",
+                    start_date=_compact(window_start),
+                    end_date=_compact(window_end),
+                    fields=SUSPENSION_FIELDS,
+                    limit=SUSPENSION_PAGE_SIZE,
+                    offset=offset,
+                )
+            except Exception as exc:
+                if _is_temporary_provider_error(exc):
+                    raise SuspensionProviderWaitingError(
+                        "Tushare suspend_d is temporarily unavailable"
+                    ) from exc
+                raise
             request_count += 1
             normalized = _normalize_page(page, start=window_start, end=window_end)
             if not normalized.empty:
@@ -357,7 +404,9 @@ def sync_suspensions(
                     for row in normalized.itertuples(index=False, name=None)
                 )
                 if signature in seen_pages:
-                    raise RuntimeError("suspend_d pagination repeated a page without advancing")
+                    raise ValueError(
+                        "suspend_d pagination repeated a page without advancing"
+                    )
                 seen_pages.add(signature)
                 pages.append(normalized)
             if len(page) < SUSPENSION_PAGE_SIZE:
@@ -365,6 +414,21 @@ def sync_suspensions(
             offset += SUSPENSION_PAGE_SIZE
 
     frame = _canonicalize(pages)
+    if frame.empty:
+        return {
+            "schema_version": 1,
+            "status": "waiting",
+            "reason": "provider_empty",
+            "source": "tushare",
+            "endpoint": "suspend_d",
+            "query": {
+                "start_date": start,
+                "end_date": end,
+                "window": "calendar_year",
+                "limit": SUSPENSION_PAGE_SIZE,
+            },
+            "request_count": request_count,
+        }
     _audit_canonical(frame, query_start=start, query_end=end)
     _write_parquet_atomic(target, frame)
     stats = _frame_stats(frame)
@@ -396,6 +460,8 @@ __all__ = [
     "SUSPENSION_COLUMNS",
     "SUSPENSION_FIELDS",
     "SUSPENSION_PAGE_SIZE",
+    "SuspensionConfigurationError",
+    "SuspensionProviderWaitingError",
     "audit_suspensions_snapshot",
     "sync_suspensions",
 ]

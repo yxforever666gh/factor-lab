@@ -1,3 +1,3 @@
 """Local A-share adaptive research with causal execution and evidence logging."""
 
-__version__ = "5.6.0"
+__version__ = "5.7.0"

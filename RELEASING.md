@@ -107,11 +107,16 @@ tag 和 GitHub 远端 tag；只在本地创建 tag 不算完成发布。
 跳过的官方 signal：canary Tlog 之后的首个官方收盘必须入账。发布 runbook 必须事先写明目标
 首信号及 canary 窗口；5.2 要保持 2026-08-31 为首信号，canary Tlog 必须位于
 2026-08-28 15:00（不含）至 2026-08-31 15:00（不含），时区均为 Asia/Shanghai。
-在首个 decision 前发布的 5.3、5.4、5.5、5.6 等纠错实现仍属于同一个不可变首信号纠错窗口，
+在首个 decision 前发布的 5.3、5.4、5.5、5.6、5.7 等纠错实现仍属于同一个不可变首信号纠错窗口，
 受完全相同的 canary 截止时间约束。
 首次 implementation canary 的可信 TLog 是不可变 prospective epoch；后续 canary 不能以较晚
 TLog 重基准首信号。若 active 纠错 canary 不早于该固定 signal 收盘，控制器必须 terminal，不能
 把该 signal 记为 skipped 或推进到下一交易日。
+
+若发布包含 `scripts/invoke-prospective-watchdog.ps1`，它必须进入 runtime closure，并只从
+implementation upgrade 生成的正式 release capsule 执行。Windows Task Scheduler 只能在 tag、
+upgrade、implementation canary 与 audit 全部完成后注册；App heartbeat 也必须调用同一个 capsule
+runner，确保两条调度路径共享互斥和完全相同的 `action.argv` 合同。
 
 前瞻数据的 availability timestamp 必须不早于它所声明可用的 source artifact 持久化和对应
 checkpoint 原子 publish；provider 响应时间、下载开始时间、写入前采样时间或临时文件完成时间

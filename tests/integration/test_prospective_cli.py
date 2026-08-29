@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 from types import SimpleNamespace
 
+import pandas as pd
 import pytest
 
 import factor_lab
@@ -27,6 +28,50 @@ AUTHORITATIVE_RUN = {
     "integrity_valid": True,
 }
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def _install_real_suspension_cli(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    client: object,
+) -> None:
+    top500_root = tmp_path / "runtime/data/top500"
+
+    def ensure_directories() -> None:
+        top500_root.mkdir(parents=True, exist_ok=True)
+
+    layout = SimpleNamespace(
+        repo_root=tmp_path,
+        top500_root=top500_root,
+        ensure_directories=ensure_directories,
+    )
+    config_path = tmp_path / "configs/data.json"
+    monkeypatch.setattr(
+        "factor_lab.cli._data_layout",
+        lambda _root: ({}, layout, config_path),
+    )
+    monkeypatch.setattr(
+        "factor_lab.data.suspensions.load_data_config",
+        lambda _path: {"sync": {"request_rate_per_minute": 0}},
+    )
+    monkeypatch.setattr(
+        "factor_lab.data.suspensions._configured_tushare_client",
+        lambda _config, _layout: client,
+    )
+
+
+def _suspensions_argv(tmp_path: Path) -> list[str]:
+    return [
+        "--root",
+        str(tmp_path),
+        "data",
+        "suspensions",
+        "--from",
+        "2017-01-01",
+        "--to",
+        "2026-08-31",
+        "--no-resume",
+    ]
 
 
 def test_data_sync_routes_calendar_extension_only_to_market_sync(
@@ -123,6 +168,88 @@ def test_data_sync_preserves_the_retryable_exit_contract(
 
     assert exit_code == expected_exit
     assert json.loads(capsys.readouterr().out)["status"] == status
+
+
+def test_data_suspensions_transport_failure_is_retryable_exit_2(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys,
+) -> None:
+    class TimeoutClient:
+        def query(self, _endpoint: str, **_kwargs: object) -> pd.DataFrame:
+            raise TimeoutError("provider timed out")
+
+    _install_real_suspension_cli(tmp_path, monkeypatch, TimeoutClient())
+
+    assert main(_suspensions_argv(tmp_path)) == 2
+    assert json.loads(capsys.readouterr().out)["reason"] == (
+        "provider_temporarily_unavailable"
+    )
+
+
+def test_data_suspensions_configuration_failure_is_blocked_exit_3(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys,
+) -> None:
+    _install_real_suspension_cli(tmp_path, monkeypatch, object())
+
+    def missing_token(_config, _layout):
+        raise RuntimeError("missing Tushare token")
+
+    monkeypatch.setattr(
+        "factor_lab.data.suspensions._configured_tushare_client",
+        missing_token,
+    )
+
+    assert main(_suspensions_argv(tmp_path)) == 3
+    assert json.loads(capsys.readouterr().out)["reason"] == (
+        "suspension_evidence_invalid"
+    )
+
+
+def test_data_suspensions_malformed_payload_is_blocked_exit_3(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys,
+) -> None:
+    class MalformedClient:
+        def query(self, _endpoint: str, **_kwargs: object) -> pd.DataFrame:
+            return pd.DataFrame([{"ts_code": "000001.SZ"}])
+
+    _install_real_suspension_cli(tmp_path, monkeypatch, MalformedClient())
+
+    assert main(_suspensions_argv(tmp_path)) == 3
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["reason"] == "suspension_evidence_invalid"
+    assert "missing columns" in payload["error"]
+
+
+def test_data_suspensions_repeated_page_is_blocked_exit_3(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys,
+) -> None:
+    class RepeatingClient:
+        def query(self, _endpoint: str, **_kwargs: object) -> pd.DataFrame:
+            return pd.DataFrame(
+                [
+                    {
+                        "ts_code": "000001.SZ",
+                        "trade_date": "20170103",
+                        "suspend_type": "S",
+                        "suspend_timing": "09:30",
+                    }
+                ]
+            )
+
+    _install_real_suspension_cli(tmp_path, monkeypatch, RepeatingClient())
+    monkeypatch.setattr("factor_lab.data.suspensions.SUSPENSION_PAGE_SIZE", 1)
+
+    assert main(_suspensions_argv(tmp_path)) == 3
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["reason"] == "suspension_evidence_invalid"
+    assert "repeated a page" in payload["error"]
 
 
 @pytest.mark.parametrize(
@@ -247,7 +374,7 @@ def test_parser_exposes_prospective_lifecycle_commands() -> None:
         assert parsed.prospective_command == command
 
     upgrade = parser.parse_args(["prospective", "upgrade"])
-    assert upgrade.release_tag == "5.6"
+    assert upgrade.release_tag == "5.7"
 
     admit = parser.parse_args(
         ["prospective", "admit", "--input", "snapshot"]

@@ -17,9 +17,11 @@ from datetime import datetime, time as wall_time, timezone
 import hashlib
 import json
 import math
+import os
 from pathlib import Path
 import re
 from typing import Any, Mapping, Sequence
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 import numpy as np
@@ -44,13 +46,14 @@ from .prospective import (
     load_prospective_input_snapshot,
 )
 from .sources import DATASET_FIELDS, _call, _configured_tushare_client
-from .suspensions import SUSPENSION_PAGE_SIZE
+from .suspensions import SUSPENSION_PAGE_SIZE, audit_suspensions_snapshot
 
 
 SCHEMA_VERSION = 1
 KIND = "prospective_execution_sources"
 EXECUTION_RELATIVE_ROOT = PROSPECTIVE_RELATIVE_ROOT / "executions"
 MINIMUM_BENCHMARK_COVERAGE_PPM = 950_000
+SUSPENSION_FULL_START_DATE = "2017-01-01"
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _SUSPENSION_INTERVAL_RE = re.compile(
     r"(?P<start_hour>\d{1,2}):(?P<start_minute>\d{2})"
@@ -65,6 +68,26 @@ _OFFICIAL_DELIST_QUERY = {
 }
 _OFFICIAL_DELIST_RESULT_LIMIT = 6_000
 _OFFICIAL_DELIST_MINIMUM_ROWS = 200
+_EXECUTION_SOURCE_KEYS = frozenset(
+    {
+        "schema_version",
+        "kind",
+        "protocol_release",
+        "generation_result_sha256",
+        "source_data_snapshot_sha256",
+        "target_input_snapshot_sha256",
+        "previous_account_state_sha256",
+        "benchmark_tickers_sha256",
+        "benchmark_coverage",
+        "selected_market_max_date",
+        "raw_checkpoint_path",
+        "decision_input",
+        "calendar",
+        "raw_partitions",
+        "suspensions",
+        "delists",
+    }
+)
 
 
 class ProspectiveExecutionDataError(ValueError):
@@ -169,17 +192,70 @@ def _load_json(path: Path, *, label: str) -> dict[str, Any]:
 
 
 def _write_create_only(path: Path, payload: bytes) -> None:
+    """Durably publish one immutable artifact without exposing partial bytes.
+
+    The temporary file lives beside the destination so the final hard-link is
+    both atomic and create-only on Windows and POSIX.  A concurrent winner is
+    accepted only when its bytes are identical.  We deliberately do not use
+    ``os.replace``: replacing an existing evidence file would violate the
+    immutable execution-store contract.
+    """
+
     path.parent.mkdir(parents=True, exist_ok=True)
-    if path.exists():
-        if not path.is_file() or path.read_bytes() != payload:
+    if path.exists() or path.is_symlink():
+        if not path.is_file() or path.is_symlink() or path.read_bytes() != payload:
             raise ProspectiveExecutionDataError(f"create-only artifact differs: {path}")
         return
+    temporary = path.parent / (
+        f".{path.name}.pending-{os.getpid()}-{uuid4().hex}.tmp"
+    )
+    binary_flag = getattr(os, "O_BINARY", 0)
+    descriptor = os.open(
+        temporary,
+        os.O_CREAT | os.O_EXCL | os.O_WRONLY | binary_flag,
+        0o600,
+    )
     try:
-        with path.open("xb") as handle:
-            handle.write(payload)
-    except FileExistsError:
-        if not path.is_file() or path.read_bytes() != payload:
-            raise ProspectiveExecutionDataError(f"create-only artifact raced with different bytes: {path}")
+        try:
+            remaining = memoryview(payload)
+            while remaining:
+                written = os.write(descriptor, remaining)
+                if written <= 0:
+                    raise OSError("short write while publishing execution evidence")
+                remaining = remaining[written:]
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        try:
+            os.link(temporary, path)
+        except FileExistsError:
+            if (
+                not path.is_file()
+                or path.is_symlink()
+                or path.read_bytes() != payload
+            ):
+                raise ProspectiveExecutionDataError(
+                    f"create-only artifact raced with different bytes: {path}"
+                )
+        except OSError as exc:
+            raise ProspectiveExecutionDataError(
+                "filesystem cannot atomically publish create-only execution evidence"
+            ) from exc
+        if not path.is_file() or path.is_symlink() or path.read_bytes() != payload:
+            raise ProspectiveExecutionDataError(
+                f"create-only artifact winner bytes differ: {path}"
+            )
+        if os.name != "nt":
+            directory_descriptor = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(directory_descriptor)
+            finally:
+                os.close(directory_descriptor)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def _generation(value: GenerationResult | Mapping[str, Any]) -> GenerationResult:
@@ -456,6 +532,7 @@ def _select_calendar(
     *,
     deadline: pd.Timestamp,
     sealed_sources: Sequence[Mapping[str, Any]] | None = None,
+    require_sealed_selection: bool = True,
 ) -> tuple[tuple[str, ...], tuple[str, ...], dict[str, Any], pd.Timestamp]:
     candidates: list[tuple[pd.Timestamp, str, list[dict[str, Any]], dict[str, Any]]] = []
     entries = (
@@ -511,7 +588,7 @@ def _select_calendar(
             "selected_max_date": sessions[-1],
             "selected_open_sessions": list(value for value in opens if value <= sessions[-1]),
         }
-        if sealed_sources is not None:
+        if sealed_sources is not None and require_sealed_selection:
             sealed_entry = entries[key]
             if selected != dict(sealed_entry):
                 raise ProspectiveExecutionDataError(
@@ -641,6 +718,419 @@ def _read_partition(
             f"sealed partition contract differs from CAS bytes for {key}"
         )
     return result, source, completed
+
+
+def _inspect_checkpoint_partition(
+    root: Path,
+    checkpoint: Mapping[str, Any],
+    *,
+    dataset: str,
+    trade_date: str,
+) -> pd.Timestamp | None:
+    """Verify one mutable checkpoint origin without materialising CAS bytes."""
+
+    key = f"{dataset}/{trade_date}"
+    raw = checkpoint.get("partitions", {}).get(key)
+    if raw is None:
+        return None
+    if not isinstance(raw, Mapping):
+        raise ProspectiveExecutionDataError(
+            f"partition checkpoint entry must be an object for {key}"
+        )
+    if (
+        raw.get("status") != "complete"
+        or raw.get("dataset") != dataset
+        or raw.get("trade_date") != trade_date
+    ):
+        raise ProspectiveExecutionDataError(
+            f"partition checkpoint identity mismatch for {key}"
+        )
+    completed = _utc(raw.get("completed_at_utc"), label=f"{key}.completed_at_utc")
+    expected = (
+        root
+        / "runtime/data/raw"
+        / dataset
+        / f"trade_date={trade_date}"
+        / "part-000.parquet"
+    )
+    if expected.is_symlink():
+        raise ProspectiveExecutionDataError(f"partition path is a symlink for {key}")
+    origin = _resolved_source_path(
+        raw.get("path"), expected=expected, root=root, label=key
+    )
+    if not origin.is_file() or origin.is_symlink():
+        raise ProspectiveExecutionDataError(f"missing canonical partition bytes for {key}")
+    if (
+        origin.stat().st_size != int(raw.get("size_bytes") or -1)
+        or sha256_file(origin)
+        != _require_sha(raw.get("sha256"), label=f"{key}.sha256")
+    ):
+        raise ProspectiveExecutionDataError(
+            f"partition bytes differ from checkpoint for {key}"
+        )
+    try:
+        frame = pd.read_parquet(origin)
+    except Exception as exc:
+        raise ProspectiveExecutionDataError(f"unreadable partition {key}") from exc
+    required = {value for value in DATASET_FIELDS[dataset].split(",") if value}
+    missing = sorted(required - set(frame.columns))
+    if missing or frame.empty or int(raw.get("row_count") or -1) != len(frame):
+        raise ProspectiveExecutionDataError(
+            f"partition {key} schema/count mismatch: {missing}"
+        )
+    tickers = frame["ts_code"].astype("string").str.strip()
+    dates = pd.to_datetime(
+        frame["trade_date"].astype("string").str.replace("-", "", regex=False),
+        format="%Y%m%d",
+        errors="coerce",
+    ).dt.strftime("%Y-%m-%d")
+    if (
+        tickers.isna().any()
+        or tickers.eq("").any()
+        or dates.isna().any()
+        or bool(dates.ne(trade_date).any())
+        or bool(frame.assign(_ticker=tickers).duplicated(["_ticker", "trade_date"]).any())
+    ):
+        raise ProspectiveExecutionDataError(
+            f"partition {key} contains invalid/future/duplicate rows"
+        )
+    if dataset == "daily":
+        numeric = ["open", "high", "low", "close", "pre_close", "pct_chg", "amount"]
+        converted = frame[numeric].apply(pd.to_numeric, errors="coerce")
+        if not bool(np.isfinite(converted).all().all()) or bool(
+            (converted[["open", "high", "low", "close", "pre_close"]] <= 0)
+            .any()
+            .any()
+        ):
+            raise ProspectiveExecutionDataError(
+                f"partition {key} contains invalid market values"
+            )
+        expected_pct = (converted["close"] / converted["pre_close"] - 1.0) * 100.0
+        if not bool(
+            np.isclose(
+                converted["pct_chg"], expected_pct, rtol=0.0, atol=0.02
+            ).all()
+        ):
+            raise ProspectiveExecutionDataError(
+                f"partition {key} pct_chg is inconsistent"
+            )
+    elif dataset == "adj_factor":
+        factors = pd.to_numeric(frame["adj_factor"], errors="coerce")
+        if not bool(np.isfinite(factors).all()) or bool((factors <= 0).any()):
+            raise ProspectiveExecutionDataError(
+                f"partition {key} has invalid adjustment factors"
+            )
+    return completed
+
+
+def inspect_prospective_execution_sources(
+    project_root: str | Path,
+    generation_result: GenerationResult | Mapping[str, Any],
+    *,
+    source_data_snapshot_sha256: str,
+    observed_at_utc: str | pd.Timestamp,
+) -> dict[str, Any]:
+    """Read-only readiness for one sealed decision's i+11 source closure.
+
+    The holding window comes only from the decision input's sealed official
+    calendar CAS.  Mutable raw data is accepted only through byte-verified
+    checkpoint entries, and suspensions must be a full-history capture that is
+    no older than the holding-end market partitions.
+    """
+
+    root = Path(project_root).expanduser().resolve()
+    generation = _generation(generation_result)
+    observed = _utc(observed_at_utc, label="observed_at_utc")
+    source_sha = _require_sha(
+        source_data_snapshot_sha256, label="source_data_snapshot_sha256"
+    )
+    source_path = root / PROSPECTIVE_RELATIVE_ROOT / "inputs" / source_sha
+    try:
+        source = load_prospective_input_snapshot(source_path)
+    except Exception as exc:
+        raise ProspectiveExecutionDataError(
+            "decision input failed independent source rebuild"
+        ) from exc
+    if source.snapshot_sha256 != source_sha:
+        raise ProspectiveExecutionDataError("decision input path/hash mismatch")
+    deadline_text = _trade_deadline(generation.trade_date)
+    _verify_generation_input_binding(generation, source, deadline=deadline_text)
+    calendar = source.manifest.get("calendar")
+    sealed_values = calendar.get("sources") if isinstance(calendar, Mapping) else None
+    if not isinstance(sealed_values, list) or not sealed_values or not all(
+        isinstance(row, Mapping) for row in sealed_values
+    ):
+        raise ProspectiveExecutionDataError(
+            "decision input lacks sealed official calendar sources"
+        )
+    # The input source adds an availability-basis label that is not part of the
+    # execution source contract.  Every other field is verified byte-for-byte
+    # by the sealed branch of ``_select_calendar``.
+    sealed_calendars = [
+        {
+            "role": "official_calendar",
+            "checkpoint_key": row.get("calendar_content_sha256"),
+            **{
+                key: value
+                for key, value in row.items()
+                if key != "availability_basis"
+            },
+        }
+        for row in sealed_values
+    ]
+    _sessions, window, calendar_source, _calendar_completed = _select_calendar(
+        root,
+        {},
+        generation,
+        source.calendar_sessions,
+        deadline=_utc(deadline_text, label="trade deadline"),
+        sealed_sources=sealed_calendars,
+        require_sealed_selection=False,
+    )
+
+    holding_end_close = pd.Timestamp(
+        datetime.combine(
+            datetime.strptime(window[-1], "%Y-%m-%d").date(),
+            wall_time(hour=15),
+            tzinfo=ZoneInfo("Asia/Shanghai"),
+        )
+    ).tz_convert("UTC")
+    if observed < holding_end_close:
+        return {
+            "schema_version": 1,
+            "status": "not_mature",
+            "generation_result_sha256": generation.result_sha256,
+            "source_data_snapshot_sha256": source_sha,
+            "holding_start_date": window[0],
+            "holding_end_date": window[-1],
+            "holding_end_close_utc": _utc_text(
+                holding_end_close, label="holding-end close"
+            ),
+            "calendar_source_sha256": str(
+                calendar_source["calendar_content_sha256"]
+            ),
+            "required_datasets": ["daily", "adj_factor"],
+            "required_partition_count": len(window) * 2,
+            "missing_partition_keys": [],
+            "future_partition_keys": [],
+        }
+
+    checkpoint_path = root / "runtime/data/raw/checkpoint.json"
+    if checkpoint_path.is_symlink():
+        raise ProspectiveExecutionDataError("raw checkpoint path is a symlink")
+    if checkpoint_path.exists():
+        _loaded_checkpoint_path, checkpoint = _checkpoint(root)
+    else:
+        checkpoint = {"schema_version": 1, "partitions": {}, "calendars": {}}
+    missing_keys: list[str] = []
+    future_keys: list[str] = []
+    completions: dict[str, pd.Timestamp] = {}
+    for session in window:
+        for dataset in ("daily", "adj_factor"):
+            key = f"{dataset}/{session}"
+            completed = _inspect_checkpoint_partition(
+                root,
+                checkpoint,
+                dataset=dataset,
+                trade_date=session,
+            )
+            if completed is None:
+                missing_keys.append(key)
+            else:
+                completions[key] = completed
+                if completed > observed:
+                    future_keys.append(key)
+
+    base = {
+        "schema_version": 1,
+        "generation_result_sha256": generation.result_sha256,
+        "source_data_snapshot_sha256": source_sha,
+        "holding_start_date": window[0],
+        "holding_end_date": window[-1],
+        "calendar_source_sha256": str(calendar_source["calendar_content_sha256"]),
+        "required_datasets": ["daily", "adj_factor"],
+        "required_partition_count": len(window) * 2,
+        "missing_partition_keys": missing_keys,
+        "future_partition_keys": future_keys,
+    }
+    if missing_keys:
+        return {**base, "status": "market_data_missing"}
+    if future_keys:
+        return {**base, "status": "waiting", "reason": "market_data_not_yet_available"}
+
+    end_completed = max(
+        completions[f"daily/{window[-1]}"],
+        completions[f"adj_factor/{window[-1]}"],
+    )
+    base["holding_end_market_completed_at_utc"] = _utc_text(
+        end_completed, label="holding-end market completion"
+    )
+    suspension_path = root / "runtime/data/top500/suspensions.parquet"
+    suspension_metadata_path = suspension_path.with_name("suspensions.meta.json")
+    suspension_present = suspension_path.exists() or suspension_path.is_symlink()
+    metadata_present = (
+        suspension_metadata_path.exists()
+        or suspension_metadata_path.is_symlink()
+    )
+    if not suspension_present and not metadata_present:
+        return {**base, "status": "suspensions_missing"}
+    if suspension_present and not metadata_present:
+        if suspension_path.is_symlink() or not suspension_path.is_file():
+            raise ProspectiveExecutionDataError(
+                "uncommitted suspension parquet is not a regular file"
+            )
+        # ``sync_suspensions --no-resume`` publishes parquet before its
+        # metadata commit marker.  A crash in that narrow window leaves no
+        # authoritative evidence and is safe to replace on the next action.
+        return {
+            **base,
+            "status": "suspensions_missing",
+            "recovery": "uncommitted_parquet_without_metadata",
+        }
+    if (
+        suspension_path.is_symlink()
+        or suspension_metadata_path.is_symlink()
+        or not suspension_path.is_file()
+        or not suspension_metadata_path.is_file()
+    ):
+        raise ProspectiveExecutionDataError(
+            "suspension evidence is incomplete or uses a symlink"
+        )
+    try:
+        suspension = audit_suspensions_snapshot(
+            suspension_path,
+            suspension_metadata_path,
+        )
+        suspension_metadata = _load_json(
+            suspension_metadata_path, label="suspension metadata"
+        )
+    except Exception as exc:
+        # The only recoverable two-file mismatch is the documented publish
+        # window: an older, already-stale metadata marker can remain after the
+        # new parquet was atomically installed.  Current/malformed metadata is
+        # still an evidence conflict and fails closed.
+        try:
+            stale_metadata = _load_json(
+                suspension_metadata_path, label="suspension metadata"
+            )
+            stale_query = stale_metadata.get("query")
+            stale_file = stale_metadata.get("file")
+            stale_retrieved = _utc(
+                stale_metadata.get("retrieved_at_utc"),
+                label="suspension retrieved_at_utc",
+            )
+            stale_start = _date(
+                (
+                    stale_query.get("start_date")
+                    if isinstance(stale_query, Mapping)
+                    else None
+                ),
+                label="suspension query start",
+            )
+            stale_end = _date(
+                (
+                    stale_query.get("end_date")
+                    if isinstance(stale_query, Mapping)
+                    else None
+                ),
+                label="suspension query end",
+            )
+            stale_sha = _require_sha(
+                (
+                    stale_file.get("sha256")
+                    if isinstance(stale_file, Mapping)
+                    else None
+                ),
+                label="stale suspension parquet hash",
+            )
+            stale_contract = (
+                set(stale_metadata)
+                == {
+                    "schema_version",
+                    "status",
+                    "source",
+                    "endpoint",
+                    "query",
+                    "retrieved_at_utc",
+                    "rows",
+                    "date",
+                    "security",
+                    "S",
+                    "R",
+                    "file",
+                    "metadata_path",
+                }
+                and type(stale_metadata.get("schema_version")) is int
+                and stale_metadata.get("schema_version") == 1
+                and stale_metadata.get("status") == "complete"
+                and stale_metadata.get("source") == "tushare"
+                and stale_metadata.get("endpoint") == "suspend_d"
+                and isinstance(stale_query, Mapping)
+                and set(stale_query)
+                == {"start_date", "end_date", "window", "limit"}
+                and stale_query.get("window") == "calendar_year"
+                and stale_query.get("limit") == SUSPENSION_PAGE_SIZE
+                and isinstance(stale_file, Mapping)
+                and set(stale_file) == {"path", "size_bytes", "sha256"}
+                and type(stale_file.get("size_bytes")) is int
+                and int(stale_file["size_bytes"]) >= 0
+                and stale_sha == stale_file.get("sha256")
+                and str(stale_file.get("path")) == str(suspension_path.resolve())
+                and str(stale_metadata.get("metadata_path"))
+                == str(suspension_metadata_path.resolve())
+            )
+            stale_by_coverage = stale_contract and (
+                stale_start > SUSPENSION_FULL_START_DATE
+                or stale_end < window[-1]
+                or stale_retrieved < end_completed
+            )
+        except Exception:
+            stale_by_coverage = False
+        if stale_by_coverage:
+            return {
+                **base,
+                "status": "suspensions_missing",
+                "recovery": "parquet_published_before_stale_metadata_replace",
+            }
+        raise ProspectiveExecutionDataError(
+            "authoritative suspension evidence is invalid"
+        ) from exc
+    query = suspension.get("query")
+    if not isinstance(query, Mapping):
+        raise ProspectiveExecutionDataError("suspension query contract is invalid")
+    retrieved = _utc(
+        suspension_metadata.get("retrieved_at_utc"),
+        label="suspension retrieved_at_utc",
+    )
+    coverage_incomplete = (
+        str(query.get("start_date")) > SUSPENSION_FULL_START_DATE
+        or str(query.get("end_date")) < window[-1]
+        or retrieved < end_completed
+    )
+    suspension_view = {
+        "query_start_date": str(query.get("start_date")),
+        "query_end_date": str(query.get("end_date")),
+        "retrieved_at_utc": _utc_text(retrieved, label="suspension retrieval"),
+        "sha256": str(suspension["hash"]),
+    }
+    if coverage_incomplete:
+        return {
+            **base,
+            "status": "suspensions_missing",
+            "suspensions": suspension_view,
+        }
+    if retrieved > observed:
+        return {
+            **base,
+            "status": "waiting",
+            "reason": "suspensions_not_yet_available",
+            "suspensions": suspension_view,
+        }
+    return {
+        **base,
+        "status": "complete",
+        "suspensions": suspension_view,
+    }
 
 
 def _suspension_class(value: Any) -> str:
@@ -803,7 +1293,8 @@ def _materialize_suspension_source(
         or set(query) != {"start_date", "end_date", "window", "limit"}
         or query.get("window") != "calendar_year"
         or query.get("limit") != SUSPENSION_PAGE_SIZE
-        or _date(query.get("start_date"), label="suspension query start") > start
+        or _date(query.get("start_date"), label="suspension query start")
+        > SUSPENSION_FULL_START_DATE
         or _date(query.get("end_date"), label="suspension query end") < end
         or not isinstance(file_info, Mapping)
         or set(file_info) != {"path", "size_bytes", "sha256"}
@@ -908,7 +1399,7 @@ def _load_suspensions(
     query = manifest.get("query")
     if (
         not isinstance(query, Mapping)
-        or str(query.get("start_date")) > start
+        or str(query.get("start_date")) > SUSPENSION_FULL_START_DATE
         or str(query.get("end_date")) < end
     ):
         raise ProspectiveExecutionDataError("immutable suspension query does not cover holding window")
@@ -1606,6 +2097,83 @@ def _benchmark_endpoint_pair_complete(
     )
 
 
+def _matching_execution_store_entries(
+    root: Path,
+    generation: GenerationResult,
+    *,
+    source_data_snapshot_sha256: str,
+    previous_account_state_sha256: str | None,
+) -> list[tuple[Path, dict[str, Any], bool]]:
+    """Find exact complete/source-first entries and reject malformed store rows."""
+
+    execution_root = root / EXECUTION_RELATIVE_ROOT
+    if not execution_root.exists():
+        return []
+    if execution_root.is_symlink() or not execution_root.is_dir():
+        raise ProspectiveExecutionDataError("execution store is not a canonical directory")
+    matches: list[tuple[Path, dict[str, Any], bool]] = []
+    for directory in sorted(execution_root.iterdir(), key=lambda path: path.name):
+        if directory.is_symlink() or not directory.is_dir() or not _SHA256_RE.fullmatch(
+            directory.name
+        ):
+            raise ProspectiveExecutionDataError(
+                f"execution store contains an invalid entry: {directory}"
+            )
+        snapshot_path = directory / "snapshot.json"
+        sources_path = directory / "sources.json"
+        snapshot_present = snapshot_path.exists() or snapshot_path.is_symlink()
+        sources_present = sources_path.exists() or sources_path.is_symlink()
+        # A process may die after creating the content-addressed directory but
+        # before linking its first complete file.  With no claimed identity it
+        # is an uncommitted partial, not evidence and not a candidate.
+        if not snapshot_present and not sources_present:
+            continue
+        if snapshot_present and not sources_present:
+            raise ProspectiveExecutionDataError(
+                f"execution bundle published snapshot before sources: {directory}"
+            )
+        if sources_path.is_symlink() or not sources_path.is_file():
+            raise ProspectiveExecutionDataError(
+                f"execution source contract is not a regular file: {sources_path}"
+            )
+        sources_raw = sources_path.read_bytes()
+        try:
+            sources = json.loads(sources_raw.decode("utf-8"))
+        except (UnicodeError, json.JSONDecodeError) as exc:
+            raise ProspectiveExecutionDataError(
+                f"execution source contract is unreadable: {sources_path}"
+            ) from exc
+        if (
+            not isinstance(sources, dict)
+            or sources_raw != _canonical_json_bytes(sources)
+            or set(sources) != _EXECUTION_SOURCE_KEYS
+        ):
+            raise ProspectiveExecutionDataError(
+                f"execution source contract is malformed: {sources_path}"
+            )
+        identity = (
+            sources.get("generation_result_sha256"),
+            sources.get("source_data_snapshot_sha256"),
+            sources.get("previous_account_state_sha256"),
+        )
+        expected = (
+            generation.result_sha256,
+            source_data_snapshot_sha256,
+            previous_account_state_sha256,
+        )
+        if snapshot_present:
+            if snapshot_path.is_symlink() or not snapshot_path.is_file():
+                raise ProspectiveExecutionDataError(
+                    f"execution snapshot is not a regular file: {snapshot_path}"
+                )
+            # Structural validation applies to every committed execution, not
+            # only the current decision, so unrelated corruption cannot hide.
+            _load_snapshot_files(directory)
+        if identity == expected:
+            matches.append((directory, sources, snapshot_present))
+    return matches
+
+
 def build_prospective_execution_snapshot(
     project_root: str | Path,
     generation_result: GenerationResult | Mapping[str, Any],
@@ -1616,6 +2184,7 @@ def build_prospective_execution_snapshot(
     _materialize: bool = True,
     _suspension_artifact_sha256: str | None = None,
     _sealed_source_contract: Mapping[str, Any] | None = None,
+    _resume_existing: bool = True,
 ) -> ProspectiveExecutionDataSnapshot:
     """Build one create-only execution/outcome source snapshot.
 
@@ -1656,6 +2225,49 @@ def build_prospective_execution_snapshot(
         raise ProspectiveExecutionDataError(
             "decision input bundle was not durably published by the trade deadline"
         )
+
+    if sealed_contract is None and _materialize and _resume_existing:
+        previous_sha = previous.state_sha256 if previous is not None else None
+        matches = _matching_execution_store_entries(
+            root,
+            generation,
+            source_data_snapshot_sha256=source_sha,
+            previous_account_state_sha256=previous_sha,
+        )
+        if len(matches) > 1:
+            raise ProspectiveExecutionDataError(
+                "multiple execution bundles match one sealed decision"
+            )
+        if matches:
+            directory, existing_contract, snapshot_present = matches[0]
+            existing_suspensions = existing_contract.get("suspensions")
+            if not isinstance(existing_suspensions, Mapping):
+                raise ProspectiveExecutionDataError(
+                    "partial execution source lacks its suspension binding"
+                )
+            rebuilt = build_prospective_execution_snapshot(
+                root,
+                generation,
+                source_data_snapshot_sha256=source_sha,
+                previous_account_state=previous,
+                _materialize=False,
+                _suspension_artifact_sha256=str(
+                    existing_suspensions.get("artifact_sha256") or ""
+                ),
+                _sealed_source_contract=existing_contract,
+                _resume_existing=False,
+            )
+            if rebuilt.directory != directory:
+                raise ProspectiveExecutionDataError(
+                    "partial execution directory differs from sealed source rebuild"
+                )
+            source_bytes = _canonical_json_bytes(rebuilt.source_contract)
+            snapshot_bytes = _canonical_json_bytes(rebuilt.snapshot.to_dict())
+            _write_create_only(rebuilt.sources_path, source_bytes)
+            _write_create_only(rebuilt.snapshot_path, snapshot_bytes)
+            if snapshot_present:
+                _load_snapshot_files(directory)
+            return rebuilt
 
     checkpoint_path = root / "runtime/data/raw/checkpoint.json"
     sealed_calendar_sources: list[Mapping[str, Any]] | None = None
@@ -1884,8 +2496,12 @@ def build_prospective_execution_snapshot(
     snapshot_path = directory / "snapshot.json"
     sources_path = directory / "sources.json"
     if _materialize:
-        _write_create_only(snapshot_path, _canonical_json_bytes(snapshot.to_dict()))
         _write_create_only(sources_path, source_bytes)
+        # ``snapshot.json`` is the bundle commit marker.  Publishing it last
+        # means a crash can leave only a source-first partial, which the next
+        # invocation can deterministically rebuild without another provider
+        # call or a second execution identity.
+        _write_create_only(snapshot_path, _canonical_json_bytes(snapshot.to_dict()))
     return ProspectiveExecutionDataSnapshot(
         snapshot=snapshot,
         directory=directory,
@@ -1921,25 +2537,10 @@ def _load_snapshot_files(path: str | Path) -> ProspectiveExecutionDataSnapshot:
         raise ProspectiveExecutionDataError("execution directory does not match snapshot hash")
     if _sha256_bytes(sources_raw) != snapshot.execution_source_sha256:
         raise ProspectiveExecutionDataError("execution source contract hash mismatch")
-    required = {
-        "schema_version",
-        "kind",
-        "protocol_release",
-        "generation_result_sha256",
-        "source_data_snapshot_sha256",
-        "target_input_snapshot_sha256",
-        "previous_account_state_sha256",
-        "benchmark_tickers_sha256",
-        "benchmark_coverage",
-        "selected_market_max_date",
-        "raw_checkpoint_path",
-        "decision_input",
-        "calendar",
-        "raw_partitions",
-        "suspensions",
-        "delists",
-    }
-    if set(sources_value) != required or len(sources_value) != len(required):
+    if (
+        set(sources_value) != _EXECUTION_SOURCE_KEYS
+        or len(sources_value) != len(_EXECUTION_SOURCE_KEYS)
+    ):
         raise ProspectiveExecutionDataError("execution source contract has a non-exact schema")
     coverage = sources_value.get("benchmark_coverage")
     decision_input = sources_value.get("decision_input")
@@ -2056,8 +2657,10 @@ def load_prospective_execution_snapshot(
 __all__ = [
     "EXECUTION_RELATIVE_ROOT",
     "MINIMUM_BENCHMARK_COVERAGE_PPM",
+    "SUSPENSION_FULL_START_DATE",
     "ProspectiveExecutionDataError",
     "ProspectiveExecutionDataSnapshot",
     "build_prospective_execution_snapshot",
+    "inspect_prospective_execution_sources",
     "load_prospective_execution_snapshot",
 ]

@@ -21,6 +21,7 @@ from factor_lab.data import (
     sync_exact_reference,
     sync_suspensions,
 )
+from factor_lab.data.suspensions import SuspensionProviderWaitingError
 from factor_lab.research.runner import latest_run, run_research
 from factor_lab.implementation_closure import verify_implementation_closure
 from factor_lab.prospective_attestation import API_VERSION, DEFAULT_REPOSITORY
@@ -217,7 +218,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("protocols/5.2-target-generator.json"),
     )
-    upgrade.add_argument("--release-tag", default="5.6")
+    upgrade.add_argument("--release-tag", default="5.7")
     abandon_upgrade = prospective_commands.add_parser(
         "abandon-upgrade",
         help="Explicitly abandon an unattested implementation upgrade.",
@@ -387,15 +388,34 @@ def _data_command(arguments: argparse.Namespace) -> int:
             "blocked": 3,
         }.get(str(result.get("status")), 1)
     if arguments.data_command == "suspensions":
-        result = sync_suspensions(
-            arguments.start_date,
-            arguments.end_date,
-            config_path=config_path,
-            layout=layout,
-            resume=bool(arguments.resume),
-        )
+        try:
+            result = sync_suspensions(
+                arguments.start_date,
+                arguments.end_date,
+                config_path=config_path,
+                layout=layout,
+                resume=bool(arguments.resume),
+            )
+        except SuspensionProviderWaitingError as exc:
+            result = {
+                "schema_version": 1,
+                "status": "waiting",
+                "reason": "provider_temporarily_unavailable",
+                "error": str(exc),
+            }
+        except (OSError, TypeError, ValueError) as exc:
+            result = {
+                "schema_version": 1,
+                "status": "blocked",
+                "reason": "suspension_evidence_invalid",
+                "error": str(exc),
+            }
         _json(result)
-        return 0 if result.get("status") == "complete" else 1
+        return {
+            "complete": 0,
+            "waiting": 2,
+            "blocked": 3,
+        }.get(str(result.get("status")), 1)
     if arguments.data_command == "enrich":
         sync_result = None
         if not bool(arguments.apply_only):

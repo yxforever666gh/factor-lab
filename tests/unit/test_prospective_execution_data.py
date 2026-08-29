@@ -67,7 +67,7 @@ def _calendar_artifact(
     checkpoint: dict[str, Any],
     *,
     completed_at: str,
-) -> None:
+) -> str:
     start = pd.Timestamp(sessions[0])
     end = pd.Timestamp(sessions[-1])
     open_set = set(sessions)
@@ -120,6 +120,7 @@ def _calendar_artifact(
     entry["manifest_path"] = str(manifest_path.resolve())
     entry["manifest_sha256"] = sha256_file(manifest_path)
     checkpoint["calendars"][content_sha] = entry
+    return content_sha
 
 
 def _partition(
@@ -440,11 +441,58 @@ def execution_root(
     )
 
     checkpoint: dict[str, Any] = {"schema_version": 1, "partitions": {}, "calendars": {}}
-    _calendar_artifact(
+    calendar_sha = _calendar_artifact(
         root,
         sessions,
         checkpoint,
         completed_at=f"{signal_date}T06:00:00Z",
+    )
+    calendar_checkpoint = checkpoint["calendars"][calendar_sha]
+    calendar_path = Path(calendar_checkpoint["path"])
+    calendar_manifest_path = Path(calendar_checkpoint["manifest_path"])
+    _calendar_cas, calendar_binding = execution_data._capture_immutable_artifact(
+        root,
+        calendar_path,
+        expected_sha256=calendar_checkpoint["artifact_sha256"],
+        sha_field="artifact_sha256",
+    )
+    _calendar_manifest_cas, calendar_manifest_binding = (
+        execution_data._capture_immutable_artifact(
+            root,
+            calendar_manifest_path,
+            expected_sha256=calendar_checkpoint["manifest_sha256"],
+            sha_field="manifest_sha256",
+            path_field="immutable_manifest_path",
+            size_field="manifest_size_bytes",
+            media_field="manifest_media_type",
+        )
+    )
+    source = replace(
+        source,
+        manifest={
+            **source.manifest,
+            "calendar": {
+                "sources": [
+                    {
+                        "calendar_content_sha256": calendar_sha,
+                        "path": execution_data._relative(calendar_path, root),
+                        **calendar_binding,
+                        "manifest_path": execution_data._relative(
+                            calendar_manifest_path, root
+                        ),
+                        **calendar_manifest_binding,
+                        "completed_at_utc": f"{signal_date}T06:00:00Z",
+                        "availability_basis": "checkpoint_completed_at_utc",
+                        "source_start_date": sessions[0],
+                        "source_end_date": sessions[-1],
+                        "row_count": int(calendar_checkpoint["row_count"]),
+                        "open_day_count": int(
+                            calendar_checkpoint["open_day_count"]
+                        ),
+                    }
+                ]
+            },
+        },
     )
     window = sessions[2:13]
     for day_index, session in enumerate(window, start=1):
@@ -477,7 +525,7 @@ def execution_root(
     _write_json(checkpoint_path, checkpoint)
     _suspensions(
         root,
-        start=sessions[0],
+        start=execution_data.SUSPENSION_FULL_START_DATE,
         end=window[-1],
         completed_at=f"{window[-1]}T08:30:00Z",
     )
@@ -1014,3 +1062,257 @@ def test_benchmark_endpoint_coverage_rejects_flagged_open_endpoint(
 
     assert execution_data._benchmark_endpoint_pair_complete(clean, clean) is True
     assert execution_data._benchmark_endpoint_pair_complete(start, end) is False
+
+
+def test_read_only_source_readiness_uses_sealed_calendar_and_exact_datasets(
+    execution_root,
+) -> None:
+    root, generation, source, sessions, _checkpoint = execution_root
+
+    report = execution_data.inspect_prospective_execution_sources(
+        root,
+        generation,
+        source_data_snapshot_sha256=source.snapshot_sha256,
+        observed_at_utc=f"{sessions[12]}T09:00:00Z",
+    )
+
+    assert report["status"] == "complete"
+    assert report["holding_start_date"] == sessions[2]
+    assert report["holding_end_date"] == sessions[12]
+    assert report["required_datasets"] == ["daily", "adj_factor"]
+    assert report["required_partition_count"] == 22
+    assert report["missing_partition_keys"] == []
+    assert report["suspensions"]["query_start_date"] == "2017-01-01"
+    assert report["suspensions"]["query_end_date"] == sessions[12]
+
+
+def test_read_only_source_readiness_routes_missing_i11_partition(
+    execution_root,
+) -> None:
+    root, generation, source, sessions, _checkpoint = execution_root
+    checkpoint_path = root / "runtime/data/raw/checkpoint.json"
+    checkpoint = json.loads(checkpoint_path.read_text(encoding="utf-8"))
+    checkpoint["partitions"].pop(f"adj_factor/{sessions[12]}")
+    _write_json(checkpoint_path, checkpoint)
+
+    report = execution_data.inspect_prospective_execution_sources(
+        root,
+        generation,
+        source_data_snapshot_sha256=source.snapshot_sha256,
+        observed_at_utc=f"{sessions[12]}T09:00:00Z",
+    )
+
+    assert report["status"] == "market_data_missing"
+    assert report["missing_partition_keys"] == [f"adj_factor/{sessions[12]}"]
+
+
+def test_read_only_source_readiness_requires_post_end_full_suspensions(
+    execution_root,
+) -> None:
+    root, generation, source, sessions, _checkpoint = execution_root
+    suspension_path = root / "runtime/data/top500/suspensions.parquet"
+    frame = pd.read_parquet(suspension_path)
+    _replace_suspensions(
+        root,
+        frame,
+        completed_at=f"{sessions[12]}T07:59:59Z",
+    )
+
+    report = execution_data.inspect_prospective_execution_sources(
+        root,
+        generation,
+        source_data_snapshot_sha256=source.snapshot_sha256,
+        observed_at_utc=f"{sessions[12]}T09:00:00Z",
+    )
+
+    assert report["status"] == "suspensions_missing"
+    assert report["holding_end_market_completed_at_utc"] == (
+        f"{sessions[12]}T08:00:00Z"
+    )
+
+
+def test_unmatured_cycle_does_not_require_mutable_raw_checkpoint(
+    execution_root,
+) -> None:
+    root, generation, source, sessions, _checkpoint = execution_root
+    (root / "runtime/data/raw/checkpoint.json").unlink()
+
+    report = execution_data.inspect_prospective_execution_sources(
+        root,
+        generation,
+        source_data_snapshot_sha256=source.snapshot_sha256,
+        observed_at_utc=f"{sessions[12]}T06:59:59Z",
+    )
+
+    assert report["status"] == "not_mature"
+    assert report["holding_end_close_utc"] == f"{sessions[12]}T07:00:00Z"
+
+
+def test_source_readiness_recovers_parquet_only_suspension_publish(
+    execution_root,
+) -> None:
+    root, generation, source, sessions, _checkpoint = execution_root
+    (root / "runtime/data/top500/suspensions.meta.json").unlink()
+
+    report = execution_data.inspect_prospective_execution_sources(
+        root,
+        generation,
+        source_data_snapshot_sha256=source.snapshot_sha256,
+        observed_at_utc=f"{sessions[12]}T09:00:00Z",
+    )
+
+    assert report["status"] == "suspensions_missing"
+    assert report["recovery"] == "uncommitted_parquet_without_metadata"
+
+
+def test_source_readiness_recovers_new_parquet_with_stale_metadata(
+    execution_root,
+) -> None:
+    root, generation, source, sessions, _checkpoint = execution_root
+    path = root / "runtime/data/top500/suspensions.parquet"
+    metadata_path = path.with_name("suspensions.meta.json")
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    metadata["query"]["end_date"] = sessions[11]
+    metadata["retrieved_at_utc"] = f"{sessions[11]}T08:30:00Z"
+    _write_json(metadata_path, metadata)
+    pd.DataFrame(
+        [
+            {
+                "ticker": "000001.SZ",
+                "date": pd.Timestamp(sessions[12]),
+                "suspend_type": "S",
+                "suspend_timing": "09:30",
+            }
+        ]
+    ).to_parquet(path, index=False)
+
+    report = execution_data.inspect_prospective_execution_sources(
+        root,
+        generation,
+        source_data_snapshot_sha256=source.snapshot_sha256,
+        observed_at_utc=f"{sessions[12]}T09:00:00Z",
+    )
+
+    assert report["status"] == "suspensions_missing"
+    assert report["recovery"] == (
+        "parquet_published_before_stale_metadata_replace"
+    )
+
+
+def test_source_readiness_blocks_current_or_malformed_suspension_conflict(
+    execution_root,
+) -> None:
+    root, generation, source, sessions, _checkpoint = execution_root
+    path = root / "runtime/data/top500/suspensions.parquet"
+    metadata_path = path.with_name("suspensions.meta.json")
+    pd.DataFrame(
+        [
+            {
+                "ticker": "000001.SZ",
+                "date": pd.Timestamp(sessions[12]),
+                "suspend_type": "S",
+                "suspend_timing": "09:30",
+            }
+        ]
+    ).to_parquet(path, index=False)
+
+    with pytest.raises(
+        execution_data.ProspectiveExecutionDataError,
+        match="authoritative suspension evidence is invalid",
+    ):
+        execution_data.inspect_prospective_execution_sources(
+            root,
+            generation,
+            source_data_snapshot_sha256=source.snapshot_sha256,
+            observed_at_utc=f"{sessions[12]}T09:00:00Z",
+        )
+
+    metadata_path.write_text("{broken", encoding="utf-8")
+    with pytest.raises(
+        execution_data.ProspectiveExecutionDataError,
+        match="authoritative suspension evidence is invalid",
+    ):
+        execution_data.inspect_prospective_execution_sources(
+            root,
+            generation,
+            source_data_snapshot_sha256=source.snapshot_sha256,
+            observed_at_utc=f"{sessions[12]}T09:00:00Z",
+        )
+
+
+def test_create_only_writer_never_exposes_short_final_bytes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target = tmp_path / "execution" / "sources.json"
+    original_write = execution_data.os.write
+
+    def short_then_fail(descriptor: int, payload: memoryview) -> int:
+        original_write(descriptor, payload[:1])
+        raise OSError("simulated write crash")
+
+    monkeypatch.setattr(execution_data.os, "write", short_then_fail)
+    with pytest.raises(OSError, match="simulated write crash"):
+        execution_data._write_create_only(target, b"complete evidence")
+
+    assert not target.exists()
+    assert not list(target.parent.glob(".*.pending-*.tmp"))
+
+
+def test_sources_first_execution_publish_recovers_without_provider_redispatch(
+    execution_root,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, generation, source, _sessions, _checkpoint = execution_root
+    original_write = execution_data._write_create_only
+    crashed = False
+
+    def crash_before_commit_marker(path: Path, payload: bytes) -> None:
+        nonlocal crashed
+        if path.name == "snapshot.json" and not crashed:
+            crashed = True
+            raise RuntimeError("simulated crash before execution commit marker")
+        original_write(path, payload)
+
+    monkeypatch.setattr(
+        execution_data,
+        "_write_create_only",
+        crash_before_commit_marker,
+    )
+    with pytest.raises(RuntimeError, match="commit marker"):
+        build_prospective_execution_snapshot(
+            root,
+            generation,
+            source_data_snapshot_sha256=source.snapshot_sha256,
+        )
+
+    execution_root_path = root / execution_data.EXECUTION_RELATIVE_ROOT
+    partials = [
+        path
+        for path in execution_root_path.iterdir()
+        if (path / "sources.json").is_file()
+        and not (path / "snapshot.json").exists()
+    ]
+    assert len(partials) == 1
+    monkeypatch.setattr(execution_data, "_write_create_only", original_write)
+    monkeypatch.setattr(
+        execution_data,
+        "_official_delist_client",
+        lambda _root: (_ for _ in ()).throw(
+            AssertionError("provider must not be called during sealed recovery")
+        ),
+    )
+
+    resumed = build_prospective_execution_snapshot(
+        root,
+        generation,
+        source_data_snapshot_sha256=source.snapshot_sha256,
+    )
+
+    assert resumed.directory == partials[0]
+    assert resumed.sources_path.is_file()
+    assert resumed.snapshot_path.is_file()
+    assert load_prospective_execution_snapshot(
+        resumed.directory,
+        generation,
+    ).snapshot.snapshot_sha256 == resumed.snapshot.snapshot_sha256
