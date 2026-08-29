@@ -29,6 +29,7 @@ import subprocess
 import sys
 import sysconfig
 import tempfile
+import time
 from typing import Any
 import unicodedata
 from zoneinfo import ZoneInfo
@@ -56,6 +57,16 @@ _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 _OID_RE = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
 _SAFE_PATH_RE = re.compile(r"^[0-9A-Za-z._/-]+$")
 _RELEASE_TAG_RE = re.compile(r"^[0-9]+\.[0-9]+$")
+_CAPSULE_FS_RETRY_DELAYS_SECONDS = (
+    0.05,
+    0.1,
+    0.2,
+    0.4,
+    0.8,
+    1.0,
+    1.0,
+    1.0,
+)
 
 
 def _canonical_distribution_name(value: str) -> str:
@@ -542,6 +553,46 @@ def _capsule_path(store_root: Path, commit_oid: str) -> Path:
     return store_root / commit_oid
 
 
+def _publish_capsule_directory(temporary: Path, target: Path) -> bool:
+    """Publish a complete capsule despite transient filesystem scanner locks."""
+
+    for retry_delay in (*_CAPSULE_FS_RETRY_DELAYS_SECONDS, None):
+        try:
+            os.rename(temporary, target)
+            return True
+        except FileExistsError:
+            return False
+        except PermissionError:
+            # Windows may report a concurrent directory winner as access denied
+            # instead of FileExistsError.  The caller verifies that winner in full.
+            if target.is_dir():
+                return False
+            if retry_delay is None:
+                raise
+            time.sleep(retry_delay)
+        except OSError:
+            if target.is_dir():
+                return False
+            raise
+    raise AssertionError("capsule publish retry loop is unreachable")
+
+
+def _remove_pending_capsule_directory(temporary: Path) -> None:
+    """Remove an owned pending tree with the same bounded lock tolerance."""
+
+    for retry_delay in (*_CAPSULE_FS_RETRY_DELAYS_SECONDS, None):
+        try:
+            shutil.rmtree(temporary)
+            return
+        except FileNotFoundError:
+            return
+        except PermissionError:
+            if retry_delay is None:
+                raise
+            time.sleep(retry_delay)
+    raise AssertionError("capsule cleanup retry loop is unreachable")
+
+
 def materialize_release_capsule(
     project_root: str | Path,
     capsule_store_root: str | Path,
@@ -597,6 +648,7 @@ def materialize_release_capsule(
 
     store.mkdir(parents=True, exist_ok=True)
     temporary = Path(tempfile.mkdtemp(prefix=".pending-capsule-", dir=store))
+    published_by_us = False
     try:
         for relative, raw in sorted(blobs.items()):
             _write_file(temporary / Path(relative), raw)
@@ -614,16 +666,16 @@ def materialize_release_capsule(
             "capsule_sha256": _sha256(canonical_json_bytes(receipt_payload)),
         }
         _write_file(temporary / CAPSULE_RECEIPT_NAME, canonical_json_bytes(receipt))
+        published_by_us = _publish_capsule_directory(temporary, target)
+    except BaseException as publish_error:
         try:
-            os.rename(temporary, target)
-        except FileExistsError:
-            pass
-        except OSError:
-            if not target.is_dir():
-                raise
-    finally:
-        if temporary.exists():
-            shutil.rmtree(temporary)
+            _remove_pending_capsule_directory(temporary)
+        except BaseException as cleanup_error:
+            raise publish_error from cleanup_error
+        raise
+    else:
+        if not published_by_us:
+            _remove_pending_capsule_directory(temporary)
     return verify_release_capsule(
         project,
         store,

@@ -64,6 +64,8 @@
   `--no-resume` 全量抓取、审计并原子替换，避免把旧范围误当成已覆盖的新快照。
 - runtime closure updater 在写 manifest 前额外要求已安装的 `factor-research-mvp` 精确等于
   `implementation_release` 对应的三段式包版本，防止 5.4 wheel 被封装成 5.5 capsule。
+- 发布胶囊的原子目录发布在 Windows 遇到短暂 scanner/indexer 文件锁时采用有界退避重试；并发发布者
+  已先完成目标目录时仍转入完整 capsule 验证，持续权限错误则在有限时间后保留原始异常并 fail closed。
 
 ### Known limitations
 

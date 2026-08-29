@@ -328,6 +328,301 @@ def published_capsule(
     return capsule, project, commit, manifest_sha
 
 
+def test_publish_capsule_directory_retries_transient_permission_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    temporary = tmp_path / "pending"
+    temporary.mkdir()
+    (temporary / "receipt.json").write_text("{}\n", encoding="utf-8")
+    target = tmp_path / "published"
+    original_rename = release_runner.os.rename
+    calls = 0
+    delays: list[float] = []
+
+    def transient_rename(source: Path, destination: Path) -> None:
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            raise PermissionError("transient scanner lock")
+        original_rename(source, destination)
+
+    monkeypatch.setattr(release_runner.os, "rename", transient_rename)
+    monkeypatch.setattr(release_runner.time, "sleep", delays.append)
+
+    published_by_us = release_runner._publish_capsule_directory(temporary, target)
+
+    assert published_by_us is True
+    assert calls == 3
+    assert delays == list(release_runner._CAPSULE_FS_RETRY_DELAYS_SECONDS[:2])
+    assert not temporary.exists()
+    assert (target / "receipt.json").read_text(encoding="utf-8") == "{}\n"
+
+
+def test_publish_capsule_directory_exhausts_bounded_permission_retries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    temporary = tmp_path / "pending"
+    temporary.mkdir()
+    target = tmp_path / "published"
+    calls = 0
+    delays: list[float] = []
+
+    def locked_rename(_source: Path, _destination: Path) -> None:
+        nonlocal calls
+        calls += 1
+        raise PermissionError("persistent lock")
+
+    monkeypatch.setattr(release_runner.os, "rename", locked_rename)
+    monkeypatch.setattr(release_runner.time, "sleep", delays.append)
+
+    with pytest.raises(PermissionError, match="persistent lock"):
+        release_runner._publish_capsule_directory(temporary, target)
+
+    assert calls == len(release_runner._CAPSULE_FS_RETRY_DELAYS_SECONDS) + 1
+    assert delays == list(release_runner._CAPSULE_FS_RETRY_DELAYS_SECONDS)
+    assert temporary.is_dir()
+    assert not target.exists()
+
+
+def test_publish_capsule_directory_accepts_concurrent_winner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    temporary = tmp_path / "pending"
+    temporary.mkdir()
+    target = tmp_path / "published"
+    delays: list[float] = []
+
+    def losing_rename(_source: Path, destination: Path) -> None:
+        destination.mkdir()
+        raise PermissionError("destination created by concurrent publisher")
+
+    monkeypatch.setattr(release_runner.os, "rename", losing_rename)
+    monkeypatch.setattr(release_runner.time, "sleep", delays.append)
+
+    published_by_us = release_runner._publish_capsule_directory(temporary, target)
+
+    assert published_by_us is False
+    assert temporary.is_dir()
+    assert target.is_dir()
+    assert delays == []
+
+
+def test_pending_capsule_cleanup_retries_transient_permission_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    temporary = tmp_path / "pending"
+    temporary.mkdir()
+    original_rmtree = release_runner.shutil.rmtree
+    calls = 0
+    delays: list[float] = []
+
+    def transient_rmtree(path: Path) -> None:
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            raise PermissionError("transient scanner lock")
+        original_rmtree(path)
+
+    monkeypatch.setattr(release_runner.shutil, "rmtree", transient_rmtree)
+    monkeypatch.setattr(release_runner.time, "sleep", delays.append)
+
+    release_runner._remove_pending_capsule_directory(temporary)
+
+    assert calls == 3
+    assert delays == list(release_runner._CAPSULE_FS_RETRY_DELAYS_SECONDS[:2])
+    assert not temporary.exists()
+
+
+def test_pending_capsule_cleanup_exhausts_bounded_permission_retries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    temporary = tmp_path / "pending"
+    temporary.mkdir()
+    calls = 0
+    delays: list[float] = []
+
+    def locked_rmtree(_path: Path) -> None:
+        nonlocal calls
+        calls += 1
+        raise PermissionError("persistent cleanup lock")
+
+    monkeypatch.setattr(release_runner.shutil, "rmtree", locked_rmtree)
+    monkeypatch.setattr(release_runner.time, "sleep", delays.append)
+
+    with pytest.raises(PermissionError, match="persistent cleanup lock"):
+        release_runner._remove_pending_capsule_directory(temporary)
+
+    assert calls == len(release_runner._CAPSULE_FS_RETRY_DELAYS_SECONDS) + 1
+    assert delays == list(release_runner._CAPSULE_FS_RETRY_DELAYS_SECONDS)
+    assert temporary.is_dir()
+
+
+def test_publish_capsule_directory_does_not_retry_other_os_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    temporary = tmp_path / "pending"
+    temporary.mkdir()
+    target = tmp_path / "published"
+    calls = 0
+    delays: list[float] = []
+
+    def broken_rename(_source: Path, _destination: Path) -> None:
+        nonlocal calls
+        calls += 1
+        raise OSError("non-permission filesystem failure")
+
+    monkeypatch.setattr(release_runner.os, "rename", broken_rename)
+    monkeypatch.setattr(release_runner.time, "sleep", delays.append)
+
+    with pytest.raises(OSError, match="non-permission filesystem failure"):
+        release_runner._publish_capsule_directory(temporary, target)
+
+    assert calls == 1
+    assert delays == []
+    assert temporary.is_dir()
+    assert not target.exists()
+
+
+def test_pending_capsule_cleanup_is_idempotent(tmp_path: Path) -> None:
+    release_runner._remove_pending_capsule_directory(tmp_path / "missing")
+
+
+def test_materialize_capsule_skips_cleanup_after_successful_rename(
+    published_capsule: tuple[release_runner.ReleaseCapsule, Path, str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    capsule, project, commit, manifest_sha = published_capsule
+    store = project.parent / "successful-publisher"
+
+    def forbidden_cleanup(_temporary: Path) -> None:
+        raise AssertionError("successful publisher must not clean the old pending name")
+
+    monkeypatch.setattr(
+        release_runner, "_remove_pending_capsule_directory", forbidden_cleanup
+    )
+
+    materialized = release_runner.materialize_release_capsule(
+        project,
+        store,
+        manifest_path="protocols/release.json",
+        manifest_sha256=manifest_sha,
+        implementation_release_tag="5.2",
+        implementation_release_tag_object_oid=(
+            capsule.implementation_release_tag_object_oid
+        ),
+        implementation_commit_oid=commit,
+    )
+
+    assert materialized.root == store.resolve() / commit
+
+
+def test_materialize_capsule_verifies_complete_concurrent_winner(
+    published_capsule: tuple[release_runner.ReleaseCapsule, Path, str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    capsule, project, commit, manifest_sha = published_capsule
+    store = project.parent / "concurrent-publisher"
+    calls = 0
+
+    def concurrent_rename(_source: Path, destination: Path) -> None:
+        nonlocal calls
+        calls += 1
+        release_runner.shutil.copytree(capsule.root, destination)
+        raise PermissionError("concurrent publisher won")
+
+    monkeypatch.setattr(release_runner.os, "rename", concurrent_rename)
+    monkeypatch.setattr(
+        release_runner.time,
+        "sleep",
+        lambda _delay: pytest.fail("winner path must not sleep"),
+    )
+
+    materialized = release_runner.materialize_release_capsule(
+        project,
+        store,
+        manifest_path="protocols/release.json",
+        manifest_sha256=manifest_sha,
+        implementation_release_tag="5.2",
+        implementation_release_tag_object_oid=(
+            capsule.implementation_release_tag_object_oid
+        ),
+        implementation_commit_oid=commit,
+    )
+
+    assert calls == 1
+    assert materialized.root == store.resolve() / commit
+    assert not list(store.glob(".pending-capsule-*"))
+
+
+def test_materialize_capsule_rejects_incomplete_concurrent_winner(
+    published_capsule: tuple[release_runner.ReleaseCapsule, Path, str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    capsule, project, commit, manifest_sha = published_capsule
+    store = project.parent / "invalid-concurrent-publisher"
+
+    def concurrent_rename(_source: Path, destination: Path) -> None:
+        destination.mkdir()
+        (destination / "intruder.txt").write_text("invalid\n", encoding="utf-8")
+        raise FileExistsError("concurrent publisher won with invalid bytes")
+
+    monkeypatch.setattr(release_runner.os, "rename", concurrent_rename)
+
+    with pytest.raises(release_runner.ReleaseRunnerError):
+        release_runner.materialize_release_capsule(
+            project,
+            store,
+            manifest_path="protocols/release.json",
+            manifest_sha256=manifest_sha,
+            implementation_release_tag="5.2",
+            implementation_release_tag_object_oid=(
+                capsule.implementation_release_tag_object_oid
+            ),
+            implementation_commit_oid=commit,
+        )
+
+    target = store / commit
+    assert (target / "intruder.txt").is_file()
+    assert not list(store.glob(".pending-capsule-*"))
+
+
+def test_materialize_capsule_preserves_publish_error_when_cleanup_also_fails(
+    published_capsule: tuple[release_runner.ReleaseCapsule, Path, str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    capsule, project, commit, manifest_sha = published_capsule
+    store = project.parent / "double-failure"
+    publish_error = PermissionError("publish failed")
+    cleanup_error = PermissionError("cleanup failed")
+
+    def fail_publish(_temporary: Path, _target: Path) -> bool:
+        raise publish_error
+
+    def fail_cleanup(_temporary: Path) -> None:
+        raise cleanup_error
+
+    monkeypatch.setattr(release_runner, "_publish_capsule_directory", fail_publish)
+    monkeypatch.setattr(
+        release_runner, "_remove_pending_capsule_directory", fail_cleanup
+    )
+
+    with pytest.raises(PermissionError, match="publish failed") as raised:
+        release_runner.materialize_release_capsule(
+            project,
+            store,
+            manifest_path="protocols/release.json",
+            manifest_sha256=manifest_sha,
+            implementation_release_tag="5.2",
+            implementation_release_tag_object_oid=(
+                capsule.implementation_release_tag_object_oid
+            ),
+            implementation_commit_oid=commit,
+        )
+
+    assert raised.value is publish_error
+    assert raised.value.__cause__ is cleanup_error
+
+
 def _target_payload(project: Path) -> dict[str, object]:
     return {
         "project_root": str(project.resolve()),
