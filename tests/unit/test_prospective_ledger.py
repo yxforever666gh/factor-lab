@@ -36,7 +36,9 @@ from factor_lab.prospective_ledger import (
     checkpoint_evaluation,
     create_only_file,
     evaluate_ledger,
+    implementation_transition_status,
     ledger_status,
+    prospective_readiness,
     seal_decision,
     seal_snapshot,
     sha256_bytes,
@@ -1143,6 +1145,705 @@ def test_active_release_capsule_drift_invalidates_audit_and_blocks_mutation(
         seal_snapshot(ledger)
 
 
+def test_predecision_runtime_upgrade_verifies_history_without_old_environment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, bool]] = []
+    running_release = {"value": "5.2"}
+
+    def verify_runtime(
+        _layout,
+        implementation,
+        *,
+        require_running_environment: bool = True,
+    ) -> None:
+        release = str(implementation["implementation_release_tag"])
+        calls.append((release, require_running_environment))
+        if require_running_environment and release != running_release["value"]:
+            raise LedgerIntegrityError(
+                "running distribution set differs from the release capsule"
+            )
+
+    monkeypatch.setattr(
+        prospective_ledger,
+        "_verify_upgrade_runtime_closure",
+        verify_runtime,
+    )
+    ledger = tmp_path / "ledger"
+    ready = _ready(ledger)
+    running_release["value"] = "5.3"
+    calls.clear()
+
+    moved = append_implementation_upgrade(
+        ledger,
+        _upgrade_payload(
+            ready["activation"]["record_sha256"],
+            supersedes=ready["upgrade"]["record_sha256"],
+            release_tag="5.3",
+        ),
+        recorded_at_utc="2026-08-23T00:06:00Z",
+    )
+    assert calls == [("5.2", False), ("5.3", True)]
+
+    calls.clear()
+    transition = implementation_transition_status(ledger)
+    assert transition["valid"] is True
+    assert transition["state"]["implementation_release_tag"] == "5.3"
+    assert calls == [("5.2", False), ("5.3", False)]
+
+    calls.clear()
+    status = ledger_status(ledger)
+    assert status["valid"] is True
+    assert status["implementation_release_tag"] == "5.3"
+    assert calls == [("5.2", False), ("5.3", False), ("5.3", True)]
+    assert moved["record"]["payload"]["implementation_release_tag"] == "5.3"
+
+
+def test_runtime_transition_rejects_a_ledger_with_any_sealed_decision(
+    tmp_path: Path,
+) -> None:
+    ledger = tmp_path / "ledger"
+    _ready(ledger)
+    case = _plan_case(ledger)
+    _seal_case(
+        ledger,
+        case,
+        recorded_at="2026-08-24T12:01:00Z",
+    )
+
+    with pytest.raises(
+        LedgerIntegrityError,
+        match="runtime transition verification requires a decision-free ledger",
+    ):
+        implementation_transition_status(ledger)
+
+
+def _authoritative_readiness_ledger_view(ledger: Path) -> dict[str, Any]:
+    layout = prospective_ledger.LedgerLayout.at(ledger)
+    with prospective_ledger._existing_read_lock(layout):
+        records, state, _generated = prospective_ledger._load_verified_record_chain(
+            layout,
+            refresh_cache=False,
+        )
+    last_signal, last_index = prospective_ledger._latest_decision_coordinates(records)
+    snapshot_sha = sha256_bytes(
+        canonical_json_bytes(
+            prospective_ledger._snapshot_payload(layout, records, state)
+        )
+    )
+    return {
+        "root": "runtime/prospective/5.0",
+        "ledger_id": "factor-lab/prospective/5.0",
+        "head_sequence": records[-1]["sequence"],
+        "head_record_sha256": records[-1]["record_sha256"],
+        "snapshot_sha256": snapshot_sha,
+        "phase": state.public_phase(),
+        "decision_generation_ready": state.decision_generation_ready(),
+        "decision_count": state.decision_count,
+        "open_decision_count": len(state.open_cycles),
+        "implementation_trusted_tlog_timestamp_utc": (
+            state.active_implementation_tlog_utc
+        ),
+        "prospective_epoch_tlog_timestamp_utc": (
+            state.prospective_epoch_tlog_utc
+            or state.active_implementation_tlog_utc
+        ),
+        "last_decision_signal_date": last_signal,
+        "last_decision_calendar_index": last_index,
+        "observer_validation_scope": (
+            "canonical_record_chain_and_snapshot_binding"
+        ),
+    }
+
+
+def test_authoritative_readiness_uses_no_cache_and_writes_no_ledger_bytes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = tmp_path / "runtime/prospective/5.0"
+    _ready(ledger)
+    transition = implementation_transition_status(ledger)
+    state = transition["state"]
+    snapshot_path = max((ledger / "snapshots").glob("*.json"))
+    snapshot_sha = snapshot_path.stem.split("-", 1)[1]
+    expected_ledger = {
+        "root": "runtime/prospective/5.0",
+        "ledger_id": "factor-lab/prospective/5.0",
+        "head_sequence": transition["head_sequence"],
+        "head_record_sha256": transition["head_record_sha256"],
+        "snapshot_sha256": snapshot_sha,
+        "phase": state["phase"],
+        "decision_generation_ready": state["decision_generation_ready"],
+        "decision_count": state["decision_count"],
+        "open_decision_count": state["open_decision_count"],
+        "implementation_trusted_tlog_timestamp_utc": state[
+            "implementation_trusted_tlog_timestamp_utc"
+        ],
+        "prospective_epoch_tlog_timestamp_utc": state[
+            "implementation_trusted_tlog_timestamp_utc"
+        ],
+        "last_decision_signal_date": None,
+        "last_decision_calendar_index": None,
+        "observer_validation_scope": (
+            "canonical_record_chain_and_snapshot_binding"
+        ),
+    }
+
+    def observer(project_root, **kwargs):
+        assert Path(project_root) == tmp_path
+        assert Path(kwargs["ledger_root"]) == ledger
+        return {
+            "status": "waiting",
+            "reason": "before_signal_close",
+            "ready": False,
+            "next_action": "wait",
+            "ready_for": {
+                "membership_build": False,
+                "input_build": False,
+                "decision_admission": False,
+            },
+            "ledger": dict(expected_ledger),
+            "candidate": {"due_offset": 5},
+            "issues": [],
+        }
+
+    monkeypatch.setattr(
+        "factor_lab.data.prospective_readiness.inspect_prospective_readiness",
+        observer,
+    )
+    original_load = prospective_ledger._load_verified_record_chain
+    calls: list[dict[str, Any]] = []
+
+    def load(layout, **kwargs):
+        calls.append(dict(kwargs))
+        return original_load(layout, **kwargs)
+
+    monkeypatch.setattr(
+        prospective_ledger,
+        "_load_verified_record_chain",
+        load,
+    )
+
+    def tree_state() -> list[tuple[str, str, int, int, str | None]]:
+        rows: list[tuple[str, str, int, int, str | None]] = []
+        for path in sorted(ledger.rglob("*"), key=lambda item: str(item)):
+            stat = path.stat()
+            rows.append(
+                (
+                    path.relative_to(ledger).as_posix(),
+                    "dir" if path.is_dir() else "file",
+                    int(stat.st_size),
+                    int(stat.st_mtime_ns),
+                    sha256_bytes(path.read_bytes()) if path.is_file() else None,
+                )
+            )
+        return rows
+
+    before = tree_state()
+    report = prospective_readiness(
+        ledger,
+        project_root=tmp_path,
+        observed_at_utc="2026-08-31T06:59:00Z",
+    )
+    after = tree_state()
+
+    assert report["status"] == "waiting"
+    assert calls == [{"refresh_cache": False}]
+    assert after == before
+
+
+def test_authoritative_readiness_replays_target_before_admission(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = tmp_path / "runtime/prospective/5.0"
+    _ready(ledger)
+    case = _plan_case(ledger)
+    expected_ledger = _authoritative_readiness_ledger_view(ledger)
+    result = case["result"]
+
+    def observer(project_root, **kwargs):
+        assert Path(project_root) == tmp_path
+        assert kwargs["ledger_id"] == "factor-lab/prospective/5.0"
+        return {
+            "status": "waiting",
+            "reason": "authoritative_target_replay_required",
+            "ready": False,
+            "next_action": "wait",
+            "ready_for": {
+                "membership_build": False,
+                "input_build": False,
+                "decision_admission": False,
+            },
+            "ledger": dict(expected_ledger),
+            "candidate": {
+                "signal_date": result.signal_date,
+                "signal_close_utc": f"{result.signal_date}T07:00:00Z",
+                "entry_date": result.trade_date,
+                "calendar_index": result.calendar_index,
+                "due_offset": result.due_offset,
+                "admission_deadline_utc": f"{result.trade_date}T01:15:00Z",
+                "initial_skipped_sessions": list(result.skipped_sessions),
+            },
+            "input_snapshot": {
+                "status": "complete",
+                "snapshot_sha256": case["source_path"].name,
+            },
+            "target_replay": {
+                "status": "not_run",
+                "result_sha256": None,
+                "deployment_sha256": None,
+                "generator_id": None,
+            },
+            "issues": [],
+        }
+
+    monkeypatch.setattr(
+        "factor_lab.data.prospective_readiness.inspect_prospective_readiness",
+        observer,
+    )
+
+    report = prospective_readiness(
+        ledger,
+        project_root=tmp_path,
+        observed_at_utc="2026-08-24T12:00:00Z",
+    )
+
+    assert report["status"] == "ready"
+    assert report["reason"] == "decision_admission_ready"
+    assert report["next_action"] == "build_plan"
+    assert report["ready_for"] == {
+        "membership_build": False,
+        "input_build": False,
+        "decision_admission": True,
+    }
+    assert report["target_replay"] == {
+        "status": "complete",
+        "result_sha256": result.result_sha256,
+        "deployment_sha256": result.deployment_sha256,
+        "generator_id": result.generator_id,
+    }
+
+
+def test_authoritative_readiness_rechecks_the_ledger_after_target_replay(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = tmp_path / "runtime/prospective/5.0"
+    ready = _ready(ledger)
+    case = _plan_case(ledger)
+    expected_ledger = _authoritative_readiness_ledger_view(ledger)
+    result = case["result"]
+
+    def observer(_project_root, **_kwargs):
+        return {
+            "status": "waiting",
+            "reason": "authoritative_target_replay_required",
+            "ready": False,
+            "next_action": "wait",
+            "stable_view": True,
+            "ready_for": {
+                "membership_build": False,
+                "input_build": False,
+                "decision_admission": False,
+            },
+            "ledger": dict(expected_ledger),
+            "candidate": {
+                "signal_date": result.signal_date,
+                "signal_close_utc": f"{result.signal_date}T07:00:00Z",
+                "entry_date": result.trade_date,
+                "calendar_index": result.calendar_index,
+                "due_offset": result.due_offset,
+                "admission_deadline_utc": f"{result.trade_date}T01:15:00Z",
+                "initial_skipped_sessions": list(result.skipped_sessions),
+            },
+            "input_snapshot": {
+                "status": "complete",
+                "snapshot_sha256": case["source_path"].name,
+            },
+            "target_replay": {
+                "status": "not_run",
+                "result_sha256": None,
+                "deployment_sha256": None,
+                "generator_id": None,
+            },
+            "issues": [],
+        }
+
+    monkeypatch.setattr(
+        "factor_lab.data.prospective_readiness.inspect_prospective_readiness",
+        observer,
+    )
+    original_regenerate = prospective_ledger._regenerate_route_target_plan
+
+    def racing_regenerate(*args, **kwargs):
+        replayed = original_regenerate(*args, **kwargs)
+        append_implementation_upgrade(
+            ledger,
+            _upgrade_payload(
+                ready["activation"]["record_sha256"],
+                supersedes=ready["upgrade"]["record_sha256"],
+                release_tag="5.3",
+            ),
+            recorded_at_utc="2026-08-24T12:00:30Z",
+        )
+        return replayed
+
+    monkeypatch.setattr(
+        prospective_ledger,
+        "_regenerate_route_target_plan",
+        racing_regenerate,
+    )
+
+    report = prospective_readiness(
+        ledger,
+        project_root=tmp_path,
+        observed_at_utc="2026-08-24T12:00:00Z",
+    )
+
+    assert report["status"] == "waiting"
+    assert report["reason"] == "ledger_changed_during_readiness"
+    assert report["stable_view"] is False
+    assert report["ready_for"]["decision_admission"] is False
+    assert any(
+        issue["code"] == "LEDGER_CHANGED_DURING_READINESS"
+        for issue in report["issues"]
+    )
+
+
+def test_build_ready_gate_reobserves_data_before_returning(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = tmp_path / "runtime/prospective/5.0"
+    _ready(ledger)
+    expected_ledger = _authoritative_readiness_ledger_view(ledger)
+    ready_report = {
+        "status": "ready",
+        "reason": "membership_build_ready",
+        "ready": True,
+        "next_action": "build_membership",
+        "stable_view": True,
+        "ready_for": {
+            "membership_build": True,
+            "input_build": False,
+            "decision_admission": False,
+        },
+        "ledger": dict(expected_ledger),
+        "candidate": {
+            "signal_close_utc": "2026-08-24T07:00:00Z",
+            "due_offset": 0,
+        },
+        "issues": [],
+    }
+    changed_report = deepcopy(ready_report)
+    changed_report.update(
+        status="waiting",
+        reason="data_incomplete",
+        ready=False,
+        next_action="wait",
+    )
+    changed_report["ready_for"] = {
+        "membership_build": False,
+        "input_build": False,
+        "decision_admission": False,
+    }
+    calls = {"count": 0}
+
+    def observer(_project_root, **_kwargs):
+        calls["count"] += 1
+        return deepcopy(ready_report if calls["count"] == 1 else changed_report)
+
+    monkeypatch.setattr(
+        "factor_lab.data.prospective_readiness.inspect_prospective_readiness",
+        observer,
+    )
+
+    report = prospective_readiness(
+        ledger,
+        project_root=tmp_path,
+        observed_at_utc="2026-08-24T08:00:00Z",
+    )
+
+    assert calls["count"] == 2
+    assert report["status"] == "waiting"
+    assert report["reason"] == "evidence_changed_during_readiness"
+    assert report["stable_view"] is False
+    assert report["ready_for"]["membership_build"] is False
+    assert any(
+        issue["code"] == "EVIDENCE_CHANGED_DURING_READINESS"
+        for issue in report["issues"]
+    )
+
+
+def test_default_observation_time_is_frozen_across_the_final_gate(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = tmp_path / "runtime/prospective/5.0"
+    _ready(ledger)
+    expected_ledger = _authoritative_readiness_ledger_view(ledger)
+    calls: list[Any] = []
+
+    def observer(_project_root, **kwargs):
+        observed = kwargs["observed_at_utc"]
+        calls.append(observed)
+        return {
+            "observed_at_utc": "2026-08-24T08:00:00Z",
+            "clock_source": (
+                "local_system_clock_untrusted"
+                if observed is None
+                else "caller_supplied"
+            ),
+            "status": "ready",
+            "reason": "membership_build_ready",
+            "ready": True,
+            "next_action": "build_membership",
+            "stable_view": True,
+            "ready_for": {
+                "membership_build": True,
+                "input_build": False,
+                "decision_admission": False,
+            },
+            "ledger": dict(expected_ledger),
+            "candidate": {
+                "signal_close_utc": "2026-08-24T07:00:00Z",
+                "due_offset": 0,
+            },
+            "issues": [],
+        }
+
+    monkeypatch.setattr(
+        "factor_lab.data.prospective_readiness.inspect_prospective_readiness",
+        observer,
+    )
+
+    report = prospective_readiness(ledger, project_root=tmp_path)
+
+    assert calls == [None, "2026-08-24T08:00:00Z"]
+    assert report["status"] == "ready"
+    assert report["clock_source"] == "local_system_clock_untrusted"
+
+
+def test_late_corrective_canary_makes_the_frozen_first_signal_terminal(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = tmp_path / "runtime/prospective/5.0"
+    ready = _ready(ledger)
+    upgrade = append_implementation_upgrade(
+        ledger,
+        _upgrade_payload(
+            ready["activation"]["record_sha256"],
+            supersedes=ready["upgrade"]["record_sha256"],
+            release_tag="5.3",
+        ),
+        recorded_at_utc="2026-08-30T00:06:00Z",
+    )
+    append_attestation_receipt(
+        ledger,
+        _receipt(
+            upgrade["snapshot"],
+            purpose="implementation_upgrade_canary",
+            decision_sha=None,
+            run_id=624,
+            created="2026-08-31T07:00:30Z",
+            completed="2026-08-31T07:02:00Z",
+            tlog="2026-08-31T07:01:00Z",
+        ),
+        recorded_at_utc="2026-08-31T07:03:00Z",
+    )
+    expected_ledger = _authoritative_readiness_ledger_view(ledger)
+
+    def observer(_project_root, **_kwargs):
+        return {
+            "status": "waiting",
+            "reason": "authoritative_target_replay_required",
+            "ready": False,
+            "next_action": "wait",
+            "ready_for": {
+                "membership_build": False,
+                "input_build": False,
+                "decision_admission": False,
+            },
+            "ledger": dict(expected_ledger),
+            "candidate": {
+                "signal_date": "2026-08-31",
+                "signal_close_utc": "2026-08-31T07:00:00Z",
+                "entry_date": "2026-09-01",
+                "calendar_index": 2345,
+                "due_offset": 5,
+                "admission_deadline_utc": "2026-09-01T01:15:00Z",
+                "initial_skipped_sessions": [
+                    "2026-08-24",
+                    "2026-08-25",
+                    "2026-08-26",
+                    "2026-08-27",
+                    "2026-08-28",
+                ],
+            },
+            "input_snapshot": {
+                "status": "complete",
+                "snapshot_sha256": "f" * 64,
+            },
+            "target_replay": {"status": "not_run"},
+            "issues": [],
+        }
+
+    monkeypatch.setattr(
+        "factor_lab.data.prospective_readiness.inspect_prospective_readiness",
+        observer,
+    )
+
+    report = prospective_readiness(
+        ledger,
+        project_root=tmp_path,
+        observed_at_utc="2026-08-31T07:04:00Z",
+    )
+
+    assert report["status"] == "terminal"
+    assert report["reason"] == "implementation_canary_missed_first_signal"
+    assert report["ready_for"]["decision_admission"] is False
+    assert any(
+        issue["code"] == "IMPLEMENTATION_CANARY_MISSED_FIRST_SIGNAL"
+        and issue["severity"] == "fatal"
+        and issue["retryable"] is False
+        for issue in report["issues"]
+    )
+
+
+def test_missed_deadline_dominates_awaiting_decision_receipt(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ledger = tmp_path / "runtime/prospective/5.0"
+    _ready(ledger)
+    case = _plan_case(ledger)
+    _seal_case(
+        ledger,
+        case,
+        recorded_at="2026-08-24T12:01:00Z",
+    )
+    expected_ledger = _authoritative_readiness_ledger_view(ledger)
+
+    def observer(_project_root, **_kwargs):
+        return {
+            "status": "terminal",
+            "reason": "admission_deadline_missed",
+            "ready": False,
+            "next_action": "none",
+            "ready_for": {
+                "membership_build": False,
+                "input_build": False,
+                "decision_admission": False,
+            },
+            "ledger": dict(expected_ledger),
+            "candidate": {"due_offset": 1},
+            "issues": [
+                {
+                    "code": "ADMISSION_DEADLINE_MISSED",
+                    "severity": "fatal",
+                    "component": "timing",
+                    "retryable": False,
+                    "message": "deadline missed",
+                    "details": {},
+                }
+            ],
+        }
+
+    monkeypatch.setattr(
+        "factor_lab.data.prospective_readiness.inspect_prospective_readiness",
+        observer,
+    )
+
+    report = prospective_readiness(
+        ledger,
+        project_root=tmp_path,
+        observed_at_utc="2026-08-25T01:15:00Z",
+    )
+
+    assert expected_ledger["decision_generation_ready"] is False
+    assert report["status"] == "terminal"
+    assert report["reason"] == "admission_deadline_missed"
+    assert not any(
+        issue["code"] == "AUTHORITATIVE_LEDGER_NOT_READY"
+        for issue in report["issues"]
+    )
+
+
+def test_runtime_abandonment_is_static_and_leaves_execution_fail_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, bool]] = []
+    running_release = {"value": "5.2"}
+
+    def verify_runtime(
+        _layout,
+        implementation,
+        *,
+        require_running_environment: bool = True,
+    ) -> None:
+        release = str(implementation["implementation_release_tag"])
+        calls.append((release, require_running_environment))
+        if require_running_environment and release != running_release["value"]:
+            raise LedgerIntegrityError(
+                "running distribution set differs from the release capsule"
+            )
+
+    monkeypatch.setattr(
+        prospective_ledger,
+        "_verify_upgrade_runtime_closure",
+        verify_runtime,
+    )
+
+    first_ledger = tmp_path / "first-ledger"
+    activation = _activate(first_ledger)
+    _activation_canary(first_ledger, activation)
+    first = append_implementation_upgrade(
+        first_ledger,
+        _upgrade_payload(activation["record_sha256"]),
+        recorded_at_utc="2026-08-22T00:06:00Z",
+    )
+    calls.clear()
+    abandon_implementation_upgrade(
+        first_ledger,
+        implementation_upgrade_record_sha256=first["record_sha256"],
+        reason="first canary failed",
+        recorded_at_utc="2026-08-22T00:07:00Z",
+    )
+    assert calls == [("5.2", False)]
+
+    moved_ledger = tmp_path / "moved-ledger"
+    running_release["value"] = "5.2"
+    ready = _ready(moved_ledger)
+    running_release["value"] = "5.3"
+    moved = append_implementation_upgrade(
+        moved_ledger,
+        _upgrade_payload(
+            ready["activation"]["record_sha256"],
+            supersedes=ready["upgrade"]["record_sha256"],
+            release_tag="5.3",
+        ),
+        recorded_at_utc="2026-08-23T00:06:00Z",
+    )
+    calls.clear()
+    abandon_implementation_upgrade(
+        moved_ledger,
+        implementation_upgrade_record_sha256=moved["record_sha256"],
+        reason="replacement canary failed",
+        recorded_at_utc="2026-08-23T00:07:00Z",
+    )
+    assert calls == [("5.2", False), ("5.3", False)]
+
+    calls.clear()
+    status = ledger_status(moved_ledger)
+    assert status["valid"] is False
+    assert "running distribution set differs" in status["issues"][0]["detail"]
+    assert calls == [("5.2", False), ("5.3", False), ("5.2", True)]
+
+
 def test_manual_plans_fail_closed_and_upgrade_requires_both_canaries(tmp_path: Path) -> None:
     ledger = tmp_path / "ledger"
     activation = _activate(ledger)
@@ -2213,7 +2914,7 @@ def test_initial_seed_cannot_skip_a_post_canary_session(tmp_path: Path) -> None:
 
     ledger = tmp_path / "ledger"
     _ready(ledger)
-    with pytest.raises(LedgerStateError, match="follows the implementation Tlog"):
+    with pytest.raises(LedgerStateError, match="follows the prospective epoch Tlog"):
         _plan_case(
             ledger,
             signal="2026-08-25",
@@ -2239,6 +2940,64 @@ def test_initial_seed_cannot_skip_a_post_canary_session(tmp_path: Path) -> None:
                 "2026-08-25",
                 "2026-08-26",
                 "2026-08-27",
+            ],
+        )
+
+
+def test_corrective_canary_cannot_rebase_the_first_prospective_signal(
+    tmp_path: Path,
+) -> None:
+    ledger = tmp_path / "ledger"
+    ready = _ready(ledger)
+    first_tlog = ready["implementation_canary"]["record"]["payload"][
+        "verified_tlog_timestamp_utc"
+    ]
+    upgrade = append_implementation_upgrade(
+        ledger,
+        _upgrade_payload(
+            ready["activation"]["record_sha256"],
+            supersedes=ready["upgrade"]["record_sha256"],
+            release_tag="5.3",
+        ),
+        recorded_at_utc="2026-08-30T00:06:00Z",
+    )
+    append_attestation_receipt(
+        ledger,
+        _receipt(
+            upgrade["snapshot"],
+            purpose="implementation_upgrade_canary",
+            decision_sha=None,
+            run_id=623,
+            created="2026-08-31T07:00:30Z",
+            completed="2026-08-31T07:02:00Z",
+            tlog="2026-08-31T07:01:00Z",
+        ),
+        recorded_at_utc="2026-08-31T07:03:00Z",
+    )
+
+    layout = prospective_ledger.LedgerLayout.at(ledger)
+    records, state = prospective_ledger._load_record_chain(layout)
+    assert records
+    assert state.active_implementation_tlog_utc == "2026-08-31T07:01:00Z"
+    assert state.prospective_epoch_tlog_utc == first_tlog
+
+    with pytest.raises(
+        LedgerStateError,
+        match="follows the prospective epoch Tlog",
+    ):
+        _plan_case(
+            ledger,
+            signal="2026-09-01",
+            session="2026-09-02",
+            calendar_sessions=[
+                "2026-08-24",
+                "2026-08-25",
+                "2026-08-26",
+                "2026-08-27",
+                "2026-08-28",
+                "2026-08-31",
+                "2026-09-01",
+                "2026-09-02",
             ],
         )
 

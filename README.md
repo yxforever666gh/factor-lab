@@ -5,8 +5,9 @@ Factor Lab 是一条本地、可复现的 A 股组合研究链：Parquet 数据 
 
 项目不再依赖 WebUI、Docker、PostgreSQL、MinIO、Dagster、Hermes 或自治 Agent。旧 Research OS 已完整归档在 Git tag `research-os-final-20260826`，不再进入当前主线。
 
-> 5.4 运行实现执行 5.0 已冻结、由 5.2 协议完整定义的 `fixed_core_full` 路线：历史只负责
-> 确定这一条待检验假设，新的
+> 5.5 软件不改变 5.0 已冻结、由 5.2 协议完整定义的 `fixed_core_full` 研究方向；它新增
+> 零写入 readiness、月度 membership 的跨周期校验，以及仅限尚无 sealed decision 账本的
+> 跨版本运行控制。历史只负责确定这一条待检验假设，新的
 > signal、targets、十个虚拟 sleeve、执行快照和 outcome 从 2026-08-21 之后开始不可回填地
 > 积累。confirmed outcome 达到预注册门槛前仍不能称为独立 OOS 验证。项目不连接券商、
 > 不下真实订单，也不保证未来收益。
@@ -29,22 +30,23 @@ python -m pip install -e ".[dev]"
 python -m pip install -e ".[data,dev]"
 ```
 
-5.4 的发布、前瞻 decision、execution、outcome、replay 和 evaluate 必须使用项目内的专用
-运行环境 `runtime/environments/5.4`。该环境固定为当前发布主机的 CPython 3.10.16，并从
+5.5 的发布及其 canary 完成后的前瞻 decision、execution、outcome、replay 和 evaluate 必须
+使用项目内的专用运行环境 `runtime/environments/5.5`。该环境固定为当前发布主机的
+CPython 3.10.16，并从
 `protocols/5.2-runtime-lock.txt` 与项目内 wheelhouse 按逐文件 SHA-256 离线安装；随后用
 同一 lock 中的项目 wheel 安装 Factor Lab 本身。不要使用 editable install，也不要让系统
 Python 或用户级 site-packages 参与前瞻证据：
 
 ```powershell
 $factorLabPython = (Resolve-Path `
-  "runtime/environments/5.4/Scripts/python.exe").Path
+  "runtime/environments/5.5/Scripts/python.exe").Path
 $wheelhouse = (Resolve-Path `
-  "runtime/environments/5.4/wheelhouse").Path
+  "runtime/environments/5.5/wheelhouse").Path
 
 & $factorLabPython -m pip install --no-index --find-links $wheelhouse `
   --require-hashes -r protocols/5.2-runtime-lock.txt
 & $factorLabPython -c `
-  "import factor_lab; assert factor_lab.__version__ == '5.4.0'"
+  "import factor_lab; assert factor_lab.__version__ == '5.5.0'"
 ```
 
 下文的 `python -m factor_lab.cli prospective ...` 表示应由 `$factorLabPython` 执行；发布
@@ -105,13 +107,24 @@ python -m factor_lab.cli prospective activate `
 python -m factor_lab.cli prospective attest --purpose activation_canary `
   --release-tag 5.0 --workflow-run-id 33132845922
 
-# 5.4 tag 与 GitHub 同步后，绑定并见证完整运行实现
+# 已完成的 5.4 历史步骤；正式账本中的记录不可改写
 python -m factor_lab.cli prospective upgrade `
   --manifest protocols/5.2-target-generator.json --release-tag 5.4
 # 为保持 2026-08-31 是第一条真实前瞻 signal，本次 implementation canary 的可信 Tlog
 # 必须晚于 2026-08-28 15:00 Asia/Shanghai，且早于 2026-08-31 15:00。
 python -m factor_lab.cli prospective attest `
   --purpose implementation_upgrade_canary --release-tag 5.0
+
+# 5.5 tag 与 GitHub 同步后，仅在仍为 0 decision 时追加单调实现升级并见证 canary
+python -m factor_lab.cli prospective upgrade `
+  --manifest protocols/5.2-target-generator.json --release-tag 5.5
+python -m factor_lab.cli prospective attest `
+  --purpose implementation_upgrade_canary --release-tag 5.0
+
+# 严格只读：不创建 membership、input、cache 或 ledger record
+python -m factor_lab.cli prospective readiness
+# 退出码：0 ready、2 waiting、3 blocked、4 terminal；只能执行 JSON 的 next_action。
+# --observed-at-utc 只用于确定性诊断，不会把调用者时间变成可信时间证据。
 
 # 为 signal 的“下一官方交易日所在月份”生成 Top500；input 不会隐式选择“最新”快照
 # 2026-08-31 的下一官方交易日在 9 月，因此首条 signal 就必须显式绑定 2026-09 membership
@@ -139,9 +152,22 @@ python -m factor_lab.cli prospective audit
 python -m factor_lab.cli prospective evaluate
 ```
 
-上例的 2026-09 membership 可以把 effective/state date 记为 `2026-09-01`，但其
-`as_of_date` 必须不晚于 `2026-08-31` signal，且构建完成与全部输入可用时间仍必须早于
-该 decision 的 pretrade deadline；`input` 会验证这些边界并 fail-closed。
+readiness 按当前阶段依次检查 `membership_build`、`input_build` 和 `decision_admission`；已有
+artifact 必须通过完整不可变源重放，最终 admission 还必须在 active 发布胶囊中重放 target
+generator。`ready` 只表示对应 `next_action` 可以尝试，不表示 builder 必然成功、decision 已
+封存、独立 OOS 已验证或收益已确认。
+
+首次通过 canary 的可信 TLog 会永久建立 prospective epoch；后续纠错版本不会重设首个 signal。
+如果 active 纠错 canary 已晚于这个固定 signal 的收盘，readiness 会 terminal，而不是静默跳到
+下一个交易日。任何 ready 动作返回前还会在账本锁内重新观察账本与数据，拒绝并发变更产生的
+旧视图。封存 membership/input 所绑定的日历 CAS 可以脱离 mutable checkpoint 自证，但仍会与
+更新、更长的 live 官方日历合并，以便跨月推进；如果下一步仍要构建 artifact，则 live checkpoint
+及其全部日历条目仍必须完整、无冲突并覆盖同一 candidate horizon。
+
+同一月份的所有 signal 复用同一个月度 membership：`as_of_date` 是自然月首之前最后一个
+官方开市日，`effective_start_date` / `effective_end_date` 是该月首个 / 最后一个官方开市日；
+自然月末只用于证明日历完整覆盖。构建完成与全部输入可用时间仍必须早于该 decision 的
+pretrade deadline；`input` 与 readiness 会通过封存 CAS 重放验证这些边界并 fail-closed。
 
 ## 当前主线：5.2 前瞻执行闭环
 
@@ -303,7 +329,7 @@ runtime/prospective/5.0/
 
 ```powershell
 $factorLabPython = (Resolve-Path `
-  "runtime/environments/5.4/Scripts/python.exe").Path
+  "runtime/environments/5.5/Scripts/python.exe").Path
 $localTestRun = "local-" + [guid]::NewGuid().ToString("N")
 & $factorLabPython -m pytest tests/unit tests/data tests/integration -q `
   --basetemp "runtime/test-tmp/$localTestRun" -p no:cacheprovider

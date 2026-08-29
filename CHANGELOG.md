@@ -10,14 +10,68 @@
 
 ## [Unreleased]
 
+## [5.5] - 2026-08-29
+
+### Added
+
+- 新增严格零写入的 `prospective readiness`：在不创建 lock、cache、membership、input 或账本
+  record 的前提下，把无缓存刷新的权威账本重放与下一合法 signal 的官方日历、阶段性原始分区、
+  exact-as-of reference、月度 membership、input bundle 和 admission deadline 绑定。稳定状态为
+  `ready`、`waiting`、`blocked`、`terminal`，自动化退出码分别为 0、2、3、4。
+- 已有 membership 与 input 不再只检查外层 manifest/hash：readiness 分别调用公开 loader，从
+  immutable CAS 完整重放冻结规则、60 日流动性窗口、exact-as-of reference、signal rows 和
+  provenance；最终 decision admission 还必须在 active 发布 capsule 中重放 target generator，
+  精确匹配 signal、entry、calendar index、offset、首轮 skipped sessions 与连续模型状态。
+
+### Changed
+
+- readiness 改为互斥阶段门：缺少月度成员时只开放 `membership_build`，成员已权威验证且 input
+  缺失时只开放 `input_build`，input 与 active target replay 均通过后才开放
+  `decision_admission`。已封存 CAS 可自证时不再因为后来变化的 membership-only live
+  liquidity/reference origin 而错误错过 deadline。
+- 5.5 保留 5.0/5.2 冻结的 `fixed_core_full` 研究方向；这是控制器与前瞻证据完整性的小版本迭代，
+  不是再次使用同一历史样本挑选新策略。
+
 ### Fixed
 
+- 修复后续日循环错误地把同一月 membership 的 `as_of_date` 和 effective interval 当成随每日
+  signal/entry 滚动的问题。现在 membership month 仍取 entry 所在月，但 as-of 固定为月首前
+  最后一个官方开市日，effective start/end 固定为月内首/末开市日；自然月末仅用于证明日历
+  完整覆盖。首轮 2026-08-31 恰好正确不再掩盖第二轮必然失败的问题。
+- 修复 deadline 终态优先级：候选与 deadline 一经权威账本/稳定日历确定就立即计算；后续证据
+  异常、awaiting receipt/evaluation 或 same-offset capacity 不再把已错过的不可恢复 admission
+  降级成普通 blocked/waiting。
+- 冻结 prospective epoch 的首次 implementation canary TLog：后续纠错版本只能更新 active runtime
+  的因果时间，不能重新选择首个 signal 或把本应处理的交易日列为 skipped；纠错 canary 若不早于
+  已冻结首信号收盘，readiness 直接进入不可重试的 terminal。
+- 修复 readiness 的稳定性门：任何 `membership_build`、`input_build` 或 `decision_admission` ready
+  在返回前都必须在账本锁内重新执行零写观察，并逐值确认账本 head、deterministic snapshot 与完整
+  数据报告没有变化；target replay 期间的并发 upgrade 或新增同 signal artifact 不再产生旧视图
+  false-positive。
+- 已封存 membership/input 中完整重放过的官方日历 CAS 成为独立 authority；它允许 admission 在
+  mutable raw checkpoint 丢失或被替换后继续验证，同时会与更长的新 live 官方日历按内容哈希合并，
+  不会让旧封存 horizon 永久遮住下一周期。仍需构建 membership/input 时则严格要求 live 日历集合
+  与真实 builder 等价，任一损坏条目或逐日冲突都会 fail closed，不能产生 build false-ready。
+- 修复新的正式环境追加 implementation upgrade 时，验证器错误要求同一解释器同时匹配所有
+  已被替代实现的完整 distribution closure。decision-free transition 仍逐字节验证历史 annotated
+  tag、Git blobs、closure、receipt、capsule tree、账本链和 snapshots；待追加的 5.5 capsule
+  以及普通 status/audit/执行路径仍要求当前 active runtime 精确一致。
 - 修正首个 2026-09 前瞻 membership 的运行手册：官方交易日历必须覆盖到整个生效月末
   2026-09-30，而不只是 i+11 的 2026-09-15；隔离的 5.4 capsule 演练已确认，覆盖月末后流程
   会在尚未发生的 `daily/2026-08-31` 分区处正确 fail closed，正式目录没有提前生成 membership
   或 decision。
 - 明确停复牌快照扩展结束日期时不能使用 `--resume`；应从 2017-01-01 到新 signal date 执行
   `--no-resume` 全量抓取、审计并原子替换，避免把旧范围误当成已覆盖的新快照。
+- runtime closure updater 在写 manifest 前额外要求已安装的 `factor-research-mvp` 精确等于
+  `implementation_release` 对应的三段式包版本，防止 5.4 wheel 被封装成 5.5 capsule。
+
+### Known limitations
+
+- `ready` 只表示报告中的 `next_action` 可以尝试；它不保证外部 provider 调用成功，不表示
+  decision 已封存、独立 OOS 已验证或策略收益已确认。发布时账本仍没有 decision/outcome，
+  5.5 因而没有新增盈利证据。
+- implementation upgrade 一旦写入又 abandonment，单调账本不会回滚到旧 runtime；恢复运行
+  需要发布更高的纠正版。已安装的旧控制器不能越过它不认识的中间升级记录。
 
 ## [5.4] - 2026-08-28
 
@@ -565,6 +619,7 @@
   移除这些实验层。
 
 [Unreleased]: https://github.com/yxforever666gh/factor-lab/commits/main
+[5.5]: https://github.com/yxforever666gh/factor-lab/tree/5.5
 [5.4]: https://github.com/yxforever666gh/factor-lab/tree/5.4
 [5.3]: https://github.com/yxforever666gh/factor-lab/tree/5.3
 [5.2]: https://github.com/yxforever666gh/factor-lab/tree/5.2

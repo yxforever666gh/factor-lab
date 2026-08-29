@@ -17,17 +17,21 @@ tag 和 GitHub 远端 tag；只在本地创建 tag 不算完成发布。
    `Unreleased`。
 2. 同步更新 `pyproject.toml` 的 `project.version`。Git tag 使用 `<major>.<minor>`：研究
    大方向变化时 `major + 1` 并将 minor 归零，小方向迭代时 `minor + 1`；Python 包版本
-   使用等价的 `<major>.<minor>.0`，并同步 `src/factor_lab/__init__.py`。
+   使用等价的 `<major>.<minor>.0`，并同步 `src/factor_lab/__init__.py`。前瞻实现发布还必须
+   同步冻结 manifest 的 `implementation_release`、CLI `prospective upgrade` 默认 tag 与
+   对应测试；协议身份不随纠错实现版本机械改名。
 3. 数字发布和前瞻运行只使用项目内的版本专用环境
-   `runtime/environments/<major.minor>`。必须用 manifest 将要绑定的精确 CPython build 创建
+   `runtime/environments/<implementation-release>`。必须用 manifest 将要绑定的精确 CPython
+   build 创建
    该环境，先把全部精确第三方 artifact 保存到该环境的 `wheelhouse` 并准备构建环境；源码
    最终确定后以 `--no-build-isolation --no-deps` 构建一次当前项目 wheel，将其 SHA-256 连同
-   全部第三方 artifact 写入 `protocols/<major.minor>-runtime-lock.txt`。正式环境最终只从这份
+   全部第三方 artifact 写入 `protocols/<protocol-version>-runtime-lock.txt`。正式环境最终只从这份
    完整 lock 安装，不保留 editable metadata。不得复用系统/user site-packages，也不得让
-   pip 在最终安装阶段临时联网解析：
+   pip 在最终安装阶段临时联网解析。当前 5.x 纠错实现继续使用冻结的
+   `protocols/5.2-target-generator.json` 与 `protocols/5.2-runtime-lock.txt`：
 
    ```powershell
-   $releaseEnv = "runtime/environments/<major.minor>"
+   $releaseEnv = "runtime/environments/<implementation-release>"
    $releasePython = (Resolve-Path `
      "$releaseEnv/Scripts/python.exe").Path
    $releaseWheelhouse = (Resolve-Path "$releaseEnv/wheelhouse").Path
@@ -40,7 +44,7 @@ tag 和 GitHub 远端 tag；只在本地创建 tag 不算完成发布。
      --wheel-dir $releaseWheelhouse <git-archive-source-directory>
    & $releasePython -m pip install --force-reinstall --no-index `
      --find-links $releaseWheelhouse --require-hashes `
-     -r "protocols/<major.minor>-runtime-lock.txt"
+     -r "protocols/<protocol-version>-runtime-lock.txt"
 
    @'
    from pathlib import Path
@@ -85,7 +89,7 @@ tag 和 GitHub 远端 tag；只在本地创建 tag 不算完成发布。
 
    ```powershell
    & $releasePython scripts/update-runtime-closure.py `
-     --manifest protocols/<version>-target-generator.json
+     --manifest protocols/<protocol-version>-target-generator.json
 
    $closureTestRun = "release-closure-" + [guid]::NewGuid().ToString("N")
    & $releasePython -m pytest tests/unit tests/data tests/integration -q `
@@ -94,7 +98,8 @@ tag 和 GitHub 远端 tag；只在本地创建 tag 不算完成发布。
    ```
 
    刷新后不得再修改闭包内文件；如有修改必须再次刷新并重跑测试。manifest 自身不放进自引用
-   的 file list，而由发布 tag、manifest SHA 和 release capsule 单独逐字节绑定。
+   的 file list，而由发布 tag、manifest SHA 和 release capsule 单独逐字节绑定。updater 还会
+   拒绝已安装 `factor-research-mvp` 与 manifest `implementation_release` 不一致的环境。
 6. 提交发布变更，并记录 release commit SHA。正式发布前确认工作区干净，并确认本地 `main`
    与 `origin/main` 完全一致；发布脚本会再次强制核验这两项。
 
@@ -102,6 +107,15 @@ tag 和 GitHub 远端 tag；只在本地创建 tag 不算完成发布。
 跳过的官方 signal：canary Tlog 之后的首个官方收盘必须入账。发布 runbook 必须事先写明目标
 首信号及 canary 窗口；5.2 要保持 2026-08-31 为首信号，canary Tlog 必须位于
 2026-08-28 15:00（不含）至 2026-08-31 15:00（不含），时区均为 Asia/Shanghai。
+在首个 decision 前发布的 5.3、5.4、5.5 等纠错实现仍受同一首信号窗口约束。
+首次 implementation canary 的可信 TLog 是不可变 prospective epoch；后续 canary 不能以较晚
+TLog 重基准首信号。若 active 纠错 canary 不早于该固定 signal 收盘，控制器必须 terminal，不能
+把该 signal 记为 skipped 或推进到下一交易日。
+
+跨版本 implementation transition 只允许尚无任何 sealed decision 的账本。历史 capsule 必须
+静态验证 annotated tag、Git blobs、closure、receipt 与完整 capsule tree，最终 active capsule
+仍必须逐值匹配当前正式环境。若新升级记录已追加后又被 abandonment，单调历史不会回退；恢复
+运行必须发布并追加更高的纠正版，而不是移动旧 tag 或假装旧解释器能越过中间记录。
 
 ## 创建并同步 tag
 

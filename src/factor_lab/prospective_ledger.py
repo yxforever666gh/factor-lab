@@ -515,6 +515,77 @@ def _exclusive_lock(layout: LedgerLayout, *, timeout_seconds: float = 15.0) -> I
         os.close(descriptor)
 
 
+@contextmanager
+def _existing_read_lock(
+    layout: LedgerLayout, *, timeout_seconds: float = 15.0
+) -> Iterator[None]:
+    """Lock an already-created ledger without creating or modifying any path.
+
+    Readiness polling must remain observational even when the ledger is missing
+    or incomplete.  The ordinary mutation lock deliberately creates the ledger
+    layout and seeds its lock byte; this variant instead requires that exact
+    state to exist and only acquires the operating-system lock on it.
+    """
+
+    required = (
+        layout.root,
+        layout.records,
+        layout.snapshots,
+        layout.bundles,
+        layout.release_runners,
+    )
+    missing = [str(path) for path in required if not path.is_dir()]
+    if missing or not layout.lock_path.is_file():
+        missing_paths = missing or [str(layout.lock_path)]
+        raise LedgerIntegrityError(
+            "read-only prospective ledger layout is incomplete: "
+            f"{missing_paths}"
+        )
+    descriptor = os.open(layout.lock_path, os.O_RDWR)
+    try:
+        if os.fstat(descriptor).st_size < 1:
+            raise LedgerIntegrityError("read-only prospective ledger lock is unseeded")
+        started = time.monotonic()
+        if os.name == "nt":
+            import msvcrt
+
+            while True:
+                try:
+                    os.lseek(descriptor, 0, os.SEEK_SET)
+                    msvcrt.locking(descriptor, msvcrt.LK_NBLCK, 1)
+                    break
+                except OSError:
+                    if time.monotonic() - started >= timeout_seconds:
+                        raise LedgerIntegrityError(
+                            "timed out acquiring read-only prospective ledger lock"
+                        )
+                    time.sleep(0.05)
+            try:
+                yield
+            finally:
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+
+            while True:
+                try:
+                    fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.monotonic() - started >= timeout_seconds:
+                        raise LedgerIntegrityError(
+                            "timed out acquiring read-only prospective ledger lock"
+                        )
+                    time.sleep(0.05)
+            try:
+                yield
+            finally:
+                fcntl.flock(descriptor, fcntl.LOCK_UN)
+    finally:
+        os.close(descriptor)
+
+
 @dataclass
 class _LedgerState:
     phase: str = "unactivated"
@@ -531,6 +602,13 @@ class _LedgerState:
     pending_previous_implementation_tlog_utc: str | None = None
     active_implementation_canary_receipt_hash: str | None = None
     active_implementation_tlog_utc: str | None = None
+    # The first successfully attested implementation establishes the
+    # prospective epoch.  Corrective implementation releases may replace the
+    # active-runtime TLog timestamp, but they must never move the first
+    # admissible market session forward.  This field is reconstructed from the
+    # immutable record chain and is intentionally excluded from legacy
+    # snapshots so existing snapshot hashes remain stable.
+    prospective_epoch_tlog_utc: str | None = None
     current_decision_hash: str | None = None
     current_receipt_hash: str | None = None
     pending_decision_plan: dict[str, Any] | None = None
@@ -1414,6 +1492,10 @@ def _validate_plan(
             "must be sealed before another decision"
         )
     upgrade_tlog = _parse_trusted_utc(state.active_implementation_tlog_utc)
+    prospective_epoch_tlog = _parse_trusted_utc(
+        state.prospective_epoch_tlog_utc
+        or state.active_implementation_tlog_utc
+    )
     skipped_sessions = [
         _parse_date(value) for value in route_plan["skipped_sessions"]
     ]
@@ -1429,10 +1511,10 @@ def _validate_plan(
                 wall_time(hour=15),
                 tzinfo=ZoneInfo("Asia/Shanghai"),
             ).astimezone(timezone.utc)
-            if session_close > upgrade_tlog:
+            if session_close > prospective_epoch_tlog:
                 raise LedgerStateError(
                     "first decision cannot skip a session whose close follows the "
-                    "implementation Tlog"
+                    "prospective epoch Tlog"
                 )
     signal_close = _parse_evidence_utc(row["signal_close_utc"])
     input_maximum = _parse_evidence_utc(row["input_max_available_at_utc"])
@@ -2349,9 +2431,10 @@ def _apply_record(state: _LedgerState, record: Mapping[str, Any], record_hash: s
                     "implementation canary does not bind the active upgrade"
                 )
             state.active_implementation_canary_receipt_hash = record_hash
-            state.active_implementation_tlog_utc = str(
-                row["verified_tlog_timestamp_utc"]
-            )
+            trusted_tlog = str(row["verified_tlog_timestamp_utc"])
+            state.active_implementation_tlog_utc = trusted_tlog
+            if state.prospective_epoch_tlog_utc is None:
+                state.prospective_epoch_tlog_utc = trusted_tlog
             state.pending_previous_implementation_hash = None
             state.pending_previous_implementation = None
             state.pending_previous_implementation_canary_receipt_hash = None
@@ -2811,10 +2894,25 @@ def append_implementation_upgrade(
     layout = LedgerLayout.at(ledger_root, ledger_id=ledger_id)
     normalized = dict(_normalize_json(upgrade))
     with _exclusive_lock(layout):
-        records, state, _generated = _load_verified_record_chain(layout)
+        # A version transition is launched from the *new* pinned runtime, so
+        # it cannot truthfully equal the previously active distribution set.
+        # Reject state-incompatible requests from structural state first, then
+        # verify every historical capsule byte without executing old research
+        # operations.  The newly materialised capsule below must match the
+        # running environment exactly before the record can be appended.
+        _structural_records, structural_state = _load_record_chain(layout)
+        _validate_implementation_upgrade(normalized, structural_state)
+        records, state, _generated = _load_verified_record_chain(
+            layout,
+            require_active_runtime=False,
+        )
         _validate_implementation_upgrade(normalized, state)
         _materialize_upgrade_runtime_capsule(layout, normalized)
-        _verify_upgrade_runtime_closure(layout, normalized)
+        _verify_upgrade_runtime_closure(
+            layout,
+            normalized,
+            require_running_environment=True,
+        )
         return _append_record_unlocked(
             layout,
             records,
@@ -2844,8 +2942,17 @@ def abandon_implementation_upgrade(
         "reason": str(reason),
     }
     with _exclusive_lock(layout):
-        records, state, _generated = _load_verified_record_chain(layout)
+        records, state, _generated = _load_verified_record_chain(
+            layout,
+            require_active_runtime=False,
+        )
         _validate_implementation_abandonment(payload, state)
+        # Abandonment is a create-only control-plane record, not execution of
+        # either implementation.  The current environment necessarily matches
+        # the failed candidate, not its predecessor.  Both capsules were
+        # verified structurally above; operational work remains fail-closed
+        # until a runtime matching the restored implementation is used, or a
+        # monotonically newer corrective release is bound.
         return _append_record_unlocked(
             layout,
             records,
@@ -2870,8 +2977,10 @@ def _implementation_project_root(layout: LedgerLayout) -> Path:
 def _verify_upgrade_runtime_closure(
     layout: LedgerLayout,
     implementation: Mapping[str, Any],
+    *,
+    require_running_environment: bool = True,
 ) -> None:
-    """Verify the installed commit capsule without consulting current source bytes."""
+    """Verify a commit capsule without consulting current source bytes."""
 
     from .prospective_release_runner import verify_release_capsule
 
@@ -2888,6 +2997,7 @@ def _verify_upgrade_runtime_closure(
                 implementation["implementation_release_tag_object_oid"]
             ),
             implementation_commit_oid=str(implementation["implementation_commit_oid"]),
+            require_running_environment=require_running_environment,
         )
     except Exception as exc:
         raise LedgerIntegrityError(
@@ -2970,7 +3080,11 @@ def _verify_active_runtime_closure(
 ) -> None:
     if state.active_implementation is None:
         return
-    _verify_upgrade_runtime_closure(layout, state.active_implementation)
+    _verify_upgrade_runtime_closure(
+        layout,
+        state.active_implementation,
+        require_running_environment=True,
+    )
 
 
 def _input_snapshot_plan_metadata(
@@ -4267,6 +4381,7 @@ def _replay_external_evidence(
     *,
     use_cache: bool = False,
     refresh_cache: bool = False,
+    require_active_runtime: bool = True,
 ) -> tuple[_LedgerState, dict[str, Any]]:
     """Strictly replay the full schema-2 external-evidence prefix."""
 
@@ -4353,7 +4468,18 @@ def _replay_external_evidence(
             str(metadata["record_sha256"]),
         )
         if record["kind"] == "implementation_upgrade":
-            _verify_active_runtime_closure(layout, preflight_state)
+            _verify_upgrade_runtime_closure(
+                layout,
+                record["payload"],
+                require_running_environment=False,
+            )
+
+    if require_active_runtime:
+        _verify_active_runtime_closure(layout, preflight_state)
+    elif preflight_state.decision_count or pending:
+        raise LedgerIntegrityError(
+            "runtime transition verification requires a decision-free ledger"
+        )
 
     if not pending:
         return preflight_state, {}
@@ -4472,6 +4598,9 @@ def _replay_external_evidence(
 
 def _load_verified_record_chain(
     layout: LedgerLayout,
+    *,
+    refresh_cache: bool = True,
+    require_active_runtime: bool = True,
 ) -> tuple[list[dict[str, Any]], _LedgerState, dict[str, Any]]:
     records, _structural_state = _load_record_chain(layout)
     try:
@@ -4480,7 +4609,8 @@ def _load_verified_record_chain(
             layout,
             records,
             use_cache=True,
-            refresh_cache=True,
+            refresh_cache=refresh_cache,
+            require_active_runtime=require_active_runtime,
         )
     except (OSError, LedgerError, ValueError) as exc:
         if isinstance(exc, LedgerIntegrityError):
@@ -4761,6 +4891,586 @@ def ledger_status(
     }
 
 
+def _latest_decision_coordinates(
+    records: Sequence[Mapping[str, Any]],
+) -> tuple[str | None, int | None]:
+    signal: str | None = None
+    calendar_index: int | None = None
+    for metadata in records:
+        record = metadata["record"]
+        if record["kind"] != "decision":
+            continue
+        payload = record["payload"]
+        plan = payload.get("plan") if isinstance(payload, Mapping) else None
+        route = (
+            plan.get("route_target_plan")
+            if isinstance(plan, Mapping)
+            else None
+        )
+        if not isinstance(route, Mapping):
+            raise LedgerIntegrityError(
+                "readiness requires schema-2 decision coordinates"
+            )
+        signal = str(route["signal_date"])
+        calendar_index = int(route["calendar_index"])
+    return signal, calendar_index
+
+
+def _readiness_issue(
+    code: str,
+    severity: str,
+    component: str,
+    message: str,
+    *,
+    retryable: bool,
+) -> dict[str, Any]:
+    return {
+        "code": code,
+        "severity": severity,
+        "component": component,
+        "retryable": retryable,
+        "message": message,
+        "details": {},
+    }
+
+
+def _override_readiness(
+    report: dict[str, Any],
+    *,
+    status: str,
+    reason: str,
+    issue: Mapping[str, Any],
+) -> dict[str, Any]:
+    issues = report.get("issues")
+    if not isinstance(issues, list):
+        issues = []
+    if not any(
+        isinstance(item, Mapping) and item.get("code") == issue["code"]
+        for item in issues
+    ):
+        issues.append(dict(issue))
+    report["issues"] = sorted(
+        issues,
+        key=lambda row: (
+            {"fatal": 0, "error": 1, "wait": 2}.get(
+                str(row.get("severity")), 9
+            ),
+            str(row.get("code")),
+        ),
+    )
+    report.update(
+        status=status,
+        reason=reason,
+        ready=False,
+        next_action="wait" if status == "waiting" else "none",
+    )
+    report["ready_for"] = {
+        "membership_build": False,
+        "input_build": False,
+        "decision_admission": False,
+    }
+    return report
+
+
+def prospective_readiness(
+    ledger_root: str | Path,
+    *,
+    project_root: str | Path | None = None,
+    observed_at_utc: datetime | str | None = None,
+    ledger_id: str = DEFAULT_LEDGER_ID,
+) -> dict[str, Any]:
+    """Strictly bind the zero-write data observer to authoritative ledger state."""
+
+    from .data.prospective_readiness import inspect_prospective_readiness
+
+    layout = LedgerLayout.at(ledger_root, ledger_id=ledger_id)
+    project = (
+        _implementation_project_root(layout)
+        if project_root is None
+        else Path(project_root).expanduser().resolve()
+    )
+    report: dict[str, Any] | None = None
+    records: list[dict[str, Any]] = []
+    state = _LedgerState()
+    strict_error: Exception | None = None
+    try:
+        with _existing_read_lock(layout):
+            try:
+                records, state, _generated = _load_verified_record_chain(
+                    layout,
+                    refresh_cache=False,
+                )
+                snapshot_issues = _audit_snapshots(layout, records)
+                if snapshot_issues:
+                    raise LedgerIntegrityError(
+                        f"prospective readiness snapshot audit failed: {snapshot_issues}"
+                    )
+            except (OSError, LedgerError, ValueError) as exc:
+                strict_error = exc
+            report = inspect_prospective_readiness(
+                project,
+                observed_at_utc=observed_at_utc,
+                ledger_root=layout.root,
+                ledger_id=ledger_id,
+            )
+    except (OSError, LedgerError, ValueError) as exc:
+        strict_error = exc
+        report = inspect_prospective_readiness(
+            project,
+            observed_at_utc=observed_at_utc,
+            ledger_root=layout.root,
+            ledger_id=ledger_id,
+        )
+    if not isinstance(report, dict):
+        raise LedgerIntegrityError("prospective readiness report is not an object")
+    if strict_error is not None:
+        return _override_readiness(
+            report,
+            status="blocked",
+            reason="authoritative_ledger_invalid",
+            issue=_readiness_issue(
+                "AUTHORITATIVE_LEDGER_INVALID",
+                "error",
+                "ledger",
+                str(strict_error),
+                retryable=False,
+            ),
+        )
+
+    last_signal, last_index = _latest_decision_coordinates(records)
+    try:
+        ledger_relative = layout.root.relative_to(project).as_posix()
+    except ValueError as exc:
+        return _override_readiness(
+            report,
+            status="blocked",
+            reason="authoritative_ledger_binding_mismatch",
+            issue=_readiness_issue(
+                "AUTHORITATIVE_LEDGER_BINDING_MISMATCH",
+                "error",
+                "ledger",
+                str(exc),
+                retryable=False,
+            ),
+        )
+    snapshot_sha = sha256_bytes(
+        canonical_json_bytes(_snapshot_payload(layout, records, state))
+    )
+    expected_ledger = {
+        "root": ledger_relative,
+        "ledger_id": ledger_id,
+        "head_sequence": records[-1]["sequence"] if records else None,
+        "head_record_sha256": (
+            records[-1]["record_sha256"] if records else None
+        ),
+        "snapshot_sha256": snapshot_sha if records else None,
+        "phase": state.public_phase(),
+        "decision_generation_ready": state.decision_generation_ready(),
+        "decision_count": state.decision_count,
+        "open_decision_count": len(state.open_cycles),
+        "implementation_trusted_tlog_timestamp_utc": (
+            state.active_implementation_tlog_utc
+        ),
+        "prospective_epoch_tlog_timestamp_utc": (
+            state.prospective_epoch_tlog_utc
+            or state.active_implementation_tlog_utc
+        ),
+        "last_decision_signal_date": last_signal,
+        "last_decision_calendar_index": last_index,
+        "observer_validation_scope": (
+            "canonical_record_chain_and_snapshot_binding"
+        ),
+    }
+    observed_ledger = report.get("ledger")
+    if not isinstance(observed_ledger, Mapping) or dict(observed_ledger) != expected_ledger:
+        return _override_readiness(
+            report,
+            status="blocked",
+            reason="authoritative_ledger_binding_mismatch",
+            issue=_readiness_issue(
+                "AUTHORITATIVE_LEDGER_BINDING_MISMATCH",
+                "error",
+                "ledger",
+                "data observer ledger binding differs from authoritative replay",
+                retryable=True,
+            ),
+        )
+
+    def final_stable_gate() -> dict[str, Any] | None:
+        """Re-observe ledger and data under the ledger lock before any action."""
+
+        try:
+            with _existing_read_lock(layout):
+                latest_records, latest_state, _latest_generated = (
+                    _load_verified_record_chain(
+                        layout,
+                        refresh_cache=False,
+                    )
+                )
+                latest_snapshot_issues = _audit_snapshots(layout, latest_records)
+                if latest_snapshot_issues:
+                    raise LedgerIntegrityError(
+                        "prospective readiness final snapshot audit failed: "
+                        f"{latest_snapshot_issues}"
+                    )
+                recheck_observed_at = (
+                    observed_at_utc
+                    if observed_at_utc is not None
+                    else report.get("observed_at_utc")
+                )
+                latest_report = inspect_prospective_readiness(
+                    project,
+                    observed_at_utc=recheck_observed_at,
+                    ledger_root=layout.root,
+                    ledger_id=ledger_id,
+                )
+                if observed_at_utc is None and isinstance(
+                    report.get("clock_source"), str
+                ):
+                    # Freeze the first observer's instant while preserving the
+                    # truthful source label in the returned report.  Reusing
+                    # the instant as a caller-supplied value must not itself
+                    # look like evidence drift.
+                    latest_report["clock_source"] = report["clock_source"]
+                latest_head = (
+                    latest_records[-1]["record_sha256"]
+                    if latest_records
+                    else None
+                )
+                latest_snapshot_sha = (
+                    sha256_bytes(
+                        canonical_json_bytes(
+                            _snapshot_payload(
+                                layout,
+                                latest_records,
+                                latest_state,
+                            )
+                        )
+                    )
+                    if latest_records
+                    else None
+                )
+        except (OSError, LedgerError, ValueError) as exc:
+            return _override_readiness(
+                report,
+                status="blocked",
+                reason="authoritative_ledger_recheck_failed",
+                issue=_readiness_issue(
+                    "AUTHORITATIVE_LEDGER_RECHECK_FAILED",
+                    "error",
+                    "ledger",
+                    str(exc),
+                    retryable=True,
+                ),
+            )
+        if (
+            latest_head != expected_ledger["head_record_sha256"]
+            or latest_snapshot_sha != expected_ledger["snapshot_sha256"]
+        ):
+            report["stable_view"] = False
+            return _override_readiness(
+                report,
+                status="waiting",
+                reason="ledger_changed_during_readiness",
+                issue=_readiness_issue(
+                    "LEDGER_CHANGED_DURING_READINESS",
+                    "wait",
+                    "ledger",
+                    "ledger advanced before the readiness action gate opened",
+                    retryable=True,
+                ),
+            )
+        if latest_report != report:
+            report["stable_view"] = False
+            return _override_readiness(
+                report,
+                status="waiting",
+                reason="evidence_changed_during_readiness",
+                issue=_readiness_issue(
+                    "EVIDENCE_CHANGED_DURING_READINESS",
+                    "wait",
+                    "filesystem",
+                    "prospective evidence changed before the action gate opened",
+                    retryable=True,
+                ),
+            )
+        return None
+
+    if state.direction_rejected or state.insolvent:
+        return _override_readiness(
+            report,
+            status="terminal",
+            reason=(
+                "direction_rejected"
+                if state.direction_rejected
+                else "terminal_insolvency"
+            ),
+            issue=_readiness_issue(
+                "LEDGER_TERMINAL",
+                "fatal",
+                "ledger",
+                "prospective ledger is in a terminal state",
+                retryable=False,
+            ),
+        )
+    # Once the derived candidate's immutable pre-trade deadline has passed,
+    # missing receipts or evaluations cannot turn that missed admission back
+    # into a retryable controller phase.  Preserve the observer's terminal
+    # finding before applying ordinary ledger readiness/capacity guards.
+    if report.get("status") == "terminal":
+        return report
+    candidate = report.get("candidate")
+    if (
+        state.decision_count == 0
+        and state.active_implementation_tlog_utc is not None
+        and isinstance(candidate, Mapping)
+    ):
+        signal_close_text = candidate.get("signal_close_utc")
+        if isinstance(signal_close_text, str):
+            active_tlog = _parse_trusted_utc(
+                state.active_implementation_tlog_utc
+            )
+            signal_close = _parse_evidence_utc(signal_close_text)
+            if active_tlog >= signal_close:
+                return _override_readiness(
+                    report,
+                    status="terminal",
+                    reason="implementation_canary_missed_first_signal",
+                    issue=_readiness_issue(
+                        "IMPLEMENTATION_CANARY_MISSED_FIRST_SIGNAL",
+                        "fatal",
+                        "ledger",
+                        "active implementation canary is not earlier than the "
+                        "immutable first signal close",
+                        retryable=False,
+                    ),
+                )
+    if not state.decision_generation_ready():
+        return _override_readiness(
+            report,
+            status="blocked",
+            reason="ledger_not_ready",
+            issue=_readiness_issue(
+                "AUTHORITATIVE_LEDGER_NOT_READY",
+                "error",
+                "ledger",
+                f"authoritative ledger phase is {state.phase}",
+                retryable=state.phase in {
+                    "awaiting_receipt",
+                    "awaiting_implementation_attestation",
+                    "awaiting_evaluation",
+                },
+            ),
+        )
+
+    candidate = report.get("candidate")
+    due_offset = (
+        candidate.get("due_offset")
+        if isinstance(candidate, Mapping)
+        else None
+    )
+    if type(due_offset) is int:
+        same_offset_open = sum(
+            not bool(cycle["legacy_single_slot"])
+            and int(cycle["due_offset"]) == due_offset
+            for cycle in state.open_cycles.values()
+        )
+        if same_offset_open >= 2:
+            return _override_readiness(
+                report,
+                status="waiting",
+                reason="same_offset_capacity",
+                issue=_readiness_issue(
+                    "SAME_OFFSET_CAPACITY_FULL",
+                    "wait",
+                    "ledger",
+                    "two same-offset cycles remain open",
+                    retryable=True,
+                ),
+            )
+    if report.get("reason") != "authoritative_target_replay_required":
+        if report.get("status") == "ready":
+            changed = final_stable_gate()
+            if changed is not None:
+                return changed
+        return report
+
+    candidate = report.get("candidate")
+    input_view = report.get("input_snapshot")
+    if not isinstance(candidate, Mapping) or not isinstance(input_view, Mapping):
+        return _override_readiness(
+            report,
+            status="blocked",
+            reason="authoritative_target_replay_failed",
+            issue=_readiness_issue(
+                "AUTHORITATIVE_TARGET_REPLAY_FAILED",
+                "error",
+                "target_replay",
+                "readiness report lacks a candidate input binding",
+                retryable=False,
+            ),
+        )
+    try:
+        source_snapshot_sha = _require_sha256(
+            input_view.get("snapshot_sha256"),
+            "readiness source data snapshot sha256",
+        )
+        admission_deadline = str(candidate["admission_deadline_utc"])
+        generation, deployment, route_input = _regenerate_route_target_plan(
+            layout,
+            state,
+            source_data_snapshot_sha256=source_snapshot_sha,
+            admission_deadline_utc=admission_deadline,
+        )
+        checked_generation = _validate_route_target_plan(
+            generation,
+            state,
+            decision_session=str(candidate["entry_date"]),
+        )
+        input_metadata = _input_snapshot_plan_metadata(
+            route_input,
+            checked_generation,
+            admission_deadline_utc=admission_deadline,
+        )
+        expected_skipped = (
+            list(candidate["initial_skipped_sessions"])
+            if state.decision_count == 0
+            else []
+        )
+        expected_coordinates = {
+            "signal_date": candidate["signal_date"],
+            "trade_date": candidate["entry_date"],
+            "calendar_index": candidate["calendar_index"],
+            "due_offset": candidate["due_offset"],
+            "skipped_sessions": expected_skipped,
+        }
+        if any(
+            checked_generation.get(name) != expected
+            for name, expected in expected_coordinates.items()
+        ):
+            raise LedgerIntegrityError(
+                "published target replay coordinates differ from readiness candidate"
+            )
+        if input_metadata["source_data_snapshot_sha256"] != source_snapshot_sha:
+            raise LedgerIntegrityError(
+                "published target replay binds another source data snapshot"
+            )
+        _payload_sha256_without(
+            deployment,
+            "deployment_sha256",
+            context="readiness target deployment",
+        )
+        expected_deployment = {
+            "deployment_sha256": checked_generation["deployment_sha256"],
+            "activation_record_sha256": state.activation_hash,
+            "implementation_upgrade_record_sha256": (
+                state.active_implementation_hash
+            ),
+            "deployment_protocol_sha256": state.activation["protocol_sha256"],
+            "route": state.activation["frozen_route"],
+            "generator_id": state.active_implementation["generator_id"],
+        }
+        if any(
+            deployment.get(name) != expected
+            for name, expected in expected_deployment.items()
+        ):
+            raise LedgerIntegrityError(
+                "published target replay deployment differs from active ledger state"
+            )
+    except Exception as exc:  # Readiness must convert any replay failure to fail-closed JSON.
+        target_replay = report.get("target_replay")
+        if isinstance(target_replay, dict):
+            target_replay["status"] = "failed"
+        return _override_readiness(
+            report,
+            status="blocked",
+            reason="authoritative_target_replay_failed",
+            issue=_readiness_issue(
+                "AUTHORITATIVE_TARGET_REPLAY_FAILED",
+                "error",
+                "target_replay",
+                f"published target replay failed: {type(exc).__name__}",
+                retryable=False,
+            ),
+        )
+
+    changed = final_stable_gate()
+    if changed is not None:
+        return changed
+
+    target_replay = report.get("target_replay")
+    if not isinstance(target_replay, dict):
+        target_replay = {}
+        report["target_replay"] = target_replay
+    target_replay.update(
+        status="complete",
+        result_sha256=checked_generation["result_sha256"],
+        deployment_sha256=checked_generation["deployment_sha256"],
+        generator_id=checked_generation["generator_id"],
+    )
+    report["ready_for"] = {
+        "membership_build": False,
+        "input_build": False,
+        "decision_admission": True,
+    }
+    report.update(
+        status="ready",
+        reason="decision_admission_ready",
+        ready=True,
+        next_action="build_plan",
+    )
+    return report
+
+
+def implementation_transition_status(
+    ledger_root: str | Path,
+    *,
+    ledger_id: str = DEFAULT_LEDGER_ID,
+) -> dict[str, Any]:
+    """Verify a decision-free ledger while moving between pinned runtimes.
+
+    The new implementation environment cannot also equal the superseded
+    environment's exact distribution set.  This narrow observer therefore
+    verifies all historical capsule identities without executing them, while
+    still checking the canonical chain, attestations, and deterministic
+    snapshots.  Mutation APIs independently revalidate the same state under
+    their exclusive lock and require the destination runtime before append.
+    """
+
+    layout = LedgerLayout.at(ledger_root, ledger_id=ledger_id)
+    with _existing_read_lock(layout):
+        records, state, _generated = _load_verified_record_chain(
+            layout,
+            refresh_cache=False,
+            require_active_runtime=False,
+        )
+        issues = _audit_snapshots(layout, records)
+        if issues:
+            raise LedgerIntegrityError(
+                f"prospective transition snapshot audit failed: {issues}"
+            )
+    return {
+        "valid": True,
+        "ledger_id": ledger_id,
+        "ledger_root": str(layout.root),
+        "record_count": len(records),
+        "head_sequence": records[-1]["sequence"] if records else None,
+        "head_record_sha256": (
+            records[-1]["record_sha256"] if records else None
+        ),
+        "state": state.public(),
+        "records": [
+            {
+                "sequence": row["sequence"],
+                "kind": row["kind"],
+                "record_sha256": row["record_sha256"],
+                "path": row["path"],
+            }
+            for row in records
+        ],
+    }
+
+
 __all__ = [
     "CanonicalJSONError",
     "DEFAULT_LEDGER_ID",
@@ -4787,6 +5497,8 @@ __all__ = [
     "create_only_file",
     "ledger_status",
     "evaluate_ledger",
+    "implementation_transition_status",
+    "prospective_readiness",
     "route_target_plan_payload_sha256",
     "seal_decision",
     "seal_snapshot",

@@ -564,6 +564,39 @@ def test_capsule_rejects_an_extra_running_distribution(
         )
 
 
+def test_historical_capsule_identity_does_not_require_its_old_environment(
+    published_capsule: tuple[release_runner.ReleaseCapsule, Path, str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    capsule, project, commit, manifest_sha = published_capsule
+    monkeypatch.setattr(release_runner.platform, "machine", lambda: "other-machine")
+    monkeypatch.setattr(
+        release_runner,
+        "_running_distribution_versions",
+        lambda: {"factor-research-mvp": "99.0.0"},
+    )
+
+    verified = release_runner.verify_release_capsule(
+        project,
+        capsule.store_root,
+        manifest_path="protocols/release.json",
+        manifest_sha256=manifest_sha,
+        implementation_release_tag=capsule.implementation_release_tag,
+        implementation_release_tag_object_oid=(
+            capsule.implementation_release_tag_object_oid
+        ),
+        implementation_commit_oid=commit,
+        require_running_environment=False,
+    )
+
+    assert verified.root == capsule.root
+    assert verified.runtime_closure_payload_sha256 == (
+        capsule.runtime_closure_payload_sha256
+    )
+    with pytest.raises(release_runner.ReleaseRunnerError, match="platform_machine"):
+        release_runner.run_release_operation(verified, "replay_target", {})
+
+
 def test_replay_history_freezes_multiple_replays_in_one_rpc(
     published_capsule: tuple[release_runner.ReleaseCapsule, Path, str, str],
 ) -> None:

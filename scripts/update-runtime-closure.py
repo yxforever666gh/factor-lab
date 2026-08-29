@@ -24,6 +24,7 @@ DEFAULT_MANIFEST = ROOT / "protocols/5.2-target-generator.json"
 # transitive native/runtime dependencies.  Tests may replace this with an
 # explicit tuple to keep their synthetic environment small.
 DISTRIBUTIONS: tuple[str, ...] | None = None
+_IMPLEMENTATION_RELEASE_RE = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 
 
 def _canonical_json_bytes(value: Any) -> bytes:
@@ -141,6 +142,23 @@ def _verify_environment_matches_lock(distributions: dict[str, str]) -> None:
         )
 
 
+def _verify_implementation_release(
+    manifest: dict[str, Any], distributions: dict[str, str]
+) -> None:
+    release = manifest.get("implementation_release")
+    if not isinstance(release, str) or not _IMPLEMENTATION_RELEASE_RE.fullmatch(
+        release
+    ):
+        raise SystemExit("manifest implementation_release is not canonical major.minor")
+    expected = f"{release}.0"
+    installed = distributions.get("factor-research-mvp")
+    if installed != expected:
+        raise SystemExit(
+            "installed factor-research-mvp differs from implementation_release "
+            f"(expected={expected}, installed={installed})"
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
@@ -160,6 +178,7 @@ def main() -> int:
     distributions = _distribution_versions()
     if DISTRIBUTIONS is None:
         _verify_environment_matches_lock(distributions)
+        _verify_implementation_release(manifest, distributions)
     payload = {
         "schema_version": 1,
         "python_version": platform.python_version(),

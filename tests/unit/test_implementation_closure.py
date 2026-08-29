@@ -335,6 +335,30 @@ def test_update_script_requires_the_release_environment_to_match_the_lock(
         script._verify_environment_matches_lock({**exact, "unlocked": "9.9"})
 
 
+def test_update_script_binds_self_distribution_to_implementation_release() -> None:
+    spec = importlib.util.spec_from_file_location(
+        "factor_lab_update_runtime_release_test", UPDATE_SCRIPT
+    )
+    assert spec is not None and spec.loader is not None
+    script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(script)
+
+    script._verify_implementation_release(
+        {"implementation_release": "5.5"},
+        {"factor-research-mvp": "5.5.0"},
+    )
+    with pytest.raises(SystemExit, match="differs from implementation_release"):
+        script._verify_implementation_release(
+            {"implementation_release": "5.5"},
+            {"factor-research-mvp": "5.4.0"},
+        )
+    with pytest.raises(SystemExit, match="not canonical"):
+        script._verify_implementation_release(
+            {"implementation_release": "05.5"},
+            {"factor-research-mvp": "5.5.0"},
+        )
+
+
 def test_closure_text_types_are_declared_git_lf() -> None:
     attributes = (ROOT / ".gitattributes").read_text(encoding="utf-8").splitlines()
 

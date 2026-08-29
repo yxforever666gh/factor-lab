@@ -644,8 +644,22 @@ def verify_release_capsule(
     implementation_release_tag: str,
     implementation_release_tag_object_oid: str,
     implementation_commit_oid: str,
+    require_running_environment: bool = True,
 ) -> ReleaseCapsule:
-    """Verify an existing capsule without creating or repairing anything."""
+    """Verify an existing capsule without creating or repairing anything.
+
+    ``require_running_environment=False`` is reserved for replaying the
+    identity of a superseded, pre-decision implementation record.  It still
+    verifies the annotated tag, published Git blobs, closure payload, receipt,
+    and complete capsule tree, but does not require one interpreter to match
+    every historical distribution set.  Any capsule that will execute remains
+    subject to the default exact runtime check.
+    """
+
+    if type(require_running_environment) is not bool:
+        raise ReleaseRunnerError(
+            "require_running_environment must be a boolean"
+        )
 
     project = Path(project_root).expanduser().resolve()
     store = Path(capsule_store_root).expanduser().resolve()
@@ -749,24 +763,27 @@ def verify_release_capsule(
             or raw != blobs[relative]
         ):
             raise ReleaseRunnerError(f"release capsule artifact differs: {relative}")
-    if closure["python_version"] != platform.python_version():
-        raise ReleaseRunnerError("running Python differs from the release capsule")
-    platform_contract = {
-        "python_implementation": platform.python_implementation(),
-        "python_runtime": sys.version,
-        "platform_system": platform.system(),
-        "platform_machine": platform.machine(),
-        "platform_tag": sysconfig.get_platform(),
-    }
-    for name, running in platform_contract.items():
-        if closure[name] != running:
+    if require_running_environment:
+        if closure["python_version"] != platform.python_version():
             raise ReleaseRunnerError(
-                f"running {name} differs from the release capsule"
+                "running Python differs from the release capsule"
             )
-    if dict(closure["distributions"]) != _running_distribution_versions():
-        raise ReleaseRunnerError(
-            "running distribution set differs from the release capsule"
-        )
+        platform_contract = {
+            "python_implementation": platform.python_implementation(),
+            "python_runtime": sys.version,
+            "platform_system": platform.system(),
+            "platform_machine": platform.machine(),
+            "platform_tag": sysconfig.get_platform(),
+        }
+        for name, running in platform_contract.items():
+            if closure[name] != running:
+                raise ReleaseRunnerError(
+                    f"running {name} differs from the release capsule"
+                )
+        if dict(closure["distributions"]) != _running_distribution_versions():
+            raise ReleaseRunnerError(
+                "running distribution set differs from the release capsule"
+            )
     return ReleaseCapsule(
         project_root=project,
         store_root=store,

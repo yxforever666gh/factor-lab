@@ -43,11 +43,16 @@ from factor_lab.prospective_ledger import (
     canonical_json_bytes,
     checkpoint_evaluation,
     create_only_file,
+    implementation_transition_status,
     ledger_status,
+    prospective_readiness,
     seal_decision,
     sha256_file,
     store_decision_plan,
     strict_load_canonical,
+)
+from factor_lab.data.prospective_readiness import (
+    prospective_readiness_exit_code,
 )
 from factor_lab.prospective_runtime import attest_snapshot, verify_authoritative_run
 
@@ -204,7 +209,7 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("protocols/5.2-target-generator.json"),
     )
-    upgrade.add_argument("--release-tag", default="5.4")
+    upgrade.add_argument("--release-tag", default="5.5")
     abandon_upgrade = prospective_commands.add_parser(
         "abandon-upgrade",
         help="Explicitly abandon an unattested implementation upgrade.",
@@ -284,6 +289,14 @@ def build_parser() -> argparse.ArgumentParser:
         "evaluate", help="Evaluate confirmed outcomes against the preregistered 5.2 gates."
     )
     prospective_commands.add_parser("status", help="Show the current ledger phase.")
+    readiness = prospective_commands.add_parser(
+        "readiness",
+        help="Inspect the next legal prospective cycle without writing files.",
+    )
+    readiness.add_argument(
+        "--observed-at-utc",
+        help="Override the observation clock for deterministic diagnostics.",
+    )
     return parser
 
 
@@ -658,7 +671,7 @@ def _require_file_at_commit(
 
 
 def _activation_payload(ledger_root: Path) -> tuple[dict[str, Any], dict[str, Any]]:
-    audit = audit_ledger(ledger_root)
+    audit = implementation_transition_status(ledger_root)
     if not audit.get("valid"):
         raise ValueError("prospective ledger is invalid")
     records = audit.get("records")
@@ -1000,6 +1013,14 @@ def _prospective_command(arguments: argparse.Namespace) -> int:
     if command == "status":
         _json(ledger_status(ledger_root))
         return 0
+    if command == "readiness":
+        report = prospective_readiness(
+            ledger_root,
+            project_root=root,
+            observed_at_utc=arguments.observed_at_utc,
+        )
+        _json(report)
+        return prospective_readiness_exit_code(report)
     raise AssertionError(command)
 
 

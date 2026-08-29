@@ -7,7 +7,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from factor_lab.cli import _published_tag_oids, build_parser, main
+import factor_lab
+from factor_lab.cli import (
+    _activation_payload,
+    _published_tag_oids,
+    build_parser,
+    main,
+)
 
 
 RUN_ID = "c" * 16
@@ -20,6 +26,7 @@ AUTHORITATIVE_RUN = {
     "frozen_route": "fixed_core_full",
     "integrity_valid": True,
 }
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_data_sync_routes_calendar_extension_only_to_market_sync(
@@ -94,6 +101,7 @@ def test_parser_exposes_prospective_lifecycle_commands() -> None:
         "audit": [],
         "evaluate": [],
         "status": [],
+        "readiness": [],
     }
 
     for command, values in arguments.items():
@@ -102,7 +110,7 @@ def test_parser_exposes_prospective_lifecycle_commands() -> None:
         assert parsed.prospective_command == command
 
     upgrade = parser.parse_args(["prospective", "upgrade"])
-    assert upgrade.release_tag == "5.4"
+    assert upgrade.release_tag == "5.5"
 
     attest = parser.parse_args(
         ["prospective", "attest", "--purpose", "activation_canary"]
@@ -113,6 +121,62 @@ def test_parser_exposes_prospective_lifecycle_commands() -> None:
     assert attest.workflow_run_id is None
     with pytest.raises(SystemExit):
         parser.parse_args(["prospective", "activate"])
+
+
+def test_current_release_metadata_and_upgrade_default_are_consistent() -> None:
+    declared = next(
+        line.split("=", 1)[1].strip().strip('"')
+        for line in (ROOT / "pyproject.toml").read_text(encoding="utf-8").splitlines()
+        if line.startswith("version = ")
+    )
+    manifest = json.loads(
+        (ROOT / "protocols/5.2-target-generator.json").read_text(encoding="utf-8")
+    )
+    release = str(manifest["implementation_release"])
+    parsed = build_parser().parse_args(["prospective", "upgrade"])
+
+    assert declared == factor_lab.__version__ == f"{release}.0"
+    assert parsed.release_tag == release
+
+
+@pytest.mark.parametrize(
+    ("status", "expected_exit"),
+    (("ready", 0), ("waiting", 2), ("blocked", 3), ("terminal", 4)),
+)
+def test_readiness_command_preserves_the_observer_exit_contract(
+    tmp_path: Path,
+    monkeypatch,
+    capsys,
+    status: str,
+    expected_exit: int,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def readiness(ledger_root, **kwargs):
+        calls.append({"ledger_root": Path(ledger_root), **kwargs})
+        return {"status": status, "ready": status == "ready"}
+
+    monkeypatch.setattr("factor_lab.cli.prospective_readiness", readiness)
+    exit_code = main(
+        [
+            "--root",
+            str(tmp_path),
+            "prospective",
+            "readiness",
+            "--observed-at-utc",
+            "2026-08-31T06:59:00Z",
+        ]
+    )
+
+    assert exit_code == expected_exit
+    assert json.loads(capsys.readouterr().out)["status"] == status
+    assert calls == [
+        {
+            "ledger_root": tmp_path / "runtime/prospective/5.0",
+            "project_root": tmp_path,
+            "observed_at_utc": "2026-08-31T06:59:00Z",
+        }
+    ]
 
 
 def test_status_is_read_only_and_plan_uses_only_verified_snapshot(
@@ -493,6 +557,57 @@ def test_upgrade_command_uses_published_manifest_binding(
             "reason": "canary failed",
         },
     )
+
+
+def test_upgrade_payload_reads_the_decision_free_transition_view(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    record_path = tmp_path / "activation.json"
+    record_path.write_bytes(b"observed")
+    state = {
+        "activation_record_sha256": "1" * 64,
+        "latest_implementation_upgrade_record_sha256": "2" * 64,
+    }
+    calls: list[Path] = []
+
+    def transition(root):
+        calls.append(Path(root))
+        return {
+            "valid": True,
+            "records": [{"path": str(record_path)}],
+            "state": dict(state),
+        }
+
+    monkeypatch.setattr(
+        "factor_lab.cli.implementation_transition_status",
+        transition,
+    )
+    monkeypatch.setattr(
+        "factor_lab.cli.audit_ledger",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            AssertionError("ordinary audit is not a cross-runtime transition view")
+        ),
+    )
+    activation = {
+        "protocol_release": "5.0",
+        "protocol_id": "factor-lab/5.0/adaptive-core-overlay",
+        "protocol_sha256": "3" * 64,
+        "frozen_route": "fixed_core_full",
+    }
+    monkeypatch.setattr(
+        "factor_lab.cli.strict_load_canonical",
+        lambda _raw: {
+            "kind": "protocol_activation",
+            "payload": dict(activation),
+        },
+    )
+
+    observed_activation, observed_state = _activation_payload(tmp_path)
+
+    assert observed_activation == activation
+    assert observed_state == state
+    assert calls == [tmp_path]
 
 
 def test_attest_resolves_latest_and_forwards_resume_contract(
