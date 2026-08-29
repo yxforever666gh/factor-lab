@@ -206,7 +206,7 @@
       "decorator": "5.3.1",
       "et-xmlfile": "2.0.0",
       "exceptiongroup": "1.3.1",
-      "factor-research-mvp": "5.5.0",
+      "factor-research-mvp": "5.6.0",
       "html5lib": "1.1",
       "idna": "3.19",
       "iniconfig": "2.3.0",
@@ -250,23 +250,23 @@
       },
       {
         "path": "protocols/5.2-runtime-lock.txt",
-        "sha256": "f349c98ce59c5d60363b24dd837b03279e1ecbe42fffac6f2c5fa20a0bb7dfdc"
+        "sha256": "d67076acc446d33da17e64af14d39c06342953cd5cb3288077f3ac35293833d3"
       },
       {
         "path": "pyproject.toml",
-        "sha256": "029e177fa7c78ce41801eb3a4166662ee3d57825495ce236f86c182cba20b5ed"
+        "sha256": "4a0dc3b52b0260955868aa6cd3cdc86f715f7c00fc31743d2205cfda74a504d8"
       },
       {
         "path": "src/factor_lab/__init__.py",
-        "sha256": "3137afa826a69fd911c34ac56e151539aa360202bab3d6e6bb80f39df52e84bc"
+        "sha256": "1c9bb3721d92552e969c1c41015eec101d05bf86fb31c1a24f0c7d5580348fcb"
       },
       {
         "path": "src/factor_lab/cli.py",
-        "sha256": "ece81825b456e1065c1779e381b0945e659376a8b99dd46edd5e05c72858287c"
+        "sha256": "f8687954f6281e9fedff9aa3257028a58036b953e61886f51e977f9364173f4d"
       },
       {
         "path": "src/factor_lab/data/__init__.py",
-        "sha256": "abcf5d4eb58fddec068d9098d5e7cb9b61fd6657c7be5841fed69ca54511d980"
+        "sha256": "b15884ee668d446f164a0b25e0e10a17ebcaeef6c29b04d351945a20c9eec210"
       },
       {
         "path": "src/factor_lab/data/build.py",
@@ -286,23 +286,23 @@
       },
       {
         "path": "src/factor_lab/data/prospective.py",
-        "sha256": "2980cef131fd956944dcf7cc5721c46142ec9934c5eae9710a8064661b0ff86d"
+        "sha256": "467c792c97c6472f18c7fe13383d7ffa93994f23720f3044762110875653b0ac"
       },
       {
         "path": "src/factor_lab/data/prospective_execution.py",
-        "sha256": "a4baf3336ff760a17a9aafaa1a4f14d6d9b886724669a9daa3f18f683cbf3b0e"
+        "sha256": "8af10de0e9c3330b08453bf51c5df49fc3d8d0811f250d04892ad908020b2879"
       },
       {
         "path": "src/factor_lab/data/prospective_membership.py",
-        "sha256": "defe153c5dd9b5f47ecebbe37a92db1ac2ffbe4786990394bdadfa08775f45e4"
+        "sha256": "646556d4ae1ac2f92d81c27cd1724dfb70bccbbb04b7849965562416a07a0cde"
       },
       {
         "path": "src/factor_lab/data/prospective_readiness.py",
-        "sha256": "83c06437d69c6efb78afd936c8b8f7f4f84ee6bffc8834d7b3d47253524a9ecf"
+        "sha256": "2625150cbfc655b014e7f489060d0c632735a7f3895ed1d08f70fcf08e2c9e2f"
       },
       {
         "path": "src/factor_lab/data/sources.py",
-        "sha256": "aa367065cbaf8acbc339c82d87d17ef8519e0302c304bf10ee6807b2feede55e"
+        "sha256": "3015b77d7e3b6fbc5ff97a9213bfbd9c815fcea2dcf872913ced0280243c9b1f"
       },
       {
         "path": "src/factor_lab/data/suspensions.py",
@@ -326,7 +326,7 @@
       },
       {
         "path": "src/factor_lab/prospective_attestation.py",
-        "sha256": "ff90299378f3701906debb13f9b8ef4d3015f21fc8be7e553a9c910b6dfdf054"
+        "sha256": "7939dac2bb5a0dd0ac88782f84c5353f857babe90d88ec28edf909f09036fa8e"
       },
       {
         "path": "src/factor_lab/prospective_evaluation.py",
@@ -338,15 +338,15 @@
       },
       {
         "path": "src/factor_lab/prospective_ledger.py",
-        "sha256": "8f8c1cba52102ae6587bd87f7793f88ace9140b7cc5669580fa87cfdb527bac3"
+        "sha256": "aedacdeacb12dba3ee98932eb49ed24696e429573277156b87bb39b0970d4f03"
       },
       {
         "path": "src/factor_lab/prospective_release_runner.py",
-        "sha256": "b4db8341693c209748b369d8c1cdc746702314d632db24b82cb61a056f3209f3"
+        "sha256": "420f80d7134973b82d537afdef7716ebd0acb63387aa1ffbbfb7758a95d97148"
       },
       {
         "path": "src/factor_lab/prospective_runtime.py",
-        "sha256": "4ff16b5e07977235ad062f836f7daac8b17dd0198e5ea2f37a1a277240558bf9"
+        "sha256": "9b1ed95c0f3ba93dbb5dbcc9942248ef08ce8612ab73d5a3e6e50d74546083a3"
       },
       {
         "path": "src/factor_lab/prospective_targets.py",
@@ -393,6 +393,6 @@
         "sha256": "a35e8fc2d70fd4f20994be799a33cabaca40814e6dcebf9f428daecc3985b165"
       }
     ],
-    "payload_sha256": "0021e53621fa55137916179e82b59d091793d65548d3b96079452bc6ceadd543"
+    "payload_sha256": "f4b31246dbee6d7992988739df0560899cec30fcb262576a5f0c39834883ef95"
   }
 }
