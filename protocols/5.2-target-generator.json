@@ -246,27 +246,27 @@
     "files": [
       {
         "path": "configs/data.json",
-        "sha256": "692760394b8cb6bcfb9c5881e980207971a2142385cea8cee66a015b3a865763"
+        "sha256": "748ed1a68e6bc472f29d6443a3dee584580f83c703e2e3b84ddd1a4245a1dcbf"
       },
       {
         "path": "protocols/5.2-runtime-lock.txt",
-        "sha256": "94f6bfa959d3e1f68551da94a40866b7829e13b32b9a6b2e33d81e227c19547e"
+        "sha256": "d15cc1ceb9ee85c5d89dbb868a3a8da2ebca093d785f9e0f23b56e931c73099e"
       },
       {
         "path": "pyproject.toml",
-        "sha256": "7cef3a37b88cdd22887509edbad7310c148c78a357df8b92a01f500a90eb38b0"
+        "sha256": "1d58ce58add7a0f6bdadd3d0b0392167a223bad9b2f1fe31c077ed76dc975be8"
       },
       {
         "path": "scripts/invoke-prospective-watchdog.ps1",
-        "sha256": "8b396538ed97e4224070ae06e91a1e142d682504d52dd2ee9c57e2c3517af922"
+        "sha256": "d88e2faf9615e815e24a6fc03f6237cf9a38236335dac860631913b29780e8c1"
       },
       {
         "path": "src/factor_lab/__init__.py",
-        "sha256": "1bac68c9b38cf8f0a28ba9c9b075fb333a0dc958cfebf73f008202aa1b937cf9"
+        "sha256": "5ecc3857399f810a2fcdd7d764ef4c015e5476dea372a31ae0d08fe8865b3b9a"
       },
       {
         "path": "src/factor_lab/cli.py",
-        "sha256": "86dca92bc4433f25b47cea641516d7168e2d7716781cafbe81eb3394e5af5121"
+        "sha256": "0faaaab5761142a6a16806649c6c3b6fac4d7f0d5f9728aaef6d45eeb75ddf2f"
       },
       {
         "path": "src/factor_lab/data/__init__.py",
@@ -290,23 +290,23 @@
       },
       {
         "path": "src/factor_lab/data/prospective.py",
-        "sha256": "467c792c97c6472f18c7fe13383d7ffa93994f23720f3044762110875653b0ac"
+        "sha256": "94201cc68941484e03484250d5b6eeaf842960aec8558ed74a248f62ddfb83b8"
       },
       {
         "path": "src/factor_lab/data/prospective_execution.py",
-        "sha256": "c08a1055faec48f90884dddcee759a6bc78907d0cc865538a96f45f99d62603e"
+        "sha256": "ad8f016b95d6e0719ed98f0efd3128fd08be315698ada26c9694661d1ddbc7ee"
       },
       {
         "path": "src/factor_lab/data/prospective_membership.py",
-        "sha256": "646556d4ae1ac2f92d81c27cd1724dfb70bccbbb04b7849965562416a07a0cde"
+        "sha256": "d8acd32c58abc6334eafe78518357e3105f0a020a4cac5eee92e096d862e5dd3"
       },
       {
         "path": "src/factor_lab/data/prospective_readiness.py",
-        "sha256": "2447da1c787d102ef4b28d5be698ceb7fc798387de41bbca4a07367348c50e2d"
+        "sha256": "de219311545c50d68efaa25eb91a41f667fb62dd3a3fc2e4f324099dca1aeba9"
       },
       {
         "path": "src/factor_lab/data/sources.py",
-        "sha256": "3015b77d7e3b6fbc5ff97a9213bfbd9c815fcea2dcf872913ced0280243c9b1f"
+        "sha256": "f11ef21429590144fb7f79c6db571ab2d23af6aac312e5b67c37ac35ebf8b1ca"
       },
       {
         "path": "src/factor_lab/data/suspensions.py",
@@ -342,7 +342,7 @@
       },
       {
         "path": "src/factor_lab/prospective_ledger.py",
-        "sha256": "b294eaaa4cd9cf6b75bcb67ddfa0eda35a13da94adbf6a20046e78079ad13dd7"
+        "sha256": "d6b6ba718255fdbbc05baafb9c05588dda8cdae030360954853b5c9f8762ff2b"
       },
       {
         "path": "src/factor_lab/prospective_release_runner.py",
@@ -397,6 +397,6 @@
         "sha256": "a35e8fc2d70fd4f20994be799a33cabaca40814e6dcebf9f428daecc3985b165"
       }
     ],
-    "payload_sha256": "ca73ba8f26d50ca546ca19d06d728f8b74539bf03b926cf4971ab26ff77d81a7"
+    "payload_sha256": "db90e95d05257f325af44e052fa468ad419371d5ec2924852ef5a78cd88d5355"
   }
 }
