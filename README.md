@@ -1,16 +1,19 @@
-# Factor Lab 6.2
+# Factor Lab 6.3
 
 Factor Lab 是一条本地、可复现的 A 股截面策略研究链：canonical Parquet → PIT 信号 →
 次日开盘成交 → 全成本逐日账户核算 → 10 个绝对日历调仓相位比较。
 
-6.2 延续“过去的 Top500 研究边界是否过早排除了 fixed-core 真正可交易机会”这一问题。它保持
-信号、Top10/exit25、十相位、成本、次日开盘、容量模型和收益门不变，只修正 6.1 在打开任何
-组合收益前暴露的数据准入错误：Tushare 文档说明亏损公司的 `pe_ttm` 为空，但这只能解释主要
-模式，不能证明每一个源字段 null 的原因。6.2 对 null 只陈述可证明事实——供应商当日返回空值，
-所以冻结信号不可评分；不猜原因、不填值，也不事后降低收益门。覆盖率保留为诊断，每个交易日、
-每个候选仍须至少 25 个有限分数和完整 Top25。真实源行缺失、非法非空值、非有限算术、未分类项
-或理论/实际可评分不一致都会在定价和收益前 fail closed。正式结果出来前，这条路线仍只是待证伪
-假设，不是稳定 alpha。
+6.3 是对已发布 6.2 机会集实验的 corrective replay，不开新研究方向，也不修改其候选、信号、
+Top10/exit25、十相位、成本、执行、容量、切分、收益门或声明边界。6.2 已通过 train 数据准入，
+但首个组合在容量摘要中因 binary64 加法次序产生软件假失败；6.3 唯一的生产语义变化，是把同一批
+已验证名义金额的普通累加改为 `math.fsum`。买卖守恒仍使用 `rel_tol=0`、`abs_tol=1e-6` 元，不能
+借修复之名放宽容差或研究门。
+
+6.3 逐字节复用冻结的 6.2 protocol 与 amendment，并以新的 corrective amendment、runtime、
+preselection closure 和 evidence 命名空间重新封闭实现。任何 6.2 derived stage、gate、winner 或
+status view 都不得沿用；canonical raw 只有在 6.3 中重新枚举、运行前后重算 SHA-256 并写入全新
+stage manifest 后才可复用。6.2 的协议、失败证据和发布 Tag 是不可改写的历史。fresh replay
+完成前，这条路线仍只是待证伪假设，不是稳定 alpha。
 
 6.0 的结论不是“已经找到稳定 alpha”，而是两件更具体的事：
 
@@ -113,21 +116,30 @@ label，并再次验证 availability 必须恰好是 `report_date` 后第一个�
 拆送股稳健性对照）、FY1 相对 FY0 的预测增长，以及实际公告相对公告前共识的 earnings surprise。
 coverage/initiations、dispersion 与 active-reviser breadth 先只做诊断，不再建 selector。
 
-## 6.2 当前主线：来源语义驱动的机会集验证
+## 6.3 当前主线：6.2 机会集实验的 corrective replay
 
-6.2 继续比较三个逐日重建的 universe：因果 ADV20 Top500 control、ADV20 至少人民币 1 亿元、ADV20
-Top1500。证券必须是沪深人民币普通股、已上市至少 120 个官方交易日、当日非 ST；缺 bar 只有
-同日或尚未清除的显式整日停牌证据才可解释。Train、validation、audit 的停复牌与 `stock_st`
-分区拥有互不复用的物理私有根，不能靠同一文件换路径伪装成隔离。
+6.3 原样执行逐字节不变的 6.2 基础协议和前置 amendment，继续比较三个逐日重建的 universe：因果
+ADV20 Top500 control、ADV20 至少人民币 1 亿元、ADV20 Top1500。证券必须是沪深人民币普通股、
+已上市至少 120 个官方交易日、当日非 ST；缺 bar 只有同日或尚未清除的显式整日停牌证据才可解释。
+Train、validation、audit 的停复牌与 `stock_st` 分区拥有互不复用的物理私有根，不能靠同一文件
+换路径伪装成隔离。
 
 流程只有一条前进路径：截至 2022 的 train 门不过就不打开 validation；截至 2024 的 validation
 只运行 train 通过者；两段都过才按预注册 q20、中位主动 CAGR、容量和换手率排序冻结至多一个
 winner；2025-01-01 至 2026-08-21 的历史 audit 只运行该 winner，失败后不换 runner-up。即使
-audit 通过，也只记为“需要新鲜未来样本”，不允许盈利承诺。6.2 基础协议与红队前置修订见：
+audit 通过，也只记为“需要新鲜未来样本”，不允许盈利承诺。6.3 的冻结根由以下文件组成：
 
 - [protocols/6.2-wide-universe.json](protocols/6.2-wide-universe.json)
 - [protocols/6.2-wide-universe-amendment-1.json](protocols/6.2-wide-universe-amendment-1.json)
-- [protocols/6.2-runtime.json](protocols/6.2-runtime.json)
+- [protocols/6.3-corrective-amendment-1.json](protocols/6.3-corrective-amendment-1.json)
+- [protocols/6.3-runtime.json](protocols/6.3-runtime.json)
+- `protocols/6.3-release.json`：必须在任何 6.3 return replay 前 create-only 生成并单独提交；
+- `protocols/evidence/6.3/`：只接收新的 winner freeze、historical audit 和 terminal result。
+
+前两份 6.2 文件继续是本次 replay 的完整研究合同，不会复制成可漂移的 6.3 版本；已发布的 6.2
+annotated tag、preselection closure 和
+[execution-failure.json](protocols/evidence/6.2/execution-failure.json) 由 6.3 closure 逐字节绑定，
+原文件不得覆盖、删除或重新解释。
 
 6.1 实际运行完成 1,579 个 train 交易日、1,459 个信号日的因果排名后，在持久化 rankings、构造
 targets、读取 next-open/复权因子或调用组合评估器之前 fail closed。Top500、Top1500、ADV≥1亿元
@@ -191,40 +203,44 @@ canonical 数据默认位于 `runtime/data/top500/`：
 证据见 [protocols/6.0-analyst-revisions.json](protocols/6.0-analyst-revisions.json) 和
 [analyst-scout.json](protocols/evidence/6.0/analyst-scout.json)。
 
-## 运行 6.2 分阶段证据
+## 运行 6.3 corrective evidence
 
 正式 runner 只接受 clean、已提交且通过共享完整性校验的 `main`。先提交实现与 immutable
 preselection closure、推送并确认该提交自己的 GitHub CI 全绿；之后按阶段运行：
 
 ```powershell
 # 在 clean implementation commit 上 create-only 生成 closure，单独提交并推送
-python scripts/build-6.2-preselection-closure.py
+python scripts/build-6.3-preselection-closure.py
 
 # 只打开 train；仅 train 通过者会继续打开 validation，最终写固定 winner freeze
 python scripts/run-wide-universe-evidence.py --mode selection
 
-# 提交并推送 protocols/evidence/6.2/winner-freeze.json，CI 通过后；仅非 null winner 可运行
+# 提交并推送 protocols/evidence/6.3/winner-freeze.json，CI 通过后；仅非 null winner 可运行
 python scripts/run-wide-universe-evidence.py --mode audit `
-  --freeze protocols/evidence/6.2/winner-freeze.json `
+  --freeze protocols/evidence/6.3/winner-freeze.json `
   --audit-end 2026-08-21
 
 # audit evidence（或 null winner freeze）提交后生成固定 terminal result
 python scripts/run-wide-universe-evidence.py --mode finalize
-python -m factor_lab.cli strategy status --release 6.2
+python -m factor_lab.cli strategy status --release 6.3
 ```
 
-6.1 的第一次 `selection` 已按设计在数据准入阶段终止，因此没有生成 winner freeze，也不得手工
-伪装成 `selected_null_frozen`。6.2 的 `selection`、`audit`、`finalize` 终端 JSON 都是固定 tracked
-path 且 create-only；阶段之间
-必须先提交、推送并等待 CI，不得在同一未提交工作树中连续打开下一层。扩大机会集收益运行额外
-要求 [6.2 runtime capsule](protocols/6.2-runtime.json) 中的 Windows CPython、distribution 文件树、
-Conda artifact 和 MKL 身份完全匹配。6.2 closure 会逐字节绑定已发布的 6.1 tag、失败证据和最后
-一份未打开收益的 6.1 preselection root；历史文件与 Git 对象原样保留。
+6.3 的 `selection`、`audit`、`finalize` 终端 JSON 都位于固定 tracked path 且 create-only；阶段之间
+必须先提交、推送并等待 CI，不得在同一未提交工作树中连续打开下一层。正式 replay 使用全新的
+`runtime/data/wide-universe-6.3/` 工作根，拒绝 6.2 的 manifest、exact run、return/trade/NAV trace、
+gate、winner freeze、audit/result 或 CLI status view。canonical raw 文件可以逐字节相同，但必须在
+6.3 stage 中重新枚举、运行前后重哈希并绑定到新的 manifest。
+
+扩大机会集收益运行额外要求 [6.3 runtime capsule](protocols/6.3-runtime.json) 中的 Windows CPython、
+distribution 文件树、Conda artifact 和 MKL 身份完全匹配。6.3 closure 会同时绑定已发布的 6.2
+annotated tag、逐字节不变的 6.2 protocol/amendment、6.2 closure 与 execution-failure，以及 6.3
+corrective amendment、runtime 和实现；6.2 的历史文件与 Git 对象原样保留。
 
 6.2 的实际正式 selection 在 train 准入成功后，因十几亿元成交金额使用普通 binary64 不同次序
 求和、再以固定 `1e-6` 元核对而产生软件假失败；没有生成 exact result、gate 或 winner freeze。
-该边界已封存在 `protocols/evidence/6.2/execution-failure.json`，不能解释为策略失败。后继 6.3
-属于同一研究方向的小版本，只修复数值归约并重新冻结；不得沿用 6.2 的中间 winner 或 gate。
+该边界已封存在 `protocols/evidence/6.2/execution-failure.json`，不能解释为策略失败。6.3 只把相关
+累加改为 `math.fsum`，固定 `1e-6` 元容差和全部研究合同不变；它必须 fresh replay，不能沿用 6.2
+的任何 derived stage、status、winner 或 gate。
 
 ## 复现 6.0 evidence
 
@@ -239,7 +255,7 @@ python scripts/run-low-churn-evidence.py `
 重建最新一个 sleeve 的目标：
 
 ```powershell
-python -m factor_lab.cli strategy status --verify-data
+python -m factor_lab.cli strategy status --release 6.3 --verify-data
 python -m factor_lab.cli strategy targets --signal-date latest
 ```
 

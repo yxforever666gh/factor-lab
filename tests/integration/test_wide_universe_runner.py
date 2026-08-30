@@ -58,18 +58,21 @@ def test_pre_return_protocol_amendment_has_valid_lineage_and_self_hash() -> None
 def test_runner_admission_constants_match_the_frozen_protocol() -> None:
     protocol_path = ROOT / "protocols" / "6.2-wide-universe.json"
     amendment_path = ROOT / "protocols" / "6.2-wide-universe-amendment-1.json"
+    corrective_path = ROOT / RUNNER.CORRECTIVE_AMENDMENT
     protocol = RUNNER._read_json(protocol_path)
 
     RUNNER._verify_runner_protocol_parity(protocol)
     binding = RUNNER._stage_protocol(
         protocol_path,
         amendment_path,
+        corrective_path,
         SimpleNamespace(admit=lambda *_args, **_kwargs: None),
     )
 
     admission = protocol["common_base"]["finite_score_admission"]
     assert binding["protocol_id"] == RUNNER.WIDE_PROTOCOL_ID
     assert binding["amendment_id"] == RUNNER.WIDE_PROTOCOL_AMENDMENT_ID
+    assert binding["corrective_amendment_id"] == RUNNER.CORRECTIVE_AMENDMENT_ID
     assert tuple(protocol["candidate_ids"]) == RUNNER.UNIVERSE_IDS
     assert admission == RUNNER.FROZEN_FINITE_SCORE_ADMISSION
     assert admission["coverage_diagnostics"]["role"] == "diagnostic_only"
@@ -282,6 +285,77 @@ def test_mode_defaults_physically_separate_selection_and_audit_status() -> None:
     assert "train" in selection.train_stock_st_checkpoint.parts
     assert "selection" in selection.suspensions.parts
     assert "audit" in audit.suspensions.parts
+    assert selection.work_root == ROOT / RUNNER.WORK_ROOT
+    assert audit.work_root == ROOT / RUNNER.WORK_ROOT
+    assert selection.work_root != ROOT / RUNNER.LEGACY_6_2_WORK_ROOT
+    assert selection.corrective_amendment == ROOT / RUNNER.CORRECTIVE_AMENDMENT
+    assert audit.corrective_amendment == ROOT / RUNNER.CORRECTIVE_AMENDMENT
+    assert all(
+        ROOT / RUNNER.WORK_ROOT in path.parents
+        for path in (
+            selection.train_suspensions,
+            selection.train_suspension_metadata,
+            selection.train_stock_st_checkpoint,
+            selection.suspensions,
+            selection.suspension_metadata,
+            selection.stock_st_checkpoint,
+            audit.suspensions,
+            audit.suspension_metadata,
+            audit.stock_st_checkpoint,
+        )
+    )
+
+
+def test_modes_reject_the_6_2_work_root() -> None:
+    with pytest.raises(SystemExit):
+        RUNNER._parse_args(
+            [
+                "--mode",
+                "selection",
+                "--work-root",
+                str(ROOT / RUNNER.LEGACY_6_2_WORK_ROOT),
+            ]
+        )
+
+
+def test_selection_rejects_a_6_2_status_artifact() -> None:
+    with pytest.raises(SystemExit):
+        RUNNER._parse_args(
+            [
+                "--mode",
+                "selection",
+                "--train-stock-st-checkpoint",
+                str(
+                    ROOT
+                    / RUNNER.LEGACY_6_2_WORK_ROOT
+                    / "train/stock-st-isolated-checkpoint.json"
+                ),
+            ]
+        )
+
+
+@pytest.mark.parametrize(
+    ("mode", "attribute"),
+    (("selection", "train_suspensions"), ("audit", "suspensions")),
+)
+def test_callable_formal_boundary_rejects_a_renamed_status_artifact(
+    tmp_path: Path, mode: str, attribute: str
+) -> None:
+    argv = ["--mode", mode]
+    if mode == "audit":
+        argv.extend(
+            [
+                "--freeze",
+                str(ROOT / RUNNER.WINNER_FREEZE),
+                "--audit-end",
+                RUNNER.AUDIT_END.date().isoformat(),
+            ]
+        )
+    args = RUNNER._parse_args(argv)
+    setattr(args, attribute, tmp_path / Path(getattr(args, attribute)).name)
+
+    with pytest.raises(ValueError, match="must use the frozen path"):
+        RUNNER._require_formal_6_3_paths(args, mode=mode)
 
 
 def test_audit_mode_rejects_selection_status_paths() -> None:
@@ -291,7 +365,7 @@ def test_audit_mode_rejects_selection_status_paths() -> None:
                 "--mode",
                 "audit",
                 "--freeze",
-                str(ROOT / "winner.json"),
+                str(ROOT / RUNNER.WINNER_FREEZE),
                 "--audit-end",
                 "2026-08-21",
                 "--stock-st-checkpoint",
@@ -322,7 +396,7 @@ def test_audit_mode_rejects_default_train_status_path() -> None:
                 "--mode",
                 "audit",
                 "--freeze",
-                str(ROOT / "winner.json"),
+                str(ROOT / RUNNER.WINNER_FREEZE),
                 "--audit-end",
                 "2026-08-21",
                 "--stock-st-checkpoint",
@@ -441,6 +515,35 @@ def _write_manifest(paths: dict[str, Path], manifest: dict[str, object]) -> None
     )
 
 
+def _fixture_stage_lineage() -> dict[str, object]:
+    protocol = RUNNER._read_json(ROOT / RUNNER.BASE_PROTOCOL_PATH)
+    amendment = RUNNER._read_json(ROOT / RUNNER.BASE_PROTOCOL_AMENDMENT_PATH)
+    corrective = RUNNER._read_json(ROOT / RUNNER.CORRECTIVE_AMENDMENT_PATH)
+    bound_paths = (
+        RUNNER.BASE_PROTOCOL_PATH,
+        RUNNER.BASE_PROTOCOL_AMENDMENT_PATH,
+        RUNNER.CORRECTIVE_AMENDMENT_PATH,
+        RUNNER.FROZEN_IMPLEMENTATION_PATHS["wide_runner"],
+        RUNNER.FROZEN_IMPLEMENTATION_PATHS["opportunity_set"],
+    )
+    source_bindings = {
+        relative_path: RUNNER.sha256_file(ROOT / relative_path)
+        for relative_path in bound_paths
+    }
+    source_bindings[RUNNER.PRESELECTION_CLOSURE_PATH] = "4" * 64
+    return {
+        "protocol_id": protocol["protocol_id"],
+        "protocol_payload_sha256": protocol["payload_sha256"],
+        "protocol_amendment_id": amendment["amendment_id"],
+        "protocol_amendment_payload_sha256": amendment["payload_sha256"],
+        "corrective_amendment_id": corrective["amendment_id"],
+        "corrective_amendment_payload_sha256": corrective["payload_sha256"],
+        "preselection_closure_payload_sha256": "3" * 64,
+        "git_commit": "a" * 40,
+        "source_bindings": source_bindings,
+    }
+
+
 def _write_valid_stage_fixture(
     tmp_path: Path,
     *,
@@ -454,6 +557,27 @@ def _write_valid_stage_fixture(
     )
     ranking_frame.to_parquet(paths["rankings"], index=False)
     diagnostic_frame.to_parquet(paths["admission_diagnostics"], index=False)
+    lineage = _fixture_stage_lineage()
+    source_hashes = dict(lineage["source_bindings"])
+    for relative_path in (
+        RUNNER.TRAIN_SUSPENSIONS,
+        RUNNER.TRAIN_SUSPENSION_METADATA,
+        RUNNER.TRAIN_ST_CHECKPOINT,
+    ):
+        source_hashes.setdefault(relative_path, "5" * 64)
+    source_files = [
+        {"path": path, "size_bytes": 0, "sha256": sha256}
+        for path, sha256 in sorted(source_hashes.items())
+    ]
+    source_payload = {
+        "file_count": len(source_files),
+        "files": source_files,
+        "payload_sha256": RUNNER.canonical_sha256(source_files),
+    }
+    paths["source_files"].write_text(
+        json.dumps(source_payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     for name in RUNNER.STAGE_ARTIFACT_NAMES:
         path = paths[name]
         if path.exists():
@@ -462,8 +586,13 @@ def _write_valid_stage_fixture(
     manifest: dict[str, object] = {
         "schema_version": 1,
         "kind": "factor_lab_wide_universe_stage_manifest",
+        "release": "6.3",
         "stage": "train",
         "status": "data_admission_passed",
+        **{
+            field: lineage[field]
+            for field in RUNNER.STAGE_LINEAGE_FIELDS
+        },
         "candidate_ids": list(RUNNER.UNIVERSE_IDS),
         "physical_max_date": "2022-12-31",
         "ranking_row_count": len(ranking_frame),
@@ -473,6 +602,8 @@ def _write_valid_stage_fixture(
         "finite_score_coverage": RUNNER._finite_score_coverage_diagnostics(
             diagnostic_frame
         ),
+        "source_file_count": source_payload["file_count"],
+        "source_file_payload_sha256": source_payload["payload_sha256"],
         "artifacts": {
             name: RUNNER._artifact(paths[name])
             for name in RUNNER.STAGE_ARTIFACT_NAMES
@@ -524,6 +655,7 @@ def _evaluate_train_fixture(
             ROOT / RUNNER.FROZEN_IMPLEMENTATION_PATHS["research_config"]
         ),
         expected_manifest_payload_sha256=expected_manifest_payload_sha256,
+        expected_lineage=_fixture_stage_lineage(),
     )
 
 
@@ -669,6 +801,8 @@ def test_build_stage_hard_admission_failure_precedes_all_downstream_work(
             "base_payload_sha256": "1" * 64,
             "amendment_id": RUNNER.WIDE_PROTOCOL_AMENDMENT_ID,
             "amendment_payload_sha256": "2" * 64,
+            "corrective_amendment_id": RUNNER.CORRECTIVE_AMENDMENT_ID,
+            "corrective_amendment_payload_sha256": "3" * 64,
         },
     )
     monkeypatch.setattr(RUNNER, "_checkpoint", lambda *_args, **_kwargs: {})
@@ -740,6 +874,7 @@ def test_build_stage_hard_admission_failure_precedes_all_downstream_work(
             protocol_amendment_path=(
                 ROOT / "protocols" / "6.2-wide-universe-amendment-1.json"
             ),
+            corrective_amendment_path=ROOT / RUNNER.CORRECTIVE_AMENDMENT,
             release_closure_path=ROOT / RUNNER.PRESELECTION_CLOSURE_PATH,
             work_root=work_root,
             suspension_path=tmp_path / "suspensions.parquet",
@@ -763,7 +898,15 @@ def test_selection_never_evaluates_a_stage_that_failed_admission(
         "_git_text",
         lambda command, *_args: "" if command == "status" else "a" * 40,
     )
-    monkeypatch.setattr(RUNNER, "_verify_release_closure", lambda *_args: {})
+    monkeypatch.setattr(
+        RUNNER, "_require_formal_6_3_paths", lambda *_args, **_kwargs: None
+    )
+    monkeypatch.setattr(
+        RUNNER,
+        "_verify_release_closure",
+        lambda *_args: {"payload_sha256": "3" * 64},
+    )
+    monkeypatch.setattr(RUNNER, "_current_stage_lineage", _fixture_stage_lineage)
     monkeypatch.setattr(RUNNER, "verify_active_runtime", lambda _root: {})
     monkeypatch.setattr(
         RUNNER,
@@ -784,6 +927,7 @@ def test_selection_never_evaluates_a_stage_that_failed_admission(
         release_closure=tmp_path / "release.json",
         protocol=tmp_path / "protocol.json",
         protocol_amendment=tmp_path / "amendment.json",
+        corrective_amendment=tmp_path / "corrective-amendment.json",
         config=ROOT / RUNNER.FROZEN_IMPLEMENTATION_PATHS["data_config"],
         research_config=ROOT / RUNNER.FROZEN_IMPLEMENTATION_PATHS["research_config"],
         work_root=tmp_path / "wide-universe",
@@ -841,7 +985,9 @@ def test_admission_diagnostics_artifact_is_manifest_bound(tmp_path: Path) -> Non
     paths, _manifest = _write_valid_stage_fixture(tmp_path)
     assert "admission_diagnostics" in RUNNER.STAGE_ARTIFACT_NAMES
 
-    _, loaded = RUNNER._load_stage(tmp_path, "train")
+    _, loaded = RUNNER._load_stage(
+        tmp_path, "train", expected_lineage=_fixture_stage_lineage()
+    )
     assert loaded["artifacts"]["admission_diagnostics"]["sha256"] == (
         RUNNER.sha256_file(paths["admission_diagnostics"])
     )
@@ -850,7 +996,68 @@ def test_admission_diagnostics_artifact_is_manifest_bound(tmp_path: Path) -> Non
     tampered.loc[0, "pe_ttm_null_count"] += 1
     tampered.to_parquet(paths["admission_diagnostics"], index=False)
     with pytest.raises(ValueError, match="artifact identity failed"):
-        RUNNER._load_stage(tmp_path, "train")
+        RUNNER._load_stage(
+            tmp_path, "train", expected_lineage=_fixture_stage_lineage()
+        )
+
+
+def test_formal_loader_rejects_the_legacy_6_2_stage_root() -> None:
+    with pytest.raises(ValueError, match="canonical 6.3 work root"):
+        RUNNER._load_stage(ROOT / RUNNER.LEGACY_6_2_WORK_ROOT, "train")
+
+
+@pytest.mark.parametrize(
+    "field",
+    (
+        "protocol_payload_sha256",
+        "protocol_amendment_payload_sha256",
+        "corrective_amendment_payload_sha256",
+        "preselection_closure_payload_sha256",
+        "git_commit",
+    ),
+)
+def test_stage_manifest_requires_complete_6_3_lineage(
+    tmp_path: Path, field: str
+) -> None:
+    paths, manifest = _write_valid_stage_fixture(tmp_path)
+    manifest[field] = "f" * (40 if field == "git_commit" else 64)
+    _write_manifest(paths, manifest)
+
+    with pytest.raises(ValueError, match=field):
+        RUNNER._load_stage(
+            tmp_path, "train", expected_lineage=_fixture_stage_lineage()
+        )
+
+
+def test_stage_source_ledger_must_bind_the_corrective_implementation(
+    tmp_path: Path,
+) -> None:
+    paths, manifest = _write_valid_stage_fixture(tmp_path)
+    source_payload = RUNNER._read_json(paths["source_files"])
+    source_payload["files"] = [
+        row
+        for row in source_payload["files"]
+        if row["path"] != RUNNER.CORRECTIVE_AMENDMENT_PATH
+    ]
+    source_payload["file_count"] = len(source_payload["files"])
+    source_payload["payload_sha256"] = RUNNER.canonical_sha256(
+        source_payload["files"]
+    )
+    paths["source_files"].write_text(
+        json.dumps(source_payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    manifest["source_file_count"] = source_payload["file_count"]
+    manifest["source_file_payload_sha256"] = source_payload["payload_sha256"]
+    manifest["artifacts"]["source_files"] = RUNNER._artifact(
+        paths["source_files"]
+    )
+    _write_manifest(paths, manifest)
+
+    with pytest.raises(ValueError, match="lacks 6.3 binding"):
+        RUNNER._load_stage(
+            tmp_path, "train", expected_lineage=_fixture_stage_lineage()
+        )
 
 
 def test_missing_admission_artifact_stops_before_return_work(
@@ -880,7 +1087,9 @@ def test_stage_manifest_requires_the_exact_artifact_allowlist(
     _write_manifest(_paths, manifest)
 
     with pytest.raises(ValueError, match="artifact allowlist mismatch"):
-        RUNNER._load_stage(tmp_path, "train")
+        RUNNER._load_stage(
+            tmp_path, "train", expected_lineage=_fixture_stage_lineage()
+        )
 
 
 def test_evaluation_rejects_a_replaced_manifest_against_the_build_hash(
@@ -955,6 +1164,7 @@ def test_evaluation_candidates_must_exactly_match_the_admitted_manifest(
                 ROOT / RUNNER.FROZEN_IMPLEMENTATION_PATHS["research_config"]
             ),
             expected_manifest_payload_sha256=str(manifest["payload_sha256"]),
+            expected_lineage=_fixture_stage_lineage(),
         )
 
     assert opened == {"decisions": False, "pricing": False, "portfolio": False}

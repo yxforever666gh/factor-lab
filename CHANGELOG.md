@@ -10,6 +10,35 @@
 
 ## [Unreleased]
 
+### Added
+
+- 新增 6.3 corrective amendment 与冻结 runtime capsule，并固定新的 create-only
+  `protocols/6.3-release.json`、`protocols/evidence/6.3/winner-freeze.json`、historical audit 和
+  terminal result 路径。6.3 closure 逐字节绑定已发布的 annotated `6.2` tag、未改动的 6.2
+  protocol/amendment、6.2 preselection closure 及其 create-only execution-failure 证据；6.2
+  历史文件和结论不得覆盖或重新解释。
+
+### Changed
+
+- Python 包版本预置为 `6.3.0`。6.3 是同一扩大机会集方向的 corrective replay；唯一生产语义变化
+  是在 `capacity_metrics` 中以 `math.fsum` 归约同一批已验证的 requested、executed、
+  capacity-limited 及买卖分项名义金额，修复 6.2 的 binary64 加法次序假失败。
+- 买卖守恒继续使用 `rel_tol=0`、`abs_tol=1e-6` 元；三个候选、来源语义数据准入、fixed-core 信号、
+  Top10/exit25、十个 offset、成本、执行、容量、train/validation/audit 切分、选择/排序/audit 门和
+  claim contract 全部保持不变，不借数值修复改变研究问题或放宽门槛。
+- 6.3 禁止复用任何 6.2 derived stage、manifest、exact replay、return/trade/NAV trace、gate、winner、
+  audit/result 或 CLI status view。只有 canonical raw 字节可以复用，且必须由 6.3 fresh stage 重新
+  枚举、运行前后重算 SHA-256，并写入全新 manifest。
+- `strategy status` 在 6.3 closure 尚未创建时会验证 corrective/runtime 精确字节，并按工作树状态
+  报告 `implementation_pending_clean_commit` 或 `implementation_ready_for_preselection_closure`，不再
+  退回已被当前源码变更自然打破的 6.0 implementation hash；显式 `--release 6.0` 仍可审计历史状态。
+
+### Known limitations
+
+- 6.3 尚未打开 corrective return replay，当前没有新的 train/validation gate、winner 或 audit 结论。
+  必须先 create-only 生成并提交 6.3 preselection closure，再从 canonical raw fresh replay；6.2 的
+  `selection_inconclusive_software_failure` 不能充当 6.3 的任何阶段结果。
+
 ## [6.2] - 2026-08-30
 
 ### Added

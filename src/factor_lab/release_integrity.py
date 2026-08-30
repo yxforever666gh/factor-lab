@@ -1,4 +1,4 @@
-"""Shared integrity root for the pre-selection 6.2 implementation closure."""
+"""Shared integrity root for the corrective 6.3 pre-selection closure."""
 
 from __future__ import annotations
 
@@ -14,12 +14,67 @@ from typing import Any, Mapping
 
 
 PROTOCOL_ID = "factor-lab/6.2/widened-opportunity-set-v2"
-RUNTIME_ID = "factor-lab/6.2/windows-cpython-3.10.16"
-RUNTIME_PATH = "protocols/6.2-runtime.json"
-PRESELECTION_CLOSURE_PATH = "protocols/6.2-release.json"
-SUPERSEDED_PRESELECTION_CLOSURE_PATH = "protocols/6.1-release-closure-3.json"
+BASE_PROTOCOL_PATH = "protocols/6.2-wide-universe.json"
+BASE_PROTOCOL_FILE_SHA256 = (
+    "ab37653cc904f1860c5c1b8276925def7145ca3e7a323c388c16000fea3c479b"
+)
+BASE_PROTOCOL_PAYLOAD_SHA256 = (
+    "9f47595125ac57f6a60ddf0526cf7074d4d1f38417655b5708fe27e3ebde4e45"
+)
+BASE_PROTOCOL_AMENDMENT_ID = f"{PROTOCOL_ID}/amendment-1"
+BASE_PROTOCOL_AMENDMENT_PATH = (
+    "protocols/6.2-wide-universe-amendment-1.json"
+)
+BASE_PROTOCOL_AMENDMENT_FILE_SHA256 = (
+    "382536870962e067a44c06f5c06b43968ae7fb79a4a153661ab46549a5770580"
+)
+BASE_PROTOCOL_AMENDMENT_PAYLOAD_SHA256 = (
+    "429d94dd570b8e1ffc0c59daff668c5a92daaae6928da4a42ad0cff0e3c7032c"
+)
+CORRECTIVE_AMENDMENT_ID = (
+    "factor-lab/6.3/widened-opportunity-set-corrective-replay/amendment-1"
+)
+CORRECTIVE_AMENDMENT_PATH = "protocols/6.3-corrective-amendment-1.json"
+CORRECTIVE_AMENDMENT_FILE_SHA256 = (
+    "8a4595ca1457c64711f10169a3ede053c12255fe01a572a2181221f1fe355ef2"
+)
+CORRECTIVE_AMENDMENT_PAYLOAD_SHA256 = (
+    "e3ea5c70d56eb30c78187ebfa35428d80877afc43c47742cc9a3325cdcee4747"
+)
+RUNTIME_ID = "factor-lab/6.3/windows-cpython-3.10.16"
+RUNTIME_PATH = "protocols/6.3-runtime.json"
+RUNTIME_FILE_SHA256 = (
+    "4aafa9407e8ce161584976ebbe459dcb57d9b7fe94ff7e9f9d9554cbea645dbc"
+)
+RUNTIME_PAYLOAD_SHA256 = (
+    "ac1e9aadd896f00b19d4104c7ddbb419d151aa32f0f2a9273c71e1f007131444"
+)
+PRESELECTION_CLOSURE_PATH = "protocols/6.3-release.json"
+SUPERSEDED_PRESELECTION_CLOSURE_PATH = "protocols/6.2-release.json"
 PRESELECTION_SUPERSESSION_REASON = (
-    "prior_release_pre_return_admission_contract_incompatible_with_provider_semantics"
+    "prior_release_selection_inconclusive_software_failure_requires_corrective_replay"
+)
+PREDECESSOR_RELEASE_TAG = "6.2"
+PREDECESSOR_RELEASE_TAG_OBJECT = "5387a04812f14b1a8b23a8cab58bcc8c404a8b4c"
+PREDECESSOR_RELEASE_COMMIT = "70f05e8ec2e470308907effe234e33d455a97ae2"
+PREDECESSOR_CLOSURE_FILE_SHA256 = (
+    "24b3089774f96df860feac0f0a1b4bb5db9a30ef63d99c709f677cc1829e6407"
+)
+PREDECESSOR_CLOSURE_PAYLOAD_SHA256 = (
+    "16020a1a7fc457e340e9e45cb9c2598e39b6be2d40bea91697eb37d1d613df46"
+)
+PREDECESSOR_CLOSURE_CREATION_COMMIT = (
+    "bc0dd8533b0fd29820923b2d7cef5440f3d1157b"
+)
+PRIOR_EXECUTION_FAILURE_PATH = "protocols/evidence/6.2/execution-failure.json"
+PRIOR_EXECUTION_FAILURE_FILE_SHA256 = (
+    "52a5e396f61cb5062f20f4fcf28970019093eb89de677afa371b039f055a7938"
+)
+PRIOR_EXECUTION_FAILURE_PAYLOAD_SHA256 = (
+    "01a26ee1cc5417b0ebeb32331fcf5446279e7859aeebb53fc8ca1a9cd700305c"
+)
+PRIOR_EXECUTION_FAILURE_CREATION_COMMIT = (
+    "dd4c1d6c02ca270dbd114c362ddbf0775603bb0b"
 )
 PRIOR_RELEASE_TAG = "6.1"
 PRIOR_RELEASE_TAG_OBJECT = "183adb6944a8ea70bea53a8ae6641280b93bf680"
@@ -36,9 +91,9 @@ PRIOR_AMENDMENT_FILE_SHA256 = (
 PRIOR_AMENDMENT_PAYLOAD = (
     "d51433e825292c3bb88dd9c3978e19c1caa20a76aa8bf701c3972e0e4919f5e2"
 )
-WINNER_FREEZE_PATH = "protocols/evidence/6.2/winner-freeze.json"
-AUDIT_EVIDENCE_PATH = "protocols/evidence/6.2/historical-audit.json"
-RELEASE_RESULT_PATH = "protocols/evidence/6.2/result.json"
+WINNER_FREEZE_PATH = "protocols/evidence/6.3/winner-freeze.json"
+AUDIT_EVIDENCE_PATH = "protocols/evidence/6.3/historical-audit.json"
+RELEASE_RESULT_PATH = "protocols/evidence/6.3/result.json"
 FROZEN_CANDIDATE_IDS = (
     "daily_adv20_top500_control",
     "daily_adv20_ge_100m",
@@ -94,7 +149,7 @@ FROZEN_IMPLEMENTATION_PATHS = {
     "package_init": "src/factor_lab/__init__.py",
     "package_manifest": "pyproject.toml",
     "release_integrity": "src/factor_lab/release_integrity.py",
-    "closure_builder": "scripts/build-6.2-preselection-closure.py",
+    "closure_builder": "scripts/build-6.3-preselection-closure.py",
     "release_script": "scripts/publish-tag.ps1",
     "releasing_guide": "RELEASING.md",
     "cli": "src/factor_lab/cli.py",
@@ -143,6 +198,7 @@ _CLOSURE_FIELDS = {
     "historical_audit",
     "protocol",
     "protocol_amendment",
+    "corrective_amendment",
     "runtime",
     "superseded_preselection_closure",
     "implementation",
@@ -159,6 +215,7 @@ _WINNER_FREEZE_FIELDS = {
     "status",
     "protocol_payload_sha256",
     "protocol_amendment_payload_sha256",
+    "corrective_amendment_payload_sha256",
     "implementation_closure_payload_sha256",
     "selected_candidate_id",
     "runner_up_fallback_after_audit_fail",
@@ -422,11 +479,13 @@ def _require_file_binding(
 
 
 def verify_wide_protocol_contract(protocol: Mapping[str, Any]) -> None:
-    """Require exact parity between the frozen 6.2 admission spec and code."""
+    """Require the exact immutable 6.2 admission protocol used by 6.3."""
 
     common_base = protocol.get("common_base")
     if (
         protocol.get("schema_version") != 1
+        or protocol.get("payload_sha256") != BASE_PROTOCOL_PAYLOAD_SHA256
+        or protocol.get("payload_sha256") != canonical_payload_sha256(protocol)
         or protocol.get("kind") != "factor_lab_wide_universe_protocol"
         or protocol.get("protocol_id") != PROTOCOL_ID
         or protocol.get("version") != "6.2"
@@ -443,17 +502,18 @@ def verify_wide_protocol_contract(protocol: Mapping[str, Any]) -> None:
 
 
 def verify_frozen_runtime_contract(runtime: Mapping[str, Any]) -> None:
-    """Validate the static 6.2 runtime capsule on every CI platform."""
+    """Validate the static 6.3 corrective-replay runtime capsule."""
 
     if (
         set(runtime) != _RUNTIME_FIELDS
         or runtime.get("payload_sha256") != canonical_payload_sha256(runtime)
+        or runtime.get("payload_sha256") != RUNTIME_PAYLOAD_SHA256
         or runtime.get("schema_version") != 1
         or runtime.get("kind") != "factor_lab_frozen_research_runtime"
         or runtime.get("runtime_id") != RUNTIME_ID
         or runtime.get("status")
-        != "frozen_before_any_wide_return_evaluation"
-        or runtime.get("source_package_version") != "6.2.0"
+        != "frozen_before_6_3_corrective_return_replay"
+        or runtime.get("source_package_version") != "6.3.0"
         or runtime.get("python")
         != {
             "implementation": "CPython",
@@ -470,7 +530,458 @@ def verify_frozen_runtime_contract(runtime: Mapping[str, Any]) -> None:
             "architecture": ["64bit", "WindowsPE"],
         }
     ):
-        raise ValueError("6.2 frozen runtime identity differs")
+        raise ValueError("6.3 frozen runtime identity differs")
+
+
+def _verify_published_predecessor_tag(root: Path) -> None:
+    """Require the exact annotated 6.2 release object and peeled commit."""
+
+    tag_type = _git(root, "cat-file", "-t", PREDECESSOR_RELEASE_TAG).stdout.decode(
+        "ascii"
+    ).strip()
+    tag_object = _git(
+        root, "rev-parse", f"refs/tags/{PREDECESSOR_RELEASE_TAG}"
+    ).stdout.decode("ascii").strip()
+    peeled_commit = _git(
+        root, "rev-parse", f"refs/tags/{PREDECESSOR_RELEASE_TAG}^{{}}"
+    ).stdout.decode("ascii").strip()
+    if (
+        tag_type != "tag"
+        or tag_object != PREDECESSOR_RELEASE_TAG_OBJECT
+        or peeled_commit != PREDECESSOR_RELEASE_COMMIT
+        or _git(
+            root,
+            "merge-base",
+            "--is-ancestor",
+            PREDECESSOR_RELEASE_COMMIT,
+            "HEAD",
+            check=False,
+        ).returncode
+        != 0
+    ):
+        raise ValueError("published 6.2 annotated tag differs")
+
+
+def _verify_prior_execution_failure_payload(failure: Mapping[str, Any]) -> None:
+    """Validate the exact failure boundary that authorizes the 6.3 replay."""
+
+    if set(failure) != {
+        "schema_version",
+        "kind",
+        "release",
+        "status",
+        "classification",
+        "selection_execution",
+        "preselection_closure",
+        "train_stage",
+        "reproduction_diagnostic",
+        "evidence_boundary",
+        "corrective_release_contract",
+        "payload_sha256",
+    }:
+        raise ValueError("6.2 execution-failure fields differ")
+    if (
+        failure.get("payload_sha256") != canonical_payload_sha256(failure)
+        or failure.get("payload_sha256")
+        != PRIOR_EXECUTION_FAILURE_PAYLOAD_SHA256
+        or failure.get("schema_version") != 1
+        or failure.get("kind") != "factor_lab_6_2_execution_failure"
+        or failure.get("release") != "6.2"
+        or failure.get("status") != "selection_inconclusive_software_failure"
+        or failure.get("classification")
+        != "floating_point_reduction_order_false_negative"
+    ):
+        raise ValueError("6.2 execution-failure identity differs")
+
+    if failure.get("selection_execution") != {
+        "command": "python scripts/run-wide-universe-evidence.py --mode selection",
+        "execution_commit": PREDECESSOR_CLOSURE_CREATION_COMMIT,
+        "phase": "train",
+        "candidate_id": FROZEN_CANDIDATE_IDS[0],
+        "offset": 0,
+        "failure_function": "factor_lab.research.wide_universe.capacity_metrics",
+        "exception_type": "RuntimeError",
+        "exception_message": "capacity by-side totals do not reconcile",
+    }:
+        raise ValueError("6.2 execution-failure site differs")
+    if failure.get("preselection_closure") != {
+        "path": SUPERSEDED_PRESELECTION_CLOSURE_PATH,
+        "file_sha256": PREDECESSOR_CLOSURE_FILE_SHA256,
+        "payload_sha256": PREDECESSOR_CLOSURE_PAYLOAD_SHA256,
+    }:
+        raise ValueError("6.2 failure does not bind its exact closure")
+
+    train_stage = failure.get("train_stage")
+    if (
+        not isinstance(train_stage, Mapping)
+        or set(train_stage)
+        != {
+            "manifest_path",
+            "manifest_file_sha256",
+            "manifest_payload_sha256",
+            "physical_max_date",
+            "signal_session_count",
+            "ranking_row_count",
+            "admission_diagnostic_row_count",
+            "candidate_ids",
+        }
+        or train_stage.get("manifest_path")
+        != "runtime/data/wide-universe/train/manifest.json"
+        or train_stage.get("manifest_file_sha256")
+        != "bc44ff26a09c666a2a2c914ebc5ee221177af0c0bf731426245286f79ecfbce6"
+        or train_stage.get("manifest_payload_sha256")
+        != "1cbee4e20e931b789356a29b0b4613689877e31a31b0012c6d2182effe7ce516"
+        or train_stage.get("physical_max_date") != "2022-12-31"
+        or train_stage.get("signal_session_count") != 1459
+        or train_stage.get("ranking_row_count") != 109425
+        or train_stage.get("admission_diagnostic_row_count") != 4377
+        or train_stage.get("candidate_ids") != list(FROZEN_CANDIDATE_IDS)
+    ):
+        raise ValueError("6.2 failure train-stage identity differs")
+
+    diagnostic = failure.get("reproduction_diagnostic")
+    if not isinstance(diagnostic, Mapping) or set(diagnostic) != {
+        "trade_record_count",
+        "trade_record_notional_precision_rmb_decimals",
+        "requested_notional",
+        "executed_notional",
+        "frozen_absolute_tolerance_rmb",
+        "finding",
+    }:
+        raise ValueError("6.2 failure reproduction fields differ")
+    tolerance = diagnostic.get("frozen_absolute_tolerance_rmb")
+    if (
+        diagnostic.get("trade_record_count") != 1533
+        or diagnostic.get("trade_record_notional_precision_rmb_decimals") != 4
+        or tolerance != 0.000001
+        or diagnostic.get("finding")
+        != (
+            "The invariant is true in exact decimal arithmetic; ordinary binary64 "
+            "summation order alone exceeded the fixed absolute tolerance."
+        )
+    ):
+        raise ValueError("6.2 failure reproduction identity differs")
+    for label in ("requested_notional", "executed_notional"):
+        values = diagnostic.get(label)
+        if (
+            not isinstance(values, Mapping)
+            or set(values)
+            != {
+                "sequential_binary64_sum",
+                "buy_then_sell_binary64_sum",
+                "binary64_difference_rmb",
+                "exact_decimal_sum",
+                "exact_decimal_buy_then_sell_sum",
+            }
+            or values.get("exact_decimal_sum")
+            != values.get("exact_decimal_buy_then_sell_sum")
+            or isinstance(values.get("binary64_difference_rmb"), bool)
+            or not isinstance(values.get("binary64_difference_rmb"), (int, float))
+            or abs(float(values["binary64_difference_rmb"])) <= float(tolerance)
+        ):
+            raise ValueError("6.2 failure does not prove a reduction-order false negative")
+
+    if failure.get("evidence_boundary") != {
+        "return_kernel_executed_in_memory": True,
+        "return_metrics_persisted_or_reported": False,
+        "exact_result_file_count": 0,
+        "train_candidate_gate_evaluated": False,
+        "validation_opened": False,
+        "winner_freeze_created": False,
+        "audit_opened": False,
+        "strategy_conclusion_allowed": False,
+    }:
+        raise ValueError("6.2 execution-failure evidence boundary differs")
+    if failure.get("corrective_release_contract") != {
+        "next_release": "6.3",
+        "direction_change": False,
+        "permitted_change": (
+            "Use a numerically stable reduction for additive capacity totals and add "
+            "a high-notional regression test."
+        ),
+        "candidate_set_must_remain_unchanged": True,
+        "signal_portfolio_cost_execution_and_phase_contracts_must_remain_unchanged": True,
+        "selection_and_audit_gates_must_remain_unchanged": True,
+        "new_preselection_closure_required": True,
+        "reuse_of_6_2_winner_or_gate_result_forbidden": True,
+    }:
+        raise ValueError("6.2 failure corrective-release authorization differs")
+
+
+def verify_prior_execution_failure(
+    project_root: Path,
+    raw_binding: Any | None = None,
+) -> dict[str, Any]:
+    """Prove the immutable, published 6.2 software-failure lineage."""
+
+    root = project_root.resolve()
+    path = (root / PRIOR_EXECUTION_FAILURE_PATH).resolve()
+    if (
+        not path.is_file()
+        or path.is_symlink()
+        or file_sha256(path) != PRIOR_EXECUTION_FAILURE_FILE_SHA256
+    ):
+        raise ValueError("published 6.2 execution-failure file differs")
+    failure = _read_json(path)
+    _verify_prior_execution_failure_payload(failure)
+    if raw_binding is not None:
+        if not isinstance(raw_binding, Mapping) or set(raw_binding) != {
+            "path",
+            "file_sha256",
+            "payload_sha256",
+            "status",
+            "classification",
+            "creation_commit",
+        }:
+            raise ValueError("6.3 closure execution-failure binding fields differ")
+        if raw_binding != {
+            "path": PRIOR_EXECUTION_FAILURE_PATH,
+            "file_sha256": PRIOR_EXECUTION_FAILURE_FILE_SHA256,
+            "payload_sha256": PRIOR_EXECUTION_FAILURE_PAYLOAD_SHA256,
+            "status": "selection_inconclusive_software_failure",
+            "classification": "floating_point_reduction_order_false_negative",
+            "creation_commit": PRIOR_EXECUTION_FAILURE_CREATION_COMMIT,
+        }:
+            raise ValueError("6.3 closure execution-failure binding differs")
+
+    _verify_published_predecessor_tag(root)
+    if _git(
+        root,
+        "show",
+        f"{PREDECESSOR_RELEASE_COMMIT}:{PRIOR_EXECUTION_FAILURE_PATH}",
+    ).stdout != path.read_bytes():
+        raise ValueError("6.2 failure is not the published tag blob")
+    creation_commits = _git(
+        root,
+        "log",
+        "--diff-filter=A",
+        "--format=%H",
+        "--",
+        PRIOR_EXECUTION_FAILURE_PATH,
+    ).stdout.decode("ascii").splitlines()
+    if creation_commits != [PRIOR_EXECUTION_FAILURE_CREATION_COMMIT]:
+        raise ValueError("6.2 failure does not have one exact creation commit")
+    if (
+        _git(
+            root,
+            "show",
+            f"{PRIOR_EXECUTION_FAILURE_CREATION_COMMIT}:{PRIOR_EXECUTION_FAILURE_PATH}",
+        ).stdout
+        != path.read_bytes()
+        or _git(
+            root,
+            "merge-base",
+            "--is-ancestor",
+            PREDECESSOR_CLOSURE_CREATION_COMMIT,
+            PRIOR_EXECUTION_FAILURE_CREATION_COMMIT,
+            check=False,
+        ).returncode
+        != 0
+        or _git(
+            root,
+            "merge-base",
+            "--is-ancestor",
+            PRIOR_EXECUTION_FAILURE_CREATION_COMMIT,
+            PREDECESSOR_RELEASE_COMMIT,
+            check=False,
+        ).returncode
+        != 0
+    ):
+        raise ValueError("6.2 failure Git lineage differs")
+    if _git(
+        root,
+        "cat-file",
+        "-e",
+        f"{PREDECESSOR_CLOSURE_CREATION_COMMIT}:{PRIOR_EXECUTION_FAILURE_PATH}",
+        check=False,
+    ).returncode == 0:
+        raise ValueError("6.2 failure predates the recorded failing execution")
+    closure_path = root / SUPERSEDED_PRESELECTION_CLOSURE_PATH
+    if _git(
+        root,
+        "show",
+        f"{PREDECESSOR_CLOSURE_CREATION_COMMIT}:{SUPERSEDED_PRESELECTION_CLOSURE_PATH}",
+    ).stdout != closure_path.read_bytes():
+        raise ValueError("6.2 failure did not execute from the exact closure")
+    for terminal_path in (
+        "protocols/evidence/6.2/winner-freeze.json",
+        "protocols/evidence/6.2/historical-audit.json",
+        "protocols/evidence/6.2/result.json",
+    ):
+        if _git(
+            root,
+            "cat-file",
+            "-e",
+            f"{PREDECESSOR_RELEASE_COMMIT}:{terminal_path}",
+            check=False,
+        ).returncode == 0:
+            raise ValueError("published 6.2 contains forbidden terminal evidence")
+    _require_tracked_head_blob(root, path)
+    return failure
+
+
+def verify_corrective_amendment_contract(
+    project_root: Path,
+    amendment: Mapping[str, Any],
+) -> None:
+    """Validate the sole permitted 6.3 correction and no-stage-reuse boundary."""
+
+    if set(amendment) != {
+        "schema_version",
+        "kind",
+        "amendment_id",
+        "release",
+        "status",
+        "direction_change",
+        "base_protocol",
+        "base_protocol_amendment",
+        "prior_release",
+        "correction",
+        "stage_reuse",
+        "unchanged_contract",
+        "required_tests_add",
+        "payload_sha256",
+    }:
+        raise ValueError("6.3 corrective amendment fields differ")
+    if (
+        amendment.get("payload_sha256")
+        != canonical_payload_sha256(amendment)
+        or amendment.get("payload_sha256")
+        != CORRECTIVE_AMENDMENT_PAYLOAD_SHA256
+        or amendment.get("schema_version") != 1
+        or amendment.get("kind") != "factor_lab_protocol_amendment"
+        or amendment.get("amendment_id") != CORRECTIVE_AMENDMENT_ID
+        or amendment.get("release") != "6.3"
+        or amendment.get("status")
+        != "frozen_before_6_3_corrective_return_replay"
+        or amendment.get("direction_change") is not False
+    ):
+        raise ValueError("6.3 corrective amendment identity differs")
+    if amendment.get("base_protocol") != {
+        "path": BASE_PROTOCOL_PATH,
+        "file_sha256": BASE_PROTOCOL_FILE_SHA256,
+        "payload_sha256": BASE_PROTOCOL_PAYLOAD_SHA256,
+        "protocol_id": PROTOCOL_ID,
+    } or amendment.get("base_protocol_amendment") != {
+        "path": BASE_PROTOCOL_AMENDMENT_PATH,
+        "file_sha256": BASE_PROTOCOL_AMENDMENT_FILE_SHA256,
+        "payload_sha256": BASE_PROTOCOL_AMENDMENT_PAYLOAD_SHA256,
+        "amendment_id": BASE_PROTOCOL_AMENDMENT_ID,
+    }:
+        raise ValueError("6.3 correction does not byte-bind the 6.2 contract")
+    if amendment.get("prior_release") != {
+        "release": PREDECESSOR_RELEASE_TAG,
+        "tag": PREDECESSOR_RELEASE_TAG,
+        "annotated_tag_object": PREDECESSOR_RELEASE_TAG_OBJECT,
+        "peeled_commit": PREDECESSOR_RELEASE_COMMIT,
+        "preselection_closure": {
+            "path": SUPERSEDED_PRESELECTION_CLOSURE_PATH,
+            "file_sha256": PREDECESSOR_CLOSURE_FILE_SHA256,
+            "payload_sha256": PREDECESSOR_CLOSURE_PAYLOAD_SHA256,
+        },
+        "execution_failure": {
+            "path": PRIOR_EXECUTION_FAILURE_PATH,
+            "file_sha256": PRIOR_EXECUTION_FAILURE_FILE_SHA256,
+            "payload_sha256": PRIOR_EXECUTION_FAILURE_PAYLOAD_SHA256,
+            "status": "selection_inconclusive_software_failure",
+            "classification": "floating_point_reduction_order_false_negative",
+        },
+    }:
+        raise ValueError("6.3 amendment prior-release binding differs")
+    if amendment.get("correction") != {
+        "created_before_any_6_3_return_replay": True,
+        "sole_production_semantic_change": {
+            "path": "src/factor_lab/research/wide_universe.py",
+            "function": "factor_lab.research.wide_universe.capacity_metrics",
+            "from": "ordinary binary64 += and built-in sum reductions",
+            "to": "math.fsum over the same validated additive values",
+            "applies_to": [
+                "requested_notional_total",
+                "executed_notional_total",
+                "capacity_limited_requested_notional",
+                "buy_plus_sell_reconciliation_totals",
+            ],
+            "row_selection_validation_ratios_and_output_schema_unchanged": True,
+        },
+        "reconciliation": {
+            "relative_tolerance": 0.0,
+            "absolute_tolerance_rmb": 0.000001,
+            "unchanged_from_6_2": True,
+        },
+    }:
+        raise ValueError("6.3 correction exceeds the authorized stable reduction")
+    if amendment.get("stage_reuse") != {
+        "reuse_6_2_derived_stages": False,
+        "reuse_6_2_status_views": False,
+        "forbidden_6_2_artifacts": [
+            "train_validation_or_audit_stage_manifests_and_derived_files",
+            "exact_run_phase_replay_return_trade_or_nav_outputs",
+            "candidate_gate_pass_fail_or_selected_definition_decisions",
+            "winner_freeze_historical_audit_terminal_result_or_cli_status_views",
+        ],
+        "canonical_raw_reuse": {
+            "allowed": True,
+            "requires_fresh_6_3_file_enumeration_and_sha256": True,
+            "requires_before_and_after_rehash": True,
+            "requires_new_6_3_stage_manifests": True,
+        },
+    }:
+        raise ValueError("6.3 corrective replay stage-reuse boundary differs")
+    unchanged = amendment.get("unchanged_contract")
+    if not isinstance(unchanged, Mapping) or unchanged != {
+        "base_protocol_and_amendment_apply_in_full": True,
+        "candidate_ids_unchanged": True,
+        "source_semantic_data_admission_unchanged": True,
+        "signal_unchanged": True,
+        "portfolio_unchanged": True,
+        "costs_unchanged": True,
+        "execution_unchanged": True,
+        "phase_boundaries_unchanged": True,
+        "selection_gates_unchanged": True,
+        "ranking_after_gates_unchanged": True,
+        "audit_rules_unchanged": True,
+        "claim_contract_unchanged": True,
+    }:
+        raise ValueError("6.3 corrective replay changed a frozen contract")
+    if amendment.get("required_tests_add") != [
+        (
+            "a high-notional interleaved buy/sell regression reproduces the 6.2 "
+            "reduction-order false negative under ordinary summation and passes with "
+            "math.fsum"
+        ),
+        (
+            "the corrective replay retains rel_tol zero and abs_tol 0.000001 RMB and "
+            "rejects any candidate, admission, signal, portfolio, cost, execution, "
+            "phase, selection, ranking, audit, or claim-contract drift"
+        ),
+        (
+            "no 6.2 derived stage or status view is accepted as 6.3 input; reused "
+            "canonical raw files are freshly enumerated and SHA-256 hashed before and "
+            "after every 6.3 stage"
+        ),
+    ]:
+        raise ValueError("6.3 corrective amendment test obligations differ")
+
+    root = project_root.resolve()
+    for relative_path, expected_sha256 in (
+        (BASE_PROTOCOL_PATH, BASE_PROTOCOL_FILE_SHA256),
+        (BASE_PROTOCOL_AMENDMENT_PATH, BASE_PROTOCOL_AMENDMENT_FILE_SHA256),
+    ):
+        path = root / relative_path
+        if (
+            not path.is_file()
+            or path.is_symlink()
+            or file_sha256(path) != expected_sha256
+            or _git(
+                root,
+                "show",
+                f"{PREDECESSOR_RELEASE_COMMIT}:{relative_path}",
+            ).stdout
+            != path.read_bytes()
+        ):
+            raise ValueError("6.3 correction base is not the published 6.2 blob")
+        _require_tracked_head_blob(root, path)
+    verify_prior_execution_failure(root)
 
 
 def _verify_prior_release(root: Path, raw: Any) -> dict[str, Any]:
@@ -637,14 +1148,23 @@ def _verify_superseded_preselection_closure(
         "file_sha256",
         "payload_sha256",
         "closure_commit",
-        "selection_returns_opened",
+        "published_tag",
+        "annotated_tag_object",
+        "peeled_commit",
+        "selection_returns_opened_at_closure",
         "replacement_reason",
     }
     if not isinstance(raw, Mapping) or set(raw) != expected_fields:
         raise ValueError("superseded preselection-closure binding differs")
     if (
         raw.get("path") != SUPERSEDED_PRESELECTION_CLOSURE_PATH
-        or raw.get("selection_returns_opened") is not False
+        or raw.get("file_sha256") != PREDECESSOR_CLOSURE_FILE_SHA256
+        or raw.get("payload_sha256") != PREDECESSOR_CLOSURE_PAYLOAD_SHA256
+        or raw.get("closure_commit") != PREDECESSOR_CLOSURE_CREATION_COMMIT
+        or raw.get("published_tag") != PREDECESSOR_RELEASE_TAG
+        or raw.get("annotated_tag_object") != PREDECESSOR_RELEASE_TAG_OBJECT
+        or raw.get("peeled_commit") != PREDECESSOR_RELEASE_COMMIT
+        or raw.get("selection_returns_opened_at_closure") is not False
         or raw.get("replacement_reason") != PRESELECTION_SUPERSESSION_REASON
     ):
         raise ValueError("superseded preselection-closure reason differs")
@@ -652,20 +1172,24 @@ def _verify_superseded_preselection_closure(
     if (
         not path.is_file()
         or path.is_symlink()
-        or file_sha256(path) != raw.get("file_sha256")
+        or file_sha256(path) != PREDECESSOR_CLOSURE_FILE_SHA256
     ):
         raise ValueError("superseded preselection-closure file differs")
     old = _read_json(path)
     if (
         old.get("payload_sha256") != canonical_payload_sha256(old)
-        or old.get("payload_sha256") != raw.get("payload_sha256")
+        or old.get("payload_sha256") != PREDECESSOR_CLOSURE_PAYLOAD_SHA256
+        or old.get("release") != "6.2"
         or old.get("status") != "implementation_frozen_before_selection"
         or old.get("selection_returns_opened") is not False
         or old.get("selected_candidate_id") is not None
         or old.get("audit_status") != "not_opened"
+        or old.get("evidence") != {}
+        or old.get("implementation_commit")
+        != "22d614b8ed0533c7484569a06643410f5ee02de3"
     ):
         raise ValueError("superseded preselection closure had opened evidence")
-    old_commit = str(raw.get("closure_commit") or "")
+    old_commit = PREDECESSOR_CLOSURE_CREATION_COMMIT
     resolved_old_commit = _git(
         root, "rev-parse", "--verify", f"{old_commit}^{{commit}}"
     ).stdout.decode("ascii").strip()
@@ -681,8 +1205,26 @@ def _verify_superseded_preselection_closure(
     committed = _git(
         root, "show", f"{old_commit}:{SUPERSEDED_PRESELECTION_CLOSURE_PATH}"
     ).stdout
-    if committed != path.read_bytes():
+    creation_commits = _git(
+        root,
+        "log",
+        "--diff-filter=A",
+        "--format=%H",
+        "--",
+        SUPERSEDED_PRESELECTION_CLOSURE_PATH,
+    ).stdout.decode("ascii").splitlines()
+    if (
+        committed != path.read_bytes()
+        or creation_commits != [PREDECESSOR_CLOSURE_CREATION_COMMIT]
+    ):
         raise ValueError("superseded closure is not its original committed blob")
+    _verify_published_predecessor_tag(root)
+    if _git(
+        root,
+        "show",
+        f"{PREDECESSOR_RELEASE_COMMIT}:{SUPERSEDED_PRESELECTION_CLOSURE_PATH}",
+    ).stdout != path.read_bytes():
+        raise ValueError("superseded closure is not its published 6.2 blob")
     _require_tracked_head_blob(root, path)
     return old
 
@@ -693,6 +1235,7 @@ def verify_preselection_closure(
     closure_path: Path,
     protocol_path: Path,
     amendment_path: Path,
+    corrective_amendment_path: Path,
 ) -> dict[str, Any]:
     """Verify the same strict pre-selection contract in the runner and CI CLI."""
 
@@ -700,25 +1243,25 @@ def verify_preselection_closure(
     closure_path = closure_path.resolve()
     protocol_path = protocol_path.resolve()
     amendment_path = amendment_path.resolve()
+    corrective_amendment_path = corrective_amendment_path.resolve()
     if _relative(root, closure_path) != PRESELECTION_CLOSURE_PATH:
-        raise ValueError("unexpected 6.2 closure path")
-    if _relative(root, protocol_path) != "protocols/6.2-wide-universe.json":
+        raise ValueError("unexpected 6.3 closure path")
+    if _relative(root, protocol_path) != BASE_PROTOCOL_PATH:
         raise ValueError("unexpected 6.2 protocol path")
-    if (
-        _relative(root, amendment_path)
-        != "protocols/6.2-wide-universe-amendment-1.json"
-    ):
+    if _relative(root, amendment_path) != BASE_PROTOCOL_AMENDMENT_PATH:
         raise ValueError("unexpected 6.2 amendment path")
+    if _relative(root, corrective_amendment_path) != CORRECTIVE_AMENDMENT_PATH:
+        raise ValueError("unexpected 6.3 corrective amendment path")
 
     closure = _read_json(closure_path)
     if set(closure) != _CLOSURE_FIELDS:
-        raise ValueError("6.2 closure contains missing or unknown fields")
+        raise ValueError("6.3 closure contains missing or unknown fields")
     if closure.get("payload_sha256") != canonical_payload_sha256(closure):
-        raise ValueError("6.2 release closure payload hash is invalid")
+        raise ValueError("6.3 release closure payload hash is invalid")
     if (
         closure.get("schema_version") != 1
         or closure.get("kind") != "factor_lab_release_closure"
-        or closure.get("release") != "6.2"
+        or closure.get("release") != "6.3"
         or closure.get("closure_role") != "immutable_preselection_root"
         or closure.get("direction_change") is not False
         or closure.get("status") != "implementation_frozen_before_selection"
@@ -727,7 +1270,6 @@ def verify_preselection_closure(
         or closure.get("selected_candidate_id") is not None
         or closure.get("audit_status") != "not_opened"
         or closure.get("historical_audit") != FROZEN_HISTORICAL_AUDIT
-        or closure.get("evidence") != {}
         or closure.get("canonical_data") != {}
         or closure.get("claim_contract")
         != {
@@ -741,30 +1283,54 @@ def verify_preselection_closure(
             "fresh_future_evidence_required": True,
         }
     ):
-        raise ValueError("6.2 release closure is not the pre-selection freeze")
+        raise ValueError("6.3 release closure is not the pre-selection freeze")
+
+    evidence = closure.get("evidence")
+    if not isinstance(evidence, Mapping) or set(evidence) != {
+        "prior_execution_failure"
+    }:
+        raise ValueError("6.3 closure must bind exactly the 6.2 execution failure")
+    verify_prior_execution_failure(root, evidence.get("prior_execution_failure"))
 
     protocol_binding = closure.get("protocol")
     amendment_binding = closure.get("protocol_amendment")
-    if not isinstance(protocol_binding, Mapping) or not isinstance(
-        amendment_binding, Mapping
+    corrective_binding = closure.get("corrective_amendment")
+    if (
+        not isinstance(protocol_binding, Mapping)
+        or not isinstance(amendment_binding, Mapping)
+        or not isinstance(corrective_binding, Mapping)
     ):
-        raise ValueError("6.2 release closure lacks protocol bindings")
+        raise ValueError("6.3 release closure lacks protocol bindings")
     protocol = _require_file_binding(
         root,
         protocol_binding,
-        expected_relative_path="protocols/6.2-wide-universe.json",
+        expected_relative_path=BASE_PROTOCOL_PATH,
         payload_id_field="protocol_id",
         payload_id=PROTOCOL_ID,
     )
+    if protocol_binding != {
+        "path": BASE_PROTOCOL_PATH,
+        "file_sha256": BASE_PROTOCOL_FILE_SHA256,
+        "payload_sha256": BASE_PROTOCOL_PAYLOAD_SHA256,
+        "protocol_id": PROTOCOL_ID,
+    }:
+        raise ValueError("6.3 closure changed the published 6.2 protocol bytes")
     verify_wide_protocol_contract(protocol)
     _verify_prior_release(root, protocol.get("prior_release"))
     amendment = _require_file_binding(
         root,
         amendment_binding,
-        expected_relative_path="protocols/6.2-wide-universe-amendment-1.json",
+        expected_relative_path=BASE_PROTOCOL_AMENDMENT_PATH,
         payload_id_field="amendment_id",
-        payload_id=f"{PROTOCOL_ID}/amendment-1",
+        payload_id=BASE_PROTOCOL_AMENDMENT_ID,
     )
+    if amendment_binding != {
+        "path": BASE_PROTOCOL_AMENDMENT_PATH,
+        "file_sha256": BASE_PROTOCOL_AMENDMENT_FILE_SHA256,
+        "payload_sha256": BASE_PROTOCOL_AMENDMENT_PAYLOAD_SHA256,
+        "amendment_id": BASE_PROTOCOL_AMENDMENT_ID,
+    }:
+        raise ValueError("6.3 closure changed the published 6.2 amendment bytes")
     if (
         amendment.get("schema_version") != 1
         or amendment.get("kind") != "factor_lab_protocol_amendment"
@@ -780,9 +1346,24 @@ def verify_preselection_closure(
     ):
         raise ValueError("6.2 amendment identity or unchanged contract differs")
     _verify_integrated_prior_amendment(root, amendment)
+    corrective = _require_file_binding(
+        root,
+        corrective_binding,
+        expected_relative_path=CORRECTIVE_AMENDMENT_PATH,
+        payload_id_field="amendment_id",
+        payload_id=CORRECTIVE_AMENDMENT_ID,
+    )
+    if corrective_binding != {
+        "path": CORRECTIVE_AMENDMENT_PATH,
+        "file_sha256": CORRECTIVE_AMENDMENT_FILE_SHA256,
+        "payload_sha256": CORRECTIVE_AMENDMENT_PAYLOAD_SHA256,
+        "amendment_id": CORRECTIVE_AMENDMENT_ID,
+    }:
+        raise ValueError("6.3 closure corrective-amendment bytes differ")
+    verify_corrective_amendment_contract(root, corrective)
     runtime_binding = closure.get("runtime")
     if not isinstance(runtime_binding, Mapping):
-        raise ValueError("6.2 release closure lacks its runtime binding")
+        raise ValueError("6.3 release closure lacks its runtime binding")
     runtime = _require_file_binding(
         root,
         runtime_binding,
@@ -790,6 +1371,13 @@ def verify_preselection_closure(
         payload_id_field="runtime_id",
         payload_id=RUNTIME_ID,
     )
+    if runtime_binding != {
+        "path": RUNTIME_PATH,
+        "file_sha256": RUNTIME_FILE_SHA256,
+        "payload_sha256": RUNTIME_PAYLOAD_SHA256,
+        "runtime_id": RUNTIME_ID,
+    }:
+        raise ValueError("6.3 closure frozen-runtime bytes differ")
     verify_frozen_runtime_contract(runtime)
     base = amendment.get("base_protocol")
     if (
@@ -806,18 +1394,18 @@ def verify_preselection_closure(
     if not isinstance(implementation, Mapping) or set(implementation) != set(
         FROZEN_IMPLEMENTATION_PATHS
     ):
-        raise ValueError("6.2 release closure implementation allowlist mismatch")
+        raise ValueError("6.3 release closure implementation allowlist mismatch")
     implementation_commit = str(closure.get("implementation_commit") or "")
     resolved_commit = _git(
         root, "rev-parse", "--verify", f"{implementation_commit}^{{commit}}"
     ).stdout.decode("ascii").strip()
     if resolved_commit != implementation_commit:
-        raise ValueError("6.2 implementation commit must be a full commit id")
+        raise ValueError("6.3 implementation commit must be a full commit id")
     resolved_tree = _git(
         root, "rev-parse", f"{implementation_commit}^{{tree}}"
     ).stdout.decode("ascii").strip()
     if str(closure.get("implementation_tree") or "") != resolved_tree:
-        raise ValueError("6.2 implementation tree differs from the frozen commit")
+        raise ValueError("6.3 implementation tree differs from the frozen commit")
     if _git(
         root,
         "merge-base",
@@ -826,7 +1414,7 @@ def verify_preselection_closure(
         "HEAD",
         check=False,
     ).returncode != 0:
-        raise ValueError("6.2 implementation commit is not an ancestor of HEAD")
+        raise ValueError("6.3 implementation commit is not an ancestor of HEAD")
     _verify_superseded_preselection_closure(
         root,
         closure.get("superseded_preselection_closure"),
@@ -856,6 +1444,7 @@ def verify_preselection_closure(
     for name, path, binding in (
         ("protocol", protocol_path, protocol_binding),
         ("protocol_amendment", amendment_path, amendment_binding),
+        ("corrective_amendment", corrective_amendment_path, corrective_binding),
         ("runtime", root / RUNTIME_PATH, runtime_binding),
     ):
         relative_path = _relative(root, path)
@@ -864,6 +1453,19 @@ def verify_preselection_closure(
         ).stdout
         if hashlib.sha256(committed).hexdigest() != binding.get("file_sha256"):
             raise ValueError(f"frozen commit lacks bound {name}")
+
+    for relative_path, expected_sha256 in (
+        (SUPERSEDED_PRESELECTION_CLOSURE_PATH, PREDECESSOR_CLOSURE_FILE_SHA256),
+        (PRIOR_EXECUTION_FAILURE_PATH, PRIOR_EXECUTION_FAILURE_FILE_SHA256),
+    ):
+        committed = _git(
+            root, "show", f"{implementation_commit}:{relative_path}"
+        ).stdout
+        if (
+            hashlib.sha256(committed).hexdigest() != expected_sha256
+            or committed != (root / relative_path).read_bytes()
+        ):
+            raise ValueError(f"6.3 implementation commit lacks lineage: {relative_path}")
 
     _require_tracked_head_blob(root, closure_path)
     return closure
@@ -881,16 +1483,16 @@ def verify_historical_audit(
     root = project_root.resolve()
     audit_path = audit_path.resolve()
     if _relative(root, audit_path) != AUDIT_EVIDENCE_PATH:
-        raise ValueError("unexpected 6.2 historical-audit path")
+        raise ValueError("unexpected 6.3 historical-audit path")
     if not audit_path.is_file() or audit_path.is_symlink():
-        raise ValueError("6.2 historical audit is not a regular file")
+        raise ValueError("6.3 historical audit is not a regular file")
     audit = _read_json(audit_path)
     gate = audit.get("gate")
     if (
         set(audit) != _AUDIT_FIELDS
         or audit.get("payload_sha256") != canonical_payload_sha256(audit)
         or audit.get("schema_version") != 1
-        or audit.get("kind") != "factor_lab_6_2_historical_audit"
+        or audit.get("kind") != "factor_lab_6_3_historical_audit"
         or not isinstance(gate, Mapping)
         or not isinstance(gate.get("passed"), bool)
         or audit.get("selected_candidate_id")
@@ -961,20 +1563,20 @@ def verify_release_result(
     root = project_root.resolve()
     result_path = result_path.resolve()
     if _relative(root, result_path) != RELEASE_RESULT_PATH:
-        raise ValueError("unexpected 6.2 result path")
+        raise ValueError("unexpected 6.3 result path")
     result = _read_json(result_path)
     if set(result) != _RESULT_FIELDS:
-        raise ValueError("6.2 result contains missing or unknown fields")
+        raise ValueError("6.3 result contains missing or unknown fields")
     if (
         result.get("payload_sha256") != canonical_payload_sha256(result)
         or result.get("schema_version") != 1
-        or result.get("kind") != "factor_lab_6_2_release_result"
-        or result.get("release") != "6.2"
+        or result.get("kind") != "factor_lab_6_3_release_result"
+        or result.get("release") != "6.3"
         or result.get("preselection_closure_payload_sha256")
         != preselection_closure.get("payload_sha256")
         or result.get("runner_up_fallback_used") is not False
     ):
-        raise ValueError("6.2 terminal result contract differs")
+        raise ValueError("6.3 terminal result contract differs")
 
     freeze = _require_terminal_binding(
         root,
@@ -1047,15 +1649,15 @@ def verify_winner_freeze(
     root = project_root.resolve()
     freeze_path = freeze_path.resolve()
     if _relative(root, freeze_path) != WINNER_FREEZE_PATH:
-        raise ValueError("unexpected 6.2 winner-freeze path")
+        raise ValueError("unexpected 6.3 winner-freeze path")
     if not freeze_path.is_file() or freeze_path.is_symlink():
-        raise ValueError("6.2 winner freeze is not a regular file")
+        raise ValueError("6.3 winner freeze is not a regular file")
     freeze = _read_json(freeze_path)
     if (
         set(freeze) != _WINNER_FREEZE_FIELDS
         or freeze.get("payload_sha256") != canonical_payload_sha256(freeze)
         or freeze.get("schema_version") != 1
-        or freeze.get("kind") != "factor_lab_6_2_winner_freeze"
+        or freeze.get("kind") != "factor_lab_6_3_winner_freeze"
         or freeze.get("implementation_closure_payload_sha256")
         != preselection_closure.get("payload_sha256")
         or freeze.get("protocol_payload_sha256")
@@ -1064,10 +1666,14 @@ def verify_winner_freeze(
         != (preselection_closure.get("protocol_amendment") or {}).get(
             "payload_sha256"
         )
+        or freeze.get("corrective_amendment_payload_sha256")
+        != (preselection_closure.get("corrective_amendment") or {}).get(
+            "payload_sha256"
+        )
         or freeze.get("runner_up_fallback_after_audit_fail") is not False
         or freeze.get("audit_market_outcomes_opened") is not False
     ):
-        raise ValueError("6.2 winner freeze contract differs")
+        raise ValueError("6.3 winner freeze contract differs")
     selection_commit = str(freeze.get("selection_execution_commit") or "")
     resolved_selection_commit = _git(
         root, "rev-parse", "--verify", f"{selection_commit}^{{commit}}"
@@ -1203,7 +1809,7 @@ def _distribution_content_identity(name: str) -> dict[str, Any]:
 def _active_conda_artifacts(names: set[str]) -> dict[str, dict[str, Any]]:
     metadata_root = Path(sys.prefix).resolve() / "conda-meta"
     if not metadata_root.is_dir():
-        raise ValueError("frozen 6.2 runtime requires its Conda metadata")
+        raise ValueError("frozen 6.3 runtime requires its Conda metadata")
     found: dict[str, dict[str, Any]] = {}
     for path in metadata_root.glob("*.json"):
         raw = _read_json(path)
@@ -1242,6 +1848,12 @@ def verify_active_runtime(project_root: Path) -> dict[str, Any]:
     """Require the exact local runtime frozen before formal return opening."""
 
     path = project_root.resolve() / RUNTIME_PATH
+    if (
+        not path.is_file()
+        or path.is_symlink()
+        or file_sha256(path) != RUNTIME_FILE_SHA256
+    ):
+        raise ValueError("frozen 6.3 runtime file differs")
     value = _read_json(path)
     verify_frozen_runtime_contract(value)
     expected_python = dict(value.get("python") or {})
@@ -1254,40 +1866,52 @@ def verify_active_runtime(project_root: Path) -> dict[str, Any]:
         or platform.release() != expected_platform.get("release")
         or list(platform.architecture()) != expected_platform.get("architecture")
     ):
-        raise ValueError("active Python/platform differs from the frozen 6.2 runtime")
+        raise ValueError("active Python/platform differs from the frozen 6.3 runtime")
     from factor_lab import __version__
 
     if __version__ != value.get("source_package_version"):
         raise ValueError("active source package version differs from the frozen runtime")
     expected_packages = value.get("packages")
     if not isinstance(expected_packages, Mapping):
-        raise ValueError("6.2 runtime package map is missing")
+        raise ValueError("6.3 runtime package map is missing")
     actual_packages = {
         str(name): importlib.metadata.version(str(name))
         for name in expected_packages
     }
     if actual_packages != dict(expected_packages):
-        raise ValueError("active packages differ from the frozen 6.2 runtime")
+        raise ValueError("active packages differ from the frozen 6.3 runtime")
     expected_contents = value.get("distribution_contents")
     if not isinstance(expected_contents, Mapping):
-        raise ValueError("6.2 runtime distribution-content map is missing")
+        raise ValueError("6.3 runtime distribution-content map is missing")
     actual_contents = {
         str(name): _distribution_content_identity(str(name))
         for name in expected_contents
     }
     if actual_contents != dict(expected_contents):
-        raise ValueError("active distribution bytes differ from the frozen 6.2 runtime")
+        raise ValueError("active distribution bytes differ from the frozen 6.3 runtime")
     expected_conda = value.get("conda_artifacts")
     if not isinstance(expected_conda, Mapping) or _active_conda_artifacts(
         set(map(str, expected_conda))
     ) != dict(expected_conda):
-        raise ValueError("active native artifacts differ from the frozen 6.2 runtime")
+        raise ValueError("active native artifacts differ from the frozen 6.3 runtime")
     if _active_numeric_backend() != value.get("numeric_backend"):
-        raise ValueError("active numeric backend differs from the frozen 6.2 runtime")
+        raise ValueError("active numeric backend differs from the frozen 6.3 runtime")
     return value
 
 
 __all__ = [
+    "AUDIT_EVIDENCE_PATH",
+    "BASE_PROTOCOL_AMENDMENT_FILE_SHA256",
+    "BASE_PROTOCOL_AMENDMENT_ID",
+    "BASE_PROTOCOL_AMENDMENT_PATH",
+    "BASE_PROTOCOL_AMENDMENT_PAYLOAD_SHA256",
+    "BASE_PROTOCOL_FILE_SHA256",
+    "BASE_PROTOCOL_PATH",
+    "BASE_PROTOCOL_PAYLOAD_SHA256",
+    "CORRECTIVE_AMENDMENT_FILE_SHA256",
+    "CORRECTIVE_AMENDMENT_ID",
+    "CORRECTIVE_AMENDMENT_PATH",
+    "CORRECTIVE_AMENDMENT_PAYLOAD_SHA256",
     "FROZEN_ADV20_CONTRACT",
     "FROZEN_CANDIDATE_IDS",
     "FROZEN_FINITE_SCORE_ADMISSION",
@@ -1295,6 +1919,12 @@ __all__ = [
     "FROZEN_IMPLEMENTATION_PATHS",
     "PRESELECTION_CLOSURE_PATH",
     "PRESELECTION_SUPERSESSION_REASON",
+    "PREDECESSOR_CLOSURE_CREATION_COMMIT",
+    "PREDECESSOR_CLOSURE_FILE_SHA256",
+    "PREDECESSOR_CLOSURE_PAYLOAD_SHA256",
+    "PREDECESSOR_RELEASE_COMMIT",
+    "PREDECESSOR_RELEASE_TAG",
+    "PREDECESSOR_RELEASE_TAG_OBJECT",
     "PRIOR_ADMISSION_FAILURE_PATH",
     "PRIOR_ADMISSION_FAILURE_PAYLOAD",
     "PRIOR_AMENDMENT_FILE_SHA256",
@@ -1304,18 +1934,25 @@ __all__ = [
     "PRIOR_RELEASE_COMMIT",
     "PRIOR_RELEASE_TAG",
     "PRIOR_RELEASE_TAG_OBJECT",
+    "PRIOR_EXECUTION_FAILURE_CREATION_COMMIT",
+    "PRIOR_EXECUTION_FAILURE_FILE_SHA256",
+    "PRIOR_EXECUTION_FAILURE_PATH",
+    "PRIOR_EXECUTION_FAILURE_PAYLOAD_SHA256",
     "PROTOCOL_ID",
     "RUNTIME_ID",
+    "RUNTIME_FILE_SHA256",
     "RUNTIME_PATH",
+    "RUNTIME_PAYLOAD_SHA256",
     "SUPERSEDED_PRESELECTION_CLOSURE_PATH",
-    "AUDIT_EVIDENCE_PATH",
     "RELEASE_RESULT_PATH",
     "WINNER_FREEZE_PATH",
     "canonical_payload_sha256",
     "file_sha256",
+    "verify_corrective_amendment_contract",
     "verify_historical_audit",
     "verify_frozen_runtime_contract",
     "verify_preselection_closure",
+    "verify_prior_execution_failure",
     "verify_release_result",
     "verify_wide_protocol_contract",
     "verify_winner_freeze",

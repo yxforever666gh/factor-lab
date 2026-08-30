@@ -24,10 +24,18 @@ from factor_lab.data import (
 )
 from factor_lab.data.suspensions import SuspensionProviderWaitingError
 from factor_lab.release_integrity import (
+    AUDIT_EVIDENCE_PATH,
+    CORRECTIVE_AMENDMENT_FILE_SHA256,
+    CORRECTIVE_AMENDMENT_PATH,
     FROZEN_IMPLEMENTATION_PATHS,
     PRESELECTION_CLOSURE_PATH,
     RELEASE_RESULT_PATH,
+    RUNTIME_FILE_SHA256,
+    RUNTIME_PATH,
     WINNER_FREEZE_PATH,
+    file_sha256,
+    verify_corrective_amendment_contract,
+    verify_frozen_runtime_contract,
     verify_preselection_closure,
     verify_release_result,
     verify_winner_freeze,
@@ -228,7 +236,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     strategy_status.add_argument(
         "--release",
-        choices=("6.0", "6.2"),
+        choices=("6.0", "6.3"),
         help="Verify one release closure; defaults to the latest tracked closure.",
     )
     strategy_targets = strategy_commands.add_parser(
@@ -695,7 +703,7 @@ def _strategy_status_6_0(root: Path, *, verify_data: bool) -> tuple[dict[str, An
     return output, 0 if not failures else 3
 
 
-def _strategy_status_6_2(root: Path, *, verify_data: bool) -> tuple[dict[str, Any], int]:
+def _strategy_status_6_3(root: Path, *, verify_data: bool) -> tuple[dict[str, Any], int]:
     closure_path = root / PRESELECTION_CLOSURE_PATH
     closure: dict[str, Any] = {}
     checks: list[dict[str, Any]] = []
@@ -710,6 +718,9 @@ def _strategy_status_6_2(root: Path, *, verify_data: bool) -> tuple[dict[str, An
             protocol_path=root / "protocols" / "6.2-wide-universe.json",
             amendment_path=(
                 root / "protocols" / "6.2-wide-universe-amendment-1.json"
+            ),
+            corrective_amendment_path=(
+                root / "protocols" / "6.3-corrective-amendment-1.json"
             ),
         )
         freeze_path = root / WINNER_FREEZE_PATH
@@ -851,6 +862,20 @@ def _strategy_status_6_2(root: Path, *, verify_data: bool) -> tuple[dict[str, An
         str(amendment.get("payload_sha256") or ""),
         category="protocol_payload:wide_universe_amendment",
     )
+    corrective_amendment = dict(
+        as_mapping(closure.get("corrective_amendment"))
+    )
+    corrective_amendment_path = str(corrective_amendment.get("path") or "")
+    check_file(
+        corrective_amendment_path,
+        str(corrective_amendment.get("file_sha256") or ""),
+        category="protocol_file:corrective_amendment",
+    )
+    check_json_payload(
+        corrective_amendment_path,
+        str(corrective_amendment.get("payload_sha256") or ""),
+        category="protocol_payload:corrective_amendment",
+    )
     for name, binding in sorted(as_mapping(closure.get("implementation")).items()):
         if isinstance(binding, Mapping):
             check_file(
@@ -906,7 +931,7 @@ def _strategy_status_6_2(root: Path, *, verify_data: bool) -> tuple[dict[str, An
             if not failures
             else "integrity_mismatch"
         ),
-        "version": "6.2",
+        "version": "6.3",
         "route": closure.get("route"),
         "protocol_id": protocol.get("protocol_id"),
         "historical_evidence_class": (
@@ -926,16 +951,132 @@ def _strategy_status_6_2(root: Path, *, verify_data: bool) -> tuple[dict[str, An
     return output, 0 if not failures else 3
 
 
+def _working_tree_is_clean(root: Path) -> bool:
+    return subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=root,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    ).stdout.strip() == ""
+
+
+def _strategy_status_6_3_pending(
+    root: Path, *, verify_data: bool
+) -> tuple[dict[str, Any], int]:
+    """Report the clean pre-closure state without falling back to stale 6.0."""
+
+    checks: list[dict[str, Any]] = []
+    failures: list[str] = []
+    try:
+        corrective_path = root / CORRECTIVE_AMENDMENT_PATH
+        corrective = _read_json(corrective_path)
+        if (
+            corrective.get("payload_sha256")
+            != _canonical_payload_sha256(corrective)
+            or file_sha256(corrective_path) != CORRECTIVE_AMENDMENT_FILE_SHA256
+        ):
+            raise ValueError("6.3 corrective amendment payload hash is invalid")
+        verify_corrective_amendment_contract(root, corrective)
+        runtime_path = root / RUNTIME_PATH
+        runtime = _read_json(runtime_path)
+        if (
+            runtime.get("payload_sha256") != _canonical_payload_sha256(runtime)
+            or file_sha256(runtime_path) != RUNTIME_FILE_SHA256
+        ):
+            raise ValueError("6.3 runtime payload hash is invalid")
+        verify_frozen_runtime_contract(runtime)
+        checks.extend(
+            [
+                {
+                    "category": "protocol_payload:corrective_amendment",
+                    "path": CORRECTIVE_AMENDMENT_PATH,
+                    "status": "match",
+                    "actual_sha256": corrective["payload_sha256"],
+                },
+                {
+                    "category": "runtime_payload",
+                    "path": RUNTIME_PATH,
+                    "status": "match",
+                    "actual_sha256": runtime["payload_sha256"],
+                },
+            ]
+        )
+    except (OSError, RuntimeError, TypeError, ValueError, subprocess.SubprocessError) as exc:
+        failures.append(str(exc))
+        checks.append(
+            {
+                "category": "preclosure_contract",
+                "path": CORRECTIVE_AMENDMENT_PATH,
+                "status": "mismatch",
+                "error": str(exc),
+            }
+        )
+
+    forbidden_before_closure = (
+        PRESELECTION_CLOSURE_PATH,
+        WINNER_FREEZE_PATH,
+        AUDIT_EVIDENCE_PATH,
+        RELEASE_RESULT_PATH,
+    )
+    for relative_path in forbidden_before_closure:
+        exists = (root / relative_path).exists()
+        checks.append(
+            {
+                "category": "preclosure_absence",
+                "path": relative_path,
+                "status": "unexpected" if exists else "match",
+            }
+        )
+        if exists:
+            failures.append(f"pre-closure artifact already exists: {relative_path}")
+
+    clean = _working_tree_is_clean(root)
+    checks.append(
+        {
+            "category": "preclosure_working_tree",
+            "path": ".",
+            "status": "match" if clean else "pending_clean_commit",
+        }
+    )
+
+    if failures:
+        status = "integrity_mismatch"
+        exit_code = 3
+    elif not clean:
+        status = "implementation_pending_clean_commit"
+        exit_code = 2
+    else:
+        status = "implementation_ready_for_preselection_closure"
+        exit_code = 0
+
+    return (
+        {
+            "status": status,
+            "version": "6.3",
+            "route": "widened_opportunity_set",
+            "protocol_id": "factor-lab/6.2/widened-opportunity-set-v2",
+            "selected_candidate_id": None,
+            "audit_status": "not_opened",
+            "profit_claim_allowed": False,
+            "canonical_data_hashes_verified": bool(verify_data),
+            "checks": checks,
+        },
+        exit_code,
+    )
+
+
 def _strategy_status(
     root: Path, *, verify_data: bool, release: str | None = None
 ) -> tuple[dict[str, Any], int]:
-    selected = release or (
-        "6.2" if (root / PRESELECTION_CLOSURE_PATH).is_file() else "6.0"
-    )
+    if release is None and not (root / PRESELECTION_CLOSURE_PATH).is_file():
+        return _strategy_status_6_3_pending(root, verify_data=verify_data)
+    selected = release or "6.3"
     if selected == "6.0":
         return _strategy_status_6_0(root, verify_data=verify_data)
-    if selected == "6.2":
-        return _strategy_status_6_2(root, verify_data=verify_data)
+    if selected == "6.3":
+        return _strategy_status_6_3(root, verify_data=verify_data)
     raise ValueError(f"unsupported strategy release: {selected}")
 
 

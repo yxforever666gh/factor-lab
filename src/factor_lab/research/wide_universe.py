@@ -26,6 +26,7 @@ CHALLENGER_IDS = ("daily_adv20_ge_100m", "daily_adv20_top1500")
 UNIVERSE_IDS = (CONTROL_ID, *CHALLENGER_IDS)
 FORBIDDEN_COLUMN_TOKENS = ("forward", "label", "future", "outcome", "return_after")
 PERIODS_PER_YEAR = 25.2
+CAPACITY_RECONCILIATION_ABS_TOL_RMB = 1e-6
 
 
 @dataclass(frozen=True)
@@ -337,9 +338,9 @@ def capacity_metrics(
     selected = [row for row in trades if str(row.get("date")) in start_dates]
 
     def aggregate(rows: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
-        requested = 0.0
-        limited = 0.0
-        executed = 0.0
+        requested_values: list[float] = []
+        limited_values: list[float] = []
+        executed_values: list[float] = []
         for row in rows:
             side = str(row.get("side") or "")
             if side not in {"buy", "sell"}:
@@ -359,10 +360,13 @@ def capacity_metrics(
                 raise ValueError("execution notionals violate finite long-only bounds")
             if str(row.get("status")) == "blocked" and fill > 1e-4:
                 raise ValueError("blocked order has executed notional")
-            requested += request
-            executed += fill
+            requested_values.append(request)
+            executed_values.append(fill)
             if bool(row.get("capacity_limited")):
-                limited += request
+                limited_values.append(request)
+        requested = math.fsum(requested_values)
+        limited = math.fsum(limited_values)
+        executed = math.fsum(executed_values)
         return {
             "order_count": len(rows),
             "requested_notional_total": requested,
@@ -385,11 +389,11 @@ def capacity_metrics(
         side: aggregate([row for row in selected if str(row.get("side")) == side])
         for side in ("buy", "sell")
     }
-    side_requested = sum(
+    side_requested = math.fsum(
         float(value["requested_notional_total"])
         for value in overall["by_side"].values()
     )
-    side_executed = sum(
+    side_executed = math.fsum(
         float(value["executed_notional_total"])
         for value in overall["by_side"].values()
     )
@@ -397,12 +401,12 @@ def capacity_metrics(
         side_requested,
         float(overall["requested_notional_total"]),
         rel_tol=0.0,
-        abs_tol=1e-6,
+        abs_tol=CAPACITY_RECONCILIATION_ABS_TOL_RMB,
     ) or not math.isclose(
         side_executed,
         float(overall["executed_notional_total"]),
         rel_tol=0.0,
-        abs_tol=1e-6,
+        abs_tol=CAPACITY_RECONCILIATION_ABS_TOL_RMB,
     ):
         raise RuntimeError("capacity by-side totals do not reconcile")
     return overall
@@ -637,6 +641,7 @@ def select_winner(
 
 
 __all__ = [
+    "CAPACITY_RECONCILIATION_ABS_TOL_RMB",
     "CHALLENGER_IDS",
     "CONTROL_ID",
     "PhaseBounds",

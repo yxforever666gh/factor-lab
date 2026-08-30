@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import math
 from types import SimpleNamespace
 
 import pandas as pd
 import pytest
 
 from factor_lab.research.wide_universe import (
+    CAPACITY_RECONCILIATION_ABS_TOL_RMB,
     CHALLENGER_IDS,
     CONTROL_ID,
     PhaseBounds,
@@ -124,6 +126,58 @@ def test_capacity_zero_denominator_is_vacuous_but_activity_fails() -> None:
     assert result["capacity_limited_requested_notional_ratio"] == 0.0
     assert result["requested_notional_fill_ratio"] == 1.0
     assert result["activity_gate_passed"] is False
+
+
+def test_capacity_metrics_use_stable_large_notional_reduction() -> None:
+    periods = [{"start_date": "2024-01-03"}]
+    trades = []
+    for _ in range(225):
+        for side, requested, executed in (
+            ("buy", 1_000_000.0002, 1_000_000.0001),
+            ("sell", 0.0001, 0.0001),
+        ):
+            trades.append(
+                {
+                    "date": "2024-01-03",
+                    "side": side,
+                    "requested_notional": requested,
+                    "executed_notional": executed,
+                    "status": "executed",
+                    "capacity_limited": True,
+                }
+            )
+
+    result = capacity_metrics(trades, periods)
+    requested_values = [
+        float(row["requested_notional"])
+        for row in trades
+    ]
+    executed_values = [
+        float(row["executed_notional"])
+        for row in trades
+    ]
+    requested_naive = sum(requested_values)
+    requested_by_side_naive = sum(requested_values[0::2]) + sum(
+        requested_values[1::2]
+    )
+    executed_naive = sum(executed_values)
+    executed_by_side_naive = sum(executed_values[0::2]) + sum(
+        executed_values[1::2]
+    )
+    assert CAPACITY_RECONCILIATION_ABS_TOL_RMB == 1e-6
+    assert abs(requested_naive - requested_by_side_naive) > 1e-6
+    assert abs(executed_naive - executed_by_side_naive) > 1e-6
+    expected_requested = math.fsum(requested_values)
+    expected_executed = math.fsum(executed_values)
+
+    assert result["order_count"] == 450
+    assert result["requested_notional_total"] == expected_requested
+    assert result["executed_notional_total"] == expected_executed
+    assert result["capacity_limited_requested_notional"] == expected_requested
+    assert result["requested_notional_fill_ratio"] == (
+        expected_executed / expected_requested
+    )
+    assert result["capacity_limited_requested_notional_ratio"] == 1.0
 
 
 def _phase(

@@ -18,6 +18,9 @@ def test_cli_exposes_only_lightweight_mainline_commands() -> None:
     strategy = parser.parse_args(["strategy", "status", "--verify-data"])
     assert strategy.strategy_command == "status"
     assert strategy.verify_data is True
+    assert parser.parse_args(
+        ["strategy", "status", "--release", "6.3"]
+    ).release == "6.3"
     targets = parser.parse_args(["strategy", "targets", "--signal-date", "latest"])
     assert targets.strategy_command == "targets"
 
@@ -118,7 +121,7 @@ def test_explicit_root_does_not_require_implicit_discovery(
 def test_strategy_status_verifies_tracked_implementation_and_evidence() -> None:
     root = Path(__file__).resolve().parents[2]
     if not (root / cli.PRESELECTION_CLOSURE_PATH).is_file():
-        pytest.skip("6.2 closure is created from the clean implementation commit")
+        pytest.skip("6.3 closure is created from the clean implementation commit")
 
     result, exit_code = cli._strategy_status(root, verify_data=False)
 
@@ -145,7 +148,7 @@ def test_strategy_status_verifies_tracked_implementation_and_evidence() -> None:
 
     assert exit_code == 0
     assert result["status"] == expected_status
-    assert result["version"] == "6.2"
+    assert result["version"] == "6.3"
     assert result["route"] == "widened_opportunity_set"
     assert result["profit_claim_allowed"] is False
     assert result["selected_candidate_id"] == expected_selected
@@ -158,10 +161,49 @@ def test_strategy_status_verifies_tracked_implementation_and_evidence() -> None:
     assert "release_payload" in categories
     assert "protocol_payload:wide_universe" in categories
     assert "protocol_payload:wide_universe_amendment" in categories
+    assert "protocol_payload:corrective_amendment" in categories
     assert "implementation:long_only" in categories
     assert "implementation:execution_kernel" in categories
     assert "implementation:wide_runner" in categories
     assert "implementation:opportunity_set" in categories
+
+
+def test_default_strategy_status_reports_the_6_3_preclosure_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = Path(__file__).resolve().parents[2]
+    if (root / cli.PRESELECTION_CLOSURE_PATH).is_file():
+        pytest.skip("6.3 closure has already superseded the preclosure state")
+    monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
+
+    result, exit_code = cli._strategy_status(root, verify_data=False)
+
+    assert exit_code == 0
+    assert result["status"] == "implementation_ready_for_preselection_closure"
+    assert result["version"] == "6.3"
+    assert result["selected_candidate_id"] is None
+    assert result["audit_status"] == "not_opened"
+    assert result["profit_claim_allowed"] is False
+    assert all(check["status"] == "match" for check in result["checks"])
+
+
+def test_default_preclosure_status_does_not_claim_dirty_tree_is_ready(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = Path(__file__).resolve().parents[2]
+    if (root / cli.PRESELECTION_CLOSURE_PATH).is_file():
+        pytest.skip("6.3 closure has already superseded the preclosure state")
+    monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: False)
+
+    result, exit_code = cli._strategy_status(root, verify_data=False)
+
+    assert exit_code == 2
+    assert result["status"] == "implementation_pending_clean_commit"
+    assert any(
+        check["category"] == "preclosure_working_tree"
+        and check["status"] == "pending_clean_commit"
+        for check in result["checks"]
+    )
 
 
 def test_strategy_status_detects_implementation_tamper(
@@ -169,7 +211,7 @@ def test_strategy_status_detects_implementation_tamper(
 ) -> None:
     root = Path(__file__).resolve().parents[2]
     if not (root / cli.PRESELECTION_CLOSURE_PATH).is_file():
-        pytest.skip("6.2 closure is created from the clean implementation commit")
+        pytest.skip("6.3 closure is created from the clean implementation commit")
     actual_sha256 = cli._file_sha256
 
     def tampered_sha256(path: Path) -> str:
@@ -195,7 +237,7 @@ def test_strategy_status_detects_protocol_file_tamper(
 ) -> None:
     root = Path(__file__).resolve().parents[2]
     if not (root / cli.PRESELECTION_CLOSURE_PATH).is_file():
-        pytest.skip("6.2 closure is created from the clean implementation commit")
+        pytest.skip("6.3 closure is created from the clean implementation commit")
     actual_sha256 = cli._file_sha256
 
     def tampered_sha256(path: Path) -> str:

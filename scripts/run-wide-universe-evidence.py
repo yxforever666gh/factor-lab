@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Build and run the pre-registered 6.2 widened-opportunity-set experiment.
+"""Run the 6.3 corrective replay of the frozen 6.2 universe experiment.
 
 Selection is deliberately staged: train is built/evaluated first; validation
 is not opened unless at least one challenger passes train.  Audit is a
@@ -53,6 +53,9 @@ from factor_lab.data.sources import (  # noqa: E402
 )
 from factor_lab.release_integrity import (  # noqa: E402
     AUDIT_EVIDENCE_PATH,
+    BASE_PROTOCOL_AMENDMENT_PATH,
+    BASE_PROTOCOL_PATH,
+    CORRECTIVE_AMENDMENT_PATH,
     FROZEN_CANDIDATE_IDS,
     FROZEN_FINITE_SCORE_ADMISSION,
     FROZEN_HISTORICAL_AUDIT,
@@ -96,26 +99,43 @@ VALIDATION_START = pd.Timestamp("2023-01-01")
 VALIDATION_END = pd.Timestamp("2024-12-31")
 AUDIT_START = pd.Timestamp("2025-01-01")
 AUDIT_END = pd.Timestamp(FROZEN_HISTORICAL_AUDIT["physical_market_data_end"])
-TRAIN_SUSPENSIONS = "runtime/data/wide-universe/train/suspensions.parquet"
-TRAIN_SUSPENSION_METADATA = "runtime/data/wide-universe/train/suspensions.meta.json"
+WORK_ROOT = "runtime/data/wide-universe-6.3"
+LEGACY_6_2_WORK_ROOT = "runtime/data/wide-universe"
+TRAIN_SUSPENSIONS = f"{WORK_ROOT}/train/suspensions.parquet"
+TRAIN_SUSPENSION_METADATA = f"{WORK_ROOT}/train/suspensions.meta.json"
 TRAIN_ST_CHECKPOINT = (
-    "runtime/data/wide-universe/train/stock-st-isolated-checkpoint.json"
+    f"{WORK_ROOT}/train/stock-st-isolated-checkpoint.json"
 )
-SELECTION_SUSPENSIONS = "runtime/data/wide-universe/selection/suspensions.parquet"
+SELECTION_SUSPENSIONS = f"{WORK_ROOT}/selection/suspensions.parquet"
 SELECTION_SUSPENSION_METADATA = (
-    "runtime/data/wide-universe/selection/suspensions.meta.json"
+    f"{WORK_ROOT}/selection/suspensions.meta.json"
 )
 SELECTION_ST_CHECKPOINT = (
-    "runtime/data/wide-universe/selection/stock-st-isolated-checkpoint.json"
+    f"{WORK_ROOT}/selection/stock-st-isolated-checkpoint.json"
 )
-AUDIT_SUSPENSIONS = "runtime/data/wide-universe/audit/suspensions.parquet"
-AUDIT_SUSPENSION_METADATA = "runtime/data/wide-universe/audit/suspensions.meta.json"
+AUDIT_SUSPENSIONS = f"{WORK_ROOT}/audit/suspensions.parquet"
+AUDIT_SUSPENSION_METADATA = f"{WORK_ROOT}/audit/suspensions.meta.json"
 AUDIT_ST_CHECKPOINT = (
-    "runtime/data/wide-universe/audit/stock-st-isolated-checkpoint.json"
+    f"{WORK_ROOT}/audit/stock-st-isolated-checkpoint.json"
 )
 WINNER_FREEZE = WINNER_FREEZE_PATH
 WIDE_PROTOCOL_ID = "factor-lab/6.2/widened-opportunity-set-v2"
 WIDE_PROTOCOL_AMENDMENT_ID = f"{WIDE_PROTOCOL_ID}/amendment-1"
+CORRECTIVE_AMENDMENT = CORRECTIVE_AMENDMENT_PATH
+CORRECTIVE_AMENDMENT_ID = (
+    "factor-lab/6.3/widened-opportunity-set-corrective-replay/amendment-1"
+)
+
+STAGE_LINEAGE_FIELDS = (
+    "protocol_id",
+    "protocol_payload_sha256",
+    "protocol_amendment_id",
+    "protocol_amendment_payload_sha256",
+    "corrective_amendment_id",
+    "corrective_amendment_payload_sha256",
+    "preselection_closure_payload_sha256",
+    "git_commit",
+)
 
 ADMISSION_MIN_FINITE_SCORE_COUNT = 25
 ADMISSION_TOP_RANKING_COUNT = 25
@@ -672,6 +692,7 @@ def _terminal_binding(path: Path, *, expected_path: str) -> dict[str, Any]:
 def _stage_protocol(
     protocol_path: Path,
     amendment_path: Path,
+    corrective_amendment_path: Path,
     ledger: SourceLedger,
 ) -> dict[str, Any]:
     ledger.admit(protocol_path)
@@ -699,11 +720,44 @@ def _stage_protocol(
         or amendment.get("wide_return_evaluation_opened_before_freeze") is not False
     ):
         raise ValueError("protocol amendment does not bind the frozen base protocol")
+    ledger.admit(corrective_amendment_path)
+    corrective = _read_json(corrective_amendment_path)
+    if corrective.get("payload_sha256") != _payload_sha256(corrective):
+        raise ValueError("6.3 corrective amendment payload hash is invalid")
+    if (
+        corrective.get("amendment_id") != CORRECTIVE_AMENDMENT_ID
+        or corrective.get("release") != "6.3"
+        or corrective.get("status")
+        != "frozen_before_6_3_corrective_return_replay"
+        or corrective.get("direction_change") is not False
+    ):
+        raise ValueError("unexpected 6.3 corrective amendment identity")
+    corrective_base = dict(corrective.get("base_protocol") or {})
+    corrective_base_amendment = dict(
+        corrective.get("base_protocol_amendment") or {}
+    )
+    if (
+        _path(str(corrective_base.get("path") or ""))
+        != protocol_path.resolve()
+        or str(corrective_base.get("file_sha256") or "")
+        != sha256_file(protocol_path)
+        or str(corrective_base.get("payload_sha256") or "")
+        != protocol["payload_sha256"]
+        or _path(str(corrective_base_amendment.get("path") or ""))
+        != amendment_path.resolve()
+        or str(corrective_base_amendment.get("file_sha256") or "")
+        != sha256_file(amendment_path)
+        or str(corrective_base_amendment.get("payload_sha256") or "")
+        != amendment["payload_sha256"]
+    ):
+        raise ValueError("6.3 correction does not bind the frozen 6.2 contract")
     return {
         "protocol_id": protocol["protocol_id"],
         "base_payload_sha256": protocol["payload_sha256"],
         "amendment_id": amendment["amendment_id"],
         "amendment_payload_sha256": amendment["payload_sha256"],
+        "corrective_amendment_id": corrective["amendment_id"],
+        "corrective_amendment_payload_sha256": corrective["payload_sha256"],
     }
 
 
@@ -730,16 +784,161 @@ def _verify_runner_protocol_parity(protocol: Mapping[str, Any]) -> None:
         raise ValueError("runner finite-score admission differs from 6.2 protocol")
 
 
+def _validated_json_payload(path: Path, *, role: str) -> dict[str, Any]:
+    value = _read_json(path)
+    if value.get("payload_sha256") != _payload_sha256(value):
+        raise ValueError(f"{role} payload hash is invalid")
+    return value
+
+
+def _current_stage_lineage() -> dict[str, Any]:
+    """Resolve the one lineage a formal 6.3 stage is allowed to claim."""
+
+    protocol_path = _path(BASE_PROTOCOL_PATH)
+    amendment_path = _path(BASE_PROTOCOL_AMENDMENT_PATH)
+    corrective_path = _path(CORRECTIVE_AMENDMENT_PATH)
+    closure_path = _path(PRESELECTION_CLOSURE_PATH)
+    protocol = _validated_json_payload(protocol_path, role="base protocol")
+    amendment = _validated_json_payload(amendment_path, role="base amendment")
+    corrective = _validated_json_payload(
+        corrective_path, role="corrective amendment"
+    )
+    closure = _validated_json_payload(closure_path, role="preselection closure")
+    if (
+        protocol.get("protocol_id") != WIDE_PROTOCOL_ID
+        or amendment.get("amendment_id") != WIDE_PROTOCOL_AMENDMENT_ID
+        or corrective.get("amendment_id") != CORRECTIVE_AMENDMENT_ID
+        or corrective.get("release") != "6.3"
+        or closure.get("release") != "6.3"
+        or closure.get("status") != "implementation_frozen_before_selection"
+    ):
+        raise ValueError("current 6.3 stage lineage identity differs")
+
+    bound_paths = {
+        BASE_PROTOCOL_PATH,
+        BASE_PROTOCOL_AMENDMENT_PATH,
+        CORRECTIVE_AMENDMENT_PATH,
+        PRESELECTION_CLOSURE_PATH,
+        RUNTIME_PATH,
+        *FROZEN_IMPLEMENTATION_PATHS.values(),
+    }
+    source_bindings: dict[str, str] = {}
+    for relative_path in sorted(bound_paths):
+        path = _path(relative_path)
+        if not path.is_file() or path.is_symlink():
+            raise ValueError(f"formal stage lineage path is indirect: {relative_path}")
+        source_bindings[_portable(path)] = sha256_file(path)
+
+    return {
+        "protocol_id": protocol["protocol_id"],
+        "protocol_payload_sha256": protocol["payload_sha256"],
+        "protocol_amendment_id": amendment["amendment_id"],
+        "protocol_amendment_payload_sha256": amendment["payload_sha256"],
+        "corrective_amendment_id": corrective["amendment_id"],
+        "corrective_amendment_payload_sha256": corrective["payload_sha256"],
+        "preselection_closure_payload_sha256": closure["payload_sha256"],
+        "git_commit": _git_text("rev-parse", "HEAD"),
+        "source_bindings": source_bindings,
+    }
+
+
+def _assert_stage_lineage(
+    manifest: Mapping[str, Any], expected_lineage: Mapping[str, Any], *, stage: str
+) -> None:
+    for field in STAGE_LINEAGE_FIELDS:
+        if manifest.get(field) != expected_lineage.get(field):
+            raise ValueError(f"{stage} manifest {field} differs from 6.3 lineage")
+
+
+def _validate_stage_source_ledger(
+    paths: Mapping[str, Path],
+    manifest: Mapping[str, Any],
+    expected_lineage: Mapping[str, Any],
+    *,
+    stage: str,
+) -> None:
+    source_payload = _read_json(paths["source_files"])
+    if set(source_payload) != {"file_count", "files", "payload_sha256"}:
+        raise ValueError(f"{stage} source ledger fields differ")
+    files = source_payload.get("files")
+    if not isinstance(files, list):
+        raise ValueError(f"{stage} source ledger files are malformed")
+    records: dict[str, Mapping[str, Any]] = {}
+    for raw in files:
+        if (
+            not isinstance(raw, Mapping)
+            or set(raw) != {"path", "size_bytes", "sha256"}
+            or not isinstance(raw.get("path"), str)
+            or not isinstance(raw.get("size_bytes"), int)
+            or int(raw["size_bytes"]) < 0
+            or not isinstance(raw.get("sha256"), str)
+            or len(str(raw["sha256"])) != 64
+            or str(raw["path"]) in records
+        ):
+            raise ValueError(f"{stage} source ledger record is malformed")
+        records[str(raw["path"])] = raw
+    payload_sha256 = canonical_sha256(files)
+    if (
+        source_payload.get("file_count") != len(files)
+        or source_payload.get("payload_sha256") != payload_sha256
+        or manifest.get("source_file_count") != len(files)
+        or manifest.get("source_file_payload_sha256") != payload_sha256
+    ):
+        raise ValueError(f"{stage} source ledger summary differs")
+
+    expected_bindings = expected_lineage.get("source_bindings")
+    if not isinstance(expected_bindings, Mapping):
+        raise ValueError("6.3 expected source bindings are malformed")
+    for path, expected_sha256 in expected_bindings.items():
+        record = records.get(str(path))
+        if record is None or record.get("sha256") != expected_sha256:
+            raise ValueError(f"{stage} source ledger lacks 6.3 binding: {path}")
+
+    status_paths = {
+        "train": (
+            TRAIN_SUSPENSIONS,
+            TRAIN_SUSPENSION_METADATA,
+            TRAIN_ST_CHECKPOINT,
+        ),
+        "validation": (
+            SELECTION_SUSPENSIONS,
+            SELECTION_SUSPENSION_METADATA,
+            SELECTION_ST_CHECKPOINT,
+        ),
+        "audit": (
+            AUDIT_SUSPENSIONS,
+            AUDIT_SUSPENSION_METADATA,
+            AUDIT_ST_CHECKPOINT,
+        ),
+    }
+    try:
+        required_status_paths = status_paths[stage]
+    except KeyError as exc:
+        raise ValueError(f"unknown stage source-ledger scope: {stage}") from exc
+    missing_status = [
+        relative_path
+        for relative_path in required_status_paths
+        if _portable(_path(relative_path)) not in records
+    ]
+    if missing_status:
+        raise ValueError(
+            f"{stage} source ledger lacks canonical 6.3 status paths: "
+            f"{missing_status}"
+        )
+
+
 def _verify_release_closure(
     closure_path: Path,
     protocol_path: Path,
     amendment_path: Path,
+    corrective_amendment_path: Path,
 ) -> dict[str, Any]:
     return verify_preselection_closure(
         PROJECT_ROOT,
         closure_path=closure_path,
         protocol_path=protocol_path,
         amendment_path=amendment_path,
+        corrective_amendment_path=corrective_amendment_path,
     )
 
 
@@ -966,6 +1165,7 @@ def build_stage(
     research_config_path: Path,
     protocol_path: Path,
     protocol_amendment_path: Path,
+    corrective_amendment_path: Path,
     release_closure_path: Path,
     work_root: Path,
     suspension_path: Path,
@@ -993,10 +1193,16 @@ def build_stage(
     paths = _stage_paths(work_root, stage)
     ledger = SourceLedger()
     config, layout = _runtime_layout(config_path)
-    protocol = _stage_protocol(protocol_path, protocol_amendment_path, ledger)
+    protocol = _stage_protocol(
+        protocol_path,
+        protocol_amendment_path,
+        corrective_amendment_path,
+        ledger,
+    )
     for implementation in (
         release_closure_path,
         protocol_amendment_path,
+        corrective_amendment_path,
         _path(RUNTIME_PATH),
         *(
             _path(relative_path)
@@ -1292,6 +1498,7 @@ def build_stage(
     manifest: dict[str, Any] = {
         "schema_version": 1,
         "kind": "factor_lab_wide_universe_stage_manifest",
+        "release": "6.3",
         "stage": stage,
         "candidate_ids": list(candidate_ids),
         "status": "data_admission_passed",
@@ -1301,6 +1508,13 @@ def build_stage(
         "protocol_amendment_payload_sha256": protocol[
             "amendment_payload_sha256"
         ],
+        "corrective_amendment_id": protocol["corrective_amendment_id"],
+        "corrective_amendment_payload_sha256": protocol[
+            "corrective_amendment_payload_sha256"
+        ],
+        "preselection_closure_payload_sha256": _read_json(
+            release_closure_path
+        )["payload_sha256"],
         "physical_max_date": end_date.date().isoformat(),
         "physical_post_cutoff_market_rows": 0,
         "calendar_start": calendar[0].date().isoformat(),
@@ -1362,7 +1576,16 @@ def build_stage(
     return manifest
 
 
-def _load_stage(work_root: Path, stage: str) -> tuple[dict[str, Path], dict[str, Any]]:
+def _load_stage(
+    work_root: Path,
+    stage: str,
+    *,
+    expected_lineage: Mapping[str, Any] | None = None,
+) -> tuple[dict[str, Path], dict[str, Any]]:
+    formal_lineage = expected_lineage is None
+    if formal_lineage and work_root.resolve() != _path(WORK_ROOT):
+        raise ValueError("formal 6.3 stage must use the canonical 6.3 work root")
+    lineage = dict(expected_lineage or _current_stage_lineage())
     paths = _stage_paths(work_root, stage)
     manifest = _read_json(paths["manifest"])
     if manifest.get("payload_sha256") != _payload_sha256(manifest):
@@ -1370,10 +1593,12 @@ def _load_stage(work_root: Path, stage: str) -> tuple[dict[str, Path], dict[str,
     if (
         manifest.get("schema_version") != 1
         or manifest.get("kind") != "factor_lab_wide_universe_stage_manifest"
+        or manifest.get("release") != "6.3"
         or manifest.get("stage") != stage
         or manifest.get("status") != "data_admission_passed"
     ):
         raise ValueError(f"{stage} manifest stage/admission contract mismatch")
+    _assert_stage_lineage(manifest, lineage, stage=stage)
 
     raw_candidates = manifest.get("candidate_ids")
     if not isinstance(raw_candidates, list) or not raw_candidates:
@@ -1431,6 +1656,12 @@ def _load_stage(work_root: Path, stage: str) -> tuple[dict[str, Path], dict[str,
             or sha256_file(path) != identity["sha256"]
         ):
             raise ValueError(f"{stage} artifact identity failed: {name}")
+    _validate_stage_source_ledger(
+        paths,
+        manifest,
+        lineage,
+        stage=stage,
+    )
     return paths, manifest
 
 
@@ -1446,7 +1677,7 @@ def _portfolio_base(research_config_path: Path) -> dict[str, Any]:
         "ticker_column": "ticker",
         "open_column": "open_adj",
         "price_basis": "adjusted_total_return",
-        "price_source": "6.2_full_market_raw_open_times_contemporaneous_adj_factor",
+        "price_source": "6.3_full_market_raw_open_times_contemporaneous_adj_factor",
         "lot_size": 0,
         "adv_column": "adv_20",
         "volatility_column": "volatility_20",
@@ -1595,8 +1826,13 @@ def evaluate_stage(
     work_root: Path,
     research_config_path: Path,
     expected_manifest_payload_sha256: str,
+    expected_lineage: Mapping[str, Any] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
-    paths, manifest = _load_stage(work_root, stage)
+    paths, manifest = _load_stage(
+        work_root,
+        stage,
+        expected_lineage=expected_lineage,
+    )
     if (
         not isinstance(expected_manifest_payload_sha256, str)
         or len(expected_manifest_payload_sha256) != 64
@@ -1724,17 +1960,67 @@ def _strip_gate(gate: Mapping[str, Any]) -> dict[str, Any]:
     return value
 
 
+def _require_formal_6_3_paths(args: argparse.Namespace, *, mode: str) -> None:
+    """Repeat the CLI path freeze at the callable formal-mode boundary."""
+
+    expected: dict[str, str] = {
+        "work_root": WORK_ROOT,
+        "release_closure": PRESELECTION_CLOSURE_PATH,
+        "protocol": BASE_PROTOCOL_PATH,
+        "protocol_amendment": BASE_PROTOCOL_AMENDMENT_PATH,
+        "corrective_amendment": CORRECTIVE_AMENDMENT_PATH,
+    }
+    if mode == "selection":
+        expected.update(
+            {
+                "train_suspensions": TRAIN_SUSPENSIONS,
+                "train_suspension_metadata": TRAIN_SUSPENSION_METADATA,
+                "train_stock_st_checkpoint": TRAIN_ST_CHECKPOINT,
+                "suspensions": SELECTION_SUSPENSIONS,
+                "suspension_metadata": SELECTION_SUSPENSION_METADATA,
+                "stock_st_checkpoint": SELECTION_ST_CHECKPOINT,
+            }
+        )
+    elif mode == "audit":
+        expected.update(
+            {
+                "suspensions": AUDIT_SUSPENSIONS,
+                "suspension_metadata": AUDIT_SUSPENSION_METADATA,
+                "stock_st_checkpoint": AUDIT_ST_CHECKPOINT,
+            }
+        )
+    else:
+        raise ValueError(f"unsupported formal path mode: {mode}")
+    for attribute, relative_path in expected.items():
+        actual = getattr(args, attribute, None)
+        if actual is None or Path(actual).resolve() != _path(relative_path):
+            raise ValueError(
+                f"6.3 {mode} {attribute} must use the frozen path: "
+                f"{relative_path}"
+            )
+
+
 def run_selection(args: argparse.Namespace) -> dict[str, Any]:
     if args.freeze_output.resolve() != _path(WINNER_FREEZE):
         raise ValueError("selection freeze path differs from the frozen repository path")
     if args.freeze_output.exists():
         raise FileExistsError("selection freeze is create-only")
+    _require_formal_6_3_paths(args, mode="selection")
     if _git_text("status", "--porcelain"):
         raise RuntimeError("selection requires a clean committed implementation")
     start_head = _git_text("rev-parse", "HEAD")
     closure = _verify_release_closure(
-        args.release_closure, args.protocol, args.protocol_amendment
+        args.release_closure,
+        args.protocol,
+        args.protocol_amendment,
+        args.corrective_amendment,
     )
+    expected_lineage = _current_stage_lineage()
+    if (
+        expected_lineage["preselection_closure_payload_sha256"]
+        != closure.get("payload_sha256")
+    ):
+        raise ValueError("verified closure differs from the active stage lineage")
     verify_active_runtime(PROJECT_ROOT)
     train_manifest = build_stage(
         stage="train",
@@ -1744,6 +2030,7 @@ def run_selection(args: argparse.Namespace) -> dict[str, Any]:
         research_config_path=args.research_config,
         protocol_path=args.protocol,
         protocol_amendment_path=args.protocol_amendment,
+        corrective_amendment_path=args.corrective_amendment,
         release_closure_path=args.release_closure,
         work_root=args.work_root,
         suspension_path=args.train_suspensions,
@@ -1756,6 +2043,7 @@ def run_selection(args: argparse.Namespace) -> dict[str, Any]:
         work_root=args.work_root,
         research_config_path=args.research_config,
         expected_manifest_payload_sha256=str(train_manifest["payload_sha256"]),
+        expected_lineage=expected_lineage,
     )
     train_gates = {
         candidate_id: candidate_gate(
@@ -1781,6 +2069,7 @@ def run_selection(args: argparse.Namespace) -> dict[str, Any]:
             research_config_path=args.research_config,
             protocol_path=args.protocol,
             protocol_amendment_path=args.protocol_amendment,
+            corrective_amendment_path=args.corrective_amendment,
             release_closure_path=args.release_closure,
             work_root=args.work_root,
             suspension_path=args.suspensions,
@@ -1795,6 +2084,7 @@ def run_selection(args: argparse.Namespace) -> dict[str, Any]:
             expected_manifest_payload_sha256=str(
                 validation_manifest["payload_sha256"]
             ),
+            expected_lineage=expected_lineage,
         )
         train_replay = _phase_replay_digests(validation_results, "train")
         original_train = _phase_replay_digests(
@@ -1828,11 +2118,14 @@ def run_selection(args: argparse.Namespace) -> dict[str, Any]:
 
     freeze: dict[str, Any] = {
         "schema_version": 1,
-        "kind": "factor_lab_6_2_winner_freeze",
+        "kind": "factor_lab_6_3_winner_freeze",
         "status": "selected_definition_frozen" if winner else "selected_null_frozen",
         "protocol_payload_sha256": train_manifest["protocol_payload_sha256"],
         "protocol_amendment_payload_sha256": train_manifest[
             "protocol_amendment_payload_sha256"
+        ],
+        "corrective_amendment_payload_sha256": train_manifest[
+            "corrective_amendment_payload_sha256"
         ],
         "implementation_closure_payload_sha256": closure["payload_sha256"],
         "selected_candidate_id": winner,
@@ -1885,7 +2178,10 @@ def run_selection(args: argparse.Namespace) -> dict[str, Any]:
     ):
         raise RuntimeError("tracked implementation changed during selection")
     _verify_release_closure(
-        args.release_closure, args.protocol, args.protocol_amendment
+        args.release_closure,
+        args.protocol,
+        args.protocol_amendment,
+        args.corrective_amendment,
     )
     verify_active_runtime(PROJECT_ROOT)
     _write_json_create_only(args.freeze_output, freeze)
@@ -1903,12 +2199,22 @@ def run_audit(args: argparse.Namespace) -> dict[str, Any]:
         raise ValueError("audit result path differs from the frozen repository path")
     if args.audit_output.exists():
         raise FileExistsError("historical audit result is create-only")
+    _require_formal_6_3_paths(args, mode="audit")
     if _git_text("status", "--porcelain"):
         raise RuntimeError("audit requires a clean committed winner freeze")
     start_head = _git_text("rev-parse", "HEAD")
     closure = _verify_release_closure(
-        args.release_closure, args.protocol, args.protocol_amendment
+        args.release_closure,
+        args.protocol,
+        args.protocol_amendment,
+        args.corrective_amendment,
     )
+    expected_lineage = _current_stage_lineage()
+    if (
+        expected_lineage["preselection_closure_payload_sha256"]
+        != closure.get("payload_sha256")
+    ):
+        raise ValueError("verified closure differs from the active stage lineage")
     verify_active_runtime(PROJECT_ROOT)
     freeze = verify_winner_freeze(
         PROJECT_ROOT,
@@ -1930,6 +2236,8 @@ def run_audit(args: argparse.Namespace) -> dict[str, Any]:
         != _read_json(args.protocol).get("payload_sha256")
         or freeze.get("protocol_amendment_payload_sha256")
         != _read_json(args.protocol_amendment).get("payload_sha256")
+        or freeze.get("corrective_amendment_payload_sha256")
+        != _read_json(args.corrective_amendment).get("payload_sha256")
         or freeze.get("implementation_closure_payload_sha256")
         != closure.get("payload_sha256")
     ):
@@ -1990,6 +2298,7 @@ def run_audit(args: argparse.Namespace) -> dict[str, Any]:
         research_config_path=args.research_config,
         protocol_path=args.protocol,
         protocol_amendment_path=args.protocol_amendment,
+        corrective_amendment_path=args.corrective_amendment,
         release_closure_path=args.release_closure,
         work_root=args.work_root,
         suspension_path=args.suspensions,
@@ -2003,6 +2312,7 @@ def run_audit(args: argparse.Namespace) -> dict[str, Any]:
         work_root=args.work_root,
         research_config_path=args.research_config,
         expected_manifest_payload_sha256=str(manifest["payload_sha256"]),
+        expected_lineage=expected_lineage,
     )
     for phase, frozen_key in (
         ("train", "train_phase_replay_sha256"),
@@ -2020,7 +2330,7 @@ def run_audit(args: argparse.Namespace) -> dict[str, Any]:
     )
     evidence: dict[str, Any] = {
         "schema_version": 1,
-        "kind": "factor_lab_6_2_historical_audit",
+        "kind": "factor_lab_6_3_historical_audit",
         "status": "historical_holdout_passed_requires_fresh_future"
         if gate["passed"]
         else "audit_falsified",
@@ -2039,7 +2349,10 @@ def run_audit(args: argparse.Namespace) -> dict[str, Any]:
     ):
         raise RuntimeError("tracked implementation changed during historical audit")
     _verify_release_closure(
-        args.release_closure, args.protocol, args.protocol_amendment
+        args.release_closure,
+        args.protocol,
+        args.protocol_amendment,
+        args.corrective_amendment,
     )
     verify_active_runtime(PROJECT_ROOT)
     verify_winner_freeze(
@@ -2066,7 +2379,10 @@ def run_finalize(args: argparse.Namespace) -> dict[str, Any]:
         raise RuntimeError("finalize requires clean committed terminal evidence")
     start_head = _git_text("rev-parse", "HEAD")
     closure = _verify_release_closure(
-        args.release_closure, args.protocol, args.protocol_amendment
+        args.release_closure,
+        args.protocol,
+        args.protocol_amendment,
+        args.corrective_amendment,
     )
     freeze_path = _path(WINNER_FREEZE)
     freeze = verify_winner_freeze(
@@ -2109,8 +2425,8 @@ def run_finalize(args: argparse.Namespace) -> dict[str, Any]:
         }
     result: dict[str, Any] = {
         "schema_version": 1,
-        "kind": "factor_lab_6_2_release_result",
-        "release": "6.2",
+        "kind": "factor_lab_6_3_release_result",
+        "release": "6.3",
         "status": status,
         "preselection_closure_payload_sha256": closure["payload_sha256"],
         "winner_freeze": freeze_binding,
@@ -2151,12 +2467,17 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=_path("protocols/6.2-wide-universe-amendment-1.json"),
     )
     parser.add_argument(
+        "--corrective-amendment",
+        type=_path,
+        default=_path(CORRECTIVE_AMENDMENT),
+    )
+    parser.add_argument(
         "--release-closure",
         type=_path,
         default=_path(PRESELECTION_CLOSURE_PATH),
     )
     parser.add_argument(
-        "--work-root", type=_path, default=_path("runtime/data/wide-universe")
+        "--work-root", type=_path, default=_path(WORK_ROOT)
     )
     parser.add_argument(
         "--train-suspensions",
@@ -2228,6 +2549,10 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         ):
             if _same_path_or_file(train_path, validation_path):
                 parser.error("train and validation status artifacts must be distinct")
+        try:
+            _require_formal_6_3_paths(args, mode="selection")
+        except ValueError as exc:
+            parser.error(str(exc))
     elif args.mode == "audit":
         if args.freeze.resolve() != _path(WINNER_FREEZE):
             parser.error("audit must use the frozen repository winner freeze")
@@ -2243,20 +2568,10 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         args.stock_st_checkpoint = (
             args.stock_st_checkpoint or _path(AUDIT_ST_CHECKPOINT)
         )
-        selection_paths = {
-            _path(TRAIN_SUSPENSIONS),
-            _path(TRAIN_SUSPENSION_METADATA),
-            _path(TRAIN_ST_CHECKPOINT),
-            _path(SELECTION_SUSPENSIONS),
-            _path(SELECTION_SUSPENSION_METADATA),
-            _path(SELECTION_ST_CHECKPOINT),
-        }
-        if {
-            args.suspensions,
-            args.suspension_metadata,
-            args.stock_st_checkpoint,
-        } & selection_paths:
-            parser.error("audit mode forbids selection status artifacts")
+        try:
+            _require_formal_6_3_paths(args, mode="audit")
+        except ValueError as exc:
+            parser.error(str(exc))
     else:
         if args.result_output.resolve() != _path(RELEASE_RESULT_PATH):
             parser.error("finalize must use the frozen repository result path")

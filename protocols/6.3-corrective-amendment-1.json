@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_protocol_amendment",
+  "amendment_id": "factor-lab/6.3/widened-opportunity-set-corrective-replay/amendment-1",
+  "release": "6.3",
+  "status": "frozen_before_6_3_corrective_return_replay",
+  "direction_change": false,
+  "base_protocol": {
+    "path": "protocols/6.2-wide-universe.json",
+    "file_sha256": "ab37653cc904f1860c5c1b8276925def7145ca3e7a323c388c16000fea3c479b",
+    "payload_sha256": "9f47595125ac57f6a60ddf0526cf7074d4d1f38417655b5708fe27e3ebde4e45",
+    "protocol_id": "factor-lab/6.2/widened-opportunity-set-v2"
+  },
+  "base_protocol_amendment": {
+    "path": "protocols/6.2-wide-universe-amendment-1.json",
+    "file_sha256": "382536870962e067a44c06f5c06b43968ae7fb79a4a153661ab46549a5770580",
+    "payload_sha256": "429d94dd570b8e1ffc0c59daff668c5a92daaae6928da4a42ad0cff0e3c7032c",
+    "amendment_id": "factor-lab/6.2/widened-opportunity-set-v2/amendment-1"
+  },
+  "prior_release": {
+    "release": "6.2",
+    "tag": "6.2",
+    "annotated_tag_object": "5387a04812f14b1a8b23a8cab58bcc8c404a8b4c",
+    "peeled_commit": "70f05e8ec2e470308907effe234e33d455a97ae2",
+    "preselection_closure": {
+      "path": "protocols/6.2-release.json",
+      "file_sha256": "24b3089774f96df860feac0f0a1b4bb5db9a30ef63d99c709f677cc1829e6407",
+      "payload_sha256": "16020a1a7fc457e340e9e45cb9c2598e39b6be2d40bea91697eb37d1d613df46"
+    },
+    "execution_failure": {
+      "path": "protocols/evidence/6.2/execution-failure.json",
+      "file_sha256": "52a5e396f61cb5062f20f4fcf28970019093eb89de677afa371b039f055a7938",
+      "payload_sha256": "01a26ee1cc5417b0ebeb32331fcf5446279e7859aeebb53fc8ca1a9cd700305c",
+      "status": "selection_inconclusive_software_failure",
+      "classification": "floating_point_reduction_order_false_negative"
+    }
+  },
+  "correction": {
+    "created_before_any_6_3_return_replay": true,
+    "sole_production_semantic_change": {
+      "path": "src/factor_lab/research/wide_universe.py",
+      "function": "factor_lab.research.wide_universe.capacity_metrics",
+      "from": "ordinary binary64 += and built-in sum reductions",
+      "to": "math.fsum over the same validated additive values",
+      "applies_to": [
+        "requested_notional_total",
+        "executed_notional_total",
+        "capacity_limited_requested_notional",
+        "buy_plus_sell_reconciliation_totals"
+      ],
+      "row_selection_validation_ratios_and_output_schema_unchanged": true
+    },
+    "reconciliation": {
+      "relative_tolerance": 0.0,
+      "absolute_tolerance_rmb": 1e-06,
+      "unchanged_from_6_2": true
+    }
+  },
+  "stage_reuse": {
+    "reuse_6_2_derived_stages": false,
+    "reuse_6_2_status_views": false,
+    "forbidden_6_2_artifacts": [
+      "train_validation_or_audit_stage_manifests_and_derived_files",
+      "exact_run_phase_replay_return_trade_or_nav_outputs",
+      "candidate_gate_pass_fail_or_selected_definition_decisions",
+      "winner_freeze_historical_audit_terminal_result_or_cli_status_views"
+    ],
+    "canonical_raw_reuse": {
+      "allowed": true,
+      "requires_fresh_6_3_file_enumeration_and_sha256": true,
+      "requires_before_and_after_rehash": true,
+      "requires_new_6_3_stage_manifests": true
+    }
+  },
+  "unchanged_contract": {
+    "base_protocol_and_amendment_apply_in_full": true,
+    "candidate_ids_unchanged": true,
+    "source_semantic_data_admission_unchanged": true,
+    "signal_unchanged": true,
+    "portfolio_unchanged": true,
+    "costs_unchanged": true,
+    "execution_unchanged": true,
+    "phase_boundaries_unchanged": true,
+    "selection_gates_unchanged": true,
+    "ranking_after_gates_unchanged": true,
+    "audit_rules_unchanged": true,
+    "claim_contract_unchanged": true
+  },
+  "required_tests_add": [
+    "a high-notional interleaved buy/sell regression reproduces the 6.2 reduction-order false negative under ordinary summation and passes with math.fsum",
+    "the corrective replay retains rel_tol zero and abs_tol 0.000001 RMB and rejects any candidate, admission, signal, portfolio, cost, execution, phase, selection, ranking, audit, or claim-contract drift",
+    "no 6.2 derived stage or status view is accepted as 6.3 input; reused canonical raw files are freshly enumerated and SHA-256 hashed before and after every 6.3 stage"
+  ],
+  "payload_sha256": "e3ea5c70d56eb30c78187ebfa35428d80877afc43c47742cc9a3325cdcee4747"
+}

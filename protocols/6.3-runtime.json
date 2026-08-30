@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_frozen_research_runtime",
+  "runtime_id": "factor-lab/6.3/windows-cpython-3.10.16",
+  "status": "frozen_before_6_3_corrective_return_replay",
+  "source_package_version": "6.3.0",
+  "python": {
+    "implementation": "CPython",
+    "version": "3.10.16",
+    "full_version": "3.10.16 | packaged by Anaconda, Inc. | (main, Dec 11 2024, 16:19:12) [MSC v.1929 64 bit (AMD64)]"
+  },
+  "platform": {
+    "system": "Windows",
+    "release": "10",
+    "architecture": ["64bit", "WindowsPE"]
+  },
+  "packages": {
+    "mkl-service": "2.4.0",
+    "numpy": "1.26.4",
+    "pandas": "2.3.3",
+    "pyarrow": "25.0.1",
+    "python-dateutil": "2.9.0.post0",
+    "pytz": "2025.2",
+    "scipy": "1.15.2",
+    "six": "1.16.0",
+    "tzdata": "2025.2"
+  },
+  "distribution_contents": {
+    "numpy": {"file_count": 934, "content_sha256": "64620e4f6a42021db7e8ef894ce3230cbeddd758cd6a36fafad9f893c909132a"},
+    "pandas": {"file_count": 1561, "content_sha256": "711c49892204b20fd088c8390c57fc3051fd617408df320e461e1e75d303a866"},
+    "pyarrow": {"file_count": 761, "content_sha256": "ef32a2656a0293bb56a76ec1369a735bea843120475848daa5ccb08681b5ce01"},
+    "python-dateutil": {"file_count": 28, "content_sha256": "5b792315a068250fbaeb1c2099727e6b9e91354e8d50877309c14bc434c06f62"},
+    "pytz": {"file_count": 617, "content_sha256": "996abc72e0516446c9e930a0c3ee68c64fdea7916d196e34e90a86552169235f"},
+    "scipy": {"file_count": 869, "content_sha256": "33e28db21f70fdcc38748c1ec763c28ddb3fb68313bad16e60f12b4c46de6cba"},
+    "six": {"file_count": 9, "content_sha256": "4a4f02c01666c5e60f87c1322b9da276eb71238a25d7d74ff1a9ce5b811e8ec7"},
+    "tzdata": {"file_count": 634, "content_sha256": "9e195bd99e1d3f84e8dcb530b67fe39d5b47f36986cc8f41f74c81c871368821"}
+  },
+  "conda_artifacts": {
+    "blas": {"version": "1.0", "build": "mkl", "subdir": "win-64", "sha256": "b289fbee56e55bedc51cc333bacd32b3632a116d9d60d1176740b035dbaf44a2"},
+    "bzip2": {"version": "1.0.8", "build": "h2bbff1b_6", "subdir": "win-64", "sha256": "4e30c9bfd4501555b0859c863e95ea044290babf3bf190b9d4fb38b06cf15c3c"},
+    "intel-openmp": {"version": "2023.1.0", "build": "h59b6b97_46320", "subdir": "win-64", "sha256": "44bc9235c43ae6ad02bb2a5c06fe860a9efefdd4747ad72b21e32b76917bf1d5"},
+    "libffi": {"version": "3.4.4", "build": "hd77b12b_1", "subdir": "win-64", "sha256": "43a437fde4c064b2f1be2342a7bc6edccbc13da6a4fb8a44d87e4e6e34c54b63"},
+    "libzlib": {"version": "1.2.13", "build": "h2466b09_6", "subdir": "win-64", "sha256": "97f47db85265b596d08c044b6533013b7286fb66259c77d04da76b74414c896e"},
+    "lz4-c": {"version": "1.9.4", "build": "h2bbff1b_1", "subdir": "win-64", "sha256": "0e848b5004a9dc7a06f459cc67c404d7fb0321bf134ec7512815afafe97960b4"},
+    "mkl": {"version": "2023.1.0", "build": "h6b88ed4_46358", "subdir": "win-64", "sha256": "2b06da1ae1ed81d9a798395604c7653365e2b197a078fde6fd47dc6218b730bb"},
+    "mkl-service": {"version": "2.4.0", "build": "py310h827c3e9_2", "subdir": "win-64", "sha256": "390b06f52579b4b8e1ee3520ebdedb560d8a6bc95a66586b20d9f32ba2a71326"},
+    "mkl_fft": {"version": "1.3.11", "build": "py310h827c3e9_0", "subdir": "win-64", "sha256": "a765ef2789a11906fbb215d37437eda93e71d8ba4ed5c688a2bbd49902421d45"},
+    "mkl_random": {"version": "1.2.8", "build": "py310hc64d2fc_0", "subdir": "win-64", "sha256": "5c58221198e5e4902845be13de80ac4964d8b966d59aeec7772876888296a7c3"},
+    "numpy": {"version": "1.26.4", "build": "py310h055cbcc_0", "subdir": "win-64", "sha256": "f49255e2d1eb8e3a96676ee56f5637e90fc8f927549dbe00988dd7ee8cc322f5"},
+    "numpy-base": {"version": "1.26.4", "build": "py310h65a83cf_0", "subdir": "win-64", "sha256": "9f63e1a2b611152c9635d5cd75414a3eb2e2edbb3b048f0d456889cc75f4de06"},
+    "python": {"version": "3.10.16", "build": "h4607a30_1", "subdir": "win-64", "sha256": "6d049aa382593ee0c46f2d27dd1782aa5a0ae3032925d84a13d7b37fd0e57ef6"},
+    "scipy": {"version": "1.15.2", "build": "py310h15c175c_0", "subdir": "win-64", "sha256": "f19350c2061b1cdc3151a33c3dd4f71a1a481f9b10ac186674f957814bc839bc"},
+    "tbb": {"version": "2021.8.0", "build": "h59b6b97_0", "subdir": "win-64", "sha256": "3856c9fc5fc42c10d8a765e3277c3739bfcf009713f2aca33c025f7645bb9d89"},
+    "ucrt": {"version": "10.0.22621.0", "build": "h57928b3_1", "subdir": "win-64", "sha256": "db8dead3dd30fb1a032737554ce91e2819b43496a0db09927edf01c32b577450"},
+    "vc": {"version": "14.42", "build": "haa95532_4", "subdir": "win-64", "sha256": "4ba82ce6a81e8037b9a1887d62beb381e41e0ae0354894171e3351a4382092b1"},
+    "vc14_runtime": {"version": "14.42.34438", "build": "hfd919c2_26", "subdir": "win-64", "sha256": "30dcb71bb166e351aadbdc18f1718757c32cdaa0e1e5d9368469ee44f6bf4709"},
+    "vs2015_runtime": {"version": "14.42.34438", "build": "h7142326_26", "subdir": "win-64", "sha256": "432f2937206f1ad4a77e39f84fabc1ce7d2472b669836fb72bd2bfd19a2defc9"},
+    "xz": {"version": "5.6.4", "build": "h4754444_1", "subdir": "win-64", "sha256": "767a18adef86909bb374379add4784879d950a49ce2f7502444fd177b43fae33"},
+    "zstd": {"version": "1.5.6", "build": "h8880b57_0", "subdir": "win-64", "sha256": "74e9d04b9d34f16c8338ae8e4570ba4ee521dc38f32eb6579240950af10b3888"}
+  },
+  "numeric_backend": {
+    "blas_name": "mkl-sdl",
+    "blas_version": "2023.1",
+    "c_compiler_name": "msvc",
+    "c_compiler_version": "19.29.30154",
+    "simd_found": ["SSSE3", "SSE41", "POPCNT", "SSE42", "AVX", "F16C", "FMA3", "AVX2"]
+  },
+  "package_pin_source": "exact installed distribution bytes plus Conda artifact SHA-256/build identities",
+  "payload_sha256": "ac1e9aadd896f00b19d4104c7ddbb419d151aa32f0f2a9273c71e1f007131444"
+}
