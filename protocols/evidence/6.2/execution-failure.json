@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_6_2_execution_failure",
+  "release": "6.2",
+  "status": "selection_inconclusive_software_failure",
+  "classification": "floating_point_reduction_order_false_negative",
+  "selection_execution": {
+    "command": "python scripts/run-wide-universe-evidence.py --mode selection",
+    "execution_commit": "bc0dd8533b0fd29820923b2d7cef5440f3d1157b",
+    "phase": "train",
+    "candidate_id": "daily_adv20_top500_control",
+    "offset": 0,
+    "failure_function": "factor_lab.research.wide_universe.capacity_metrics",
+    "exception_type": "RuntimeError",
+    "exception_message": "capacity by-side totals do not reconcile"
+  },
+  "preselection_closure": {
+    "path": "protocols/6.2-release.json",
+    "file_sha256": "24b3089774f96df860feac0f0a1b4bb5db9a30ef63d99c709f677cc1829e6407",
+    "payload_sha256": "16020a1a7fc457e340e9e45cb9c2598e39b6be2d40bea91697eb37d1d613df46"
+  },
+  "train_stage": {
+    "manifest_path": "runtime/data/wide-universe/train/manifest.json",
+    "manifest_file_sha256": "bc44ff26a09c666a2a2c914ebc5ee221177af0c0bf731426245286f79ecfbce6",
+    "manifest_payload_sha256": "1cbee4e20e931b789356a29b0b4613689877e31a31b0012c6d2182effe7ce516",
+    "physical_max_date": "2022-12-31",
+    "signal_session_count": 1459,
+    "ranking_row_count": 109425,
+    "admission_diagnostic_row_count": 4377,
+    "candidate_ids": [
+      "daily_adv20_top500_control",
+      "daily_adv20_ge_100m",
+      "daily_adv20_top1500"
+    ]
+  },
+  "reproduction_diagnostic": {
+    "trade_record_count": 1533,
+    "trade_record_notional_precision_rmb_decimals": 4,
+    "requested_notional": {
+      "sequential_binary64_sum": 1225513297.653002,
+      "buy_then_sell_binary64_sum": 1225513297.652999,
+      "binary64_difference_rmb": -0.0000030994415283203125,
+      "exact_decimal_sum": "1225513297.6530",
+      "exact_decimal_buy_then_sell_sum": "1225513297.6530"
+    },
+    "executed_notional": {
+      "sequential_binary64_sum": 1223137990.518702,
+      "buy_then_sell_binary64_sum": 1223137990.5186992,
+      "binary64_difference_rmb": -0.00000286102294921875,
+      "exact_decimal_sum": "1223137990.5187",
+      "exact_decimal_buy_then_sell_sum": "1223137990.5187"
+    },
+    "frozen_absolute_tolerance_rmb": 0.000001,
+    "finding": "The invariant is true in exact decimal arithmetic; ordinary binary64 summation order alone exceeded the fixed absolute tolerance."
+  },
+  "evidence_boundary": {
+    "return_kernel_executed_in_memory": true,
+    "return_metrics_persisted_or_reported": false,
+    "exact_result_file_count": 0,
+    "train_candidate_gate_evaluated": false,
+    "validation_opened": false,
+    "winner_freeze_created": false,
+    "audit_opened": false,
+    "strategy_conclusion_allowed": false
+  },
+  "corrective_release_contract": {
+    "next_release": "6.3",
+    "direction_change": false,
+    "permitted_change": "Use a numerically stable reduction for additive capacity totals and add a high-notional regression test.",
+    "candidate_set_must_remain_unchanged": true,
+    "signal_portfolio_cost_execution_and_phase_contracts_must_remain_unchanged": true,
+    "selection_and_audit_gates_must_remain_unchanged": true,
+    "new_preselection_closure_required": true,
+    "reuse_of_6_2_winner_or_gate_result_forbidden": true
+  },
+  "payload_sha256": "01a26ee1cc5417b0ebeb32331fcf5446279e7859aeebb53fc8ca1a9cd700305c"
+}

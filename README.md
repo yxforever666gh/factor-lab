@@ -221,6 +221,11 @@ path 且 create-only；阶段之间
 Conda artifact 和 MKL 身份完全匹配。6.2 closure 会逐字节绑定已发布的 6.1 tag、失败证据和最后
 一份未打开收益的 6.1 preselection root；历史文件与 Git 对象原样保留。
 
+6.2 的实际正式 selection 在 train 准入成功后，因十几亿元成交金额使用普通 binary64 不同次序
+求和、再以固定 `1e-6` 元核对而产生软件假失败；没有生成 exact result、gate 或 winner freeze。
+该边界已封存在 `protocols/evidence/6.2/execution-failure.json`，不能解释为策略失败。后继 6.3
+属于同一研究方向的小版本，只修复数值归约并重新冻结；不得沿用 6.2 的中间 winner 或 gate。
+
 ## 复现 6.0 evidence
 
 完整 exact 比较会运行 `exit15` 与 `exit25` 各十个 offset；输出 JSON 文件应放在仓库外：

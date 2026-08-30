@@ -10,6 +10,8 @@
 
 ## [Unreleased]
 
+## [6.2] - 2026-08-30
+
 ### Added
 
 - 新增 6.2 来源语义驱动的数据准入合同和逐日、逐候选诊断证据：分别记录实际行情缺
@@ -39,6 +41,15 @@
 
 ### Known limitations
 
+- 6.2 的正式 selection 已通过 train 数据准入并封存 1459 个信号日、109425 行排名，但在首个
+  control/offset0 的容量摘要阶段因 binary64 加法次序触发软件假失败：1533 笔成交的 requested
+  notional 按原序与先分买卖求和只差 `-0.0000030994415283203125` 元，executed notional 只差
+  `-0.00000286102294921875` 元；按交易记录冻结的四位人民币精度做十进制精确求和，两项均完全
+  相等。首个组合已在内存运行，但没有 exact result、gate、validation、winner freeze 或 audit
+  落盘，因此 6.2 状态是 `selection_inconclusive_software_failure`，不能据此判断三条路线的收益。
+  create-only 失败边界及 train manifest 绑定见
+  `protocols/evidence/6.2/execution-failure.json`。同方向 6.3 只允许修复稳定求和并新增大额回归测试，
+  候选、信号、组合、成本、执行、切分和所有选择门必须保持不变，且必须重新冻结实现后再跑。
 - 6.2 的硬准入异常仍在成功 stage manifest 写入前终止；若正式运行再次失败，需要像 6.1 一样从
   冻结源码、源文件 ledger 和只读重构另行封存 create-only 失败证据，runner 尚不会自动发布该
   tracked failure JSON。
