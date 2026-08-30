@@ -10,6 +10,8 @@
 
 ## [Unreleased]
 
+## [7.1] - 2026-08-31
+
 ### Added
 
 - 新增 7.1 corrective amendment、独立 preselection closure、`multi-asset-7.1` runtime namespace
