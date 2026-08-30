@@ -10,6 +10,8 @@
 
 ## [Unreleased]
 
+## [6.3] - 2026-08-30
+
 ### Added
 
 - 新增 6.3 corrective amendment 与冻结 runtime capsule，并固定新的 create-only
