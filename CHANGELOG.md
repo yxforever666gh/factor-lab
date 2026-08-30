@@ -30,6 +30,10 @@
   CPython 3.10.16，测试尚未开始。后继实现把通用 CI 兼容矩阵改为可获得的 3.10/3.11，但正式收益
   runner 仍要求本机已逐字节冻结的 Conda CPython 3.10.16 capsule；新 closure 显式绑定并取代旧
   closure，不覆盖或删除旧文件。
+- 同样保留第二次 closure（payload `af1fc6fc…`）：GitHub Actions run `33296042579` 已成功建立
+  Windows/Linux 3.10/3.11 环境，但默认 shallow checkout 不含 closure 所绑定的祖先 commit/blob，
+  因而完整性测试按设计失败。CI checkout 现固定 `fetch-depth: 0`；第三个 closure 显式取代第二个，
+  前两份文件及其创建 commit 均原样保留，期间仍未运行 selection。
 - 在打开任何 widened-universe 收益前，根据真实源数据红队复现修订 6.1 数据合同：只有
   `suspend_timing` 为空的整日 S 才能证明缺 bar 或建立跨日状态；未被 R/实际 daily bar 清除的历史
   整日 S 可因果解释后续缺 bar，但必须单列为 `carried_prior_explicit_full_day_S` 推断并记录来源日，

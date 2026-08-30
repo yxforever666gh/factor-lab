@@ -16,8 +16,11 @@ from typing import Any, Mapping
 PROTOCOL_ID = "factor-lab/6.1/widened-opportunity-set-v1"
 RUNTIME_ID = "factor-lab/6.1/windows-cpython-3.10.16"
 RUNTIME_PATH = "protocols/6.1-runtime.json"
-PRESELECTION_CLOSURE_PATH = "protocols/6.1-release-closure-2.json"
-SUPERSEDED_PRESELECTION_CLOSURE_PATH = "protocols/6.1-release.json"
+PRESELECTION_CLOSURE_PATH = "protocols/6.1-release-closure-3.json"
+SUPERSEDED_PRESELECTION_CLOSURE_PATH = "protocols/6.1-release-closure-2.json"
+PRESELECTION_SUPERSESSION_REASON = (
+    "github_actions_shallow_checkout_lacks_frozen_ancestors"
+)
 WINNER_FREEZE_PATH = "protocols/evidence/6.1/winner-freeze.json"
 AUDIT_EVIDENCE_PATH = "protocols/evidence/6.1/historical-audit.json"
 RELEASE_RESULT_PATH = "protocols/evidence/6.1/result.json"
@@ -378,8 +381,7 @@ def _verify_superseded_preselection_closure(
     if (
         raw.get("path") != SUPERSEDED_PRESELECTION_CLOSURE_PATH
         or raw.get("selection_returns_opened") is not False
-        or raw.get("replacement_reason")
-        != "github_actions_windows_lacks_cpython_3_10_16"
+        or raw.get("replacement_reason") != PRESELECTION_SUPERSESSION_REASON
     ):
         raise ValueError("superseded preselection-closure reason differs")
     path = root / SUPERSEDED_PRESELECTION_CLOSURE_PATH
@@ -1015,6 +1017,7 @@ __all__ = [
     "FROZEN_HISTORICAL_AUDIT",
     "FROZEN_IMPLEMENTATION_PATHS",
     "PRESELECTION_CLOSURE_PATH",
+    "PRESELECTION_SUPERSESSION_REASON",
     "PROTOCOL_ID",
     "RUNTIME_ID",
     "RUNTIME_PATH",

@@ -22,6 +22,7 @@ from factor_lab.release_integrity import (  # noqa: E402
     FROZEN_HISTORICAL_AUDIT,
     FROZEN_IMPLEMENTATION_PATHS,
     PRESELECTION_CLOSURE_PATH,
+    PRESELECTION_SUPERSESSION_REASON,
     PROTOCOL_ID,
     RUNTIME_ID,
     RUNTIME_PATH,
@@ -124,7 +125,7 @@ def _superseded_closure_binding() -> dict[str, Any]:
         "payload_sha256": old["payload_sha256"],
         "closure_commit": closure_commit,
         "selection_returns_opened": False,
-        "replacement_reason": "github_actions_windows_lacks_cpython_3_10_16",
+        "replacement_reason": PRESELECTION_SUPERSESSION_REASON,
     }
 
 

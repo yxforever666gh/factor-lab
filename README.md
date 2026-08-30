@@ -200,8 +200,9 @@ python -m factor_lab.cli strategy status --release 6.1
 必须先提交、推送并等待 CI，不得在同一未提交工作树中连续打开下一层。扩大机会集收益运行额外
 要求 [6.1 runtime capsule](protocols/6.1-runtime.json) 中的 Windows CPython、distribution 文件树、
 Conda artifact 和 MKL 身份完全匹配。当前有效 preselection root 是
-`protocols/6.1-release-closure-2.json`；首次 `protocols/6.1-release.json` 因 GitHub Windows
-toolcache 不提供 CPython 3.10.16 而在任何测试/收益打开前被显式取代，文件原样保留。
+`protocols/6.1-release-closure-3.json`；前两份 closure 分别暴露 GitHub Windows toolcache 不提供
+CPython 3.10.16、默认 shallow checkout 看不到冻结祖先对象，两者都在任何收益打开前被后继 closure
+显式取代，文件原样保留。
 
 ## 复现 6.0 evidence
 
