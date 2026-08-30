@@ -54,6 +54,19 @@
   `datetime64` 搜索并缓存，真实全主表首日机会集构建由约 9.1 秒降至约 0.095 秒；上市前、上市日、
   第 119/120 个交易日和未来上市边界的语义不变。
 
+### Known limitations
+
+- 6.1 的正式 selection 在任何 target、next-open/复权定价、组合收益、交易、validation 或 audit
+  打开前，未通过预注册的 finite-score 数据准入门。ADV≥1亿元、Top1500、Top500 control 的
+  median/q05 分别为 `0.886663/0.836144`、`0.886000/0.838667`、`0.916000/0.850000`，低于
+  `0.95/0.90`；但每天最低有限分数仍有 530/1206/406。逐日只读重构证明主要原因不是 raw 分区
+  缺页，而是 Tushare `daily_basic.pe_ttm` 按文档对亏损公司为空，固定 control score 又必须先有
+  有限 PE。该结果只能称为 `pre_return_data_admission_failed`，不能称为策略无赢家或负收益。
+  绑定 execution commit、closure/runtime 和 train 输入哈希的证据见
+  `protocols/evidence/6.1/admission-failure.json`。同一 widened-opportunity-set 假设的后续小版本必须
+  重新冻结来源语义驱动的可评分资格合同，把结构性 PE 空值、停牌日无 snapshot 与真正抓取缺失
+  分开；不得事后把 coverage 阈值调到刚好越线。
+
 ## [6.0] - 2026-08-30
 
 ### Changed

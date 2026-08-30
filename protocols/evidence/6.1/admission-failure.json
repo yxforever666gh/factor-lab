@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_6_1_data_admission_failure",
+  "release": "6.1",
+  "status": "pre_return_data_admission_failed",
+  "stage": "train_data_admission",
+  "execution_commit": "1c2f920c0202a08f865d7e67a7cd5ee4f5135485",
+  "active_preselection_closure": {
+    "path": "protocols/6.1-release-closure-3.json",
+    "file_sha256": "8928735a11827b4e01f174675a03a7278d8118ea00e470ec395744600b8248ac",
+    "payload_sha256": "254f316cc777198d1672d0804a3223927d24e5417c376748a1d71b9d189f9e54"
+  },
+  "runtime": {
+    "path": "protocols/6.1-runtime.json",
+    "file_sha256": "c4dade718ab7abe231d60a305a7333e64e34355e2fc5b8a142ed27a9ad6914fc",
+    "payload_sha256": "12fc58495d64727a4560aa62541da7517aa2fdabe405d82cc14d5ed9ec8d5889"
+  },
+  "train_inputs": {
+    "raw_checkpoint": {
+      "path": "runtime/data/raw/checkpoint.json",
+      "file_sha256": "1f4ef6f0ee19f7a673bce937e4e66e5188607b10567844c629a619d590487e51",
+      "schema_version": 1,
+      "partition_count": 7395
+    },
+    "stock_st": {
+      "path": "runtime/data/wide-universe/train/stock-st-isolated-checkpoint.json",
+      "file_sha256": "e7d853f05179749436082495277dce5d004e6ddc3b6659de304bff60b20d936f",
+      "payload_sha256": "12ef321ece3290fbc89cd2ce229aa54d9f00c4ba038f4047dc0d3954c95f8ed1",
+      "stage": "train",
+      "start_date": "2016-07-07",
+      "cutoff_date": "2022-12-31",
+      "partition_count": 1579,
+      "partitions_payload_sha256": "f3e69136134721fd8883308146a493221dfbe30facbd26e751fce473545ca23b",
+      "partition_root_payload_sha256": "e8e9973b4fb6130fc5234c5d53527feef14e46445dd7f86e7458b5a382b2767d",
+      "source_checkpoint_sha256": "0e1b2c19a6d2a8bf91575d39e3e0eb21dd4873822ad57aa6d9acd163fe2af8d3"
+    },
+    "suspensions": {
+      "path": "runtime/data/wide-universe/train/suspensions.parquet",
+      "file_sha256": "70487baeb0dccdf073c48d56c18d44f0cf3f32b64a553f73ada3bad1b62e1b87",
+      "size_bytes": 180681,
+      "row_count": 176475,
+      "date_min": "2016-07-07",
+      "date_max": "2022-12-30",
+      "suspend_event_count": 170266,
+      "resume_event_count": 6209,
+      "metadata": {
+        "path": "runtime/data/wide-universe/train/suspensions.meta.json",
+        "file_sha256": "5f50de8fcaaa5dbc916d4ff76c675c9f2454a1cd24220cbbdec886d883f3043c",
+        "schema_version": 1,
+        "status": "complete"
+      }
+    }
+  },
+  "finite_score_admission": {
+    "official_session_count": 1579,
+    "signal_session_count": 1459,
+    "quantile_method": "linear",
+    "thresholds": {
+      "median_finite_score_coverage_min": 0.95,
+      "q05_finite_score_coverage_min": 0.9,
+      "finite_score_count_min_per_signal": 10
+    },
+    "arms": {
+      "daily_adv20_ge_100m": {
+        "median_finite_score_coverage": 0.8866634098680997,
+        "q05_finite_score_coverage": 0.836143565860079,
+        "minimum_finite_score_count": 530,
+        "median_threshold_passed": false,
+        "q05_threshold_passed": false,
+        "minimum_count_threshold_passed": true,
+        "admission_passed": false
+      },
+      "daily_adv20_top1500": {
+        "median_finite_score_coverage": 0.886,
+        "q05_finite_score_coverage": 0.8386666666666667,
+        "minimum_finite_score_count": 1206,
+        "median_threshold_passed": false,
+        "q05_threshold_passed": false,
+        "minimum_count_threshold_passed": true,
+        "admission_passed": false
+      },
+      "daily_adv20_top500_control": {
+        "median_finite_score_coverage": 0.916,
+        "q05_finite_score_coverage": 0.85,
+        "minimum_finite_score_count": 406,
+        "median_threshold_passed": false,
+        "q05_threshold_passed": false,
+        "minimum_count_threshold_passed": true,
+        "admission_passed": false
+      }
+    },
+    "all_arms_admission_passed": false
+  },
+  "opening_state": {
+    "rankings_constructed_in_memory": true,
+    "rankings_persisted": false,
+    "targets_opened": false,
+    "decisions_opened": false,
+    "sparse_pricing_opened": false,
+    "evaluate_stage_opened": false,
+    "portfolio_returns_opened": false,
+    "winner_freeze_opened": false,
+    "validation_opened": false,
+    "audit_opened": false,
+    "daily_pct_chg_read_for_frozen_contemporaneous_volatility_only": true
+  },
+  "post_failure_diagnosis": {
+    "performed_after_admission_failure": true,
+    "portfolio_returns_used": false,
+    "classification": "protocol_threshold_incompatible_with_provider_defined_signal_eligibility",
+    "provider_defined_loss_pe_null": {
+      "field": "daily_basic.pe_ttm",
+      "provider": "tushare",
+      "provider_documentation": "https://tushare.pro/document/2?doc_id=32",
+      "documented_semantics": "PE is empty for loss-making companies",
+      "structural_null_expected": true,
+      "dominant_observed_cause": true
+    },
+    "unexpected_missing": {
+      "daily_basic_row_missing_with_actual_daily_bar": "must remain separately diagnosed and fail closed",
+      "daily_basic_row_absent_during_proven_no-bar_suspension": "expected point-in-time snapshot absence; structurally unscoreable, not a missing raw partition",
+      "pb_nonfinite_or_zero": "must remain separately diagnosed from provider-defined loss PE nulls",
+      "established_as_primary_cause": false
+    },
+    "independent_streaming_reconstruction": {
+      "official_session_count": 1579,
+      "signal_session_count": 1459,
+      "coverage_statistics_exactly_reproduced": true,
+      "control_member_day_count": 729500,
+      "control_missing_score_member_day_count": 63010,
+      "control_missing_score_breakdown": {
+        "pe_ttm_only_nonfinite_with_daily_basic_row": 59623,
+        "daily_basic_row_absent_with_proven_no_daily_bar": 2952,
+        "pe_ttm_and_pb_nonfinite_with_daily_basic_row": 360,
+        "pb_only_nonfinite_with_daily_basic_row": 75
+      },
+      "control_minimum_finite_score_date": "2017-02-03",
+      "top1500_minimum_finite_score_date": "2022-12-30",
+      "adv_ge_100m_minimum_finite_score_date": "2022-12-30"
+    },
+    "coverage_calculation_matches_frozen_protocol": true,
+    "disposition": "do_not_rewrite_6_1; preserve this pre-return failure and issue a newly frozen 6.2 eligibility contract"
+  },
+  "payload_sha256": "dfc0c16b18dc0d9a4733657f961435d2c65e48ccc340270d343921b4c7e1a3d9"
+}

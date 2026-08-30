@@ -5,7 +5,9 @@ Factor Lab 是一条本地、可复现的 A 股截面策略研究链：canonical
 
 6.1 的主问题不再是“怎样继续组合旧因子”，而是“过去的 Top500 研究边界是否过早排除了
 fixed-core 真正可交易的机会”。它保持信号、Top10/exit25、十相位、成本、次日开盘和容量模型
-不变，只改变逐日因果机会集。正式结果尚未打开，因此当前仍不能声称找到稳定 alpha。
+不变，只改变逐日因果机会集。6.1 在任何组合收益、交易或 validation 打开前被数据准入门拦下：
+Tushare 按定义把亏损公司的 `pe_ttm` 置空，而协议错误地把这些结构性不可评分股票计作抓取缺失，
+要求全 universe 95%/90% 有限分数覆盖。这个结果不是“策略无赢家”，更不能声称找到稳定 alpha。
 
 6.0 的结论不是“已经找到稳定 alpha”，而是两件更具体的事：
 
@@ -124,6 +126,15 @@ audit 通过，也只记为“需要新鲜未来样本”，不允许盈利承�
 - [protocols/6.1-wide-universe-amendment-1.json](protocols/6.1-wide-universe-amendment-1.json)
 - [protocols/6.1-runtime.json](protocols/6.1-runtime.json)
 
+实际运行完成 1,579 个 train 交易日、1,459 个信号日的因果排名后，在持久化 rankings、构造
+targets、读取 next-open/复权因子或调用组合评估器之前 fail closed。Top500、Top1500、ADV≥1亿元
+的有限分数覆盖中位数分别为 91.60%、88.60%、88.67%，但每天最低仍有 406、1,206、530 只
+可评分股票，远超 Top25。逐日重构表明控制组 63,010 个缺分 member-day 中 59,623 个是已有
+`daily_basic` 行但 `pe_ttm` 为空；供应商文档明确规定亏损公司 PE 为空。完整绑定证据见
+[protocols/evidence/6.1/admission-failure.json](protocols/evidence/6.1/admission-failure.json)。下一小版本
+6.2 将保持候选、信号、组合和收益门不变，只把“原始记录完整性”与“按信号定义结构性不可评分”
+拆成独立准入合同；不会把百分比阈值事后调到刚好能通过。
+
 ## 安装
 
 ```powershell
@@ -196,7 +207,9 @@ python scripts/run-wide-universe-evidence.py --mode finalize
 python -m factor_lab.cli strategy status --release 6.1
 ```
 
-`selection`、`audit`、`finalize` 的三个终端 JSON 都是固定 tracked path 且 create-only；阶段之间
+6.1 的第一次 `selection` 已按设计在数据准入阶段终止，因此没有生成 winner freeze，也不得手工
+伪装成 `selected_null_frozen`。若协议准入成功，`selection`、`audit`、`finalize` 的三个终端 JSON
+都是固定 tracked path 且 create-only；阶段之间
 必须先提交、推送并等待 CI，不得在同一未提交工作树中连续打开下一层。扩大机会集收益运行额外
 要求 [6.1 runtime capsule](protocols/6.1-runtime.json) 中的 Windows CPython、distribution 文件树、
 Conda artifact 和 MKL 身份完全匹配。当前有效 preselection root 是
