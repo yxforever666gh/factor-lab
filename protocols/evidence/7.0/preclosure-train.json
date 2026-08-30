@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_preclosure_train_disclosure",
+  "release": "7.0",
+  "status": "train_falsified_before_preselection_closure",
+  "payload_sha256": "6bd2909ddc97ec84d3535d15e8f13330a5752831aead82d8fb50afdd16ac6775",
+  "observed_at_utc": "2026-08-30T17:32:12.5748183Z",
+  "disclosure": {
+    "trigger": "a read-only code-review subagent ran the real train stage outside the formal runner while checking capture/load compatibility",
+    "formal_runner_used": false,
+    "preselection_closure_existed": false,
+    "human_visible_train_outcome": true,
+    "validation_market_outcomes_opened": false,
+    "audit_market_outcomes_opened": false,
+    "repository_files_modified_by_probe": false,
+    "parameter_or_gate_change_after_probe": false,
+    "interpretation": "the unchanged pre-specified candidate failed train; this is disclosed historical diagnostic evidence, not an independent preselection experiment"
+  },
+  "repository_state": {
+    "head": "9ec3f9dd6941ae797a1407f85e00ff770e8d1c60",
+    "branch": "main",
+    "protocol_path": "protocols/7.0-multi-asset.json",
+    "protocol_file_sha256": "567aa16a334d2dd863d4a61e087849dd0ed6795298264cb0c6a804348560684c",
+    "protocol_payload_sha256": "66057dd909090a358ad6d4134190ef7ddfee567590ad87a4e263510d4a3b2902",
+    "asset_selection_path": "protocols/7.0-asset-selection.json",
+    "asset_selection_file_sha256": "6d2d819db2579db76f8e7830a5de090d8d471c7fdc657abd8aba626cd1b065ec",
+    "asset_selection_payload_sha256": "b00536d618c7fe46e3cbe8d258d2b2032ef4e0c16d40fb9c74ff016c34525e0b",
+    "data_kernel_sha256": "45f62eb7000745b031fa358121495f1ed3e172bb3a4ddd92ed7ac0406aa5f82d",
+    "research_kernel_sha256": "fc1f64c6c13a57d01a7ef1604a451749f225b45dbd66afc1021fb87599d68028",
+    "runner_sha256_at_probe_stop": "b72768706e297300ee4592d9081dcfd98440e3c59f1e615ceac807816e1ad66d",
+    "runner_role": "not imported or used by the probe"
+  },
+  "source_stage": {
+    "temporary_path": "H:/Download/factor-lab-v7-real-stage-review-8c2f19/stage=train",
+    "manifest_path": "H:/Download/factor-lab-v7-real-stage-review-8c2f19/stage=train/manifest.json",
+    "manifest_file_sha256": "740c45485af7e83ff8f386b23e3382df76d7a193b09d4fe57f0df7783ec07f4e",
+    "manifest_payload_sha256": "e7b1dfe994106ef26bea12098b3c84e4fbc25982241dba28f79d5140b1041ed8",
+    "price_start_date": "2014-01-15",
+    "price_end_date": "2019-12-31",
+    "calendar_rows": 1471,
+    "rows_per_asset": 1455,
+    "asset_count": 6
+  },
+  "candidate": {
+    "candidate_id": "causal_multi_horizon_trend_budget",
+    "observations": 1184,
+    "start_date": "2015-03-02",
+    "baseline_date": "2015-02-27",
+    "end_date": "2019-12-31",
+    "start_nav": 1000000.0,
+    "end_nav": 1263672.48896,
+    "total_return": 0.26367248895999995,
+    "cagr": 0.05107008054509099,
+    "sharpe": 0.7239048856382325,
+    "max_drawdown": -0.15378658367470155,
+    "annualized_turnover": 3.037929347506282,
+    "complete_year_returns": {
+      "2016": -0.0028460978093692857,
+      "2017": 0.11398486420411857,
+      "2018": 0.008389404712557669,
+      "2019": 0.09736346408745544
+    },
+    "positive_complete_year_count": 3,
+    "requested_notional_fill_ratio": 0.9967450854478762,
+    "capacity_limited_requested_notional_ratio": 0.0,
+    "max_abs_accounting_error": 3.637978807091713e-10,
+    "canonical_metrics_sha256": "876b70b3e1c821a2163434ac7601d7d37164df5b140a4da048aa3500d55910b3"
+  },
+  "stress": {
+    "cost_bps_per_side": 16.0,
+    "end_nav": 1249628.2339199998,
+    "total_return": 0.24962823391999978,
+    "cagr": 0.048572883247247844,
+    "sharpe": 0.6910436149711741,
+    "max_drawdown": -0.15462617021000402,
+    "positive_complete_year_count": 3,
+    "requested_notional_fill_ratio": 0.9953680389684361,
+    "capacity_limited_requested_notional_ratio": 0.0,
+    "max_abs_accounting_error": 3.4924596548080444e-10,
+    "canonical_metrics_sha256": "5ad62281eb22edb5c9256c7aab06b233e8f74671b0bc3cf3672c3b5d28a29036"
+  },
+  "control": {
+    "candidate_id": "static_risk_budget",
+    "end_nav": 1368727.7504,
+    "total_return": 0.36872775039999994,
+    "cagr": 0.06908794127071727,
+    "sharpe": 0.7263933657449289,
+    "max_drawdown": -0.17024574801653047,
+    "annualized_turnover": 0.5399265050913324,
+    "positive_complete_year_count": 3,
+    "requested_notional_fill_ratio": 0.9954253240120514,
+    "capacity_limited_requested_notional_ratio": 0.0,
+    "max_abs_accounting_error": 2.8558133635669947e-10,
+    "canonical_metrics_sha256": "fb1b146e34d62486dfd2c7ff39102ca7418419260f7eda99b11b6c2768c12492"
+  },
+  "relative": {
+    "cagr": -0.018017860725626278,
+    "sharpe": -0.0024884801066963336,
+    "max_drawdown": 0.016459164341828925,
+    "combined_metrics_sha256": "2dda50d1fa41c0490eef41ccba0be469066b21b82ac02d1a6b109e0fe2b2944c"
+  },
+  "train_gate": {
+    "passed": false,
+    "checks": {
+      "net_cagr_strictly_positive": true,
+      "net_sharpe_at_least": true,
+      "daily_max_drawdown_at_least": true,
+      "positive_complete_year_count_at_least": true,
+      "stress_cost_cagr_strictly_positive": true,
+      "relative_cagr_at_least": false,
+      "relative_sharpe_at_least": false,
+      "relative_max_drawdown_at_least": true,
+      "requested_notional_fill_ratio_at_least": true,
+      "capacity_limited_requested_notional_ratio_at_most": true,
+      "nav_reconciliation_error_at_most": true
+    },
+    "failed_checks": {
+      "relative_cagr_at_least": {
+        "metric": -0.018017860725626278,
+        "threshold": -0.015
+      },
+      "relative_sharpe_at_least": {
+        "metric": -0.0024884801066963336,
+        "threshold": 0.0
+      }
+    },
+    "canonical_gate_sha256": "e03937a101011b546dd6195052f5f2ed6183c64b6697c081f621fd72f7a95adf"
+  },
+  "selection": {
+    "selected_candidate_id": null,
+    "validation_opened": false,
+    "audit_opened": false,
+    "runner_up_fallback": false
+  },
+  "claim_contract": {
+    "historical_evidence_class": "preclosure_exposed_historical_diagnostic",
+    "profit_claim_allowed": false,
+    "stable_future_profit_claim_allowed": false,
+    "fresh_future_evidence_required": true
+  }
+}

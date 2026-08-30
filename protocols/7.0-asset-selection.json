@@ -1,0 +1,2822 @@
+{
+  "adv20": {
+    "amount_conversion": "Tushare fund_daily amount times 1000 equals RMB",
+    "sessions": 20,
+    "volume_conversion": "Tushare fund_daily vol times 100 equals fund units"
+  },
+  "cash_distribution_contract": {
+    "automatic_unit_accretion_or_present-day_NAV_backfill_forbidden": true,
+    "complete_fields": [
+      "ann_date",
+      "imp_anndate",
+      "record_date",
+      "ex_date",
+      "pay_date",
+      "div_cash"
+    ],
+    "implemented_event_required": true,
+    "pre_close_absolute_tolerance_rmb": 0.0011,
+    "pre_close_equation": "pre_close_on_ex_date = prior_raw_close - div_cash_per_fund_unit",
+    "query_boundary": "derive suspicious pre_close action dates from cutoff daily first, then query fund_div by exact ex_date only",
+    "unbounded_fund_div_queries_forbidden": true
+  },
+  "class_order": [
+    "mainland_broad",
+    "hong_kong_broad",
+    "united_states_broad",
+    "gold",
+    "five_year_government_bond",
+    "cash_proxy"
+  ],
+  "classes": {
+    "cash_proxy": {
+      "candidate_count": 30,
+      "candidates": [
+        {
+          "adv20_rmb": 254941133.50500003,
+          "benchmark": "活期存款利率(税后)×100%",
+          "cash_distribution_admission": {
+            "accepted_event_count": 0,
+            "accepted_events": [],
+            "admission_rule": "at least one implemented pre-cutoff cash distribution with complete causal dates and raw pre_close reconciliation",
+            "cutoff_source_content_sha256": "1b42b5e089c7f9545325e059024d9941e613e9f765a6c77ad2ca84c24dd7a494",
+            "cutoff_source_row_count": 0,
+            "exact_ex_date_queries": [],
+            "passed": false,
+            "queried_ex_dates": [],
+            "rejected_events": [],
+            "suspicious_action_count": 0,
+            "suspicious_actions": [],
+            "unbounded_query_count": 0
+          },
+          "daily_source": {
+            "content_sha256": "5d4dca0653d60eca691f0caa336345ae9802934db10ec9b2b36ede689e567176",
+            "first_trade_date": "2014-10-20",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,pre_close,close,vol,amount",
+              "start_date": "20141020",
+              "ts_code": "159001.SZ"
+            },
+            "row_count": 88
+          },
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "cash_distribution_not_reconstructible_before_cutoff",
+            "fewer_than_252_pre_cutoff_daily_rows"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2014-10-20",
+          "name": "易方达保证金收益货币ETF-A",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159001.SZ"
+        },
+        {
+          "adv20_rmb": 602166069.6800001,
+          "benchmark": "活期存款利率(税后)×100%",
+          "cash_distribution_admission": {
+            "accepted_event_count": 0,
+            "accepted_events": [],
+            "admission_rule": "at least one implemented pre-cutoff cash distribution with complete causal dates and raw pre_close reconciliation",
+            "cutoff_source_content_sha256": "1b42b5e089c7f9545325e059024d9941e613e9f765a6c77ad2ca84c24dd7a494",
+            "cutoff_source_row_count": 0,
+            "exact_ex_date_queries": [],
+            "passed": false,
+            "queried_ex_dates": [],
+            "rejected_events": [],
+            "suspicious_action_count": 0,
+            "suspicious_actions": [],
+            "unbounded_query_count": 0
+          },
+          "daily_source": {
+            "content_sha256": "1c5183ecbc0cb5ee8848ba015d0e205d81d8b99f89cf81a35143b17c5e36654d",
+            "first_trade_date": "2014-10-20",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,pre_close,close,vol,amount",
+              "start_date": "20141020",
+              "ts_code": "159003.SZ"
+            },
+            "row_count": 88
+          },
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "cash_distribution_not_reconstructible_before_cutoff",
+            "fewer_than_252_pre_cutoff_daily_rows"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2014-10-20",
+          "name": "招商保证金快线货币ETF-A",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159003.SZ"
+        },
+        {
+          "adv20_rmb": 47487432.655,
+          "benchmark": "活期存款利率(税后)×100%",
+          "cash_distribution_admission": {
+            "accepted_event_count": 0,
+            "accepted_events": [],
+            "admission_rule": "at least one implemented pre-cutoff cash distribution with complete causal dates and raw pre_close reconciliation",
+            "cutoff_source_content_sha256": "1b42b5e089c7f9545325e059024d9941e613e9f765a6c77ad2ca84c24dd7a494",
+            "cutoff_source_row_count": 0,
+            "exact_ex_date_queries": [],
+            "passed": false,
+            "queried_ex_dates": [],
+            "rejected_events": [],
+            "suspicious_action_count": 0,
+            "suspicious_actions": [],
+            "unbounded_query_count": 0
+          },
+          "daily_source": {
+            "content_sha256": "536e1ac6e4e3ae2d944ba8d34ad8465bc8fda40aec2c5abf7e8c50337dc12d00",
+            "first_trade_date": "2015-01-13",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,pre_close,close,vol,amount",
+              "start_date": "20150113",
+              "ts_code": "159005.SZ"
+            },
+            "row_count": 29
+          },
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "cash_distribution_not_reconstructible_before_cutoff",
+            "fewer_than_252_pre_cutoff_daily_rows"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2015-01-13",
+          "name": "汇添富收益快钱货币ETF-A",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159005.SZ"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "7天通知存款利率(税后)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2016-09-27",
+          "name": "华安日日鑫货币ETF-H",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511600.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "七天通知存款利率(税后)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2017-09-07",
+          "name": "国泰瞬利货币ETF-A",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511620.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "七天通知存款利率(税后)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2017-01-16",
+          "name": "华夏快线货币ETF-E",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511650.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "七天通知存款利率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2016-09-21",
+          "name": "建信现金添益货币ETF-H",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511660.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "七天通知存款利率(税后)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2017-08-28",
+          "name": "华泰紫金天天金货币ETF-A",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511670.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "七天通知存款利率(税后)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": "2018-10-30",
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2016-09-27",
+          "name": "安信保证金货币ETF",
+          "provider_current_status": "D",
+          "queried_statuses": [
+            "D"
+          ],
+          "ts_code": "511680.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "活期存款利率(税后)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2016-10-20",
+          "name": "大成添益货币ETF-E",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511690.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "七天通知存款利率(税后)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2016-10-17",
+          "name": "平安货币ETF-E",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511700.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "七天通知存款利率(税后)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": "2018-06-12",
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2016-12-15",
+          "name": "德邦现金宝货币ETF-E",
+          "provider_current_status": "D",
+          "queried_statuses": [
+            "D"
+          ],
+          "ts_code": "511760.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "七天通知存款利率(税后)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2017-04-10",
+          "name": "金鹰现金增益货币ETF-E",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511770.SH"
+        },
+        {
+          "adv20_rmb": 3552779.6,
+          "benchmark": "活期存款利率(税后)×100%",
+          "cash_distribution_admission": {
+            "accepted_event_count": 0,
+            "accepted_events": [],
+            "admission_rule": "at least one implemented pre-cutoff cash distribution with complete causal dates and raw pre_close reconciliation",
+            "cutoff_source_content_sha256": "1b42b5e089c7f9545325e059024d9941e613e9f765a6c77ad2ca84c24dd7a494",
+            "cutoff_source_row_count": 0,
+            "exact_ex_date_queries": [],
+            "passed": false,
+            "queried_ex_dates": [],
+            "rejected_events": [],
+            "suspicious_action_count": 0,
+            "suspicious_actions": [],
+            "unbounded_query_count": 0
+          },
+          "daily_source": {
+            "content_sha256": "82e32de3f2731f9b7c03c5357be7d4b25fc578e4ca21faad2cf707cc4bfc565f",
+            "first_trade_date": "2014-12-08",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,pre_close,close,vol,amount",
+              "start_date": "20141208",
+              "ts_code": "511800.SH"
+            },
+            "row_count": 53
+          },
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "cash_distribution_not_reconstructible_before_cutoff",
+            "fewer_than_252_pre_cutoff_daily_rows"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2014-12-08",
+          "name": "易方达货币ETF-E",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511800.SH"
+        },
+        {
+          "adv20_rmb": 168808343.5,
+          "benchmark": "七天通知存款利率(税后)×100%",
+          "cash_distribution_admission": {
+            "accepted_event_count": 0,
+            "accepted_events": [],
+            "admission_rule": "at least one implemented pre-cutoff cash distribution with complete causal dates and raw pre_close reconciliation",
+            "cutoff_source_content_sha256": "1b42b5e089c7f9545325e059024d9941e613e9f765a6c77ad2ca84c24dd7a494",
+            "cutoff_source_row_count": 0,
+            "exact_ex_date_queries": [],
+            "passed": false,
+            "queried_ex_dates": [],
+            "rejected_events": [],
+            "suspicious_action_count": 0,
+            "suspicious_actions": [],
+            "unbounded_query_count": 0
+          },
+          "daily_source": {
+            "content_sha256": "3dd9977615cd14ba56300ca6af64edf17962edfdd746abb9116573a17ef178ed",
+            "first_trade_date": "2015-01-05",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,pre_close,close,vol,amount",
+              "start_date": "20150105",
+              "ts_code": "511810.SH"
+            },
+            "row_count": 35
+          },
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "cash_distribution_not_reconstructible_before_cutoff",
+            "fewer_than_252_pre_cutoff_daily_rows"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2015-01-05",
+          "name": "南方理财金货币ETF-H",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511810.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "活期存款利率(税后)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2016-02-22",
+          "name": "鹏华添利货币ETF-B",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511820.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "活期存款利率(税后)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2015-08-03",
+          "name": "华泰柏瑞货币ETF-A",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511830.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "活期存款利率(税后)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2016-07-18",
+          "name": "招商财富宝货币ETF-E",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511850.SH"
+        },
+        {
+          "adv20_rmb": 19392820.25,
+          "benchmark": "七天通知存款利率(税后)×100%",
+          "cash_distribution_admission": {
+            "accepted_event_count": 0,
+            "accepted_events": [],
+            "admission_rule": "at least one implemented pre-cutoff cash distribution with complete causal dates and raw pre_close reconciliation",
+            "cutoff_source_content_sha256": "1b42b5e089c7f9545325e059024d9941e613e9f765a6c77ad2ca84c24dd7a494",
+            "cutoff_source_row_count": 0,
+            "exact_ex_date_queries": [],
+            "passed": false,
+            "queried_ex_dates": [],
+            "rejected_events": [],
+            "suspicious_action_count": 0,
+            "suspicious_actions": [],
+            "unbounded_query_count": 0
+          },
+          "daily_source": {
+            "content_sha256": "6a614d634c09d8c547ba78b031fb9b6dcbd86a8877cc722f5b3b7f3dd3c7bc89",
+            "first_trade_date": "2014-12-09",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,pre_close,close,vol,amount",
+              "start_date": "20141209",
+              "ts_code": "511860.SH"
+            },
+            "row_count": 52
+          },
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "cash_distribution_not_reconstructible_before_cutoff",
+            "fewer_than_252_pre_cutoff_daily_rows"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2014-12-09",
+          "name": "博时保证金实时货币ETF-A",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511860.SH"
+        },
+        {
+          "adv20_rmb": 1698621498.45,
+          "benchmark": "活期存款利率(税后)×100%",
+          "cash_distribution_admission": {
+            "accepted_event_count": 2,
+            "accepted_events": [
+              {
+                "ann_date": "2014-01-13",
+                "div_cash_per_fund_unit_rmb": 3.208,
+                "ex_date": "2014-01-17",
+                "imp_anndate": "2014-01-13",
+                "observed_pre_close_rmb": 100.287,
+                "pay_date": "2014-01-22",
+                "prior_close_rmb": 103.495,
+                "reconciliation_error_rmb": 0.0,
+                "record_date": "2014-01-16"
+              },
+              {
+                "ann_date": "2014-12-25",
+                "div_cash_per_fund_unit_rmb": 4.228,
+                "ex_date": "2014-12-31",
+                "imp_anndate": "2014-12-25",
+                "observed_pre_close_rmb": 100.176,
+                "pay_date": "2015-01-07",
+                "prior_close_rmb": 104.404,
+                "reconciliation_error_rmb": 0.0,
+                "record_date": "2014-12-30"
+              }
+            ],
+            "admission_rule": "at least one implemented pre-cutoff cash distribution with complete causal dates and raw pre_close reconciliation",
+            "cutoff_source_content_sha256": "16ad6d30798079b6f7c988b514f123ba798d5c71371085037fe30b46e42604c0",
+            "cutoff_source_row_count": 3,
+            "exact_ex_date_queries": [
+              {
+                "endpoint": "fund_div",
+                "ex_date": "20140117",
+                "fields": "ts_code,ann_date,imp_anndate,div_proc,record_date,ex_date,pay_date,div_cash",
+                "matching_ticker_content_sha256": "e2729731bcfbda839d03d79cb61816efbcdd8402fbfe26f25e47f8eee71f8ee6",
+                "matching_ticker_row_count": 1,
+                "provider_content_sha256": "b0f781cf37c520dfbf4c73eaed97b3317a2f5f139fe4c8620ce697e71b29e2b3",
+                "provider_row_count": 21
+              },
+              {
+                "endpoint": "fund_div",
+                "ex_date": "20141231",
+                "fields": "ts_code,ann_date,imp_anndate,div_proc,record_date,ex_date,pay_date,div_cash",
+                "matching_ticker_content_sha256": "721f9a464190fa0b87ec7b887c71b0185eef4d995236b62777f297d6b99140a8",
+                "matching_ticker_row_count": 2,
+                "provider_content_sha256": "4beb45e7fd8dacbc329bcac6a1288b62ec3093839e530a371114ebc61ea69052",
+                "provider_row_count": 8
+              }
+            ],
+            "passed": true,
+            "queried_ex_dates": [
+              "2014-01-17",
+              "2014-12-31"
+            ],
+            "rejected_events": [],
+            "suspicious_action_count": 2,
+            "suspicious_actions": [
+              {
+                "ex_date": "2014-01-17",
+                "implied_action_rmb_per_unit": 3.2079999999999984,
+                "observed_pre_close_rmb": 100.287,
+                "prior_raw_close_rmb": 103.495
+              },
+              {
+                "ex_date": "2014-12-31",
+                "implied_action_rmb_per_unit": 4.227999999999994,
+                "observed_pre_close_rmb": 100.176,
+                "prior_raw_close_rmb": 104.404
+              }
+            ],
+            "unbounded_query_count": 0
+          },
+          "daily_source": {
+            "content_sha256": "291e3bb521e2df00207b8c6626dc184ad3468f085d75c77dac87c5f490880678",
+            "first_trade_date": "2013-04-18",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,pre_close,close,vol,amount",
+              "start_date": "20130418",
+              "ts_code": "511880.SH"
+            },
+            "row_count": 451
+          },
+          "delist_date": null,
+          "eligible": true,
+          "exclusion_reasons": [],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2013-04-18",
+          "name": "银华货币ETF-A",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511880.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "七天通知存款税后利率(税后)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": "2018-04-12",
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2015-08-03",
+          "name": "景顺长城货币ETF",
+          "provider_current_status": "D",
+          "queried_statuses": [
+            "D"
+          ],
+          "ts_code": "511890.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "活期存款利率(税后)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2015-12-09",
+          "name": "富国收益宝货币ETF-H",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511900.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "活期存款利率(税后)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2016-07-04",
+          "name": "融通易支付货币ETF-E",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511910.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "活期存款利率(税后)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2016-03-28",
+          "name": "广发货币ETF-E",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511920.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "七天通知存款利率(税后)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2015-12-15",
+          "name": "国联日日盈货币ETF-A",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511930.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "活期存款利率(税后)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2016-12-19",
+          "name": "广发添利货币ETF-A",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511950.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "活期存款利率(税后)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2016-01-11",
+          "name": "嘉实快线货币ETF-H",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511960.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "7天通知存款利率(税后)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2016-07-18",
+          "name": "国寿安保货币ETF-E",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511970.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "活期存款利率(税后)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2015-11-02",
+          "name": "汇添富添富通货币ETF-E",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511980.SH"
+        },
+        {
+          "adv20_rmb": 9165106268.05,
+          "benchmark": "7天通知存款利率(税后)×100%",
+          "cash_distribution_admission": {
+            "accepted_event_count": 0,
+            "accepted_events": [],
+            "admission_rule": "at least one implemented pre-cutoff cash distribution with complete causal dates and raw pre_close reconciliation",
+            "cutoff_source_content_sha256": "1b42b5e089c7f9545325e059024d9941e613e9f765a6c77ad2ca84c24dd7a494",
+            "cutoff_source_row_count": 0,
+            "exact_ex_date_queries": [],
+            "passed": false,
+            "queried_ex_dates": [],
+            "rejected_events": [],
+            "suspicious_action_count": 0,
+            "suspicious_actions": [],
+            "unbounded_query_count": 0
+          },
+          "daily_source": {
+            "content_sha256": "c3e529253f81117a9508f63d88440d7fa91692aeaf63b5ef70386f3764c7b04a",
+            "first_trade_date": "2013-01-28",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,pre_close,close,vol,amount",
+              "start_date": "20130128",
+              "ts_code": "511990.SH"
+            },
+            "row_count": 502
+          },
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "cash_distribution_not_reconstructible_before_cutoff"
+          ],
+          "fund_type": "货币型",
+          "invest_type": "货币型",
+          "list_date": "2013-01-28",
+          "name": "华宝现金添益货币ETF-A",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511990.SH"
+        }
+      ],
+      "eligible_count": 1,
+      "ranking": "descending cutoff ADV20 RMB, then ts_code ascending",
+      "rule": "exchange-traded money-market ETF with a reconstructible implemented pre-cutoff cash distribution",
+      "selected_ts_code": "511880.SH"
+    },
+    "five_year_government_bond": {
+      "candidate_count": 1,
+      "candidates": [
+        {
+          "adv20_rmb": 982152384.45,
+          "benchmark": "上证5年期国债指数×100%",
+          "cash_distribution_admission": null,
+          "daily_source": {
+            "content_sha256": "5fa923f159eff56cb39e624c045b1c1b405a9ca36ae7e3cb2d821663f4e6162a",
+            "first_trade_date": "2013-03-25",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,vol,amount",
+              "start_date": "20130325",
+              "ts_code": "511010.SH"
+            },
+            "row_count": 467
+          },
+          "delist_date": null,
+          "eligible": true,
+          "exclusion_reasons": [],
+          "fund_type": "债券型",
+          "invest_type": "被动指数型",
+          "list_date": "2013-03-25",
+          "name": "国泰上证5年期国债ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "511010.SH"
+        }
+      ],
+      "eligible_count": 1,
+      "ranking": "descending cutoff ADV20 RMB, then ts_code ascending",
+      "rule": "ETF tracking five-year Chinese government bonds",
+      "selected_ts_code": "511010.SH"
+    },
+    "gold": {
+      "candidate_count": 20,
+      "candidates": [
+        {
+          "adv20_rmb": null,
+          "benchmark": "中证沪深港黄金产业股票指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2024-06-14",
+          "name": "工银瑞信中证沪深港黄金产业股票ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159315.SZ"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "中证沪深港黄金产业股票指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2024-05-27",
+          "name": "华安中证沪深港黄金产业股票ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159321.SZ"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "中证沪深港黄金产业股票指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2024-06-14",
+          "name": "平安中证沪深港黄金产业股票ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159322.SZ"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "中证沪深港黄金产业股票指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2024-01-22",
+          "name": "华夏中证沪深港黄金产业股票ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159562.SZ"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "上海黄金交易所Au99.99现货实盘合约收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "其他",
+          "invest_type": "黄金现货合约",
+          "list_date": "2020-05-29",
+          "name": "前海开源黄金ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159812.SZ"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "上海黄金交易所上海金集中定价合约午盘基准价×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "其他",
+          "invest_type": "黄金现货合约",
+          "list_date": "2021-07-19",
+          "name": "天弘上海金ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159830.SZ"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "上海黄金交易所上海金集中定价合约的午盘基准价格收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "其他",
+          "invest_type": "黄金现货合约",
+          "list_date": "2022-04-07",
+          "name": "嘉实上海金ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159831.SZ"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "上海黄金交易所上海金集中定价合约午盘基准价格收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": "2023-06-06",
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "其他",
+          "invest_type": "黄金现货合约",
+          "list_date": "2022-03-29",
+          "name": "大成上海金ETF",
+          "provider_current_status": "D",
+          "queried_statuses": [
+            "D"
+          ],
+          "ts_code": "159833.SZ"
+        },
+        {
+          "adv20_rmb": 1105467.04,
+          "benchmark": "国内黄金现货价格收益率(Au99.99合约)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": {
+            "content_sha256": "4a0c2400dd1b1501c5f6d063997a6bdfd8dfbaddb2f50adf0834395df228d882",
+            "first_trade_date": "2013-12-16",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,vol,amount",
+              "start_date": "20131216",
+              "ts_code": "159934.SZ"
+            },
+            "row_count": 292
+          },
+          "delist_date": null,
+          "eligible": true,
+          "exclusion_reasons": [],
+          "fund_type": "其他",
+          "invest_type": "黄金现货合约",
+          "list_date": "2013-12-16",
+          "name": "易方达黄金ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159934.SZ"
+        },
+        {
+          "adv20_rmb": 113989.06499999999,
+          "benchmark": "国内黄金现货价格收益率(Au99.99合约)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": {
+            "content_sha256": "1fd633c14b23f81194760cb2b0fce551ad297fbe7d04663a94ce5fedb3feb686",
+            "first_trade_date": "2014-09-01",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,vol,amount",
+              "start_date": "20140901",
+              "ts_code": "159937.SZ"
+            },
+            "row_count": 117
+          },
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "fewer_than_252_pre_cutoff_daily_rows"
+          ],
+          "fund_type": "其他",
+          "invest_type": "黄金现货合约",
+          "list_date": "2014-09-01",
+          "name": "博时黄金ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159937.SZ"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "中证沪深港黄金产业股票指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2024-05-08",
+          "name": "国泰中证沪深港黄金产业股票ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "517400.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "中证沪深港黄金产业股票指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2023-11-01",
+          "name": "永赢中证沪深港黄金产业股票ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "517520.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "上海黄金交易所上海金集中定价合约(合约代码:SHAU)的午盘基准价格收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "其他",
+          "invest_type": "黄金现货合约",
+          "list_date": "2020-08-05",
+          "name": "广发上海金ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "518600.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "上海黄金交易所Au99.99现货实盘合约收盘价收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "其他",
+          "invest_type": "黄金现货合约",
+          "list_date": "2020-05-29",
+          "name": "工银瑞信黄金ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "518660.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "上海黄金交易所上海金集中定价合约(合约代码:SHAU)午盘基准价格收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "其他",
+          "invest_type": "黄金现货合约",
+          "list_date": "2020-07-28",
+          "name": "富国上海金ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "518680.SH"
+        },
+        {
+          "adv20_rmb": 161473.4,
+          "benchmark": "国内黄金现货价格收益率(Au99.99合约)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": {
+            "content_sha256": "b7a1932bd84300c4eafd12b4a9805236d27dfb23735e2752d7eeeb43230adcf7",
+            "first_trade_date": "2013-07-29",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,vol,amount",
+              "start_date": "20130729",
+              "ts_code": "518800.SH"
+            },
+            "row_count": 385
+          },
+          "delist_date": null,
+          "eligible": true,
+          "exclusion_reasons": [],
+          "fund_type": "其他",
+          "invest_type": "黄金现货合约",
+          "list_date": "2013-07-29",
+          "name": "国泰黄金ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "518800.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "上海黄金交易所黄金现货实盘合约Au99.99价格收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "其他",
+          "invest_type": "黄金现货合约",
+          "list_date": "2020-06-05",
+          "name": "华夏黄金ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "518850.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "上海黄金交易所上海金集中定价合约(合约代码:SHAU)的午盘基准价的收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "其他",
+          "invest_type": "黄金现货合约",
+          "list_date": "2020-09-07",
+          "name": "建信上海金ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "518860.SH"
+        },
+        {
+          "adv20_rmb": 43035467.1,
+          "benchmark": "国内黄金现货价格收益率(Au99.99合约)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": {
+            "content_sha256": "5b6e0df8af22bd6e1e23590d1d7cc4e34188dda0fa3040355f6010d46552f03a",
+            "first_trade_date": "2013-07-29",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,vol,amount",
+              "start_date": "20130729",
+              "ts_code": "518880.SH"
+            },
+            "row_count": 385
+          },
+          "delist_date": null,
+          "eligible": true,
+          "exclusion_reasons": [],
+          "fund_type": "其他",
+          "invest_type": "黄金现货合约",
+          "list_date": "2013-07-29",
+          "name": "华安易富黄金ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "518880.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "上海黄金交易所上海金集中定价合约(合约代码:SHAU)午盘基准价格收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "其他",
+          "invest_type": "黄金现货合约",
+          "list_date": "2020-09-28",
+          "name": "中银上海金ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "518890.SH"
+        }
+      ],
+      "eligible_count": 3,
+      "ranking": "descending cutoff ADV20 RMB, then ts_code ascending",
+      "rule": "gold ETF",
+      "selected_ts_code": "518880.SH"
+    },
+    "hong_kong_broad": {
+      "candidate_count": 5,
+      "candidates": [
+        {
+          "adv20_rmb": null,
+          "benchmark": "香港恒生指数×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2025-08-11",
+          "name": "鹏华恒生ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159271.SZ"
+        },
+        {
+          "adv20_rmb": 7835547.87,
+          "benchmark": "香港恒生指数×100%",
+          "cash_distribution_admission": null,
+          "daily_source": {
+            "content_sha256": "0798cc3d6479f72af9186b3741d4cb7d66ae9823ca5af4f1306d7559cd1db2bf",
+            "first_trade_date": "2012-10-22",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,vol,amount",
+              "start_date": "20121022",
+              "ts_code": "159920.SZ"
+            },
+            "row_count": 569
+          },
+          "delist_date": null,
+          "eligible": true,
+          "exclusion_reasons": [],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2012-10-22",
+          "name": "华夏恒生ETF(QDII)",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159920.SZ"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "恒生指数收益率(使用估值汇率折算)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2024-04-22",
+          "name": "易方达恒生ETF(QDII)",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "513210.SH"
+        },
+        {
+          "adv20_rmb": 15521871.4,
+          "benchmark": "香港恒生指数×100%",
+          "cash_distribution_admission": null,
+          "daily_source": {
+            "content_sha256": "be53e530499a61aaeb20b9bd6e9572c63f11ede2e88a7a81161131565afaeaa5",
+            "first_trade_date": "2015-01-26",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,vol,amount",
+              "start_date": "20150126",
+              "ts_code": "513600.SH"
+            },
+            "row_count": 20
+          },
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "fewer_than_252_pre_cutoff_daily_rows"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2015-01-26",
+          "name": "南方恒生ETF(QDII)",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "513600.SH"
+        },
+        {
+          "adv20_rmb": 41953935.85,
+          "benchmark": "香港恒生指数×100%",
+          "cash_distribution_admission": null,
+          "daily_source": {
+            "content_sha256": "bc7d5c073178d5269e5c79b1503d46ce5cc30a645c30ebca7da18098b510f77f",
+            "first_trade_date": "2015-01-26",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,vol,amount",
+              "start_date": "20150126",
+              "ts_code": "513660.SH"
+            },
+            "row_count": 20
+          },
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "fewer_than_252_pre_cutoff_daily_rows"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2015-01-26",
+          "name": "华夏沪港通恒生ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "513660.SH"
+        }
+      ],
+      "eligible_count": 1,
+      "ranking": "descending cutoff ADV20 RMB, then ts_code ascending",
+      "rule": "ETF tracking the plain Hang Seng Index, excluding China-enterprise, technology and other sub-index variants",
+      "selected_ts_code": "159920.SZ"
+    },
+    "mainland_broad": {
+      "candidate_count": 37,
+      "candidates": [
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2024-06-05",
+          "name": "富国沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159300.SZ"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2024-08-19",
+          "name": "东财沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159330.SZ"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2025-03-10",
+          "name": "万家沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159393.SZ"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2023-07-17",
+          "name": "鹏华沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159673.SZ"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300ESG基准指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2022-03-08",
+          "name": "华夏沪深300ESG基准ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159791.SZ"
+        },
+        {
+          "adv20_rmb": 958259555.0200001,
+          "benchmark": "沪深300指数×100%",
+          "cash_distribution_admission": null,
+          "daily_source": {
+            "content_sha256": "c05bcda7565423a372af4e97519afa04a15c554446b88a55c5ecb2646d11af1b",
+            "first_trade_date": "2012-05-28",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,vol,amount",
+              "start_date": "20120528",
+              "ts_code": "159919.SZ"
+            },
+            "row_count": 667
+          },
+          "delist_date": null,
+          "eligible": true,
+          "exclusion_reasons": [],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2012-05-28",
+          "name": "嘉实沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159919.SZ"
+        },
+        {
+          "adv20_rmb": 4372312.705,
+          "benchmark": "沪深300指数×100%",
+          "cash_distribution_admission": null,
+          "daily_source": {
+            "content_sha256": "b7ec986d3c55c1a3f25a12907aa0ba9215995bc69354fe2be40cd9804d41d9d2",
+            "first_trade_date": "2013-04-11",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,vol,amount",
+              "start_date": "20130411",
+              "ts_code": "159925.SZ"
+            },
+            "row_count": 456
+          },
+          "delist_date": null,
+          "eligible": true,
+          "exclusion_reasons": [],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2013-04-11",
+          "name": "南方沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159925.SZ"
+        },
+        {
+          "adv20_rmb": 882646.125,
+          "benchmark": "沪深300指数×100%",
+          "cash_distribution_admission": null,
+          "daily_source": {
+            "content_sha256": "7f88fa92083133ad82ed51b45e906d659b446579a425ce776ce67d502056163d",
+            "first_trade_date": "2013-08-16",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,vol,amount",
+              "start_date": "20130816",
+              "ts_code": "159927.SZ"
+            },
+            "row_count": 371
+          },
+          "delist_date": "2018-02-14",
+          "eligible": true,
+          "exclusion_reasons": [],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2013-08-16",
+          "name": "鹏华沪深300ETF",
+          "provider_current_status": "D",
+          "queried_statuses": [
+            "D"
+          ],
+          "ts_code": "159927.SZ"
+        },
+        {
+          "adv20_rmb": 3768808558.4,
+          "benchmark": "沪深300指数×100%",
+          "cash_distribution_admission": null,
+          "daily_source": {
+            "content_sha256": "17b863cc5d5b6f6d340c472fba893f082380ee80b1c907eccde731145ec6cbb2",
+            "first_trade_date": "2012-05-28",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,vol,amount",
+              "start_date": "20120528",
+              "ts_code": "510300.SH"
+            },
+            "row_count": 668
+          },
+          "delist_date": null,
+          "eligible": true,
+          "exclusion_reasons": [],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2012-05-28",
+          "name": "华泰柏瑞沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "510300.SH"
+        },
+        {
+          "adv20_rmb": 42696376.25,
+          "benchmark": "沪深300指数×100%",
+          "cash_distribution_admission": null,
+          "daily_source": {
+            "content_sha256": "b3912674d75aa4d9b203aab091f2261d585cd073731a033faef0ef83c98fb6af",
+            "first_trade_date": "2013-03-25",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,vol,amount",
+              "start_date": "20130325",
+              "ts_code": "510310.SH"
+            },
+            "row_count": 467
+          },
+          "delist_date": null,
+          "eligible": true,
+          "exclusion_reasons": [],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2013-03-25",
+          "name": "易方达沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "510310.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2025-04-25",
+          "name": "中金沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "510320.SH"
+        },
+        {
+          "adv20_rmb": 117831871.7,
+          "benchmark": "沪深300指数×100%",
+          "cash_distribution_admission": null,
+          "daily_source": {
+            "content_sha256": "66a0277b599155a1cdee87b8c2f44192ddb98037228a80531e9604fcecbdd960",
+            "first_trade_date": "2013-01-16",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,vol,amount",
+              "start_date": "20130116",
+              "ts_code": "510330.SH"
+            },
+            "row_count": 510
+          },
+          "delist_date": null,
+          "eligible": true,
+          "exclusion_reasons": [],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2013-01-16",
+          "name": "华夏沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "510330.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2019-08-16",
+          "name": "工银瑞信沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "510350.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300指数×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2015-09-09",
+          "name": "广发沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "510360.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2020-10-27",
+          "name": "兴业沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "510370.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300指数×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2018-02-07",
+          "name": "国寿安保沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "510380.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300指数×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2018-01-26",
+          "name": "平安沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "510390.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300红利指数×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2019-09-23",
+          "name": "建信沪深300红利ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "512530.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2020-05-11",
+          "name": "博时沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "515130.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2019-12-25",
+          "name": "汇添富沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "515310.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2019-12-26",
+          "name": "天弘沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "515330.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2020-02-07",
+          "name": "民生加银沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "515350.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2019-11-01",
+          "name": "方正富邦沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "515360.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2020-03-23",
+          "name": "泰康沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "515380.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2020-01-10",
+          "name": "华安沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "515390.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2019-12-24",
+          "name": "国联安沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "515660.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": "2023-07-31",
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2020-05-08",
+          "name": "永赢沪深300ETF",
+          "provider_current_status": "D",
+          "queried_statuses": [
+            "D"
+          ],
+          "ts_code": "515930.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300ESG基准指数×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2021-07-05",
+          "name": "富国沪深300ESG基准ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "516830.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300ESG基准指数×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2023-04-21",
+          "name": "南方沪深300ESG基准ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "560180.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300自由现金流指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": null,
+          "list_date": "2026-07-08",
+          "name": "汇添富沪深300自由现金流ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "561420.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300质量指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "missing_or_invalid_list_date"
+          ],
+          "fund_type": "股票型",
+          "invest_type": null,
+          "list_date": null,
+          "name": "农银汇理沪深300质量ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "561690.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300ESG基准指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2021-07-15",
+          "name": "招商沪深300ESG基准ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "561900.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2024-09-20",
+          "name": "招商沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "561930.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300自由现金流指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2025-04-15",
+          "name": "华宝沪深300自由现金流ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "562080.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2024-11-18",
+          "name": "永赢沪深300ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "563520.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300自由现金流指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2025-05-07",
+          "name": "摩根沪深300自由现金流ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "563900.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "沪深300质量指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2026-01-08",
+          "name": "兴全沪深300质量ETF",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "563960.SH"
+        }
+      ],
+      "eligible_count": 6,
+      "ranking": "descending cutoff ADV20 RMB, then ts_code ascending",
+      "rule": "ETF whose name identifies the plain CSI 300 (沪深300), excluding linked, sector, style and leveraged variants",
+      "selected_ts_code": "510300.SH"
+    },
+    "united_states_broad": {
+      "candidate_count": 17,
+      "candidates": [
+        {
+          "adv20_rmb": null,
+          "benchmark": "经估值汇率调整后的纳斯达克100指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2023-06-14",
+          "name": "嘉实纳斯达克100ETF(QDII)",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159501.SZ"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "纳斯达克100指数收益率(经汇率调整)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2023-07-28",
+          "name": "大成纳斯达克100ETF(QDII)",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159513.SZ"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "标普500消费精选指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2024-02-02",
+          "name": "景顺长城标普消费精选ETF(QDII)",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159529.SZ"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "标普500指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2022-05-20",
+          "name": "国泰标普500ETF(QDII)",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159612.SZ"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "纳斯达克100指数收益率(经估值汇率调整)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2022-08-03",
+          "name": "华安纳斯达克100ETF(QDII)",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159632.SZ"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "经估值汇率调整后的标普500指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2022-10-25",
+          "name": "华夏标普500ETF(QDII)",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159655.SZ"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "纳斯达克100指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2023-04-25",
+          "name": "招商纳斯达克100ETF(QDII)",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159659.SZ"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "经人民币汇率调整的纳斯达克100指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2023-04-17",
+          "name": "汇添富纳斯达克100ETF(QDII)",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159660.SZ"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "纳斯达克100指数收益率(使用估值汇率折算)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2023-08-25",
+          "name": "易方达纳斯达克100ETF(QDII)",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159696.SZ"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "纳斯达克100指数×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2015-07-13",
+          "name": "广发纳斯达克100ETF(QDII)",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "159941.SZ"
+        },
+        {
+          "adv20_rmb": 50134102.75,
+          "benchmark": "纳斯达克100指数×100%",
+          "cash_distribution_admission": null,
+          "daily_source": {
+            "content_sha256": "306b9e27d96167ea20cd1c72d0ef4504bed508712607f913639e03d66a9d1dc6",
+            "first_trade_date": "2013-05-15",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,vol,amount",
+              "start_date": "20130515",
+              "ts_code": "513100.SH"
+            },
+            "row_count": 435
+          },
+          "delist_date": null,
+          "eligible": true,
+          "exclusion_reasons": [],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2013-05-15",
+          "name": "国泰纳斯达克100ETF(QDII)",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "513100.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "纳斯达克100指数收益率(使用估值汇率折算)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2023-03-20",
+          "name": "华泰柏瑞纳斯达克100ETF(QDII)",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "513110.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "经估值汇率调整后的纳斯达克100指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2020-11-05",
+          "name": "华夏纳斯达克100ETF(QDII)",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "513300.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "纳斯达克100指数收益率(经估值汇率调整)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2023-05-08",
+          "name": "博时纳斯达克100ETF(QDII)",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "513390.SH"
+        },
+        {
+          "adv20_rmb": 36335284.1,
+          "benchmark": "标普500指数×100%",
+          "cash_distribution_admission": null,
+          "daily_source": {
+            "content_sha256": "8d991dadd5963ca0bbf7f998f72a73070796a674bf76a8b54f83837bffe79b74",
+            "first_trade_date": "2014-01-15",
+            "last_positive_trade_date": "2015-02-27",
+            "last_trade_date": "2015-02-27",
+            "query": {
+              "end_date": "20150227",
+              "endpoint": "fund_daily",
+              "fields": "ts_code,trade_date,vol,amount",
+              "start_date": "20140115",
+              "ts_code": "513500.SH"
+            },
+            "row_count": 271
+          },
+          "delist_date": null,
+          "eligible": true,
+          "exclusion_reasons": [],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2014-01-15",
+          "name": "博时标普500ETF(QDII)",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "513500.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "标普500指数收益率×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2023-04-04",
+          "name": "南方标普500ETF(QDII)",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "513650.SH"
+        },
+        {
+          "adv20_rmb": null,
+          "benchmark": "纳斯达克100指数收益率(经汇率调整后)×100%",
+          "cash_distribution_admission": null,
+          "daily_source": null,
+          "delist_date": null,
+          "eligible": false,
+          "exclusion_reasons": [
+            "listed_after_cutoff"
+          ],
+          "fund_type": "股票型",
+          "invest_type": "被动指数型",
+          "list_date": "2023-11-02",
+          "name": "富国纳斯达克100ETF(QDII)",
+          "provider_current_status": "L",
+          "queried_statuses": [
+            "L"
+          ],
+          "ts_code": "513870.SH"
+        }
+      ],
+      "eligible_count": 2,
+      "ranking": "descending cutoff ADV20 RMB, then ts_code ascending",
+      "rule": "ETF tracking Nasdaq 100 or S&P 500",
+      "selected_ts_code": "513100.SH"
+    }
+  },
+  "contract_id": "factor-lab/7.0/pre-return-etf-selection/1",
+  "current_status_not_used_as_survival_filter": true,
+  "cutoff_date": "2015-02-27",
+  "expected_codes": [
+    "510300.SH",
+    "159920.SZ",
+    "513100.SH",
+    "518880.SH",
+    "511010.SH",
+    "511880.SH"
+  ],
+  "fund_basic_sources": {
+    "D": {
+      "content_sha256": "a7c11e731bde53cf02e2391d9328bb4b8ebd79be44f74276745062e9eba65963",
+      "query": {
+        "endpoint": "fund_basic",
+        "fields": "ts_code,name,fund_type,list_date,delist_date,benchmark,status,invest_type,type,market",
+        "market": "E",
+        "status": "D"
+      },
+      "row_count": 676
+    },
+    "I": {
+      "content_sha256": "e5e0c5da7494be86c5b5347fef2e347dc75d3f5cdaa8532846d898468e1dcfcd",
+      "query": {
+        "endpoint": "fund_basic",
+        "fields": "ts_code,name,fund_type,list_date,delist_date,benchmark,status,invest_type,type,market",
+        "market": "E",
+        "status": "I"
+      },
+      "row_count": 0
+    },
+    "L": {
+      "content_sha256": "a6b01860d91c40322c191a3edd0f581ed80835f10f21dc7925f2ceceb248ff14",
+      "query": {
+        "endpoint": "fund_basic",
+        "fields": "ts_code,name,fund_type,list_date,delist_date,benchmark,status,invest_type,type,market",
+        "market": "E",
+        "status": "L"
+      },
+      "row_count": 2197
+    }
+  },
+  "fund_div_query_audit": {
+    "queried_ex_dates_by_cash_candidate": {
+      "159001.SZ": [],
+      "159003.SZ": [],
+      "159005.SZ": [],
+      "511800.SH": [],
+      "511810.SH": [],
+      "511860.SH": [],
+      "511880.SH": [
+        "2014-01-17",
+        "2014-12-31"
+      ],
+      "511990.SH": []
+    },
+    "unbounded_query_count": 0
+  },
+  "kind": "factor_lab_7_0_asset_selection",
+  "merged_master": {
+    "content_sha256": "57e65013bfd846762fd0e66325133bace624c58e93a97413b92970237b9fa31d",
+    "row_count": 2873
+  },
+  "minimum_pre_cutoff_daily_rows": 252,
+  "payload_sha256": "b00536d618c7fe46e3cbe8d258d2b2032ef4e0c16d40fb9c74ff016c34525e0b",
+  "post_cutoff_fund_daily_requested": false,
+  "recent_positive_trade_calendar_days": 31,
+  "schema_version": 1,
+  "selected_codes": [
+    "510300.SH",
+    "159920.SZ",
+    "513100.SH",
+    "518880.SH",
+    "511010.SH",
+    "511880.SH"
+  ],
+  "selection_information_boundary": "fund_basic metadata plus fund_daily/fund_div observations no later than cutoff; no return evaluation",
+  "status_queries": [
+    "L",
+    "D",
+    "I"
+  ]
+}

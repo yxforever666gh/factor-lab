@@ -1,19 +1,21 @@
-# Factor Lab 6.3
+# Factor Lab 7.0
 
-Factor Lab 是一条本地、可复现的 A 股截面策略研究链：canonical Parquet → PIT 信号 →
-次日开盘成交 → 全成本逐日账户核算 → 10 个绝对日历调仓相位比较。
+Factor Lab 7.0 是一条本地、可复现的跨资产 ETF 研究链：原始交易所价格与现金分红 →
+严格滞后趋势状态 → 月末信号/下一开盘成交 → 全成本逐日账户 → train / validation / audit。
 
-6.3 是对已发布 6.2 机会集实验的 corrective replay，不开新研究方向，也不修改其候选、信号、
-Top10/exit25、十相位、成本、执行、容量、切分、收益门或声明边界。6.2 已通过 train 数据准入，
-但首个组合在容量摘要中因 binary64 加法次序产生软件假失败；6.3 唯一的生产语义变化，是把同一批
-已验证名义金额的普通累加改为 `math.fsum`。买卖守恒仍使用 `rel_tol=0`、`abs_tol=1e-6` 元，不能
-借修复之名放宽容差或研究门。
+已发布的 6.3 corrective replay 证明数值修复有效，但也给出正式 null：扩大 ADV20 机会集的两个
+challenger 在 train 都是 `0/10` offset 相对 control 为正，validation 与 audit 未打开，终态为
+`selection_falsified_no_candidate`。因此 7.0 按 major 版本切换研究对象，不再为同一 fixed-core
+信号调整 universe、selector 或 overlay。
 
-6.3 逐字节复用冻结的 6.2 protocol 与 amendment，并以新的 corrective amendment、runtime、
-preselection closure 和 evidence 命名空间重新封闭实现。任何 6.2 derived stage、gate、winner 或
-status view 都不得沿用；canonical raw 只有在 6.3 中重新枚举、运行前后重算 SHA-256 并写入全新
-stage manifest 后才可复用。6.2 的协议、失败证据和发布 Tag 是不可改写的历史。fresh replay
-完成前，这条路线仍只是待证伪假设，不是稳定 alpha。
+7.0 固定 A 股、港股、美股、黄金、五年国债和场内现金代理六类 ETF，只注册一个候选：每月末以
+63/126/252 个交易日相对现金代理的正总回报比例启用各资产的预定预算，未启用部分进入现金代理；
+唯一 control 是同预算、无趋势过滤的静态组合。资产、窗口、风险预算、100 万元资本、10% ADV20
+容量、8bp 单边全成本、双倍成本压力和全部阶段门在打开正式收益前一次冻结，不做参数网格。
+
+卖方盈利预期修正仍是潜在更正交的信息源，但本机没有带原始发布时间和修订版本的可信历史 archive，
+既有 `report_rc.create_time` 又已出现多年后回填。7.0 不会用不可信 vintage 凑成绩；该路线只有在
+外部 archive 真正交付后才可另立协议。
 
 6.0 的结论不是“已经找到稳定 alpha”，而是两件更具体的事：
 
@@ -116,7 +118,56 @@ label，并再次验证 availability 必须恰好是 `report_date` 后第一个�
 拆送股稳健性对照）、FY1 相对 FY0 的预测增长，以及实际公告相对公告前共识的 earnings surprise。
 coverage/initiations、dispersion 与 active-reviser breadth 先只做诊断，不再建 selector。
 
-## 6.3 当前主线：6.2 机会集实验的 corrective replay
+## 7.0 当前主线：固定多资产因果趋势预算
+
+固定资产与资本预算如下；`511880.SH` 只接收未启用预算和整手/容量残余：
+
+| 资产 | 角色 | 固定预算 |
+| --- | --- | ---: |
+| `510300.SH` | A 股大盘 | 30% |
+| `159920.SZ` | 港股 | 10% |
+| `513100.SH` | 美股 | 10% |
+| `518880.SH` | 黄金 | 20% |
+| `511010.SH` | 五年国债 | 30% |
+| `511880.SH` | 场内现金代理 | residual |
+
+代表选择由 [protocols/7.0-asset-selection.json](protocols/7.0-asset-selection.json) 固定：完整枚举
+2015-02-27 时仍在交易的 L/D/I 场内基金（包括后来退市者），每类要求至少 252 行 cutoff 前日线和
+可复算总回报，再按 cutoff ADV20、代码升序选择。它不使用 2026 存续状态或任何候选收益。
+
+信号只比较每只风险 ETF 与现金代理在 63、126、252 个已完成交易日上的总回报。三个窗口中严格
+跑赢现金的比例乘以固定预算，得到下一次目标；没有足够历史时风险预算为零。总回报由 raw close
+与当日已生效现金分红逐日重建，`fund_adj` 只作公司行动诊断；`513100.SH` 在 2022-01-13 的
+官方 1:5 份额拆分按上交所公告精确调整持仓与隔夜订单，其他无法解释的动作继续 fail closed。
+`pre_close` 的非经济参考价 reset 只能在冻结日期、调整因子不变且幅度小于 2% 时留痕通过。
+
+阶段边界为：2015-03-02 至 2019-12-31 train，2020-01-02 至 2022-12-30 validation，
+2023-01-03 至 2026-08-28 historical audit。Train 不过不得创建或读取 validation stage；
+train 与 validation 都通过才冻结唯一 winner；audit 失败不得换模型。完整冻结合同见
+[protocols/7.0-multi-asset.json](protocols/7.0-multi-asset.json)。
+
+代码审查曾在 Git closure 生成前意外打开真实 train；候选 CAGR 约 5.11%、Sharpe 0.724、最大回撤
+-15.38%，但相对静态 control 少约 1.80 个百分点 CAGR、Sharpe 低 0.0025，冻结的两项相对门失败。
+Validation/audit 均未打开，完整披露见
+[preclosure-train.json](protocols/evidence/7.0/preclosure-train.json)。因此下面的 selection 只能重放并
+封存同一 null，不能再被描述为独立预注册检验，也不得修改 -1.5pp 门槛来“救活”候选。
+
+正式运行顺序：
+
+```powershell
+# 实现提交推送且 CI 全绿后，先封存已披露 train 越界与完整 replay 根
+python scripts/build-7.0-preselection-closure.py
+
+# closure 单独提交、推送且 CI 全绿后
+python scripts/run-multi-asset-evidence.py --mode selection
+
+# 只有非 null winner freeze 提交并通过 CI 后才允许
+python scripts/run-multi-asset-evidence.py --mode audit
+
+python scripts/run-multi-asset-evidence.py --mode finalize
+```
+
+## 6.3 已归档路线：6.2 机会集实验的 corrective replay
 
 6.3 原样执行逐字节不变的 6.2 基础协议和前置 amendment，继续比较三个逐日重建的 universe：因果
 ADV20 Top500 control、ADV20 至少人民币 1 亿元、ADV20 Top1500。证券必须是沪深人民币普通股、
@@ -203,7 +254,7 @@ canonical 数据默认位于 `runtime/data/top500/`：
 证据见 [protocols/6.0-analyst-revisions.json](protocols/6.0-analyst-revisions.json) 和
 [analyst-scout.json](protocols/evidence/6.0/analyst-scout.json)。
 
-## 运行 6.3 corrective evidence
+## 复现已归档的 6.3 corrective evidence
 
 正式 runner 只接受 clean、已提交且通过共享完整性校验的 `main`。先提交实现与 immutable
 preselection closure、推送并确认该提交自己的 GitHub CI 全绿；之后按阶段运行：

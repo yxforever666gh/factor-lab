@@ -1,0 +1,309 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_research_protocol",
+  "protocol_id": "factor-lab/7.0/fixed-multi-asset-trend-budget-v1",
+  "release": "7.0",
+  "direction_change": true,
+  "route": "fixed_multi_asset_causal_trend_budget",
+  "payload_sha256": "6f2fcd2a67d52bfae19bedcaecf495faa986195f6840da48a3a67a666589aaf0",
+  "prior_release": {
+    "tag": "6.3",
+    "annotated_tag_object": "bf923c3f757be13a8fdef566d3404c3625861721",
+    "peeled_commit": "9ec3f9dd6941ae797a1407f85e00ff770e8d1c60",
+    "terminal_result_path": "protocols/evidence/6.3/result.json",
+    "terminal_result_payload_sha256": "5ce9e7e92a0908f2e0fb1554801b900d746cc67fd27600fbf4fc82850323cadf",
+    "status": "selection_falsified_no_candidate"
+  },
+  "decision_record": {
+    "why_direction_changed": [
+      "the 6.3 widened-universe challengers had zero positive relative offsets in train",
+      "the 5.0 market overlay, online allocation and static diversification routes were already falsified",
+      "the 6.0 canonical and PIT-event searches produced no candidate",
+      "a trustworthy point-in-time analyst expectation archive is not available on this host"
+    ],
+    "why_this_route_is_distinct": "fixed cross-asset time-series state and pre-allocated risk budgets replace A-share cross-sectional stock ranking",
+    "alternatives_not_run_in_parallel": [
+      "analyst expectation revisions remain blocked until an original publication-time archive is delivered",
+      "no second ETF model, parameter grid, online allocator or A-share sleeve may be evaluated for 7.0"
+    ],
+    "pre_return_availability_checks_only_at_initial_design": true,
+    "pre_return_checks": [
+      "provider endpoint and field availability",
+      "listing-date coverage",
+      "pre-2015-03-02 ADV20 capacity",
+      "cash-distribution and pre-close reconciliation feasibility"
+    ],
+    "data_semantics_disclosure": "provider action rows through 2026 were inspected only to prove field units, ex/pay timing and the 0.001 price-tick reconciliation rule; no strategy return, trend state, target, weight, window or gate was computed or changed from those later rows",
+    "later_preclosure_train_event": "a code-review probe subsequently opened train before the Git preselection closure; the unchanged failed gate is bound below and validation/audit remained unopened"
+  },
+  "preclosure_train_disclosure": {
+    "path": "protocols/evidence/7.0/preclosure-train.json",
+    "file_sha256": "01c3d97f7a3cce81bd8abe4e430c5b35b35deddefc80950403d3b40d109f7c09",
+    "payload_sha256": "6bd2909ddc97ec84d3535d15e8f13330a5752831aead82d8fb50afdd16ac6775",
+    "status": "train_falsified_before_preselection_closure",
+    "validation_market_outcomes_opened": false,
+    "audit_market_outcomes_opened": false,
+    "parameter_or_gate_change_after_probe": false,
+    "post_probe_non_market_hardening": "train manifest no longer embeds the 2022 split event outside its 2019 cutoff; signal, execution, metrics and every gate are unchanged"
+  },
+  "assets": {
+    "risk_assets": [
+      {
+        "ts_code": "510300.SH",
+        "role": "mainland_china_large_equity",
+        "base_budget": 0.3
+      },
+      {
+        "ts_code": "159920.SZ",
+        "role": "hong_kong_equity",
+        "base_budget": 0.1
+      },
+      {
+        "ts_code": "513100.SH",
+        "role": "united_states_equity",
+        "base_budget": 0.1
+      },
+      {
+        "ts_code": "518880.SH",
+        "role": "gold",
+        "base_budget": 0.2
+      },
+      {
+        "ts_code": "511010.SH",
+        "role": "five_year_government_bond",
+        "base_budget": 0.3
+      }
+    ],
+    "cash_proxy": {
+      "ts_code": "511880.SH",
+      "role": "exchange_traded_money_market_cash_proxy"
+    },
+    "selection_cutoff": "2015-02-27",
+    "selection_evidence_path": "protocols/7.0-asset-selection.json",
+    "selection_evidence_file_sha256": "6d2d819db2579db76f8e7830a5de090d8d471c7fdc657abd8aba626cd1b065ec",
+    "selection_evidence_payload_sha256": "b00536d618c7fe46e3cbe8d258d2b2032ef4e0c16d40fb9c74ff016c34525e0b",
+    "selection_rule": "within six economically fixed classes, enumerate every exchange fund listed and still trading at the cutoff, including funds delisted later; require at least 252 pre-cutoff daily rows and a total-return path fully reconstructible from the frozen raw-price and implemented-distribution sources, then select the highest cutoff ADV20 with ts_code ascending as the only tie break",
+    "class_rules": {
+      "mainland_china_large_equity": "benchmark or name identifies CSI 300",
+      "hong_kong_equity": "benchmark or name identifies the broad Hang Seng Index and not a sector or technology sub-index",
+      "united_states_equity": "benchmark or name identifies Nasdaq 100 or S&P 500",
+      "gold": "exchange-traded physical gold ETF",
+      "five_year_government_bond": "five-year Chinese government-bond ETF",
+      "exchange_traded_money_market_cash_proxy": "exchange-traded money-market ETF with at least one implemented pre-cutoff distribution whose announcement, record, ex, pay and pre-close identities are reconstructible; automatic unit accrual absent from fund_div is ineligible"
+    },
+    "survivorship_rule": "current survival status is forbidden; list and delist dates plus actual trading through the cutoff reconstruct cutoff eligibility",
+    "fund_master_vintage_limitation": "Tushare fund_basic has no historical as-of endpoint; querying L/D/I and requiring actual cutoff trading removes direct current-survivor filtering, but later name or benchmark revisions cannot be fully disproved and remain an explicit historical-evidence limitation",
+    "post_return_substitution": false
+  },
+  "data_contract": {
+    "provider": "tushare_pro",
+    "endpoints": [
+      "fund_daily",
+      "fund_div",
+      "fund_adj",
+      "trade_cal"
+    ],
+    "source_start_date": "2014-01-15",
+    "daily_price_role": "raw_unadjusted_execution_and_valuation",
+    "dividend_role": "cash_distribution_effective_on_ex_date_for_pre_existing_units",
+    "adjustment_factor_role": "diagnostic_only_not_signal_or_execution",
+    "volume_conversion": "tushare fund_daily vol times 100 equals fund units",
+    "amount_conversion": "tushare fund_daily amount times 1000 equals RMB",
+    "daily_requirements": [
+      "positive finite pre_close/open/high/low/close",
+      "nonnegative finite volume and amount",
+      "unique ts_code and trade_date",
+      "no rows after the physical stage cutoff"
+    ],
+    "distribution_requirements": [
+      "only implemented distributions with announcement, record, ex and pay dates are accepted",
+      "announcement date is no later than record date, which is no later than ex date and pay date",
+      "exact supplier duplicates collapse by ts_code, ex_date and div_cash",
+      "conflicting cash amounts on one ex date fail closed"
+    ],
+    "distribution_query_boundary": "after loading only stage-bounded fund_daily, fund_div is queried only by exact suspicious ex dates implied by pre_close versus prior close and never beyond the physical stage cutoff; an unbounded per-fund history call is forbidden",
+    "corporate_action_reconciliation": "cash distributions use the frozen 0.0011 RMB pre-close identity; the official 513100.SH 2022-01-13 one-to-five unit split is applied before the 2022-01-14 resumed open and cross-checked against fund_adj; a no-factor reference-price reset may not change economic close-to-close return and any other material unexplained action fails closed",
+    "official_unit_event": {
+      "ts_code": "513100.SH",
+      "announcement_date": "2022-01-04",
+      "record_date": "2022-01-12",
+      "split_date": "2022-01-13",
+      "first_resumed_trade_date": "2022-01-14",
+      "unit_multiplier": 5.0,
+      "source": "https://www.sse.com.cn/disclosure/fund/announcement/c/new/2022-01-04/513100_20220104_1_0U96WMU8.pdf",
+      "source_sha256": "7dd4e55669fcd2ec0645a61e2dba648e000a2947e6bd160b43ea6cf3898abef1",
+      "source_size_bytes": 303782
+    },
+    "total_return_index": "previous index times (raw close times the exact official unit multiplier plus effective cash distribution) divided by previous raw close",
+    "dividend_accounting": "on ex date the distribution becomes a non-spendable receivable included in NAV for units held through the prior close; it becomes spendable cash only on pay date",
+    "official_calendar": "SSE trade_cal open sessions are a hashed stage input and exclusively define month end, next session and missing rows; the published calendar may extend at most 31 calendar days beyond the price cutoff because it contains no market outcome",
+    "future_append_invariance_required": true,
+    "stage_views": {
+      "train": {
+        "end_date": "2019-12-31",
+        "may_exist_before_train_gate": true
+      },
+      "validation": {
+        "end_date": "2022-12-30",
+        "may_be_created_or_loaded_only_after_train_pass": true
+      },
+      "audit": {
+        "end_date": "2026-08-28",
+        "may_be_created_or_loaded_only_after_winner_freeze": true
+      }
+    },
+    "create_only_stage_manifest": true,
+    "source_files_rehashed_before_and_after_evaluation": true
+  },
+  "candidate_registry": [
+    {
+      "candidate_id": "causal_multi_horizon_trend_budget",
+      "kind": "single_pre_registered_challenger",
+      "horizons_sessions": [
+        63,
+        126,
+        252
+      ],
+      "activation": "for each risk asset, the fraction of horizons whose trailing total return is strictly greater than the cash proxy trailing total return",
+      "target_weight": "frozen base budget times activation",
+      "residual": "all unactivated budget is assigned to 511880.SH",
+      "insufficient_history": "zero risk activation and cash proxy residual",
+      "borrowing_allowed": false
+    }
+  ],
+  "control": {
+    "candidate_id": "static_risk_budget",
+    "definition": "the same frozen base budgets without trend activation, rebalanced on the identical schedule",
+    "selection_role": "paired comparator only"
+  },
+  "signal_and_execution": {
+    "signal_schedule": "last official SSE trade_cal open session of each calendar month after close; the published calendar identifies month end without waiting for a future price row",
+    "first_signal_date": "2015-02-27",
+    "first_execution_date": "2015-03-02",
+    "execution": "the immediate next official SSE trade_cal session open",
+    "order_sizing": "at the signal close, use only then-known NAV, signal close, lot size and signal-date ADV20 to freeze requested share deltas; the next open may determine price and cash feasibility but may not change requested shares",
+    "capacity_sizing": "planned shares valued at the signal close may not exceed 10% of signal-date ADV20; execution-open price gaps are reported separately and never used to increase shares",
+    "missing_signal_close": "skip the entire month; never move the signal to an earlier date after observing the absence",
+    "missing_execution_open": "block only that asset order, keep the old holding and do not substitute",
+    "missing_daily_close": "carry the last valuation for at most one official session and forbid a signal or trade on the missing row",
+    "tie_break": "ts_code ascending",
+    "initial_capital_rmb": 1000000.0,
+    "lot_size_units": 100,
+    "long_only": true,
+    "maximum_gross_exposure": 1.0,
+    "cash_interest_outside_511880": 0.0,
+    "cost_per_traded_notional": 0.0008,
+    "stress_cost_per_traded_notional": 0.0016,
+    "stamp_tax": 0.0,
+    "capacity_limit_fraction_of_signal_date_adv20": 0.1,
+    "capacity_lookback_sessions": 20,
+    "sell_before_buy": true,
+    "dividend_ex_date_treatment": "create a NAV receivable before ex-date trading for prior-close units",
+    "dividend_pay_date_treatment": "transfer the frozen receivable to spendable cash on pay date only",
+    "blocked_order_substitution": false,
+    "blocked_sell_target_recalculation": false,
+    "cash_shortfall_rule": "pro-rata lot-rounded reduction of the already frozen buy orders; no order may increase"
+  },
+  "physical_phases": {
+    "train": {
+      "performance_start": "2015-03-02",
+      "performance_end": "2019-12-31",
+      "fresh_cash": true
+    },
+    "validation": {
+      "performance_start": "2020-01-02",
+      "performance_end": "2022-12-30",
+      "fresh_cash": true,
+      "opened_only_after_train_pass": true
+    },
+    "audit": {
+      "performance_start": "2023-01-03",
+      "performance_end": "2026-08-28",
+      "fresh_cash": true,
+      "opened_only_after_winner_freeze": true
+    }
+  },
+  "metrics": {
+    "annualization_sessions": 252,
+    "risk_free_rate": 0.0,
+    "horizon_semantics": "h sessions means total_return_index[t] divided by total_return_index[t-h], producing h return intervals from h+1 observations",
+    "phase_seed": "one explicit pre-open seed observation of 1000000 RMB immediately before the first phase execution; first-day trade costs and open-to-close return are included in every metric",
+    "calendar_year_positive_rule": "year-end NAV divided by the immediately preceding year-end NAV minus one is strictly positive; the first included year uses the phase seed NAV",
+    "relative_metric_rule": "every relative CAGR, Sharpe and max-drawdown value is candidate minus paired static control",
+    "fill_ratio_rule": "executed shares valued at the execution open divided by frozen requested shares valued at that same open; a missing-open request is valued at its frozen signal close and remains in the denominator",
+    "capacity_limited_ratio_rule": "frozen requested shares rejected only by the signal-date ADV20 cap, valued at the execution open, divided by all frozen requested shares valued at the execution open; missing-open requests use their frozen signal close",
+    "nav_reconciliation_error_unit": "maximum absolute daily RMB identity error",
+    "complete_train_years": [
+      2016,
+      2017,
+      2018,
+      2019
+    ],
+    "complete_validation_years": [
+      2020,
+      2021,
+      2022
+    ],
+    "complete_audit_years": [
+      2023,
+      2024,
+      2025
+    ]
+  },
+  "train_gate": {
+    "net_cagr_strictly_positive": true,
+    "net_sharpe_at_least": 0.6,
+    "daily_max_drawdown_at_least": -0.2,
+    "positive_complete_year_count_at_least": 3,
+    "stress_cost_cagr_strictly_positive": true,
+    "relative_cagr_at_least": -0.015,
+    "relative_sharpe_at_least": 0.0,
+    "relative_max_drawdown_at_least": 0.0,
+    "requested_notional_fill_ratio_at_least": 0.99,
+    "capacity_limited_requested_notional_ratio_at_most": 0.01,
+    "nav_reconciliation_error_at_most": 1e-08
+  },
+  "validation_gate": {
+    "net_cagr_strictly_positive": true,
+    "net_sharpe_at_least": 0.7,
+    "daily_max_drawdown_at_least": -0.2,
+    "positive_complete_year_count_at_least": 2,
+    "stress_cost_cagr_strictly_positive": true,
+    "relative_cagr_at_least": -0.015,
+    "relative_sharpe_at_least": 0.0,
+    "relative_max_drawdown_at_least": 0.0,
+    "requested_notional_fill_ratio_at_least": 0.99,
+    "capacity_limited_requested_notional_ratio_at_most": 0.01,
+    "nav_reconciliation_error_at_most": 1e-08
+  },
+  "selection": {
+    "train_pass_required_before_validation": true,
+    "registry_size": 1,
+    "maximum_winners": 1,
+    "winner": "causal_multi_horizon_trend_budget only if every train and validation check passes",
+    "null_is_valid": true,
+    "runner_up_fallback": false,
+    "parameter_change_after_returns": false
+  },
+  "audit_gate": {
+    "net_cagr_strictly_positive": true,
+    "net_sharpe_at_least": 0.6,
+    "daily_max_drawdown_at_least": -0.2,
+    "positive_complete_year_count_at_least": 2,
+    "stress_cost_cagr_strictly_positive": true,
+    "relative_cagr_at_least": -0.015,
+    "relative_sharpe_at_least": 0.0,
+    "relative_max_drawdown_at_least": 0.0,
+    "requested_notional_fill_ratio_at_least": 0.99,
+    "capacity_limited_requested_notional_ratio_at_most": 0.01,
+    "nav_reconciliation_error_at_most": 1e-08
+  },
+  "audit_failure_action": "terminal audit failure without runner-up",
+  "claim_contract": {
+    "historical_evidence_class": "preclosure_exposed_historical_diagnostic",
+    "profit_claim_allowed": false,
+    "stable_future_profit_claim_allowed": false,
+    "fresh_future_evidence_required": true,
+    "first_fresh_unseen_session_not_before": "2026-08-31"
+  }
+}

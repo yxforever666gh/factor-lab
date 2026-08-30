@@ -10,6 +10,55 @@
 
 ## [Unreleased]
 
+### Added
+
+- 冻结 7.0 大方向协议 `fixed_multi_asset_causal_trend_budget`：固定 A 股、港股、美股、黄金、
+  五年国债与场内现金代理六只长历史 ETF，只注册一个 63/126/252 日相对现金趋势预算候选，
+  与同风险预算的静态 control 配对。未启用预算全部进入现金代理，不允许回测后替换 ETF、增加
+  第二模型、网格调参或启用旧 A 股分数。
+- 新增 Tushare `fund_daily` / `fund_div` / `fund_adj` 的 create-only stage capture、原始价格与
+  现金分红总回报重构、下一开盘月频组合、逐日 NAV、成本、整手和信号日 ADV20 容量核算，
+  以及 train → validation → winner freeze → audit 的物理阶段入口。
+- 新增 create-only ETF 选择证据（payload
+  `b00536d618c7fe46e3cbe8d258d2b2032ef4e0c16d40fb9c74ff016c34525e0b`）：枚举
+  2015-02-27 当时 L/D/I 全部场内基金及后来退市者，只用 cutoff 前上市状态、至少 252 行日线、
+  ADV20 和可复算公司行动选出六只代表；`fund_div` 只按 cutoff 前异常 ex-date 精确查询，
+  无界调用和 cutoff 后 `fund_daily` 请求均为零。
+
+### Changed
+
+- Python 包版本预置为 `7.0.0`。6.3 已以 annotated tag 封存为
+  `selection_falsified_no_candidate`；7.0 不再改变 fixed-core universe 或权重，而把研究对象改为
+  固定跨资产时间序列状态与预分配风险预算。
+- 正式资本冻结为人民币 100 万元，每笔最多使用信号日 ADV20 的 10%，ETF 单边全成本 8bp、
+  双倍成本压力 16bp、100 份整手、无股票印花税。这个规模由 2015-02-27 之前可见的 QDII ETF
+  流动性决定，不把今天的高成交额回填到早期容量。
+- 分红在 ex-date 先进入不可交易应收、pay-date 才转现金；`513100.SH` 的 2022-01-13 官方
+  1:5 份额拆分以逐字节绑定的上交所公告调整既有持仓和隔夜固定订单，冻结名义金额与 ADV 容量
+  不被拆分改写。参考价 reset 只留痕，不把 `pre_close` 变化伪造成经济收益或公司行动。
+
+### Research results
+
+- 一次只读代码审查在 preselection closure 提交前意外打开了真实 train；该越界运行未调用 formal
+  runner、未修改仓库，也未打开 validation/audit。候选 train CAGR / Sharpe / 最大回撤为
+  `5.1070% / 0.7239 / -15.3787%`，静态 risk-budget control 为
+  `6.9088% / 0.7264 / -17.0246%`。候选虽改善回撤约 `1.646pp`，却少 `1.802pp` CAGR，
+  Sharpe 也低 `0.00249`，因此冻结的 relative CAGR `>= -1.5pp` 与 relative Sharpe `>= 0`
+  两门失败；双倍成本 CAGR 仍为 `4.8573%`，requested fill 为 `99.6745%`，不是软件或容量故障。
+- 参数、资产、窗口和 gate 在上述 outcome 可见后均未改变；但因 Git closure 尚不存在，这不能再称为
+  独立预注册 selection。create-only disclosure payload 为
+  `6bd2909ddc97ec84d3535d15e8f13330a5752831aead82d8fb50afdd16ac6775`。7.0 只允许
+  对同一失败 train 做完整性 replay 并冻结 null，不允许打开 validation 或借接近门槛调参。
+
+### Known limitations
+
+- 本机没有带原始发布时间和历史修订版本的可信卖方预期 archive；Tushare `report_rc` 的历史
+  `create_time` 已观察到晚 732–1831 天回填。卖方预期修正虽是更正交的信息方向，但在交付可信
+  archive 前不得打开收益，也不能用权限升级冒充 vintage 证明。
+- 固定 ETF 代表是在 2026 年已知其仍存续后选择，存在幸存与研究者选择偏差；2015–2026 历史也
+  已被市场参与者和本项目人类观察。即使 7.0 全部历史门通过，仍只属于预注册历史诊断，首个可称
+  新鲜的未来交易日不早于 2026-08-31，且不得承诺稳定盈利。
+
 ## [6.3] - 2026-08-30
 
 ### Added

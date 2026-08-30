@@ -1,5 +1,7 @@
+import hashlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -21,6 +23,9 @@ def test_cli_exposes_only_lightweight_mainline_commands() -> None:
     assert parser.parse_args(
         ["strategy", "status", "--release", "6.3"]
     ).release == "6.3"
+    assert parser.parse_args(
+        ["strategy", "status", "--release", "7.0"]
+    ).release == "7.0"
     targets = parser.parse_args(["strategy", "targets", "--signal-date", "latest"])
     assert targets.strategy_command == "targets"
 
@@ -120,67 +125,47 @@ def test_explicit_root_does_not_require_implicit_discovery(
 
 def test_strategy_status_verifies_tracked_implementation_and_evidence() -> None:
     root = Path(__file__).resolve().parents[2]
-    if not (root / cli.PRESELECTION_CLOSURE_PATH).is_file():
-        pytest.skip("6.3 closure is created from the clean implementation commit")
-
     result, exit_code = cli._strategy_status(root, verify_data=False)
-
-    result_path = root / cli.RELEASE_RESULT_PATH
-    freeze_path = root / cli.WINNER_FREEZE_PATH
-    if result_path.is_file():
-        terminal = json.loads(result_path.read_text(encoding="utf-8"))
-        expected_status = terminal["status"]
-        expected_selected = terminal["selected_candidate_id"]
-        expected_audit = terminal["audit_status"]
-    elif freeze_path.is_file():
-        freeze = json.loads(freeze_path.read_text(encoding="utf-8"))
-        expected_selected = freeze["selected_candidate_id"]
-        expected_status = (
-            "selection_frozen_pending_historical_audit"
-            if expected_selected is not None
-            else "selection_frozen_no_candidate_pending_finalize"
-        )
-        expected_audit = "not_opened"
+    closure_exists = (root / cli.V7_CLOSURE_PATH).is_file()
+    if closure_exists:
+        assert exit_code == 0
     else:
-        expected_status = "implementation_frozen_before_selection"
-        expected_selected = None
-        expected_audit = "not_opened"
-
-    assert exit_code == 0
-    assert result["status"] == expected_status
-    assert result["version"] == "6.3"
-    assert result["route"] == "widened_opportunity_set"
+        assert exit_code in {0, 2}
+        assert result["status"] in {
+            "implementation_ready_for_preselection_closure",
+            "implementation_pending_clean_commit",
+        }
+    assert result["version"] == "7.0"
+    assert result["route"] == "fixed_multi_asset_causal_trend_budget"
     assert result["profit_claim_allowed"] is False
-    assert result["selected_candidate_id"] == expected_selected
-    assert result["audit_status"] == expected_audit
+    if not closure_exists:
+        assert result["audit_status"] == "not_opened"
     assert all(
-        check["status"] in {"match", "not_verified"}
+        check["status"] in {"match", "not_verified", "pending_clean_commit"}
         for check in result["checks"]
     )
     categories = {check["category"] for check in result["checks"]}
-    assert "release_payload" in categories
-    assert "protocol_payload:wide_universe" in categories
-    assert "protocol_payload:wide_universe_amendment" in categories
-    assert "protocol_payload:corrective_amendment" in categories
-    assert "implementation:long_only" in categories
-    assert "implementation:execution_kernel" in categories
-    assert "implementation:wide_runner" in categories
-    assert "implementation:opportunity_set" in categories
+    if closure_exists:
+        assert "release_evidence_chain" in categories
+    else:
+        assert "protocol_payload" in categories
+        assert "asset_selection_payload" in categories
 
 
-def test_default_strategy_status_reports_the_6_3_preclosure_state(
+def test_default_strategy_status_reports_the_7_0_preclosure_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root = Path(__file__).resolve().parents[2]
-    if (root / cli.PRESELECTION_CLOSURE_PATH).is_file():
-        pytest.skip("6.3 closure has already superseded the preclosure state")
+    if (root / cli.V7_CLOSURE_PATH).is_file():
+        pytest.skip("7.0 closure has already superseded the preclosure state")
     monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
+    monkeypatch.setattr(cli, "_v7_require_head_ci", lambda _root: "a" * 40)
 
     result, exit_code = cli._strategy_status(root, verify_data=False)
 
     assert exit_code == 0
     assert result["status"] == "implementation_ready_for_preselection_closure"
-    assert result["version"] == "6.3"
+    assert result["version"] == "7.0"
     assert result["selected_candidate_id"] is None
     assert result["audit_status"] == "not_opened"
     assert result["profit_claim_allowed"] is False
@@ -191,8 +176,8 @@ def test_default_preclosure_status_does_not_claim_dirty_tree_is_ready(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root = Path(__file__).resolve().parents[2]
-    if (root / cli.PRESELECTION_CLOSURE_PATH).is_file():
-        pytest.skip("6.3 closure has already superseded the preclosure state")
+    if (root / cli.V7_CLOSURE_PATH).is_file():
+        pytest.skip("7.0 closure has already superseded the preclosure state")
     monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: False)
 
     result, exit_code = cli._strategy_status(root, verify_data=False)
@@ -202,6 +187,156 @@ def test_default_preclosure_status_does_not_claim_dirty_tree_is_ready(
     assert any(
         check["category"] == "preclosure_working_tree"
         and check["status"] == "pending_clean_commit"
+        for check in result["checks"]
+    )
+
+
+def test_7_0_preclosure_status_rejects_contradictory_opened_disclosure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = Path(__file__).resolve().parents[2]
+    selection = json.loads(
+        (root / cli.V7_ASSET_SELECTION_PATH).read_text(encoding="utf-8")
+    )
+    disclosure = json.loads(
+        (root / cli.V7_PRECLOSURE_TRAIN_PATH).read_text(encoding="utf-8")
+    )
+    disclosure["disclosure"]["audit_market_outcomes_opened"] = True
+    disclosure["payload_sha256"] = cli._canonical_payload_sha256(disclosure)
+    disclosure_path = tmp_path / cli.V7_PRECLOSURE_TRAIN_PATH
+    disclosure_path.parent.mkdir(parents=True)
+    disclosure_path.write_text(
+        json.dumps(disclosure, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    selection_path = tmp_path / cli.V7_ASSET_SELECTION_PATH
+    selection_path.parent.mkdir(parents=True, exist_ok=True)
+    selection_path.write_bytes((root / cli.V7_ASSET_SELECTION_PATH).read_bytes())
+    protocol = json.loads(
+        (root / cli.V7_PROTOCOL_PATH).read_text(encoding="utf-8")
+    )
+    protocol["preclosure_train_disclosure"].update(
+        {
+            "file_sha256": hashlib.sha256(disclosure_path.read_bytes()).hexdigest(),
+            "payload_sha256": disclosure["payload_sha256"],
+        }
+    )
+    protocol["payload_sha256"] = cli._canonical_payload_sha256(protocol)
+    protocol_path = tmp_path / cli.V7_PROTOCOL_PATH
+    protocol_path.parent.mkdir(parents=True, exist_ok=True)
+    protocol_path.write_text(
+        json.dumps(protocol, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    runner = cli._load_v7_runner(root)
+    monkeypatch.setattr(cli, "_load_v7_runner", lambda _root: runner)
+    monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
+    monkeypatch.setattr(cli, "_v7_require_head_ci", lambda _root: "a" * 40)
+
+    result, exit_code = cli._strategy_status_7_0_pending(
+        tmp_path, verify_data=False
+    )
+
+    assert exit_code == 3
+    assert result["status"] == "integrity_mismatch"
+    assert any(
+        check["category"] == "preclosure_outcome_boundary"
+        and check["status"] == "mismatch"
+        for check in result["checks"]
+    )
+
+
+def test_default_preclosure_status_requires_pushed_successful_ci(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = Path(__file__).resolve().parents[2]
+    if (root / cli.V7_CLOSURE_PATH).is_file():
+        pytest.skip("7.0 closure has already superseded the preclosure state")
+    monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
+    monkeypatch.setattr(
+        cli,
+        "_v7_require_head_ci",
+        lambda _root: (_ for _ in ()).throw(RuntimeError("push CI missing")),
+    )
+
+    result, exit_code = cli._strategy_status(root, verify_data=False)
+
+    assert exit_code == 3
+    assert result["status"] == "integrity_mismatch"
+    assert any(
+        check["category"] == "preclosure_head_push_ci"
+        and check["status"] == "mismatch"
+        for check in result["checks"]
+    )
+
+
+def test_7_0_status_rejects_orphan_audit_from_full_chain_verifier(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    closure = tmp_path / cli.V7_CLOSURE_PATH
+    closure.parent.mkdir(parents=True)
+    closure.write_text("{}", encoding="utf-8")
+    verifier = SimpleNamespace(
+        verify_release_state=lambda **_: (_ for _ in ()).throw(
+            ValueError("audit/result exists without a winner freeze")
+        )
+    )
+    monkeypatch.setattr(cli, "_load_v7_runner", lambda _root: verifier)
+
+    result, exit_code = cli._strategy_status_7_0(tmp_path, verify_data=True)
+
+    assert exit_code == 3
+    assert result["status"] == "integrity_mismatch"
+    assert result["canonical_data_hashes_verified"] is False
+    assert "without a winner freeze" in result["checks"][-1]["error"]
+
+
+def test_7_0_verify_data_is_forwarded_to_stage_verifier(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    closure_path = tmp_path / cli.V7_CLOSURE_PATH
+    closure_path.parent.mkdir(parents=True)
+    closure_path.write_text("{}", encoding="utf-8")
+    calls: list[tuple[bool, bool]] = []
+
+    def verify_release_state(*, verify_data: bool, verify_runtime: bool) -> dict:
+        calls.append((verify_data, verify_runtime))
+        return {
+            "status": "selection_frozen_pending_historical_audit",
+            "closure": {"route": "fixed_multi_asset_causal_trend_budget"},
+            "protocol": {
+                "protocol_id": "factor-lab/7.0/fixed-multi-asset-trend-budget-v1",
+                "claim_contract": {
+                    "historical_evidence_class": "pre_registered_historical_diagnostic_only",
+                    "profit_claim_allowed": False,
+                },
+            },
+            "selection": {},
+            "freeze": {"selected_candidate_id": "causal_multi_horizon_trend_budget"},
+            "audit": None,
+            "result": None,
+        }
+
+    monkeypatch.setattr(
+        cli,
+        "_load_v7_runner",
+        lambda _root: SimpleNamespace(verify_release_state=verify_release_state),
+    )
+    monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
+    monkeypatch.setattr(cli, "_v7_require_head_ci", lambda _root: "a" * 40)
+
+    result, exit_code = cli._strategy_status_7_0(tmp_path, verify_data=True)
+
+    assert exit_code == 0
+    assert calls == [(True, False)]
+    assert result["canonical_data_hashes_verified"] is True
+    assert any(
+        check["category"] == "head_push_ci" and check["status"] == "match"
+        for check in result["checks"]
+    )
+    assert any(
+        check["category"] == "canonical_stage_artifacts"
+        and check["status"] == "match"
         for check in result["checks"]
     )
 
@@ -221,7 +356,9 @@ def test_strategy_status_detects_implementation_tamper(
 
     monkeypatch.setattr(cli, "_file_sha256", tampered_sha256)
 
-    result, exit_code = cli._strategy_status(root, verify_data=False)
+    result, exit_code = cli._strategy_status(
+        root, verify_data=False, release="6.3"
+    )
 
     assert exit_code == 3
     assert result["status"] == "integrity_mismatch"
@@ -247,7 +384,9 @@ def test_strategy_status_detects_protocol_file_tamper(
 
     monkeypatch.setattr(cli, "_file_sha256", tampered_sha256)
 
-    result, exit_code = cli._strategy_status(root, verify_data=False)
+    result, exit_code = cli._strategy_status(
+        root, verify_data=False, release="6.3"
+    )
 
     assert exit_code == 3
     assert any(

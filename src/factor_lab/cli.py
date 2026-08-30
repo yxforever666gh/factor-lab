@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import subprocess
@@ -42,6 +43,16 @@ from factor_lab.release_integrity import (
 )
 from factor_lab.research.runner import latest_run, run_research
 from factor_lab.strategy import generate_sleeve_target_schedule
+
+
+V7_PROTOCOL_PATH = "protocols/7.0-multi-asset.json"
+V7_ASSET_SELECTION_PATH = "protocols/7.0-asset-selection.json"
+V7_CLOSURE_PATH = "protocols/7.0-release.json"
+V7_PRECLOSURE_TRAIN_PATH = "protocols/evidence/7.0/preclosure-train.json"
+V7_WINNER_FREEZE_PATH = "protocols/evidence/7.0/winner-freeze.json"
+V7_AUDIT_PATH = "protocols/evidence/7.0/historical-audit.json"
+V7_RESULT_PATH = "protocols/evidence/7.0/result.json"
+V7_RUNTIME_PATH = "runtime/data/multi-asset-7.0"
 
 
 def _root() -> Path:
@@ -236,7 +247,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     strategy_status.add_argument(
         "--release",
-        choices=("6.0", "6.3"),
+        choices=("6.0", "6.3", "7.0"),
         help="Verify one release closure; defaults to the latest tracked closure.",
     )
     strategy_targets = strategy_commands.add_parser(
@@ -1040,7 +1051,6 @@ def _strategy_status_6_3_pending(
             "status": "match" if clean else "pending_clean_commit",
         }
     )
-
     if failures:
         status = "integrity_mismatch"
         exit_code = 3
@@ -1067,16 +1077,336 @@ def _strategy_status_6_3_pending(
     )
 
 
+def _v7_json_check(
+    root: Path,
+    relative_path: str,
+    *,
+    expected_payload: str | None = None,
+    expected_file: str | None = None,
+) -> tuple[dict[str, Any] | None, dict[str, Any]]:
+    path = root / relative_path
+    check: dict[str, Any] = {"path": relative_path}
+    if not path.is_file() or path.is_symlink():
+        check["status"] = "missing"
+        return None, check
+    try:
+        value = _read_json(path)
+        payload = _canonical_payload_sha256(value)
+        actual_file = _file_sha256(path)
+        valid = value.get("payload_sha256") == payload
+        if expected_payload is not None:
+            valid = valid and payload == expected_payload
+        if expected_file is not None:
+            valid = valid and actual_file == expected_file
+        check.update(
+            {
+                "status": "match" if valid else "mismatch",
+                "actual_payload_sha256": payload,
+                "actual_file_sha256": actual_file,
+            }
+        )
+        return value, check
+    except (OSError, SystemExit, TypeError, ValueError, json.JSONDecodeError) as exc:
+        check.update({"status": "invalid_json", "error": str(exc)})
+        return None, check
+
+
+def _load_v7_runner(root: Path) -> Any:
+    resolved = root.resolve()
+    script = resolved / "scripts" / "run-multi-asset-evidence.py"
+    if script.is_symlink() or not script.is_file():
+        raise ValueError("7.0 formal runner is missing or indirect")
+    spec = importlib.util.spec_from_file_location("factor_lab_v7_status_verifier", script)
+    if spec is None or spec.loader is None:
+        raise ValueError("could not load the 7.0 formal verifier")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    module.ROOT = resolved
+    module.SRC = resolved / "src"
+    module.WORK_ROOT = resolved / V7_RUNTIME_PATH
+    module.SOURCE_ROOT = module.WORK_ROOT / "sources"
+    module.EVALUATION_ROOT = module.WORK_ROOT / "evaluations"
+    module.BINDING_ROOT = module.WORK_ROOT / "stage-bindings"
+    return module
+
+
+def _v7_require_head_ci(root: Path) -> str:
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=root,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    ).stdout.strip()
+    _load_v7_runner(root)._require_head_pushed_and_ci_success(head)
+    return head
+
+
+def _strategy_status_7_0_pending(
+    root: Path, *, verify_data: bool
+) -> tuple[dict[str, Any], int]:
+    checks: list[dict[str, Any]] = []
+    protocol, protocol_check = _v7_json_check(root, V7_PROTOCOL_PATH)
+    protocol_check["category"] = "protocol_payload"
+    checks.append(protocol_check)
+    selection, selection_check = _v7_json_check(root, V7_ASSET_SELECTION_PATH)
+    selection_check["category"] = "asset_selection_payload"
+    checks.append(selection_check)
+    disclosure_contract = (
+        protocol.get("preclosure_train_disclosure")
+        if protocol is not None
+        else {}
+    )
+    disclosure, disclosure_check = _v7_json_check(
+        root,
+        V7_PRECLOSURE_TRAIN_PATH,
+        expected_payload=str(disclosure_contract.get("payload_sha256") or ""),
+        expected_file=str(disclosure_contract.get("file_sha256") or ""),
+    )
+    disclosure_check["category"] = "preclosure_train_disclosure"
+    checks.append(disclosure_check)
+    failures = [
+        item for item in checks if item.get("status") != "match"
+    ]
+    if disclosure is not None:
+        try:
+            _load_v7_runner(root)._verify_disclosed_outcome_boundary(disclosure)
+            checks.append(
+                {
+                    "category": "preclosure_outcome_boundary",
+                    "path": V7_PRECLOSURE_TRAIN_PATH,
+                    "status": "match",
+                }
+            )
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            item = {
+                "category": "preclosure_outcome_boundary",
+                "path": V7_PRECLOSURE_TRAIN_PATH,
+                "status": "mismatch",
+                "error": str(exc),
+            }
+            checks.append(item)
+            failures.append(item)
+    if protocol is not None and selection is not None and disclosure is not None:
+        assets = protocol.get("assets") or {}
+        if (
+            assets.get("selection_evidence_file_sha256")
+            != _file_sha256(root / V7_ASSET_SELECTION_PATH)
+            or assets.get("selection_evidence_payload_sha256")
+            != selection.get("payload_sha256")
+            or selection.get("selected_codes")
+            != [
+                "510300.SH",
+                "159920.SZ",
+                "513100.SH",
+                "518880.SH",
+                "511010.SH",
+                "511880.SH",
+            ]
+        ):
+            item = {
+                "category": "asset_selection_binding",
+                "path": V7_ASSET_SELECTION_PATH,
+                "status": "mismatch",
+            }
+            checks.append(item)
+            failures.append(item)
+        else:
+            checks.append(
+                {
+                    "category": "asset_selection_binding",
+                    "path": V7_ASSET_SELECTION_PATH,
+                    "status": "match",
+                }
+            )
+    for relative in (
+        V7_CLOSURE_PATH,
+        V7_WINNER_FREEZE_PATH,
+        V7_AUDIT_PATH,
+        V7_RESULT_PATH,
+        V7_RUNTIME_PATH,
+    ):
+        exists = (root / relative).exists()
+        item = {
+            "category": "preclosure_absence",
+            "path": relative,
+            "status": "unexpected" if exists else "match",
+        }
+        checks.append(item)
+        if exists:
+            failures.append(item)
+    clean = _working_tree_is_clean(root)
+    checks.append(
+        {
+            "category": "preclosure_working_tree",
+            "path": ".",
+            "status": "match" if clean else "pending_clean_commit",
+        }
+    )
+    if clean:
+        try:
+            head = _v7_require_head_ci(root)
+            checks.append(
+                {
+                    "category": "preclosure_head_push_ci",
+                    "path": ".git",
+                    "status": "match",
+                    "head": head,
+                }
+            )
+        except (OSError, RuntimeError, ValueError, subprocess.SubprocessError) as exc:
+            item = {
+                "category": "preclosure_head_push_ci",
+                "path": ".git",
+                "status": "mismatch",
+                "error": str(exc),
+            }
+            checks.append(item)
+            failures.append(item)
+    if failures:
+        status, exit_code = "integrity_mismatch", 3
+    elif clean:
+        status, exit_code = "implementation_ready_for_preselection_closure", 0
+    else:
+        status, exit_code = "implementation_pending_clean_commit", 2
+    return {
+        "status": status,
+        "version": "7.0",
+        "route": "fixed_multi_asset_causal_trend_budget",
+        "protocol_id": (
+            protocol.get("protocol_id") if protocol is not None else None
+        ),
+        "historical_evidence_class": (
+            (protocol.get("claim_contract") or {}).get(
+                "historical_evidence_class"
+            )
+            if protocol is not None
+            else None
+        ),
+        "profit_claim_allowed": False,
+        "selected_candidate_id": None,
+        "audit_status": "not_opened",
+        "terminal_result_payload_sha256": None,
+        "canonical_data_hashes_verified": False,
+        "checks": checks,
+    }, exit_code
+
+
+def _strategy_status_7_0(
+    root: Path, *, verify_data: bool
+) -> tuple[dict[str, Any], int]:
+    if not (root / V7_CLOSURE_PATH).is_file():
+        return _strategy_status_7_0_pending(root, verify_data=verify_data)
+    checks: list[dict[str, Any]] = []
+    try:
+        verifier = _load_v7_runner(root)
+        state = verifier.verify_release_state(
+            verify_data=verify_data,
+            verify_runtime=False,
+        )
+        closure = state["closure"]
+        protocol = state["protocol"]
+        freeze = state["freeze"]
+        audit = state["audit"]
+        result = state["result"]
+        checks.append(
+            {
+                "category": "release_evidence_chain",
+                "path": V7_CLOSURE_PATH,
+                "status": "match",
+            }
+        )
+        checks.append(
+            {
+                "category": "canonical_stage_artifacts",
+                "path": V7_RUNTIME_PATH,
+                "status": "match" if verify_data else "not_verified",
+            }
+        )
+        clean = _working_tree_is_clean(root)
+        checks.append(
+            {
+                "category": "working_tree",
+                "path": ".",
+                "status": "match" if clean else "mismatch",
+            }
+        )
+        if not clean:
+            raise RuntimeError("7.0 formal status requires a clean worktree")
+        head = _v7_require_head_ci(root)
+        checks.append(
+            {
+                "category": "head_push_ci",
+                "path": ".git",
+                "status": "match",
+                "head": head,
+            }
+        )
+        selected = (
+            result.get("selected_candidate_id")
+            if result is not None
+            else freeze.get("selected_candidate_id")
+            if freeze is not None
+            else None
+        )
+        audit_status = (
+            result.get("audit_status")
+            if result is not None
+            else audit.get("status")
+            if audit is not None
+            else "not_opened"
+        )
+        claim = protocol.get("claim_contract") or {}
+        return {
+            "status": state["status"],
+            "version": "7.0",
+            "route": closure.get("route"),
+            "protocol_id": protocol.get("protocol_id"),
+            "historical_evidence_class": claim.get("historical_evidence_class"),
+            "profit_claim_allowed": claim.get("profit_claim_allowed", False),
+            "selected_candidate_id": selected,
+            "audit_status": audit_status,
+            "terminal_result_payload_sha256": (
+                result.get("payload_sha256") if result is not None else None
+            ),
+            "canonical_data_hashes_verified": bool(verify_data),
+            "checks": checks,
+        }, 0
+    except (OSError, RuntimeError, TypeError, ValueError, subprocess.SubprocessError) as exc:
+        checks.append(
+            {
+                "category": "release_evidence_chain",
+                "path": V7_CLOSURE_PATH,
+                "status": "mismatch",
+                "error": str(exc),
+            }
+        )
+        return {
+            "status": "integrity_mismatch",
+            "version": "7.0",
+            "route": "fixed_multi_asset_causal_trend_budget",
+            "protocol_id": None,
+            "historical_evidence_class": None,
+            "profit_claim_allowed": False,
+            "selected_candidate_id": None,
+            "audit_status": "unknown",
+            "terminal_result_payload_sha256": None,
+            "canonical_data_hashes_verified": False,
+            "checks": checks,
+        }, 3
+
+
 def _strategy_status(
     root: Path, *, verify_data: bool, release: str | None = None
 ) -> tuple[dict[str, Any], int]:
-    if release is None and not (root / PRESELECTION_CLOSURE_PATH).is_file():
-        return _strategy_status_6_3_pending(root, verify_data=verify_data)
-    selected = release or "6.3"
+    selected = release or "7.0"
     if selected == "6.0":
         return _strategy_status_6_0(root, verify_data=verify_data)
     if selected == "6.3":
         return _strategy_status_6_3(root, verify_data=verify_data)
+    if selected == "7.0":
+        return _strategy_status_7_0(root, verify_data=verify_data)
     raise ValueError(f"unsupported strategy release: {selected}")
 
 
