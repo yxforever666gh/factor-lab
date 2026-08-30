@@ -17,6 +17,11 @@
   terminal result 路径。6.3 closure 逐字节绑定已发布的 annotated `6.2` tag、未改动的 6.2
   protocol/amendment、6.2 preselection closure 及其 create-only execution-failure 证据；6.2
   历史文件和结论不得覆盖或重新解释。
+- 6.3 正式 train replay 已从 fresh 6.3 source ledger 封存 stage payload
+  `47130f0c03268c8c13ee81e38b62d14c22ce9a45ba80b23d0d07c1a73948237b`，并生成
+  create-only null winner freeze（payload
+  `71a8543ea63fa949e5fee4c9a8ab792a6cc0834096778ab8cacbcef16796f55a`）。两个 challenger
+  均未通过 train，因此 validation 与 historical audit 的市场结果保持物理未打开。
 
 ### Changed
 
@@ -35,9 +40,14 @@
 
 ### Known limitations
 
-- 6.3 尚未打开 corrective return replay，当前没有新的 train/validation gate、winner 或 audit 结论。
-  必须先 create-only 生成并提交 6.3 preselection closure，再从 canonical raw fresh replay；6.2 的
-  `selection_inconclusive_software_failure` 不能充当 6.3 的任何阶段结果。
+- 6.3 corrective replay 已证明 6.2 的容量守恒异常只是 binary64 归约次序假失败，但同一冻结研究问题
+  的扩大机会集路线在 train 被否证。相对动态 ADV20 Top500 control，`ADV20 >= 1 亿元` challenger
+  的 paired relative CAGR q20/median/worst 分别为 `-2.8161%`、`-1.9542%`、`-3.4165%`，
+  ADV20 Top1500 分别为 `-2.5338%`、`-1.6887%`、`-4.1251%`；两者十个 offset 的正相对收益
+  计数均为 `0`。两者还分别出现最坏 `21.6998%` / `14.4238%` 的容量受限请求占比和
+  `91.2416%` / `91.7009%` 的最坏请求成交率，未通过冻结的执行容量门。故不选择 winner，
+  不允许打开 validation 或 audit，也不允许从该结果提出盈利声明；它只否证当前固定信号、组合、
+  成本和执行合同下的两个扩大机会集 challenger，不外推为所有选股或所有市场路线均无效。
 
 ## [6.2] - 2026-08-30
 

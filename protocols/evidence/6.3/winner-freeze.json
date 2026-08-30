@@ -1,0 +1,1663 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_6_3_winner_freeze",
+  "status": "selected_null_frozen",
+  "protocol_payload_sha256": "9f47595125ac57f6a60ddf0526cf7074d4d1f38417655b5708fe27e3ebde4e45",
+  "protocol_amendment_payload_sha256": "429d94dd570b8e1ffc0c59daff668c5a92daaae6928da4a42ad0cff0e3c7032c",
+  "corrective_amendment_payload_sha256": "e3ea5c70d56eb30c78187ebfa35428d80877afc43c47742cc9a3325cdcee4747",
+  "implementation_closure_payload_sha256": "2f83093f809802cac29c54e47f50dfd728cf8b0160815e4316e2083dcfcec0df",
+  "selected_candidate_id": null,
+  "runner_up_fallback_after_audit_fail": false,
+  "train_passers": [],
+  "train_gates": {
+    "daily_adv20_ge_100m": {
+      "passed": false,
+      "checks": {
+        "q20_paired_relative_cagr_strictly_positive": false,
+        "positive_relative_offset_count_at_least_7": false,
+        "all_offset_execution_and_risk_gates": false
+      },
+      "offset_checks": [
+        {
+          "offset": 0,
+          "checks": {
+            "minimum_observations": true,
+            "daily_max_drawdown": true,
+            "drawdown_worsening": true,
+            "capacity_violation_count": true,
+            "execution_input_future_violation_count": true,
+            "execution_input_coverage": true,
+            "capacity_limited_requested_notional_ratio": false,
+            "requested_notional_fill_ratio": false,
+            "activity": true
+          },
+          "passed": false
+        },
+        {
+          "offset": 1,
+          "checks": {
+            "minimum_observations": true,
+            "daily_max_drawdown": true,
+            "drawdown_worsening": false,
+            "capacity_violation_count": true,
+            "execution_input_future_violation_count": true,
+            "execution_input_coverage": true,
+            "capacity_limited_requested_notional_ratio": false,
+            "requested_notional_fill_ratio": false,
+            "activity": true
+          },
+          "passed": false
+        },
+        {
+          "offset": 2,
+          "checks": {
+            "minimum_observations": true,
+            "daily_max_drawdown": true,
+            "drawdown_worsening": true,
+            "capacity_violation_count": true,
+            "execution_input_future_violation_count": true,
+            "execution_input_coverage": true,
+            "capacity_limited_requested_notional_ratio": false,
+            "requested_notional_fill_ratio": false,
+            "activity": true
+          },
+          "passed": false
+        },
+        {
+          "offset": 3,
+          "checks": {
+            "minimum_observations": true,
+            "daily_max_drawdown": true,
+            "drawdown_worsening": true,
+            "capacity_violation_count": true,
+            "execution_input_future_violation_count": true,
+            "execution_input_coverage": true,
+            "capacity_limited_requested_notional_ratio": false,
+            "requested_notional_fill_ratio": false,
+            "activity": true
+          },
+          "passed": false
+        },
+        {
+          "offset": 4,
+          "checks": {
+            "minimum_observations": true,
+            "daily_max_drawdown": true,
+            "drawdown_worsening": true,
+            "capacity_violation_count": true,
+            "execution_input_future_violation_count": true,
+            "execution_input_coverage": true,
+            "capacity_limited_requested_notional_ratio": false,
+            "requested_notional_fill_ratio": false,
+            "activity": true
+          },
+          "passed": false
+        },
+        {
+          "offset": 5,
+          "checks": {
+            "minimum_observations": true,
+            "daily_max_drawdown": true,
+            "drawdown_worsening": true,
+            "capacity_violation_count": true,
+            "execution_input_future_violation_count": true,
+            "execution_input_coverage": true,
+            "capacity_limited_requested_notional_ratio": false,
+            "requested_notional_fill_ratio": false,
+            "activity": true
+          },
+          "passed": false
+        },
+        {
+          "offset": 6,
+          "checks": {
+            "minimum_observations": true,
+            "daily_max_drawdown": true,
+            "drawdown_worsening": true,
+            "capacity_violation_count": true,
+            "execution_input_future_violation_count": true,
+            "execution_input_coverage": true,
+            "capacity_limited_requested_notional_ratio": false,
+            "requested_notional_fill_ratio": false,
+            "activity": true
+          },
+          "passed": false
+        },
+        {
+          "offset": 7,
+          "checks": {
+            "minimum_observations": true,
+            "daily_max_drawdown": true,
+            "drawdown_worsening": true,
+            "capacity_violation_count": true,
+            "execution_input_future_violation_count": true,
+            "execution_input_coverage": true,
+            "capacity_limited_requested_notional_ratio": false,
+            "requested_notional_fill_ratio": false,
+            "activity": true
+          },
+          "passed": false
+        },
+        {
+          "offset": 8,
+          "checks": {
+            "minimum_observations": true,
+            "daily_max_drawdown": true,
+            "drawdown_worsening": true,
+            "capacity_violation_count": true,
+            "execution_input_future_violation_count": true,
+            "execution_input_coverage": true,
+            "capacity_limited_requested_notional_ratio": false,
+            "requested_notional_fill_ratio": false,
+            "activity": true
+          },
+          "passed": false
+        },
+        {
+          "offset": 9,
+          "checks": {
+            "minimum_observations": true,
+            "daily_max_drawdown": true,
+            "drawdown_worsening": false,
+            "capacity_violation_count": true,
+            "execution_input_future_violation_count": true,
+            "execution_input_coverage": true,
+            "capacity_limited_requested_notional_ratio": false,
+            "requested_notional_fill_ratio": false,
+            "activity": true
+          },
+          "passed": false
+        }
+      ],
+      "paired_relative_cagr": {
+        "q20": -0.028160506543436114,
+        "median": -0.019541799801159943,
+        "worst": -0.03416500884479323
+      },
+      "positive_relative_offset_count": 0,
+      "validation_median_relative_cagr": -0.019541799801159943,
+      "worst_capacity_limited_requested_notional_ratio": 0.21699820682146992,
+      "worst_requested_notional_fill_ratio": 0.9124161437102951,
+      "paired_phases": [
+        {
+          "observations": 145,
+          "start_signal_date": "2017-01-03",
+          "end_signal_date": "2022-12-06",
+          "max_outcome_end_date": "2022-12-21",
+          "net_cagr": 0.020637387819014474,
+          "gross_cagr": 0.02538786936913806,
+          "net_sharpe": 0.2113667444075714,
+          "daily_max_drawdown": -0.23878947024497044,
+          "mean_turnover": 0.0874309893137931,
+          "total_cost_fraction": 0.026681183594841108,
+          "blocked_trade_count": 2,
+          "capacity_limited_count": 28,
+          "capacity_violation_count": 0,
+          "forced_delist_write_down_count": 0,
+          "execution_input_required_count": 1524,
+          "execution_input_observed_count": 1524,
+          "execution_input_coverage": 1.0,
+          "execution_input_future_violation_count": 0,
+          "capacity": {
+            "order_count": 1524,
+            "requested_notional_total": 785053950.5199,
+            "capacity_limited_requested_notional": 155903190.1772,
+            "executed_notional_total": 716295898.1379,
+            "capacity_limited_requested_notional_ratio": 0.19858914164300875,
+            "requested_notional_fill_ratio": 0.9124161437102951,
+            "trade_record_notional_precision_rmb_decimals": 4,
+            "activity_gate_passed": true,
+            "by_side": {
+              "buy": {
+                "order_count": 817,
+                "requested_notional_total": 418168466.7677,
+                "capacity_limited_requested_notional": 34342942.5122,
+                "executed_notional_total": 382389350.893,
+                "capacity_limited_requested_notional_ratio": 0.08212704984108261,
+                "requested_notional_fill_ratio": 0.9144385129006488
+              },
+              "sell": {
+                "order_count": 707,
+                "requested_notional_total": 366885483.7522,
+                "capacity_limited_requested_notional": 121560247.66499999,
+                "executed_notional_total": 333906547.2449,
+                "capacity_limited_requested_notional_ratio": 0.33133021896037623,
+                "requested_notional_fill_ratio": 0.910111089242292
+              }
+            }
+          },
+          "exact_trace_sha256": {
+            "period_trace_sha256": "dea496671c0289bba806565497f68561b1a868a62495733eb8730f41b02e148d",
+            "trade_trace_sha256": "da68ca7514ab65f2a23cacabdeb172f66697520e3175f5c8c1e67288e942b77d",
+            "daily_nav_sha256": "aa0864fc1c7d64e191352ef23bd5b749c9f320dd26d14a0c95d99562988787d6"
+          },
+          "payload_sha256": "02eabd4d56eedcc0a92e1ab94401a567824b84b8d3e19beba3d4f3eb39284845",
+          "relative_to_control": {
+            "paired_relative_cagr": -0.022090076080111487,
+            "paired_spread_ir": -0.4209911307243734,
+            "net_cagr_delta": -0.023055249768562103,
+            "daily_max_drawdown_delta": 0.013864533514531874,
+            "turnover_delta": -0.050842113728275865,
+            "positive_period_fraction": 0.4689655172413793
+          }
+        },
+        {
+          "observations": 145,
+          "start_signal_date": "2017-01-04",
+          "end_signal_date": "2022-12-07",
+          "max_outcome_end_date": "2022-12-22",
+          "net_cagr": 0.01711391258305217,
+          "gross_cagr": 0.021881916921691058,
+          "net_sharpe": 0.18343879945941546,
+          "daily_max_drawdown": -0.27489108596088563,
+          "mean_turnover": 0.08892227676896551,
+          "total_cost_fraction": 0.02672027296028486,
+          "blocked_trade_count": 2,
+          "capacity_limited_count": 26,
+          "capacity_violation_count": 0,
+          "forced_delist_write_down_count": 0,
+          "execution_input_required_count": 1525,
+          "execution_input_observed_count": 1525,
+          "execution_input_coverage": 1.0,
+          "execution_input_future_violation_count": 0,
+          "capacity": {
+            "order_count": 1525,
+            "requested_notional_total": 785140067.1392,
+            "capacity_limited_requested_notional": 142239085.773,
+            "executed_notional_total": 725166103.6703,
+            "capacity_limited_requested_notional_ratio": 0.1811639626178726,
+            "requested_notional_fill_ratio": 0.9236136761082313,
+            "trade_record_notional_precision_rmb_decimals": 4,
+            "activity_gate_passed": true,
+            "by_side": {
+              "buy": {
+                "order_count": 826,
+                "requested_notional_total": 418173152.8394,
+                "capacity_limited_requested_notional": 28466746.212300003,
+                "executed_notional_total": 386825898.4756,
+                "capacity_limited_requested_notional_ratio": 0.06807406458068985,
+                "requested_notional_fill_ratio": 0.9250376210166726
+              },
+              "sell": {
+                "order_count": 699,
+                "requested_notional_total": 366966914.2998,
+                "capacity_limited_requested_notional": 113772339.5607,
+                "executed_notional_total": 338340205.1947,
+                "capacity_limited_requested_notional_ratio": 0.3100343249684676,
+                "requested_notional_fill_ratio": 0.9219910351871317
+              }
+            }
+          },
+          "exact_trace_sha256": {
+            "period_trace_sha256": "dbcc1a02ba2d5ee6061c67100451343edebb829a050593ced7b43fcef9a59cd0",
+            "trade_trace_sha256": "5a699bb77d0fa0937ec977653913afdd0fe762e3c95db2cf24295eb42ed2950a",
+            "daily_nav_sha256": "dcc5710a5c4f9e3a6e704e781d07306c9641fd12521af3386c0ba20816f9591c"
+          },
+          "payload_sha256": "c74548c4e88563bc311f6aa275ed754fcd907617c1dd37ea616790ff3509087c",
+          "relative_to_control": {
+            "paired_relative_cagr": -0.02718635530605462,
+            "paired_spread_ir": -0.4995879004549156,
+            "net_cagr_delta": -0.0284243753827218,
+            "daily_max_drawdown_delta": -0.0229861876514057,
+            "turnover_delta": -0.0546057569648276,
+            "positive_period_fraction": 0.47586206896551725
+          }
+        },
+        {
+          "observations": 145,
+          "start_signal_date": "2017-01-05",
+          "end_signal_date": "2022-12-08",
+          "max_outcome_end_date": "2022-12-23",
+          "net_cagr": 0.009940740295111272,
+          "gross_cagr": 0.014643213373252584,
+          "net_sharpe": 0.13939223508634982,
+          "daily_max_drawdown": -0.2612395531430348,
+          "mean_turnover": 0.08713943442,
+          "total_cost_fraction": 0.026543892950732083,
+          "blocked_trade_count": 1,
+          "capacity_limited_count": 23,
+          "capacity_violation_count": 0,
+          "forced_delist_write_down_count": 0,
+          "execution_input_required_count": 1522,
+          "execution_input_observed_count": 1522,
+          "execution_input_coverage": 1.0,
+          "execution_input_future_violation_count": 0,
+          "capacity": {
+            "order_count": 1522,
+            "requested_notional_total": 726021374.3203,
+            "capacity_limited_requested_notional": 122071147.6985,
+            "executed_notional_total": 680551942.4103,
+            "capacity_limited_requested_notional_ratio": 0.16813712655881904,
+            "requested_notional_fill_ratio": 0.9373717723495836,
+            "trade_record_notional_precision_rmb_decimals": 4,
+            "activity_gate_passed": true,
+            "by_side": {
+              "buy": {
+                "order_count": 812,
+                "requested_notional_total": 388010687.16,
+                "capacity_limited_requested_notional": 10837765.469999999,
+                "executed_notional_total": 364557529.0565,
+                "capacity_limited_requested_notional_ratio": 0.02793161587719603,
+                "requested_notional_fill_ratio": 0.9395553811283841
+              },
+              "sell": {
+                "order_count": 710,
+                "requested_notional_total": 338010687.1603,
+                "capacity_limited_requested_notional": 111233382.22850001,
+                "executed_notional_total": 315994413.3538,
+                "capacity_limited_requested_notional_ratio": 0.3290824416322318,
+                "requested_notional_fill_ratio": 0.9348651547338238
+              }
+            }
+          },
+          "exact_trace_sha256": {
+            "period_trace_sha256": "a1aa3e03b4c34b1f09ca6f6b2b248f1a7bb4ef63877c32f81a6c387f711e2962",
+            "trade_trace_sha256": "e267445f7fb6802b0d5f230b2598cbd215a9052ab3b245e0f56fbb7531237fb6",
+            "daily_nav_sha256": "e51fe10ae40d2f2c5bb94da6ad108eaa1c21581fe7959e53bdfd9e2f5780a2d6"
+          },
+          "payload_sha256": "4def5a029bcc27d37fabf6afd6c7fca985aca8a32136c3c7032ec52e5fd9af91",
+          "relative_to_control": {
+            "paired_relative_cagr": -0.016662859813816766,
+            "paired_spread_ir": -0.3408323909712516,
+            "net_cagr_delta": -0.017113663552475566,
+            "daily_max_drawdown_delta": -0.004474256464181758,
+            "turnover_delta": -0.04139447500965515,
+            "positive_period_fraction": 0.4689655172413793
+          }
+        },
+        {
+          "observations": 145,
+          "start_signal_date": "2017-01-06",
+          "end_signal_date": "2022-12-09",
+          "max_outcome_end_date": "2022-12-26",
+          "net_cagr": 0.020042960070376425,
+          "gross_cagr": 0.02471978577478673,
+          "net_sharpe": 0.20562980909547196,
+          "daily_max_drawdown": -0.2611697982596627,
+          "mean_turnover": 0.0856748838110345,
+          "total_cost_fraction": 0.02614100448663683,
+          "blocked_trade_count": 0,
+          "capacity_limited_count": 27,
+          "capacity_violation_count": 0,
+          "forced_delist_write_down_count": 0,
+          "execution_input_required_count": 1519,
+          "execution_input_observed_count": 1519,
+          "execution_input_coverage": 1.0,
+          "execution_input_future_violation_count": 0,
+          "capacity": {
+            "order_count": 1519,
+            "requested_notional_total": 747707930.3393,
+            "capacity_limited_requested_notional": 152679330.3466,
+            "executed_notional_total": 702363624.8577,
+            "capacity_limited_requested_notional_ratio": 0.20419648388283929,
+            "requested_notional_fill_ratio": 0.9393555910781588,
+            "trade_record_notional_precision_rmb_decimals": 4,
+            "activity_gate_passed": true,
+            "by_side": {
+              "buy": {
+                "order_count": 804,
+                "requested_notional_total": 400176897.2426,
+                "capacity_limited_requested_notional": 46940934.4921,
+                "executed_notional_total": 375437396.7905,
+                "capacity_limited_requested_notional_ratio": 0.11730046091002326,
+                "requested_notional_fill_ratio": 0.9381785889626153
+              },
+              "sell": {
+                "order_count": 715,
+                "requested_notional_total": 347531033.0967,
+                "capacity_limited_requested_notional": 105738395.8545,
+                "executed_notional_total": 326926228.0672,
+                "capacity_limited_requested_notional_ratio": 0.3042559822997978,
+                "requested_notional_fill_ratio": 0.9407108917845425
+              }
+            }
+          },
+          "exact_trace_sha256": {
+            "period_trace_sha256": "abc6ee2af7ca4f76f6b6a5afc68fbc3dac06b106c8f195bcc9f153d8ddf81b4a",
+            "trade_trace_sha256": "2733952e0a71540dd5e0ce2649b9e9e75fb5b2c1b500625e22613dd4704ecdac",
+            "daily_nav_sha256": "756c616a28934a4b5ac6b13ed59aea0aa1c473f0c88a93600e4da79d33fe4715"
+          },
+          "payload_sha256": "8e1db4a00af35619d6113fd0e4198d60da70c0640abaca2b6e1b57a55444e727",
+          "relative_to_control": {
+            "paired_relative_cagr": -0.02705420187436991,
+            "paired_spread_ir": -0.5052028009995346,
+            "net_cagr_delta": -0.028363808359559428,
+            "daily_max_drawdown_delta": -0.006088578952512469,
+            "turnover_delta": -0.03926663999448274,
+            "positive_period_fraction": 0.47586206896551725
+          }
+        },
+        {
+          "observations": 145,
+          "start_signal_date": "2017-01-09",
+          "end_signal_date": "2022-12-12",
+          "max_outcome_end_date": "2022-12-27",
+          "net_cagr": 0.009333825467451096,
+          "gross_cagr": 0.013148341651527229,
+          "net_sharpe": 0.13501336584279705,
+          "daily_max_drawdown": -0.2626117757388545,
+          "mean_turnover": 0.07284219383172413,
+          "total_cost_fraction": 0.0215182960743928,
+          "blocked_trade_count": 0,
+          "capacity_limited_count": 22,
+          "capacity_violation_count": 0,
+          "forced_delist_write_down_count": 0,
+          "execution_input_required_count": 1507,
+          "execution_input_observed_count": 1507,
+          "execution_input_coverage": 1.0,
+          "execution_input_future_violation_count": 0,
+          "capacity": {
+            "order_count": 1507,
+            "requested_notional_total": 614612868.0663,
+            "capacity_limited_requested_notional": 120082150.2201,
+            "executed_notional_total": 578078955.63,
+            "capacity_limited_requested_notional_ratio": 0.19537851623234545,
+            "requested_notional_fill_ratio": 0.940557846516876,
+            "trade_record_notional_precision_rmb_decimals": 4,
+            "activity_gate_passed": true,
+            "by_side": {
+              "buy": {
+                "order_count": 802,
+                "requested_notional_total": 333069260.0132,
+                "capacity_limited_requested_notional": 28668601.7181,
+                "executed_notional_total": 313446885.7239,
+                "capacity_limited_requested_notional_ratio": 0.08607399469096555,
+                "requested_notional_fill_ratio": 0.9410862044473204
+              },
+              "sell": {
+                "order_count": 705,
+                "requested_notional_total": 281543608.0531,
+                "capacity_limited_requested_notional": 91413548.502,
+                "executed_notional_total": 264632069.9061,
+                "capacity_limited_requested_notional_ratio": 0.3246869965691394,
+                "requested_notional_fill_ratio": 0.9399327931330254
+              }
+            }
+          },
+          "exact_trace_sha256": {
+            "period_trace_sha256": "a3fd8c6d0e908dad477e08ee1caceb0a4da9dc39cb99a1b29b2178ebeb7317c1",
+            "trade_trace_sha256": "689131b4bcb2a5ffc22e04c0801eecd442b7fb55b479014d3b992369a8c416b8",
+            "daily_nav_sha256": "1afe8fe0a153814323722dfb0bf972eed68e0282008e017bcf7289ab1e7ce38e"
+          },
+          "payload_sha256": "9bbd1382bc42066caf98c1f6bf677afaf29afd88dcbaf427e9750b1c02611517",
+          "relative_to_control": {
+            "paired_relative_cagr": -0.03416500884479323,
+            "paired_spread_ir": -0.5940974599689252,
+            "net_cagr_delta": -0.035703716877350855,
+            "daily_max_drawdown_delta": -0.008941913470609464,
+            "turnover_delta": -0.06776268366482757,
+            "positive_period_fraction": 0.43448275862068964
+          }
+        },
+        {
+          "observations": 145,
+          "start_signal_date": "2017-01-10",
+          "end_signal_date": "2022-12-13",
+          "max_outcome_end_date": "2022-12-28",
+          "net_cagr": 0.006938429144460523,
+          "gross_cagr": 0.010801082375955229,
+          "net_sharpe": 0.11809243878537432,
+          "daily_max_drawdown": -0.2808347210791865,
+          "mean_turnover": 0.07422755408482758,
+          "total_cost_fraction": 0.021899845614169956,
+          "blocked_trade_count": 1,
+          "capacity_limited_count": 23,
+          "capacity_violation_count": 0,
+          "forced_delist_write_down_count": 0,
+          "execution_input_required_count": 1510,
+          "execution_input_observed_count": 1510,
+          "execution_input_coverage": 1.0,
+          "execution_input_future_violation_count": 0,
+          "capacity": {
+            "order_count": 1510,
+            "requested_notional_total": 624493897.0886,
+            "capacity_limited_requested_notional": 122022105.4154,
+            "executed_notional_total": 588075192.7658,
+            "capacity_limited_requested_notional_ratio": 0.19539359148947474,
+            "requested_notional_fill_ratio": 0.9416828499164129,
+            "trade_record_notional_precision_rmb_decimals": 4,
+            "activity_gate_passed": true,
+            "by_side": {
+              "buy": {
+                "order_count": 784,
+                "requested_notional_total": 337598037.0573,
+                "capacity_limited_requested_notional": 22223323.0049,
+                "executed_notional_total": 318436065.8251,
+                "capacity_limited_requested_notional_ratio": 0.06582776131819769,
+                "requested_notional_fill_ratio": 0.9432402765157439
+              },
+              "sell": {
+                "order_count": 726,
+                "requested_notional_total": 286895860.0313,
+                "capacity_limited_requested_notional": 99798782.4105,
+                "executed_notional_total": 269639126.9407,
+                "capacity_limited_requested_notional_ratio": 0.3478571715869726,
+                "requested_notional_fill_ratio": 0.9398501843535932
+              }
+            }
+          },
+          "exact_trace_sha256": {
+            "period_trace_sha256": "8c72d66b9b64870d38d2abe05a78ec67b7f72703f1e37b7c3e6f5fdd0f6eae7e",
+            "trade_trace_sha256": "6fe143966ef3f74a38b524d6e494fd9d38ddbb732d020d0ecda2d61b926cc75d",
+            "daily_nav_sha256": "924cf34f434f93c76cbe0a8252e7b8f45ce426a101a73458cdbf5f170db64afe"
+          },
+          "payload_sha256": "6f09743da892e54fad2cc6595c14707165a438675d084ba1cf360e4c6feb3c14",
+          "relative_to_control": {
+            "paired_relative_cagr": -0.016993523522208398,
+            "paired_spread_ir": -0.3531350020028136,
+            "net_cagr_delta": -0.017407242261917366,
+            "daily_max_drawdown_delta": -0.012812294669967583,
+            "turnover_delta": -0.057724613375172415,
+            "positive_period_fraction": 0.4689655172413793
+          }
+        },
+        {
+          "observations": 145,
+          "start_signal_date": "2017-01-11",
+          "end_signal_date": "2022-12-14",
+          "max_outcome_end_date": "2022-12-29",
+          "net_cagr": 0.005360787904955755,
+          "gross_cagr": 0.009448225396376797,
+          "net_sharpe": 0.10898972212161281,
+          "daily_max_drawdown": -0.30474385458666886,
+          "mean_turnover": 0.07879242338206897,
+          "total_cost_fraction": 0.023189470734744984,
+          "blocked_trade_count": 1,
+          "capacity_limited_count": 20,
+          "capacity_violation_count": 0,
+          "forced_delist_write_down_count": 0,
+          "execution_input_required_count": 1511,
+          "execution_input_observed_count": 1511,
+          "execution_input_coverage": 1.0,
+          "execution_input_future_violation_count": 0,
+          "capacity": {
+            "order_count": 1511,
+            "requested_notional_total": 667662788.5067,
+            "capacity_limited_requested_notional": 106291512.3466,
+            "executed_notional_total": 631383100.9877,
+            "capacity_limited_requested_notional_ratio": 0.15919939552769213,
+            "requested_notional_fill_ratio": 0.9456616601321403,
+            "trade_record_notional_precision_rmb_decimals": 4,
+            "activity_gate_passed": true,
+            "by_side": {
+              "buy": {
+                "order_count": 801,
+                "requested_notional_total": 359189964.6839,
+                "capacity_limited_requested_notional": 11208179.1305,
+                "executed_notional_total": 340046987.1035,
+                "capacity_limited_requested_notional_ratio": 0.03120404307610208,
+                "requested_notional_fill_ratio": 0.946705143621575
+              },
+              "sell": {
+                "order_count": 710,
+                "requested_notional_total": 308472823.8228,
+                "capacity_limited_requested_notional": 95083333.2161,
+                "executed_notional_total": 291336113.8842,
+                "capacity_limited_requested_notional_ratio": 0.3082389302168153,
+                "requested_notional_fill_ratio": 0.9444466137203579
+              }
+            }
+          },
+          "exact_trace_sha256": {
+            "period_trace_sha256": "dfcfb4f8e56591e04955467fc974cc3896c27a3b67fc88c4ef30929b23f61ad7",
+            "trade_trace_sha256": "45858b105e47feef782242ff157b89fc6263a9d74ce3b0889291c1cb703fc780",
+            "daily_nav_sha256": "74965270aae691ba116232d6ec8eaa468821b9b85b5867b9fae17f5e5c49eee3"
+          },
+          "payload_sha256": "fd49a57f576c3a78ba1321fb50098c662d3b5a19e99e1f8df39f8f2a07fcf974",
+          "relative_to_control": {
+            "paired_relative_cagr": -0.015301608480365436,
+            "paired_spread_ir": -0.3162375802620637,
+            "net_cagr_delta": -0.01562268943518097,
+            "daily_max_drawdown_delta": -0.019706642077797598,
+            "turnover_delta": -0.045873218828275886,
+            "positive_period_fraction": 0.46206896551724136
+          }
+        },
+        {
+          "observations": 145,
+          "start_signal_date": "2017-01-12",
+          "end_signal_date": "2022-12-15",
+          "max_outcome_end_date": "2022-12-30",
+          "net_cagr": 0.011604523683898194,
+          "gross_cagr": 0.015947207438197886,
+          "net_sharpe": 0.1515474922304833,
+          "daily_max_drawdown": -0.2895645289751003,
+          "mean_turnover": 0.0818985394510345,
+          "total_cost_fraction": 0.02454323534874993,
+          "blocked_trade_count": 1,
+          "capacity_limited_count": 25,
+          "capacity_violation_count": 0,
+          "forced_delist_write_down_count": 0,
+          "execution_input_required_count": 1515,
+          "execution_input_observed_count": 1515,
+          "execution_input_coverage": 1.0,
+          "execution_input_future_violation_count": 0,
+          "capacity": {
+            "order_count": 1515,
+            "requested_notional_total": 736996144.002,
+            "capacity_limited_requested_notional": 143359412.2096,
+            "executed_notional_total": 675476952.6461,
+            "capacity_limited_requested_notional_ratio": 0.19451853768343594,
+            "requested_notional_fill_ratio": 0.9165271190947601,
+            "trade_record_notional_precision_rmb_decimals": 4,
+            "activity_gate_passed": true,
+            "by_side": {
+              "buy": {
+                "order_count": 821,
+                "requested_notional_total": 395427228.6049,
+                "capacity_limited_requested_notional": 35487107.409099996,
+                "executed_notional_total": 362034813.7738,
+                "capacity_limited_requested_notional_ratio": 0.0897437122231098,
+                "requested_notional_fill_ratio": 0.9155535774587117
+              },
+              "sell": {
+                "order_count": 694,
+                "requested_notional_total": 341568915.3971,
+                "capacity_limited_requested_notional": 107872304.8005,
+                "executed_notional_total": 313442138.8723,
+                "capacity_limited_requested_notional_ratio": 0.31581417376663273,
+                "requested_notional_fill_ratio": 0.9176541679968143
+              }
+            }
+          },
+          "exact_trace_sha256": {
+            "period_trace_sha256": "dfe6f7d50b4e67dc3941c13011c623fe35933fdb0ae17dccb90302a88da2e14b",
+            "trade_trace_sha256": "7581c50b19ae7511614fbe5af8162d2b9de85b290912c6ad8320c3516ad12054",
+            "daily_nav_sha256": "e810be1060dc6942507fa9b59cb8479a41c2b5e6d0ced55ce033d87aee3bcbd6"
+          },
+          "payload_sha256": "24e0b701232cebb5328ffcb3761898140be80392abcce61ce5800920deb1d212",
+          "relative_to_control": {
+            "paired_relative_cagr": -0.0038933248991313008,
+            "paired_spread_ir": -0.12083696797864545,
+            "net_cagr_delta": -0.00395389889314135,
+            "daily_max_drawdown_delta": 0.008365360515733555,
+            "turnover_delta": -0.05796852327172412,
+            "positive_period_fraction": 0.4482758620689655
+          }
+        },
+        {
+          "observations": 144,
+          "start_signal_date": "2017-01-13",
+          "end_signal_date": "2022-12-02",
+          "max_outcome_end_date": "2022-12-19",
+          "net_cagr": 0.019711666221956525,
+          "gross_cagr": 0.024546922414810712,
+          "net_sharpe": 0.20913169978265062,
+          "daily_max_drawdown": -0.26738881803220793,
+          "mean_turnover": 0.08938461915555555,
+          "total_cost_fraction": 0.026991501988447072,
+          "blocked_trade_count": 1,
+          "capacity_limited_count": 31,
+          "capacity_violation_count": 0,
+          "forced_delist_write_down_count": 0,
+          "execution_input_required_count": 1512,
+          "execution_input_observed_count": 1512,
+          "execution_input_coverage": 1.0,
+          "execution_input_future_violation_count": 0,
+          "capacity": {
+            "order_count": 1512,
+            "requested_notional_total": 815831605.0199,
+            "capacity_limited_requested_notional": 177033995.3576,
+            "executed_notional_total": 746446381.7058,
+            "capacity_limited_requested_notional_ratio": 0.21699820682146992,
+            "requested_notional_fill_ratio": 0.914951537931155,
+            "trade_record_notional_precision_rmb_decimals": 4,
+            "activity_gate_passed": true,
+            "by_side": {
+              "buy": {
+                "order_count": 816,
+                "requested_notional_total": 435866957.4048,
+                "capacity_limited_requested_notional": 71299105.4683,
+                "executed_notional_total": 397433410.073,
+                "capacity_limited_requested_notional_ratio": 0.1635799737902197,
+                "requested_notional_fill_ratio": 0.9118227553640735
+              },
+              "sell": {
+                "order_count": 696,
+                "requested_notional_total": 379964647.6151,
+                "capacity_limited_requested_notional": 105734889.8893,
+                "executed_notional_total": 349012971.6328,
+                "capacity_limited_requested_notional_ratio": 0.27827559893521536,
+                "requested_notional_fill_ratio": 0.9185406427240732
+              }
+            }
+          },
+          "exact_trace_sha256": {
+            "period_trace_sha256": "f31e3f7a933c66762e05785b9a59f0d3c086fc9f243d09253858fb2d60ad4a63",
+            "trade_trace_sha256": "1322c8e0d664e0d6d54576c5ef19a86564279107eb7fb341ee0a011c076bdd28",
+            "daily_nav_sha256": "2d686b15b32f0bad2efb2183f66140f3564a7cc52310c051f985835166f50cb9"
+          },
+          "payload_sha256": "b81f41e5ac6e4c436a6947599cce120f3a0bcfd9f6f151a6707269588a453848",
+          "relative_to_control": {
+            "paired_relative_cagr": -0.01450532029761642,
+            "paired_spread_ir": -0.3083191378328876,
+            "net_cagr_delta": -0.015008954015086395,
+            "daily_max_drawdown_delta": -0.01639897951451197,
+            "turnover_delta": -0.0438717610916667,
+            "positive_period_fraction": 0.4861111111111111
+          }
+        },
+        {
+          "observations": 144,
+          "start_signal_date": "2017-01-16",
+          "end_signal_date": "2022-12-05",
+          "max_outcome_end_date": "2022-12-20",
+          "net_cagr": 0.009344769423019539,
+          "gross_cagr": 0.01397061820229073,
+          "net_sharpe": 0.1355765465778264,
+          "daily_max_drawdown": -0.2786370385459217,
+          "mean_turnover": 0.08798928285763889,
+          "total_cost_fraction": 0.02611852482809209,
+          "blocked_trade_count": 0,
+          "capacity_limited_count": 28,
+          "capacity_violation_count": 0,
+          "forced_delist_write_down_count": 0,
+          "execution_input_required_count": 1510,
+          "execution_input_observed_count": 1510,
+          "execution_input_coverage": 1.0,
+          "execution_input_future_violation_count": 0,
+          "capacity": {
+            "order_count": 1510,
+            "requested_notional_total": 732430627.0081,
+            "capacity_limited_requested_notional": 150974114.3258,
+            "executed_notional_total": 695101521.1189001,
+            "capacity_limited_requested_notional_ratio": 0.20612752765748335,
+            "requested_notional_fill_ratio": 0.9490339364402532,
+            "trade_record_notional_precision_rmb_decimals": 4,
+            "activity_gate_passed": true,
+            "by_side": {
+              "buy": {
+                "order_count": 788,
+                "requested_notional_total": 391592924.0035,
+                "capacity_limited_requested_notional": 38398422.2904,
+                "executed_notional_total": 371829920.3347,
+                "capacity_limited_requested_notional_ratio": 0.09805698708196474,
+                "requested_notional_fill_ratio": 0.9495317651127338
+              },
+              "sell": {
+                "order_count": 722,
+                "requested_notional_total": 340837703.0046,
+                "capacity_limited_requested_notional": 112575692.0354,
+                "executed_notional_total": 323271600.7842,
+                "capacity_limited_requested_notional_ratio": 0.3302911944394857,
+                "requested_notional_fill_ratio": 0.948461974524682
+              }
+            }
+          },
+          "exact_trace_sha256": {
+            "period_trace_sha256": "e1c150a3450c3f380570f8bc2db9ab13ef46f48256c0e92a9bd9d1e9e15770a6",
+            "trade_trace_sha256": "f235b9ea0345e54fd1e8a532fe9a805f0373c067bebed305df6579b932905e27",
+            "daily_nav_sha256": "5ee915049f519e637de919d6d45954a41f33688b19192e362a3a487008ae5bd7"
+          },
+          "payload_sha256": "b42f8c2200b48b344833709cb6901ceb4b65f70c65a85c419e5d8c936e1e2a41",
+          "relative_to_control": {
+            "paired_relative_cagr": -0.03205711149296209,
+            "paired_spread_ir": -0.6909722393682937,
+            "net_cagr_delta": -0.03342829230156252,
+            "daily_max_drawdown_delta": -0.028045928823729138,
+            "turnover_delta": -0.049639763492361086,
+            "positive_period_fraction": 0.4097222222222222
+          }
+        }
+      ]
+    },
+    "daily_adv20_top1500": {
+      "passed": false,
+      "checks": {
+        "q20_paired_relative_cagr_strictly_positive": false,
+        "positive_relative_offset_count_at_least_7": false,
+        "all_offset_execution_and_risk_gates": false
+      },
+      "offset_checks": [
+        {
+          "offset": 0,
+          "checks": {
+            "minimum_observations": true,
+            "daily_max_drawdown": true,
+            "drawdown_worsening": true,
+            "capacity_violation_count": true,
+            "execution_input_future_violation_count": true,
+            "execution_input_coverage": true,
+            "capacity_limited_requested_notional_ratio": false,
+            "requested_notional_fill_ratio": false,
+            "activity": true
+          },
+          "passed": false
+        },
+        {
+          "offset": 1,
+          "checks": {
+            "minimum_observations": true,
+            "daily_max_drawdown": true,
+            "drawdown_worsening": false,
+            "capacity_violation_count": true,
+            "execution_input_future_violation_count": true,
+            "execution_input_coverage": true,
+            "capacity_limited_requested_notional_ratio": false,
+            "requested_notional_fill_ratio": false,
+            "activity": true
+          },
+          "passed": false
+        },
+        {
+          "offset": 2,
+          "checks": {
+            "minimum_observations": true,
+            "daily_max_drawdown": true,
+            "drawdown_worsening": true,
+            "capacity_violation_count": true,
+            "execution_input_future_violation_count": true,
+            "execution_input_coverage": true,
+            "capacity_limited_requested_notional_ratio": false,
+            "requested_notional_fill_ratio": true,
+            "activity": true
+          },
+          "passed": false
+        },
+        {
+          "offset": 3,
+          "checks": {
+            "minimum_observations": true,
+            "daily_max_drawdown": true,
+            "drawdown_worsening": false,
+            "capacity_violation_count": true,
+            "execution_input_future_violation_count": true,
+            "execution_input_coverage": true,
+            "capacity_limited_requested_notional_ratio": false,
+            "requested_notional_fill_ratio": true,
+            "activity": true
+          },
+          "passed": false
+        },
+        {
+          "offset": 4,
+          "checks": {
+            "minimum_observations": true,
+            "daily_max_drawdown": true,
+            "drawdown_worsening": true,
+            "capacity_violation_count": true,
+            "execution_input_future_violation_count": true,
+            "execution_input_coverage": true,
+            "capacity_limited_requested_notional_ratio": false,
+            "requested_notional_fill_ratio": false,
+            "activity": true
+          },
+          "passed": false
+        },
+        {
+          "offset": 5,
+          "checks": {
+            "minimum_observations": true,
+            "daily_max_drawdown": true,
+            "drawdown_worsening": true,
+            "capacity_violation_count": true,
+            "execution_input_future_violation_count": true,
+            "execution_input_coverage": true,
+            "capacity_limited_requested_notional_ratio": false,
+            "requested_notional_fill_ratio": true,
+            "activity": true
+          },
+          "passed": false
+        },
+        {
+          "offset": 6,
+          "checks": {
+            "minimum_observations": true,
+            "daily_max_drawdown": true,
+            "drawdown_worsening": true,
+            "capacity_violation_count": true,
+            "execution_input_future_violation_count": true,
+            "execution_input_coverage": true,
+            "capacity_limited_requested_notional_ratio": false,
+            "requested_notional_fill_ratio": true,
+            "activity": true
+          },
+          "passed": false
+        },
+        {
+          "offset": 7,
+          "checks": {
+            "minimum_observations": true,
+            "daily_max_drawdown": true,
+            "drawdown_worsening": true,
+            "capacity_violation_count": true,
+            "execution_input_future_violation_count": true,
+            "execution_input_coverage": true,
+            "capacity_limited_requested_notional_ratio": false,
+            "requested_notional_fill_ratio": true,
+            "activity": true
+          },
+          "passed": false
+        },
+        {
+          "offset": 8,
+          "checks": {
+            "minimum_observations": true,
+            "daily_max_drawdown": true,
+            "drawdown_worsening": true,
+            "capacity_violation_count": true,
+            "execution_input_future_violation_count": true,
+            "execution_input_coverage": true,
+            "capacity_limited_requested_notional_ratio": false,
+            "requested_notional_fill_ratio": false,
+            "activity": true
+          },
+          "passed": false
+        },
+        {
+          "offset": 9,
+          "checks": {
+            "minimum_observations": true,
+            "daily_max_drawdown": true,
+            "drawdown_worsening": true,
+            "capacity_violation_count": true,
+            "execution_input_future_violation_count": true,
+            "execution_input_coverage": true,
+            "capacity_limited_requested_notional_ratio": false,
+            "requested_notional_fill_ratio": false,
+            "activity": true
+          },
+          "passed": false
+        }
+      ],
+      "paired_relative_cagr": {
+        "q20": -0.02533782810491192,
+        "median": -0.01688723447296453,
+        "worst": -0.041251375844593485
+      },
+      "positive_relative_offset_count": 0,
+      "validation_median_relative_cagr": -0.01688723447296453,
+      "worst_capacity_limited_requested_notional_ratio": 0.14423811636485678,
+      "worst_requested_notional_fill_ratio": 0.917008931692891,
+      "paired_phases": [
+        {
+          "observations": 145,
+          "start_signal_date": "2017-01-03",
+          "end_signal_date": "2022-12-06",
+          "max_outcome_end_date": "2022-12-21",
+          "net_cagr": 0.02215297078699363,
+          "gross_cagr": 0.0273401302102112,
+          "net_sharpe": 0.2194332063093747,
+          "daily_max_drawdown": -0.2562552244186993,
+          "mean_turnover": 0.09673756546413793,
+          "total_cost_fraction": 0.0289599800601656,
+          "blocked_trade_count": 2,
+          "capacity_limited_count": 23,
+          "capacity_violation_count": 0,
+          "forced_delist_write_down_count": 0,
+          "execution_input_required_count": 1522,
+          "execution_input_observed_count": 1522,
+          "execution_input_coverage": 1.0,
+          "execution_input_future_violation_count": 0,
+          "capacity": {
+            "order_count": 1522,
+            "requested_notional_total": 862052720.2163,
+            "capacity_limited_requested_notional": 124340860.5712,
+            "executed_notional_total": 790510044.0285,
+            "capacity_limited_requested_notional_ratio": 0.14423811636485678,
+            "requested_notional_fill_ratio": 0.917008931692891,
+            "trade_record_notional_precision_rmb_decimals": 4,
+            "activity_gate_passed": true,
+            "by_side": {
+              "buy": {
+                "order_count": 815,
+                "requested_notional_total": 461883242.4215,
+                "capacity_limited_requested_notional": 57736266.0236,
+                "executed_notional_total": 419434554.246,
+                "capacity_limited_requested_notional_ratio": 0.12500186350322645,
+                "requested_notional_fill_ratio": 0.9080964965237628
+              },
+              "sell": {
+                "order_count": 707,
+                "requested_notional_total": 400169477.7948,
+                "capacity_limited_requested_notional": 66604594.5476,
+                "executed_notional_total": 371075489.78249997,
+                "capacity_limited_requested_notional_ratio": 0.16644096624918928,
+                "requested_notional_fill_ratio": 0.9272958343234291
+              }
+            }
+          },
+          "exact_trace_sha256": {
+            "period_trace_sha256": "62725416ba1d5e2fccc96d318b3a4434dae4f4e6813d252c53a68021b93274c3",
+            "trade_trace_sha256": "4ecb39a94f70b0bef064bd6e422072881953ca52e4776107de970e1977fcdec7",
+            "daily_nav_sha256": "dd6dbe52b655049a5fb0e4585b2dfd279a0254eeab17995b1759618d9e4287b1"
+          },
+          "payload_sha256": "55fdf99a6ae0d8d6f87fa54e40b6ad6f26fe64ef1161443397856b2529bd5dd7",
+          "relative_to_control": {
+            "paired_relative_cagr": -0.02063794073547376,
+            "paired_spread_ir": -0.4256228429574349,
+            "net_cagr_delta": -0.021539666800582946,
+            "daily_max_drawdown_delta": -0.003601220659196991,
+            "turnover_delta": -0.041535537577931034,
+            "positive_period_fraction": 0.46206896551724136
+          }
+        },
+        {
+          "observations": 145,
+          "start_signal_date": "2017-01-04",
+          "end_signal_date": "2022-12-07",
+          "max_outcome_end_date": "2022-12-22",
+          "net_cagr": 0.006245234133470667,
+          "gross_cagr": 0.01195752009809481,
+          "net_sharpe": 0.11736776670399059,
+          "daily_max_drawdown": -0.3144939782618983,
+          "mean_turnover": 0.10602171676482759,
+          "total_cost_fraction": 0.03243810309484307,
+          "blocked_trade_count": 2,
+          "capacity_limited_count": 16,
+          "capacity_violation_count": 0,
+          "forced_delist_write_down_count": 0,
+          "execution_input_required_count": 1524,
+          "execution_input_observed_count": 1524,
+          "execution_input_coverage": 1.0,
+          "execution_input_future_violation_count": 0,
+          "capacity": {
+            "order_count": 1524,
+            "requested_notional_total": 868358839.2012,
+            "capacity_limited_requested_notional": 83691613.5695,
+            "executed_notional_total": 822480561.8759,
+            "capacity_limited_requested_notional_ratio": 0.09637906564812261,
+            "requested_notional_fill_ratio": 0.9471666835711567,
+            "trade_record_notional_precision_rmb_decimals": 4,
+            "activity_gate_passed": true,
+            "by_side": {
+              "buy": {
+                "order_count": 801,
+                "requested_notional_total": 462848184.4562,
+                "capacity_limited_requested_notional": 43423285.8621,
+                "executed_notional_total": 435368828.0528,
+                "capacity_limited_requested_notional_ratio": 0.09381755685855825,
+                "requested_notional_fill_ratio": 0.9406298710327977
+              },
+              "sell": {
+                "order_count": 723,
+                "requested_notional_total": 405510654.745,
+                "capacity_limited_requested_notional": 40268327.7074,
+                "executed_notional_total": 387111733.82310003,
+                "capacity_limited_requested_notional_ratio": 0.09930276118816707,
+                "requested_notional_fill_ratio": 0.954627774371379
+              }
+            }
+          },
+          "exact_trace_sha256": {
+            "period_trace_sha256": "3875c48851a157ccbad14640200dd3baae00b04eb3d8bef8bb5a6dc830398963",
+            "trade_trace_sha256": "48683deaf444e82836c7d156c62564770d98be32a80cd85874aee5fec7dcefa9",
+            "daily_nav_sha256": "22d2e3aebaaae9e107bca8891e6275133bd15bd75bc8b098fd4b15490a4a3755"
+          },
+          "payload_sha256": "d2b9f3ad983134df387dc516e21df992ff7000074aa3bf26c0323d7fc4b26f3d",
+          "relative_to_control": {
+            "paired_relative_cagr": -0.037581649839675046,
+            "paired_spread_ir": -0.6800786035402828,
+            "net_cagr_delta": -0.039293053832303304,
+            "daily_max_drawdown_delta": -0.06258907995241836,
+            "turnover_delta": -0.03750631696896552,
+            "positive_period_fraction": 0.46206896551724136
+          }
+        },
+        {
+          "observations": 145,
+          "start_signal_date": "2017-01-05",
+          "end_signal_date": "2022-12-08",
+          "max_outcome_end_date": "2022-12-23",
+          "net_cagr": 0.016612367294472685,
+          "gross_cagr": 0.022742155687675014,
+          "net_sharpe": 0.18226596149436453,
+          "daily_max_drawdown": -0.2722569952961842,
+          "mean_turnover": 0.11051344515172414,
+          "total_cost_fraction": 0.03452916761386088,
+          "blocked_trade_count": 1,
+          "capacity_limited_count": 22,
+          "capacity_violation_count": 0,
+          "forced_delist_write_down_count": 0,
+          "execution_input_required_count": 1527,
+          "execution_input_observed_count": 1527,
+          "execution_input_coverage": 1.0,
+          "execution_input_future_violation_count": 0,
+          "capacity": {
+            "order_count": 1527,
+            "requested_notional_total": 930849889.1126,
+            "capacity_limited_requested_notional": 117860370.9453,
+            "executed_notional_total": 887719564.8464,
+            "capacity_limited_requested_notional_ratio": 0.12661587257388937,
+            "requested_notional_fill_ratio": 0.9536656503152006,
+            "trade_record_notional_precision_rmb_decimals": 4,
+            "activity_gate_passed": true,
+            "by_side": {
+              "buy": {
+                "order_count": 815,
+                "requested_notional_total": 497662675.8672,
+                "capacity_limited_requested_notional": 72023745.4337,
+                "executed_notional_total": 467899330.4449,
+                "capacity_limited_requested_notional_ratio": 0.14472402477882296,
+                "requested_notional_fill_ratio": 0.9401937359066841
+              },
+              "sell": {
+                "order_count": 712,
+                "requested_notional_total": 433187213.2454,
+                "capacity_limited_requested_notional": 45836625.5116,
+                "executed_notional_total": 419820234.4015,
+                "capacity_limited_requested_notional_ratio": 0.10581250810289641,
+                "requested_notional_fill_ratio": 0.9691427206639923
+              }
+            }
+          },
+          "exact_trace_sha256": {
+            "period_trace_sha256": "993957e8242158e0acd237eebe0ed130b72ad6d9ecb9107e156f65bc006f33df",
+            "trade_trace_sha256": "e4ba0ffa4c9bd1bffa5f78c240d185f95024a98f946c181073a9af2ddc199f38",
+            "daily_nav_sha256": "3c7825046fd669fc85172f367c9e86582e4e3268c9c7cfc742e5e8776a94e43c"
+          },
+          "payload_sha256": "35ac3a23801a44a7fa23e6c5fd1ec2c55758853fd6dbb54cdaa061ba5cd801a4",
+          "relative_to_control": {
+            "paired_relative_cagr": -0.010166975102774978,
+            "paired_spread_ir": -0.23161036140439226,
+            "net_cagr_delta": -0.010442036553114153,
+            "daily_max_drawdown_delta": -0.015491698617331129,
+            "turnover_delta": -0.01802046427793101,
+            "positive_period_fraction": 0.503448275862069
+          }
+        },
+        {
+          "observations": 145,
+          "start_signal_date": "2017-01-06",
+          "end_signal_date": "2022-12-09",
+          "max_outcome_end_date": "2022-12-26",
+          "net_cagr": 0.0051585467874168955,
+          "gross_cagr": 0.011196518448449044,
+          "net_sharpe": 0.10929709190473176,
+          "daily_max_drawdown": -0.2837754716383397,
+          "mean_turnover": 0.11175539660206896,
+          "total_cost_fraction": 0.034284386330649314,
+          "blocked_trade_count": 0,
+          "capacity_limited_count": 18,
+          "capacity_violation_count": 0,
+          "forced_delist_write_down_count": 0,
+          "execution_input_required_count": 1527,
+          "execution_input_observed_count": 1527,
+          "execution_input_coverage": 1.0,
+          "execution_input_future_violation_count": 0,
+          "capacity": {
+            "order_count": 1527,
+            "requested_notional_total": 901379513.8112,
+            "capacity_limited_requested_notional": 93240833.40980001,
+            "executed_notional_total": 865922861.1408,
+            "capacity_limited_requested_notional_ratio": 0.10344237025707456,
+            "requested_notional_fill_ratio": 0.9606640131852091,
+            "trade_record_notional_precision_rmb_decimals": 4,
+            "activity_gate_passed": true,
+            "by_side": {
+              "buy": {
+                "order_count": 804,
+                "requested_notional_total": 479631257.9738,
+                "capacity_limited_requested_notional": 42843711.9794,
+                "executed_notional_total": 457042182.9613,
+                "capacity_limited_requested_notional_ratio": 0.08932635491771963,
+                "requested_notional_fill_ratio": 0.9529032467401574
+              },
+              "sell": {
+                "order_count": 723,
+                "requested_notional_total": 421748255.8374,
+                "capacity_limited_requested_notional": 50397121.4304,
+                "executed_notional_total": 408880678.1795,
+                "capacity_limited_requested_notional_ratio": 0.11949574356942926,
+                "requested_notional_fill_ratio": 0.9694899090161004
+              }
+            }
+          },
+          "exact_trace_sha256": {
+            "period_trace_sha256": "d3675a8faf7ca5e7e3833dfcd0211348912ff21504f4de3eb666a3529b22e4b9",
+            "trade_trace_sha256": "8b9469895dc468d7776ddd94d4a1391d13dd5ac8710711406f6fac475026134b",
+            "daily_nav_sha256": "5298a8bf0e8311801f237b04ed6c92e0db531dd48f93abd90cab19eda2892ca9"
+          },
+          "payload_sha256": "4a7acfa624e1afed721e38ce03a5488fdf563f7e751044b72a3c47fa85647fb8",
+          "relative_to_control": {
+            "paired_relative_cagr": -0.041251375844593485,
+            "paired_spread_ir": -0.7128143261513257,
+            "net_cagr_delta": -0.04324822164251896,
+            "daily_max_drawdown_delta": -0.028694252331189496,
+            "turnover_delta": -0.013186127203448278,
+            "positive_period_fraction": 0.46206896551724136
+          }
+        },
+        {
+          "observations": 145,
+          "start_signal_date": "2017-01-09",
+          "end_signal_date": "2022-12-12",
+          "max_outcome_end_date": "2022-12-27",
+          "net_cagr": 0.021757374077340907,
+          "gross_cagr": 0.027643490584005503,
+          "net_sharpe": 0.2122658662665314,
+          "daily_max_drawdown": -0.2547281602964525,
+          "mean_turnover": 0.10787202787379309,
+          "total_cost_fraction": 0.0327646031966967,
+          "blocked_trade_count": 0,
+          "capacity_limited_count": 18,
+          "capacity_violation_count": 0,
+          "forced_delist_write_down_count": 0,
+          "execution_input_required_count": 1524,
+          "execution_input_observed_count": 1524,
+          "execution_input_coverage": 1.0,
+          "execution_input_future_violation_count": 0,
+          "capacity": {
+            "order_count": 1524,
+            "requested_notional_total": 952009723.9542,
+            "capacity_limited_requested_notional": 102127977.84019999,
+            "executed_notional_total": 903196034.2870001,
+            "capacity_limited_requested_notional_ratio": 0.10727619190275543,
+            "requested_notional_fill_ratio": 0.9487256396242982,
+            "trade_record_notional_precision_rmb_decimals": 4,
+            "activity_gate_passed": true,
+            "by_side": {
+              "buy": {
+                "order_count": 802,
+                "requested_notional_total": 507667652.4336,
+                "capacity_limited_requested_notional": 47865858.8026,
+                "executed_notional_total": 475647223.724,
+                "capacity_limited_requested_notional_ratio": 0.0942858158741177,
+                "requested_notional_fill_ratio": 0.9369263955343539
+              },
+              "sell": {
+                "order_count": 722,
+                "requested_notional_total": 444342071.5206,
+                "capacity_limited_requested_notional": 54262119.037599996,
+                "executed_notional_total": 427548810.563,
+                "capacity_limited_requested_notional_ratio": 0.12211789635833384,
+                "requested_notional_fill_ratio": 0.9622064575156453
+              }
+            }
+          },
+          "exact_trace_sha256": {
+            "period_trace_sha256": "b4533c057872a8438b85081ad66e08003b5beb6be329aade234814b42846fe0c",
+            "trade_trace_sha256": "97dc222b6ab8cef5fcfa004c692e068f3e7e4e797efba3163d082fc994ac6722",
+            "daily_nav_sha256": "0bdf43605167d5e85751462c64d5be1c4d8c80d7c758cafdb5bdf450407387c5"
+          },
+          "payload_sha256": "a67b298b4fca749ff4f9f54c3802cad1f57bd5d026f52d4f35e1d785a1b1fa0f",
+          "relative_to_control": {
+            "paired_relative_cagr": -0.022276872671221137,
+            "paired_spread_ir": -0.3971931525307277,
+            "net_cagr_delta": -0.023280168267461043,
+            "daily_max_drawdown_delta": -0.0010582980282074494,
+            "turnover_delta": -0.03273284962275862,
+            "positive_period_fraction": 0.47586206896551725
+          }
+        },
+        {
+          "observations": 145,
+          "start_signal_date": "2017-01-10",
+          "end_signal_date": "2022-12-13",
+          "max_outcome_end_date": "2022-12-28",
+          "net_cagr": 0.010854829051192949,
+          "gross_cagr": 0.017206712755822196,
+          "net_sharpe": 0.14573833659108457,
+          "daily_max_drawdown": -0.270589018551621,
+          "mean_turnover": 0.11616973642689654,
+          "total_cost_fraction": 0.035847542421774535,
+          "blocked_trade_count": 1,
+          "capacity_limited_count": 18,
+          "capacity_violation_count": 0,
+          "forced_delist_write_down_count": 0,
+          "execution_input_required_count": 1529,
+          "execution_input_observed_count": 1529,
+          "execution_input_coverage": 1.0,
+          "execution_input_future_violation_count": 0,
+          "capacity": {
+            "order_count": 1529,
+            "requested_notional_total": 961682683.5997,
+            "capacity_limited_requested_notional": 99137378.4083,
+            "executed_notional_total": 927586402.8235,
+            "capacity_limited_requested_notional_ratio": 0.10308741136651878,
+            "requested_notional_fill_ratio": 0.9645451858937781,
+            "trade_record_notional_precision_rmb_decimals": 4,
+            "activity_gate_passed": true,
+            "by_side": {
+              "buy": {
+                "order_count": 800,
+                "requested_notional_total": 512245456.5364,
+                "capacity_limited_requested_notional": 57246711.9323,
+                "executed_notional_total": 487802552.5187,
+                "capacity_limited_requested_notional_ratio": 0.1117564074055034,
+                "requested_notional_fill_ratio": 0.9522828290504064
+              },
+              "sell": {
+                "order_count": 729,
+                "requested_notional_total": 449437227.0633,
+                "capacity_limited_requested_notional": 41890666.476,
+                "executed_notional_total": 439783850.3048,
+                "capacity_limited_requested_notional_ratio": 0.09320693514803126,
+                "requested_notional_fill_ratio": 0.978521190107956
+              }
+            }
+          },
+          "exact_trace_sha256": {
+            "period_trace_sha256": "98e7ca31f1612de5b586ce6fcc331468cb5e036f7c2002553c84e08dac72ad89",
+            "trade_trace_sha256": "9718441162b699ccd7c0b29b71dfe094a646dd0eda7d4eeeca7f5eb76f75ecdc",
+            "daily_nav_sha256": "9bc65f292b01bdafad624373f8352fbc60ccea8a21931b2f505b49359f27ed51"
+          },
+          "payload_sha256": "574501693cf9822103f01229232ec825f5402d956b3a432db73aeaaec96dfa9c",
+          "relative_to_control": {
+            "paired_relative_cagr": -0.013170204874945135,
+            "paired_spread_ir": -0.2538267202995959,
+            "net_cagr_delta": -0.01349084235518494,
+            "daily_max_drawdown_delta": -0.002566592142402069,
+            "turnover_delta": -0.01578243103310345,
+            "positive_period_fraction": 0.4896551724137931
+          }
+        },
+        {
+          "observations": 145,
+          "start_signal_date": "2017-01-11",
+          "end_signal_date": "2022-12-14",
+          "max_outcome_end_date": "2022-12-29",
+          "net_cagr": 0.012661399090178715,
+          "gross_cagr": 0.018040822791039135,
+          "net_sharpe": 0.1581281481728884,
+          "daily_max_drawdown": -0.27999245333012934,
+          "mean_turnover": 0.10103834496206898,
+          "total_cost_fraction": 0.03040069608962083,
+          "blocked_trade_count": 2,
+          "capacity_limited_count": 14,
+          "capacity_violation_count": 0,
+          "forced_delist_write_down_count": 0,
+          "execution_input_required_count": 1516,
+          "execution_input_observed_count": 1516,
+          "execution_input_coverage": 1.0,
+          "execution_input_future_violation_count": 0,
+          "capacity": {
+            "order_count": 1516,
+            "requested_notional_total": 842094240.249,
+            "capacity_limited_requested_notional": 77108178.5284,
+            "executed_notional_total": 802107191.2826,
+            "capacity_limited_requested_notional_ratio": 0.09156716058953186,
+            "requested_notional_fill_ratio": 0.9525147577846202,
+            "trade_record_notional_precision_rmb_decimals": 4,
+            "activity_gate_passed": true,
+            "by_side": {
+              "buy": {
+                "order_count": 806,
+                "requested_notional_total": 451519743.4216,
+                "capacity_limited_requested_notional": 49937184.5791,
+                "executed_notional_total": 425216900.6483,
+                "capacity_limited_requested_notional_ratio": 0.110598008850461,
+                "requested_notional_fill_ratio": 0.9417459742203563
+              },
+              "sell": {
+                "order_count": 710,
+                "requested_notional_total": 390574496.8274,
+                "capacity_limited_requested_notional": 27170993.9493,
+                "executed_notional_total": 376890290.6343,
+                "capacity_limited_requested_notional_ratio": 0.0695667386631934,
+                "requested_notional_fill_ratio": 0.9649639023944073
+              }
+            }
+          },
+          "exact_trace_sha256": {
+            "period_trace_sha256": "13e97bf4415b38a32a29b7be887f4ea1e848616b945c407de2ad69705e7e8fbb",
+            "trade_trace_sha256": "28120765edf7810325dad1034907c2561631c850475c3dbac8834c86863ea0d1",
+            "daily_nav_sha256": "0ad454f0d2df839258c083491e75dc641abf8f848760ba0fdefbdaeae91b8acc"
+          },
+          "payload_sha256": "a6f86cbd800288d4342613e35463625d29a494fb918406bc7557ab6c76e6b3af",
+          "relative_to_control": {
+            "paired_relative_cagr": -0.008151041064482833,
+            "paired_spread_ir": -0.1712320844996077,
+            "net_cagr_delta": -0.00832207824995801,
+            "daily_max_drawdown_delta": 0.00504475917874192,
+            "turnover_delta": -0.023627297248275878,
+            "positive_period_fraction": 0.47586206896551725
+          }
+        },
+        {
+          "observations": 145,
+          "start_signal_date": "2017-01-12",
+          "end_signal_date": "2022-12-15",
+          "max_outcome_end_date": "2022-12-30",
+          "net_cagr": 0.008196985088344988,
+          "gross_cagr": 0.013461664918739569,
+          "net_sharpe": 0.12769016527782556,
+          "daily_max_drawdown": -0.2822846011834461,
+          "mean_turnover": 0.09814128278827587,
+          "total_cost_fraction": 0.02986651748685647,
+          "blocked_trade_count": 0,
+          "capacity_limited_count": 18,
+          "capacity_violation_count": 0,
+          "forced_delist_write_down_count": 0,
+          "execution_input_required_count": 1516,
+          "execution_input_observed_count": 1516,
+          "execution_input_coverage": 1.0,
+          "execution_input_future_violation_count": 0,
+          "capacity": {
+            "order_count": 1516,
+            "requested_notional_total": 810737873.9151,
+            "capacity_limited_requested_notional": 91285622.3088,
+            "executed_notional_total": 772487689.1857,
+            "capacity_limited_requested_notional_ratio": 0.11259572945319116,
+            "requested_notional_fill_ratio": 0.952820528113868,
+            "trade_record_notional_precision_rmb_decimals": 4,
+            "activity_gate_passed": true,
+            "by_side": {
+              "buy": {
+                "order_count": 788,
+                "requested_notional_total": 437454730.43659997,
+                "capacity_limited_requested_notional": 54401983.727,
+                "executed_notional_total": 410429190.1965,
+                "capacity_limited_requested_notional_ratio": 0.12436025934090211,
+                "requested_notional_fill_ratio": 0.938220944112029
+              },
+              "sell": {
+                "order_count": 728,
+                "requested_notional_total": 373283143.4785,
+                "capacity_limited_requested_notional": 36883638.5818,
+                "executed_notional_total": 362058498.9892,
+                "capacity_limited_requested_notional_ratio": 0.09880874404907165,
+                "requested_notional_fill_ratio": 0.9699299454438223
+              }
+            }
+          },
+          "exact_trace_sha256": {
+            "period_trace_sha256": "d228559d65808b5933311e17c20445fbb4cf2e9942abe9371a635be8f6084893",
+            "trade_trace_sha256": "6645302adf3dfca3d583d86e589d5ab5f10e9b991d59ec71edff55f14c9dc0f0",
+            "daily_nav_sha256": "2b48ecbbe646584076a0abd27793f826158e904cbd9be6d9aa94fc91e3ebcf81"
+          },
+          "payload_sha256": "8af52ac8a8d5cbd61ecdf7ef689442659f468fbb1a0baebf6ed96ed27c2f2bd7",
+          "relative_to_control": {
+            "paired_relative_cagr": -0.007248659776770361,
+            "paired_spread_ir": -0.17058125379421923,
+            "net_cagr_delta": -0.0073614374886945555,
+            "daily_max_drawdown_delta": 0.01564528830738776,
+            "turnover_delta": -0.041725779934482746,
+            "positive_period_fraction": 0.47586206896551725
+          }
+        },
+        {
+          "observations": 144,
+          "start_signal_date": "2017-01-13",
+          "end_signal_date": "2022-12-02",
+          "max_outcome_end_date": "2022-12-19",
+          "net_cagr": 0.022640274065302446,
+          "gross_cagr": 0.02810058921228764,
+          "net_sharpe": 0.2305616050890483,
+          "daily_max_drawdown": -0.2601635157532223,
+          "mean_turnover": 0.10074392510694444,
+          "total_cost_fraction": 0.03038716609987551,
+          "blocked_trade_count": 1,
+          "capacity_limited_count": 21,
+          "capacity_violation_count": 0,
+          "forced_delist_write_down_count": 0,
+          "execution_input_required_count": 1510,
+          "execution_input_observed_count": 1510,
+          "execution_input_coverage": 1.0,
+          "execution_input_future_violation_count": 0,
+          "capacity": {
+            "order_count": 1510,
+            "requested_notional_total": 870205515.1209,
+            "capacity_limited_requested_notional": 115644998.2825,
+            "executed_notional_total": 816882078.3103,
+            "capacity_limited_requested_notional_ratio": 0.13289389261849613,
+            "requested_notional_fill_ratio": 0.9387231683963855,
+            "trade_record_notional_precision_rmb_decimals": 4,
+            "activity_gate_passed": true,
+            "by_side": {
+              "buy": {
+                "order_count": 819,
+                "requested_notional_total": 466339984.3936,
+                "capacity_limited_requested_notional": 64519437.2972,
+                "executed_notional_total": 432579324.4064,
+                "capacity_limited_requested_notional_ratio": 0.13835278864431308,
+                "requested_notional_fill_ratio": 0.9276050497126034
+              },
+              "sell": {
+                "order_count": 691,
+                "requested_notional_total": 403865530.7273,
+                "capacity_limited_requested_notional": 51125560.9853,
+                "executed_notional_total": 384302753.9039,
+                "capacity_limited_requested_notional_ratio": 0.12659055327953017,
+                "requested_notional_fill_ratio": 0.9515611624785844
+              }
+            }
+          },
+          "exact_trace_sha256": {
+            "period_trace_sha256": "3c7ece82b2a19ce8b5c6f3f728864804f13a121a77fb31ad5e02d1997faa8ebd",
+            "trade_trace_sha256": "c52f45e2cc35b25b5738569b7ebb334a8e1714e60a9adc2b0f331b002d222d14",
+            "daily_nav_sha256": "77d883c0d5c8522668666df3200e98654639fa96f4b0d80965ef2363d082646a"
+          },
+          "payload_sha256": "f36933e559ad1184151cd129052408928ddbd3231057701025989893c3c07711",
+          "relative_to_control": {
+            "paired_relative_cagr": -0.011674983503250136,
+            "paired_spread_ir": -0.2549598628354413,
+            "net_cagr_delta": -0.012080346171740475,
+            "daily_max_drawdown_delta": -0.009173677235526312,
+            "turnover_delta": -0.03251245514027781,
+            "positive_period_fraction": 0.4930555555555556
+          }
+        },
+        {
+          "observations": 144,
+          "start_signal_date": "2017-01-16",
+          "end_signal_date": "2022-12-05",
+          "max_outcome_end_date": "2022-12-20",
+          "net_cagr": 0.0212874901947,
+          "gross_cagr": 0.026559522828188964,
+          "net_sharpe": 0.21575794234645332,
+          "daily_max_drawdown": -0.2511859937440254,
+          "mean_turnover": 0.09807942376597222,
+          "total_cost_fraction": 0.02932209092434384,
+          "blocked_trade_count": 1,
+          "capacity_limited_count": 19,
+          "capacity_violation_count": 0,
+          "forced_delist_write_down_count": 0,
+          "execution_input_required_count": 1508,
+          "execution_input_observed_count": 1508,
+          "execution_input_coverage": 1.0,
+          "execution_input_future_violation_count": 0,
+          "capacity": {
+            "order_count": 1508,
+            "requested_notional_total": 841140833.2348,
+            "capacity_limited_requested_notional": 102549784.06650001,
+            "executed_notional_total": 788550682.9255,
+            "capacity_limited_requested_notional_ratio": 0.1219174958753593,
+            "requested_notional_fill_ratio": 0.9374775920614239,
+            "trade_record_notional_precision_rmb_decimals": 4,
+            "activity_gate_passed": true,
+            "by_side": {
+              "buy": {
+                "order_count": 793,
+                "requested_notional_total": 451283616.03110003,
+                "capacity_limited_requested_notional": 52134829.7642,
+                "executed_notional_total": 418450563.45600003,
+                "capacity_limited_requested_notional_ratio": 0.11552564266061711,
+                "requested_notional_fill_ratio": 0.9272451925823132
+              },
+              "sell": {
+                "order_count": 715,
+                "requested_notional_total": 389857217.2037,
+                "capacity_limited_requested_notional": 50414954.3023,
+                "executed_notional_total": 370100119.4695,
+                "capacity_limited_requested_notional_ratio": 0.12931645760955154,
+                "requested_notional_fill_ratio": 0.9493222214124692
+              }
+            }
+          },
+          "exact_trace_sha256": {
+            "period_trace_sha256": "6cd2964c5c4aa5863990e85d339cc7402d6b499fbaf64f64d0ae0f830ef5bebc",
+            "trade_trace_sha256": "86c74d9647517de6faa52ab34e9fd36ae1e32191a55a8f4176b1c4563d400a16",
+            "daily_nav_sha256": "1cbe3c30459d179c0780a8f080bae74f76aab920443bc6e46336bb02f57d1f1b"
+          },
+          "payload_sha256": "63c0436e4ce4d4b095fe31cac7beceedbf12a3c281d36ae5df323b719b017841",
+          "relative_to_control": {
+            "paired_relative_cagr": -0.020604264070983924,
+            "paired_spread_ir": -0.4381252036317028,
+            "net_cagr_delta": -0.021485571529882064,
+            "daily_max_drawdown_delta": -0.0005948840218328311,
+            "turnover_delta": -0.03954962258402776,
+            "positive_period_fraction": 0.4513888888888889
+          }
+        }
+      ]
+    }
+  },
+  "validation_gates": {},
+  "turnover_by_candidate": {},
+  "train_manifest_payload_sha256": "47130f0c03268c8c13ee81e38b62d14c22ce9a45ba80b23d0d07c1a73948237b",
+  "validation_manifest_payload_sha256": null,
+  "selection_status_sources": {
+    "train": {
+      "suspensions": {
+        "path": "runtime/data/wide-universe-6.3/train/suspensions.parquet",
+        "size_bytes": 180681,
+        "sha256": "70487baeb0dccdf073c48d56c18d44f0cf3f32b64a553f73ada3bad1b62e1b87"
+      },
+      "suspension_metadata": {
+        "path": "runtime/data/wide-universe-6.3/train/suspensions.meta.json",
+        "size_bytes": 789,
+        "sha256": "b12d4cf41e0346eae72bd07a4afa4303c5a976b8b0b0257b3b3e4e22c6ed1f8e"
+      },
+      "stock_st_cutoff_view": {
+        "path": "runtime/data/wide-universe-6.3/train/stock-st-isolated-checkpoint.json",
+        "size_bytes": 1197090,
+        "sha256": "2cb754667b5cef9640bb9ac15a8701904036d4405f00de35f3ea510810aa0bbb"
+      }
+    },
+    "validation": null
+  },
+  "train_phase_replay_sha256": {
+    "daily_adv20_top500_control": [
+      "e363f0d7e9b447c9b6da7a63ad5156ed44d3bedab07a50dbd26a5398029d7e1c",
+      "3aceeffece1ce2b073dc713d453dc741a26167495cfb23ec32ee6d704ffd3895",
+      "dd2784d679a2f927eb74b868a71bbce491f7ebb57357d8f110be0f6ebfc7fa9c",
+      "31b9822f7363a826f419bbd714de29cd82fda0174d0fb5e220f96455bbcedf49",
+      "3b7004d0170c83aeffefb939a62d91ca346133b908385d67c2682b111ffdeceb",
+      "8c404f43964b14ff51973c2c9f5e2bc9fd3f85586f1fae10f72db5b4b9454855",
+      "db60ea9bd9b611ec55dffe10347c70fffb7746f62719fae4d22f7688aad8e80a",
+      "b53b305684869f3335db1006011845532c759544bc9924fe64054ffbeef0a3e8",
+      "e149ef96ecbba1610a73e09d62f9011782f8e60ca2b1248bc789d7faeee0e0a7",
+      "2435279ef2187b36b167bc6340910d5aadd9c867570dab68e591cfcead5817a2"
+    ],
+    "daily_adv20_ge_100m": [
+      "02eabd4d56eedcc0a92e1ab94401a567824b84b8d3e19beba3d4f3eb39284845",
+      "c74548c4e88563bc311f6aa275ed754fcd907617c1dd37ea616790ff3509087c",
+      "4def5a029bcc27d37fabf6afd6c7fca985aca8a32136c3c7032ec52e5fd9af91",
+      "8e1db4a00af35619d6113fd0e4198d60da70c0640abaca2b6e1b57a55444e727",
+      "9bbd1382bc42066caf98c1f6bf677afaf29afd88dcbaf427e9750b1c02611517",
+      "6f09743da892e54fad2cc6595c14707165a438675d084ba1cf360e4c6feb3c14",
+      "fd49a57f576c3a78ba1321fb50098c662d3b5a19e99e1f8df39f8f2a07fcf974",
+      "24e0b701232cebb5328ffcb3761898140be80392abcce61ce5800920deb1d212",
+      "b81f41e5ac6e4c436a6947599cce120f3a0bcfd9f6f151a6707269588a453848",
+      "b42f8c2200b48b344833709cb6901ceb4b65f70c65a85c419e5d8c936e1e2a41"
+    ],
+    "daily_adv20_top1500": [
+      "55fdf99a6ae0d8d6f87fa54e40b6ad6f26fe64ef1161443397856b2529bd5dd7",
+      "d2b9f3ad983134df387dc516e21df992ff7000074aa3bf26c0323d7fc4b26f3d",
+      "35ac3a23801a44a7fa23e6c5fd1ec2c55758853fd6dbb54cdaa061ba5cd801a4",
+      "4a7acfa624e1afed721e38ce03a5488fdf563f7e751044b72a3c47fa85647fb8",
+      "a67b298b4fca749ff4f9f54c3802cad1f57bd5d026f52d4f35e1d785a1b1fa0f",
+      "574501693cf9822103f01229232ec825f5402d956b3a432db73aeaaec96dfa9c",
+      "a6f86cbd800288d4342613e35463625d29a494fb918406bc7557ab6c76e6b3af",
+      "8af52ac8a8d5cbd61ecdf7ef689442659f468fbb1a0baebf6ed96ed27c2f2bd7",
+      "f36933e559ad1184151cd129052408928ddbd3231057701025989893c3c07711",
+      "63c0436e4ce4d4b095fe31cac7beceedbf12a3c281d36ae5df323b719b017841"
+    ]
+  },
+  "validation_phase_replay_sha256": {},
+  "selected_definition": null,
+  "audit_market_outcomes_opened": false,
+  "selection_execution_commit": "e18c393dcc997a00ffe2b54f64cbedb5aae2bbdb",
+  "payload_sha256": "71a8543ea63fa949e5fee4c9a8ab792a6cc0834096778ab8cacbcef16796f55a"
+}
