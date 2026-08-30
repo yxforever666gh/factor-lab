@@ -10,6 +10,42 @@
 
 ## [Unreleased]
 
+### Added
+
+- 新增 6.2 来源语义驱动的数据准入合同和逐日、逐候选诊断证据：分别记录实际行情缺
+  `daily_basic`、经证明的无行情停牌、供应商当日返回的空 `pe_ttm`、独立空 `pb`、非法非空
+  基本面值、有限输入的非有限算术结果、未分类不可评分项及理论/实际可评分数量不一致。通过准入的
+  逐日诊断会单独落盘并绑定 stage manifest，
+  每次评估还会在读取 pricing 或打开组合收益前从 rankings 与诊断文件重新执行硬门。
+- 6.2 协议逐字节绑定已发布的 annotated `6.1` tag、其 peeled commit，以及 6.1 create-only
+  `pre_return_data_admission_failed` 证据；完整性检查同时验证本地 tag object、历史 Git blob 和
+  当前 tracked blob，避免把未跑收益的数据失败改写成策略负收益。
+
+### Changed
+
+- 保持三个 ADV20 机会集、fixed-core 信号、Top10/exit25、十个 offset、成本、容量、次日开盘执行、
+  train/validation/audit 切分和全部收益门不变。原 `median >= 95% / q05 >= 90%` 有限分数覆盖率改为
+  只读诊断；新的硬准入要求每个信号日、每个候选至少 25 个有限分数并能精确构造完整 Top25。
+- `daily_basic` 源行存在但 `pe_ttm` 为空只按可证明事实归为“供应商当日 null、冻结信号不可评分”，
+  不推断该证券必然亏损，也不推断抓取一定完整；空 `pb` 单独诊断。实际有 daily bar 却没有
+  `daily_basic` 源行，以及非空但非数值、非有限或为零的 PE/PB、有限输入却产生非有限算术、存在
+  未分类不可评分项，仍 fail closed；所有成员必须由有限可评分或已命名不可评分并集穷尽，不填补、
+  不替换信号。
+- ADV20 的单位换算或 20 日聚合产生非有限值会 fail closed；ADV20 非正的证券在三个候选 arm
+  共同的 base universe 之前剔除，避免全停牌零成交证券进入 TopK。
+- Python 包版本预置为 `6.2.0`；正式 runner、协议、runtime capsule、closure、winner/audit/result
+  路径与 CLI 完整性入口迁移到 6.2；当前 main 上误用旧 6.1 closure builder 会明确要求从 annotated
+  6.1 tag 运行。该版本属于同一扩大机会集方向的小迭代，不提前宣称路线通过。
+
+### Known limitations
+
+- 6.2 的硬准入异常仍在成功 stage manifest 写入前终止；若正式运行再次失败，需要像 6.1 一样从
+  冻结源码、源文件 ledger 和只读重构另行封存 create-only 失败证据，runner 尚不会自动发布该
+  tracked failure JSON。
+- `finite_score_count >= 25` 只保证冻结的 Top25 可以完整构造，不是新的百分比 coverage 门；
+  median/q05 仍只作诊断。因此极端大面积供应商字段置空可能把有效横截面缩到很小但仍准入，最终
+  解释必须同时报告实际 minimum/median/q05，不能只报告收益门结果。
+
 ## [6.1] - 2026-08-30
 
 ### Added

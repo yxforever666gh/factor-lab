@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Build and run the pre-registered 6.1 widened-opportunity-set experiment.
+"""Build and run the pre-registered 6.2 widened-opportunity-set experiment.
 
 Selection is deliberately staged: train is built/evaluated first; validation
 is not opened unless at least one challenger passes train.  Audit is a
@@ -53,6 +53,8 @@ from factor_lab.data.sources import (  # noqa: E402
 )
 from factor_lab.release_integrity import (  # noqa: E402
     AUDIT_EVIDENCE_PATH,
+    FROZEN_CANDIDATE_IDS,
+    FROZEN_FINITE_SCORE_ADMISSION,
     FROZEN_HISTORICAL_AUDIT,
     FROZEN_IMPLEMENTATION_PATHS,
     PRESELECTION_CLOSURE_PATH,
@@ -62,6 +64,7 @@ from factor_lab.release_integrity import (  # noqa: E402
     verify_active_runtime,
     verify_historical_audit,
     verify_preselection_closure,
+    verify_wide_protocol_contract,
     verify_winner_freeze,
 )
 from factor_lab.portfolio.long_only import (  # noqa: E402
@@ -111,6 +114,39 @@ AUDIT_ST_CHECKPOINT = (
     "runtime/data/wide-universe/audit/stock-st-isolated-checkpoint.json"
 )
 WINNER_FREEZE = WINNER_FREEZE_PATH
+WIDE_PROTOCOL_ID = "factor-lab/6.2/widened-opportunity-set-v2"
+WIDE_PROTOCOL_AMENDMENT_ID = f"{WIDE_PROTOCOL_ID}/amendment-1"
+
+ADMISSION_MIN_FINITE_SCORE_COUNT = 25
+ADMISSION_TOP_RANKING_COUNT = 25
+ADMISSION_CLASSIFICATION_FIELDS = (
+    "daily_basic_row_absent_with_daily_bar_count",
+    "daily_basic_row_absent_with_proven_no_daily_bar_count",
+    "pe_ttm_null_count",
+    "pb_null_count",
+    "invalid_non_null_fundamental_count",
+    "expected_finite_score_count",
+    "unexpected_score_mismatch_count",
+    "arithmetic_nonfinite_count",
+    "classified_unscoreable_count",
+    "unclassified_unscoreable_count",
+)
+ADMISSION_ZERO_REQUIRED_FIELDS = (
+    "daily_basic_row_absent_with_daily_bar_count",
+    "invalid_non_null_fundamental_count",
+    "unexpected_score_mismatch_count",
+    "arithmetic_nonfinite_count",
+    "unclassified_unscoreable_count",
+)
+STAGE_ARTIFACT_NAMES = (
+    "rankings",
+    "admission_diagnostics",
+    "targets",
+    "carried_suspensions",
+    "decisions",
+    "pricing",
+    "source_files",
+)
 
 
 def _selected_definition(candidate_id: str) -> dict[str, Any]:
@@ -601,6 +637,7 @@ def _stage_paths(root: Path, stage: str) -> dict[str, Path]:
     return {
         "root": directory,
         "rankings": directory / "rankings.parquet",
+        "admission_diagnostics": directory / "admission-diagnostics.parquet",
         "targets": directory / "targets.parquet",
         "carried_suspensions": directory / "carried-suspensions.parquet",
         "decisions": directory / "decisions.json",
@@ -641,14 +678,18 @@ def _stage_protocol(
     protocol = _read_json(protocol_path)
     actual = _payload_sha256(protocol)
     if protocol.get("payload_sha256") != actual:
-        raise ValueError("6.1 protocol payload hash is invalid")
-    if protocol.get("protocol_id") != "factor-lab/6.1/widened-opportunity-set-v1":
+        raise ValueError("6.2 protocol payload hash is invalid")
+    if protocol.get("protocol_id") != WIDE_PROTOCOL_ID:
         raise ValueError("unexpected widened-universe protocol id")
+    _verify_runner_protocol_parity(protocol)
     ledger.admit(amendment_path)
     amendment = _read_json(amendment_path)
     if amendment.get("payload_sha256") != _payload_sha256(amendment):
-        raise ValueError("6.1 protocol amendment payload hash is invalid")
-    if amendment.get("protocol_id") != protocol.get("protocol_id"):
+        raise ValueError("6.2 protocol amendment payload hash is invalid")
+    if (
+        amendment.get("protocol_id") != protocol.get("protocol_id")
+        or amendment.get("amendment_id") != WIDE_PROTOCOL_AMENDMENT_ID
+    ):
         raise ValueError("protocol amendment targets a different protocol")
     base = dict(amendment.get("base_protocol") or {})
     if (
@@ -664,6 +705,29 @@ def _stage_protocol(
         "amendment_id": amendment["amendment_id"],
         "amendment_payload_sha256": amendment["payload_sha256"],
     }
+
+
+def _verify_runner_protocol_parity(protocol: Mapping[str, Any]) -> None:
+    """Keep the executable admission gate identical to the frozen protocol."""
+
+    verify_wide_protocol_contract(protocol)
+    admission = protocol["common_base"]["finite_score_admission"]
+    coverage = admission["coverage_diagnostics"]
+    per_signal = admission["per_signal_per_arm"]
+    source_semantics = admission["source_semantics"]
+    if (
+        tuple(UNIVERSE_IDS) != tuple(FROZEN_CANDIDATE_IDS)
+        or protocol["candidate_ids"] != list(UNIVERSE_IDS)
+        or coverage["role"] != "diagnostic_only"
+        or coverage["may_gate_or_select"] is not False
+        or per_signal["finite_score_count_min"]
+        != ADMISSION_MIN_FINITE_SCORE_COUNT
+        or per_signal["top25_complete_required"] is not True
+        or ADMISSION_TOP_RANKING_COUNT != 25
+        or source_semantics
+        != FROZEN_FINITE_SCORE_ADMISSION["source_semantics"]
+    ):
+        raise ValueError("runner finite-score admission differs from 6.2 protocol")
 
 
 def _verify_release_closure(
@@ -696,6 +760,201 @@ def _ranking_rows(result: Any) -> list[pd.DataFrame]:
         frame["base_eligible_count"] = result.base_eligible_count
         rows.append(frame)
     return rows
+
+
+def _admission_diagnostic_rows(result: Any) -> list[dict[str, Any]]:
+    """Return one complete pre-return admission record per date and arm."""
+
+    rows: list[dict[str, Any]] = []
+    for universe in result.universes:
+        row: dict[str, Any] = {
+            "candidate_id": str(universe.name),
+            "date": pd.Timestamp(result.signal_date).normalize(),
+            "member_count": int(universe.member_count),
+            "finite_score_count": int(universe.finite_score_count),
+            "finite_score_coverage": float(universe.finite_score_coverage),
+            "top25_row_count": len(tuple(universe.top25)),
+        }
+        for field in ADMISSION_CLASSIFICATION_FIELDS:
+            row[field] = int(getattr(universe, field))
+        rows.append(row)
+    return rows
+
+
+def _audit_admission_diagnostics(
+    diagnostics: pd.DataFrame,
+    rankings: pd.DataFrame,
+    *,
+    expected_universes: Sequence[str],
+) -> pd.DataFrame:
+    """Validate the 6.2 structural score admission before any downstream work."""
+
+    required = {
+        "candidate_id",
+        "date",
+        "member_count",
+        "finite_score_count",
+        "finite_score_coverage",
+        "top25_row_count",
+        *ADMISSION_CLASSIFICATION_FIELDS,
+    }
+    if not isinstance(diagnostics, pd.DataFrame) or diagnostics.empty:
+        raise ValueError("data admission diagnostics must be a non-empty DataFrame")
+    missing = sorted(required - set(diagnostics.columns))
+    if missing:
+        raise ValueError(f"data admission diagnostics missing columns: {missing}")
+
+    work = diagnostics.loc[:, sorted(required)].copy()
+    work["candidate_id"] = work["candidate_id"].astype("string").str.strip()
+    work["date"] = pd.to_datetime(work["date"], errors="coerce").dt.normalize()
+    if (
+        work["candidate_id"].isna().any()
+        or work["candidate_id"].eq("").any()
+        or work["date"].isna().any()
+        or work.duplicated(["candidate_id", "date"]).any()
+    ):
+        raise ValueError("data admission diagnostics contain invalid or duplicate keys")
+
+    integer_fields = (
+        "member_count",
+        "finite_score_count",
+        "top25_row_count",
+        *ADMISSION_CLASSIFICATION_FIELDS,
+    )
+    for field in integer_fields:
+        numeric = pd.to_numeric(work[field], errors="coerce")
+        if (
+            numeric.isna().any()
+            or not np.isfinite(numeric).all()
+            or numeric.lt(0).any()
+            or not numeric.eq(np.floor(numeric)).all()
+        ):
+            raise ValueError(
+                f"data admission diagnostics contain an invalid count: {field}"
+            )
+        work[field] = numeric.astype(np.int64)
+
+    coverage = pd.to_numeric(work["finite_score_coverage"], errors="coerce")
+    expected_coverage = work["finite_score_count"].div(
+        work["member_count"].replace(0, np.nan)
+    )
+    if (
+        coverage.isna().any()
+        or not np.isfinite(coverage).all()
+        or coverage.lt(0.0).any()
+        or coverage.gt(1.0).any()
+        or not np.allclose(
+            coverage.to_numpy(dtype=float),
+            expected_coverage.to_numpy(dtype=float),
+            rtol=0.0,
+            atol=1e-15,
+            equal_nan=False,
+        )
+    ):
+        raise ValueError("data admission diagnostics contain inconsistent coverage")
+    work["finite_score_coverage"] = coverage.astype(float)
+
+    if bool(work["finite_score_count"].gt(work["member_count"]).any()) or bool(
+        work["expected_finite_score_count"].gt(work["member_count"]).any()
+    ):
+        raise ValueError("data admission diagnostics exceed universe membership")
+    if not work["expected_finite_score_count"].eq(
+        work["finite_score_count"]
+    ).all():
+        raise ValueError(
+            "data admission diagnostics disagree on expected finite-score count"
+        )
+    if not work["expected_finite_score_count"].add(
+        work["classified_unscoreable_count"]
+    ).eq(work["member_count"]).all():
+        raise ValueError(
+            "data admission diagnostics do not classify every universe member"
+        )
+
+    expected_candidates = tuple(sorted(map(str, expected_universes)))
+    actual_candidates = tuple(sorted(work["candidate_id"].astype(str).unique()))
+    if actual_candidates != expected_candidates:
+        raise ValueError(
+            "data admission diagnostics contain unexpected candidates: "
+            f"{actual_candidates}"
+        )
+
+    ranking_counts = (
+        rankings.groupby(["candidate_id", "date"], sort=True)
+        .size()
+        .rename("actual_ranking_row_count")
+        .reset_index()
+    )
+    ranking_counts["candidate_id"] = ranking_counts["candidate_id"].astype(str)
+    ranking_counts["date"] = pd.to_datetime(
+        ranking_counts["date"], errors="coerce"
+    ).dt.normalize()
+    joined = work.merge(
+        ranking_counts,
+        on=["candidate_id", "date"],
+        how="outer",
+        validate="one_to_one",
+        indicator=True,
+    )
+    if not joined["_merge"].eq("both").all():
+        raise ValueError("data admission diagnostics do not cover every ranking key")
+
+    failure_mask = (
+        joined["finite_score_count"].lt(ADMISSION_MIN_FINITE_SCORE_COUNT)
+        | joined["top25_row_count"].ne(ADMISSION_TOP_RANKING_COUNT)
+        | joined["actual_ranking_row_count"].ne(ADMISSION_TOP_RANKING_COUNT)
+    )
+    for field in ADMISSION_ZERO_REQUIRED_FIELDS:
+        failure_mask |= joined[field].ne(0)
+    if bool(failure_mask.any()):
+        failure_columns = [
+            "candidate_id",
+            "date",
+            "member_count",
+            "finite_score_count",
+            "top25_row_count",
+            "actual_ranking_row_count",
+            *ADMISSION_ZERO_REQUIRED_FIELDS,
+        ]
+        failures = joined.loc[failure_mask, failure_columns].copy()
+        failures["date"] = failures["date"].dt.date.astype(str)
+        raise ValueError(
+            "structural score data admission failed: "
+            f"{failures.to_dict(orient='records')}"
+        )
+
+    return work.sort_values(
+        ["candidate_id", "date"], kind="mergesort"
+    ).reset_index(drop=True)
+
+
+def _score_data_admission_contract() -> dict[str, Any]:
+    return {
+        "status": "passed",
+        "finite_score_count_min_per_signal": ADMISSION_MIN_FINITE_SCORE_COUNT,
+        "top_ranking_count_required": ADMISSION_TOP_RANKING_COUNT,
+        "zero_required_fields": list(ADMISSION_ZERO_REQUIRED_FIELDS),
+        "coverage_median_and_q05_role": "diagnostic_only",
+    }
+
+
+def _finite_score_coverage_diagnostics(
+    diagnostics: pd.DataFrame,
+) -> dict[str, dict[str, float | int]]:
+    return {
+        str(candidate_id): {
+            "median": float(group["finite_score_coverage"].median()),
+            "q05": float(
+                group["finite_score_coverage"].quantile(
+                    0.05, interpolation="linear"
+                )
+            ),
+            "minimum_finite_score_count": int(group["finite_score_count"].min()),
+        }
+        for candidate_id, group in diagnostics.groupby(
+            "candidate_id", sort=True
+        )
+    }
 
 
 def build_stage(
@@ -803,6 +1062,7 @@ def build_stage(
         universe_names=candidate_ids,
     )
     ranking_parts: list[pd.DataFrame] = []
+    admission_diagnostic_rows: list[dict[str, Any]] = []
     carried_suspension_rows: list[dict[str, Any]] = []
     inactive_stock_st_ignored_count = 0
     out_of_scope_bj_rows_ignored = {
@@ -891,35 +1151,19 @@ def build_stage(
             if not result.history_ready:
                 raise ValueError("ranking emitted before exact ADV20 history")
             ranking_parts.extend(_ranking_rows(result))
+            admission_diagnostic_rows.extend(_admission_diagnostic_rows(result))
         if index and index % 250 == 0:
             print(f"ranking sessions {index}/{len(calendar)}", flush=True)
     rankings = pd.concat(ranking_parts, ignore_index=True)
     rankings = audit_rankings(
         rankings, calendar, expected_universes=candidate_ids
     )
-    coverage = {
-        candidate_id: {
-            "median": float(group.groupby("date")["finite_score_coverage"].first().median()),
-            "q05": float(
-                group.groupby("date")["finite_score_coverage"].first().quantile(
-                    0.05, interpolation="linear"
-                )
-            ),
-            "minimum_finite_score_count": int(
-                group.groupby("date")["finite_score_count"].first().min()
-            ),
-        }
-        for candidate_id, group in rankings.groupby("candidate_id", sort=True)
-    }
-    coverage_failures = {
-        candidate_id: value
-        for candidate_id, value in coverage.items()
-        if value["median"] < 0.95
-        or value["q05"] < 0.90
-        or value["minimum_finite_score_count"] < 10
-    }
-    if coverage_failures:
-        raise ValueError(f"finite-score data admission failed: {coverage_failures}")
+    admission_diagnostics = _audit_admission_diagnostics(
+        pd.DataFrame(admission_diagnostic_rows),
+        rankings,
+        expected_universes=candidate_ids,
+    )
+    coverage = _finite_score_coverage_diagnostics(admission_diagnostics)
 
     decisions = build_target_decisions(
         rankings, calendar, expected_universes=candidate_ids
@@ -943,6 +1187,7 @@ def build_stage(
             raise ValueError("carried-suspension provenance contains duplicate keys")
     target_union = set(targets["ticker"].astype(str))
     _write_parquet_atomic(paths["rankings"], rankings)
+    _write_parquet_atomic(paths["admission_diagnostics"], admission_diagnostics)
     _write_parquet_atomic(paths["targets"], targets)
     _write_parquet_atomic(paths["carried_suspensions"], carried_suspensions)
     _write_json_atomic(paths["decisions"], {"decisions": decisions})
@@ -1042,15 +1287,7 @@ def build_stage(
     source_payload = ledger.payload()
     _write_json_atomic(paths["source_files"], source_payload)
     artifacts = {
-        name: _artifact(paths[name])
-        for name in (
-            "rankings",
-            "targets",
-            "carried_suspensions",
-            "decisions",
-            "pricing",
-            "source_files",
-        )
+        name: _artifact(paths[name]) for name in STAGE_ARTIFACT_NAMES
     }
     manifest: dict[str, Any] = {
         "schema_version": 1,
@@ -1071,10 +1308,12 @@ def build_stage(
         "official_session_count": len(calendar),
         "signal_session_count": int(rankings["date"].nunique()),
         "ranking_row_count": len(rankings),
+        "admission_diagnostic_row_count": len(admission_diagnostics),
         "target_row_count": len(targets),
         "ever_targeted_ticker_count": len(target_union),
         "sparse_pricing_row_count": pricing_rows,
         "finite_score_coverage": coverage,
+        "score_data_admission": _score_data_admission_contract(),
         "carried_suspension_inference": {
             "provenance": "carried_prior_explicit_full_day_S",
             "ticker_day_count": len(carried_suspensions),
@@ -1128,12 +1367,67 @@ def _load_stage(work_root: Path, stage: str) -> tuple[dict[str, Path], dict[str,
     manifest = _read_json(paths["manifest"])
     if manifest.get("payload_sha256") != _payload_sha256(manifest):
         raise ValueError(f"{stage} manifest payload hash mismatch")
-    for name, identity in (manifest.get("artifacts") or {}).items():
-        path = _path(identity["path"])
+    if (
+        manifest.get("schema_version") != 1
+        or manifest.get("kind") != "factor_lab_wide_universe_stage_manifest"
+        or manifest.get("stage") != stage
+        or manifest.get("status") != "data_admission_passed"
+    ):
+        raise ValueError(f"{stage} manifest stage/admission contract mismatch")
+
+    raw_candidates = manifest.get("candidate_ids")
+    if not isinstance(raw_candidates, list) or not raw_candidates:
+        raise ValueError(f"{stage} manifest candidate ids are malformed")
+    candidate_ids = tuple(raw_candidates)
+    if (
+        not all(
+            isinstance(candidate_id, str)
+            and candidate_id
+            and candidate_id == candidate_id.strip()
+            for candidate_id in candidate_ids
+        )
+        or len(set(candidate_ids)) != len(candidate_ids)
+        or CONTROL_ID not in candidate_ids
+        or not set(candidate_ids).issubset(UNIVERSE_IDS)
+    ):
+        raise ValueError(f"{stage} manifest candidate ids violate the frozen arms")
+
+    admission_contract = manifest.get("score_data_admission")
+    if not isinstance(admission_contract, Mapping) or canonical_sha256(
+        admission_contract
+    ) != canonical_sha256(_score_data_admission_contract()):
+        raise ValueError(f"{stage} manifest score-data admission contract mismatch")
+
+    coverage = manifest.get("finite_score_coverage")
+    if not isinstance(coverage, Mapping) or set(map(str, coverage)) != set(
+        candidate_ids
+    ):
+        raise ValueError(f"{stage} manifest coverage diagnostics are malformed")
+
+    artifacts = manifest.get("artifacts")
+    if not isinstance(artifacts, Mapping) or set(artifacts) != set(
+        STAGE_ARTIFACT_NAMES
+    ):
+        raise ValueError(f"{stage} manifest artifact allowlist mismatch")
+    for name in STAGE_ARTIFACT_NAMES:
+        identity = artifacts[name]
+        if not isinstance(identity, Mapping) or set(identity) != {
+            "path",
+            "size_bytes",
+            "sha256",
+        }:
+            raise ValueError(f"{stage} artifact binding is malformed: {name}")
+        if not isinstance(identity["path"], str):
+            raise ValueError(f"{stage} artifact path is malformed: {name}")
+        path = _path(str(identity["path"]))
         if (
             path != paths[name].resolve()
             or not path.is_file()
-            or path.stat().st_size != int(identity["size_bytes"])
+            or not isinstance(identity["size_bytes"], int)
+            or identity["size_bytes"] < 0
+            or path.stat().st_size != identity["size_bytes"]
+            or not isinstance(identity["sha256"], str)
+            or len(identity["sha256"]) != 64
             or sha256_file(path) != identity["sha256"]
         ):
             raise ValueError(f"{stage} artifact identity failed: {name}")
@@ -1152,7 +1446,7 @@ def _portfolio_base(research_config_path: Path) -> dict[str, Any]:
         "ticker_column": "ticker",
         "open_column": "open_adj",
         "price_basis": "adjusted_total_return",
-        "price_source": "6.1_full_market_raw_open_times_contemporaneous_adj_factor",
+        "price_source": "6.2_full_market_raw_open_times_contemporaneous_adj_factor",
         "lot_size": 0,
         "adv_column": "adv_20",
         "volatility_column": "volatility_20",
@@ -1243,15 +1537,79 @@ def _evaluation_phase_bounds(physical_max_date: Any) -> dict[str, PhaseBounds]:
     return bounds
 
 
+def _replay_stage_admission(
+    paths: Mapping[str, Path],
+    manifest: Mapping[str, Any],
+    *,
+    stage: str,
+    candidates: Sequence[str],
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Re-prove structural admission before opening any exact return work."""
+
+    requested_candidates = tuple(candidates)
+    manifest_candidates = tuple(manifest["candidate_ids"])
+    if (
+        not all(isinstance(candidate_id, str) for candidate_id in requested_candidates)
+        or requested_candidates != manifest_candidates
+    ):
+        raise ValueError(
+            f"{stage} evaluation candidates differ from the admitted manifest"
+        )
+
+    rankings = pd.read_parquet(paths["rankings"])
+    diagnostics = pd.read_parquet(paths["admission_diagnostics"])
+    admitted = _audit_admission_diagnostics(
+        diagnostics,
+        rankings,
+        expected_universes=manifest_candidates,
+    )
+
+    actual_counts = {
+        "ranking_row_count": len(rankings),
+        "admission_diagnostic_row_count": len(admitted),
+        "signal_session_count": int(
+            pd.to_datetime(rankings["date"], errors="coerce").dt.normalize().nunique()
+        ),
+    }
+    for field, actual in actual_counts.items():
+        expected = manifest.get(field)
+        if (
+            isinstance(expected, bool)
+            or not isinstance(expected, int)
+            or expected != actual
+        ):
+            raise ValueError(f"{stage} manifest {field} differs from replay")
+
+    replayed_coverage = _finite_score_coverage_diagnostics(admitted)
+    if canonical_sha256(manifest["finite_score_coverage"]) != canonical_sha256(
+        replayed_coverage
+    ):
+        raise ValueError(f"{stage} manifest coverage diagnostics differ from replay")
+    return rankings, admitted
+
+
 def evaluate_stage(
     *,
     stage: str,
     candidates: Sequence[str],
     work_root: Path,
     research_config_path: Path,
+    expected_manifest_payload_sha256: str,
 ) -> dict[str, list[dict[str, Any]]]:
     paths, manifest = _load_stage(work_root, stage)
-    rankings = pd.read_parquet(paths["rankings"])
+    if (
+        not isinstance(expected_manifest_payload_sha256, str)
+        or len(expected_manifest_payload_sha256) != 64
+        or manifest.get("payload_sha256")
+        != expected_manifest_payload_sha256
+    ):
+        raise ValueError(f"{stage} manifest payload differs from the completed build")
+    rankings, _admission_diagnostics = _replay_stage_admission(
+        paths,
+        manifest,
+        stage=stage,
+        candidates=candidates,
+    )
     decisions_payload = _read_json(paths["decisions"])
     decisions = decisions_payload.get("decisions")
     if not isinstance(decisions, list):
@@ -1397,6 +1755,7 @@ def run_selection(args: argparse.Namespace) -> dict[str, Any]:
         candidates=UNIVERSE_IDS,
         work_root=args.work_root,
         research_config_path=args.research_config,
+        expected_manifest_payload_sha256=str(train_manifest["payload_sha256"]),
     )
     train_gates = {
         candidate_id: candidate_gate(
@@ -1433,6 +1792,9 @@ def run_selection(args: argparse.Namespace) -> dict[str, Any]:
             candidates=(CONTROL_ID, *train_passers),
             work_root=args.work_root,
             research_config_path=args.research_config,
+            expected_manifest_payload_sha256=str(
+                validation_manifest["payload_sha256"]
+            ),
         )
         train_replay = _phase_replay_digests(validation_results, "train")
         original_train = _phase_replay_digests(
@@ -1466,7 +1828,7 @@ def run_selection(args: argparse.Namespace) -> dict[str, Any]:
 
     freeze: dict[str, Any] = {
         "schema_version": 1,
-        "kind": "factor_lab_6_1_winner_freeze",
+        "kind": "factor_lab_6_2_winner_freeze",
         "status": "selected_definition_frozen" if winner else "selected_null_frozen",
         "protocol_payload_sha256": train_manifest["protocol_payload_sha256"],
         "protocol_amendment_payload_sha256": train_manifest[
@@ -1640,6 +2002,7 @@ def run_audit(args: argparse.Namespace) -> dict[str, Any]:
         candidates=(CONTROL_ID, str(winner)),
         work_root=args.work_root,
         research_config_path=args.research_config,
+        expected_manifest_payload_sha256=str(manifest["payload_sha256"]),
     )
     for phase, frozen_key in (
         ("train", "train_phase_replay_sha256"),
@@ -1657,7 +2020,7 @@ def run_audit(args: argparse.Namespace) -> dict[str, Any]:
     )
     evidence: dict[str, Any] = {
         "schema_version": 1,
-        "kind": "factor_lab_6_1_historical_audit",
+        "kind": "factor_lab_6_2_historical_audit",
         "status": "historical_holdout_passed_requires_fresh_future"
         if gate["passed"]
         else "audit_falsified",
@@ -1746,8 +2109,8 @@ def run_finalize(args: argparse.Namespace) -> dict[str, Any]:
         }
     result: dict[str, Any] = {
         "schema_version": 1,
-        "kind": "factor_lab_6_1_release_result",
-        "release": "6.1",
+        "kind": "factor_lab_6_2_release_result",
+        "release": "6.2",
         "status": status,
         "preselection_closure_payload_sha256": closure["payload_sha256"],
         "winner_freeze": freeze_binding,
@@ -1780,12 +2143,12 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--research-config", type=_path, default=_path("configs/research.json")
     )
     parser.add_argument(
-        "--protocol", type=_path, default=_path("protocols/6.1-wide-universe.json")
+        "--protocol", type=_path, default=_path("protocols/6.2-wide-universe.json")
     )
     parser.add_argument(
         "--protocol-amendment",
         type=_path,
-        default=_path("protocols/6.1-wide-universe-amendment-1.json"),
+        default=_path("protocols/6.2-wide-universe-amendment-1.json"),
     )
     parser.add_argument(
         "--release-closure",

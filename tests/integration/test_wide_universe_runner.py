@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -39,17 +40,147 @@ def test_evaluation_phase_bounds_rejects_pre_anchor_stage() -> None:
 
 
 def test_pre_return_protocol_amendment_has_valid_lineage_and_self_hash() -> None:
-    protocol = RUNNER._read_json(ROOT / "protocols" / "6.1-wide-universe.json")
+    protocol = RUNNER._read_json(ROOT / "protocols" / "6.2-wide-universe.json")
     amendment = RUNNER._read_json(
-        ROOT / "protocols" / "6.1-wide-universe-amendment-1.json"
+        ROOT / "protocols" / "6.2-wide-universe-amendment-1.json"
     )
 
     assert protocol["payload_sha256"] == RUNNER._payload_sha256(protocol)
     assert amendment["payload_sha256"] == RUNNER._payload_sha256(amendment)
     assert amendment["wide_return_evaluation_opened_before_freeze"] is False
-    assert amendment["base_protocol"]["payload_sha256"] == (
-        "4d544251e3d64f48f1980c7886ea33418118fe7112b0a5f62d18ce270dab781f"
+    assert amendment["protocol_id"] == "factor-lab/6.2/widened-opportunity-set-v2"
+    assert amendment["amendment_id"] == (
+        "factor-lab/6.2/widened-opportunity-set-v2/amendment-1"
     )
+    assert amendment["base_protocol"]["payload_sha256"] == protocol["payload_sha256"]
+
+
+def test_runner_admission_constants_match_the_frozen_protocol() -> None:
+    protocol_path = ROOT / "protocols" / "6.2-wide-universe.json"
+    amendment_path = ROOT / "protocols" / "6.2-wide-universe-amendment-1.json"
+    protocol = RUNNER._read_json(protocol_path)
+
+    RUNNER._verify_runner_protocol_parity(protocol)
+    binding = RUNNER._stage_protocol(
+        protocol_path,
+        amendment_path,
+        SimpleNamespace(admit=lambda *_args, **_kwargs: None),
+    )
+
+    admission = protocol["common_base"]["finite_score_admission"]
+    assert binding["protocol_id"] == RUNNER.WIDE_PROTOCOL_ID
+    assert binding["amendment_id"] == RUNNER.WIDE_PROTOCOL_AMENDMENT_ID
+    assert tuple(protocol["candidate_ids"]) == RUNNER.UNIVERSE_IDS
+    assert admission == RUNNER.FROZEN_FINITE_SCORE_ADMISSION
+    assert admission["coverage_diagnostics"]["role"] == "diagnostic_only"
+    assert admission["coverage_diagnostics"]["may_gate_or_select"] is False
+    assert admission["per_signal_per_arm"] == {
+        "finite_score_count_min": RUNNER.ADMISSION_MIN_FINITE_SCORE_COUNT,
+        "top25_complete_required": True,
+    }
+    assert RUNNER.ADMISSION_TOP_RANKING_COUNT == 25
+    assert admission["source_semantics"] == (
+        RUNNER.FROZEN_FINITE_SCORE_ADMISSION["source_semantics"]
+    )
+
+
+@pytest.mark.parametrize(
+    ("path", "replacement"),
+    [
+        (("version",), "6.3"),
+        (("status",), "draft"),
+        (("direction_change",), True),
+        (("candidate_ids",), list(reversed(RUNNER.UNIVERSE_IDS))),
+        (
+            (
+                "common_base",
+                "finite_score_admission",
+                "coverage_diagnostics",
+                "role",
+            ),
+            "gate",
+        ),
+        (
+            (
+                "common_base",
+                "finite_score_admission",
+                "coverage_diagnostics",
+                "may_gate_or_select",
+            ),
+            True,
+        ),
+        (
+            (
+                "common_base",
+                "finite_score_admission",
+                "per_signal_per_arm",
+                "finite_score_count_min",
+            ),
+            24,
+        ),
+        (
+            (
+                "common_base",
+                "finite_score_admission",
+                "per_signal_per_arm",
+                "top25_complete_required",
+            ),
+            False,
+        ),
+    ],
+)
+def test_runner_protocol_parity_rejects_identity_or_gate_drift(
+    path: tuple[str, ...], replacement: object
+) -> None:
+    protocol = json.loads(
+        (ROOT / "protocols" / "6.2-wide-universe.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    cursor = protocol
+    for key in path[:-1]:
+        cursor = cursor[key]
+    cursor[path[-1]] = replacement
+
+    with pytest.raises(ValueError, match="protocol|admission"):
+        RUNNER._verify_runner_protocol_parity(protocol)
+
+
+@pytest.mark.parametrize(
+    "semantic",
+    tuple(RUNNER.FROZEN_FINITE_SCORE_ADMISSION["source_semantics"]),
+)
+def test_runner_protocol_parity_rejects_each_source_semantic_drift(
+    semantic: str,
+) -> None:
+    protocol = json.loads(
+        (ROOT / "protocols" / "6.2-wide-universe.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    protocol["common_base"]["finite_score_admission"]["source_semantics"][
+        semantic
+    ] = "drifted"
+
+    with pytest.raises(ValueError, match="protocol|admission"):
+        RUNNER._verify_runner_protocol_parity(protocol)
+
+
+@pytest.mark.parametrize(
+    ("constant", "replacement"),
+    [
+        ("ADMISSION_MIN_FINITE_SCORE_COUNT", 24),
+        ("ADMISSION_TOP_RANKING_COUNT", 24),
+    ],
+)
+def test_runner_protocol_parity_rejects_executable_constant_drift(
+    monkeypatch: pytest.MonkeyPatch, constant: str, replacement: int
+) -> None:
+    protocol = RUNNER._read_json(ROOT / "protocols" / "6.2-wide-universe.json")
+    monkeypatch.setattr(RUNNER, constant, replacement)
+
+    with pytest.raises(ValueError, match="runner finite-score admission differs"):
+        RUNNER._verify_runner_protocol_parity(protocol)
 
 
 def test_selected_definition_requires_exact_frozen_contract() -> None:
@@ -136,7 +267,7 @@ def test_mode_defaults_physically_separate_selection_and_audit_status() -> None:
             "--mode",
             "audit",
             "--freeze",
-            str(ROOT / "protocols" / "evidence" / "6.1" / "winner-freeze.json"),
+            str(ROOT / RUNNER.WINNER_FREEZE),
             "--audit-end",
             "2026-08-21",
         ]
@@ -224,3 +355,645 @@ def test_scope_filter_ignores_only_bj_and_rejects_unknown_sh_sz() -> None:
             role="stock_st",
             date=date,
         )
+
+
+def _complete_rankings(
+    *, candidate_ids: tuple[str, ...] = RUNNER.UNIVERSE_IDS, row_count: int = 25
+) -> pd.DataFrame:
+    rows = []
+    for candidate_index, candidate_id in enumerate(candidate_ids):
+        for rank in range(1, row_count + 1):
+            rows.append(
+                {
+                    "candidate_id": candidate_id,
+                    "date": pd.Timestamp("2017-01-03"),
+                    "ticker": f"{candidate_index}{rank:05d}.SZ",
+                    "rank": rank,
+                    "score": float(row_count - rank + 1),
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def _admission_diagnostics(
+    *,
+    candidate_ids: tuple[str, ...] = RUNNER.UNIVERSE_IDS,
+    member_count: int = 500,
+    finite_score_count: int = 400,
+    top25_row_count: int = 25,
+    pe_ttm_null_count: int = 100,
+    pb_null_count: int = 0,
+    daily_basic_row_absent_with_daily_bar_count: int = 0,
+    daily_basic_row_absent_with_proven_no_daily_bar_count: int = 0,
+    invalid_non_null_fundamental_count: int = 0,
+    expected_finite_score_count: int | None = None,
+    unexpected_score_mismatch_count: int = 0,
+    arithmetic_nonfinite_count: int = 0,
+    classified_unscoreable_count: int | None = None,
+    unclassified_unscoreable_count: int = 0,
+) -> pd.DataFrame:
+    expected = (
+        finite_score_count
+        if expected_finite_score_count is None
+        else expected_finite_score_count
+    )
+    classified = (
+        member_count - expected
+        if classified_unscoreable_count is None
+        else classified_unscoreable_count
+    )
+    return pd.DataFrame(
+        [
+            {
+                "candidate_id": candidate_id,
+                "date": pd.Timestamp("2017-01-03"),
+                "member_count": member_count,
+                "finite_score_count": finite_score_count,
+                "finite_score_coverage": finite_score_count / member_count,
+                "top25_row_count": top25_row_count,
+                "daily_basic_row_absent_with_daily_bar_count": (
+                    daily_basic_row_absent_with_daily_bar_count
+                ),
+                "daily_basic_row_absent_with_proven_no_daily_bar_count": (
+                    daily_basic_row_absent_with_proven_no_daily_bar_count
+                ),
+                "pe_ttm_null_count": pe_ttm_null_count,
+                "pb_null_count": pb_null_count,
+                "invalid_non_null_fundamental_count": (
+                    invalid_non_null_fundamental_count
+                ),
+                "expected_finite_score_count": expected,
+                "unexpected_score_mismatch_count": unexpected_score_mismatch_count,
+                "arithmetic_nonfinite_count": arithmetic_nonfinite_count,
+                "classified_unscoreable_count": classified,
+                "unclassified_unscoreable_count": unclassified_unscoreable_count,
+            }
+            for candidate_id in candidate_ids
+        ]
+    )
+
+
+def _write_manifest(paths: dict[str, Path], manifest: dict[str, object]) -> None:
+    manifest["payload_sha256"] = RUNNER._payload_sha256(manifest)
+    paths["manifest"].write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _write_valid_stage_fixture(
+    tmp_path: Path,
+    *,
+    rankings: pd.DataFrame | None = None,
+    diagnostics: pd.DataFrame | None = None,
+) -> tuple[dict[str, Path], dict[str, object]]:
+    paths = RUNNER._stage_paths(tmp_path, "train")
+    ranking_frame = _complete_rankings() if rankings is None else rankings
+    diagnostic_frame = (
+        _admission_diagnostics() if diagnostics is None else diagnostics
+    )
+    ranking_frame.to_parquet(paths["rankings"], index=False)
+    diagnostic_frame.to_parquet(paths["admission_diagnostics"], index=False)
+    for name in RUNNER.STAGE_ARTIFACT_NAMES:
+        path = paths[name]
+        if path.exists():
+            continue
+        path.write_bytes(f"fixture:{name}\n".encode("utf-8"))
+    manifest: dict[str, object] = {
+        "schema_version": 1,
+        "kind": "factor_lab_wide_universe_stage_manifest",
+        "stage": "train",
+        "status": "data_admission_passed",
+        "candidate_ids": list(RUNNER.UNIVERSE_IDS),
+        "physical_max_date": "2022-12-31",
+        "ranking_row_count": len(ranking_frame),
+        "admission_diagnostic_row_count": len(diagnostic_frame),
+        "signal_session_count": int(ranking_frame["date"].nunique()),
+        "score_data_admission": RUNNER._score_data_admission_contract(),
+        "finite_score_coverage": RUNNER._finite_score_coverage_diagnostics(
+            diagnostic_frame
+        ),
+        "artifacts": {
+            name: RUNNER._artifact(paths[name])
+            for name in RUNNER.STAGE_ARTIFACT_NAMES
+        },
+    }
+    _write_manifest(paths, manifest)
+    return paths, manifest
+
+
+def _forbid_return_work(
+    monkeypatch: pytest.MonkeyPatch, paths: dict[str, Path]
+) -> dict[str, bool]:
+    opened = {"decisions": False, "pricing": False, "portfolio": False}
+    original_read_json = RUNNER._read_json
+    original_read_parquet = RUNNER.pd.read_parquet
+
+    def guarded_read_json(path: Path) -> dict[str, object]:
+        if Path(path).resolve() == paths["decisions"].resolve():
+            opened["decisions"] = True
+            raise AssertionError("decisions opened before admission replay")
+        return original_read_json(path)
+
+    def guarded_read_parquet(
+        path: Path, *args: object, **kwargs: object
+    ) -> pd.DataFrame:
+        if Path(path).resolve() == paths["pricing"].resolve():
+            opened["pricing"] = True
+            raise AssertionError("pricing opened before admission replay")
+        return original_read_parquet(path, *args, **kwargs)
+
+    def forbidden_portfolio(*_args: object, **_kwargs: object) -> None:
+        opened["portfolio"] = True
+        raise AssertionError("portfolio evaluation opened before admission replay")
+
+    monkeypatch.setattr(RUNNER, "_read_json", guarded_read_json)
+    monkeypatch.setattr(RUNNER.pd, "read_parquet", guarded_read_parquet)
+    monkeypatch.setattr(RUNNER, "evaluate_long_only_portfolio", forbidden_portfolio)
+    return opened
+
+
+def _evaluate_train_fixture(
+    tmp_path: Path, expected_manifest_payload_sha256: str
+) -> None:
+    RUNNER.evaluate_stage(
+        stage="train",
+        candidates=RUNNER.UNIVERSE_IDS,
+        work_root=tmp_path,
+        research_config_path=(
+            ROOT / RUNNER.FROZEN_IMPLEMENTATION_PATHS["research_config"]
+        ),
+        expected_manifest_payload_sha256=expected_manifest_payload_sha256,
+    )
+
+
+def test_provider_pe_null_coverage_is_diagnostic_only() -> None:
+    rankings = _complete_rankings()
+    diagnostics = _admission_diagnostics(
+        member_count=500,
+        finite_score_count=400,
+        pe_ttm_null_count=100,
+    )
+
+    admitted = RUNNER._audit_admission_diagnostics(
+        diagnostics,
+        rankings,
+        expected_universes=RUNNER.UNIVERSE_IDS,
+    )
+
+    assert admitted["finite_score_coverage"].eq(0.8).all()
+    assert admitted["pe_ttm_null_count"].eq(100).all()
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("daily_basic_row_absent_with_daily_bar_count", 1),
+        ("invalid_non_null_fundamental_count", 1),
+        ("unexpected_score_mismatch_count", 1),
+        ("arithmetic_nonfinite_count", 1),
+        ("unclassified_unscoreable_count", 1),
+    ],
+)
+def test_hard_score_data_anomaly_blocks_before_pricing_or_evaluation(
+    tmp_path: Path, field: str, value: int
+) -> None:
+    paths = RUNNER._stage_paths(tmp_path, "train")
+    diagnostics = _admission_diagnostics()
+    diagnostics.loc[0, field] = value
+
+    with pytest.raises(ValueError, match="structural score data admission failed"):
+        RUNNER._audit_admission_diagnostics(
+            diagnostics,
+            _complete_rankings(),
+            expected_universes=RUNNER.UNIVERSE_IDS,
+        )
+
+    assert not paths["pricing"].exists()
+    assert not paths["evaluation"].exists()
+
+
+def test_build_stage_hard_admission_failure_precedes_all_downstream_work(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class FakeLedger:
+        def admit(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+        def verify_unchanged(self) -> None:
+            return None
+
+        def payload(self) -> dict[str, object]:
+            return {"file_count": 0, "files": [], "payload_sha256": "0" * 64}
+
+    class FakeUniverse:
+        def __init__(self, name: str, *, invalid_count: int) -> None:
+            self.name = name
+            self.member_count = 500
+            self.finite_score_count = 400
+            self.daily_basic_row_absent_with_daily_bar_count = 0
+            self.daily_basic_row_absent_with_proven_no_daily_bar_count = 0
+            self.pe_ttm_null_count = 100
+            self.pb_null_count = 0
+            self.invalid_non_null_fundamental_count = invalid_count
+            self.expected_finite_score_count = 400
+            self.unexpected_score_mismatch_count = 0
+            self.arithmetic_nonfinite_count = 0
+            self.classified_unscoreable_count = 100
+            self.unclassified_unscoreable_count = 0
+            self.top25 = tuple(range(25))
+
+        @property
+        def finite_score_coverage(self) -> float:
+            return self.finite_score_count / self.member_count
+
+        def to_frame(self) -> pd.DataFrame:
+            candidate_index = RUNNER.UNIVERSE_IDS.index(self.name)
+            return pd.DataFrame(
+                {
+                    "rank": range(1, 26),
+                    "ticker": [
+                        f"{candidate_index}{rank:05d}.SZ" for rank in range(1, 26)
+                    ],
+                    "fixed_core_score": [float(26 - rank) for rank in range(1, 26)],
+                    "adv20_rmb": [1_000_000_000.0] * 25,
+                    "volatility_20": [0.02] * 25,
+                }
+            )
+
+    universes = tuple(
+        FakeUniverse(candidate_id, invalid_count=1 if index == 0 else 0)
+        for index, candidate_id in enumerate(RUNNER.UNIVERSE_IDS)
+    )
+    opportunity_result = SimpleNamespace(
+        signal_date="2017-01-03",
+        universes=universes,
+        base_eligible_count=500,
+        history_ready=True,
+        carried_suspension_evidence=(),
+        inactive_stock_st_ignored_count=0,
+    )
+
+    class FakeOpportunityBuilder:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            return None
+
+        def push_day(self, *_args: object, **_kwargs: object) -> SimpleNamespace:
+            return opportunity_result
+
+    downstream = {"decisions": False, "pricing": False}
+
+    def forbidden_decisions(*_args: object, **_kwargs: object) -> None:
+        downstream["decisions"] = True
+        raise AssertionError("decisions opened after failed admission")
+
+    class ForbiddenPricingBuilder:
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            downstream["pricing"] = True
+            raise AssertionError("pricing opened after failed admission")
+
+    monkeypatch.setattr(RUNNER, "SourceLedger", FakeLedger)
+    monkeypatch.setattr(
+        RUNNER,
+        "_runtime_layout",
+        lambda _path: (
+            {"enrichment": {"security_code_aliases": []}},
+            SimpleNamespace(checkpoint_path=tmp_path / "checkpoint.json"),
+        ),
+    )
+    monkeypatch.setattr(
+        RUNNER,
+        "_stage_protocol",
+        lambda *_args, **_kwargs: {
+            "protocol_id": RUNNER.WIDE_PROTOCOL_ID,
+            "base_payload_sha256": "1" * 64,
+            "amendment_id": RUNNER.WIDE_PROTOCOL_AMENDMENT_ID,
+            "amendment_payload_sha256": "2" * 64,
+        },
+    )
+    monkeypatch.setattr(RUNNER, "_checkpoint", lambda *_args, **_kwargs: {})
+    monkeypatch.setattr(
+        RUNNER,
+        "_load_official_calendar",
+        lambda *_args, **_kwargs: (
+            (pd.Timestamp("2017-01-03"),),
+            [],
+            {"exchange": "SSE"},
+        ),
+    )
+    monkeypatch.setattr(
+        RUNNER,
+        "_stock_st_cutoff_view",
+        lambda *_args, **_kwargs: {},
+    )
+    monkeypatch.setattr(
+        RUNNER,
+        "audit_security_master",
+        lambda _layout: {
+            "status": "pass",
+            "snapshot_path": str(tmp_path / "master"),
+            "checkpoint_path": str(tmp_path / "master-checkpoint.json"),
+        },
+    )
+    monkeypatch.setattr(
+        RUNNER,
+        "load_security_master",
+        lambda _layout: pd.DataFrame(
+            {
+                "ts_code": ["000001.SZ"],
+                "exchange": ["SZSE"],
+                "curr_type": ["CNY"],
+                "list_date": ["19910101"],
+                "delist_date": [None],
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        RUNNER,
+        "_load_suspensions",
+        lambda *_args, **_kwargs: pd.DataFrame(
+            {"date": pd.Series(dtype="datetime64[ns]")}
+        ),
+    )
+    monkeypatch.setattr(
+        RUNNER,
+        "_read_partition",
+        lambda _checkpoint, _dataset, _date, columns, _ledger: pd.DataFrame(
+            columns=columns
+        ),
+    )
+    monkeypatch.setattr(RUNNER, "DailyOpportunitySetBuilder", FakeOpportunityBuilder)
+    monkeypatch.setattr(RUNNER, "build_target_decisions", forbidden_decisions)
+    monkeypatch.setattr(RUNNER, "SparsePricingBuilder", ForbiddenPricingBuilder)
+
+    work_root = tmp_path / "wide-universe"
+    with pytest.raises(ValueError, match="structural score data admission failed"):
+        RUNNER.build_stage(
+            stage="train",
+            candidates=RUNNER.UNIVERSE_IDS,
+            end_date=RUNNER.TRAIN_END,
+            config_path=ROOT / RUNNER.FROZEN_IMPLEMENTATION_PATHS["data_config"],
+            research_config_path=(
+                ROOT / RUNNER.FROZEN_IMPLEMENTATION_PATHS["research_config"]
+            ),
+            protocol_path=ROOT / "protocols" / "6.2-wide-universe.json",
+            protocol_amendment_path=(
+                ROOT / "protocols" / "6.2-wide-universe-amendment-1.json"
+            ),
+            release_closure_path=ROOT / RUNNER.PRESELECTION_CLOSURE_PATH,
+            work_root=work_root,
+            suspension_path=tmp_path / "suspensions.parquet",
+            suspension_metadata_path=tmp_path / "suspensions.meta.json",
+            stock_st_checkpoint_path=tmp_path / "stock-st.json",
+        )
+
+    paths = RUNNER._stage_paths(work_root, "train")
+    assert downstream == {"decisions": False, "pricing": False}
+    assert not paths["pricing"].exists()
+    assert not paths["evaluation"].exists()
+
+
+def test_selection_never_evaluates_a_stage_that_failed_admission(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    freeze_path = tmp_path / "winner-freeze.json"
+    monkeypatch.setattr(RUNNER, "WINNER_FREEZE", str(freeze_path))
+    monkeypatch.setattr(
+        RUNNER,
+        "_git_text",
+        lambda command, *_args: "" if command == "status" else "a" * 40,
+    )
+    monkeypatch.setattr(RUNNER, "_verify_release_closure", lambda *_args: {})
+    monkeypatch.setattr(RUNNER, "verify_active_runtime", lambda _root: {})
+    monkeypatch.setattr(
+        RUNNER,
+        "build_stage",
+        lambda **_kwargs: (_ for _ in ()).throw(
+            ValueError("structural score data admission failed")
+        ),
+    )
+    evaluated = {"value": False}
+
+    def forbidden_evaluation(**_kwargs: object) -> None:
+        evaluated["value"] = True
+        raise AssertionError("return evaluation opened after failed admission")
+
+    monkeypatch.setattr(RUNNER, "evaluate_stage", forbidden_evaluation)
+    args = SimpleNamespace(
+        freeze_output=freeze_path,
+        release_closure=tmp_path / "release.json",
+        protocol=tmp_path / "protocol.json",
+        protocol_amendment=tmp_path / "amendment.json",
+        config=ROOT / RUNNER.FROZEN_IMPLEMENTATION_PATHS["data_config"],
+        research_config=ROOT / RUNNER.FROZEN_IMPLEMENTATION_PATHS["research_config"],
+        work_root=tmp_path / "wide-universe",
+        train_suspensions=tmp_path / "train-suspensions.parquet",
+        train_suspension_metadata=tmp_path / "train-suspensions.meta.json",
+        train_stock_st_checkpoint=tmp_path / "train-stock-st.json",
+        suspensions=tmp_path / "validation-suspensions.parquet",
+        suspension_metadata=tmp_path / "validation-suspensions.meta.json",
+        stock_st_checkpoint=tmp_path / "validation-stock-st.json",
+    )
+
+    with pytest.raises(ValueError, match="structural score data admission failed"):
+        RUNNER.run_selection(args)
+
+    assert evaluated["value"] is False
+    assert not freeze_path.exists()
+
+
+def test_fewer_than_twenty_five_finite_scores_fails_admission() -> None:
+    diagnostics = _admission_diagnostics(
+        member_count=500,
+        finite_score_count=24,
+        pe_ttm_null_count=476,
+    )
+
+    with pytest.raises(ValueError, match="structural score data admission failed"):
+        RUNNER._audit_admission_diagnostics(
+            diagnostics,
+            _complete_rankings(),
+            expected_universes=RUNNER.UNIVERSE_IDS,
+        )
+
+
+def test_every_universe_member_must_have_a_scoreability_classification() -> None:
+    diagnostics = _admission_diagnostics(classified_unscoreable_count=99)
+
+    with pytest.raises(ValueError, match="classify every universe member"):
+        RUNNER._audit_admission_diagnostics(
+            diagnostics,
+            _complete_rankings(),
+            expected_universes=RUNNER.UNIVERSE_IDS,
+        )
+
+
+def test_incomplete_top25_fails_admission() -> None:
+    with pytest.raises(ValueError, match="structural score data admission failed"):
+        RUNNER._audit_admission_diagnostics(
+            _admission_diagnostics(top25_row_count=24),
+            _complete_rankings(row_count=24),
+            expected_universes=RUNNER.UNIVERSE_IDS,
+        )
+
+
+def test_admission_diagnostics_artifact_is_manifest_bound(tmp_path: Path) -> None:
+    paths, _manifest = _write_valid_stage_fixture(tmp_path)
+    assert "admission_diagnostics" in RUNNER.STAGE_ARTIFACT_NAMES
+
+    _, loaded = RUNNER._load_stage(tmp_path, "train")
+    assert loaded["artifacts"]["admission_diagnostics"]["sha256"] == (
+        RUNNER.sha256_file(paths["admission_diagnostics"])
+    )
+
+    tampered = pd.read_parquet(paths["admission_diagnostics"])
+    tampered.loc[0, "pe_ttm_null_count"] += 1
+    tampered.to_parquet(paths["admission_diagnostics"], index=False)
+    with pytest.raises(ValueError, match="artifact identity failed"):
+        RUNNER._load_stage(tmp_path, "train")
+
+
+def test_missing_admission_artifact_stops_before_return_work(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths, manifest = _write_valid_stage_fixture(tmp_path)
+    paths["admission_diagnostics"].unlink()
+    opened = _forbid_return_work(monkeypatch, paths)
+
+    with pytest.raises(
+        ValueError, match="artifact identity failed: admission_diagnostics"
+    ):
+        _evaluate_train_fixture(tmp_path, str(manifest["payload_sha256"]))
+
+    assert opened == {"decisions": False, "pricing": False, "portfolio": False}
+    assert not (paths["root"] / "exact-runs").exists()
+    assert not paths["evaluation"].exists()
+
+
+def test_stage_manifest_requires_the_exact_artifact_allowlist(
+    tmp_path: Path,
+) -> None:
+    _paths, manifest = _write_valid_stage_fixture(tmp_path)
+    artifacts = manifest["artifacts"]
+    assert isinstance(artifacts, dict)
+    artifacts.pop("admission_diagnostics")
+    _write_manifest(_paths, manifest)
+
+    with pytest.raises(ValueError, match="artifact allowlist mismatch"):
+        RUNNER._load_stage(tmp_path, "train")
+
+
+def test_evaluation_rejects_a_replaced_manifest_against_the_build_hash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths, manifest = _write_valid_stage_fixture(tmp_path)
+    completed_build_sha256 = str(manifest["payload_sha256"])
+    manifest["synchronous_replacement_marker"] = "different-stage-instance"
+    _write_manifest(paths, manifest)
+    assert manifest["payload_sha256"] != completed_build_sha256
+    opened = _forbid_return_work(monkeypatch, paths)
+
+    with pytest.raises(ValueError, match="payload differs from the completed build"):
+        _evaluate_train_fixture(tmp_path, completed_build_sha256)
+
+    assert opened == {"decisions": False, "pricing": False, "portfolio": False}
+    assert not (paths["root"] / "exact-runs").exists()
+
+
+def test_self_hashed_manifest_cannot_relax_the_admission_contract(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths, manifest = _write_valid_stage_fixture(tmp_path)
+    contract = dict(manifest["score_data_admission"])
+    contract["finite_score_count_min_per_signal"] = 24
+    manifest["score_data_admission"] = contract
+    _write_manifest(paths, manifest)
+    opened = _forbid_return_work(monkeypatch, paths)
+
+    with pytest.raises(ValueError, match="score-data admission contract mismatch"):
+        _evaluate_train_fixture(tmp_path, str(manifest["payload_sha256"]))
+
+    assert opened == {"decisions": False, "pricing": False, "portfolio": False}
+    assert not (paths["root"] / "exact-runs").exists()
+
+
+def test_rehashed_hard_anomaly_cannot_bypass_admission_replay(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths, manifest = _write_valid_stage_fixture(tmp_path)
+    tampered = pd.read_parquet(paths["admission_diagnostics"])
+    tampered.loc[0, "invalid_non_null_fundamental_count"] = 1
+    tampered.to_parquet(paths["admission_diagnostics"], index=False)
+    artifacts = manifest["artifacts"]
+    assert isinstance(artifacts, dict)
+    artifacts["admission_diagnostics"] = RUNNER._artifact(
+        paths["admission_diagnostics"]
+    )
+    _write_manifest(paths, manifest)
+    opened = _forbid_return_work(monkeypatch, paths)
+
+    with pytest.raises(ValueError, match="structural score data admission failed"):
+        _evaluate_train_fixture(tmp_path, str(manifest["payload_sha256"]))
+
+    assert opened == {"decisions": False, "pricing": False, "portfolio": False}
+    assert not (paths["root"] / "exact-runs").exists()
+    assert not paths["evaluation"].exists()
+
+
+def test_evaluation_candidates_must_exactly_match_the_admitted_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths, manifest = _write_valid_stage_fixture(tmp_path)
+    opened = _forbid_return_work(monkeypatch, paths)
+
+    with pytest.raises(ValueError, match="candidates differ"):
+        RUNNER.evaluate_stage(
+            stage="train",
+            candidates=tuple(reversed(RUNNER.UNIVERSE_IDS)),
+            work_root=tmp_path,
+            research_config_path=(
+                ROOT / RUNNER.FROZEN_IMPLEMENTATION_PATHS["research_config"]
+            ),
+            expected_manifest_payload_sha256=str(manifest["payload_sha256"]),
+        )
+
+    assert opened == {"decisions": False, "pricing": False, "portfolio": False}
+    assert not (paths["root"] / "exact-runs").exists()
+
+
+def test_replay_requires_manifest_row_counts_to_match(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths, manifest = _write_valid_stage_fixture(tmp_path)
+    manifest["admission_diagnostic_row_count"] = (
+        int(manifest["admission_diagnostic_row_count"]) + 1
+    )
+    _write_manifest(paths, manifest)
+    opened = _forbid_return_work(monkeypatch, paths)
+
+    with pytest.raises(
+        ValueError, match="admission_diagnostic_row_count differs from replay"
+    ):
+        _evaluate_train_fixture(tmp_path, str(manifest["payload_sha256"]))
+
+    assert opened == {"decisions": False, "pricing": False, "portfolio": False}
+    assert not (paths["root"] / "exact-runs").exists()
+
+
+def test_replay_requires_manifest_coverage_to_match(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    paths, manifest = _write_valid_stage_fixture(tmp_path)
+    coverage = manifest["finite_score_coverage"]
+    assert isinstance(coverage, dict)
+    control = coverage[RUNNER.CONTROL_ID]
+    assert isinstance(control, dict)
+    control["median"] = float(control["median"]) - 0.01
+    _write_manifest(paths, manifest)
+    opened = _forbid_return_work(monkeypatch, paths)
+
+    with pytest.raises(ValueError, match="coverage diagnostics differ from replay"):
+        _evaluate_train_fixture(tmp_path, str(manifest["payload_sha256"]))
+
+    assert opened == {"decisions": False, "pricing": False, "portfolio": False}
+    assert not (paths["root"] / "exact-runs").exists()

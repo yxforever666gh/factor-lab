@@ -1,13 +1,16 @@
-# Factor Lab 6.1
+# Factor Lab 6.2
 
 Factor Lab 是一条本地、可复现的 A 股截面策略研究链：canonical Parquet → PIT 信号 →
 次日开盘成交 → 全成本逐日账户核算 → 10 个绝对日历调仓相位比较。
 
-6.1 的主问题不再是“怎样继续组合旧因子”，而是“过去的 Top500 研究边界是否过早排除了
-fixed-core 真正可交易的机会”。它保持信号、Top10/exit25、十相位、成本、次日开盘和容量模型
-不变，只改变逐日因果机会集。6.1 在任何组合收益、交易或 validation 打开前被数据准入门拦下：
-Tushare 按定义把亏损公司的 `pe_ttm` 置空，而协议错误地把这些结构性不可评分股票计作抓取缺失，
-要求全 universe 95%/90% 有限分数覆盖。这个结果不是“策略无赢家”，更不能声称找到稳定 alpha。
+6.2 延续“过去的 Top500 研究边界是否过早排除了 fixed-core 真正可交易机会”这一问题。它保持
+信号、Top10/exit25、十相位、成本、次日开盘、容量模型和收益门不变，只修正 6.1 在打开任何
+组合收益前暴露的数据准入错误：Tushare 文档说明亏损公司的 `pe_ttm` 为空，但这只能解释主要
+模式，不能证明每一个源字段 null 的原因。6.2 对 null 只陈述可证明事实——供应商当日返回空值，
+所以冻结信号不可评分；不猜原因、不填值，也不事后降低收益门。覆盖率保留为诊断，每个交易日、
+每个候选仍须至少 25 个有限分数和完整 Top25。真实源行缺失、非法非空值、非有限算术、未分类项
+或理论/实际可评分不一致都会在定价和收益前 fail closed。正式结果出来前，这条路线仍只是待证伪
+假设，不是稳定 alpha。
 
 6.0 的结论不是“已经找到稳定 alpha”，而是两件更具体的事：
 
@@ -110,9 +113,9 @@ label，并再次验证 availability 必须恰好是 `report_date` 后第一个�
 拆送股稳健性对照）、FY1 相对 FY0 的预测增长，以及实际公告相对公告前共识的 earnings surprise。
 coverage/initiations、dispersion 与 active-reviser breadth 先只做诊断，不再建 selector。
 
-## 6.1 当前主线：扩大因果机会集
+## 6.2 当前主线：来源语义驱动的机会集验证
 
-6.1 比较三个逐日重建的 universe：因果 ADV20 Top500 control、ADV20 至少人民币 1 亿元、ADV20
+6.2 继续比较三个逐日重建的 universe：因果 ADV20 Top500 control、ADV20 至少人民币 1 亿元、ADV20
 Top1500。证券必须是沪深人民币普通股、已上市至少 120 个官方交易日、当日非 ST；缺 bar 只有
 同日或尚未清除的显式整日停牌证据才可解释。Train、validation、audit 的停复牌与 `stock_st`
 分区拥有互不复用的物理私有根，不能靠同一文件换路径伪装成隔离。
@@ -120,20 +123,23 @@ Top1500。证券必须是沪深人民币普通股、已上市至少 120 个官�
 流程只有一条前进路径：截至 2022 的 train 门不过就不打开 validation；截至 2024 的 validation
 只运行 train 通过者；两段都过才按预注册 q20、中位主动 CAGR、容量和换手率排序冻结至多一个
 winner；2025-01-01 至 2026-08-21 的历史 audit 只运行该 winner，失败后不换 runner-up。即使
-audit 通过，也只记为“需要新鲜未来样本”，不允许盈利承诺。基础协议与红队前置修订见：
+audit 通过，也只记为“需要新鲜未来样本”，不允许盈利承诺。6.2 基础协议与红队前置修订见：
 
-- [protocols/6.1-wide-universe.json](protocols/6.1-wide-universe.json)
-- [protocols/6.1-wide-universe-amendment-1.json](protocols/6.1-wide-universe-amendment-1.json)
-- [protocols/6.1-runtime.json](protocols/6.1-runtime.json)
+- [protocols/6.2-wide-universe.json](protocols/6.2-wide-universe.json)
+- [protocols/6.2-wide-universe-amendment-1.json](protocols/6.2-wide-universe-amendment-1.json)
+- [protocols/6.2-runtime.json](protocols/6.2-runtime.json)
 
-实际运行完成 1,579 个 train 交易日、1,459 个信号日的因果排名后，在持久化 rankings、构造
+6.1 实际运行完成 1,579 个 train 交易日、1,459 个信号日的因果排名后，在持久化 rankings、构造
 targets、读取 next-open/复权因子或调用组合评估器之前 fail closed。Top500、Top1500、ADV≥1亿元
 的有限分数覆盖中位数分别为 91.60%、88.60%、88.67%，但每天最低仍有 406、1,206、530 只
 可评分股票，远超 Top25。逐日重构表明控制组 63,010 个缺分 member-day 中 59,623 个是已有
-`daily_basic` 行但 `pe_ttm` 为空；供应商文档明确规定亏损公司 PE 为空。完整绑定证据见
-[protocols/evidence/6.1/admission-failure.json](protocols/evidence/6.1/admission-failure.json)。下一小版本
-6.2 将保持候选、信号、组合和收益门不变，只把“原始记录完整性”与“按信号定义结构性不可评分”
-拆成独立准入合同；不会把百分比阈值事后调到刚好能通过。
+`daily_basic` 行但 `pe_ttm` 为空；供应商文档对亏损公司空 PE 的说明解释了这一主导模式，但不
+足以证明每个单日 null 的经济原因。完整绑定证据见
+[protocols/evidence/6.1/admission-failure.json](protocols/evidence/6.1/admission-failure.json)。6.2
+逐日分别统计有行情但缺 `daily_basic`、有停牌证明且无 snapshot、空 PE、空 PB、非法非空基本面值、
+有限输入的非有限算术、未分类不可评分项和预期/实际评分不一致；全部成员必须被有限可评分或已命名
+不可评分并集穷尽。95%/90% 只输出诊断，任何异常硬门或 Top25 完整性门不通过都不会读取 next-open
+定价或产生收益。ADV20 单位换算/聚合非有限会终止构建，非正 ADV20 在三个 arm 的共同 base 前剔除。
 
 ## 安装
 
@@ -185,37 +191,35 @@ canonical 数据默认位于 `runtime/data/top500/`：
 证据见 [protocols/6.0-analyst-revisions.json](protocols/6.0-analyst-revisions.json) 和
 [analyst-scout.json](protocols/evidence/6.0/analyst-scout.json)。
 
-## 运行 6.1 分阶段证据
+## 运行 6.2 分阶段证据
 
 正式 runner 只接受 clean、已提交且通过共享完整性校验的 `main`。先提交实现与 immutable
 preselection closure、推送并确认该提交自己的 GitHub CI 全绿；之后按阶段运行：
 
 ```powershell
 # 在 clean implementation commit 上 create-only 生成 closure，单独提交并推送
-python scripts/build-6.1-preselection-closure.py
+python scripts/build-6.2-preselection-closure.py
 
 # 只打开 train；仅 train 通过者会继续打开 validation，最终写固定 winner freeze
 python scripts/run-wide-universe-evidence.py --mode selection
 
-# 提交并推送 protocols/evidence/6.1/winner-freeze.json，CI 通过后；仅非 null winner 可运行
+# 提交并推送 protocols/evidence/6.2/winner-freeze.json，CI 通过后；仅非 null winner 可运行
 python scripts/run-wide-universe-evidence.py --mode audit `
-  --freeze protocols/evidence/6.1/winner-freeze.json `
+  --freeze protocols/evidence/6.2/winner-freeze.json `
   --audit-end 2026-08-21
 
 # audit evidence（或 null winner freeze）提交后生成固定 terminal result
 python scripts/run-wide-universe-evidence.py --mode finalize
-python -m factor_lab.cli strategy status --release 6.1
+python -m factor_lab.cli strategy status --release 6.2
 ```
 
 6.1 的第一次 `selection` 已按设计在数据准入阶段终止，因此没有生成 winner freeze，也不得手工
-伪装成 `selected_null_frozen`。若协议准入成功，`selection`、`audit`、`finalize` 的三个终端 JSON
-都是固定 tracked path 且 create-only；阶段之间
+伪装成 `selected_null_frozen`。6.2 的 `selection`、`audit`、`finalize` 终端 JSON 都是固定 tracked
+path 且 create-only；阶段之间
 必须先提交、推送并等待 CI，不得在同一未提交工作树中连续打开下一层。扩大机会集收益运行额外
-要求 [6.1 runtime capsule](protocols/6.1-runtime.json) 中的 Windows CPython、distribution 文件树、
-Conda artifact 和 MKL 身份完全匹配。当前有效 preselection root 是
-`protocols/6.1-release-closure-3.json`；前两份 closure 分别暴露 GitHub Windows toolcache 不提供
-CPython 3.10.16、默认 shallow checkout 看不到冻结祖先对象，两者都在任何收益打开前被后继 closure
-显式取代，文件原样保留。
+要求 [6.2 runtime capsule](protocols/6.2-runtime.json) 中的 Windows CPython、distribution 文件树、
+Conda artifact 和 MKL 身份完全匹配。6.2 closure 会逐字节绑定已发布的 6.1 tag、失败证据和最后
+一份未打开收益的 6.1 preselection root；历史文件与 Git 对象原样保留。
 
 ## 复现 6.0 evidence
 

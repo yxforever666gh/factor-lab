@@ -228,7 +228,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     strategy_status.add_argument(
         "--release",
-        choices=("6.0", "6.1"),
+        choices=("6.0", "6.2"),
         help="Verify one release closure; defaults to the latest tracked closure.",
     )
     strategy_targets = strategy_commands.add_parser(
@@ -695,7 +695,7 @@ def _strategy_status_6_0(root: Path, *, verify_data: bool) -> tuple[dict[str, An
     return output, 0 if not failures else 3
 
 
-def _strategy_status_6_1(root: Path, *, verify_data: bool) -> tuple[dict[str, Any], int]:
+def _strategy_status_6_2(root: Path, *, verify_data: bool) -> tuple[dict[str, Any], int]:
     closure_path = root / PRESELECTION_CLOSURE_PATH
     closure: dict[str, Any] = {}
     checks: list[dict[str, Any]] = []
@@ -707,9 +707,9 @@ def _strategy_status_6_1(root: Path, *, verify_data: bool) -> tuple[dict[str, An
         verified_closure = verify_preselection_closure(
             root,
             closure_path=closure_path,
-            protocol_path=root / "protocols" / "6.1-wide-universe.json",
+            protocol_path=root / "protocols" / "6.2-wide-universe.json",
             amendment_path=(
-                root / "protocols" / "6.1-wide-universe-amendment-1.json"
+                root / "protocols" / "6.2-wide-universe-amendment-1.json"
             ),
         )
         freeze_path = root / WINNER_FREEZE_PATH
@@ -906,7 +906,7 @@ def _strategy_status_6_1(root: Path, *, verify_data: bool) -> tuple[dict[str, An
             if not failures
             else "integrity_mismatch"
         ),
-        "version": "6.1",
+        "version": "6.2",
         "route": closure.get("route"),
         "protocol_id": protocol.get("protocol_id"),
         "historical_evidence_class": (
@@ -930,12 +930,12 @@ def _strategy_status(
     root: Path, *, verify_data: bool, release: str | None = None
 ) -> tuple[dict[str, Any], int]:
     selected = release or (
-        "6.1" if (root / PRESELECTION_CLOSURE_PATH).is_file() else "6.0"
+        "6.2" if (root / PRESELECTION_CLOSURE_PATH).is_file() else "6.0"
     )
     if selected == "6.0":
         return _strategy_status_6_0(root, verify_data=verify_data)
-    if selected == "6.1":
-        return _strategy_status_6_1(root, verify_data=verify_data)
+    if selected == "6.2":
+        return _strategy_status_6_2(root, verify_data=verify_data)
     raise ValueError(f"unsupported strategy release: {selected}")
 
 

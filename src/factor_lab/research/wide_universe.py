@@ -1,4 +1,4 @@
-"""Pre-registered 6.1 widened-opportunity-set target and evidence helpers.
+"""Pre-registered 6.2 widened-opportunity-set target and evidence helpers.
 
 The module deliberately contains no raw-data I/O.  It consumes an already
 audited Top-25 ranking trace, produces one independent low-churn state per
@@ -45,7 +45,7 @@ class PhaseBounds:
 
 
 def canonical_sha256(value: Any) -> str:
-    """Return the deterministic digest used by 6.1 manifests and evidence."""
+    """Return the deterministic digest used by 6.2 manifests and evidence."""
 
     payload = json.dumps(
         value,
@@ -174,7 +174,7 @@ def build_target_decisions(
         or int(cfg.sleeve_count) != 10
         or not math.isclose(float(cfg.position_weight), 0.1)
     ):
-        raise ValueError("6.1 target construction requires Top10/exit25/10 sleeves/0.1")
+        raise ValueError("6.2 target construction requires Top10/exit25/10 sleeves/0.1")
     official = _normalized_calendar(calendar)
     work = audit_rankings(
         rankings,
@@ -525,7 +525,7 @@ def candidate_gate(
     """Apply every phase gate per offset, then the cross-offset q20/count gate."""
 
     if len(candidate_phases) != 10 or len(control_phases) != 10:
-        raise ValueError("6.1 gates require exactly ten independent offsets")
+        raise ValueError("6.2 gates require exactly ten independent offsets")
     paired = [
         pair_phase(candidate, control)
         for candidate, control in zip(candidate_phases, control_phases)

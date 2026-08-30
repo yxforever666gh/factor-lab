@@ -1,4 +1,4 @@
-"""Streaming sparse execution-pricing construction for the 6.1 experiment."""
+"""Streaming sparse execution-pricing construction for the 6.2 experiment."""
 
 from __future__ import annotations
 

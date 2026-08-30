@@ -413,6 +413,16 @@ class UniverseRanking:
     name: str
     member_count: int
     finite_score_count: int
+    daily_basic_row_absent_with_daily_bar_count: int
+    daily_basic_row_absent_with_proven_no_daily_bar_count: int
+    pe_ttm_null_count: int
+    pb_null_count: int
+    invalid_non_null_fundamental_count: int
+    expected_finite_score_count: int
+    unexpected_score_mismatch_count: int
+    arithmetic_nonfinite_count: int
+    classified_unscoreable_count: int
+    unclassified_unscoreable_count: int
     top25: tuple[RankedSecurity, ...]
 
     @property
@@ -430,6 +440,28 @@ class UniverseRanking:
     def to_frame(self) -> pd.DataFrame:
         """Materialize only the retained ranking rows for downstream scripts."""
 
+        diagnostics = {
+            "daily_basic_row_absent_with_daily_bar_count": (
+                self.daily_basic_row_absent_with_daily_bar_count
+            ),
+            "daily_basic_row_absent_with_proven_no_daily_bar_count": (
+                self.daily_basic_row_absent_with_proven_no_daily_bar_count
+            ),
+            "pe_ttm_null_count": self.pe_ttm_null_count,
+            "pb_null_count": self.pb_null_count,
+            "invalid_non_null_fundamental_count": (
+                self.invalid_non_null_fundamental_count
+            ),
+            "expected_finite_score_count": self.expected_finite_score_count,
+            "unexpected_score_mismatch_count": (
+                self.unexpected_score_mismatch_count
+            ),
+            "arithmetic_nonfinite_count": self.arithmetic_nonfinite_count,
+            "classified_unscoreable_count": self.classified_unscoreable_count,
+            "unclassified_unscoreable_count": (
+                self.unclassified_unscoreable_count
+            ),
+        }
         return pd.DataFrame(
             [
                 {
@@ -438,6 +470,7 @@ class UniverseRanking:
                     "fixed_core_score": row.fixed_core_score,
                     "adv20_rmb": row.adv20_rmb,
                     "volatility_20": row.volatility_20,
+                    **diagnostics,
                 }
                 for row in self.top25
             ],
@@ -447,6 +480,7 @@ class UniverseRanking:
                 "fixed_core_score",
                 "adv20_rmb",
                 "volatility_20",
+                *diagnostics,
             ),
         )
 
@@ -666,8 +700,13 @@ class DailyOpportunitySetBuilder:
 
         result = work.loc[:, ["ticker", "amount", "pct_chg"]].copy()
         result["ticker"] = result["ticker"].astype(str)
-        result["amount_rmb"] = result["amount"].astype(float) * 1000.0
+        with np.errstate(over="ignore", invalid="ignore"):
+            result["amount_rmb"] = result["amount"].astype(float) * 1000.0
         result["return_1d"] = result["pct_chg"].astype(float) / 100.0
+        if not np.isfinite(result["amount_rmb"]).all():
+            raise OpportunitySetDataError(
+                "daily amount overflows after conversion from thousand RMB"
+            )
         suspension_zeros = missing - excluded_tickers
         if suspension_zeros:
             zero_rows = pd.DataFrame(
@@ -850,8 +889,17 @@ class DailyOpportunitySetBuilder:
             )
         result = work.loc[:, ["ticker", "pe_ttm", "pb"]].copy()
         result["ticker"] = result["ticker"].astype(str)
-        result["pe_ttm"] = pd.to_numeric(result["pe_ttm"], errors="coerce")
-        result["pb"] = pd.to_numeric(result["pb"], errors="coerce")
+        for column in ("pe_ttm", "pb"):
+            source_null = result[column].isna()
+            numeric = pd.to_numeric(result[column], errors="coerce")
+            numeric_values = numeric.to_numpy(dtype=float, na_value=np.nan)
+            result[f"{column}_source_null"] = source_null.to_numpy(dtype=bool)
+            result[f"{column}_invalid_non_null"] = (
+                ~source_null.to_numpy(dtype=bool)
+                & (~np.isfinite(numeric_values) | (numeric_values == 0.0))
+            )
+            result[column] = numeric_values
+        result["daily_basic_row_present"] = True
         return result
 
     @staticmethod
@@ -859,6 +907,40 @@ class DailyOpportunitySetBuilder:
         signal = members.copy().reset_index(drop=True)
         signal["eligible"] = True
         signal["universe_member"] = True
+        row_present = signal["daily_basic_row_present"].astype(bool)
+        actual_daily_bar = signal["actual_daily_bar"].astype(bool)
+        pe_source_null = signal["pe_ttm_source_null"].astype(bool)
+        pb_source_null = signal["pb_source_null"].astype(bool)
+        invalid_non_null = (
+            signal["pe_ttm_invalid_non_null"].astype(bool)
+            | signal["pb_invalid_non_null"].astype(bool)
+        )
+        with np.errstate(divide="ignore", invalid="ignore", over="ignore"):
+            expected_control = (1.0 / signal["pe_ttm"]) / signal["pb"]
+        expected_finite_score = (
+            row_present
+            & ~pe_source_null
+            & ~pb_source_null
+            & ~invalid_non_null
+            & np.isfinite(expected_control)
+        )
+        arithmetic_nonfinite = (
+            row_present
+            & ~pe_source_null
+            & ~pb_source_null
+            & ~invalid_non_null
+            & ~np.isfinite(expected_control)
+        )
+        classified_unscoreable = (
+            ~row_present
+            | pe_source_null
+            | pb_source_null
+            | invalid_non_null
+            | arithmetic_nonfinite
+        )
+        unclassified_unscoreable = ~(
+            expected_finite_score | classified_unscoreable
+        )
         scores = fixed_core_score(
             signal[
                 [
@@ -874,7 +956,8 @@ class DailyOpportunitySetBuilder:
             ]
         )
         signal["fixed_core_score"] = pd.to_numeric(scores, errors="coerce").to_numpy()
-        ranked = signal.loc[np.isfinite(signal["fixed_core_score"])].sort_values(
+        actual_finite_score = np.isfinite(signal["fixed_core_score"])
+        ranked = signal.loc[actual_finite_score].sort_values(
             ["fixed_core_score", "ticker"],
             ascending=[False, True],
             kind="mergesort",
@@ -892,7 +975,25 @@ class DailyOpportunitySetBuilder:
         return UniverseRanking(
             name=name,
             member_count=int(len(signal)),
-            finite_score_count=int(np.isfinite(signal["fixed_core_score"]).sum()),
+            finite_score_count=int(actual_finite_score.sum()),
+            daily_basic_row_absent_with_daily_bar_count=int(
+                ((~row_present) & actual_daily_bar).sum()
+            ),
+            daily_basic_row_absent_with_proven_no_daily_bar_count=int(
+                ((~row_present) & ~actual_daily_bar).sum()
+            ),
+            pe_ttm_null_count=int((row_present & pe_source_null).sum()),
+            pb_null_count=int((row_present & pb_source_null).sum()),
+            invalid_non_null_fundamental_count=int(
+                (row_present & invalid_non_null).sum()
+            ),
+            expected_finite_score_count=int(expected_finite_score.sum()),
+            unexpected_score_mismatch_count=int(
+                (actual_finite_score != expected_finite_score).sum()
+            ),
+            arithmetic_nonfinite_count=int(arithmetic_nonfinite.sum()),
+            classified_unscoreable_count=int(classified_unscoreable.sum()),
+            unclassified_unscoreable_count=int(unclassified_unscoreable.sum()),
             top25=rows,
         )
 
@@ -982,6 +1083,10 @@ class DailyOpportunitySetBuilder:
             metrics["adv20_rmb"] = (
                 metrics["amount_sum_rmb"] / float(ADV_WINDOW_SESSIONS)
             )
+            if not np.isfinite(metrics["adv20_rmb"]).all():
+                raise OpportunitySetDataError(
+                    "rolling ADV20 is non-finite after aggregation"
+                )
         else:  # pragma: no cover - a successfully consumed day is never empty here
             metrics = pd.DataFrame(
                 columns=("ticker", "observation_count", "adv20_rmb", "volatility_20")
@@ -1002,14 +1107,24 @@ class DailyOpportunitySetBuilder:
         base = base.loc[
             base["listing_sessions"].ge(MIN_LISTING_SESSIONS)
             & base["observation_count"].eq(ADV_WINDOW_SESSIONS)
+            & base["adv20_rmb"].gt(0.0)
             & ~base["ticker"].isin(st_tickers)
         ].copy()
+        base["actual_daily_bar"] = base["ticker"].isin(observed_tickers)
         base = base.merge(
             fundamentals,
             on="ticker",
             how="left",
             validate="one_to_one",
         )
+        for marker in (
+            "daily_basic_row_present",
+            "pe_ttm_source_null",
+            "pb_source_null",
+            "pe_ttm_invalid_non_null",
+            "pb_invalid_non_null",
+        ):
+            base[marker] = base[marker].eq(True)
         base["date"] = date
         with np.errstate(divide="ignore", invalid="ignore"):
             base["earnings_yield"] = 1.0 / base["pe_ttm"]

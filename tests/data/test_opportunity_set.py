@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+import json
 
 import numpy as np
 import pandas as pd
@@ -357,6 +358,44 @@ def test_missing_daily_bar_requires_suspension_and_contributes_zero() -> None:
     )
 
 
+def test_nonpositive_adv_is_excluded_from_every_candidate_arm() -> None:
+    calendar = _calendar()
+    tickers = ("LIVE", "ZERO_ADV")
+    builder = DailyOpportunitySetBuilder(
+        calendar, _securities(tickers, calendar)
+    )
+
+    result = None
+    for date in calendar[100:120]:
+        result = _push_normal_day(
+            builder,
+            date,
+            tickers,
+            amounts=(100_000.0, 0.0),
+        )
+
+    assert result is not None
+    assert result.base_eligible_count == 1
+    for universe in result.universes:
+        assert universe.tickers == ("LIVE",)
+
+
+def test_amount_conversion_overflow_fails_before_adv_construction() -> None:
+    calendar = _calendar()
+    ticker = "OVERFLOW"
+    builder = DailyOpportunitySetBuilder(
+        calendar, _securities([ticker], calendar)
+    )
+
+    with pytest.raises(OpportunitySetDataError, match="amount overflows"):
+        _push_normal_day(
+            builder,
+            calendar[100],
+            [ticker],
+            amounts=1e308,
+        )
+
+
 def test_same_day_suspend_and_resume_are_valid_missing_bar_proof() -> None:
     calendar = _calendar()
     ticker = "000001.SZ"
@@ -660,6 +699,159 @@ def test_builder_materializes_only_the_stage_candidate_subset() -> None:
         UNIVERSE_TOP500,
         UNIVERSE_TOP1500,
     )
+
+
+def test_universe_ranking_classifies_source_fundamental_missingness() -> None:
+    calendar = _calendar()
+    tickers = (
+        "GOOD",
+        "PE_SOURCE_NULL",
+        "SUSPENDED_NO_SNAPSHOT",
+        "BAR_NO_SNAPSHOT",
+        "PB_NULL",
+        "INVALID_TEXT",
+        "INVALID_ZERO",
+    )
+    builder = DailyOpportunitySetBuilder(
+        calendar, _securities(tickers, calendar)
+    )
+    for date in calendar[100:119]:
+        _push_normal_day(builder, date, tickers, amounts=200_000.0)
+
+    signal_date = calendar[119]
+    actual_bar_tickers = tuple(
+        ticker for ticker in tickers if ticker != "SUSPENDED_NO_SNAPSHOT"
+    )
+    daily_basic = pd.DataFrame(
+        {
+            "trade_date": [signal_date] * 5,
+            "ts_code": [
+                "GOOD",
+                "PE_SOURCE_NULL",
+                "PB_NULL",
+                "INVALID_TEXT",
+                "INVALID_ZERO",
+            ],
+            "pe_ttm": [10.0, np.nan, 10.0, "not-a-number", 10.0],
+            "pb": [1.0, 1.0, np.nan, 1.0, 0.0],
+        }
+    )
+    result = builder.push_day(
+        signal_date,
+        daily=_daily(signal_date, actual_bar_tickers, amounts=200_000.0),
+        daily_basic=daily_basic,
+        stock_st=_known_empty_st(),
+        suspensions=pd.DataFrame(
+            {
+                "date": [signal_date],
+                "ticker": ["SUSPENDED_NO_SNAPSHOT"],
+                "is_suspended": [True],
+            }
+        ),
+    )
+
+    diagnostic_fields = (
+        "daily_basic_row_absent_with_daily_bar_count",
+        "daily_basic_row_absent_with_proven_no_daily_bar_count",
+        "pe_ttm_null_count",
+        "pb_null_count",
+        "invalid_non_null_fundamental_count",
+        "expected_finite_score_count",
+        "unexpected_score_mismatch_count",
+        "arithmetic_nonfinite_count",
+        "classified_unscoreable_count",
+        "unclassified_unscoreable_count",
+    )
+    expected = {
+        "daily_basic_row_absent_with_daily_bar_count": 1,
+        "daily_basic_row_absent_with_proven_no_daily_bar_count": 1,
+        "pe_ttm_null_count": 1,
+        "pb_null_count": 1,
+        "invalid_non_null_fundamental_count": 2,
+        "expected_finite_score_count": 1,
+        "unexpected_score_mismatch_count": 0,
+        "arithmetic_nonfinite_count": 0,
+        "classified_unscoreable_count": 6,
+        "unclassified_unscoreable_count": 0,
+    }
+    assert result.base_eligible_count == len(tickers)
+    for universe in result.universes:
+        assert universe.member_count == len(tickers)
+        assert universe.finite_score_count == 1
+        assert universe.tickers == ("GOOD",)
+        assert {
+            field: getattr(universe, field) for field in diagnostic_fields
+        } == expected
+        frame = universe.to_frame()
+        assert set(diagnostic_fields).issubset(frame.columns)
+        assert frame.loc[0, list(diagnostic_fields)].to_dict() == expected
+        json.dumps(
+            frame.loc[:, diagnostic_fields].to_dict(orient="records"),
+            allow_nan=False,
+        )
+
+
+def test_invalid_infinity_is_counted_and_score_mismatch_is_observable() -> None:
+    calendar = _calendar()
+    ticker = "INFINITE_PE"
+    builder = DailyOpportunitySetBuilder(
+        calendar, _securities([ticker], calendar)
+    )
+    for date in calendar[100:119]:
+        _push_normal_day(builder, date, [ticker], amounts=200_000.0)
+
+    result = _push_normal_day(
+        builder,
+        calendar[119],
+        [ticker],
+        amounts=200_000.0,
+        pe_ttm=np.inf,
+    )
+
+    for universe in result.universes:
+        # Preserve the frozen score path: it currently produces a finite score
+        # for infinite PE, while the independent input classifier rejects it.
+        assert universe.finite_score_count == 1
+        assert universe.invalid_non_null_fundamental_count == 1
+        assert universe.expected_finite_score_count == 0
+        assert universe.unexpected_score_mismatch_count == 1
+        assert universe.arithmetic_nonfinite_count == 0
+        assert universe.classified_unscoreable_count == 1
+        assert universe.unclassified_unscoreable_count == 0
+        assert universe.tickers == (ticker,)
+
+
+def test_finite_nonzero_inputs_with_nonfinite_arithmetic_are_classified() -> None:
+    calendar = _calendar()
+    ticker = "ARITHMETIC_OVERFLOW"
+    builder = DailyOpportunitySetBuilder(
+        calendar, _securities([ticker], calendar)
+    )
+    for date in calendar[100:119]:
+        _push_normal_day(builder, date, [ticker], amounts=200_000.0)
+
+    signal_date = calendar[119]
+    result = builder.push_day(
+        signal_date,
+        daily=_daily(signal_date, [ticker], amounts=200_000.0),
+        daily_basic=pd.DataFrame(
+            {
+                "trade_date": [signal_date],
+                "ts_code": [ticker],
+                "pe_ttm": [1e-308],
+                "pb": [1e-308],
+            }
+        ),
+        stock_st=_known_empty_st(),
+        suspensions=None,
+    )
+
+    for universe in result.universes:
+        assert universe.invalid_non_null_fundamental_count == 0
+        assert universe.arithmetic_nonfinite_count == 1
+        assert universe.expected_finite_score_count == 0
+        assert universe.classified_unscoreable_count == 1
+        assert universe.unclassified_unscoreable_count == 0
 
 
 def test_universe_boundaries_ties_threshold_and_independent_fixed_core_calls(

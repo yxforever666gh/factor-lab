@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Create the immutable 6.1 preselection closure from one clean commit."""
+"""Create the immutable 6.2 preselection closure from one clean commit."""
 
 from __future__ import annotations
 
@@ -29,17 +29,17 @@ from factor_lab.release_integrity import (  # noqa: E402
     SUPERSEDED_PRESELECTION_CLOSURE_PATH,
     canonical_payload_sha256,
     file_sha256,
+    verify_frozen_runtime_contract,
+    verify_wide_protocol_contract,
 )
 
 
 CLOSURE_PATH = PROJECT_ROOT / PRESELECTION_CLOSURE_PATH
 SUPERSEDED_CLOSURE_PATH = PROJECT_ROOT / SUPERSEDED_PRESELECTION_CLOSURE_PATH
-PROTOCOL_PATH = PROJECT_ROOT / "protocols" / "6.1-wide-universe.json"
+PROTOCOL_PATH = PROJECT_ROOT / "protocols" / "6.2-wide-universe.json"
 AMENDMENT_PATH = (
-    PROJECT_ROOT / "protocols" / "6.1-wide-universe-amendment-1.json"
+    PROJECT_ROOT / "protocols" / "6.2-wide-universe-amendment-1.json"
 )
-HISTORICAL_PROTOCOL_ID = "factor-lab/6.1/widened-opportunity-set-v1"
-HISTORICAL_RUNTIME_ID = "factor-lab/6.1/windows-cpython-3.10.16"
 
 
 def _git(*args: str) -> bytes:
@@ -132,15 +132,12 @@ def _superseded_closure_binding() -> dict[str, Any]:
 
 
 def main() -> int:
-    if PROTOCOL_ID != HISTORICAL_PROTOCOL_ID or RUNTIME_ID != HISTORICAL_RUNTIME_ID:
-        raise RuntimeError(
-            "the 6.1 closure builder is historical; run it only from the annotated "
-            "6.1 tag"
-        )
     if CLOSURE_PATH.exists():
-        raise FileExistsError("6.1 preselection closure is create-only")
+        raise FileExistsError("6.2 preselection closure is create-only")
     if _git("status", "--porcelain").strip():
         raise RuntimeError("preselection closure requires a clean implementation commit")
+    verify_wide_protocol_contract(_read_json(PROTOCOL_PATH))
+    verify_frozen_runtime_contract(_read_json(PROJECT_ROOT / RUNTIME_PATH))
     implementation_commit = _git("rev-parse", "HEAD").decode("ascii").strip()
     implementation_tree = _git(
         "rev-parse", f"{implementation_commit}^{{tree}}"
@@ -186,7 +183,7 @@ def main() -> int:
     closure: dict[str, Any] = {
         "schema_version": 1,
         "kind": "factor_lab_release_closure",
-        "release": "6.1",
+        "release": "6.2",
         "closure_role": "immutable_preselection_root",
         "direction_change": False,
         "status": "implementation_frozen_before_selection",

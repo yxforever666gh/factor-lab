@@ -117,16 +117,39 @@ def test_explicit_root_does_not_require_implicit_discovery(
 
 def test_strategy_status_verifies_tracked_implementation_and_evidence() -> None:
     root = Path(__file__).resolve().parents[2]
+    if not (root / cli.PRESELECTION_CLOSURE_PATH).is_file():
+        pytest.skip("6.2 closure is created from the clean implementation commit")
 
     result, exit_code = cli._strategy_status(root, verify_data=False)
 
+    result_path = root / cli.RELEASE_RESULT_PATH
+    freeze_path = root / cli.WINNER_FREEZE_PATH
+    if result_path.is_file():
+        terminal = json.loads(result_path.read_text(encoding="utf-8"))
+        expected_status = terminal["status"]
+        expected_selected = terminal["selected_candidate_id"]
+        expected_audit = terminal["audit_status"]
+    elif freeze_path.is_file():
+        freeze = json.loads(freeze_path.read_text(encoding="utf-8"))
+        expected_selected = freeze["selected_candidate_id"]
+        expected_status = (
+            "selection_frozen_pending_historical_audit"
+            if expected_selected is not None
+            else "selection_frozen_no_candidate_pending_finalize"
+        )
+        expected_audit = "not_opened"
+    else:
+        expected_status = "implementation_frozen_before_selection"
+        expected_selected = None
+        expected_audit = "not_opened"
+
     assert exit_code == 0
-    assert result["status"] == "implementation_frozen_before_selection"
-    assert result["version"] == "6.1"
+    assert result["status"] == expected_status
+    assert result["version"] == "6.2"
     assert result["route"] == "widened_opportunity_set"
     assert result["profit_claim_allowed"] is False
-    assert result["selected_candidate_id"] is None
-    assert result["audit_status"] == "not_opened"
+    assert result["selected_candidate_id"] == expected_selected
+    assert result["audit_status"] == expected_audit
     assert all(
         check["status"] in {"match", "not_verified"}
         for check in result["checks"]
@@ -145,6 +168,8 @@ def test_strategy_status_detects_implementation_tamper(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root = Path(__file__).resolve().parents[2]
+    if not (root / cli.PRESELECTION_CLOSURE_PATH).is_file():
+        pytest.skip("6.2 closure is created from the clean implementation commit")
     actual_sha256 = cli._file_sha256
 
     def tampered_sha256(path: Path) -> str:
@@ -169,10 +194,12 @@ def test_strategy_status_detects_protocol_file_tamper(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root = Path(__file__).resolve().parents[2]
+    if not (root / cli.PRESELECTION_CLOSURE_PATH).is_file():
+        pytest.skip("6.2 closure is created from the clean implementation commit")
     actual_sha256 = cli._file_sha256
 
     def tampered_sha256(path: Path) -> str:
-        if path.name == "6.1-wide-universe.json":
+        if path.name == "6.2-wide-universe.json":
             return "0" * 64
         return actual_sha256(path)
 
@@ -242,4 +269,3 @@ def test_strategy_targets_rebuilds_absolute_sleeve_state(tmp_path: Path) -> None
     assert result["decision"]["sleeve"] == 1
     assert result["decision"]["status"] == "ok"
     assert len(result["decision"]["selected_tickers"]) == 10
-
