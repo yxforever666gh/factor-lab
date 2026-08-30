@@ -72,6 +72,12 @@
   资产、信号、预算、成本、数据与 gates 全部不变，使用新 runtime/stage/closure，且不得复用 7.0
   derived evaluation 或 status。
 
+### Release artifacts
+
+- 从候选提交 `c96b7e2987db06deac8218b588795ebd29c1ed5a` 的 `git archive` 构建
+  `factor_research_mvp-7.0.0-py3-none-any.whl`；SHA-256：
+  `72b343c41732c0128458272c310312b041b5bb33d46da70f96128cfc1494212f`。
+
 ## [6.3] - 2026-08-30
 
 ### Added
