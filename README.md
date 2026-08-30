@@ -152,7 +152,17 @@ Validation/audit 均未打开，完整披露见
 [preclosure-train.json](protocols/evidence/7.0/preclosure-train.json)。因此下面的 selection 只能重放并
 封存同一 null，不能再被描述为独立预注册检验，也不得修改 -1.5pp 门槛来“救活”候选。
 
-正式运行顺序：
+正式 7.0 selection 已在关闭根和提交自身的四平台 CI 全绿后执行。Train source、binding、15 个
+evaluation Parquet、metrics 与 gate 均成功落盘，完整结果哈希与披露一致，gate 仍为 `false`；但
+完整性 verifier 在规范化前逐行比较 targets，把协议资产顺序与模拟器的 `signal_date, code` 排序
+误判为值差异，因此在 winner freeze 前终止。独立 exact replay 证明三种角色按唯一键排序后 targets
+及全部 15 个 artifact 逐值相同。这是软件执行失败，不是可发布的正式 null：validation、winner、
+audit 和 terminal result 均不存在，7.0 的策略结论不成立。Tracked、自哈希的失败收据见
+[execution-failure.json](protocols/evidence/7.0/execution-failure.json)；发布 tag 与 7.1 closure 将再逐字节
+绑定它。修复只能进入保持全部研究语义
+不变的新 7.1 runtime 与 closure，不能覆盖或续跑现有 7.0 stage。
+
+7.0 原计划流程如下；实际只执行到 selection，audit/finalize 从未执行，且不得继续：
 
 ```powershell
 # 实现提交推送且 CI 全绿后，先封存已披露 train 越界与完整 replay 根

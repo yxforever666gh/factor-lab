@@ -49,6 +49,13 @@
   独立预注册 selection。create-only disclosure payload 为
   `6bd2909ddc97ec84d3535d15e8f13330a5752831aead82d8fb50afdd16ac6775`。7.0 只允许
   对同一失败 train 做完整性 replay 并冻结 null，不允许打开 validation 或借接近门槛调参。
+- 关闭根提交并通过四平台 CI 后，正式 7.0 selection 在提交 `76a4735` 重新落盘 train source、binding、
+  15 个 evaluation Parquet 与 gate；完整 metrics/gate 哈希均与上述披露一致，train 仍为 `false`。
+  但 verifier 在正常化前逐行比较 targets，把协议资产顺序与 `simulate_targets` 的
+  `signal_date, code` 规范顺序误判为数据差异，因此在 winner freeze 前终止。三种角色各 `348×8`
+  行，按唯一键稳定排序后 targets 逐值 exact，全部 15 个重放 artifact 也逐值 exact；这被封存为
+  `selection_inconclusive_software_failure`（execution-failure payload
+  `04099ab6c2bd03099c9d045120578344bfe9ba3c963dfb82a0cba9f8a49f5df9`），不能冒充正式 null 终态。
 
 ### Known limitations
 
@@ -58,6 +65,10 @@
 - 固定 ETF 代表是在 2026 年已知其仍存续后选择，存在幸存与研究者选择偏差；2015–2026 历史也
   已被市场参与者和本项目人类观察。即使 7.0 全部历史门通过，仍只属于预注册历史诊断，首个可称
   新鲜的未来交易日不早于 2026-08-31，且不得承诺稳定盈利。
+- 7.0 已冻结 runner 没有合法的 execution-failure 恢复入口；validation、winner、audit 与 terminal
+  result 均未创建，7.0 不允许策略结论。唯一纠正路径是 7.1 小版本：仅规范 targets 比较顺序，
+  资产、信号、预算、成本、数据与 gates 全部不变，使用新 runtime/stage/closure，且不得复用 7.0
+  derived evaluation 或 status。
 
 ## [6.3] - 2026-08-30
 

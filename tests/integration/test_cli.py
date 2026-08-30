@@ -129,8 +129,10 @@ def test_strategy_status_verifies_tracked_implementation_and_evidence(
     root = Path(__file__).resolve().parents[2]
     # This test validates the checked-out evidence chain.  A workflow cannot
     # require its own still-running GitHub job to have completed successfully;
-    # the remote-CI contract is covered by dedicated tests below.
+    # the remote-CI and worktree-state contracts are covered by dedicated tests
+    # below.
     monkeypatch.setattr(cli, "_v7_require_head_ci", lambda _root: "a" * 40)
+    monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
     result, exit_code = cli._strategy_status(root, verify_data=False)
     closure_exists = (root / cli.V7_CLOSURE_PATH).is_file()
     if closure_exists:
