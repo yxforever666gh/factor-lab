@@ -1,0 +1,184 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_multi_asset_winner_freeze",
+  "release": "7.1",
+  "status": "selected_null_frozen_train_failed",
+  "protocol_payload_sha256": "6f2fcd2a67d52bfae19bedcaecf495faa986195f6840da48a3a67a666589aaf0",
+  "asset_selection_payload_sha256": "b00536d618c7fe46e3cbe8d258d2b2032ef4e0c16d40fb9c74ff016c34525e0b",
+  "implementation_closure_payload_sha256": "8cd80c7c770477cf29c2fa04348e9ed16f637f7d5ee61f31232d6f1f81ff2e55",
+  "selection_execution_commit": "c454c59d390c1f5771d846b0fe753a6527f9609d",
+  "run_nonce": "192e83fb12e242adb6453371a526dc6d",
+  "candidate_registry": [
+    "causal_multi_horizon_trend_budget"
+  ],
+  "selected_candidate_id": null,
+  "train": {
+    "source_manifest_payload_sha256": "58c0477745dd0afd6e8fad686af5379db00cf2736b25da71fd3a314217052130",
+    "stage_binding_payload_sha256": "5adcb0206bb73f1214e11d185f5f15261dd566ac980ac7aa68d7709e21342e55",
+    "evaluation_payload_sha256": "6c23508a1e0e265c00be96af87aef472420e50cc0ace5eb0f8fafdc6d11ffc3c",
+    "evaluation_file_sha256": "82fc9fb28865bed72beb926f6d06aa2f9163a21f47007a9197ffa758c7567154",
+    "metrics": {
+      "observations": 1184,
+      "start_date": "2015-03-02",
+      "performance_start": "2015-03-02",
+      "baseline_date": "2015-02-27",
+      "end_date": "2019-12-31",
+      "start_nav": 1000000.0,
+      "end_nav": 1263672.48896,
+      "total_return": 0.26367248895999995,
+      "cagr": 0.05107008054509099,
+      "sharpe": 0.7239048856382325,
+      "max_drawdown": -0.15378658367470155,
+      "turnover": 14.273445823204119,
+      "annualized_turnover": 3.037929347506282,
+      "complete_year_returns": {
+        "2016": -0.0028460978093692857,
+        "2017": 0.11398486420411857,
+        "2018": 0.008389404712557669,
+        "2019": 0.09736346408745544
+      },
+      "complete_year_count": 4,
+      "positive_complete_year_count": 3,
+      "positive_complete_year_ratio": 0.75,
+      "requested_notional_fill_ratio": 0.9967450854478762,
+      "capacity_limited_requested_notional_ratio": 0.0,
+      "max_abs_accounting_error": 3.637978807091713e-10,
+      "nav_reconciliation_error": 3.637978807091713e-10,
+      "stress_cagr": 0.048572883247247844,
+      "stress_cost_cagr": 0.048572883247247844,
+      "relative_cagr": -0.018017860725626278,
+      "relative_sharpe": -0.0024884801066963336,
+      "relative_max_drawdown": 0.016459164341828925,
+      "stress": {
+        "observations": 1184,
+        "start_date": "2015-03-02",
+        "performance_start": "2015-03-02",
+        "baseline_date": "2015-02-27",
+        "end_date": "2019-12-31",
+        "start_nav": 1000000.0,
+        "end_nav": 1249628.2339199998,
+        "total_return": 0.24962823391999978,
+        "cagr": 0.048572883247247844,
+        "sharpe": 0.6910436149711741,
+        "max_drawdown": -0.15462617021000402,
+        "turnover": 14.197717256631524,
+        "annualized_turnover": 3.021811443134412,
+        "complete_year_returns": {
+          "2016": -0.0048595824613966165,
+          "2017": 0.1113720759902197,
+          "2018": 0.006765695971256536,
+          "2019": 0.09396937630118085
+        },
+        "complete_year_count": 4,
+        "positive_complete_year_count": 3,
+        "positive_complete_year_ratio": 0.75,
+        "requested_notional_fill_ratio": 0.9953680389684361,
+        "capacity_limited_requested_notional_ratio": 0.0,
+        "max_abs_accounting_error": 3.4924596548080444e-10,
+        "nav_reconciliation_error": 3.4924596548080444e-10
+      },
+      "control": {
+        "observations": 1184,
+        "start_date": "2015-03-02",
+        "performance_start": "2015-03-02",
+        "baseline_date": "2015-02-27",
+        "end_date": "2019-12-31",
+        "start_nav": 1000000.0,
+        "end_nav": 1368727.7504,
+        "total_return": 0.36872775039999994,
+        "cagr": 0.06908794127071727,
+        "sharpe": 0.7263933657449289,
+        "max_drawdown": -0.17024574801653047,
+        "turnover": 2.5367975477307048,
+        "annualized_turnover": 0.5399265050913324,
+        "complete_year_returns": {
+          "2016": 0.03890062570751174,
+          "2017": 0.11907144431643268,
+          "2018": -0.05822631943084988,
+          "2019": 0.21793512622772404
+        },
+        "complete_year_count": 4,
+        "positive_complete_year_count": 3,
+        "positive_complete_year_ratio": 0.75,
+        "requested_notional_fill_ratio": 0.9954253240120514,
+        "capacity_limited_requested_notional_ratio": 0.0,
+        "max_abs_accounting_error": 2.8558133635669947e-10,
+        "nav_reconciliation_error": 2.8558133635669947e-10
+      }
+    },
+    "gate": {
+      "passed": false,
+      "checks": {
+        "net_cagr_strictly_positive": true,
+        "net_sharpe_at_least": true,
+        "daily_max_drawdown_at_least": true,
+        "positive_complete_year_count_at_least": true,
+        "stress_cost_cagr_strictly_positive": true,
+        "relative_cagr_at_least": false,
+        "relative_sharpe_at_least": false,
+        "relative_max_drawdown_at_least": true,
+        "requested_notional_fill_ratio_at_least": true,
+        "capacity_limited_requested_notional_ratio_at_most": true,
+        "nav_reconciliation_error_at_most": true
+      },
+      "values": {
+        "net_cagr_strictly_positive": {
+          "metric": 0.05107008054509099,
+          "threshold": 0.0
+        },
+        "net_sharpe_at_least": {
+          "metric": 0.7239048856382325,
+          "threshold": 0.6
+        },
+        "daily_max_drawdown_at_least": {
+          "metric": -0.15378658367470155,
+          "threshold": -0.2
+        },
+        "positive_complete_year_count_at_least": {
+          "metric": 3.0,
+          "threshold": 3.0
+        },
+        "stress_cost_cagr_strictly_positive": {
+          "metric": 0.048572883247247844,
+          "threshold": 0.0
+        },
+        "relative_cagr_at_least": {
+          "metric": -0.018017860725626278,
+          "threshold": -0.015
+        },
+        "relative_sharpe_at_least": {
+          "metric": -0.0024884801066963336,
+          "threshold": 0.0
+        },
+        "relative_max_drawdown_at_least": {
+          "metric": 0.016459164341828925,
+          "threshold": 0.0
+        },
+        "requested_notional_fill_ratio_at_least": {
+          "metric": 0.9967450854478762,
+          "threshold": 0.99
+        },
+        "capacity_limited_requested_notional_ratio_at_most": {
+          "metric": 0.0,
+          "threshold": 0.01
+        },
+        "nav_reconciliation_error_at_most": {
+          "metric": 3.637978807091713e-10,
+          "threshold": 1e-08
+        }
+      }
+    }
+  },
+  "validation": null,
+  "validation_market_outcomes_opened": false,
+  "audit_market_outcomes_opened": false,
+  "runner_up_fallback": false,
+  "claim_contract": {
+    "historical_evidence_class": "preclosure_exposed_historical_diagnostic",
+    "profit_claim_allowed": false,
+    "stable_future_profit_claim_allowed": false,
+    "fresh_future_evidence_required": true,
+    "first_fresh_unseen_session_not_before": "2026-08-31"
+  },
+  "payload_sha256": "451b7de8bbcba9372731b7dd7236e16a46467bdf5499eeff5e17e8e946ffabfd"
+}

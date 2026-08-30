@@ -28,6 +28,17 @@
   hardlink、symlink 和额外顶层对象全部拒绝；若执行留下 runtime 却未生成 freeze，必须归档为新的
   execution failure，不得删除后在同一 7.1 重试。
 
+### Research results
+
+- 7.1 正式 corrective selection 从不存在的 `multi-asset-7.1` 根开始，全新生成 train source、binding
+  和 15 个 evaluation Parquet；source/binding/evaluation payload 分别为 `58c0477745dd0afd6e8fad686af5379db00cf2736b25da71fd3a314217052130`、
+  `5adcb0206bb73f1214e11d185f5f15261dd566ac980ac7aa68d7709e21342e55`、
+  `6c23508a1e0e265c00be96af87aef472420e50cc0ace5eb0f8fafdc6d11ffc3c`。全部 15 个 artifact、
+  33,249 行、metrics 与 gate 均通过 causal exact replay，五个结果哈希与 7.0 disclosure 完全一致。
+- Train gate 仍为 `false`，只失败既有 relative CAGR / Sharpe 两门；create-only null freeze payload 为
+  `451b7de8bbcba9372731b7dd7236e16a46467bdf5499eeff5e17e8e946ffabfd`，状态
+  `selected_null_frozen_train_failed`。Validation、audit 与 runner-up 均未打开，不允许盈利声明。
+
 ## [7.0] - 2026-08-31
 
 ### Added
