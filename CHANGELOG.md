@@ -10,6 +10,8 @@
 
 ## [Unreleased]
 
+## [7.0] - 2026-08-31
+
 ### Added
 
 - 冻结 7.0 大方向协议 `fixed_multi_asset_causal_trend_budget`：固定 A 股、港股、美股、黄金、
