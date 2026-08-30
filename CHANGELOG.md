@@ -43,6 +43,12 @@
   `selection_falsified_no_candidate`，payload
   `869b6f1fe028378e1071a416c7f8d045650a41c17c01bd9a1d48f62b35c3a4b9`，不允许盈利声明。
 
+### Release artifacts
+
+- 从候选提交 `83783c99820577b4f58083501ff7f8a7d701bd87` 的 `git archive` 构建
+  `factor_research_mvp-7.1.0-py3-none-any.whl`；SHA-256：
+  `c372e6f39380542c3124f0b4eb5120a942673530d0204eaaabae0796f6b5899e`。
+
 ## [7.0] - 2026-08-31
 
 ### Added
