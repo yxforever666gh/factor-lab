@@ -57,6 +57,12 @@
   median/q05 仍只作诊断。因此极端大面积供应商字段置空可能把有效横截面缩到很小但仍准入，最终
   解释必须同时报告实际 minimum/median/q05，不能只报告收益门结果。
 
+### Release artifacts
+
+- 从候选提交 `dd4c1d6c02ca270dbd114c362ddbf0775603bb0b` 的 `git archive` 构建
+  `factor_research_mvp-6.2.0-py3-none-any.whl`；SHA-256：
+  `6d787b306d14b8a37f82db251334f8941aae96b21a1e4e3bca1ef5bc1c73b427`。
+
 ## [6.1] - 2026-08-30
 
 ### Added
