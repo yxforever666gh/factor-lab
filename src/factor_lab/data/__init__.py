@@ -42,14 +42,29 @@ from .pit_lineage import (
     conservative_default_contract,
     conservative_default_field_lineage,
 )
+from .opportunity_set import (
+    CarriedSuspensionEvidence,
+    DailyOpportunitySet,
+    DailyOpportunitySetBuilder,
+    OpportunitySetDataError,
+    SecurityAliasInterval,
+)
+from .security_master import (
+    audit_security_master,
+    load_security_master,
+    sync_security_master,
+)
 from .sources import (
     TushareClient,
+    create_daily_stock_st_cutoff_checkpoint,
     sync_data,
+    sync_daily_stock_st,
     sync_enrichment,
     sync_exact_reference,
     turnover_amount_to_rmb,
 )
 from .suspensions import audit_suspensions_snapshot, sync_suspensions
+from .wide_pricing import CALENDAR_SENTINEL, SparsePricingBuilder, SparsePricingDay
 
 
 @dataclass
@@ -155,19 +170,28 @@ class SampleDataGenerator:
 
 
 __all__ = [
+    "CALENDAR_SENTINEL",
+    "CarriedSuspensionEvidence",
     "DEFAULT_WALK_FORWARD_REQUIRED_FIELDS",
+    "DailyOpportunitySet",
+    "DailyOpportunitySetBuilder",
     "PIT_CONTRACT_SCHEMA_VERSION",
     "PIT_STATUS_UNVERIFIED",
     "PIT_STATUS_VERIFIED",
+    "OpportunitySetDataError",
     "PITFieldLineage",
     "PITLineageContract",
     "RuntimeLayout",
     "SampleDataGenerator",
     "SampleDataset",
+    "SecurityAliasInterval",
+    "SparsePricingBuilder",
+    "SparsePricingDay",
     "TushareClient",
     "apply_feature_store_migration",
     "audit_parquet",
     "audit_pit_lineage",
+    "audit_security_master",
     "audit_suspensions_snapshot",
     "audit_top500_store",
     "build_data",
@@ -175,15 +199,19 @@ __all__ = [
     "canonical_trading_dates",
     "conservative_default_contract",
     "conservative_default_field_lineage",
+    "create_daily_stock_st_cutoff_checkpoint",
     "enrich_top500_store",
     "load_data_config",
+    "load_security_master",
     "normalize_legacy_amount_units",
     "parquet_status",
     "plan_feature_store_migration",
     "prepare_financial_pit",
     "sync_data",
+    "sync_daily_stock_st",
     "sync_enrichment",
     "sync_exact_reference",
+    "sync_security_master",
     "sync_suspensions",
     "turnover_amount_to_rmb",
 ]

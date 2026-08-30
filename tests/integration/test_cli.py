@@ -121,55 +121,34 @@ def test_strategy_status_verifies_tracked_implementation_and_evidence() -> None:
     result, exit_code = cli._strategy_status(root, verify_data=False)
 
     assert exit_code == 0
-    assert result["status"] == "ready"
-    assert result["route"] == "fixed_core_low_churn"
+    assert result["status"] == "implementation_frozen_before_selection"
+    assert result["version"] == "6.1"
+    assert result["route"] == "widened_opportunity_set"
     assert result["profit_claim_allowed"] is False
-    assert result["pit_event_search"] == {
-        "selected_candidate_id": None,
-        "candidate_count": 6,
-        "candidate_pass_count": 0,
-    }
-    assert result["orthogonal_canonical_search"] == {
-        "selected_candidate_id": None,
-        "candidate_count": 129,
-        "train_q20_positive_count": 0,
-        "validation_q20_positive_count": 0,
-    }
-    assert result["next_data_lane"] == {
-        "protocol_id": "6.0-analyst-revisions",
-        "status": "ingestion_implemented_research_spec_permission_and_vintage_blocked",
-        "source_endpoint": "report_rc",
-        "returns_or_labels_opened": False,
-        "alpha_claim": False,
-        "selected_route": "report_rc_sell_side_estimate_revisions",
-        "current_permission": "trial_only",
-    }
+    assert result["selected_candidate_id"] is None
+    assert result["audit_status"] == "not_opened"
     assert all(
         check["status"] in {"match", "not_verified"}
         for check in result["checks"]
     )
     categories = {check["category"] for check in result["checks"]}
-    assert "evidence:pit_event_protocol" in categories
-    assert "evidence:pit_event_result" in categories
+    assert "release_payload" in categories
+    assert "protocol_payload:wide_universe" in categories
+    assert "protocol_payload:wide_universe_amendment" in categories
     assert "implementation:long_only" in categories
     assert "implementation:execution_kernel" in categories
-    assert "implementation:analyst_data" in categories
-    assert "implementation:analyst_sync" in categories
-    assert "evidence:analyst_protocol" in categories
-    assert "evidence_payload:analyst_protocol" in categories
-    assert "evidence:analyst_scout" in categories
-    assert "evidence_payload:analyst_scout" in categories
-    assert "protocol_payload:low_churn" in categories
+    assert "implementation:wide_runner" in categories
+    assert "implementation:opportunity_set" in categories
 
 
-def test_strategy_status_detects_event_evidence_tamper(
+def test_strategy_status_detects_implementation_tamper(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root = Path(__file__).resolve().parents[2]
     actual_sha256 = cli._file_sha256
 
     def tampered_sha256(path: Path) -> str:
-        if path.name == "pit-event-negative.json":
+        if path.name == "wide_pricing.py":
             return "0" * 64
         return actual_sha256(path)
 
@@ -180,27 +159,46 @@ def test_strategy_status_detects_event_evidence_tamper(
     assert exit_code == 3
     assert result["status"] == "integrity_mismatch"
     assert any(
-        check["category"] == "evidence:pit_event_result"
+        check["category"] == "implementation:wide_pricing"
         and check["status"] == "mismatch"
         for check in result["checks"]
     )
 
 
-def test_strategy_status_detects_protocol_payload_tamper(tmp_path: Path) -> None:
+def test_strategy_status_detects_protocol_file_tamper(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     root = Path(__file__).resolve().parents[2]
-    protocol = json.loads(
-        (root / "protocols" / "6.0-low-churn.json").read_text(encoding="utf-8")
-    )
-    protocol["objective"] = "tampered without refreshing payload hash"
-    target = tmp_path / "protocols" / "6.0-low-churn.json"
-    target.parent.mkdir(parents=True)
-    target.write_text(json.dumps(protocol), encoding="utf-8")
+    actual_sha256 = cli._file_sha256
 
-    result, exit_code = cli._strategy_status(tmp_path, verify_data=False)
+    def tampered_sha256(path: Path) -> str:
+        if path.name == "6.1-wide-universe.json":
+            return "0" * 64
+        return actual_sha256(path)
+
+    monkeypatch.setattr(cli, "_file_sha256", tampered_sha256)
+
+    result, exit_code = cli._strategy_status(root, verify_data=False)
 
     assert exit_code == 3
     assert any(
-        check["category"] == "protocol_payload:low_churn"
+        check["category"] == "protocol_file:wide_universe"
+        and check["status"] == "mismatch"
+        for check in result["checks"]
+    )
+
+
+def test_strategy_status_can_explicitly_audit_legacy_6_0() -> None:
+    root = Path(__file__).resolve().parents[2]
+
+    result, exit_code = cli._strategy_status(
+        root, verify_data=False, release="6.0"
+    )
+
+    assert exit_code == 3
+    assert result["version"] == "6.0"
+    assert any(
+        check["category"] == "implementation:cli"
         and check["status"] == "mismatch"
         for check in result["checks"]
     )

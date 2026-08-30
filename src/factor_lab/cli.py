@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 from pathlib import Path
+import subprocess
 from typing import Any, Mapping, Sequence
 
 from factor_lab.data import (
@@ -16,11 +17,20 @@ from factor_lab.data import (
     load_data_config,
     plan_feature_store_migration,
     sync_data,
+    sync_daily_stock_st,
     sync_enrichment,
     sync_exact_reference,
     sync_suspensions,
 )
 from factor_lab.data.suspensions import SuspensionProviderWaitingError
+from factor_lab.release_integrity import (
+    FROZEN_IMPLEMENTATION_PATHS,
+    RELEASE_RESULT_PATH,
+    WINNER_FREEZE_PATH,
+    verify_preselection_closure,
+    verify_release_result,
+    verify_winner_freeze,
+)
 from factor_lab.research.runner import latest_run, run_research
 from factor_lab.strategy import generate_sleeve_target_schedule
 
@@ -119,6 +129,22 @@ def build_parser() -> argparse.ArgumentParser:
     sync.add_argument("--dataset", action="append", dest="datasets")
     sync.add_argument("--max-partitions", type=int)
 
+    stock_st = data_commands.add_parser(
+        "stock-st",
+        help="Resume official-session daily Tushare stock_st partitions.",
+    )
+    stock_st.add_argument("--from", dest="start_date", required=True)
+    stock_st.add_argument("--to", dest="end_date", required=True)
+    stock_st.add_argument(
+        "--resume", action=argparse.BooleanOptionalAction, default=True
+    )
+    stock_st.add_argument("--max-partitions", type=int)
+    stock_st.add_argument(
+        "--checkpoint",
+        type=Path,
+        help="Use a separate stock_st checkpoint (for post-freeze audit isolation).",
+    )
+
     reference = data_commands.add_parser(
         "reference",
         help="Capture one stable exact-as-of raw bak_basic reference partition.",
@@ -186,7 +212,7 @@ def build_parser() -> argparse.ArgumentParser:
     research_commands.add_parser("status", help="Show the latest completed run.")
 
     strategy = commands.add_parser(
-        "strategy", help="Inspect or generate the 6.0 low-churn fixed-core route."
+        "strategy", help="Inspect versioned strategy evidence or generate legacy targets."
     )
     strategy_commands = strategy.add_subparsers(
         dest="strategy_command", required=True
@@ -198,6 +224,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--verify-data",
         action="store_true",
         help="Also hash the canonical Parquet inputs (slower).",
+    )
+    strategy_status.add_argument(
+        "--release",
+        choices=("6.0", "6.1"),
+        help="Verify one release closure; defaults to the latest tracked closure.",
     )
     strategy_targets = strategy_commands.add_parser(
         "targets",
@@ -259,6 +290,30 @@ def _data_command(arguments: argparse.Namespace) -> int:
         if status == "blocked":
             return 3
         return 1
+    if arguments.data_command == "stock-st":
+        try:
+            result = sync_daily_stock_st(
+                arguments.start_date,
+                arguments.end_date,
+                config_path=config_path,
+                layout=layout,
+                resume=bool(arguments.resume),
+                max_partitions=arguments.max_partitions,
+                checkpoint_path=arguments.checkpoint,
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            result = {
+                "schema_version": 1,
+                "status": "blocked",
+                "reason": "daily_stock_st_evidence_invalid",
+                "error": str(exc),
+            }
+        _json(result)
+        return {
+            "complete": 0,
+            "partial": 0,
+            "blocked": 3,
+        }.get(str(result.get("status")), 1)
     if arguments.data_command == "reference":
         try:
             result = sync_exact_reference(
@@ -436,7 +491,7 @@ def _report_command(arguments: argparse.Namespace) -> int:
     return 0
 
 
-def _strategy_status(root: Path, *, verify_data: bool) -> tuple[dict[str, Any], int]:
+def _strategy_status_6_0(root: Path, *, verify_data: bool) -> tuple[dict[str, Any], int]:
     protocol_path = root / "protocols" / "6.0-low-churn.json"
     protocol = _read_json(protocol_path)
     checks: list[dict[str, Any]] = []
@@ -639,6 +694,250 @@ def _strategy_status(root: Path, *, verify_data: bool) -> tuple[dict[str, Any], 
     return output, 0 if not failures else 3
 
 
+def _strategy_status_6_1(root: Path, *, verify_data: bool) -> tuple[dict[str, Any], int]:
+    closure_path = root / "protocols" / "6.1-release.json"
+    closure: dict[str, Any] = {}
+    checks: list[dict[str, Any]] = []
+    integrity_error: str | None = None
+    release_result: dict[str, Any] | None = None
+    winner_freeze: dict[str, Any] | None = None
+    try:
+        closure = _read_json(closure_path)
+        verified_closure = verify_preselection_closure(
+            root,
+            closure_path=closure_path,
+            protocol_path=root / "protocols" / "6.1-wide-universe.json",
+            amendment_path=(
+                root / "protocols" / "6.1-wide-universe-amendment-1.json"
+            ),
+        )
+        freeze_path = root / WINNER_FREEZE_PATH
+        if freeze_path.is_file():
+            winner_freeze = verify_winner_freeze(
+                root,
+                preselection_closure=verified_closure,
+                freeze_path=freeze_path,
+            )
+        result_path = root / RELEASE_RESULT_PATH
+        if result_path.is_file():
+            release_result = verify_release_result(
+                root,
+                preselection_closure=verified_closure,
+                result_path=result_path,
+            )
+    except (OSError, RuntimeError, TypeError, ValueError, subprocess.SubprocessError) as exc:
+        integrity_error = str(exc)
+
+    def as_mapping(value: Any) -> Mapping[str, Any]:
+        return value if isinstance(value, Mapping) else {}
+
+    def check_file(
+        relative_path: str,
+        expected_sha256: str,
+        *,
+        category: str,
+        enabled: bool = True,
+    ) -> None:
+        path = root / relative_path
+        item: dict[str, Any] = {
+            "category": category,
+            "path": relative_path.replace("\\", "/"),
+            "expected_sha256": expected_sha256,
+        }
+        if not enabled:
+            item["status"] = "not_verified"
+        elif not path.is_file():
+            item["status"] = "missing"
+        else:
+            actual = _file_sha256(path)
+            item.update(
+                {
+                    "status": "match" if actual == expected_sha256 else "mismatch",
+                    "actual_sha256": actual,
+                }
+            )
+        checks.append(item)
+
+    def check_json_payload(
+        relative_path: str,
+        expected_sha256: str,
+        *,
+        category: str,
+    ) -> None:
+        path = root / relative_path
+        item: dict[str, Any] = {
+            "category": category,
+            "path": relative_path.replace("\\", "/"),
+            "expected_sha256": expected_sha256,
+        }
+        if not path.is_file():
+            item["status"] = "missing"
+        else:
+            try:
+                value = json.loads(path.read_text(encoding="utf-8"))
+                if not isinstance(value, dict):
+                    raise ValueError("root is not an object")
+                actual = _canonical_payload_sha256(value)
+                item.update(
+                    {
+                        "status": "match" if actual == expected_sha256 else "mismatch",
+                        "actual_sha256": actual,
+                    }
+                )
+            except (OSError, TypeError, ValueError, json.JSONDecodeError) as exc:
+                item.update({"status": "invalid_json", "error": str(exc)})
+        checks.append(item)
+
+    contract_valid = bool(
+        integrity_error is None
+        and set(as_mapping(closure.get("implementation")))
+        == set(FROZEN_IMPLEMENTATION_PATHS)
+    )
+    checks.append(
+        {
+            "category": "release_contract",
+            "path": "protocols/6.1-release.json",
+            "status": "match" if contract_valid else "mismatch",
+            **({"error": integrity_error} if integrity_error else {}),
+        }
+    )
+    if (root / RELEASE_RESULT_PATH).is_file():
+        result_binding_valid = release_result is not None and integrity_error is None
+        checks.append(
+            {
+                "category": "terminal_result_contract",
+                "path": RELEASE_RESULT_PATH,
+                "status": "match" if result_binding_valid else "mismatch",
+                **({"error": integrity_error} if integrity_error else {}),
+            }
+        )
+    if (root / WINNER_FREEZE_PATH).is_file():
+        freeze_binding_valid = winner_freeze is not None and integrity_error is None
+        checks.append(
+            {
+                "category": "winner_freeze_contract",
+                "path": WINNER_FREEZE_PATH,
+                "status": "match" if freeze_binding_valid else "mismatch",
+                **({"error": integrity_error} if integrity_error else {}),
+            }
+        )
+    check_json_payload(
+        "protocols/6.1-release.json",
+        str(closure.get("payload_sha256") or ""),
+        category="release_payload",
+    )
+    protocol = dict(as_mapping(closure.get("protocol")))
+    protocol_path = str(protocol.get("path") or "")
+    check_file(
+        protocol_path,
+        str(protocol.get("file_sha256") or ""),
+        category="protocol_file:wide_universe",
+    )
+    check_json_payload(
+        protocol_path,
+        str(protocol.get("payload_sha256") or ""),
+        category="protocol_payload:wide_universe",
+    )
+    amendment = dict(as_mapping(closure.get("protocol_amendment")))
+    amendment_path = str(amendment.get("path") or "")
+    check_file(
+        amendment_path,
+        str(amendment.get("file_sha256") or ""),
+        category="protocol_file:wide_universe_amendment",
+    )
+    check_json_payload(
+        amendment_path,
+        str(amendment.get("payload_sha256") or ""),
+        category="protocol_payload:wide_universe_amendment",
+    )
+    for name, binding in sorted(as_mapping(closure.get("implementation")).items()):
+        if isinstance(binding, Mapping):
+            check_file(
+                str(binding.get("path") or ""),
+                str(binding.get("sha256") or ""),
+                category=f"implementation:{name}",
+            )
+    for name, binding in sorted(as_mapping(closure.get("evidence")).items()):
+        if not isinstance(binding, Mapping):
+            continue
+        relative_path = str(binding.get("path") or "")
+        check_file(
+            relative_path,
+            str(binding.get("file_sha256") or ""),
+            category=f"evidence:{name}",
+        )
+        payload_sha256 = str(binding.get("payload_sha256") or "")
+        if payload_sha256:
+            check_json_payload(
+                relative_path,
+                payload_sha256,
+                category=f"evidence_payload:{name}",
+            )
+    for name, binding in sorted(as_mapping(closure.get("canonical_data")).items()):
+        if isinstance(binding, Mapping):
+            check_file(
+                str(binding.get("path") or ""),
+                str(binding.get("sha256") or ""),
+                category=f"canonical_data:{name}",
+                enabled=verify_data,
+            )
+    failures = [
+        item
+        for item in checks
+        if item.get("status") not in {"match", "not_verified"}
+    ]
+    effective = release_result or closure
+    if release_result is None and winner_freeze is not None:
+        winner = winner_freeze.get("selected_candidate_id")
+        effective = {
+            **closure,
+            "status": (
+                "selection_frozen_pending_historical_audit"
+                if winner is not None
+                else "selection_frozen_no_candidate_pending_finalize"
+            ),
+            "selected_candidate_id": winner,
+            "audit_status": "not_opened",
+        }
+    output = {
+        "status": (
+            str(effective.get("status") or "unknown")
+            if not failures
+            else "integrity_mismatch"
+        ),
+        "version": "6.1",
+        "route": closure.get("route"),
+        "protocol_id": protocol.get("protocol_id"),
+        "historical_evidence_class": (
+            effective.get("claim_contract") or {}
+        ).get("historical_evidence_class"),
+        "profit_claim_allowed": (
+            effective.get("claim_contract") or {}
+        ).get("profit_claim_allowed"),
+        "selected_candidate_id": effective.get("selected_candidate_id"),
+        "audit_status": effective.get("audit_status"),
+        "terminal_result_payload_sha256": (
+            release_result.get("payload_sha256") if release_result else None
+        ),
+        "canonical_data_hashes_verified": bool(verify_data),
+        "checks": checks,
+    }
+    return output, 0 if not failures else 3
+
+
+def _strategy_status(
+    root: Path, *, verify_data: bool, release: str | None = None
+) -> tuple[dict[str, Any], int]:
+    selected = release or (
+        "6.1" if (root / "protocols" / "6.1-release.json").is_file() else "6.0"
+    )
+    if selected == "6.0":
+        return _strategy_status_6_0(root, verify_data=verify_data)
+    if selected == "6.1":
+        return _strategy_status_6_1(root, verify_data=verify_data)
+    raise ValueError(f"unsupported strategy release: {selected}")
+
+
 def _strategy_targets(root: Path, signal_date: str) -> dict[str, Any]:
     import pandas as pd
 
@@ -703,7 +1002,9 @@ def _strategy_command(arguments: argparse.Namespace) -> int:
     root = arguments.root.resolve()
     if arguments.strategy_command == "status":
         result, exit_code = _strategy_status(
-            root, verify_data=bool(arguments.verify_data)
+            root,
+            verify_data=bool(arguments.verify_data),
+            release=arguments.release,
         )
         _json(result)
         return exit_code

@@ -59,6 +59,16 @@ ENRICHMENT_DATASET_FIELDS = {
     "stock_st": "ts_code,name,trade_date,type,type_name",
 }
 EXACT_REFERENCE_CONTRACT_ID = "factor-lab/exact-bak-basic-raw/1"
+DAILY_STOCK_ST_CONTRACT_ID = "factor-lab/tushare-daily-stock-st/1"
+DAILY_STOCK_ST_CUTOFF_VIEW_CONTRACT_ID = (
+    "factor-lab/tushare-daily-stock-st-cutoff-view/1"
+)
+DAILY_STOCK_ST_CHECKPOINT_FILE = "stock-st-checkpoint.json"
+DAILY_STOCK_ST_ENDPOINT_ROW_LIMIT = 1_000
+
+_WINDOWS_ATOMIC_REPLACE_RETRY_WINERRORS = frozenset({5, 32, 33})
+_WINDOWS_ATOMIC_REPLACE_MAX_ATTEMPTS = 6
+_WINDOWS_ATOMIC_REPLACE_INITIAL_DELAY_SECONDS = 0.01
 
 AMOUNT_TO_RMB_MULTIPLIERS = {
     "tushare_daily": 1000.0,
@@ -310,7 +320,7 @@ def _write_json_atomic(path: Path, payload: Mapping[str, Any]) -> None:
         )
         with temporary.open("r+b") as handle:
             os.fsync(handle.fileno())
-        temporary.replace(path)
+        _replace_atomic_with_windows_retry(temporary, path)
         _fsync_directory(path.parent)
     finally:
         temporary.unlink(missing_ok=True)
@@ -325,10 +335,37 @@ def _write_parquet_atomic(path: Path, frame: pd.DataFrame) -> None:
         frame.to_parquet(temporary, index=False)
         with temporary.open("r+b") as handle:
             os.fsync(handle.fileno())
-        temporary.replace(path)
+        _replace_atomic_with_windows_retry(temporary, path)
         _fsync_directory(path.parent)
     finally:
         temporary.unlink(missing_ok=True)
+
+
+def _replace_atomic_with_windows_retry(source: Path, destination: Path) -> None:
+    """Bound retries for transient Windows scanner/indexer replace locks.
+
+    ``Path.replace`` is still the only publication primitive.  Windows can
+    briefly report sharing/access violations (WinError 5/32/33) while an
+    antivirus or indexer has the destination open.  Only those native error
+    codes are retried; all other failures, and a lock that survives the small
+    retry budget, remain fatal.
+    """
+
+    for attempt in range(_WINDOWS_ATOMIC_REPLACE_MAX_ATTEMPTS):
+        try:
+            source.replace(destination)
+            return
+        except OSError as exc:
+            retryable = getattr(exc, "winerror", None) in (
+                _WINDOWS_ATOMIC_REPLACE_RETRY_WINERRORS
+            )
+            if not retryable or attempt + 1 >= _WINDOWS_ATOMIC_REPLACE_MAX_ATTEMPTS:
+                raise
+            delay = min(
+                _WINDOWS_ATOMIC_REPLACE_INITIAL_DELAY_SECONDS * (2**attempt),
+                0.08,
+            )
+            time.sleep(delay)
 
 
 @contextmanager
@@ -1462,6 +1499,1060 @@ def sync_enrichment(
             str(path) for path in {checkpoint_paths[name] for name in selected_datasets}
         ),
         "raw_root": str(resolved_layout.raw_root),
+    }
+
+
+def _daily_stock_st_checkpoint_path(
+    config: Mapping[str, Any], layout: RuntimeLayout
+) -> Path:
+    settings = dict(config.get("daily_stock_st") or {})
+    configured = Path(
+        str(settings.get("checkpoint_file") or DAILY_STOCK_ST_CHECKPOINT_FILE)
+    ).expanduser()
+    checkpoint_path = (
+        configured.resolve()
+        if configured.is_absolute()
+        else (layout.raw_root / configured).resolve()
+    )
+    if checkpoint_path == layout.checkpoint_path.expanduser().resolve():
+        raise ValueError("daily stock_st requires an independent checkpoint")
+    return checkpoint_path
+
+
+def _same_resolved_file(left: Path, right: Path) -> bool:
+    """Return whether two paths resolve to one physical file when knowable."""
+
+    resolved_left = left.expanduser().resolve()
+    resolved_right = right.expanduser().resolve()
+    if resolved_left == resolved_right:
+        return True
+    if not resolved_left.exists() or not resolved_right.exists():
+        return False
+    try:
+        return os.path.samefile(resolved_left, resolved_right)
+    except OSError as exc:
+        raise ValueError(
+            "unable to prove that stock_st paths are physically distinct"
+        ) from exc
+
+
+def _daily_stock_st_partition_path(
+    partition_root: Path, trade_date: str
+) -> Path:
+    return (
+        partition_root
+        / f"trade_date={_date(trade_date)}"
+        / "part-000.parquet"
+    )
+
+
+def _daily_stock_st_partition_root_manifest(
+    partition_root: Path,
+    partitions: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Bind a checkpoint to canonical paths and immutable artifact hashes."""
+
+    resolved_root = partition_root.expanduser().resolve()
+    artifacts: dict[str, Any] = {}
+    for key, raw_entry in sorted(partitions.items()):
+        if not str(key).startswith("stock_st/trade_date="):
+            raise ValueError(
+                "daily stock_st checkpoint must not share non-stock_st partitions"
+            )
+        trade_date = _date(str(key).split("=", 1)[1])
+        canonical_key = f"stock_st/trade_date={trade_date}"
+        if key != canonical_key or not isinstance(raw_entry, Mapping):
+            raise ValueError("stock_st checkpoint contains a malformed partition entry")
+        expected_path = _daily_stock_st_partition_path(
+            resolved_root, trade_date
+        ).resolve()
+        recorded_path = Path(
+            str(raw_entry.get("path") or "")
+        ).expanduser().resolve()
+        if recorded_path != expected_path:
+            raise ValueError(
+                f"stock_st checkpoint partition escapes its partition root: {key}"
+            )
+        size_bytes = int(raw_entry.get("size_bytes") or -1)
+        artifact_sha256 = str(raw_entry.get("sha256") or "")
+        if size_bytes <= 0 or not re.fullmatch(r"[0-9a-f]{64}", artifact_sha256):
+            raise ValueError(
+                f"stock_st checkpoint partition identity is incomplete: {key}"
+            )
+        artifacts[str(key)] = {
+            "relative_path": expected_path.relative_to(resolved_root).as_posix(),
+            "size_bytes": size_bytes,
+            "sha256": artifact_sha256,
+        }
+    return {
+        "partition_root": str(resolved_root),
+        "artifacts": artifacts,
+    }
+
+
+def _daily_stock_st_partition_root_payload_sha256(
+    partition_root: Path,
+    partitions: Mapping[str, Any],
+) -> str:
+    return hashlib.sha256(
+        _canonical_json_bytes(
+            _daily_stock_st_partition_root_manifest(
+                partition_root, partitions
+            )
+        )
+    ).hexdigest()
+
+
+def _bind_daily_stock_st_checkpoint_partition_root(
+    checkpoint_path: Path,
+    partition_root: Path,
+) -> dict[str, Any]:
+    """Create or verify the immutable physical-root binding on a source checkpoint."""
+
+    resolved_root = partition_root.expanduser().resolve()
+    with _checkpoint_lock(checkpoint_path):
+        checkpoint = _read_checkpoint(checkpoint_path)
+        recorded_root = checkpoint.get("partition_root")
+        if recorded_root is not None and not _same_resolved_file(
+            Path(str(recorded_root)), resolved_root
+        ):
+            raise ValueError(
+                "daily stock_st checkpoint is already bound to a different "
+                "partition_root"
+            )
+        partitions = dict(checkpoint.get("partitions") or {})
+        root_payload_sha256 = _daily_stock_st_partition_root_payload_sha256(
+            resolved_root, partitions
+        )
+        recorded_payload_sha256 = checkpoint.get(
+            "partition_root_payload_sha256"
+        )
+        if (
+            recorded_payload_sha256 is not None
+            and recorded_payload_sha256 != root_payload_sha256
+        ):
+            raise ValueError(
+                "daily stock_st checkpoint partition-root payload hash mismatch"
+            )
+        bound = {
+            **checkpoint,
+            "schema_version": int(checkpoint.get("schema_version") or 1),
+            "partition_root": str(resolved_root),
+            "partition_root_payload_sha256": root_payload_sha256,
+            "partitions": partitions,
+            "calendars": dict(checkpoint.get("calendars") or {}),
+        }
+        if bound != checkpoint:
+            _write_json_atomic(checkpoint_path, bound)
+        return bound
+
+
+def _validate_create_only_partition(
+    source_path: Path,
+    destination_path: Path,
+    *,
+    expected_size: int,
+    expected_sha256: str,
+) -> None:
+    if _same_resolved_file(source_path, destination_path):
+        raise ValueError(
+            "stock_st source and cutoff-view partitions must be physically distinct"
+        )
+    if destination_path.is_symlink() or not destination_path.is_file():
+        raise ValueError(
+            f"stock_st cutoff-view partition is not a regular file: {destination_path}"
+        )
+    if destination_path.stat().st_nlink != 1:
+        raise ValueError(
+            "stock_st cutoff-view partition must not be hard linked: "
+            f"{destination_path}"
+        )
+    if (
+        destination_path.stat().st_size != expected_size
+        or sha256_file(destination_path) != expected_sha256
+    ):
+        raise ValueError(
+            "refusing to overwrite a different stock_st cutoff-view partition: "
+            f"{destination_path}"
+        )
+
+
+def _copy_partition_create_only(
+    source_path: Path,
+    destination_path: Path,
+    *,
+    expected_size: int,
+    expected_sha256: str,
+) -> bool:
+    """Copy one immutable artifact without any replace/overwrite window."""
+
+    if _same_resolved_file(source_path, destination_path):
+        raise ValueError(
+            "stock_st source and cutoff-view partitions must be physically distinct"
+        )
+    destination_path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor: int | None = None
+    created = False
+    try:
+        try:
+            descriptor = os.open(
+                destination_path,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+            )
+            created = True
+        except FileExistsError:
+            _validate_create_only_partition(
+                source_path,
+                destination_path,
+                expected_size=expected_size,
+                expected_sha256=expected_sha256,
+            )
+            return False
+
+        with source_path.open("rb") as source_handle, os.fdopen(
+            descriptor, "wb"
+        ) as destination_handle:
+            descriptor = None
+            while chunk := source_handle.read(1024 * 1024):
+                destination_handle.write(chunk)
+            destination_handle.flush()
+            os.fsync(destination_handle.fileno())
+        _fsync_directory(destination_path.parent)
+        _validate_create_only_partition(
+            source_path,
+            destination_path,
+            expected_size=expected_size,
+            expected_sha256=expected_sha256,
+        )
+        return True
+    except BaseException:
+        if created:
+            destination_path.unlink(missing_ok=True)
+        raise
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+
+
+def _write_json_create_only_verified(
+    path: Path,
+    payload: Mapping[str, Any],
+) -> bool:
+    """Publish JSON with O_EXCL, accepting only an identical existing value."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    encoded = json.dumps(
+        payload, ensure_ascii=False, indent=2, sort_keys=True
+    ).encode("utf-8")
+    descriptor: int | None = None
+    created = False
+    try:
+        try:
+            descriptor = os.open(
+                path,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+            )
+            created = True
+        except FileExistsError:
+            if (
+                path.is_symlink()
+                or not path.is_file()
+                or path.stat().st_nlink != 1
+            ):
+                raise ValueError(
+                    "stock_st cutoff-view checkpoint must be a distinct "
+                    "regular file"
+                )
+            try:
+                existing = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError) as exc:
+                raise ValueError(
+                    "existing stock_st cutoff view is unreadable"
+                ) from exc
+            if existing != payload:
+                raise ValueError(
+                    "refusing to overwrite a different stock_st cutoff view"
+                )
+            return False
+
+        with os.fdopen(descriptor, "wb") as handle:
+            descriptor = None
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+        _fsync_directory(path.parent)
+        return True
+    except BaseException:
+        if created:
+            path.unlink(missing_ok=True)
+        raise
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+
+
+def _daily_stock_st_calendar_session_sha256(row: Mapping[str, Any]) -> str:
+    return hashlib.sha256(_canonical_json_bytes(dict(row))).hexdigest()
+
+
+def _daily_stock_st_entry_is_valid(
+    entry: Any,
+    path: Path,
+    *,
+    trade_date: str,
+    calendar_session_sha256: str,
+) -> bool:
+    if not isinstance(entry, Mapping):
+        return False
+    try:
+        row_count = int(entry.get("row_count") or 0)
+        artifact_valid = _checkpoint_entry_is_valid(
+            entry, path, verify_hash=True
+        )
+    except (OSError, TypeError, ValueError):
+        return False
+    return bool(
+        artifact_valid
+        and entry.get("contract_id") == DAILY_STOCK_ST_CONTRACT_ID
+        and entry.get("dataset") == "stock_st"
+        and entry.get("trade_date") == trade_date
+        and 0 < row_count < DAILY_STOCK_ST_ENDPOINT_ROW_LIMIT
+        and entry.get("endpoint_row_limit") == DAILY_STOCK_ST_ENDPOINT_ROW_LIMIT
+        and entry.get("official_calendar_session_sha256")
+        == calendar_session_sha256
+    )
+
+
+def _audit_daily_stock_st_partition(
+    frame: pd.DataFrame, trade_date: str
+) -> pd.DataFrame:
+    date_text = _date(trade_date)
+    if bool(frame.columns.duplicated().any()):
+        raise ValueError(f"stock_st/{date_text} contains duplicate columns")
+    audit_enrichment_partition(frame, "stock_st", date_text)
+    if len(frame) >= DAILY_STOCK_ST_ENDPOINT_ROW_LIMIT:
+        raise ValueError(
+            f"stock_st/{date_text} reached the ambiguous "
+            f"{DAILY_STOCK_ST_ENDPOINT_ROW_LIMIT}-row endpoint limit"
+        )
+    fields = ENRICHMENT_DATASET_FIELDS["stock_st"].split(",")
+    work = frame.loc[:, fields].copy()
+    work["ts_code"] = work["ts_code"].astype("string").str.strip()
+    if bool(work.duplicated("ts_code").any()):
+        raise ValueError(
+            f"stock_st/{date_text} contains duplicate normalized tickers"
+        )
+    return work.sort_values(
+        ["ts_code", "trade_date"], kind="mergesort"
+    ).reset_index(drop=True)
+
+
+def sync_daily_stock_st(
+    start_date: str,
+    end_date: str,
+    *,
+    config_path: str | Path = DEFAULT_CONFIG_PATH,
+    layout: RuntimeLayout | None = None,
+    client: MarketDataClient | Any | None = None,
+    resume: bool = True,
+    max_partitions: int | None = None,
+    checkpoint_path: str | Path | None = None,
+    partition_root: str | Path | None = None,
+) -> dict[str, Any]:
+    """Synchronise one fail-closed ``stock_st`` snapshot per SSE session.
+
+    The official SSE calendar is fetched for the exact requested interval and
+    persisted beside this source's independent checkpoint.  An explicitly
+    isolated checkpoint and ``partition_root`` are bound together so neither
+    can silently reuse the shared raw artifacts.  A provider-empty response
+    cannot distinguish "no ST stocks" from an unavailable endpoint, and a
+    response at Tushare's 1,000-row cap may be truncated, so neither is
+    publishable evidence.
+    """
+
+    start = _date(start_date)
+    end = _date(end_date)
+    if end < start:
+        raise ValueError("end_date must be on or after start_date")
+    config = load_data_config(config_path)
+    resolved_layout = layout or RuntimeLayout.from_config(
+        config, config_path=config_path
+    )
+    resolved_layout.ensure_directories()
+    sync_config = dict(config.get("sync") or {})
+    stock_st_config = dict(config.get("daily_stock_st") or {})
+    shared_checkpoint_path = _daily_stock_st_checkpoint_path(
+        config, resolved_layout
+    )
+    shared_partition_root = (
+        resolved_layout.raw_root / "stock_st"
+    ).expanduser().resolve()
+    explicit_partition_root = partition_root is not None
+    if explicit_partition_root:
+        resolved_partition_root = Path(
+            partition_root
+        ).expanduser().resolve()
+        if _same_resolved_file(
+            resolved_partition_root, shared_partition_root
+        ) or resolved_partition_root == resolved_layout.raw_root.resolve():
+            raise ValueError(
+                "explicit daily stock_st partition_root must be independent "
+                "of the shared raw root"
+            )
+        if checkpoint_path is None:
+            checkpoint_path = (
+                resolved_partition_root.parent
+                / f"{resolved_partition_root.name.replace('_', '-')}-checkpoint.json"
+            ).resolve()
+        else:
+            checkpoint_path = Path(checkpoint_path).expanduser().resolve()
+    else:
+        checkpoint_path = (
+            Path(checkpoint_path).expanduser().resolve()
+            if checkpoint_path is not None
+            else shared_checkpoint_path
+        )
+        if _same_resolved_file(checkpoint_path, shared_checkpoint_path):
+            resolved_partition_root = shared_partition_root
+        else:
+            resolved_partition_root = (
+                checkpoint_path.parent
+                / f"{checkpoint_path.stem}.partitions"
+            ).resolve()
+    if checkpoint_path == resolved_layout.checkpoint_path.expanduser().resolve():
+        raise ValueError("daily stock_st requires an independent checkpoint")
+    if _same_resolved_file(checkpoint_path, resolved_partition_root):
+        raise ValueError(
+            "daily stock_st checkpoint and partition_root must be distinct"
+        )
+    using_shared_checkpoint = _same_resolved_file(
+        checkpoint_path, shared_checkpoint_path
+    )
+    using_shared_partition_root = _same_resolved_file(
+        resolved_partition_root, shared_partition_root
+    )
+    if using_shared_checkpoint != using_shared_partition_root:
+        raise ValueError(
+            "daily stock_st checkpoint and partition_root must be isolated together"
+        )
+    resolved_client = client or _configured_tushare_client(
+        sync_config, resolved_layout
+    )
+    exchange = "SSE"
+
+    baseline_checkpoint = _bind_daily_stock_st_checkpoint_partition_root(
+        checkpoint_path,
+        resolved_partition_root,
+    )
+    baseline_calendars = dict(baseline_checkpoint.get("calendars") or {})
+    calendar = _call(
+        resolved_client,
+        "trade_cal",
+        exchange=exchange,
+        start_date=_compact(start),
+        end_date=_compact(end),
+        fields="exchange,cal_date,is_open,pretrade_date",
+    )
+    if calendar.empty:
+        raise ValueError("stock_st official SSE trade_cal returned no rows")
+    normalised_calendar, calendar_records, _calendar_content_sha256 = (
+        _normalise_trade_calendar(
+            calendar,
+            exchange=exchange,
+            start_date=start,
+            end_date=end,
+        )
+    )
+    checkpoint, calendar_entry = _persist_trade_calendar(
+        calendar,
+        raw_root=resolved_partition_root,
+        checkpoint_path=checkpoint_path,
+        baseline_calendars=baseline_calendars,
+        resume=resume,
+        exchange=exchange,
+        start_date=start,
+        end_date=end,
+    )
+    open_dates = normalised_calendar.loc[
+        normalised_calendar["is_open"], "cal_date"
+    ].dt.strftime("%Y-%m-%d").tolist()
+    records_by_date = {
+        str(record["cal_date"]): record for record in calendar_records
+    }
+    calendar_session_sha256 = {
+        trade_date: _daily_stock_st_calendar_session_sha256(
+            records_by_date[trade_date]
+        )
+        for trade_date in open_dates
+    }
+
+    entries = dict(checkpoint.get("partitions") or {})
+    baseline_partitions = dict(entries)
+    pending: list[tuple[str, Path, str, str]] = []
+    completed_before = 0
+    for trade_date in open_dates:
+        path = _daily_stock_st_partition_path(
+            resolved_partition_root, trade_date
+        )
+        key = f"stock_st/trade_date={trade_date}"
+        session_sha256 = calendar_session_sha256[trade_date]
+        if resume and _daily_stock_st_entry_is_valid(
+            entries.get(key),
+            path,
+            trade_date=trade_date,
+            calendar_session_sha256=session_sha256,
+        ):
+            completed_before += 1
+        else:
+            pending.append(
+                (
+                    trade_date,
+                    path,
+                    key,
+                    _checkpoint_value_sha256(baseline_partitions.get(key)),
+                )
+            )
+
+    requested_count = (
+        len(pending)
+        if max_partitions is None
+        else min(len(pending), max(0, int(max_partitions)))
+    )
+    rate = max(
+        0.0,
+        float(
+            stock_st_config.get(
+                "request_rate_per_minute",
+                sync_config.get("request_rate_per_minute") or 0.0,
+            )
+        ),
+    )
+    delay = 60.0 / rate if rate else 0.0
+    completed_now = 0
+    completed_concurrently = 0
+    for request_index, (trade_date, path, key, baseline_sha256) in enumerate(
+        pending[:requested_count]
+    ):
+        frame = _call(
+            resolved_client,
+            "stock_st",
+            trade_date=_compact(trade_date),
+            fields=ENRICHMENT_DATASET_FIELDS["stock_st"],
+        )
+        frame = _audit_daily_stock_st_partition(frame, trade_date)
+        session_sha256 = calendar_session_sha256[trade_date]
+        published = False
+        with _checkpoint_lock(checkpoint_path):
+            latest = _read_checkpoint(checkpoint_path)
+            latest_entries = dict(latest.get("partitions") or {})
+            concurrent = latest_entries.get(key)
+            concurrent_valid = _daily_stock_st_entry_is_valid(
+                concurrent,
+                path,
+                trade_date=trade_date,
+                calendar_session_sha256=session_sha256,
+            )
+            changed_since_start = (
+                _checkpoint_value_sha256(concurrent) != baseline_sha256
+            )
+            if changed_since_start:
+                if not concurrent_valid:
+                    raise ValueError(
+                        f"{key} checkpoint changed to invalid evidence during sync"
+                    )
+            elif not (resume and concurrent_valid):
+                _write_parquet_atomic(path, frame)
+                entry_without_completion = {
+                    "status": "complete",
+                    "contract_id": DAILY_STOCK_ST_CONTRACT_ID,
+                    "source": "tushare",
+                    "dataset": "stock_st",
+                    "trade_date": trade_date,
+                    "path": str(path),
+                    "row_count": int(len(frame)),
+                    "size_bytes": int(path.stat().st_size),
+                    "sha256": sha256_file(path),
+                    "endpoint_row_limit": DAILY_STOCK_ST_ENDPOINT_ROW_LIMIT,
+                    "official_calendar_exchange": exchange,
+                    "official_calendar_session_sha256": session_sha256,
+                }
+
+                def stock_st_checkpoint_payload(
+                    completed_at_utc: str,
+                ) -> Mapping[str, Any]:
+                    published_entry = {
+                        **entry_without_completion,
+                        "completed_at_utc": completed_at_utc,
+                    }
+                    published_partitions = {
+                        **latest_entries,
+                        key: published_entry,
+                    }
+                    return {
+                        **dict(latest),
+                        "schema_version": int(latest.get("schema_version") or 1),
+                        "partition_root": str(resolved_partition_root),
+                        "partition_root_payload_sha256": (
+                            _daily_stock_st_partition_root_payload_sha256(
+                                resolved_partition_root,
+                                published_partitions,
+                            )
+                        ),
+                        "partitions": published_partitions,
+                        "calendars": dict(latest.get("calendars") or {}),
+                    }
+
+                published_checkpoint = _write_checkpoint_with_conservative_completion(
+                    checkpoint_path,
+                    stock_st_checkpoint_payload,
+                )
+                published_entry = dict(
+                    published_checkpoint["partitions"][key]
+                )
+                if not _daily_stock_st_entry_is_valid(
+                    published_entry,
+                    path,
+                    trade_date=trade_date,
+                    calendar_session_sha256=session_sha256,
+                ):
+                    raise ValueError(
+                        f"daily stock_st durable publish failed for {trade_date}"
+                    )
+                published = True
+        if published:
+            completed_now += 1
+        else:
+            completed_concurrently += 1
+        if delay and request_index + 1 < requested_count:
+            time.sleep(delay)
+
+    remaining = len(pending) - completed_now - completed_concurrently
+    with _checkpoint_lock(checkpoint_path):
+        final_checkpoint = _read_checkpoint(checkpoint_path)
+        final_partitions = dict(final_checkpoint.get("partitions") or {})
+        final_root_payload_sha256 = (
+            _daily_stock_st_partition_root_payload_sha256(
+                resolved_partition_root,
+                final_partitions,
+            )
+        )
+        if (
+            final_checkpoint.get("partition_root")
+            != str(resolved_partition_root)
+            or final_checkpoint.get("partition_root_payload_sha256")
+            != final_root_payload_sha256
+        ):
+            raise ValueError(
+                "daily stock_st checkpoint lost its partition-root binding"
+            )
+    return {
+        "schema_version": 1,
+        "status": "complete" if remaining == 0 else "partial",
+        "contract_id": DAILY_STOCK_ST_CONTRACT_ID,
+        "source": "tushare",
+        "dataset": "stock_st",
+        "start_date": start,
+        "end_date": end,
+        "calendar_exchange": exchange,
+        "open_day_count": len(open_dates),
+        "partition_count": len(open_dates),
+        "completed_before": completed_before,
+        "completed_this_run": completed_now,
+        "completed_concurrently": completed_concurrently,
+        "remaining_partition_count": remaining,
+        "checkpoint_path": str(checkpoint_path),
+        "calendar_path": str(calendar_entry["path"]),
+        "calendar_content_sha256": str(
+            calendar_entry["calendar_content_sha256"]
+        ),
+        "calendar_artifact_sha256": str(calendar_entry["artifact_sha256"]),
+        "calendar_completed_at_utc": str(calendar_entry["completed_at_utc"]),
+        "raw_root": str(resolved_layout.raw_root),
+        "partition_root": str(resolved_partition_root),
+        "partition_root_payload_sha256": final_root_payload_sha256,
+    }
+
+
+def create_daily_stock_st_cutoff_checkpoint(
+    start_date: str,
+    cutoff_date: str,
+    *,
+    source_checkpoint_path: str | Path,
+    destination_checkpoint_path: str | Path,
+    stage: str,
+    config_path: str | Path = DEFAULT_CONFIG_PATH,
+    layout: RuntimeLayout | None = None,
+    winner_freeze_payload_sha256: str | None = None,
+) -> dict[str, Any]:
+    """Create an immutable allowlist view of daily ``stock_st`` evidence.
+
+    The view contains only the exact official sessions through ``cutoff_date``.
+    Each allowed Parquet is copied byte-for-byte, with create-only semantics,
+    into a root owned by the destination checkpoint and stage.  Source and
+    copied artifacts are both re-audited before create-only checkpoint
+    publication.  The mutable source checkpoint is lineage only and is not
+    needed to consume an already-published view.
+    """
+
+    start = _date(start_date)
+    cutoff = _date(cutoff_date)
+    if cutoff < start:
+        raise ValueError("cutoff_date must be on or after start_date")
+    stage_name = str(stage).strip().casefold()
+    if stage_name not in {"train", "validation", "audit"}:
+        raise ValueError(
+            "stock_st cutoff view stage must be train, validation, or audit"
+        )
+    freeze_hash = (
+        str(winner_freeze_payload_sha256).strip()
+        if winner_freeze_payload_sha256 is not None
+        else None
+    )
+    if stage_name == "audit":
+        if not freeze_hash or not re.fullmatch(r"[0-9a-f]{64}", freeze_hash):
+            raise ValueError(
+                "audit stock_st view requires a winner-freeze payload hash"
+            )
+    elif freeze_hash is not None:
+        raise ValueError("only an audit stock_st view may bind a winner freeze")
+
+    config = load_data_config(config_path)
+    resolved_layout = layout or RuntimeLayout.from_config(
+        config, config_path=config_path
+    )
+    source_path = Path(source_checkpoint_path).expanduser().resolve()
+    destination_path = Path(destination_checkpoint_path).expanduser().resolve()
+    destination_partition_root = (
+        destination_path.parent / "stock_st" / f"stage={stage_name}"
+    ).resolve()
+    if _same_resolved_file(source_path, destination_path):
+        raise ValueError("stock_st source and cutoff-view checkpoints must differ")
+    if not source_path.is_file() or source_path.is_symlink():
+        raise ValueError(
+            f"stock_st source checkpoint is not a regular file: {source_path}"
+        )
+
+    with _checkpoint_lock(source_path):
+        source_bytes = source_path.read_bytes()
+        source_sha256 = hashlib.sha256(source_bytes).hexdigest()
+        try:
+            source = json.loads(source_bytes)
+        except json.JSONDecodeError as exc:
+            raise ValueError("stock_st source checkpoint is invalid JSON") from exc
+        source_partitions = source.get("partitions")
+        source_calendars = source.get("calendars")
+        if not isinstance(source_partitions, Mapping) or not isinstance(
+            source_calendars, Mapping
+        ):
+            raise ValueError("stock_st source checkpoint lacks partitions/calendars")
+        source_partition_root = Path(
+            str(
+                source.get("partition_root")
+                or (resolved_layout.raw_root / "stock_st")
+            )
+        ).expanduser().resolve()
+        if _same_resolved_file(
+            source_partition_root, destination_partition_root
+        ):
+            raise ValueError(
+                "stock_st source and cutoff-view partition roots must be "
+                "physically distinct"
+            )
+        source_root_payload_sha256 = (
+            _daily_stock_st_partition_root_payload_sha256(
+                source_partition_root,
+                source_partitions,
+            )
+        )
+        recorded_root_payload_sha256 = source.get(
+            "partition_root_payload_sha256"
+        )
+        if (
+            recorded_root_payload_sha256 is not None
+            and recorded_root_payload_sha256 != source_root_payload_sha256
+        ):
+            raise ValueError(
+                "stock_st source checkpoint partition-root payload hash mismatch"
+            )
+
+        calendar_frames: list[pd.DataFrame] = []
+        for content_sha256, raw_entry in source_calendars.items():
+            if (
+                not isinstance(raw_entry, Mapping)
+                or raw_entry.get("status") != "complete"
+            ):
+                continue
+            entry_start = _date(str(raw_entry.get("start_date")))
+            entry_end = _date(str(raw_entry.get("end_date")))
+            if entry_end < start or entry_start > cutoff:
+                continue
+            if (
+                raw_entry.get("exchange") != "SSE"
+                or raw_entry.get("calendar_content_sha256") != content_sha256
+            ):
+                raise ValueError("stock_st source calendar identity is incomplete")
+            calendar_path = Path(
+                str(raw_entry.get("path") or "")
+            ).expanduser().resolve()
+            if not calendar_path.is_file() or calendar_path.is_symlink():
+                raise ValueError("stock_st source calendar is not a regular file")
+            if sha256_file(calendar_path) != str(
+                raw_entry.get("artifact_sha256") or ""
+            ):
+                raise ValueError("stock_st source calendar hash mismatch")
+            frame = pd.read_parquet(calendar_path)
+            if tuple(frame.columns) != (
+                "exchange",
+                "cal_date",
+                "is_open",
+                "pretrade_date",
+            ):
+                raise ValueError("stock_st source calendar schema mismatch")
+            if len(frame) != int(raw_entry.get("row_count") or -1):
+                raise ValueError("stock_st source calendar row count mismatch")
+            normalized, _records, observed_content_sha256 = _normalise_trade_calendar(
+                frame,
+                exchange="SSE",
+                start_date=entry_start,
+                end_date=entry_end,
+            )
+            if observed_content_sha256 != content_sha256:
+                raise ValueError("stock_st source calendar content hash mismatch")
+            calendar_frames.append(normalized)
+        if not calendar_frames:
+            raise ValueError("no stock_st source calendar covers the cutoff view")
+
+        combined = pd.concat(calendar_frames, ignore_index=True)
+        combined = combined.loc[
+            combined["cal_date"].between(pd.Timestamp(start), pd.Timestamp(cutoff))
+        ].copy()
+        identity = combined.assign(
+            _pretrade=combined["pretrade_date"].dt.strftime("%Y-%m-%d").fillna("")
+        )[["cal_date", "exchange", "is_open", "_pretrade"]].drop_duplicates()
+        if bool(identity.duplicated("cal_date", keep=False).any()):
+            raise ValueError(
+                "stock_st source calendars disagree inside the cutoff view"
+            )
+        combined = combined.drop_duplicates("cal_date", keep="first")
+        normalized_calendar, calendar_records, calendar_records_sha256 = (
+            _normalise_trade_calendar(
+                combined,
+                exchange="SSE",
+                start_date=start,
+                end_date=cutoff,
+            )
+        )
+        open_dates = normalized_calendar.loc[
+            normalized_calendar["is_open"], "cal_date"
+        ].dt.strftime("%Y-%m-%d").tolist()
+        records_by_date = {
+            str(record["cal_date"]): record for record in calendar_records
+        }
+
+        selected: dict[str, Any] = {}
+        selected_sources: dict[str, tuple[Path, dict[str, Any]]] = {}
+        selected_paths: set[Path] = set()
+        for trade_date in open_dates:
+            key = f"stock_st/trade_date={trade_date}"
+            raw_entry = source_partitions.get(key)
+            if not isinstance(raw_entry, Mapping):
+                raise ValueError(f"stock_st source checkpoint misses {key}")
+            entry = json.loads(json.dumps(dict(raw_entry), allow_nan=False))
+            expected_path = _daily_stock_st_partition_path(
+                source_partition_root, trade_date
+            ).resolve()
+            recorded_path = Path(str(entry.get("path") or "")).expanduser().resolve()
+            if recorded_path != expected_path:
+                raise ValueError(f"stock_st source partition path mismatch: {key}")
+            session_sha256 = _daily_stock_st_calendar_session_sha256(
+                records_by_date[trade_date]
+            )
+            if not _daily_stock_st_entry_is_valid(
+                entry,
+                expected_path,
+                trade_date=trade_date,
+                calendar_session_sha256=session_sha256,
+            ):
+                raise ValueError(f"stock_st source partition identity failed: {key}")
+            if expected_path in selected_paths:
+                raise ValueError("stock_st cutoff view reuses a physical partition")
+            selected_paths.add(expected_path)
+            if int(entry.get("size_bytes") or -1) != expected_path.stat().st_size:
+                raise ValueError(f"stock_st source partition size mismatch: {key}")
+            frame = pd.read_parquet(expected_path)
+            expected_fields = tuple(ENRICHMENT_DATASET_FIELDS["stock_st"].split(","))
+            if tuple(frame.columns) != expected_fields:
+                raise ValueError(f"stock_st source partition schema mismatch: {key}")
+            audited = _audit_daily_stock_st_partition(frame, trade_date)
+            if len(audited) != int(entry["row_count"]):
+                raise ValueError(f"stock_st source partition row count mismatch: {key}")
+            target_path = _daily_stock_st_partition_path(
+                destination_partition_root, trade_date
+            ).resolve()
+            if _same_resolved_file(expected_path, target_path):
+                raise ValueError(
+                    "stock_st source and cutoff-view partitions must be "
+                    "physically distinct"
+                )
+            selected_sources[key] = (expected_path, entry)
+            selected[key] = {
+                **entry,
+                "path": str(target_path),
+            }
+
+        expected_keys = {f"stock_st/trade_date={value}" for value in open_dates}
+        if set(selected) != expected_keys:
+            raise ValueError(
+                "stock_st cutoff view does not match official open sessions"
+            )
+        partitions_payload_sha256 = hashlib.sha256(
+            _canonical_json_bytes(selected)
+        ).hexdigest()
+        partition_root_payload_sha256 = (
+            _daily_stock_st_partition_root_payload_sha256(
+                destination_partition_root,
+                selected,
+            )
+        )
+        view: dict[str, Any] = {
+            "schema_version": 1,
+            "kind": "factor_lab_daily_stock_st_cutoff_view",
+            "contract_id": DAILY_STOCK_ST_CUTOFF_VIEW_CONTRACT_ID,
+            "status": "complete",
+            "source": "tushare",
+            "dataset": "stock_st",
+            "stage": stage_name,
+            "start_date": start,
+            "cutoff_date": cutoff,
+            "partition_count": len(selected),
+            "official_open_session_count": len(open_dates),
+            "official_calendar_records_sha256": calendar_records_sha256,
+            "source_checkpoint_path": str(source_path),
+            "source_checkpoint_sha256": source_sha256,
+            "partition_root": str(destination_partition_root),
+            "partition_root_payload_sha256": (
+                partition_root_payload_sha256
+            ),
+            "partitions_payload_sha256": partitions_payload_sha256,
+            "partitions": selected,
+        }
+        if freeze_hash is not None:
+            view["winner_freeze_payload_sha256"] = freeze_hash
+        view["payload_sha256"] = hashlib.sha256(
+            _canonical_json_bytes(view)
+        ).hexdigest()
+
+        if hashlib.sha256(source_path.read_bytes()).hexdigest() != source_sha256:
+            raise ValueError(
+                "stock_st source checkpoint changed while creating cutoff view"
+            )
+        for key, (path, entry) in selected_sources.items():
+            if (
+                not path.is_file()
+                or path.is_symlink()
+                or path.stat().st_size != int(entry["size_bytes"])
+                or sha256_file(path) != str(entry["sha256"])
+            ):
+                raise ValueError(
+                    f"stock_st source partition changed during view: {key}"
+                )
+
+        with _checkpoint_lock(destination_path):
+            if destination_path.exists():
+                if (
+                    destination_path.is_symlink()
+                    or not destination_path.is_file()
+                    or destination_path.stat().st_nlink != 1
+                ):
+                    raise ValueError(
+                        "stock_st cutoff-view checkpoint must be a distinct "
+                        "regular file"
+                    )
+                try:
+                    existing = json.loads(destination_path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError) as exc:
+                    raise ValueError(
+                        "existing stock_st cutoff view is unreadable"
+                    ) from exc
+                if existing != view:
+                    raise ValueError(
+                        "refusing to overwrite a different stock_st cutoff view"
+                    )
+
+            partitions_created = 0
+            for key, (source_partition, source_entry) in selected_sources.items():
+                target_entry = selected[key]
+                target_partition = Path(str(target_entry["path"])).resolve()
+                if _copy_partition_create_only(
+                    source_partition,
+                    target_partition,
+                    expected_size=int(source_entry["size_bytes"]),
+                    expected_sha256=str(source_entry["sha256"]),
+                ):
+                    partitions_created += 1
+
+                trade_date = str(target_entry["trade_date"])
+                session_sha256 = _daily_stock_st_calendar_session_sha256(
+                    records_by_date[trade_date]
+                )
+                if not _daily_stock_st_entry_is_valid(
+                    target_entry,
+                    target_partition,
+                    trade_date=trade_date,
+                    calendar_session_sha256=session_sha256,
+                ):
+                    raise ValueError(
+                        f"stock_st cutoff-view partition identity failed: {key}"
+                    )
+                target_frame = pd.read_parquet(target_partition)
+                expected_fields = tuple(
+                    ENRICHMENT_DATASET_FIELDS["stock_st"].split(",")
+                )
+                if tuple(target_frame.columns) != expected_fields:
+                    raise ValueError(
+                        f"stock_st cutoff-view partition schema mismatch: {key}"
+                    )
+                target_audited = _audit_daily_stock_st_partition(
+                    target_frame, trade_date
+                )
+                if len(target_audited) != int(target_entry["row_count"]):
+                    raise ValueError(
+                        f"stock_st cutoff-view partition row count mismatch: {key}"
+                    )
+
+            if hashlib.sha256(source_path.read_bytes()).hexdigest() != source_sha256:
+                raise ValueError(
+                    "stock_st source checkpoint changed while creating cutoff view"
+                )
+            for key, (path, entry) in selected_sources.items():
+                if (
+                    not path.is_file()
+                    or path.is_symlink()
+                    or path.stat().st_size != int(entry["size_bytes"])
+                    or sha256_file(path) != str(entry["sha256"])
+                ):
+                    raise ValueError(
+                        f"stock_st source partition changed during view: {key}"
+                    )
+            created = _write_json_create_only_verified(
+                destination_path, view
+            )
+
+    return {
+        "schema_version": 1,
+        "status": "complete",
+        "stage": stage_name,
+        "start_date": start,
+        "cutoff_date": cutoff,
+        "partition_count": len(selected),
+        "checkpoint_path": str(destination_path),
+        "partition_root": str(destination_partition_root),
+        "partition_root_payload_sha256": partition_root_payload_sha256,
+        "payload_sha256": view["payload_sha256"],
+        "created": created,
+        "partitions_created": partitions_created,
     }
 
 
@@ -2693,6 +3784,9 @@ def sync_data(
 __all__ = [
     "AMOUNT_TO_RMB_MULTIPLIERS",
     "DATASET_FIELDS",
+    "DAILY_STOCK_ST_CHECKPOINT_FILE",
+    "DAILY_STOCK_ST_CONTRACT_ID",
+    "DAILY_STOCK_ST_ENDPOINT_ROW_LIMIT",
     "ENRICHMENT_DATASET_FIELDS",
     "EXACT_REFERENCE_CONTRACT_ID",
     "MarketDataClient",
@@ -2709,6 +3803,7 @@ __all__ = [
     "provider_completion_required",
     "provider_partition_fingerprint",
     "sync_data",
+    "sync_daily_stock_st",
     "sync_enrichment",
     "sync_exact_reference",
     "turnover_amount_to_rmb",

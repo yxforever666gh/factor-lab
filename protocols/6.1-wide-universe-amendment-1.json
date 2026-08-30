@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_protocol_amendment",
+  "amendment_id": "factor-lab/6.1/widened-opportunity-set-v1/amendment-1",
+  "protocol_id": "factor-lab/6.1/widened-opportunity-set-v1",
+  "status": "frozen_before_any_wide_return_evaluation",
+  "base_protocol": {
+    "path": "protocols/6.1-wide-universe.json",
+    "file_sha256": "3877950fed62eaffe0e08b18fbac1007d35cb941538d4143bf383127c9372b92",
+    "payload_sha256": "4d544251e3d64f48f1980c7886ea33418118fe7112b0a5f62d18ce270dab781f"
+  },
+  "wide_return_evaluation_opened_before_freeze": false,
+  "reason": "Pre-return red-team replay found provider-valid same-day S/R events, historical code aliases with slightly different adj_factor normalizations, stock_st-positive securities whose intentionally absent daily bars are not represented by suspend_d, and 1,398 active-roster ticker-days whose absent bars are explained only by an earlier explicit full-day S event that has not yet been cleared. The base protocol remains byte-identical; this amendment makes the necessary deterministic source semantics explicit before returns are opened.",
+  "effective_overrides": {
+    "allowed_suspension_fields_add": [
+      "suspensions.suspend_type",
+      "suspensions.suspend_timing"
+    ],
+    "same_day_suspend_resume": "Only an S row with null or empty suspend_timing proves an absent full-day bar for opportunity completeness. Same-day full-day S and R still prove that day's absence but R clears the state at day end. A non-empty intraday S never proves a missing daily bar and never carries forward; next-open blocking of an observed bar uses only S timing effective no later than the open.",
+    "carried_suspension_state": "Stream causally from an earlier explicit full-day S with null or empty suspend_timing. Carry it only while no later R and no actual daily bar has appeared. On t, prior carry can explain a missing active non-ST bar only after subtracting current R; a current full-day S is direct evidence, not carried evidence. A carried missing bar contributes zero amount and zero return and is blocked in sparse pricing. Any actual daily bar or R clears the carried state, and state changes commit only after the entire session validates. Every use is labeled provenance=carried_prior_explicit_full_day_S with ticker, source S date, and official-session age; it must not be described as same-day raw suspension proof.",
+    "st_missing_bar": "A stock_st-positive security is excluded before daily-bar completeness. An absent ST bar is omitted, never imputed as a suspension or zero return, and the security cannot later re-enter until its rolling window again contains exactly 20 admitted observations.",
+    "missing_bar_fail_rule": "A listed, non-delisted, non-ST security with no daily bar and no explicit S evidence fails the build.",
+    "adj_factor_alias": "Inside a verified alias interval the historical vendor-code adj_factor row is authoritative when both vendor and canonical rows exist; outside the interval the canonical code is authoritative. Daily and selected daily_basic fields still require exact equality when both identities overlap.",
+    "security_scope_and_inactive_status": "The active roster remains list_date <= t < delist_date. A stock_st row for an identity present in the master but inactive on t is ignored and counted; it never changes listing bounds. An unknown SH/SZ code in daily, daily_basic, stock_st, or suspensions fails as security-master incompleteness. Only an explicit .BJ row is silently excluded as outside the frozen SSE/SZSE scope.",
+    "selection_source_isolation": "Train uses exact suspension and strict stock_st cutoff-view artifacts ending 2022-12-31. Validation uses separately named exact artifacts ending 2024-12-31 and cannot share a path or physical file with train. Each stock_st cutoff view copies every admitted Parquet byte-for-byte into a create-only stage-private partition root, rejects symlinks/hardlinks/samefile aliases, binds the private-root payload, revalidates every copied Parquet, and carries no future calendar or unknown source-checkpoint fields. Audit uses a third private root created only after the selected-definition freeze, cannot reuse any train or validation source, and its stock_st view binds the winner-freeze payload.",
+    "exact_replay_integrity": "Every train and validation replay binds the complete phase-attributable period rows, trade rows, and daily account-NAV rows, not only aggregate phase statistics. Their canonical trace digests are included inside each frozen phase payload.",
+    "selection_derivation": "The winner freeze records both challenger gate maps, the exact ordered train-pass set, validation median turnover used by the registered tie-break, and ten per-phase replay payloads. Verification recomputes the unique winner or null result, requires a full pre-freeze selection commit OID, and proves the freeze path did not exist in that execution commit.",
+    "runtime_capsule": "Formal returns run only on the frozen Windows CPython 3.10.16 source package. The runtime binds exact imported distribution versions and non-bytecode file-tree SHA-256 identities, exact Conda Python/NumPy/SciPy/MKL/compression/runtime artifact builds and package SHA-256 identities, plus the active MKL/compiler/SIMD configuration; all are rechecked before and after each formal return opening.",
+    "historical_audit_opening": "Before any widened-universe return is opened, the implementation closure fixes the one historical-audit physical market-data cutoff at 2026-08-21. A different cutoff is rejected. The winner freeze, tracked historical-audit evidence, and tracked terminal release result each have one fixed repository path and use create-only publication. Audit status must equal its gate outcome, binds the committed winner freeze and pre-audit execution commit, and a dedicated finalize mode deterministically emits the null-selection or audited terminal result."
+  },
+  "required_tests_add": [
+    "missing stock_st-positive bars are omitted rather than treated as unproved suspensions",
+    "same-day full-day S and R rows retain S proof for that missing bar but R clears the carried state without overriding next-open timing",
+    "only null/empty-timing full-day S can prove a missing bar or establish causal carry; intraday S cannot carry and current R removes prior proof",
+    "carried suspension inference records its earlier S date and official-session age separately from raw same-day evidence",
+    "verified alias intervals prefer the historical vendor adj_factor when provider normalizations differ",
+    "known inactive stock_st rows are ignored and counted, explicit BJ rows are excluded, and unknown SH/SZ rows fail before filtering",
+    "train, validation, and audit status artifacts use strict, mutually distinct physical paths and exact-cutoff stock_st views",
+    "stock_st cutoff views own byte-for-byte private partitions and reject samefile, hardlink, symlink, or cross-stage physical reuse",
+    "train and validation exact replay detects any change to phase-attributable period, trade, or daily NAV trace rows",
+    "winner verification recomputes train passers, validation candidates, turnover tie-break, and the unique winner or null result",
+    "the formal runtime rejects distribution byte, Conda artifact build/hash, or MKL/compiler/SIMD drift",
+    "historical audit rejects any cutoff other than the pre-selection frozen 2026-08-21 endpoint, enforces gate/status consistency, and refuses to overwrite any terminal artifact"
+  ],
+  "claim_contract_unchanged": true,
+  "candidate_ids_unchanged": true,
+  "signal_portfolio_costs_and_gates_unchanged": true,
+  "payload_sha256": "d51433e825292c3bb88dd9c3978e19c1caa20a76aa8bf701c3972e0e4919f5e2"
+}

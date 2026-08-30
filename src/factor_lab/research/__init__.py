@@ -18,9 +18,20 @@ from .validation import (
     evaluate_stage_a,
     select_stage_b,
 )
+from .wide_universe import (
+    CHALLENGER_IDS,
+    CONTROL_ID,
+    PhaseBounds,
+    build_target_decisions,
+    candidate_gate,
+    select_winner,
+)
 
 __all__ = [
+    "CHALLENGER_IDS",
+    "CONTROL_ID",
     "FactorSpec",
+    "PhaseBounds",
     "ValidationSpec",
     "WindowDiagnostics",
     "FactorValidation",
@@ -33,6 +44,9 @@ __all__ = [
     "evaluate_stage_a",
     "select_stage_b",
     "build_stage_a_selection",
+    "build_target_decisions",
+    "candidate_gate",
     "diagnose_train_similarity",
     "deterministic_block_bootstrap_mean",
+    "select_winner",
 ]

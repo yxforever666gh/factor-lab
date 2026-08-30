@@ -14,6 +14,36 @@
 
 - Froze the 6.1 widened-opportunity-set experiment before loading any widened-universe returns. The protocol compares a strictly causal daily ADV20 Top500 control with ADV20 Top1500 and ADV20 at least RMB 100 million while keeping the fixed-core score, Top10/exit25 portfolio, ten offsets, costs and next-open execution unchanged.
 - Required full-market daily ST history, an all-status stock roster, exact official-session listing age, physical 2024-12-31 selection truncation, paired candidate/control returns and explicit capacity fill/notional gates. The legacy monthly Top500 is bridge diagnostics only and cannot select a winner.
+- 新增全状态证券主数据、逐交易日 `stock_st` 内容寻址同步、动态 ADV20 Top500/成交额一亿元/Top1500
+  机会集构建器、稀疏 next-open 定价器、十相位低换手目标与容量/执行门，以及 train → validation →
+  winner freeze → audit 的物理分阶段 runner。所有实际读取的协议、实现、检查点和数据分区均在运行
+  前后复核 SHA-256；扩大机会集失败时不强选赢家，也不回退到 runner-up。
+- Python 包版本预置为 `6.1.0`；正式收益运行冻结为 Windows CPython 3.10.16 及精确的 NumPy、
+  pandas、PyArrow、SciPy 和日期/时区依赖版本，并绑定核心 distribution 非字节码文件树、Conda
+  native artifact build/SHA-256 及 MKL/compiler/SIMD 身份。CI 同时覆盖 3.10.16 与 3.11、Windows
+  与 Linux。
+
+### Changed
+
+- 在打开任何 widened-universe 收益前，根据真实源数据红队复现修订 6.1 数据合同：只有
+  `suspend_timing` 为空的整日 S 才能证明缺 bar 或建立跨日状态；未被 R/实际 daily bar 清除的历史
+  整日 S 可因果解释后续缺 bar，但必须单列为 `carried_prior_explicit_full_day_S` 推断并记录来源日，
+  不能冒充同日原始停牌记录。日内 S 不跨日，R 当日先移除旧证明；当日 `stock_st` 阳性证券先从
+  机会集排除，缺 bar 不伪造为停牌或零收益，恢复后必须重新取得完整 20 个观测；经交易所公告验证
+  的代码更名区间若新旧代码 `adj_factor` 归一化略有差异，明确采用历史 vendor code。train、
+  validation、audit 分别使用精确截止且互不复用的停复牌和 strict stock_st cutoff-view artifacts；
+  cutoff view 把每个分区逐字节复制到 create-only stage-private root，并拒绝 samefile、硬链接、
+  符号链接或跨阶段物理复用。
+  audit view 额外绑定 winner freeze。主表已知但当日 inactive 的 ST 行只计数忽略；`.BJ` 明确出域，
+  任何未知 `.SH/.SZ` 代码在过滤前失败。train/validation 复跑额外绑定逐期、逐笔交易和每日账户
+  净值完整轨迹，不再只比较摘要；唯一历史审计物理截止日预先固定为 2026-08-21，winner freeze
+  与 audit result 均为 create-only；冻结证据额外记录 tie-break 换手率并独立重算唯一胜者/null，
+  audit 状态必须与 gate 一致；create-only closure builder 与 `finalize` 模式分别生成固定
+  preselection root 和 tracked terminal result。原预注册 payload
+  `4d544251…` 保持逐字节不变；独立 amendment payload 为 `d51433e8…`。
+- 将上市交易日年龄从“每只证券、每天重新转换 2063 日 Python tuple”改为初始化时一次向量化
+  `datetime64` 搜索并缓存，真实全主表首日机会集构建由约 9.1 秒降至约 0.095 秒；上市前、上市日、
+  第 119/120 个交易日和未来上市边界的语义不变。
 
 ## [6.0] - 2026-08-30
 

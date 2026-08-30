@@ -44,10 +44,12 @@ Factor Lab 用 annotated Git tag 标识正式版本。发布必须同时更新�
 
    wheel 必须来自候选 commit 的 `git archive`，不能来自带未提交改动或 CRLF 转换的工作树。
    将 wheel SHA-256 写入对应 Changelog 版本段。
-4. 在全新的隔离 venv 中安装 wheel 与项目声明的精确依赖，验证包版本、`pip check` 和 CLI import；
-   wheel 只包含 Python package，配置、协议与 evidence 仍由 checkout 提供，因此还要运行
-   `python -m factor_lab.cli --root <git-archive-source-directory> strategy status`，证明安装包能读取并
-   校验候选提交的完整研究闭包。
+4. 在全新的隔离 venv 中安装 wheel 与项目声明的精确依赖，验证包版本、`pip check` 和 CLI import。
+   wheel 只包含 Python package，配置、协议与 evidence 仍由 checkout 提供；因此用候选 commit 创建
+   位于 `H:\Download` 的 fresh detached Git worktree，并运行
+   `python -m factor_lab.cli --root <detached-worktree> strategy status`。不要对 `git archive` 解压目录运行
+   该命令：6.1+ 完整性校验会读取 commit/tree/blob，缺少 `.git` 时必须失败。验证后通过
+   `git worktree remove <detached-worktree>` 清理。
 5. 用全新临时目录运行完整测试并编译生产源码：
 
    ```powershell

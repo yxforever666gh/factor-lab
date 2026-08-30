@@ -63,6 +63,13 @@
         "source": "https://www.sse.com.cn/disclosure/listedinfo/announcement/c/2018-02-23/601313_20180223_18.pdf"
       },
       {
+        "canonical_ts_code": "001914.SZ",
+        "vendor_ts_code": "000043.SZ",
+        "effective_from": "1900-01-01",
+        "effective_to": "2019-12-15",
+        "source": "https://www.szse.cn/disclosure/notice/general/t20191211_572534.html"
+      },
+      {
         "canonical_ts_code": "302132.SZ",
         "vendor_ts_code": "300114.SZ",
         "effective_from": "1900-01-01",
