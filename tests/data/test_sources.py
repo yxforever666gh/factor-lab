@@ -566,28 +566,6 @@ def test_resume_never_reuses_a_guarded_canonical_partition_symlink(
     assert result["reason"] == "provider_revision_conflict"
     assert path.is_symlink()
     assert target.is_file()
-    from factor_lab.data import prospective_execution, prospective_readiness
-
-    checkpoint = json.loads(layout.checkpoint_path.read_text(encoding="utf-8"))
-    assert prospective_readiness._partition_result(
-        layout.repo_root,
-        checkpoint,
-        "daily",
-        GUARDED_DATE,
-        pd.Timestamp("2030-01-01T00:00:00Z").to_pydatetime(),
-    )["status"] == "invalid"
-    with pytest.raises(
-        prospective_execution.ProspectiveExecutionDataError,
-        match="symlink",
-    ):
-        prospective_execution._inspect_checkpoint_partition(
-            layout.repo_root,
-            checkpoint,
-            dataset="daily",
-            trade_date=GUARDED_DATE,
-        )
-
-
 def test_clock_rollback_during_stability_sampling_waits_before_partition_write(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

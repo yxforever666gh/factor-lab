@@ -1,0 +1,178 @@
+{
+  "canonical_data_sha256": {
+    "execution": "0b33d7b76dcadddb46d5ed4a16b6c1e339162fb210fbe2a5d1fafe1efc92b28c",
+    "features": "8afe71e400e861ad219f1feb8c61899017b0aadd1536df92d99b8c9034bc2e88",
+    "suspension_metadata": "edf70a9b6cc2c03d6a910c9314e3a16c4d91f4f6105ae4f4fae97b0edca83000",
+    "suspensions": "5fc3c971b1a0376f5da3243a15a0bf4817f11f0339ef825daae298715b44689d"
+  },
+  "claim_contract": {
+    "fresh_future_evidence_required": true,
+    "historical_evidence_class": "post_selected_historical_diagnostic_only",
+    "historical_qualification_allowed": false,
+    "profit_claim_allowed": false
+  },
+  "direction_change": true,
+  "evidence": {
+    "analyst_protocol": {
+      "file_sha256": "0c38a9af67daeed0b424dfe915dc008ccfbe2a663699e931bdc682569c8be557",
+      "path": "protocols/6.0-analyst-revisions.json",
+      "payload_sha256": "58a299bae56119b8c957f267d2fedfe4323fa63364f2091a247e6bf019648e0a"
+    },
+    "analyst_scout": {
+      "file_sha256": "089795a545119e28d5de0cdf7753034fe9a5341adffa8397a40afbc62c07badd",
+      "path": "protocols/evidence/6.0/analyst-scout.json",
+      "payload_sha256": "1eaa62423790cffee3cf15b632d2d1fc2203ff9a03fb41e6045da7fa9aca32d4"
+    },
+    "disclosure": {
+      "file_sha256": "e36e09939437ca1871721268be1018d4c8f670f6fd8c72532d08d4fc0337aa35",
+      "path": "protocols/evidence/6.0/disclosure.json",
+      "payload_sha256": "b859237fbf2b45b2d8f3e78cc5d783cc99941f4492e3319215638ea32eae7c8e"
+    },
+    "orthogonal_canonical_negative": {
+      "file_sha256": "2bd472c0a326fea491fe6e438da5c0da25ba1197a38823354a50d27df601abd6",
+      "path": "protocols/evidence/6.0/orthogonal-canonical-negative.json",
+      "payload_sha256": "a9e9e03523069487bd62611de7640ed6a1bb65e7356ff9f9134eb95d8e4b0249"
+    },
+    "pit_event_protocol": {
+      "file_sha256": "159285bf265a461d3d6cc90c1fc3fdfb92b87ea01cd1059e133b07107022557a",
+      "path": "protocols/6.0-pit-event-search.json",
+      "payload_sha256": "715a4104412af1e69e4a2f3d020ff434972f0627df8e1e9bf848ce550f1cbdc1"
+    },
+    "pit_event_result": {
+      "file_sha256": "fec59727742ea715c7847d642ce2546df711f59520027c8819cf535e63376235",
+      "path": "protocols/evidence/6.0/pit-event-negative.json",
+      "payload_sha256": "65de91a5bac20d6b810b7d5b4373eca7908f01b42c45406a5cfb4b821efbb793"
+    },
+    "result": {
+      "file_sha256": "005c91101a696de936a050055b5cd2c461a089a3e146b241c0df1a365a4e8e0c",
+      "path": "protocols/evidence/6.0/result.json",
+      "payload_sha256": "ffb5c263f17a7ea2e180d65d234e7391c95202e815e941ec423df3e49a945105"
+    },
+    "selection": {
+      "file_sha256": "6ec11287ec0b7cd8283d8c26d76dbeed602358e1f476cdf146fe422bf567e27b",
+      "path": "protocols/evidence/6.0/selection.json",
+      "payload_sha256": "620ef063772d69ddbdebcdf094ce900080e2d470194854a6c4000f17bcc83961"
+    },
+    "untracked_per_evaluation_files_required": false
+  },
+  "execution_contract": {
+    "capital": 50000000.0,
+    "costs": {
+      "commission_rate": 0.0003,
+      "exchange_handling_rate": 3.41e-05,
+      "impact_coefficient": 0.5,
+      "slippage_bps_per_side": 5.0,
+      "stamp_duty_before_2023_08_28": 0.001,
+      "stamp_duty_from_2023_08_28": 0.0005,
+      "transfer_fee_rate": 1e-05
+    },
+    "entry": "next official session open_adj",
+    "holding_days": 10,
+    "holding_end": "open_adj at signal calendar index + 11",
+    "max_adv_participation": 0.05,
+    "max_stale_position_age_days": 21,
+    "offsets": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "price_basis": "adjusted_total_return",
+    "rebalance_every_days": 10
+  },
+  "implementation": {
+    "analyst_data": {
+      "path": "src/factor_lab/data/analyst.py",
+      "sha256": "9a948b3a0c4038a2692a38781325a712ee02f87d62a2b5ea9be14abac28a5d34"
+    },
+    "analyst_sync": {
+      "path": "scripts/sync-analyst-reports.py",
+      "sha256": "122382f0895d04dd74c1142e31db27fed36df7efc0e6468227b82f79773c87ee"
+    },
+    "cli": {
+      "path": "src/factor_lab/cli.py",
+      "sha256": "d6569d9ffebf9419e3ac9b0a6f85d07d5124bd8835033dbe30e7c4576011cde9"
+    },
+    "execution_kernel": {
+      "path": "src/factor_lab/portfolio/execution.py",
+      "sha256": "df10b31012192b778f1291ae41d88e28685e917a15ce7b8a3f32e6678f38690d"
+    },
+    "long_only": {
+      "path": "src/factor_lab/portfolio/long_only.py",
+      "sha256": "fc819ea33c86ffc446d91bfcd27120919becd5859a8be6c19bf39f20ea8c6bf7"
+    },
+    "research_config": {
+      "path": "configs/research.json",
+      "sha256": "a11e69042223b0958925be578663fe420016fd4fe21cb1a37155b99933fd0b2e"
+    },
+    "research_runner": {
+      "path": "src/factor_lab/research/runner.py",
+      "sha256": "181cf477f6da3f319a59f7d39135f25705ebf1debb22078c2a34c1bb4da9a703"
+    },
+    "runner": {
+      "path": "scripts/run-low-churn-evidence.py",
+      "sha256": "6cb5c80bb75588040649c471878cccd257cd31a679cb273504480a19a3301013"
+    },
+    "strategy": {
+      "path": "src/factor_lab/strategy.py",
+      "sha256": "a2fb4905e263aa09436ea17665a67eb70401451bf27f5e33e9ff58de3a9cd046"
+    }
+  },
+  "kind": "factor_lab_research_direction_protocol",
+  "objective": "Use the existing fixed-core score as a stable control surface while testing whether wider per-sleeve retention preserves returns with less churn.",
+  "payload_sha256": "6b41744008a52ec378b65572d7d8335198fe4509997fe178bca6315f97c55fe4",
+  "physical_phase_contract": {
+    "audit": {
+      "signal_start": "2025-01-01"
+    },
+    "inclusion_rule": "signal_date >= phase_start and end_date <= phase_end",
+    "physical_run_cutoff": {
+      "applied": false,
+      "pricing_max_date": "2026-08-21",
+      "requested_max_outcome_date": null,
+      "signal_max_date": "2026-08-13"
+    },
+    "train": {
+      "outcome_end_max": "2022-12-31",
+      "signal_start": "2017-01-03"
+    },
+    "validation": {
+      "outcome_end_max": "2024-12-31",
+      "signal_start": "2023-01-01"
+    }
+  },
+  "protocol_id": "factor-lab/6.0/low-churn-fixed-core",
+  "route": "fixed_core_low_churn",
+  "schema_version": 1,
+  "selection_contract": {
+    "absolute_offset_count": 10,
+    "anchor_date": "2017-01-03",
+    "control_retention_exit_rank": 15,
+    "empty_signal_policy": "explicit_skip_without_reindex_or_state_mutation",
+    "only_control_difference": "retention_exit_rank",
+    "position_count": 10,
+    "position_weight": 0.1,
+    "retention_exit_rank": 25,
+    "state_policy": "separate_target_state_per_absolute_offset"
+  },
+  "signal_contract": {
+    "binary64_operation": "(1.0 - defensive_weight) * control_rank + defensive_weight * defensive_rank",
+    "control_raw": "earnings_yield / pb",
+    "defensive_raw": "rank(book_yield) + rank(earnings_yield) + rank(-volatility_20)",
+    "defensive_weight": 0.7,
+    "eligible_columns": [
+      "eligible",
+      "universe_member"
+    ],
+    "labels_and_forward_returns_forbidden": true,
+    "missing_defensive_policy": "fallback_to_control_rank",
+    "rank_tie_break": "score_desc_then_ticker_asc"
+  },
+  "version": "6.0"
+}

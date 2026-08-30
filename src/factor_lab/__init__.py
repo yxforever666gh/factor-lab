@@ -1,3 +1,3 @@
-"""Local A-share adaptive research with causal execution and evidence logging."""
+"""Local A-share point-in-time research with exact cost-aware execution."""
 
-__version__ = "5.9.0"
+__version__ = "6.0.0"

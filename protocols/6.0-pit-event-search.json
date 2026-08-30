@@ -1,0 +1,174 @@
+{
+  "schema_version": 1,
+  "payload_sha256": "715a4104412af1e69e4a2f3d020ff434972f0627df8e1e9bf848ce550f1cbdc1",
+  "protocol_version": "6.0-pit-event-search-v1",
+  "implementation_release": "6.0",
+  "status": "completed_no_candidate",
+  "purpose": "Test a finite set of low-frequency, announcement-driven PIT challengers that are economically distinct from formal_fixed_core_full.",
+  "registry_effect": {
+    "formal_score_changed": false,
+    "candidate_registered": false,
+    "selected_candidate_id": null,
+    "failed_mechanism_may_be_present_in_formal_score": false
+  },
+  "causal_boundary": {
+    "selection_feature_and_pricing_physical_cutoff": "2024-12-31",
+    "train": {
+      "signal_start": "2017-03-02",
+      "maximum_exact_end_date": "2022-12-31"
+    },
+    "validation": {
+      "signal_start": "2023-01-01",
+      "maximum_exact_end_date": "2024-12-31"
+    },
+    "phase_membership_rule": "A completed period belongs to a phase only when its exact end_date is on or before that phase boundary.",
+    "financial_timing_rule": "financial_available_date <= signal_date and financial_available_date > financial_ann_date",
+    "event_delta_rule": "current visible announcement value minus the immediately prior visible announcement value for the same ticker",
+    "announcement_freshness_calendar_days": 180,
+    "evaluation_start_rule": "2017-03-02 was fixed by a feature-only, no-price coverage audit as the first date after which every standalone definition continuously had at least ten finite scores.",
+    "future_return_or_label_fields_allowed": [],
+    "price_window_fields_allowed_in_event_components": [],
+    "audit_open_rule": "Open 2025-plus data only after at most one definition passes the frozen selection gate and a selected-definition hash freeze is written."
+  },
+  "control": {
+    "id": "formal_fixed_core_full",
+    "score_formula": "0.30*rank(earnings_yield/pb) + 0.70*rank(rank(book_yield)+rank(earnings_yield)+rank(-volatility_20))",
+    "top_n": 10,
+    "retention_exit_rank": 15
+  },
+  "shared_candidate_contract": {
+    "direction": "higher_is_better",
+    "event_score_cross_section": "eligible and universe_member rows with valid PIT financial state",
+    "announcement_freshness_calendar_days": 180,
+    "top_n": 10,
+    "retention_buffer": 5,
+    "retention_exit_rank": 15,
+    "position_weight": 0.1,
+    "tie_break": "score_desc_then_ticker_asc",
+    "entry_rule": "next_official_session_open_adj",
+    "future_label_fields": [],
+    "event_component_price_window_fields": []
+  },
+  "mechanisms": {
+    "growth_acceleration": {
+      "economic_mechanism": "Newly disclosed acceleration in same-quarter revenue and profit growth.",
+      "event_fields": [
+        "q_sales_yoy_pit",
+        "q_netprofit_yoy_pit"
+      ],
+      "event_formula": "0.45*rank(delta(q_sales_yoy_pit)) + 0.45*rank(delta(q_netprofit_yoy_pit)) + 0.10*rank(-announcement_age_days)"
+    },
+    "cash_quality_delta": {
+      "economic_mechanism": "Newly disclosed improvement in capital return and cash conversion with lower leverage.",
+      "event_fields": [
+        "roic_pit",
+        "q_ocf_to_sales_pit",
+        "debt_to_assets_pit",
+        "ocf_to_profit_pit"
+      ],
+      "event_formula": "0.225*rank(delta(roic_pit)) + 0.225*rank(delta(q_ocf_to_sales_pit)) + 0.225*rank(-delta(debt_to_assets_pit)) + 0.225*rank(ocf_to_profit_pit) + 0.10*rank(-announcement_age_days)"
+    },
+    "growth_cash_confirmation": {
+      "economic_mechanism": "Newly disclosed revenue and profit acceleration confirmed by cash conversion.",
+      "event_fields": [
+        "q_sales_yoy_pit",
+        "q_netprofit_yoy_pit",
+        "q_ocf_to_sales_pit"
+      ],
+      "event_formula": "0.30*rank(delta(q_sales_yoy_pit)) + 0.30*rank(delta(q_netprofit_yoy_pit)) + 0.30*rank(delta(q_ocf_to_sales_pit)) + 0.10*rank(-announcement_age_days)"
+    }
+  },
+  "constructions": {
+    "standalone": {
+      "formula": "event_formula",
+      "missing_event_policy": "not_ranked"
+    },
+    "fixed_core_blend30": {
+      "formula": "0.70*formal_fixed_core_full + 0.30*event_formula",
+      "missing_event_policy": "fallback_to_formal_fixed_core_full"
+    }
+  },
+  "ordered_frozen_definitions": [
+    {
+      "id": "pit_growth_acceleration_180d_standalone_v1",
+      "mechanism": "growth_acceleration",
+      "construction": "standalone"
+    },
+    {
+      "id": "pit_growth_acceleration_180d_fixed_core_blend30_v1",
+      "mechanism": "growth_acceleration",
+      "construction": "fixed_core_blend30"
+    },
+    {
+      "id": "pit_cash_quality_delta_180d_standalone_v1",
+      "mechanism": "cash_quality_delta",
+      "construction": "standalone"
+    },
+    {
+      "id": "pit_cash_quality_delta_180d_fixed_core_blend30_v1",
+      "mechanism": "cash_quality_delta",
+      "construction": "fixed_core_blend30"
+    },
+    {
+      "id": "pit_growth_cash_confirmation_180d_standalone_v1",
+      "mechanism": "growth_cash_confirmation",
+      "construction": "standalone"
+    },
+    {
+      "id": "pit_growth_cash_confirmation_180d_fixed_core_blend30_v1",
+      "mechanism": "growth_cash_confirmation",
+      "construction": "fixed_core_blend30"
+    }
+  ],
+  "exact_execution": {
+    "engine": "factor-lab formal long-only execution and accounting kernel",
+    "capital": 50000000,
+    "holding_days": 10,
+    "rebalance_every_days": 10,
+    "offsets": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "price_basis": "adjusted_total_return",
+    "entry_price": "next_session_open_adj",
+    "full_formal_costs": true,
+    "formal_suspension_and_delist_events": true
+  },
+  "selection_gate": {
+    "strict_exact_offsets": 10,
+    "train_q20_paired_relative_cagr_strictly_positive": true,
+    "validation_q20_paired_relative_cagr_strictly_positive": true,
+    "train_positive_relative_offsets_min": 7,
+    "validation_positive_relative_offsets_min": 7,
+    "selection_full_worst_daily_drawdown_min": -0.35,
+    "selection_full_capacity_violation_count_max": 0,
+    "selection_full_median_absolute_daily_score_correlation_max": 0.8,
+    "selection_full_mean_naked_top10_overlap_fraction_max": 0.7,
+    "selection_full_median_exact_target_overlap_fraction_max": 0.75,
+    "maximum_selected_definitions": 1,
+    "no_forced_winner": true,
+    "ranking_after_all_gates_pass": [
+      "maximize minimum train/validation q20 paired relative CAGR",
+      "maximize validation median paired relative CAGR",
+      "minimize exact target overlap",
+      "minimize validation turnover",
+      "minimize complexity",
+      "candidate id ascending"
+    ]
+  },
+  "frozen_external_artifacts": {
+    "selection_input_manifest_file_sha256": "1ccf00410f2e1813f8cd81fa73760133c5ffa72a7737fdf6729a56999b6f5c17",
+    "selection_input_manifest_payload_sha256": "cd0fea52c1b06de7bd52904313a66b418eca0579e3eba7a11d4fceb56ebd9163",
+    "candidate_space_freeze_file_sha256": "16c73d54c3b751c744d7ab7420994a8a3c42642dae7b1040de5a5767b67af46c",
+    "candidate_space_freeze_payload_sha256": "b7631601033b31803983de35639bf1fefb34d662216742011696660cc792adba"
+  },
+  "evidence_relative_path": "protocols/evidence/6.0/pit-event-negative.json"
+}

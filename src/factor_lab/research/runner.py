@@ -50,7 +50,15 @@ ENGINE_ID = "factor-lab/research/v7"
 EVIDENCE_CLASS = "historical_diagnostic"
 RESULTS_FIRST_SUITE = "results-first"
 WALK_FORWARD_SUITE = "walk-forward"
-ADAPTIVE_SUITE = "adaptive"
+SUPPORTED_SUITES = frozenset(
+    {
+        WALK_FORWARD_SUITE,
+        RESULTS_FIRST_SUITE,
+        "recovery",
+        "next",
+        "legacy-regression",
+    }
+)
 _DETAIL_FIELDS = {"periods", "trades", "optimization_audit", "account_nav_path"}
 _REQUIRED_PROMOTION_GATE_KEYS = {
     "validation_net_excess_annual_return_min",
@@ -226,33 +234,6 @@ def _completed_run_valid(summary_path: Path, output_dir: Path, run_fingerprint: 
                 return False
         else:
             return False
-        protocol_inputs = [
-            row
-            for row in inputs
-            if isinstance(row, Mapping)
-            and row.get("role") == "adaptive_protocol"
-        ]
-        if summary.get("suite") == ADAPTIVE_SUITE:
-            if len(protocol_inputs) != 1:
-                return False
-            protocol_input = protocol_inputs[0]
-            protocol_file = Path(str(protocol_input.get("path") or ""))
-            adaptive_summary = summary.get("adaptive") or {}
-            expected_protocol_hash = (
-                adaptive_summary.get("protocol_sha256")
-                or (adaptive_summary.get("protocol") or {}).get("sha256")
-            )
-            if (
-                not protocol_file.is_absolute()
-                or not protocol_file.is_file()
-                or protocol_input.get("size_bytes")
-                != protocol_file.stat().st_size
-                or protocol_input.get("sha256") != expected_protocol_hash
-                or _sha256_file(protocol_file) != expected_protocol_hash
-            ):
-                return False
-        elif protocol_inputs:
-            return False
         rows = manifest.get("files") or []
         if not isinstance(rows, list) or not rows:
             return False
@@ -295,22 +276,6 @@ def _completed_run_valid(summary_path: Path, output_dir: Path, run_fingerprint: 
                 required.update(
                     f"{offset_root}/scoring/static/{_safe_name(str(name))}.json"
                     for name in candidate_registry
-                )
-        adaptive = summary.get("adaptive") or {}
-        if adaptive.get("enabled") and not adaptive.get("canary_smoke_only"):
-            required.add("adaptive/adaptive-summary.json")
-            expert_registry = tuple(adaptive.get("expert_registry") or ())
-            account_registry = tuple(adaptive.get("account_registry") or ())
-            for offset in adaptive.get("rebalance_offsets") or ():
-                offset_root = f"adaptive/offset-{int(offset):02d}"
-                required.add(f"{offset_root}/decisions.json")
-                required.update(
-                    f"{offset_root}/shadows/{_safe_name(str(name))}.json"
-                    for name in expert_registry
-                )
-                required.update(
-                    f"{offset_root}/accounts/{_safe_name(str(name))}.json"
-                    for name in account_registry
                 )
         return required.issubset(names)
     except (
@@ -418,24 +383,12 @@ def _verify_loaded_input_snapshot(
     suspension_metadata_sha256: str | None,
     suspension_requested_start: str,
     suspension_requested_end: str,
-    adaptive_protocol_path: Path | None = None,
-    adaptive_protocol_sha256: str | None = None,
 ) -> tuple[str, str, dict[str, Any] | None, str | None, str | None]:
     """Fail if a frozen input changed after it was fingerprinted."""
-
-    if (adaptive_protocol_path is None) != (adaptive_protocol_sha256 is None):
-        raise ValueError(
-            "adaptive protocol path and SHA-256 must either both be set or both be absent"
-        )
 
     try:
         current_feature_hash = _sha256_file(feature_path)
         current_execution_hash = _sha256_file(execution_path)
-        current_protocol_hash = (
-            _sha256_file(adaptive_protocol_path)
-            if adaptive_protocol_path is not None
-            else None
-        )
         (
             current_suspension_audit,
             current_suspension_hash,
@@ -462,7 +415,6 @@ def _verify_loaded_input_snapshot(
             current_suspension_metadata_hash,
         ),
         ("suspensions_audit", suspension_audit, current_suspension_audit),
-        ("adaptive_protocol", adaptive_protocol_sha256, current_protocol_hash),
     ):
         if expected != actual:
             changed.append(role)
@@ -545,35 +497,18 @@ def _portfolio_config(
     config: Mapping[str, Any],
     *,
     suite: str | None = None,
-    adaptive_protocol: Mapping[str, Any] | None = None,
 ) -> LongOnlyPortfolioConfig:
-    if suite not in {RESULTS_FIRST_SUITE, WALK_FORWARD_SUITE, ADAPTIVE_SUITE}:
+    if suite not in {RESULTS_FIRST_SUITE, WALK_FORWARD_SUITE}:
         result = LongOnlyPortfolioConfig.from_mapping(config)
     else:
         merged = dict(config)
         portfolio = dict(config.get("portfolio") or {})
-        if suite == ADAPTIVE_SUITE:
-            if adaptive_protocol is None:
-                raise ValueError("adaptive suite requires a frozen protocol")
-            frozen = dict(adaptive_protocol.get("portfolio") or {})
-            portfolio.update(
-                {
-                    "holding_days": frozen["holding_days"],
-                    "rebalance_every_days": frozen["rebalance_every_days"],
-                    "position_count": frozen["position_count_per_expert"],
-                    "target_weight": 1.0
-                    / int(frozen["position_count_per_expert"]),
-                    "retention_buffer": frozen["retention_buffer"],
-                    "periods_per_year": frozen["periods_per_year"],
-                }
-            )
-        else:
-            suite_settings = (
-                config.get("results_first")
-                if suite == RESULTS_FIRST_SUITE
-                else config.get("walk_forward")
-            ) or {}
-            portfolio.update(dict(suite_settings.get("portfolio") or {}))
+        suite_settings = (
+            config.get("results_first")
+            if suite == RESULTS_FIRST_SUITE
+            else config.get("walk_forward")
+        ) or {}
+        portfolio.update(dict(suite_settings.get("portfolio") or {}))
         merged["portfolio"] = portfolio
         result = LongOnlyPortfolioConfig.from_mapping(merged)
     if result.price_basis != ADJUSTED_TOTAL_RETURN_PRICE_BASIS:
@@ -2733,54 +2668,24 @@ def _run_robustness(
     return payload
 
 
-def _load_adaptive_protocol(path: Path) -> tuple[dict[str, Any], str]:
-    payload = _read_json(path)
-    if payload.get("schema_version") != 1:
-        raise ValueError("adaptive protocol schema_version must be 1")
-    if payload.get("protocol_id") != "factor-lab/5.0/adaptive-core-overlay":
-        raise ValueError("unexpected adaptive protocol_id")
-    if payload.get("release") != "5.0":
-        raise ValueError("adaptive protocol release must be 5.0")
-    if payload.get("status") != "frozen_before_historical_execution":
-        raise ValueError("adaptive protocol is not frozen")
-    if payload.get("evidence_class") != "post_selection_adaptive_simulation":
-        raise ValueError("unexpected adaptive evidence class")
-    if payload.get("investment_claim_allowed") is not False:
-        raise ValueError("adaptive protocol must forbid investment claims")
-    routing = payload.get("routing") or {}
-    if (
-        routing.get("allow_post_run_threshold_changes") is not False
-        or routing.get("allow_historical_rerun_to_change_route_after_release")
-        is not False
-    ):
-        raise ValueError("adaptive protocol routing is not immutable")
-    experts = payload.get("experts") or {}
-    registry = experts.get("ordered_registry") or []
-    if len(registry) != 4 or len(set(map(str, registry))) != 4:
-        raise ValueError("adaptive protocol requires four unique ordered experts")
-    accounts = (payload.get("scoring_accounts") or {}).get("per_offset") or []
-    if len(accounts) != 5 or len(set(map(str, accounts))) != 5:
-        raise ValueError("adaptive protocol requires five unique scoring accounts")
-    return payload, _sha256_file(path)
-
-
 def run_research(
     *,
     project_root: str | Path | None = None,
-    suite: str = ADAPTIVE_SUITE,
+    suite: str = WALK_FORWARD_SUITE,
     mode: str = "canary",
     resume: bool = True,
     feature_path: str | Path | None = None,
     execution_path: str | Path | None = None,
     factors_path: str | Path | None = None,
     research_config_path: str | Path | None = None,
-    protocol_path: str | Path | None = None,
     run_robustness: bool = True,
 ) -> dict[str, Any]:
     """Run a deterministic historical research suite."""
 
     if mode not in {"canary", "full"}:
         raise ValueError("mode must be canary or full")
+    if suite not in SUPPORTED_SUITES:
+        raise ValueError(f"unknown research suite: {suite}")
     root = _project_root(project_root)
     default_features, default_execution = _default_data_paths(root)
     feature_file = Path(feature_path or default_features).resolve()
@@ -2791,25 +2696,12 @@ def run_research(
     suspension_metadata_file = suspension_file.with_name("suspensions.meta.json")
     factors_file = Path(factors_path or root / "configs" / "factors.json").resolve()
     research_file = Path(research_config_path or root / "configs" / "research.json").resolve()
-    adaptive_protocol_file = (
-        Path(protocol_path or root / "protocols" / "5.0.json").resolve()
-        if suite == ADAPTIVE_SUITE
-        else None
-    )
     required_paths = [feature_file, execution_file, factors_file, research_file]
-    if adaptive_protocol_file is not None:
-        required_paths.append(adaptive_protocol_file)
     for path in required_paths:
         if not path.is_file():
             raise FileNotFoundError(path)
 
     research_config = _read_json(research_file)
-    adaptive_protocol: dict[str, Any] | None = None
-    adaptive_protocol_hash: str | None = None
-    if adaptive_protocol_file is not None:
-        adaptive_protocol, adaptive_protocol_hash = _load_adaptive_protocol(
-            adaptive_protocol_file
-        )
     validation_spec = _validation_spec(research_config)
     control, challengers = load_factor_suite(factors_file, suite)
     if suite == RESULTS_FIRST_SUITE:
@@ -2818,7 +2710,7 @@ def run_research(
             replace(factor, direction_policy="all_history_ic")
             for factor in challengers
         ]
-    elif suite in {WALK_FORWARD_SUITE, ADAPTIVE_SUITE}:
+    elif suite == WALK_FORWARD_SUITE:
         control = replace(
             control,
             direction_policy="fixed",
@@ -2828,7 +2720,6 @@ def run_research(
     portfolio_config = _portfolio_config(
         research_config,
         suite=suite,
-        adaptive_protocol=adaptive_protocol,
     )
     feature_hash = _sha256_file(feature_file)
     execution_hash = _sha256_file(execution_file)
@@ -2886,14 +2777,6 @@ def run_research(
             },
             "factors": [row.to_dict() for row in all_factors],
             "research": research_config,
-            "adaptive_protocol": (
-                {
-                    "sha256": adaptive_protocol_hash,
-                    "payload": adaptive_protocol,
-                }
-                if adaptive_protocol is not None
-                else None
-            ),
             "run_robustness": (
                 bool(run_robustness) if robustness_affects_run else None
             ),
@@ -2918,14 +2801,10 @@ def run_research(
     factor_dir = output_dir / "factors"
     factor_dir.mkdir(parents=True, exist_ok=True)
 
-    adaptive_feature_fields = (
-        ("return_1d", "momentum_120") if suite == ADAPTIVE_SUITE else ()
-    )
     features = _load_features(
         feature_file,
         all_factors,
         validation_spec,
-        extra_required_fields=adaptive_feature_fields,
     )
     execution = _load_execution(
         execution_file,
@@ -2952,8 +2831,6 @@ def run_research(
         suspension_metadata_sha256=suspension_metadata_hash,
         suspension_requested_start=suspension_requested_start,
         suspension_requested_end=suspension_requested_end,
-        adaptive_protocol_path=adaptive_protocol_file,
-        adaptive_protocol_sha256=adaptive_protocol_hash,
     )
     signals = {
         factor.name: evaluate_factor_signal(features, factor, date_column=validation_spec.date_column)
@@ -2972,7 +2849,6 @@ def run_research(
         "legacy-regression",
         RESULTS_FIRST_SUITE,
         WALK_FORWARD_SUITE,
-        ADAPTIVE_SUITE,
     }:
         selected = [factor for factor in all_factors if factor.role != "diagnostic_only"]
     else:
@@ -3010,7 +2886,7 @@ def run_research(
         # direction, but only fallback-control ensembles are exposure-comparable
         # enough to enter the expensive portfolio leaderboard.
         selected = [control, *ensemble_factors]
-    elif suite in {WALK_FORWARD_SUITE, ADAPTIVE_SUITE}:
+    elif suite == WALK_FORWARD_SUITE:
         candidate_factors, candidate_signals, candidate_validations = (
             _build_walk_forward_candidates(
                 features,
@@ -3029,49 +2905,12 @@ def run_research(
             for factor in candidate_factors
             if factor.name != control.name
         )
-        if suite == ADAPTIVE_SUITE:
-            assert adaptive_protocol is not None
-            frozen_registry = list(
-                (adaptive_protocol.get("experts") or {}).get(
-                    "ordered_registry"
-                )
-                or []
-            )
-            candidate_by_name = {
-                factor.name: factor for factor in candidate_factors
-            }
-            missing_frozen = [
-                name for name in frozen_registry if name not in candidate_by_name
-            ]
-            if missing_frozen:
-                raise ValueError(
-                    "adaptive protocol experts are absent from runtime candidates: "
-                    + ", ".join(map(str, missing_frozen))
-                )
-            selected = [candidate_by_name[name] for name in frozen_registry]
-        else:
-            selected = candidate_factors
+        selected = candidate_factors
 
     _assert_unique_artifact_names(
         [factor.name for factor in selected],
         context=f"{suite} factor artifact",
     )
-    if suite == ADAPTIVE_SUITE:
-        assert adaptive_protocol is not None
-        assert adaptive_protocol_hash is not None
-        from .adaptive_runtime import validate_adaptive_protocol
-
-        # Canary and full mode must reject the same protocol drift.  The full
-        # sweep validates again at its artifact boundary, but waiting until
-        # that expensive path would let the default smoke test bless modified
-        # gates, allocator parameters, or overlay semantics.
-        validate_adaptive_protocol(
-            adaptive_protocol,
-            protocol_sha256=adaptive_protocol_hash,
-            factors=selected,
-            control=control,
-            base_config=portfolio_config,
-        )
     execution_date_for_lineage = _resolve_column(
         set(execution.columns), portfolio_config.date_column, ("date", "trade_date")
     )
@@ -3110,7 +2949,6 @@ def run_research(
             "columns_applied", ()
         )
     )
-    feature_lineage_fields.update(adaptive_feature_fields)
     if any(
         factor.kind == "builtin" and factor.builtin == "pit_cashflow_quality"
         for factor in all_factors
@@ -3189,7 +3027,6 @@ def run_research(
                 evaluation_execution,
                 portfolio_config,
                 research_config,
-                include_period_target_weights=suite == ADAPTIVE_SUITE,
             )
             _write_json(
                 result_path,
@@ -3208,7 +3045,6 @@ def run_research(
     results_first_excluded: list[dict[str, Any]] = []
     best_historical_strategy: str | None = None
     walk_forward_summary: dict[str, Any] | None = None
-    adaptive_summary: dict[str, Any] | None = None
     if suite == RESULTS_FIRST_SUITE:
         comparison_periods = list(control_result.get("period_active_returns") or [])
         for row in stage_b:
@@ -3346,73 +3182,6 @@ def run_research(
                 for row in stage_b
                 if not row["results_first_ranking_eligible"]
             ]
-    elif suite == ADAPTIVE_SUITE:
-        assert adaptive_protocol is not None
-        assert adaptive_protocol_hash is not None
-        if mode == "full":
-            from .adaptive_runtime import run_adaptive_sweep
-
-            adaptive_summary, _adaptive_base_accounts = run_adaptive_sweep(
-                factors=selected,
-                validations=validations,
-                signals=signals,
-                features=features,
-                execution=execution,
-                base_config=portfolio_config,
-                research_config=research_config,
-                base_results=stage_b,
-                control=control,
-                protocol=adaptive_protocol,
-                protocol_sha256=adaptive_protocol_hash,
-                output_dir=output_dir,
-                run_fingerprint=fingerprint,
-                resume=cache_resume_allowed,
-                portfolio_result=_portfolio_result,
-                historical_metrics=_results_first_metrics,
-            )
-        else:
-            adaptive_summary = {
-                "enabled": True,
-                "protocol_id": adaptive_protocol["protocol_id"],
-                "protocol_sha256": adaptive_protocol_hash,
-                "protocol_status": adaptive_protocol["status"],
-                "evidence_class": "engineering_smoke",
-                "canary_smoke_only": True,
-                "expert_registry": list(
-                    (adaptive_protocol.get("experts") or {})[
-                        "ordered_registry"
-                    ]
-                ),
-                "account_registry": list(
-                    (adaptive_protocol.get("scoring_accounts") or {})[
-                        "per_offset"
-                    ]
-                ),
-                "rebalance_offsets": [],
-                "common_evaluation_start": None,
-                "shadow_accounts_valid": False,
-                "scoring_accounts_valid": False,
-                "future_feedback_violation_count": 0,
-                "future_overlay_violation_count": 0,
-                "integrity_valid": False,
-                "gate_results": {},
-                "frozen_route": None,
-                "prospective_status": "not_activated",
-                "offsets": [],
-            }
-        for row in stage_b:
-            row["strategy_kind"] = "adaptive_expert_shadow"
-            row["account_role"] = (
-                "adaptive_shadow_full_history"
-                if mode == "full"
-                else "engineering_smoke_account"
-            )
-            row["cross_strategy_comparison_eligible"] = False
-            row["authoritative_comparison_artifact"] = (
-                "adaptive/adaptive-summary.json" if mode == "full" else None
-            )
-            row["pre_audit_confirmed"] = False
-            row["validated"] = False
     elif suite == WALK_FORWARD_SUITE:
         if mode == "full":
             walk_forward_summary, _dynamic_base_result = run_walk_forward_sweep(
@@ -3577,11 +3346,7 @@ def run_research(
             output_dir / "robustness.json",
         )
 
-    if suite == ADAPTIVE_SUITE and mode == "full":
-        search_status = "adaptive_protocol_evaluated"
-    elif suite == ADAPTIVE_SUITE:
-        search_status = "adaptive_canary_smoke"
-    elif suite == WALK_FORWARD_SUITE and mode == "full":
+    if suite == WALK_FORWARD_SUITE and mode == "full":
         search_status = "causal_walk_forward_sweep_completed"
     elif suite == WALK_FORWARD_SUITE:
         search_status = "causal_walk_forward_canary_smoke"
@@ -3620,12 +3385,10 @@ def run_research(
         "suite": suite,
         "mode": mode,
         "evidence_class": (
-            "post_selection_adaptive_simulation"
-            if suite == ADAPTIVE_SUITE and mode == "full"
-            else "post_selection_causal_simulation"
+            "post_selection_causal_simulation"
             if suite == WALK_FORWARD_SUITE and mode == "full"
             else "engineering_smoke"
-            if suite in {WALK_FORWARD_SUITE, ADAPTIVE_SUITE}
+            if suite == WALK_FORWARD_SUITE
             else EVIDENCE_CLASS
         ),
         "investment_claim_allowed": False,
@@ -3642,7 +3405,7 @@ def run_research(
         "gate_results_interpretable": (
             mode == "full"
             and suite
-            not in {RESULTS_FIRST_SUITE, WALK_FORWARD_SUITE, ADAPTIVE_SUITE}
+            not in {RESULTS_FIRST_SUITE, WALK_FORWARD_SUITE}
         ),
         "ranking_results_interpretable": (
             mode == "full" and suite == RESULTS_FIRST_SUITE
@@ -3651,11 +3414,6 @@ def run_research(
             mode == "full"
             and suite == WALK_FORWARD_SUITE
             and (walk_forward_summary or {}).get("causal_history_valid")
-        ),
-        "adaptive_results_interpretable": bool(
-            mode == "full"
-            and suite == ADAPTIVE_SUITE
-            and (adaptive_summary or {}).get("integrity_valid") is True
         ),
         "git": _git_state(root),
         "implementation_sha256": implementation_hash,
@@ -3715,7 +3473,7 @@ def run_research(
                 "all_registered_plus_runtime_ensembles"
                 if suite == RESULTS_FIRST_SUITE
                 else "fixed_direction_causal_candidate_registry"
-                if suite in {WALK_FORWARD_SUITE, ADAPTIVE_SUITE}
+                if suite == WALK_FORWARD_SUITE
                 else "legacy_regression_all_registered"
             ),
             "selected": [row.name for row in selected if row.name != control.name],
@@ -3751,7 +3509,6 @@ def run_research(
             "excluded_from_ranking": results_first_excluded,
         },
         "walk_forward": walk_forward_summary,
-        "adaptive": adaptive_summary,
         "robustness": robustness,
         "search_status": search_status,
         "search_stopped": bool(
@@ -3789,19 +3546,9 @@ def run_research(
             )
             for path in sorted(walk_forward_dir.rglob("*.json"))
         )
-    adaptive_dir = output_dir / "adaptive"
-    if adaptive_dir.is_dir():
-        artifact_paths.extend(
-            (
-                path.relative_to(output_dir).as_posix(),
-                path,
-            )
-            for path in sorted(adaptive_dir.rglob("*.json"))
-        )
     # Recheck every external byte-bound input immediately before publication.
-    # Full adaptive runs are long enough for a protocol or data file to change
-    # after the post-load check; no completed summary/manifest may be exposed
-    # for such a mixed snapshot.
+    # Full runs are long enough for a data file to change after the post-load
+    # check; no completed summary/manifest may be exposed for a mixed snapshot.
     (
         feature_hash,
         execution_hash,
@@ -3820,8 +3567,6 @@ def run_research(
         suspension_metadata_sha256=suspension_metadata_hash,
         suspension_requested_start=suspension_requested_start,
         suspension_requested_end=suspension_requested_end,
-        adaptive_protocol_path=adaptive_protocol_file,
-        adaptive_protocol_sha256=adaptive_protocol_hash,
     )
     manifest = {
         "schema_version": 2,
@@ -3850,18 +3595,6 @@ def run_research(
                 "metadata_sha256": suspension_metadata_hash,
                 "audit": suspension_snapshot_audit,
             },
-            *(
-                [
-                    {
-                        "role": "adaptive_protocol",
-                        "path": str(adaptive_protocol_file),
-                        "size_bytes": adaptive_protocol_file.stat().st_size,
-                        "sha256": adaptive_protocol_hash,
-                    }
-                ]
-                if adaptive_protocol_file is not None
-                else []
-            ),
         ],
         "files": [
             {
@@ -3889,8 +3622,8 @@ def latest_run(project_root: str | Path | None = None) -> dict[str, Any] | None:
 
 
 __all__ = [
-    "ADAPTIVE_SUITE",
     "ENGINE_ID",
+    "SUPPORTED_SUITES",
     "latest_run",
     "load_factor_suite",
     "run_research",

@@ -1,0 +1,183 @@
+{
+  "schema_version": "factor-lab/analyst-revisions-protocol/1",
+  "protocol_id": "6.0-analyst-revisions",
+  "payload_sha256": "58a299bae56119b8c957f267d2fedfe4323fa63364f2091a247e6bf019648e0a",
+  "status": "ingestion_implemented_research_spec_permission_and_vintage_blocked",
+  "direction": "sell_side_earnings_expectation_revisions",
+  "research_conclusion": {
+    "returns_or_labels_opened": false,
+    "alpha_claim": false,
+    "statement": "This release implements immutable ingestion and a PIT FY0/FY1 feature prototype only; target scoring, historical vintage proof, coverage qualification and return validation remain blocked."
+  },
+  "source": {
+    "provider": "Tushare Pro",
+    "endpoint": "report_rc",
+    "official_document": "https://tushare.pro/document/2?doc_id=292",
+    "documented_history_start": "2010-01-01",
+    "formal_research_start": "2017-01-01",
+    "documented_update_window": "19:00-22:00 Asia/Shanghai",
+    "documented_row_limit": 3000,
+    "documented_pagination": "limit=3000 and offset=N*3000 until a short or empty page",
+    "runtime_max_pages_per_date": 100,
+    "permission": {
+      "observed_current_rate_per_minute": 1,
+      "observed_state": "trial_only",
+      "formal_minimum_points": 8000,
+      "recommended_points": 10000,
+      "purchase_or_permission_change_is_external": true,
+      "reason": "A full historical backfill is not feasible under the observed trial rate and daily allowance."
+    }
+  },
+  "raw_contract": {
+    "fields": [
+      "ts_code",
+      "name",
+      "report_date",
+      "report_title",
+      "report_type",
+      "classify",
+      "org_name",
+      "author_name",
+      "quarter",
+      "op_rt",
+      "op_pr",
+      "tp",
+      "np",
+      "eps",
+      "rating",
+      "create_time"
+    ],
+    "excluded_initial_fields": [
+      "pe",
+      "rd",
+      "roe",
+      "ev_ebitda",
+      "max_price",
+      "min_price",
+      "imp_dg"
+    ],
+    "identity": [
+      "ts_code",
+      "report_date",
+      "report_title",
+      "report_type",
+      "classify",
+      "org_name",
+      "author_name",
+      "quarter"
+    ],
+    "partition": "runtime/data/raw/report_rc/report_date=YYYY-MM-DD",
+    "files": [
+      "part-000.parquet",
+      "pages/page-NNN.parquet",
+      "manifest.json"
+    ],
+    "publication": "All pages must complete before normalized page Parquets, the combined Parquet and a page-bound manifest are written to one staging directory and atomically renamed.",
+    "resume": "An existing partition is reused only when endpoint, field order, schema, combined Parquet row count/SHA-256, exact page-file set, every page file SHA/content hash/row count/offset and provider total row count are recomputed and match.",
+    "pagination_rule": "Every request sends limit=3000 and an explicit offset. A full 3000-row page requires another rate-limited page; only a short or empty page completes the date.",
+    "pagination_blocks": "A page over 3000, a repeated page content hash, any exact source row repeated across pages, unsupported limit/offset, a request failure, conflicting identity across pages, or 100 consecutive full pages blocks without publication.",
+    "maturity": "Only report dates strictly before the current Asia/Shanghai calendar date may be published; the current date waits until the provider's documented 19:00-22:00 update window has fully passed.",
+    "dedupe": "Exact source-row duplicates are removed deterministically; conflicting rows with the same report identity block normalization."
+  },
+  "pit_contract": {
+    "event_date": "report_date",
+    "availability": "first official exchange open session strictly after report_date",
+    "same_day_use": "forbidden",
+    "create_time_role": "vendor lineage only",
+    "create_time_may_advance_availability": false,
+    "correction_policy": "Previously published raw partitions are immutable; changed or malformed partitions block instead of being overwritten.",
+    "calendar_requirement": "The supplied official calendar must extend through the next open session after every report_date."
+  },
+  "feature_contract": {
+    "implementation": "factor_lab.data.analyst.build_analyst_revision_features",
+    "network_access": false,
+    "forbidden_inputs": [
+      "price",
+      "return",
+      "forward return",
+      "label"
+    ],
+    "state_key": [
+      "ts_code",
+      "quarter",
+      "org_name"
+    ],
+    "state": "latest available report per stock, target quarter and broker; same-broker same-report-date duplicates use a frozen per-metric median and never create_time or content-hash ordering",
+    "target_quarters": "Only calendar-year FY0 Q4 and FY1 Q4 are emitted for each signal date; stale historical quarters, non-Q4 quarters and FY2+ are excluded.",
+    "minimum_brokers": 3,
+    "horizons_trading_sessions": [
+      20,
+      60
+    ],
+    "metrics": [
+      "eps",
+      "np"
+    ],
+    "outputs_per_metric_and_horizon": [
+      "paired broker count",
+      "symmetric median-consensus revision",
+      "revision breadth"
+    ],
+    "symmetric_change": "2 * (new - old) / (abs(new) + abs(old) + 1e-12)",
+    "breadth": "(number upgraded - number downgraded) / paired brokers",
+    "missing_policy": "Insufficient paired brokers or missing estimates produce NaN; missing values are never replaced with zero."
+  },
+  "research_spec_before_returns": {
+    "candidate_families": [
+      "FY0/FY1 NP consensus revision at frozen 20/60-session horizons, with EPS as a split/share-adjustment robustness check",
+      "FY1 versus FY0 consensus forecast growth on the same paired brokers",
+      "actual announced earnings versus the last pre-announcement consensus"
+    ],
+    "diagnostic_only_until_frozen": [
+      "active-reviser breadth versus stale-broker breadth",
+      "coverage and initiations",
+      "dispersion",
+      "broker alias normalization"
+    ],
+    "final_score_status": "not_frozen",
+    "selection_rule": "No family may load returns until fiscal mapping, expiry, broker normalization, coverage and one-dimensional stock-score formulas are versioned and hash-bound."
+  },
+  "sync_plan": {
+    "entry_point": "python scripts/sync-analyst-reports.py",
+    "default_request_rate_per_minute": 1,
+    "date_axis": "all calendar report dates, including immutable empty partitions",
+    "estimated_2017_to_2026_minimum_requests": 3530,
+    "request_count_note": "This is a lower bound of one request per calendar date; full pages require additional page and terminal-short-page requests.",
+    "upgrade_required_before_full_backfill": true
+  },
+  "event_anchors": {
+    "endpoints": [
+      "forecast_vip",
+      "express_vip"
+    ],
+    "role": "later expectation-realization attribution only",
+    "standalone_factor_search": "not reopened",
+    "availability": "first official open session strictly after ann_date"
+  },
+  "parallel_opportunity_set_experiment": {
+    "status": "frozen_not_implemented",
+    "purpose": "Test whether the Top500 opportunity set, rather than another score transformation, is the binding constraint.",
+    "selection_data_cutoff": "2024-12-31 physical files before any expanded-universe return evaluation",
+    "control_universe": "existing monthly PIT Top500",
+    "challenger_universes": [
+      "all PIT-eligible A-shares with trailing-20-session RMB ADV >= 100000000",
+      "the top 1500 PIT-eligible A-shares by trailing-20-session RMB ADV"
+    ],
+    "eligibility": [
+      "listed for at least 120 official trading sessions",
+      "not ST on the signal date under historical-name PIT data",
+      "not delisted and has valid next-open execution inputs",
+      "same 50000000 capital, 5000000 target position notional and 5% ADV capacity rule"
+    ],
+    "fixed_components": "Use the unchanged fixed-core score, Top10/exit25 retention, ten offsets, next-open execution and full costs; do not add a selector or change weights.",
+    "audit_rule": "Do not open 2025+ for a challenger that fails the frozen train and validation gates."
+  },
+  "promotion_gates": [
+    "Upgrade report_rc permission and finish an uncapped immutable backfill from 2017.",
+    "Acquire research_report or an equivalent original-report archive and validate a stratified sample of report timestamps and EPS/NP values; otherwise restrict strict evidence to forward observations after first capture.",
+    "Pass schema, identity, broker-alias, calendar and monthly FY0/FY1 three-paired-broker coverage audits.",
+    "Freeze active-reviser semantics, fiscal expiry and the one-dimensional score for all three candidate families before loading returns.",
+    "Run exact next-open full-cost validation without changing this feature family."
+  ],
+  "evidence": "protocols/evidence/6.0/analyst-scout.json"
+}

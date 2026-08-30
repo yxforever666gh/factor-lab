@@ -1,0 +1,2057 @@
+{
+  "assertions": {
+    "all_evaluations_ok": true,
+    "candidate_and_control_schedule_paired": true,
+    "candidate_and_control_score_formula_identical": true,
+    "capacity_violation_count": 0,
+    "labels_or_forward_returns_loaded": false,
+    "offset_count": 10,
+    "only_retention_exit_rank_differs": true,
+    "selection_does_not_cross_2024_12_31": true,
+    "selection_max_outcome_end_date": "2024-12-31",
+    "target_state_separate_per_absolute_offset": true
+  },
+  "canonical_data_sha256": {
+    "execution": "0b33d7b76dcadddb46d5ed4a16b6c1e339162fb210fbe2a5d1fafe1efc92b28c",
+    "features": "8afe71e400e861ad219f1feb8c61899017b0aadd1536df92d99b8c9034bc2e88",
+    "suspension_metadata": "edf70a9b6cc2c03d6a910c9314e3a16c4d91f4f6105ae4f4fae97b0edca83000",
+    "suspensions": "5fc3c971b1a0376f5da3243a15a0bf4817f11f0339ef825daae298715b44689d"
+  },
+  "definitions": {
+    "candidate": {
+      "anchor_date": "2017-01-03",
+      "defensive_weight": 0.7,
+      "entry": "next_official_session_open_adj",
+      "holding_end": "open_adj_at_t_plus_11",
+      "id": "fixed_core_top10_exit25",
+      "position_count": 10,
+      "position_weight": 0.1,
+      "rank_tie_break": "score_desc_then_ticker_asc",
+      "retention_buffer": 15,
+      "retention_exit_rank": 25,
+      "score_formula": "(1-0.70)*rank(earnings_yield/pb) + 0.70*rank(rank(book_yield)+rank(earnings_yield)+rank(-volatility_20))",
+      "signal_timing": "close_t",
+      "sleeve_count": 10
+    },
+    "control": {
+      "anchor_date": "2017-01-03",
+      "defensive_weight": 0.7,
+      "entry": "next_official_session_open_adj",
+      "holding_end": "open_adj_at_t_plus_11",
+      "id": "fixed_core_top10_exit15",
+      "position_count": 10,
+      "position_weight": 0.1,
+      "rank_tie_break": "score_desc_then_ticker_asc",
+      "retention_buffer": 5,
+      "retention_exit_rank": 15,
+      "score_formula": "(1-0.70)*rank(earnings_yield/pb) + 0.70*rank(rank(book_yield)+rank(earnings_yield)+rank(-volatility_20))",
+      "signal_timing": "close_t",
+      "sleeve_count": 10
+    }
+  },
+  "evidence_class": "post_selected_historical_diagnostic_only",
+  "execution_contract": {
+    "capital": 50000000.0,
+    "costs": {
+      "commission_rate": 0.0003,
+      "exchange_handling_rate": 3.41e-05,
+      "impact_coefficient": 0.5,
+      "slippage_bps_per_side": 5.0,
+      "stamp_duty_before_2023_08_28": 0.001,
+      "stamp_duty_from_2023_08_28": 0.0005,
+      "transfer_fee_rate": 1e-05
+    },
+    "entry": "next official session open_adj",
+    "holding_days": 10,
+    "holding_end": "open_adj at signal calendar index + 11",
+    "max_adv_participation": 0.05,
+    "max_stale_position_age_days": 21,
+    "offsets": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "price_basis": "adjusted_total_return",
+    "rebalance_every_days": 10
+  },
+  "implementation_sha256": {
+    "execution_kernel": "ce695e793e805c21cae16e77400466883064cf3b6f3c318505f2a820aed7a7fb",
+    "long_only": "11b098597a01313f144f46e7a482649f67b978df8609302d9cc51c995085bae6",
+    "research_config": "6e96c4cdddd2d3a063d1cf39a0dbab59d795726518bd276fe2606215b48a83ae",
+    "research_runner": "fa296c94cca0e7477c6842b1331fe47cf727a1f3ea3de1aeb5a5a21357586bf5",
+    "runner": "93db71692332da9c15c69d3e927048e0433a635eedac6ddffa18ccbcb143d7e7",
+    "strategy": "a2fb4905e263aa09436ea17665a67eb70401451bf27f5e33e9ff58de3a9cd046"
+  },
+  "kind": "factor_lab_6_0_low_churn_exact_result",
+  "paired_offsets": [
+    {
+      "candidate_daily_nav_sha256": "dde9049e37cde67bc3d301fe1d7912580f31d415d9f5f3361f54729b99fe7908",
+      "candidate_period_trace_sha256": "c7bd960f08694560a88e695eb645b03c7bf7181a59d49a820db99df102941c9d",
+      "control_daily_nav_sha256": "5acb2d31846585d4f014408da3e46abec13f2d7a6e25abf13a56b4947b4fac7b",
+      "control_period_trace_sha256": "f8e32796df64163944421df16c10fd58e03249bc07d47aaf8f54653d7a72f238",
+      "offset": 0,
+      "phases": {
+        "audit": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.17647651073752346,
+            "end_signal_date": "2026-07-27",
+            "max_outcome_end_date": "2026-08-11",
+            "mean_turnover": 0.10607524492368418,
+            "net_cagr": 0.09351588626589358,
+            "net_sharpe": 0.6974391535966497,
+            "observations": 38,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.015102855338636756,
+              "net_cagr_delta": -0.021717104962900136,
+              "net_sharpe_delta": -0.12305200520983606,
+              "paired_relative_cagr": -0.019473155057017855,
+              "paired_spread_ir": -0.6756254560446483,
+              "positive_period_fraction": 0.3157894736842105,
+              "turnover_delta": -0.1204312953947368
+            },
+            "start_signal_date": "2025-01-13",
+            "total_cost_fraction": 0.007054897446551546
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.1613736553988867,
+            "end_signal_date": "2026-07-27",
+            "max_outcome_end_date": "2026-08-11",
+            "mean_turnover": 0.226506540318421,
+            "net_cagr": 0.11523299122879371,
+            "net_sharpe": 0.8204911588064857,
+            "observations": 38,
+            "start_signal_date": "2025-01-13",
+            "total_cost_fraction": 0.015004492282656892
+          }
+        },
+        "full": {
+          "candidate": {
+            "blocked_trade_count": 1,
+            "capacity_limited_count": 2,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2546819673030407,
+            "end_signal_date": "2026-07-27",
+            "max_outcome_end_date": "2026-08-11",
+            "mean_turnover": 0.11935641998412015,
+            "net_cagr": 0.11356904232630494,
+            "net_sharpe": 0.7110947676342052,
+            "observations": 233,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.0049034256834546985,
+              "net_cagr_delta": 0.013983234668647482,
+              "net_sharpe_delta": 0.05447682676413823,
+              "paired_relative_cagr": 0.012716819889149411,
+              "paired_spread_ir": 0.4647208774380335,
+              "positive_period_fraction": 0.4034334763948498,
+              "turnover_delta": -0.0691399712171674
+            },
+            "start_signal_date": "2017-01-03",
+            "total_cost_fraction": 0.05522904217271408
+          },
+          "control": {
+            "blocked_trade_count": 2,
+            "capacity_limited_count": 1,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.24977854161958601,
+            "end_signal_date": "2026-07-27",
+            "max_outcome_end_date": "2026-08-11",
+            "mean_turnover": 0.18849639120128756,
+            "net_cagr": 0.09958580765765745,
+            "net_sharpe": 0.656617940870067,
+            "observations": 233,
+            "start_signal_date": "2017-01-03",
+            "total_cost_fraction": 0.08739699197781815
+          }
+        },
+        "train": {
+          "candidate": {
+            "blocked_trade_count": 1,
+            "capacity_limited_count": 2,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2546819673030407,
+            "end_signal_date": "2022-12-06",
+            "max_outcome_end_date": "2022-12-21",
+            "mean_turnover": 0.11122342636413794,
+            "net_cagr": 0.07048770114277558,
+            "net_sharpe": 0.49751385117275243,
+            "observations": 145,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.0049034256834546985,
+              "net_cagr_delta": 0.01786001833864992,
+              "net_sharpe_delta": 0.09264598237754679,
+              "paired_relative_cagr": 0.01696708022258342,
+              "paired_spread_ir": 0.7262854861223248,
+              "positive_period_fraction": 0.4068965517241379,
+              "turnover_delta": -0.04555463557310342
+            },
+            "start_signal_date": "2017-01-03",
+            "total_cost_fraction": 0.03231449554809701
+          },
+          "control": {
+            "blocked_trade_count": 2,
+            "capacity_limited_count": 1,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.24977854161958601,
+            "end_signal_date": "2022-12-06",
+            "max_outcome_end_date": "2022-12-21",
+            "mean_turnover": 0.15677806193724136,
+            "net_cagr": 0.052627682804125664,
+            "net_sharpe": 0.40486786879520564,
+            "observations": 145,
+            "start_signal_date": "2017-01-03",
+            "total_cost_fraction": 0.046446330594191426
+          }
+        },
+        "validation": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.12268898469827805,
+            "end_signal_date": "2024-12-13",
+            "max_outcome_end_date": "2024-12-30",
+            "mean_turnover": 0.15873769411458333,
+            "net_cagr": 0.2853264109315432,
+            "net_sharpe": 1.2775225317370866,
+            "observations": 48,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.0016365792302515114,
+              "net_cagr_delta": 0.024218179382770266,
+              "net_sharpe_delta": 0.029450475174550794,
+              "paired_relative_cagr": 0.019203886531632408,
+              "paired_spread_ir": 0.528324940818823,
+              "positive_period_fraction": 0.4375,
+              "turnover_delta": -0.0944857729916666
+            },
+            "start_signal_date": "2023-01-04",
+            "total_cost_fraction": 0.015816813455706947
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.12105240546802654,
+            "end_signal_date": "2024-12-13",
+            "max_outcome_end_date": "2024-12-30",
+            "mean_turnover": 0.25322346710624993,
+            "net_cagr": 0.26110823154877294,
+            "net_sharpe": 1.2480720565625358,
+            "observations": 48,
+            "start_signal_date": "2023-01-04",
+            "total_cost_fraction": 0.025061399101335615
+          }
+        }
+      }
+    },
+    {
+      "candidate_daily_nav_sha256": "e32401f0e9d52ee2a0e6ffca911cdd2277d8274e491ab5f62b512512eaf6311a",
+      "candidate_period_trace_sha256": "3b8a8f4840cec2bdcf50c605273728e2d37084f682e7c182ca95ab1acb34264b",
+      "control_daily_nav_sha256": "99e3add51019a08078503c0ef18df769192a35d31222afb716447093611f7a92",
+      "control_period_trace_sha256": "21099db781cc90d8def7a1758496732b06796a57532e9961cd3c127030856b92",
+      "offset": 1,
+      "phases": {
+        "audit": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.17876354243595394,
+            "end_signal_date": "2026-07-28",
+            "max_outcome_end_date": "2026-08-12",
+            "mean_turnover": 0.10514411313421053,
+            "net_cagr": 0.06978747853318268,
+            "net_sharpe": 0.536028497479051,
+            "observations": 38,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.00544528579567205,
+              "net_cagr_delta": -0.0065949426407916345,
+              "net_sharpe_delta": -0.02210054640840542,
+              "paired_relative_cagr": -0.006126951268489389,
+              "paired_spread_ir": -0.25625962995623036,
+              "positive_period_fraction": 0.42105263157894735,
+              "turnover_delta": -0.10486022765789475
+            },
+            "start_signal_date": "2025-01-14",
+            "total_cost_fraction": 0.006987888428443976
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.1733182566402819,
+            "end_signal_date": "2026-07-28",
+            "max_outcome_end_date": "2026-08-12",
+            "mean_turnover": 0.21000434079210528,
+            "net_cagr": 0.07638242117397431,
+            "net_sharpe": 0.5581290438874564,
+            "observations": 38,
+            "start_signal_date": "2025-01-14",
+            "total_cost_fraction": 0.013781057232603562
+          }
+        },
+        "full": {
+          "candidate": {
+            "blocked_trade_count": 1,
+            "capacity_limited_count": 1,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2683920541181636,
+            "end_signal_date": "2026-07-28",
+            "max_outcome_end_date": "2026-08-12",
+            "mean_turnover": 0.11758678681974252,
+            "net_cagr": 0.11367490713699446,
+            "net_sharpe": 0.6269006833162766,
+            "observations": 233,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.02179785110729837,
+              "net_cagr_delta": 0.01123629034309892,
+              "net_sharpe_delta": 0.0421121965707576,
+              "paired_relative_cagr": 0.010192214035259717,
+              "paired_spread_ir": 0.3673065811878782,
+              "positive_period_fraction": 0.5278969957081545,
+              "turnover_delta": -0.07215000402403432
+            },
+            "start_signal_date": "2017-01-04",
+            "total_cost_fraction": 0.05479939823794665
+          },
+          "control": {
+            "blocked_trade_count": 1,
+            "capacity_limited_count": 4,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2465942030108652,
+            "end_signal_date": "2026-07-28",
+            "max_outcome_end_date": "2026-08-12",
+            "mean_turnover": 0.18973679084377684,
+            "net_cagr": 0.10243861679389554,
+            "net_sharpe": 0.584788486745519,
+            "observations": 233,
+            "start_signal_date": "2017-01-04",
+            "total_cost_fraction": 0.08937655161302763
+          }
+        },
+        "train": {
+          "candidate": {
+            "blocked_trade_count": 1,
+            "capacity_limited_count": 1,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2683920541181636,
+            "end_signal_date": "2022-12-07",
+            "max_outcome_end_date": "2022-12-22",
+            "mean_turnover": 0.11072299421103447,
+            "net_cagr": 0.06913255186381728,
+            "net_sharpe": 0.4677252575651102,
+            "observations": 145,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.02179785110729837,
+              "net_cagr_delta": 0.005268126039076115,
+              "net_sharpe_delta": 0.014024843932640196,
+              "paired_relative_cagr": 0.004951877242245439,
+              "paired_spread_ir": 0.23590688132672327,
+              "positive_period_fraction": 0.5586206896551724,
+              "turnover_delta": -0.053234601389655176
+            },
+            "start_signal_date": "2017-01-04",
+            "total_cost_fraction": 0.03221907854988362
+          },
+          "control": {
+            "blocked_trade_count": 1,
+            "capacity_limited_count": 2,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2465942030108652,
+            "end_signal_date": "2022-12-07",
+            "max_outcome_end_date": "2022-12-22",
+            "mean_turnover": 0.16395759560068965,
+            "net_cagr": 0.06386442582474117,
+            "net_sharpe": 0.45370041363247,
+            "observations": 145,
+            "start_signal_date": "2017-01-04",
+            "total_cost_fraction": 0.04956446514506682
+          }
+        },
+        "validation": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.12425715127983539,
+            "end_signal_date": "2024-12-16",
+            "max_outcome_end_date": "2024-12-31",
+            "mean_turnover": 0.15251541353125,
+            "net_cagr": 0.32356453924126627,
+            "net_sharpe": 1.0713456063114168,
+            "observations": 48,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": 0.018261938427502677,
+              "net_cagr_delta": 0.045700290678323485,
+              "net_sharpe_delta": 0.11718937738396473,
+              "paired_relative_cagr": 0.03576302469508552,
+              "paired_spread_ir": 0.9284077681295841,
+              "positive_period_fraction": 0.5208333333333334,
+              "turnover_delta": -0.10225463276250005
+            },
+            "start_signal_date": "2023-01-05",
+            "total_cost_fraction": 0.015556249142668736
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 2,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.14251908970733806,
+            "end_signal_date": "2024-12-16",
+            "max_outcome_end_date": "2024-12-31",
+            "mean_turnover": 0.25477004629375005,
+            "net_cagr": 0.2778642485629428,
+            "net_sharpe": 0.9541562289274521,
+            "observations": 48,
+            "start_signal_date": "2023-01-05",
+            "total_cost_fraction": 0.025477497845042395
+          }
+        }
+      }
+    },
+    {
+      "candidate_daily_nav_sha256": "e5cbe96b2646a7ee5dff64b6528e5dcd3781b081f193745216e5661b8d1960d4",
+      "candidate_period_trace_sha256": "752ee2f5caf658ace6d97221f6f7bc39f36d7b904b1295e0481e4dd47822e649",
+      "control_daily_nav_sha256": "f2aab1799407ce3481dcc4cee5cda6c42abb4f1149c5acecc48b36a2bd17a88e",
+      "control_period_trace_sha256": "2cbe4528faae181b34df48ed0532dcf3d94d84cc9e42452e6f2e4d86cb73e755",
+      "offset": 2,
+      "phases": {
+        "audit": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.17807797929353608,
+            "end_signal_date": "2026-07-29",
+            "max_outcome_end_date": "2026-08-13",
+            "mean_turnover": 0.10019844358157894,
+            "net_cagr": 0.08646322139641027,
+            "net_sharpe": 0.6236885250487165,
+            "observations": 38,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": 0.004560853281664223,
+              "net_cagr_delta": 0.02189808385087999,
+              "net_sharpe_delta": 0.13116541685933197,
+              "paired_relative_cagr": 0.020569980246927688,
+              "paired_spread_ir": 0.8253627662799808,
+              "positive_period_fraction": 0.42105263157894735,
+              "turnover_delta": -0.09480981979736842
+            },
+            "start_signal_date": "2025-01-15",
+            "total_cost_fraction": 0.006376296814109337
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.1826388325752003,
+            "end_signal_date": "2026-07-29",
+            "max_outcome_end_date": "2026-08-13",
+            "mean_turnover": 0.19500826337894736,
+            "net_cagr": 0.06456513754553028,
+            "net_sharpe": 0.49252310818938455,
+            "observations": 38,
+            "start_signal_date": "2025-01-15",
+            "total_cost_fraction": 0.012445335519925663
+          }
+        },
+        "full": {
+          "candidate": {
+            "blocked_trade_count": 1,
+            "capacity_limited_count": 1,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2635309416732,
+            "end_signal_date": "2026-07-29",
+            "max_outcome_end_date": "2026-08-13",
+            "mean_turnover": 0.11775356546909872,
+            "net_cagr": 0.10769188158856502,
+            "net_sharpe": 0.6452183340498949,
+            "observations": 233,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": 0.0033600491650094266,
+              "net_cagr_delta": 0.01736091432332665,
+              "net_sharpe_delta": 0.0759103565974405,
+              "paired_relative_cagr": 0.015922609597039727,
+              "paired_spread_ir": 0.6507288945288644,
+              "positive_period_fraction": 0.4291845493562232,
+              "turnover_delta": -0.06417437903605151
+            },
+            "start_signal_date": "2017-01-05",
+            "total_cost_fraction": 0.05461302876910916
+          },
+          "control": {
+            "blocked_trade_count": 1,
+            "capacity_limited_count": 2,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.26689099083820944,
+            "end_signal_date": "2026-07-29",
+            "max_outcome_end_date": "2026-08-13",
+            "mean_turnover": 0.18192794450515024,
+            "net_cagr": 0.09033096726523837,
+            "net_sharpe": 0.5693079774524544,
+            "observations": 233,
+            "start_signal_date": "2017-01-05",
+            "total_cost_fraction": 0.08466230939676757
+          }
+        },
+        "train": {
+          "candidate": {
+            "blocked_trade_count": 1,
+            "capacity_limited_count": 1,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2635309416732,
+            "end_signal_date": "2022-12-08",
+            "max_outcome_end_date": "2022-12-23",
+            "mean_turnover": 0.11081453905379311,
+            "net_cagr": 0.05090799500990917,
+            "net_sharpe": 0.3794226810312231,
+            "observations": 145,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": 0.0033600491650094266,
+              "net_cagr_delta": 0.012253183727582329,
+              "net_sharpe_delta": 0.06426230996921106,
+              "paired_relative_cagr": 0.011797166483497046,
+              "paired_spread_ir": 0.5351696319287854,
+              "positive_period_fraction": 0.4,
+              "turnover_delta": -0.045754008778620694
+            },
+            "start_signal_date": "2017-01-05",
+            "total_cost_fraction": 0.032432095801397616
+          },
+          "control": {
+            "blocked_trade_count": 1,
+            "capacity_limited_count": 2,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.26689099083820944,
+            "end_signal_date": "2022-12-08",
+            "max_outcome_end_date": "2022-12-23",
+            "mean_turnover": 0.1565685478324138,
+            "net_cagr": 0.03865481128232684,
+            "net_sharpe": 0.31516037106201206,
+            "observations": 145,
+            "start_signal_date": "2017-01-05",
+            "total_cost_fraction": 0.04717045583822024
+          }
+        },
+        "validation": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.12036049699527263,
+            "end_signal_date": "2024-12-03",
+            "max_outcome_end_date": "2024-12-18",
+            "mean_turnover": 0.15986905884042554,
+            "net_cagr": 0.2958913796410594,
+            "net_sharpe": 1.1577159983536545,
+            "observations": 47,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": 0.027196247815262975,
+              "net_cagr_delta": 0.024720208803525212,
+              "net_sharpe_delta": 0.0682708094452904,
+              "paired_relative_cagr": 0.01944679785904735,
+              "paired_spread_ir": 0.6350866171989054,
+              "positive_period_fraction": 0.48936170212765956,
+              "turnover_delta": -0.09180740273829782
+            },
+            "start_signal_date": "2023-01-06",
+            "total_cost_fraction": 0.015743972616131606
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.1475567448105356,
+            "end_signal_date": "2024-12-03",
+            "max_outcome_end_date": "2024-12-18",
+            "mean_turnover": 0.25167646157872336,
+            "net_cagr": 0.27117117083753417,
+            "net_sharpe": 1.089445188908364,
+            "observations": 47,
+            "start_signal_date": "2023-01-06",
+            "total_cost_fraction": 0.024131364230638688
+          }
+        }
+      }
+    },
+    {
+      "candidate_daily_nav_sha256": "79176c8d7dfbca1fdcf33e5ea1584fcf1a5f5d3ac183036eaee3680be4bc3851",
+      "candidate_period_trace_sha256": "c9b416fba2cb689f71af6155c09388af081e3f0785f22e70d8e67398ce845f25",
+      "control_daily_nav_sha256": "cbf6b586a40b8bddb4e5832160543ab910e6c1bc3e3ae7efa552b0ee67a6678b",
+      "control_period_trace_sha256": "b0474b68db35632edc180fa7b7cc5d626d1885bf918115d8d5736c3caa48b913",
+      "offset": 3,
+      "phases": {
+        "audit": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.16933235094537757,
+            "end_signal_date": "2026-07-30",
+            "max_outcome_end_date": "2026-08-14",
+            "mean_turnover": 0.09226107973076922,
+            "net_cagr": 0.07839670680996047,
+            "net_sharpe": 0.5882670739268158,
+            "observations": 39,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": 0.0021522724956576367,
+              "net_cagr_delta": 0.0016637027382073732,
+              "net_sharpe_delta": 0.022453075211241402,
+              "paired_relative_cagr": 0.001545139539622431,
+              "paired_spread_ir": 0.025823617975177383,
+              "positive_period_fraction": 0.3076923076923077,
+              "turnover_delta": -0.11247630797948718
+            },
+            "start_signal_date": "2025-01-02",
+            "total_cost_fraction": 0.006114441267780385
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.1714846234410352,
+            "end_signal_date": "2026-07-30",
+            "max_outcome_end_date": "2026-08-14",
+            "mean_turnover": 0.2047373877102564,
+            "net_cagr": 0.0767330040717531,
+            "net_sharpe": 0.5658139987155744,
+            "observations": 39,
+            "start_signal_date": "2025-01-02",
+            "total_cost_fraction": 0.013598074754378207
+          }
+        },
+        "full": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 1,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2599937825024914,
+            "end_signal_date": "2026-07-30",
+            "max_outcome_end_date": "2026-08-14",
+            "mean_turnover": 0.11273456624763949,
+            "net_cagr": 0.10244623061231217,
+            "net_sharpe": 0.6672616534763209,
+            "observations": 233,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.00034692063518482197,
+              "net_cagr_delta": 0.01146900571335685,
+              "net_sharpe_delta": 0.049496380088980274,
+              "paired_relative_cagr": 0.01051259866072729,
+              "paired_spread_ir": 0.36122105897089574,
+              "positive_period_fraction": 0.38626609442060084,
+              "turnover_delta": -0.07005007662703859
+            },
+            "start_signal_date": "2017-01-06",
+            "total_cost_fraction": 0.05210380306015975
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 2,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.25964686186730657,
+            "end_signal_date": "2026-07-30",
+            "max_outcome_end_date": "2026-08-14",
+            "mean_turnover": 0.18278464287467808,
+            "net_cagr": 0.09097722489895532,
+            "net_sharpe": 0.6177652733873407,
+            "observations": 233,
+            "start_signal_date": "2017-01-06",
+            "total_cost_fraction": 0.0854971023038659
+          }
+        },
+        "train": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 1,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2599937825024914,
+            "end_signal_date": "2022-12-09",
+            "max_outcome_end_date": "2022-12-26",
+            "mean_turnover": 0.1073667401551724,
+            "net_cagr": 0.05659365152223628,
+            "net_sharpe": 0.41310564104223524,
+            "observations": 145,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.00034692063518482197,
+              "net_cagr_delta": 0.006327136947707812,
+              "net_sharpe_delta": 0.02831593302662816,
+              "paired_relative_cagr": 0.0060243155998083164,
+              "paired_spread_ir": 0.24563298530184333,
+              "positive_period_fraction": 0.38620689655172413,
+              "turnover_delta": -0.04957170428689654
+            },
+            "start_signal_date": "2017-01-06",
+            "total_cost_fraction": 0.031339444954703144
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 2,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.25964686186730657,
+            "end_signal_date": "2022-12-09",
+            "max_outcome_end_date": "2022-12-26",
+            "mean_turnover": 0.15693844444206895,
+            "net_cagr": 0.050266514574528465,
+            "net_sharpe": 0.3847897080156071,
+            "observations": 145,
+            "start_signal_date": "2017-01-06",
+            "total_cost_fraction": 0.04701184602998637
+          }
+        },
+        "validation": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.13004692261142647,
+            "end_signal_date": "2024-12-04",
+            "max_outcome_end_date": "2024-12-19",
+            "mean_turnover": 0.15040022527021277,
+            "net_cagr": 0.25973679153371987,
+            "net_sharpe": 1.3294685799650656,
+            "observations": 47,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": 0.0130774336806595,
+              "net_cagr_delta": 0.032049078685407295,
+              "net_sharpe_delta": 0.09838576462895454,
+              "paired_relative_cagr": 0.026105236983312574,
+              "paired_spread_ir": 0.8446090476531715,
+              "positive_period_fraction": 0.425531914893617,
+              "turnover_delta": -0.08831246099787235
+            },
+            "start_signal_date": "2023-01-09",
+            "total_cost_fraction": 0.014607075000876097
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.14312435629208597,
+            "end_signal_date": "2024-12-04",
+            "max_outcome_end_date": "2024-12-19",
+            "mean_turnover": 0.23871268626808512,
+            "net_cagr": 0.22768771284831257,
+            "net_sharpe": 1.231082815336111,
+            "observations": 47,
+            "start_signal_date": "2023-01-09",
+            "total_cost_fraction": 0.02353316763846056
+          }
+        }
+      }
+    },
+    {
+      "candidate_daily_nav_sha256": "1fbd425bf9aff5e09e3e697916b14a436712a33167e6cc186c115045321d1be5",
+      "candidate_period_trace_sha256": "a79d7ff67fde05894213307e08c26e332cdf78007472ce6dff6719e74705ccf8",
+      "control_daily_nav_sha256": "b79b77af2d3d9d5d70f7a358e802fcccf8ad481e90760311d83f607e102a3688",
+      "control_period_trace_sha256": "7c3572129955f3cb297eb1886c21dfe099a747d19a981c33029b73a9ee44cdcb",
+      "offset": 4,
+      "phases": {
+        "audit": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.16784099284086562,
+            "end_signal_date": "2026-07-31",
+            "max_outcome_end_date": "2026-08-17",
+            "mean_turnover": 0.09317741545384617,
+            "net_cagr": 0.08365596951658327,
+            "net_sharpe": 0.6693930135715034,
+            "observations": 39,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": 0.001090652691412064,
+              "net_cagr_delta": 0.010148291278085475,
+              "net_sharpe_delta": 0.07247373035474036,
+              "paired_relative_cagr": 0.009453394217671107,
+              "paired_spread_ir": 0.3130721231492963,
+              "positive_period_fraction": 0.38461538461538464,
+              "turnover_delta": -0.10118894245641025
+            },
+            "start_signal_date": "2025-01-03",
+            "total_cost_fraction": 0.006175514665702804
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.16893164553227769,
+            "end_signal_date": "2026-07-31",
+            "max_outcome_end_date": "2026-08-17",
+            "mean_turnover": 0.19436635791025642,
+            "net_cagr": 0.0735076782384978,
+            "net_sharpe": 0.596919283216763,
+            "observations": 39,
+            "start_signal_date": "2025-01-03",
+            "total_cost_fraction": 0.012958660931821787
+          }
+        },
+        "full": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 1,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2557775810993409,
+            "end_signal_date": "2026-07-31",
+            "max_outcome_end_date": "2026-08-17",
+            "mean_turnover": 0.11294729304463519,
+            "net_cagr": 0.10229760852678771,
+            "net_sharpe": 0.6575993340447199,
+            "observations": 233,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.014191089067231988,
+              "net_cagr_delta": 0.007517288763146945,
+              "net_sharpe_delta": 0.046380765430891535,
+              "paired_relative_cagr": 0.0068664814551742115,
+              "paired_spread_ir": 0.25027265854263336,
+              "positive_period_fraction": 0.47639484978540775,
+              "turnover_delta": -0.06349100471287555
+            },
+            "start_signal_date": "2017-01-09",
+            "total_cost_fraction": 0.05200645920232057
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 2,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2415864920321089,
+            "end_signal_date": "2026-07-31",
+            "max_outcome_end_date": "2026-08-17",
+            "mean_turnover": 0.17643829775751074,
+            "net_cagr": 0.09478031976364076,
+            "net_sharpe": 0.6112185686138284,
+            "observations": 233,
+            "start_signal_date": "2017-01-09",
+            "total_cost_fraction": 0.08159660038620997
+          }
+        },
+        "train": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 1,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2557775810993409,
+            "end_signal_date": "2022-12-12",
+            "max_outcome_end_date": "2022-12-27",
+            "mean_turnover": 0.10491128538413794,
+            "net_cagr": 0.04639675800423637,
+            "net_sharpe": 0.35159161595319083,
+            "observations": 145,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.014191089067231988,
+              "net_cagr_delta": -0.001015828172451938,
+              "net_sharpe_delta": -0.0045125678860896135,
+              "paired_relative_cagr": -0.0009698452986514061,
+              "paired_spread_ir": -0.046452615747341316,
+              "positive_period_fraction": 0.4482758620689655,
+              "turnover_delta": -0.048716477839999967
+            },
+            "start_signal_date": "2017-01-09",
+            "total_cost_fraction": 0.0303937099675196
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 2,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2415864920321089,
+            "end_signal_date": "2022-12-12",
+            "max_outcome_end_date": "2022-12-27",
+            "mean_turnover": 0.1536277632241379,
+            "net_cagr": 0.04741258617668831,
+            "net_sharpe": 0.35610418383928044,
+            "observations": 145,
+            "start_signal_date": "2017-01-09",
+            "total_cost_fraction": 0.04567834456982115
+          }
+        },
+        "validation": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.12040715251826395,
+            "end_signal_date": "2024-12-05",
+            "max_outcome_end_date": "2024-12-20",
+            "mean_turnover": 0.15841876079361705,
+            "net_cagr": 0.29744081754040197,
+            "net_sharpe": 1.4067792117079698,
+            "observations": 47,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.006357910431467828,
+              "net_cagr_delta": 0.0364395044309378,
+              "net_sharpe_delta": 0.1823371428976468,
+              "paired_relative_cagr": 0.02889727714960344,
+              "paired_spread_ir": 0.8223827950593782,
+              "positive_period_fraction": 0.6382978723404256,
+              "turnover_delta": -0.07622851680212767
+            },
+            "start_signal_date": "2023-01-10",
+            "total_cost_fraction": 0.015403680175622344
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.11404924208679612,
+            "end_signal_date": "2024-12-05",
+            "max_outcome_end_date": "2024-12-20",
+            "mean_turnover": 0.23464727759574472,
+            "net_cagr": 0.2610013131094642,
+            "net_sharpe": 1.224442068810323,
+            "observations": 47,
+            "start_signal_date": "2023-01-10",
+            "total_cost_fraction": 0.022590364816935726
+          }
+        }
+      }
+    },
+    {
+      "candidate_daily_nav_sha256": "22ebb51249d5afb8fd71827992b394639a64636c93db245e88e1a70d1ed40ecf",
+      "candidate_period_trace_sha256": "efc8582d9dafbd27aa478175271aa98dc814620e811f40439fcd23f54e3c4925",
+      "control_daily_nav_sha256": "744146dfede640723f44b1d3f8bfb8438b99a977ebc555489f96dcd1e1597d53",
+      "control_period_trace_sha256": "6ba78bd953712f2805693e80baa0c368eb52fcdad4e3c4fb7e0ce785accbf229",
+      "offset": 5,
+      "phases": {
+        "audit": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.17107773779446112,
+            "end_signal_date": "2026-08-03",
+            "max_outcome_end_date": "2026-08-18",
+            "mean_turnover": 0.0932482486820513,
+            "net_cagr": 0.06996490522462517,
+            "net_sharpe": 0.5703623380629926,
+            "observations": 39,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.01918645126507179,
+              "net_cagr_delta": -0.008808411389924276,
+              "net_sharpe_delta": -0.06771200661276511,
+              "paired_relative_cagr": -0.008165210664986877,
+              "paired_spread_ir": -0.2904360038088874,
+              "positive_period_fraction": 0.4358974358974359,
+              "turnover_delta": -0.11709918068461532
+            },
+            "start_signal_date": "2025-01-06",
+            "total_cost_fraction": 0.006276766958686299
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.15189128652938932,
+            "end_signal_date": "2026-08-03",
+            "max_outcome_end_date": "2026-08-18",
+            "mean_turnover": 0.21034742936666662,
+            "net_cagr": 0.07877331661454945,
+            "net_sharpe": 0.6380743446757577,
+            "observations": 39,
+            "start_signal_date": "2025-01-06",
+            "total_cost_fraction": 0.014010836624945644
+          }
+        },
+        "full": {
+          "candidate": {
+            "blocked_trade_count": 1,
+            "capacity_limited_count": 2,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.26314187009808976,
+            "end_signal_date": "2026-08-03",
+            "max_outcome_end_date": "2026-08-18",
+            "mean_turnover": 0.11675279731244635,
+            "net_cagr": 0.11168753020357225,
+            "net_sharpe": 0.7217518141591934,
+            "observations": 233,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.010632251842647156,
+              "net_cagr_delta": 0.013441307245817713,
+              "net_sharpe_delta": 0.056236658411226714,
+              "paired_relative_cagr": 0.012238883198357753,
+              "paired_spread_ir": 0.43030493092801836,
+              "positive_period_fraction": 0.4592274678111588,
+              "turnover_delta": -0.07064845042017169
+            },
+            "start_signal_date": "2017-01-10",
+            "total_cost_fraction": 0.05563490825228916
+          },
+          "control": {
+            "blocked_trade_count": 1,
+            "capacity_limited_count": 4,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2525096182554426,
+            "end_signal_date": "2026-08-03",
+            "max_outcome_end_date": "2026-08-18",
+            "mean_turnover": 0.18740124773261804,
+            "net_cagr": 0.09824622295775454,
+            "net_sharpe": 0.6655151557479667,
+            "observations": 233,
+            "start_signal_date": "2017-01-10",
+            "total_cost_fraction": 0.08806511465514093
+          }
+        },
+        "train": {
+          "candidate": {
+            "blocked_trade_count": 1,
+            "capacity_limited_count": 2,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.26314187009808976,
+            "end_signal_date": "2022-12-13",
+            "max_outcome_end_date": "2022-12-28",
+            "mean_turnover": 0.10839217777034484,
+            "net_cagr": 0.07650260976070822,
+            "net_sharpe": 0.5370474435037002,
+            "observations": 145,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.010632251842647156,
+              "net_cagr_delta": 0.02117774002332573,
+              "net_sharpe_delta": 0.11799524759743324,
+              "paired_relative_cagr": 0.02006750776999655,
+              "paired_spread_ir": 0.6784114907045082,
+              "positive_period_fraction": 0.45517241379310347,
+              "turnover_delta": -0.05356523074413792
+            },
+            "start_signal_date": "2017-01-10",
+            "total_cost_fraction": 0.03249205439327156
+          },
+          "control": {
+            "blocked_trade_count": 1,
+            "capacity_limited_count": 1,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2525096182554426,
+            "end_signal_date": "2022-12-13",
+            "max_outcome_end_date": "2022-12-28",
+            "mean_turnover": 0.16195740851448276,
+            "net_cagr": 0.05532486973738249,
+            "net_sharpe": 0.4190521959062669,
+            "observations": 145,
+            "start_signal_date": "2017-01-10",
+            "total_cost_fraction": 0.04947973765061498
+          }
+        },
+        "validation": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.11774942917839426,
+            "end_signal_date": "2024-12-06",
+            "max_outcome_end_date": "2024-12-23",
+            "mean_turnover": 0.1664663429106383,
+            "net_cagr": 0.25255931602336745,
+            "net_sharpe": 1.2132569600542198,
+            "observations": 47,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": 0.0042241600679757685,
+              "net_cagr_delta": 0.005290220498143983,
+              "net_sharpe_delta": -0.055828043486796375,
+              "paired_relative_cagr": 0.004241442778565974,
+              "paired_spread_ir": 0.19762815449007967,
+              "positive_period_fraction": 0.48936170212765956,
+              "turnover_delta": -0.07937592689574471
+            },
+            "start_signal_date": "2023-01-11",
+            "total_cost_fraction": 0.016831786125939593
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 3,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.12197358924637003,
+            "end_signal_date": "2024-12-06",
+            "max_outcome_end_date": "2024-12-23",
+            "mean_turnover": 0.24584226980638302,
+            "net_cagr": 0.24726909552522347,
+            "net_sharpe": 1.2690850035410162,
+            "observations": 47,
+            "start_signal_date": "2023-01-11",
+            "total_cost_fraction": 0.023678476705905175
+          }
+        }
+      }
+    },
+    {
+      "candidate_daily_nav_sha256": "170b944970fdc5562a22ef5d506e5f6bdbff8605cf9c3f7d0a05c365b0b7ac6b",
+      "candidate_period_trace_sha256": "a83c56ad0d11ca95e3db980ea027b339219d39d14e6092e3822e6a3e44e653d1",
+      "control_daily_nav_sha256": "a9635ccb91f194faeb21dca57f7bf28a474fe5366f1daf01f532d4348442651f",
+      "control_period_trace_sha256": "290de744a72c7c11a0f2cd28d3b9099292180429b707a96058ab59dd0d39ff4c",
+      "offset": 6,
+      "phases": {
+        "audit": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.17982537918753627,
+            "end_signal_date": "2026-08-04",
+            "max_outcome_end_date": "2026-08-19",
+            "mean_turnover": 0.0986566830051282,
+            "net_cagr": 0.0765674380816177,
+            "net_sharpe": 0.6331321465749308,
+            "observations": 39,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.002540338333291592,
+              "net_cagr_delta": -0.009090613536993697,
+              "net_sharpe_delta": -0.05861205990780294,
+              "paired_relative_cagr": -0.008373367215801286,
+              "paired_spread_ir": -0.26324227938213546,
+              "positive_period_fraction": 0.4358974358974359,
+              "turnover_delta": -0.11193129987435899
+            },
+            "start_signal_date": "2025-01-07",
+            "total_cost_fraction": 0.006521515771483112
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.17728504085424468,
+            "end_signal_date": "2026-08-04",
+            "max_outcome_end_date": "2026-08-19",
+            "mean_turnover": 0.21058798287948718,
+            "net_cagr": 0.0856580516186114,
+            "net_sharpe": 0.6917442064827337,
+            "observations": 39,
+            "start_signal_date": "2025-01-07",
+            "total_cost_fraction": 0.014240492503142918
+          }
+        },
+        "full": {
+          "candidate": {
+            "blocked_trade_count": 1,
+            "capacity_limited_count": 1,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2675237502440816,
+            "end_signal_date": "2026-08-04",
+            "max_outcome_end_date": "2026-08-19",
+            "mean_turnover": 0.11168329645064376,
+            "net_cagr": 0.1067446360857045,
+            "net_sharpe": 0.6891145340745443,
+            "observations": 233,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.010891030492164,
+              "net_cagr_delta": 0.0043931814926270185,
+              "net_sharpe_delta": -0.003158016034514044,
+              "paired_relative_cagr": 0.003985282075260388,
+              "paired_spread_ir": 0.1721981004060338,
+              "positive_period_fraction": 0.4592274678111588,
+              "turnover_delta": -0.0707063958695279
+            },
+            "start_signal_date": "2017-01-11",
+            "total_cost_fraction": 0.05133221580340021
+          },
+          "control": {
+            "blocked_trade_count": 1,
+            "capacity_limited_count": 5,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2566327197519176,
+            "end_signal_date": "2026-08-04",
+            "max_outcome_end_date": "2026-08-19",
+            "mean_turnover": 0.18238969232017166,
+            "net_cagr": 0.10235145459307748,
+            "net_sharpe": 0.6922725501090583,
+            "observations": 233,
+            "start_signal_date": "2017-01-11",
+            "total_cost_fraction": 0.08545502487397197
+          }
+        },
+        "train": {
+          "candidate": {
+            "blocked_trade_count": 1,
+            "capacity_limited_count": 1,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2675237502440816,
+            "end_signal_date": "2022-12-14",
+            "max_outcome_end_date": "2022-12-29",
+            "mean_turnover": 0.10404072546689655,
+            "net_cagr": 0.0638250370081781,
+            "net_sharpe": 0.4572374724512683,
+            "observations": 145,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.010891030492164,
+              "net_cagr_delta": 0.004684545765835102,
+              "net_sharpe_delta": 0.012606920958042667,
+              "paired_relative_cagr": 0.004422969194898929,
+              "paired_spread_ir": 0.1993917290687836,
+              "positive_period_fraction": 0.47586206896551725,
+              "turnover_delta": -0.05282540716689657
+            },
+            "start_signal_date": "2017-01-11",
+            "total_cost_fraction": 0.030421587843854285
+          },
+          "control": {
+            "blocked_trade_count": 1,
+            "capacity_limited_count": 2,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2566327197519176,
+            "end_signal_date": "2022-12-14",
+            "max_outcome_end_date": "2022-12-29",
+            "mean_turnover": 0.15686613263379312,
+            "net_cagr": 0.059140491242342996,
+            "net_sharpe": 0.4446305514932256,
+            "observations": 145,
+            "start_signal_date": "2017-01-11",
+            "total_cost_fraction": 0.047304303765520764
+          }
+        },
+        "validation": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.11825000241808503,
+            "end_signal_date": "2024-12-09",
+            "max_outcome_end_date": "2024-12-24",
+            "mean_turnover": 0.15002545735744682,
+            "net_cagr": 0.26811235392816646,
+            "net_sharpe": 1.2705375673936774,
+            "observations": 47,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.0015372250872146553,
+              "net_cagr_delta": 0.0148073792854575,
+              "net_sharpe_delta": -0.02284500187075733,
+              "paired_relative_cagr": 0.011814665691946669,
+              "paired_spread_ir": 0.40313002482259713,
+              "positive_period_fraction": 0.425531914893617,
+              "turnover_delta": -0.0862706197170213
+            },
+            "start_signal_date": "2023-01-12",
+            "total_cost_fraction": 0.014339926796350353
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 3,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.11671277733087038,
+            "end_signal_date": "2024-12-09",
+            "max_outcome_end_date": "2024-12-24",
+            "mean_turnover": 0.23629607707446812,
+            "net_cagr": 0.25330497464270896,
+            "net_sharpe": 1.2933825692644347,
+            "observations": 47,
+            "start_signal_date": "2023-01-12",
+            "total_cost_fraction": 0.02299499680948674
+          }
+        }
+      }
+    },
+    {
+      "candidate_daily_nav_sha256": "64dfbaeb40e0e5e210e62dfba914286daa9e0ba584df805bcd77f55d348a8495",
+      "candidate_period_trace_sha256": "29810c767d98416844d618100e0b05694d7697dfa529c8471350d90a64b9d13b",
+      "control_daily_nav_sha256": "bbe70e37bba46912a8058059bf393220c14243c9993ce9f41069e2cbd8ce28f0",
+      "control_period_trace_sha256": "78f4d13a109e1fb500fbf8abe314634efcb1bb18fb3aa628e1a2deeae8eebc16",
+      "offset": 7,
+      "phases": {
+        "audit": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.18004343676807677,
+            "end_signal_date": "2026-08-05",
+            "max_outcome_end_date": "2026-08-20",
+            "mean_turnover": 0.09873517928974361,
+            "net_cagr": 0.07515205340019349,
+            "net_sharpe": 0.561567493952101,
+            "observations": 39,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": 0.004470421560402782,
+              "net_cagr_delta": -0.0015996291376916272,
+              "net_sharpe_delta": -0.01031228526359107,
+              "paired_relative_cagr": -0.0014856063506870631,
+              "paired_spread_ir": -0.042364983308195936,
+              "positive_period_fraction": 0.38461538461538464,
+              "turnover_delta": -0.08165041644102562
+            },
+            "start_signal_date": "2025-01-08",
+            "total_cost_fraction": 0.006682665660391388
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.18451385832847955,
+            "end_signal_date": "2026-08-05",
+            "max_outcome_end_date": "2026-08-20",
+            "mean_turnover": 0.18038559573076923,
+            "net_cagr": 0.07675168253788511,
+            "net_sharpe": 0.5718797792156921,
+            "observations": 39,
+            "start_signal_date": "2025-01-08",
+            "total_cost_fraction": 0.012160601725975245
+          }
+        },
+        "full": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 1,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.27046846454314144,
+            "end_signal_date": "2026-08-05",
+            "max_outcome_end_date": "2026-08-20",
+            "mean_turnover": 0.1114707203,
+            "net_cagr": 0.11988045435385453,
+            "net_sharpe": 0.7939431258981156,
+            "observations": 233,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.018437095983036778,
+              "net_cagr_delta": 0.019442714204189526,
+              "net_sharpe_delta": 0.0930749050167512,
+              "paired_relative_cagr": 0.017668163763217892,
+              "paired_spread_ir": 0.5827065722279772,
+              "positive_period_fraction": 0.43776824034334766,
+              "turnover_delta": -0.0677468894939914
+            },
+            "start_signal_date": "2017-01-12",
+            "total_cost_fraction": 0.05132076015119828
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 2,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.25203136856010466,
+            "end_signal_date": "2026-08-05",
+            "max_outcome_end_date": "2026-08-20",
+            "mean_turnover": 0.1792176097939914,
+            "net_cagr": 0.100437740149665,
+            "net_sharpe": 0.7008682208813644,
+            "observations": 233,
+            "start_signal_date": "2017-01-12",
+            "total_cost_fraction": 0.08397454837571092
+          }
+        },
+        "train": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 1,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.27046846454314144,
+            "end_signal_date": "2022-12-15",
+            "max_outcome_end_date": "2022-12-30",
+            "mean_turnover": 0.10422028873448276,
+            "net_cagr": 0.07221958374091297,
+            "net_sharpe": 0.5197321445156609,
+            "observations": 145,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.018437095983036778,
+              "net_cagr_delta": 0.016334852235710517,
+              "net_sharpe_delta": 0.08868891521792144,
+              "paired_relative_cagr": 0.015470298744091782,
+              "paired_spread_ir": 0.5947781648066365,
+              "positive_period_fraction": 0.42758620689655175,
+              "turnover_delta": -0.05678066723793103
+            },
+            "start_signal_date": "2017-01-12",
+            "total_cost_fraction": 0.030004768308095564
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 1,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.25203136856010466,
+            "end_signal_date": "2022-12-15",
+            "max_outcome_end_date": "2022-12-30",
+            "mean_turnover": 0.1610009559724138,
+            "net_cagr": 0.055884731505202456,
+            "net_sharpe": 0.4310432292977394,
+            "observations": 145,
+            "start_signal_date": "2017-01-12",
+            "total_cost_fraction": 0.0482449709960776
+          }
+        },
+        "validation": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.12739596567263645,
+            "end_signal_date": "2024-12-10",
+            "max_outcome_end_date": "2024-12-25",
+            "mean_turnover": 0.14839968976382975,
+            "net_cagr": 0.3087061439523118,
+            "net_sharpe": 1.6759963426680182,
+            "observations": 47,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.013136936594802529,
+              "net_cagr_delta": 0.04994087648559975,
+              "net_sharpe_delta": 0.16208114915314065,
+              "paired_relative_cagr": 0.03967449513927801,
+              "paired_spread_ir": 0.9905950169934343,
+              "positive_period_fraction": 0.5106382978723404,
+              "turnover_delta": -0.08450633548936173
+            },
+            "start_signal_date": "2023-01-13",
+            "total_cost_fraction": 0.014585213007380698
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 1,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.11425902907783392,
+            "end_signal_date": "2024-12-10",
+            "max_outcome_end_date": "2024-12-25",
+            "mean_turnover": 0.23290602525319148,
+            "net_cagr": 0.258765267466712,
+            "net_sharpe": 1.5139151935148776,
+            "observations": 47,
+            "start_signal_date": "2023-01-13",
+            "total_cost_fraction": 0.02261380540246992
+          }
+        }
+      }
+    },
+    {
+      "candidate_daily_nav_sha256": "c6dd49022b1ff6f0f21d455033a569706efacfd0e76311d68c2579a0697db902",
+      "candidate_period_trace_sha256": "29369ec4d074c1f0afe5381ca90e5bf53e16597cb2d9a3d275e9e0c88de2b85e",
+      "control_daily_nav_sha256": "cc705f02635531bdbacf5ef5904dc61a5846ab1fbaf6c1e2b00b328e390fc53d",
+      "control_period_trace_sha256": "2217358151eb17cffb00b1a12c5132aa52d6c46856a4db64f5849905f9adfc84",
+      "offset": 8,
+      "phases": {
+        "audit": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.1818158457071406,
+            "end_signal_date": "2026-08-06",
+            "max_outcome_end_date": "2026-08-21",
+            "mean_turnover": 0.09944091685897435,
+            "net_cagr": 0.08370828301641509,
+            "net_sharpe": 0.6257422257185754,
+            "observations": 39,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": 0.014925999252695443,
+              "net_cagr_delta": 0.011242677438895843,
+              "net_sharpe_delta": 0.07165483671638706,
+              "paired_relative_cagr": 0.010483019110753888,
+              "paired_spread_ir": 0.3900729957303316,
+              "positive_period_fraction": 0.46153846153846156,
+              "turnover_delta": -0.10141065912307695
+            },
+            "start_signal_date": "2025-01-09",
+            "total_cost_fraction": 0.00659534582936997
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.19674184495983604,
+            "end_signal_date": "2026-08-06",
+            "max_outcome_end_date": "2026-08-21",
+            "mean_turnover": 0.2008515759820513,
+            "net_cagr": 0.07246560557751924,
+            "net_sharpe": 0.5540873890021883,
+            "observations": 39,
+            "start_signal_date": "2025-01-09",
+            "total_cost_fraction": 0.013561191649913406
+          }
+        },
+        "full": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 2,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2673241069081873,
+            "end_signal_date": "2026-08-06",
+            "max_outcome_end_date": "2026-08-21",
+            "mean_turnover": 0.12004607779828327,
+            "net_cagr": 0.10542491501423323,
+            "net_sharpe": 0.716923172351969,
+            "observations": 233,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.01282173658134489,
+              "net_cagr_delta": 0.011366590654095843,
+              "net_sharpe_delta": 0.044733482726171836,
+              "paired_relative_cagr": 0.010389382723945406,
+              "paired_spread_ir": 0.38031507528648933,
+              "positive_period_fraction": 0.3905579399141631,
+              "turnover_delta": -0.058050970378969946
+            },
+            "start_signal_date": "2017-01-13",
+            "total_cost_fraction": 0.055068786352511154
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 1,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2545023703268424,
+            "end_signal_date": "2026-08-06",
+            "max_outcome_end_date": "2026-08-21",
+            "mean_turnover": 0.17809704817725322,
+            "net_cagr": 0.09405832436013739,
+            "net_sharpe": 0.6721896896257972,
+            "observations": 233,
+            "start_signal_date": "2017-01-13",
+            "total_cost_fraction": 0.08166650327192168
+          }
+        },
+        "train": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 2,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2673241069081873,
+            "end_signal_date": "2022-12-02",
+            "max_outcome_end_date": "2022-12-19",
+            "mean_turnover": 0.1140433880048611,
+            "net_cagr": 0.0668904498280205,
+            "net_sharpe": 0.5010382370958553,
+            "observations": 144,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.01282173658134489,
+              "net_cagr_delta": 0.013120691642964477,
+              "net_sharpe_delta": 0.06011899913176655,
+              "paired_relative_cagr": 0.012451193954894801,
+              "paired_spread_ir": 0.4794152181140758,
+              "positive_period_fraction": 0.3680555555555556,
+              "turnover_delta": -0.033639665614583356
+            },
+            "start_signal_date": "2017-01-13",
+            "total_cost_fraction": 0.03292310205908794
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 1,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.2545023703268424,
+            "end_signal_date": "2022-12-02",
+            "max_outcome_end_date": "2022-12-19",
+            "mean_turnover": 0.14768305361944445,
+            "net_cagr": 0.05376975818505603,
+            "net_sharpe": 0.4409192379640887,
+            "observations": 144,
+            "start_signal_date": "2017-01-13",
+            "total_cost_fraction": 0.04308300358634789
+          }
+        },
+        "validation": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.12643301370160476,
+            "end_signal_date": "2024-12-11",
+            "max_outcome_end_date": "2024-12-26",
+            "mean_turnover": 0.1536102694957447,
+            "net_cagr": 0.2698395981538717,
+            "net_sharpe": 1.4011289479827964,
+            "observations": 47,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.0008348123381342054,
+              "net_cagr_delta": 0.0021793938624683484,
+              "net_sharpe_delta": 0.00652840258746501,
+              "paired_relative_cagr": 0.0017192255898630382,
+              "paired_spread_ir": 0.05388001041436195,
+              "positive_period_fraction": 0.3829787234042553,
+              "turnover_delta": -0.10458741699148932
+            },
+            "start_signal_date": "2023-01-16",
+            "total_cost_fraction": 0.01454645216672259
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.12559820136347055,
+            "end_signal_date": "2024-12-11",
+            "max_outcome_end_date": "2024-12-26",
+            "mean_turnover": 0.258197686487234,
+            "net_cagr": 0.26766020429140336,
+            "net_sharpe": 1.3946005453953314,
+            "observations": 47,
+            "start_signal_date": "2023-01-16",
+            "total_cost_fraction": 0.02444838589149581
+          }
+        }
+      }
+    },
+    {
+      "candidate_daily_nav_sha256": "4907393570ac28acda2441e9275a732398387f8be24b3a074c4d1ef2a46e04ed",
+      "candidate_period_trace_sha256": "30d16770e85303d431ec442464ce8fb58ef339dd1c7a02bbdbcb94e3d4543dbe",
+      "control_daily_nav_sha256": "925066aa6218f6b5b5b2dacd6a866e69a66577391520f9d7a8f9d2aa07bb0ba3",
+      "control_period_trace_sha256": "53671bb066b392352cb4eaa82798e236b77f3b36fdc675cacb4da78ef0fed608",
+      "offset": 9,
+      "phases": {
+        "audit": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.14863708097753403,
+            "end_signal_date": "2026-07-24",
+            "max_outcome_end_date": "2026-08-10",
+            "mean_turnover": 0.12315129289473682,
+            "net_cagr": 0.11399077506771982,
+            "net_sharpe": 0.8189363831352129,
+            "observations": 38,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": 0.013333632023305175,
+              "net_cagr_delta": 0.008357911753624325,
+              "net_sharpe_delta": 0.07252813279070569,
+              "paired_relative_cagr": 0.007559391576488217,
+              "paired_spread_ir": 0.2553366362683826,
+              "positive_period_fraction": 0.3157894736842105,
+              "turnover_delta": -0.0727883998236842
+            },
+            "start_signal_date": "2025-01-10",
+            "total_cost_fraction": 0.008074431057329372
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.1619707130008392,
+            "end_signal_date": "2026-07-24",
+            "max_outcome_end_date": "2026-08-10",
+            "mean_turnover": 0.19593969271842102,
+            "net_cagr": 0.1056328633140955,
+            "net_sharpe": 0.7464082503445072,
+            "observations": 38,
+            "start_signal_date": "2025-01-10",
+            "total_cost_fraction": 0.013006724051100092
+          }
+        },
+        "full": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 1,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.259634180013109,
+            "end_signal_date": "2026-07-24",
+            "max_outcome_end_date": "2026-08-10",
+            "mean_turnover": 0.11851190744655174,
+            "net_cagr": 0.09819585229830663,
+            "net_sharpe": 0.6570002015929289,
+            "observations": 232,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.017623970382392384,
+              "net_cagr_delta": 0.008046050365505764,
+              "net_sharpe_delta": 0.025358919987697126,
+              "paired_relative_cagr": 0.007380683233846108,
+              "paired_spread_ir": 0.279250367360337,
+              "positive_period_fraction": 0.4956896551724138,
+              "turnover_delta": -0.05550087287370689
+            },
+            "start_signal_date": "2017-01-16",
+            "total_cost_fraction": 0.05243275754836264
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 1,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.24201020963071662,
+            "end_signal_date": "2026-07-24",
+            "max_outcome_end_date": "2026-08-10",
+            "mean_turnover": 0.17401278032025863,
+            "net_cagr": 0.09014980193280087,
+            "net_sharpe": 0.6316412816052318,
+            "observations": 232,
+            "start_signal_date": "2017-01-16",
+            "total_cost_fraction": 0.0796880178576524
+          }
+        },
+        "train": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 1,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.259634180013109,
+            "end_signal_date": "2022-12-05",
+            "max_outcome_end_date": "2022-12-20",
+            "mean_turnover": 0.10668838367708335,
+            "net_cagr": 0.047894323895664836,
+            "net_sharpe": 0.3725603016174579,
+            "observations": 144,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.017623970382392384,
+              "net_cagr_delta": -0.0025874182197191953,
+              "net_sharpe_delta": -0.029658827729849235,
+              "paired_relative_cagr": -0.00246307776326371,
+              "paired_spread_ir": -0.039674761864339346,
+              "positive_period_fraction": 0.5208333333333334,
+              "turnover_delta": -0.04274617861666667
+            },
+            "start_signal_date": "2017-01-16",
+            "total_cost_fraction": 0.02965793728247548
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 1,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.24201020963071662,
+            "end_signal_date": "2022-12-05",
+            "max_outcome_end_date": "2022-12-20",
+            "mean_turnover": 0.14943456229375002,
+            "net_cagr": 0.05048174211538403,
+            "net_sharpe": 0.40221912934730714,
+            "observations": 144,
+            "start_signal_date": "2017-01-16",
+            "total_cost_fraction": 0.04377361458719212
+          }
+        },
+        "validation": {
+          "candidate": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.12479711907565993,
+            "end_signal_date": "2024-12-12",
+            "max_outcome_end_date": "2024-12-27",
+            "mean_turnover": 0.15429814281458334,
+            "net_cagr": 0.27245118892059184,
+            "net_sharpe": 1.3880545721882458,
+            "observations": 48,
+            "relative_to_control": {
+              "daily_max_drawdown_delta": -0.01054263622401963,
+              "net_cagr_delta": 0.04157758974683623,
+              "net_sharpe_delta": 0.12952934072990385,
+              "paired_relative_cagr": 0.03377892723895104,
+              "paired_spread_ir": 0.9421868478765113,
+              "positive_period_fraction": 0.5416666666666666,
+              "turnover_delta": -0.07830526154166667
+            },
+            "start_signal_date": "2023-01-03",
+            "total_cost_fraction": 0.014640815256948731
+          },
+          "control": {
+            "blocked_trade_count": 0,
+            "capacity_limited_count": 0,
+            "capacity_violation_count": 0,
+            "daily_max_drawdown": -0.1142544828516403,
+            "end_signal_date": "2024-12-12",
+            "max_outcome_end_date": "2024-12-27",
+            "mean_turnover": 0.23260340435625002,
+            "net_cagr": 0.2308735991737556,
+            "net_sharpe": 1.258525231458342,
+            "observations": 48,
+            "start_signal_date": "2023-01-03",
+            "total_cost_fraction": 0.022354433587347265
+          }
+        }
+      }
+    }
+  ],
+  "payload_sha256": "ffb5c263f17a7ea2e180d65d234e7391c95202e815e941ec423df3e49a945105",
+  "phase_contract": {
+    "audit": {
+      "signal_start": "2025-01-01"
+    },
+    "inclusion_rule": "signal_date >= phase_start and end_date <= phase_end",
+    "physical_run_cutoff": {
+      "applied": false,
+      "pricing_max_date": "2026-08-21",
+      "requested_max_outcome_date": null,
+      "signal_max_date": "2026-08-13"
+    },
+    "train": {
+      "outcome_end_max": "2022-12-31",
+      "signal_start": "2017-01-03"
+    },
+    "validation": {
+      "outcome_end_max": "2024-12-31",
+      "signal_start": "2023-01-01"
+    }
+  },
+  "qualification_or_promotion_use_forbidden": true,
+  "reproduction": {
+    "command": "python scripts/run-low-churn-evidence.py --output <explicit-output-path>.json",
+    "physical_selection_only_command": "python scripts/run-low-churn-evidence.py --max-outcome-date 2024-12-31 --output <explicit-output-path>.json",
+    "untracked_per_evaluation_files_required": false
+  },
+  "schema_version": 1,
+  "summary": {
+    "candidate": {
+      "candidate_id": "fixed_core_top10_exit25",
+      "definition": {
+        "anchor_date": "2017-01-03",
+        "defensive_weight": 0.7,
+        "entry": "next_official_session_open_adj",
+        "holding_end": "open_adj_at_t_plus_11",
+        "id": "fixed_core_top10_exit25",
+        "position_count": 10,
+        "position_weight": 0.1,
+        "rank_tie_break": "score_desc_then_ticker_asc",
+        "retention_buffer": 15,
+        "retention_exit_rank": 25,
+        "score_formula": "(1-0.70)*rank(earnings_yield/pb) + 0.70*rank(rank(book_yield)+rank(earnings_yield)+rank(-volatility_20))",
+        "signal_timing": "close_t",
+        "sleeve_count": 10
+      },
+      "offset_count": 10,
+      "phases": {
+        "audit": {
+          "blocked_trade_count": 0,
+          "capacity_violation_count": 0,
+          "daily_max_drawdown": {
+            "median": -0.17727724501552977,
+            "q20": -0.17986899070364437,
+            "worst": -0.1818158457071406
+          },
+          "mean_turnover": {
+            "median": 0.09908804807435898,
+            "q20": 0.09323408203641027,
+            "worst": 0.12315129289473682
+          },
+          "net_cagr": {
+            "median": 0.08102633816327187,
+            "q20": 0.07411462376507982,
+            "worst": 0.06978747853318268
+          },
+          "net_sharpe": {
+            "median": 0.624715375383646,
+            "q20": 0.5686033692408143,
+            "worst": 0.536028497479051
+          },
+          "paired_relative_cagr": {
+            "median": 2.9766594467683927e-05,
+            "q20": -0.008206841975149759,
+            "worst": -0.019473155057017855
+          },
+          "positive_relative_offset_count": 5
+        },
+        "full": {
+          "blocked_trade_count": 5,
+          "capacity_violation_count": 0,
+          "daily_max_drawdown": {
+            "median": -0.2633364058856449,
+            "q20": -0.267697411018898,
+            "worst": -0.27046846454314144
+          },
+          "mean_turnover": {
+            "median": 0.11716979206609443,
+            "q20": 0.11252431228824034,
+            "worst": 0.12004607779828327
+          },
+          "net_cagr": {
+            "median": 0.10721825883713476,
+            "q20": 0.10241650619520729,
+            "worst": 0.09819585229830663
+          },
+          "net_sharpe": {
+            "median": 0.6781880937754325,
+            "q20": 0.6546438280843221,
+            "worst": 0.6269006833162766
+          },
+          "paired_relative_cagr": {
+            "median": 0.010450990692336348,
+            "q20": 0.007277842878111729,
+            "worst": 0.003985282075260388
+          },
+          "positive_relative_offset_count": 10
+        },
+        "train": {
+          "blocked_trade_count": 5,
+          "capacity_violation_count": 0,
+          "daily_max_drawdown": {
+            "median": -0.2633364058856449,
+            "q20": -0.267697411018898,
+            "worst": -0.27046846454314144
+          },
+          "mean_turnover": {
+            "median": 0.10787945896275862,
+            "q20": 0.1047730860542069,
+            "worst": 0.1140433880048611
+          },
+          "net_cagr": {
+            "median": 0.0653577434180993,
+            "q20": 0.0503052607870603,
+            "worst": 0.04639675800423637
+          },
+          "net_sharpe": {
+            "median": 0.46248136500818926,
+            "q20": 0.3780502051484701,
+            "worst": 0.35159161595319083
+          },
+          "paired_relative_cagr": {
+            "median": 0.008910741041652681,
+            "q20": 0.0033444062961888624,
+            "worst": -0.00246307776326371
+          },
+          "positive_relative_offset_count": 8
+        },
+        "validation": {
+          "blocked_trade_count": 0,
+          "capacity_violation_count": 0,
+          "daily_max_drawdown": {
+            "median": -0.12347306798905672,
+            "q20": -0.12662560409581108,
+            "worst": -0.13004692261142647
+          },
+          "mean_turnover": {
+            "median": 0.15395420615516403,
+            "q20": 0.15032527168765958,
+            "worst": 0.1664663429106383
+          },
+          "net_cagr": {
+            "median": 0.2788887999260675,
+            "q20": 0.26643724144927716,
+            "worst": 0.25255931602336745
+          },
+          "net_sharpe": {
+            "median": 1.3034955558510761,
+            "q20": 1.2021487677141067,
+            "worst": 1.0713456063114168
+          },
+          "paired_relative_cagr": {
+            "median": 0.02277601742117996,
+            "q20": 0.01030002110927053,
+            "worst": 0.0017192255898630382
+          },
+          "positive_relative_offset_count": 10
+        }
+      }
+    },
+    "control": {
+      "candidate_id": "fixed_core_top10_exit15",
+      "definition": {
+        "anchor_date": "2017-01-03",
+        "defensive_weight": 0.7,
+        "entry": "next_official_session_open_adj",
+        "holding_end": "open_adj_at_t_plus_11",
+        "id": "fixed_core_top10_exit15",
+        "position_count": 10,
+        "position_weight": 0.1,
+        "rank_tie_break": "score_desc_then_ticker_asc",
+        "retention_buffer": 5,
+        "retention_exit_rank": 15,
+        "score_formula": "(1-0.70)*rank(earnings_yield/pb) + 0.70*rank(rank(book_yield)+rank(earnings_yield)+rank(-volatility_20))",
+        "signal_timing": "close_t",
+        "sleeve_count": 10
+      },
+      "offset_count": 10,
+      "phases": {
+        "audit": {
+          "blocked_trade_count": 0,
+          "capacity_violation_count": 0,
+          "daily_max_drawdown": {
+            "median": -0.17240144004065855,
+            "q20": -0.18301383772585617,
+            "worst": -0.19674184495983604
+          },
+          "mean_turnover": {
+            "median": 0.20279448184615384,
+            "q20": 0.19487988228520917,
+            "worst": 0.226506540318421
+          },
+          "net_cagr": {
+            "median": 0.0767423433048191,
+            "q20": 0.07329926370630209,
+            "worst": 0.06456513754553028
+          },
+          "net_sharpe": {
+            "median": 0.5843995312162276,
+            "q20": 0.5573207129104029,
+            "worst": 0.49252310818938455
+          },
+          "paired_relative_cagr": {
+            "median": 0.0,
+            "q20": 0.0,
+            "worst": 0.0
+          },
+          "positive_relative_offset_count": 0
+        },
+        "full": {
+          "blocked_trade_count": 6,
+          "capacity_violation_count": 0,
+          "daily_max_drawdown": {
+            "median": -0.25227049340777363,
+            "q20": -0.2572355481749954,
+            "worst": -0.26689099083820944
+          },
+          "mean_turnover": {
+            "median": 0.18215881841266096,
+            "q20": 0.1777652980933047,
+            "worst": 0.18973679084377684
+          },
+          "net_cagr": {
+            "median": 0.09651327136069765,
+            "q20": 0.09084797337221193,
+            "worst": 0.09014980193280087
+          },
+          "net_sharpe": {
+            "median": 0.6441296112376493,
+            "q20": 0.6059325522401665,
+            "worst": 0.5693079774524544
+          },
+          "paired_relative_cagr": {
+            "median": 0.0,
+            "q20": 0.0,
+            "worst": 0.0
+          },
+          "positive_relative_offset_count": 0
+        },
+        "train": {
+          "blocked_trade_count": 6,
+          "capacity_violation_count": 0,
+          "daily_max_drawdown": {
+            "median": -0.25227049340777363,
+            "q20": -0.2572355481749954,
+            "worst": -0.26689099083820944
+          },
+          "mean_turnover": {
+            "median": 0.15682209728551724,
+            "q20": 0.15278912303806033,
+            "worst": 0.16395759560068965
+          },
+          "net_cagr": {
+            "median": 0.053198720494590845,
+            "q20": 0.049695728894960434,
+            "worst": 0.03865481128232684
+          },
+          "net_sharpe": {
+            "median": 0.4119600323507363,
+            "q20": 0.37905260318034173,
+            "worst": 0.31516037106201206
+          },
+          "paired_relative_cagr": {
+            "median": 0.0,
+            "q20": 0.0,
+            "worst": 0.0
+          },
+          "positive_relative_offset_count": 0
+        },
+        "validation": {
+          "blocked_trade_count": 0,
+          "capacity_violation_count": 0,
+          "daily_max_drawdown": {
+            "median": -0.12151299735719828,
+            "q20": -0.14264014302428765,
+            "worst": -0.1475567448105356
+          },
+          "mean_turnover": {
+            "median": 0.24227747803723407,
+            "q20": 0.23429902712723408,
+            "worst": 0.258197686487234
+          },
+          "net_cagr": {
+            "median": 0.2598832902880881,
+            "q20": 0.2439899962549299,
+            "worst": 0.22768771284831257
+          },
+          "net_sharpe": {
+            "median": 1.2532986440104388,
+            "q20": 1.1974426928299313,
+            "worst": 0.9541562289274521
+          },
+          "paired_relative_cagr": {
+            "median": 0.0,
+            "q20": 0.0,
+            "worst": 0.0
+          },
+          "positive_relative_offset_count": 0
+        }
+      }
+    }
+  }
+}

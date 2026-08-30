@@ -1,0 +1,139 @@
+{
+  "canonical_data_sha256": {
+    "execution": "0b33d7b76dcadddb46d5ed4a16b6c1e339162fb210fbe2a5d1fafe1efc92b28c",
+    "features": "8afe71e400e861ad219f1feb8c61899017b0aadd1536df92d99b8c9034bc2e88",
+    "suspensions": "5fc3c971b1a0376f5da3243a15a0bf4817f11f0339ef825daae298715b44689d"
+  },
+  "control": {
+    "anchor_date": "2017-01-03",
+    "defensive_weight": 0.7,
+    "entry": "next_official_session_open_adj",
+    "holding_end": "open_adj_at_t_plus_11",
+    "id": "fixed_core_top10_exit15",
+    "position_count": 10,
+    "position_weight": 0.1,
+    "rank_tie_break": "score_desc_then_ticker_asc",
+    "retention_buffer": 5,
+    "retention_exit_rank": 15,
+    "score_formula": "(1-0.70)*rank(earnings_yield/pb) + 0.70*rank(rank(book_yield)+rank(earnings_yield)+rank(-volatility_20))",
+    "signal_timing": "close_t",
+    "sleeve_count": 10
+  },
+  "evidence_class": "post_selected_historical_diagnostic_only",
+  "implementation_binding": {
+    "runner_path": "scripts/run-low-churn-evidence.py",
+    "runner_sha256": "93db71692332da9c15c69d3e927048e0433a635eedac6ddffa18ccbcb143d7e7",
+    "strategy_path": "src/factor_lab/strategy.py",
+    "strategy_sha256": "a2fb4905e263aa09436ea17665a67eb70401451bf27f5e33e9ff58de3a9cd046"
+  },
+  "kind": "factor_lab_6_0_low_churn_selection",
+  "payload_sha256": "620ef063772d69ddbdebcdf094ce900080e2d470194854a6c4000f17bcc83961",
+  "physical_selection_contract": {
+    "inclusion_rule": "signal_date >= phase_start and end_date <= phase_end",
+    "train": {
+      "last_signal_date": "2022-12-15",
+      "maximum_outcome_end_date": "2022-12-30",
+      "phase_end": "2022-12-31"
+    },
+    "validation": {
+      "last_signal_date": "2024-12-16",
+      "maximum_outcome_end_date": "2024-12-31",
+      "phase_end": "2024-12-31"
+    }
+  },
+  "qualification_or_promotion_use_forbidden": true,
+  "schema_version": 1,
+  "search_disclosure": {
+    "adaptive_search_performed": true,
+    "audit_period_already_seen_elsewhere": true,
+    "enumerated_candidate_count_before_follow_up": 165,
+    "old_internal_no_audit_claim_retracted": true,
+    "old_signal_date_only_freeze_superseded": true,
+    "pure_exit25_was_a_follow_up_post_selection_diagnostic": true
+  },
+  "selected_candidate": {
+    "anchor_date": "2017-01-03",
+    "defensive_weight": 0.7,
+    "entry": "next_official_session_open_adj",
+    "holding_end": "open_adj_at_t_plus_11",
+    "id": "fixed_core_top10_exit25",
+    "position_count": 10,
+    "position_weight": 0.1,
+    "rank_tie_break": "score_desc_then_ticker_asc",
+    "retention_buffer": 15,
+    "retention_exit_rank": 25,
+    "score_formula": "(1-0.70)*rank(earnings_yield/pb) + 0.70*rank(rank(book_yield)+rank(earnings_yield)+rank(-volatility_20))",
+    "signal_timing": "close_t",
+    "sleeve_count": 10
+  },
+  "selection_metrics": {
+    "train": {
+      "blocked_trade_count": 5,
+      "capacity_violation_count": 0,
+      "daily_max_drawdown": {
+        "median": -0.2633364058856449,
+        "q20": -0.267697411018898,
+        "worst": -0.27046846454314144
+      },
+      "mean_turnover": {
+        "median": 0.10787945896275862,
+        "q20": 0.1047730860542069,
+        "worst": 0.1140433880048611
+      },
+      "net_cagr": {
+        "median": 0.0653577434180993,
+        "q20": 0.0503052607870603,
+        "worst": 0.04639675800423637
+      },
+      "net_sharpe": {
+        "median": 0.46248136500818926,
+        "q20": 0.3780502051484701,
+        "worst": 0.35159161595319083
+      },
+      "paired_relative_cagr": {
+        "median": 0.008910741041652681,
+        "q20": 0.0033444062961888624,
+        "worst": -0.00246307776326371
+      },
+      "positive_relative_offset_count": 8
+    },
+    "validation": {
+      "blocked_trade_count": 0,
+      "capacity_violation_count": 0,
+      "daily_max_drawdown": {
+        "median": -0.12347306798905672,
+        "q20": -0.12662560409581108,
+        "worst": -0.13004692261142647
+      },
+      "mean_turnover": {
+        "median": 0.15395420615516403,
+        "q20": 0.15032527168765958,
+        "worst": 0.1664663429106383
+      },
+      "net_cagr": {
+        "median": 0.2788887999260675,
+        "q20": 0.26643724144927716,
+        "worst": 0.25255931602336745
+      },
+      "net_sharpe": {
+        "median": 1.3034955558510761,
+        "q20": 1.2021487677141067,
+        "worst": 1.0713456063114168
+      },
+      "paired_relative_cagr": {
+        "median": 0.02277601742117996,
+        "q20": 0.01030002110927053,
+        "worst": 0.0017192255898630382
+      },
+      "positive_relative_offset_count": 10
+    }
+  },
+  "selection_reason": [
+    "single low-churn mechanism with no new score degrees of freedom",
+    "candidate and control score arrays are identical",
+    "full-history paired active CAGR is positive in all ten offsets",
+    "turnover is materially lower than exit15",
+    "audit is mixed and therefore cannot qualify the candidate"
+  ],
+  "selection_statement": "Keep the fixed-core score and Top10 unchanged; widen only the per-sleeve retention exit rank from 15 to 25."
+}

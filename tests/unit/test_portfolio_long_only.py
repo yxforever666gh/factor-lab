@@ -1270,7 +1270,7 @@ def test_required_external_targets_execute_without_rank_fallback() -> None:
     target_dates = (dates[0], dates[5], dates[10])
     targets = {value: {"B": 0.75} for value in target_dates}
     audits = {
-        value: {"promotion_eligible": True, "source": "adaptive_protocol"}
+        value: {"promotion_eligible": True, "source": "external_protocol"}
         for value in target_dates
     }
 
@@ -1313,7 +1313,7 @@ def test_required_empty_external_target_is_explicit_full_cash_not_fallback() -> 
         target_dates[2]: {},
     }
     audits = {
-        value: {"promotion_eligible": True, "source": "adaptive_fail_closed"}
+        value: {"promotion_eligible": True, "source": "external_fail_closed"}
         for value in target_dates
     }
 

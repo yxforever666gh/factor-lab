@@ -1,0 +1,77 @@
+{
+  "schema_version": "factor-lab/analyst-scout-evidence/1",
+  "payload_sha256": "1eaa62423790cffee3cf15b632d2d1fc2203ff9a03fb41e6045da7fa9aca32d4",
+  "captured_date": "2026-08-30",
+  "returns_or_labels_loaded": false,
+  "selected_route": "report_rc_sell_side_estimate_revisions",
+  "official_contract": {
+    "document": "https://tushare.pro/document/2?doc_id=292",
+    "observed_document_date": "2026-08-30",
+    "endpoint": "report_rc",
+    "sdk_version": "1.4.29",
+    "page_limit": 3000,
+    "pagination": "The current official contract explicitly permits limit/offset pagination and requires looping to retrieve all rows."
+  },
+  "capability": {
+    "dates": {
+      "2017-04-28": {
+        "rows": 970,
+        "stocks": 393,
+        "brokers": 49,
+        "eligible_top500_with_report": 104,
+        "eligible_top500": 494,
+        "eps_missing_rate": 0.01237113,
+        "create_time_calendar_lag_days": 1831
+      },
+      "2020-04-30": {
+        "rows": 3886,
+        "stocks": 565,
+        "brokers": 60,
+        "eligible_top500_with_report": 209,
+        "eligible_top500": 500,
+        "eps_missing_rate": 0.00566135,
+        "create_time_calendar_lag_days": 732
+      },
+      "2024-04-30": {
+        "rows": 2658,
+        "stocks": 538,
+        "brokers": 57,
+        "eligible_top500_with_report": 160,
+        "eligible_top500": 499,
+        "eps_missing_rate": 0.00413845,
+        "create_time_calendar_lag_days": 0
+      }
+    },
+    "legacy_unpaged_single_stock_probe": {
+      "requested_start": "2010-01-01",
+      "requested_end": "2024-12-31",
+      "returned_rows": 5000,
+      "returned_start": "2019-07-18",
+      "revision_series": 517,
+      "revision_series_with_two_or_more_observations": 463,
+      "complete": false,
+      "interpretation": "The 5000-row response conflicts with the documented 3000-row page size and cannot establish completeness or a runtime cap; production must request and verify explicit 3000-row pages."
+    },
+    "observed_permission": {
+      "report_rc": "success_at_one_request_per_minute_trial_rate",
+      "research_report": "permission_error",
+      "anns_d": "permission_error"
+    }
+  },
+  "alternative_rejections": {
+    "forecast_express": "Accessible and PIT-date clean, but retained only as event anchors after the standalone event mechanism failed its frozen selection gates.",
+    "hk_hold": "Actual responses contained no SH or SZ rows from 2024-08-19 onward; only HK rows remained.",
+    "fund_portfolio": "A 2023-12-31 request returned exactly 8000 rows and only 104 funds, so it was incomplete without further partitioning and is only quarterly."
+  },
+  "historical_vintage_limitation": {
+    "status": "unverified",
+    "evidence": "The 2017 and 2020 probes were first created by the vendor 1831 and 732 calendar days later, so report_date alone cannot prove the historical EPS/NP values were never backfilled or revised.",
+    "required_resolution": "Before opening returns, validate a stratified sample against original research reports/research_report timestamps and values, or limit strict evidence to observations after first capture."
+  },
+  "external_evidence_sha256": {
+    "scout_final_report": "b0edc38aa65c7cafa7424e5095f35827de5ae678a9ca52ebb8c13502031be69b",
+    "scout_manifest": "392ad558f0d3f2b51d817fbcfb07d5dc1606882150de5bbc7fa51f258b34be74",
+    "report_rc_feature_only_audit": "7773f4b4f2b673d98ddf24cb032808c6359f0acaf8d4cac6c2eaf7ed0a9d3322"
+  },
+  "conclusion": "The evidence establishes endpoint feasibility and a conservative report_date availability convention only. It does not establish historical vendor vintage, qualified three-broker feature coverage or profitable returns."
+}

@@ -1,0 +1,275 @@
+{
+  "schema_version": 1,
+  "payload_sha256": "65de91a5bac20d6b810b7d5b4373eca7908f01b42c45406a5cfb4b821efbb793",
+  "evidence_id": "6.0-pit-event-negative-v1",
+  "evidence_class": "physically_cutoff_pre_audit_negative_selection",
+  "protocol": {
+    "relative_path": "protocols/6.0-pit-event-search.json",
+    "file_sha256": "159285bf265a461d3d6cc90c1fc3fdfb92b87ea01cd1059e133b07107022557a"
+  },
+  "decision": {
+    "selected_candidate_id": null,
+    "candidate_count": 6,
+    "candidate_pass_count": 0,
+    "formal_score_changed": false,
+    "candidate_registered": false,
+    "recommendation": "Do not promote or register any tested PIT event definition.",
+    "reason": "Every pre-frozen definition failed the train/validation relative-performance gate; the least weak blend was also highly redundant with formal_fixed_core_full."
+  },
+  "selection_boundary": {
+    "feature_and_pricing_physical_max_date": "2024-12-31",
+    "evaluation_start": "2017-03-02",
+    "train_maximum_exact_end_date": "2022-12-31",
+    "validation_maximum_exact_end_date": "2024-12-31",
+    "phase_rule": "exact end_date must be on or before the phase boundary",
+    "raw_feature_rows": 965112,
+    "investable_signal_rows": 873788,
+    "signal_dates": 1943,
+    "distinct_visible_events": 20298,
+    "maximum_visible_financial_available_date": "2024-11-14"
+  },
+  "pit_integrity": {
+    "future_availability_violation_count": 0,
+    "availability_not_after_announcement_violation_count": 0,
+    "report_period_after_announcement_violation_count": 0,
+    "future_return_or_label_fields_read": [],
+    "event_component_price_window_fields": [],
+    "same_ticker_prior_visible_announcement_delta": true,
+    "all_selection_inputs_physically_truncated": true
+  },
+  "exact_execution": {
+    "strict_offset_count_per_definition": 10,
+    "offsets": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "entry": "next_session_open_adj",
+    "price_basis": "adjusted_total_return",
+    "capital": 50000000,
+    "holding_and_rebalance_sessions": 10,
+    "top_n": 10,
+    "retention_exit_rank": 15,
+    "full_formal_costs": true,
+    "formal_suspension_and_delist_events": true,
+    "selection_full_capacity_violation_count_all_definitions": 0
+  },
+  "control": {
+    "id": "formal_fixed_core_full",
+    "train_net_cagr": {
+      "q20": 0.043621385294236516,
+      "median": 0.047633919750761367,
+      "worst": 0.03634423710677526
+    },
+    "validation_net_cagr": {
+      "q20": 0.24402091057980155,
+      "median": 0.2600220522373258,
+      "worst": 0.22780038705729955
+    },
+    "selection_full_net_cagr": {
+      "q20": 0.0928343929102359,
+      "median": 0.09664376147159426,
+      "worst": 0.09015055438457709
+    },
+    "selection_full_turnover_median": 0.18154968102490812,
+    "selection_full_daily_max_drawdown_worst": -0.26688472466934166
+  },
+  "candidate_results": [
+    {
+      "id": "pit_growth_acceleration_180d_standalone_v1",
+      "train_paired_relative_cagr_q20": -0.07688055694459625,
+      "train_paired_relative_cagr_median": -0.06615908815364763,
+      "train_positive_relative_offsets": 0,
+      "validation_paired_relative_cagr_q20": -0.190701609825413,
+      "validation_paired_relative_cagr_median": -0.16570092089200217,
+      "validation_positive_relative_offsets": 0,
+      "selection_full_net_cagr_median": 0.002705480844837571,
+      "selection_full_turnover_median": 0.5167244840202632,
+      "selection_full_daily_max_drawdown_worst": -0.685561628662225,
+      "selection_full_median_absolute_daily_score_correlation": 0.06152751644957362,
+      "selection_full_mean_naked_top10_overlap_fraction": 0.001416579223504722,
+      "selection_full_median_exact_target_overlap_fraction": 0.0015789473684210528,
+      "gate_pass": false,
+      "failed_gate_groups": [
+        "train_relative_performance",
+        "validation_relative_performance",
+        "drawdown"
+      ]
+    },
+    {
+      "id": "pit_growth_acceleration_180d_fixed_core_blend30_v1",
+      "train_paired_relative_cagr_q20": -0.042512521703287544,
+      "train_paired_relative_cagr_median": -0.03146563926747997,
+      "train_positive_relative_offsets": 0,
+      "validation_paired_relative_cagr_q20": -0.14425595525716325,
+      "validation_paired_relative_cagr_median": -0.1277744804618926,
+      "validation_positive_relative_offsets": 0,
+      "selection_full_net_cagr_median": 0.036723416921805696,
+      "selection_full_turnover_median": 0.511262326382005,
+      "selection_full_daily_max_drawdown_worst": -0.35426710738038336,
+      "selection_full_median_absolute_daily_score_correlation": 0.9501438762637564,
+      "selection_full_mean_naked_top10_overlap_fraction": 0.35477439664218263,
+      "selection_full_median_exact_target_overlap_fraction": 0.3828042328042327,
+      "gate_pass": false,
+      "failed_gate_groups": [
+        "train_relative_performance",
+        "validation_relative_performance",
+        "drawdown",
+        "score_correlation"
+      ]
+    },
+    {
+      "id": "pit_cash_quality_delta_180d_standalone_v1",
+      "train_paired_relative_cagr_q20": -0.09354202268155427,
+      "train_paired_relative_cagr_median": -0.060031113014228754,
+      "train_positive_relative_offsets": 0,
+      "validation_paired_relative_cagr_q20": -0.31893948771561853,
+      "validation_paired_relative_cagr_median": -0.28712886284444905,
+      "validation_positive_relative_offsets": 0,
+      "selection_full_net_cagr_median": -0.03322251863514064,
+      "selection_full_turnover_median": 0.5470570279681579,
+      "selection_full_daily_max_drawdown_worst": -0.6484933285514967,
+      "selection_full_median_absolute_daily_score_correlation": 0.09210926517105268,
+      "selection_full_mean_naked_top10_overlap_fraction": 0.00010493179433368311,
+      "selection_full_median_exact_target_overlap_fraction": 0.0005263157894736842,
+      "gate_pass": false,
+      "failed_gate_groups": [
+        "train_relative_performance",
+        "validation_relative_performance",
+        "drawdown"
+      ]
+    },
+    {
+      "id": "pit_cash_quality_delta_180d_fixed_core_blend30_v1",
+      "train_paired_relative_cagr_q20": -0.02502896946044377,
+      "train_paired_relative_cagr_median": -0.01984929666780183,
+      "train_positive_relative_offsets": 0,
+      "validation_paired_relative_cagr_q20": -0.014835849049520998,
+      "validation_paired_relative_cagr_median": 0.0033464262012806723,
+      "validation_positive_relative_offsets": 6,
+      "selection_full_net_cagr_median": 0.08079953940111406,
+      "selection_full_turnover_median": 0.12373170818703705,
+      "selection_full_daily_max_drawdown_worst": -0.2652801416483894,
+      "selection_full_median_absolute_daily_score_correlation": 0.9756797763041276,
+      "selection_full_mean_naked_top10_overlap_fraction": 0.8195173137460651,
+      "selection_full_median_exact_target_overlap_fraction": 0.7828042328042328,
+      "gate_pass": false,
+      "failed_gate_groups": [
+        "train_relative_performance",
+        "validation_relative_performance",
+        "score_correlation",
+        "naked_top10_overlap",
+        "exact_target_overlap"
+      ]
+    },
+    {
+      "id": "pit_growth_cash_confirmation_180d_standalone_v1",
+      "train_paired_relative_cagr_q20": -0.11539195906779458,
+      "train_paired_relative_cagr_median": -0.09862786254909167,
+      "train_positive_relative_offsets": 0,
+      "validation_paired_relative_cagr_q20": -0.2541755292413159,
+      "validation_paired_relative_cagr_median": -0.22431260144299808,
+      "validation_positive_relative_offsets": 0,
+      "selection_full_net_cagr_median": -0.043201841954309705,
+      "selection_full_turnover_median": 0.5249048589563032,
+      "selection_full_daily_max_drawdown_worst": -0.7442422043213597,
+      "selection_full_median_absolute_daily_score_correlation": 0.06511607349801651,
+      "selection_full_mean_naked_top10_overlap_fraction": 0.002308499475341029,
+      "selection_full_median_exact_target_overlap_fraction": 0.0010582010582010583,
+      "gate_pass": false,
+      "failed_gate_groups": [
+        "train_relative_performance",
+        "validation_relative_performance",
+        "drawdown"
+      ]
+    },
+    {
+      "id": "pit_growth_cash_confirmation_180d_fixed_core_blend30_v1",
+      "train_paired_relative_cagr_q20": -0.031092954604560786,
+      "train_paired_relative_cagr_median": -0.028168465812176358,
+      "train_positive_relative_offsets": 0,
+      "validation_paired_relative_cagr_q20": -0.0667725202044187,
+      "validation_paired_relative_cagr_median": -0.0546213768082045,
+      "validation_positive_relative_offsets": 0,
+      "selection_full_net_cagr_median": 0.05899482666198408,
+      "selection_full_turnover_median": 0.4748774687375661,
+      "selection_full_daily_max_drawdown_worst": -0.3253013279546002,
+      "selection_full_median_absolute_daily_score_correlation": 0.9664947595874591,
+      "selection_full_mean_naked_top10_overlap_fraction": 0.44370409233997904,
+      "selection_full_median_exact_target_overlap_fraction": 0.4646421609579504,
+      "gate_pass": false,
+      "failed_gate_groups": [
+        "train_relative_performance",
+        "validation_relative_performance",
+        "score_correlation"
+      ]
+    }
+  ],
+  "audit_handling": {
+    "selected_definition_freeze_selected_candidate_id": null,
+    "audit_authorized": false,
+    "audit_status": "skipped_no_selection_eligible_candidate",
+    "full_or_2025_plus_data_opened": false,
+    "audit_2025_plus_metrics": null,
+    "full_2017_2026_metrics": null
+  },
+  "artifact_lineage": {
+    "selection_input_manifest": {
+      "file_sha256": "1ccf00410f2e1813f8cd81fa73760133c5ffa72a7737fdf6729a56999b6f5c17",
+      "payload_sha256": "cd0fea52c1b06de7bd52904313a66b418eca0579e3eba7a11d4fceb56ebd9163"
+    },
+    "physical_selection_features_sha256": "e989e8f97e8b46e60ef59bbd1c6c835aedcc4904336a14d08009099b651fd549",
+    "physical_selection_execution_sha256": "23a62b2f789a963cb85a6b8e94e7ff70e432cbe1784a04a15989609083e91748",
+    "physical_selection_suspensions_sha256": "b3381fed877ad33dc98b85e7f8ff24411f0c174d70784de722871aabf7c96c1b",
+    "physical_selection_suspensions_metadata_sha256": "d60d62bd3c144894c5d12b6c2d9af9ec00f248feebe2e99880a7365195636e0e",
+    "candidate_space_freeze": {
+      "file_sha256": "16c73d54c3b751c744d7ab7420994a8a3c42642dae7b1040de5a5767b67af46c",
+      "payload_sha256": "b7631601033b31803983de35639bf1fefb34d662216742011696660cc792adba"
+    },
+    "exact_runner_sha256": "e7a3a246311fd0b3eb6838c7b75fa14c1f2e113a35fce675daa9ca3f83d7a93f",
+    "research_config_sha256": "6e96c4cdddd2d3a063d1cf39a0dbab59d795726518bd276fe2606215b48a83ae",
+    "portfolio_execution_kernel_sha256": "ce695e793e805c21cae16e77400466883064cf3b6f3c318505f2a820aed7a7fb",
+    "portfolio_long_only_kernel_sha256": "11b098597a01313f144f46e7a482649f67b978df8609302d9cc51c995085bae6",
+    "research_execution_loader_sha256": "fa296c94cca0e7477c6842b1331fe47cf727a1f3ea3de1aeb5a5a21357586bf5",
+    "selection_results": {
+      "file_sha256": "248b89b0e728686e2c1a4f6e5441bbc6cdfd0be964617969234574f0220f144a",
+      "payload_sha256": "9e66ec70f5ebe0ddb2c87a42f606240753c8f7e87879d8df624cfdcd0bd35522"
+    },
+    "selected_definition_freeze": {
+      "file_sha256": "29260bff58f3138ca95baad0d44f48e498664cd7c53d650964e2f2723f68027f",
+      "payload_sha256": "f2b5b20555aa0999d2e8a3d1bdc70663c3c004c581f81b1a415af4c918d8579d"
+    },
+    "audit_skip_result": {
+      "file_sha256": "0458cc1018562e31d4445b055cdfd1369026ba6df9f570dda9ace31cad64ca59",
+      "payload_sha256": "44d64d3c2cee9e0529efb3a381e61af52925fc40be9f624aa148d66d392b78cd"
+    },
+    "compact_external_decision_summary_sha256": "d7d775aabac263a9c1aaf13b375658f57653b790c8874f81c0d2f6581c009f55",
+    "implementation_correction_record_sha256": "e14d0ab3637e6c200b049202ce63cce9176771591be9341d3ff3f66dd6dd3373"
+  },
+  "implementation_correction_disclosure": {
+    "failure_before_any_exact_offset": true,
+    "outcome_metrics_seen_before_correction": false,
+    "post_2024_data_opened_before_correction": false,
+    "candidate_definitions_or_selection_rule_changed": false,
+    "correction": "Add and audit metadata for the physically truncated suspension snapshot; reuse the original candidate-space freeze unchanged."
+  },
+  "release_line_ending_normalization": {
+    "source_evaluation_hashes_preserved_in_artifact_lineage": true,
+    "semantic_code_changed": false,
+    "normalization": "CRLF/mixed working-tree bytes were normalized to the repository-enforced LF form before the 6.0 release.",
+    "release_lf_sha256": {
+      "research_config": "a11e69042223b0958925be578663fe420016fd4fe21cb1a37155b99933fd0b2e",
+      "portfolio_execution_kernel": "df10b31012192b778f1291ae41d88e28685e917a15ce7b8a3f32e6678f38690d",
+      "portfolio_long_only_kernel": "fc819ea33c86ffc446d91bfcd27120919becd5859a8be6c19bf39f20ea8c6bf7",
+      "research_execution_loader": "181cf477f6da3f319a59f7d39135f25705ebf1debb22078c2a34c1bb4da9a703"
+    },
+    "interpretation": "The original hashes identify the exact bytes used by the negative event run; the LF hashes identify the semantically identical files reproducible from the release tag."
+  }
+}

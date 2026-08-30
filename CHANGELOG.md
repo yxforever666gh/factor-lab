@@ -10,6 +10,67 @@
 
 ## [Unreleased]
 
+## [6.0] - 2026-08-30
+
+### Changed
+
+- 6.0 将研究主线从“为旧信号继续建设 prospective 账本、attestation、watchdog 和 shadow
+  tournament”切换为“低换手可执行基线 + 公告时点可验证的新信息源”。保留 canonical PIT
+  数据、next-open 全成本执行、停复牌/退市处理、容量检查和逐日账户核算；不再把工程门或发布
+  次数当作市场进展。
+- 即时正式基线保持 5.0 的 fixed-core 截面分数、Top10、等权和十个调仓相位不变，只把持仓
+  保留边界由 rank15 放宽到 rank25。该改动的目标是降低换手，不作为新 alpha 声明。
+- Python 包版本更新为 `6.0.0`；CI 回归为纯数据/研究/组合执行主线，不再为已删除的前瞻
+  scheduler 强制修改 Windows 时区。
+
+### Added
+
+- 新增可从 canonical Parquet 独立重跑的 6.0 low-churn exact evidence runner、纯目标选择模块与
+  版本化协议证据。train/validation 按 exact 持有期末边界切分且不越界；完整结果仍明确包含
+  已被项目观察过的 2025+ audit，并非物理隔离的独立 OOS。新增
+  `strategy status` 完整性检查与 `strategy targets` 绝对日历 sleeve 目标重建入口。
+- 新增公告驱动的 PIT 候选研究：只使用 `financial_ann_date` / `financial_available_date` 之后
+  当时可见的盈利与收入变化、现金流转换、ROIC 和杠杆字段，不把价格窗口或未来标签混入
+  event component。预先定义的 3 个 standalone 与 3 个 fixed-core blend 全部未通过 train / validation
+  主动收益门槛，`selected_candidate_id=null`，因此没有修改正式 score，也没有打开 2025+ audit。
+- 新增对现有 canonical 价量、趋势和 PIT 质量字段的 129 定义正交搜索闭包；train / validation
+  q20 为正均为 `0/129`，没有候选进入 formal exact，也未打开 2025+。该负面结果把下一条发现线
+  明确转向新的卖方盈利预测修正数据，而不是继续排列组合旧字段。
+- 新增 Tushare `report_rc` 卖方盈利预测修正数据线、不可变报告日分区、逐页 hash manifest 与
+  纯 PIT 特征构造器。同步严格使用官方 3000 行 `limit/offset` 分页；超页、重复页、分页中断、
+  跨页 identity/重复行冲突或连续 100 个满页均阻断且不发布部分数据。只有上海时区昨天及更早
+  的日期可发布，避开 19–22 点更新中的空/部分响应；每个规范化 page 单独保存，resume 会重算
+  page 文件与内容 hash、endpoint、字段和最终 Parquet。availability 固定为
+  `report_date` 后首个官方开市日，`create_time` 只作 lineage；20/60 交易日 EPS/净利润共识修正
+  和 breadth 至少要求三家配对券商，同券商同日多报告按指标中位数聚合，只输出信号年 FY0/FY1
+  Q4；缺失保持 NaN，不读取价格、收益或 label。
+- 在打开新收益前冻结下一阶段的两个正交工作流：分析师 FY0/FY1 共识修正、预测增长、公告相对
+  共识 surprise 三个小候选族；以及保持 fixed-core/Top10/exit25/成本不变、只把 PIT Top500 扩展
+  为动态 ADV≥1 亿元或流动性 Top1500 的机会集实验。二者都先用物理 2024-12-31 截止做
+  train/validation，失败者不得打开 2025+。
+
+### Removed
+
+- 从 6.0 主线删除 5.x prospective ledger/release capsule/attestation/readiness/watchdog、5.9
+  adaptive-shadow tournament 及其专用协议和测试；完整历史仍由已同步 GitHub 的 annotated
+  `5.9` tag 保存。
+- 删除已经被否决的 5.0 adaptive selector/overlay 研究入口。保留 results-first、recovery、
+  walk-forward 等有限历史复现能力，但它们不再是默认正式路线。
+
+### Known limitations
+
+- rank25 是在项目已经反复观察 2017–2026 历史后选择的执行参数，不能称为独立 OOS。全历史
+  exact 结果相对 rank15 为 10/10 offset CAGR 改善、中位数约 +1.045 个百分点；每个
+  10-session 调仓周期的平均换手中位数由 18.216% 降至 11.717%。但 2025–2026 仅 5/10 offset
+  为正、中位数约 +0.003 个百分点，说明可靠
+  证据主要是降换手，而不是新增收益。
+- 分析师修正路线当前为 `ingestion_implemented_research_spec_permission_and_vintage_blocked`：本机
+  `report_rc` 凭据只有每天 10 次的试用权限，尚未完成 2017–2024 不截断回填，也没有冻结最终
+  一维股票 score、打开收益或运行 exact validation。正式回填需要至少 8000 积分权限；旧的
+  3886/5000 行无分页响应只能证明单页不可靠，不能作为完整数据。2017/2020 数据的供应商
+  `create_time` 又晚了 1831/732 天；正式历史验证前还需用原始研报档案做 vintage 抽样，或只把
+  首次捕获后的前瞻样本称为严格证据。
+
 ## [5.9] - 2026-08-30
 
 ### Added
@@ -844,6 +905,7 @@
   移除这些实验层。
 
 [Unreleased]: https://github.com/yxforever666gh/factor-lab/commits/main
+[6.0]: https://github.com/yxforever666gh/factor-lab/tree/6.0
 [5.9]: https://github.com/yxforever666gh/factor-lab/tree/5.9
 [5.8]: https://github.com/yxforever666gh/factor-lab/tree/5.8
 [5.7]: https://github.com/yxforever666gh/factor-lab/tree/5.7

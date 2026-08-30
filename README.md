@@ -1,28 +1,115 @@
-# Factor Lab
+# Factor Lab 6.0
 
-Factor Lab 是一条本地、可复现的 A 股组合研究链：Parquet 数据 → 固定方向截面排名 →
-逐日成交与账户核算 → fresh equal-AUM 比较 → 10 个相关调仓相位稳健性汇总 → 协议冻结。
+Factor Lab 是一条本地、可复现的 A 股截面策略研究链：canonical Parquet → PIT 信号 →
+次日开盘成交 → 全成本逐日账户核算 → 10 个绝对日历调仓相位比较。
 
-项目不再依赖 WebUI、Docker、PostgreSQL、MinIO、Dagster、Hermes 或自治 Agent。旧 Research OS 已完整归档在 Git tag `research-os-final-20260826`，不再进入当前主线。
+6.0 的结论不是“已经找到稳定 alpha”，而是两件更具体的事：
 
-> 5.9 不改变 5.0 已冻结、由 5.2 协议完整定义的正式 `fixed_core_full` 路由，并保留 5.8 的
-> 连续 controller 与 provider-complete 数据门。它另建无资金权限的自适应影子锦标赛，预注册
-> 一个换手率 Challenger 和一个价格波动率 Challenger，与正式路由共用 signal、membership、
-> 日历、成本、持有窗和十个 offset；只有激活后按时封存且严格成熟的 outcome 才能进入配对评价，
-> 历史桥只用于初始化特征，
-> 不算赢家证据。锦标赛不会自动替换正式路由，任何方向切换都必须另发 6.0。截至协议写入时仍为
-> 0 个新增前瞻市场 outcome，没有新增盈利证据；项目不连接券商、不下真实订单，也不保证未来收益。
+1. 停止继续为同一批弱相关信号建设 selector、overlay、前瞻账本和调度平台。
+2. 把当前最可靠的可运行路线收缩为低换手 fixed-core，并让新机制必须先证明能在选择期
+   稳定胜过它。
 
-历史版本与当前未发布改动见 [CHANGELOG.md](CHANGELOG.md)。正式发布、Git tag 与 GitHub
-同步规则见 [RELEASING.md](RELEASING.md)。
+旧 Research OS 保存在 annotated tag `research-os-final-20260826`；完整 5.x 前瞻/影子实现
+保存在已经同步 GitHub 的 annotated tag `5.9`。它们不再进入当前主线。
 
-未来 tag 统一通过 `./scripts/publish-tag.ps1 -Tag <major.minor>` 发布；大方向递增 major，
-小方向递增 minor。脚本会确认
-GitHub CI 成功并在推送后核对远端 tag SHA。
+版本历史见 [CHANGELOG.md](CHANGELOG.md)，发布规则见 [RELEASING.md](RELEASING.md)。
+
+## 为什么判断原方向错了
+
+Git 历史显示，项目长期把主要增量投向研究平台与控制层，而不是新的信息源：`1.0 → 1.2`
+增加约 49 万行；Research OS 归档到 `3.0` 时一次删除约 75.6 万行；但 `5.0 → 5.9` 又在
+23 个提交中增加约 5.85 万行前瞻账本、attestation、controller、watchdog 和影子锦标赛代码。
+这十个 5.x tag 在约 46 小时内发布，却一直是 0 个新增 market outcome。
+
+与此同时，4.0 的 selector 结果被 4.1 的 equal-AUM/核算修正改变，5.0 的 overlay、静态分配和
+在线分配都没有稳定胜过 fixed-core，5.9 的低换手/低波动 challenger 又是 0/10 offset 胜出。
+因此错误不在“回测工程还不够复杂”，而在“同一组弱且高度相关的特征上叠了太多决策层”。
+6.0 保留能防止虚假成绩的 PIT、执行和核算内核，删除不能创造信息优势的运行层。
+
+## 当前路线
+
+`fixed_core_top10_exit25` 保持旧 fixed-core 的信号定义、Top10、等权和十个 sleeve 不变：
+
+```text
+control   = rank(earnings_yield / pb)
+defensive = rank(rank(book_yield) + rank(earnings_yield) + rank(-volatility_20))
+score     = (1 - 0.70) * control + 0.70 * defensive
+```
+
+每个交易日只更新其绝对日历对应的一个 sleeve。新持仓从 Top10 进入，旧持仓在当日排名不差于
+25 时保留，空位再按排名补齐。成交使用下一官方交易日 `open_adj`，并计入佣金、印花税、滑点、
+冲击、涨跌停、停复牌、退市与容量约束。
+
+相对旧 `exit15` 的 exact paired 结果如下；数值是年化收益率差的百分点，不是未来收益承诺：
+
+| 区间 | active CAGR q20 | 中位数 | 最差 offset | 正 offset |
+| --- | ---: | ---: | ---: | ---: |
+| train（持有期末不晚于 2022-12-31） | +0.334 | +0.891 | -0.246 | 8/10 |
+| validation（2023–2024） | +1.030 | +2.278 | +0.172 | 10/10 |
+| audit（2025+） | -0.821 | +0.003 | -1.947 | 5/10 |
+| full | +0.728 | +1.045 | +0.399 | 10/10 |
+
+全区间 `exit25` 每个 10-session 调仓周期的平均换手中位数约 11.717%，比 `exit15` 的
+18.216% 下降约 6.50 个百分点；十相位最差
+日频最大回撤约 -27.047%。因此目前可靠的结论是“降低了换手并改善了历史全区间成本后结果”，
+不是“发现了新的独立 alpha”。尤其 2025+ 的主动收益中位数接近零。
+
+## 新信号搜索结果
+
+6.0 首轮研究了 6 个只在公告可见后使用的 PIT 定义：增长加速度、现金质量变化、增长与现金流
+确认，以及三者各自的 30% fixed-core 混合。选择输入在物理文件层截断至 2024-12-31，财务
+available/report/announcement 时点违规均为 0。
+
+结果是 6/6 都没有同时通过 train 和 validation 门槛，`selected_candidate_id=null`，所以没有把
+任何公告机制接入正式分数，也没有为了挑赢家而查看 2025+。三个独立 event 组合的换手中位数
+约 51.7%–54.7%，最差日频回撤约 -64.8% 至 -74.4%；最接近的现金质量混合又与 fixed-core
+分数高度相关（约 0.976）。详细定义和负面结果位于：
+
+- [protocols/6.0-pit-event-search.json](protocols/6.0-pit-event-search.json)
+- [protocols/evidence/6.0/pit-event-negative.json](protocols/evidence/6.0/pit-event-negative.json)
+
+这类失败会被保留为搜索边界，避免换个名字再次消耗计算量；它不会进入正式 registry。
+
+随后又在同一物理截止上冻结并穷尽了 129 个旧数据候选，覆盖行业/规模中性动量、52 周高位、
+趋势稳定、量价确认、残差趋势和质量×趋势。结果仍是 train q20 为正 `0/129`、validation q20
+为正 `0/129`，没有 formal exact finalist，也没有打开 2025+。最优联合失败者与 fixed-core 的
+score 相关仅 0.226，说明它确实正交，但 train / validation 主动 CAGR q20 约 -15.4% / -17.4%。
+紧凑负面证据见
+[orthogonal-canonical-negative.json](protocols/evidence/6.0/orthogonal-canonical-negative.json)。
+
+因此下一条研究线不再改写现有价量/质量字段，而是接入卖方盈利预测修正：按 `report_date` 后
+首个官方交易日可用，先取每家券商对 ticker/目标季度的最新预测，再构造至少三家券商覆盖的
+20/60 日 EPS、净利润共识修正与 revision breadth。供应商 `create_time` 已实测存在多年后回填，
+只保留为 lineage，禁止参与 PIT availability。
+
+6.0 已实现这条数据线的不可变 ingestion 闭包与 feature prototype：每个报告日以官方 3000 行上限做显式 `limit/offset`
+分页，只有短页或空页才算完成；重复页、超页、第二页失败、跨页 identity 冲突或连续 100 个
+满页都会阻断，且不会发布部分分区。Parquet 与逐页 hash manifest 在同一目录原子发布，已发布
+日期不可覆盖；为避开供应商 19–22 点当日更新窗口，只允许发布上海时区昨天及更早的日期。
+每个规范化 page 也单独保存并在 resume 时重算文件与内容 hash。特征构造器不读取价格、收益或
+label，并再次验证 availability 必须恰好是 `report_date` 后第一个官方开市日；同券商同日多报告
+按 EPS/NP 中位数聚合，不用 `create_time` 或内容 hash 决定先后，只输出信号年 FY0/FY1 的 Q4
+预测，过期季度、非 Q4 和 FY2+ 不进入面板。
+
+当前状态是 `ingestion_implemented_research_spec_permission_and_vintage_blocked`，不是 alpha 通过。
+现有 Tushare 凭据只有试用权限
+（每天 10 次）；[官方 `report_rc` 文档](https://tushare.pro/document/2?doc_id=292)要求 8000
+积分取得正式日 100000 次权限，10000 积分以上无总量限制。
+因此 2017–2024 全量回填与冻结后的 exact return validation 仍未执行，任何旧的单页 3886/5000
+响应都被视为不完整证据。2017/2020 样本的 `create_time` 还分别晚了 1831/732 天；打开收益前
+必须另购 [`research_report`](https://tushare.pro/document/2?doc_id=415)/原始研报档案抽样核验历史 timestamp 与预测值，或把严格证据限制在
+首次捕获之后的前瞻样本。
+
+打开任何新收益前，协议一次冻结三类有经济含义的小候选族：FY0/FY1 NP 共识修正（EPS 只作
+拆送股稳健性对照）、FY1 相对 FY0 的预测增长，以及实际公告相对公告前共识的 earnings surprise。
+coverage/initiations、dispersion 与 active-reviser breadth 先只做诊断，不再建 selector。
+
+同时冻结一个独立的机会集实验：保持 fixed-core、Top10/exit25、成本和执行完全不变，只比较
+当前 PIT Top500 与“20 日人民币 ADV 至少 1 亿元”及“PIT 流动性 Top1500”两个 universe；要求
+至少上市 120 个交易日、按历史名称剔除当日 ST，并在物理 2024-12-31 截止上先过 train / validation，
+失败者不打开 2025+。这条线检验的不是新因子，而是项目是否长期把可交易机会集限制得过窄。
 
 ## 安装
-
-普通历史诊断可以直接安装开发依赖：
 
 ```powershell
 python -m pip install -e ".[dev]"
@@ -31,457 +118,117 @@ python -m pip install -e ".[dev]"
 python -m pip install -e ".[data,dev]"
 ```
 
-5.9 的发布及其 canary 完成后的前瞻 decision、execution、outcome、replay 和 evaluate 必须
-使用项目内的专用运行环境 `runtime/environments/5.9`。该环境固定为当前发布主机的
-CPython 3.10.16，并从
-`protocols/5.2-runtime-lock.txt` 与项目内 wheelhouse 按逐文件 SHA-256 离线安装；随后用
-同一 lock 中的项目 wheel 安装 Factor Lab 本身。不要使用 editable install，也不要让系统
-Python 或用户级 site-packages 参与前瞻证据：
+凭据可由环境变量 `TUSHARE_TOKEN` 提供，也可放在配置指定的
+`runtime/secrets/settings/tushare_token`。运行数据、密钥、临时结果与报告不进入 Git。
+
+## 数据
 
 ```powershell
-$factorLabPython = (Resolve-Path `
-  "runtime/environments/5.9/Scripts/python.exe").Path
-$wheelhouse = (Resolve-Path `
-  "runtime/environments/5.9/wheelhouse").Path
+# 查看 canonical Parquet readiness、键和覆盖范围
+python -m factor_lab.cli data status --deep --hash
 
-& $factorLabPython -m pip install --no-index --find-links $wheelhouse `
-  --require-hashes -r protocols/5.2-runtime-lock.txt
-& $factorLabPython -c `
-  "import factor_lab; assert factor_lab.__version__ == '5.9.0'"
-```
-
-下文的 `python -m factor_lab.cli prospective ...` 表示应由 `$factorLabPython` 执行；发布
-胶囊还会再次核对完整 CPython build 字符串、平台标签、全部已安装 distributions、lock 和
-全部 `src/factor_lab/**/*.py` 的发布 Git blob，任一不一致都会停止。
-
-数据源凭据可使用本机环境变量 `TUSHARE_TOKEN`，也可放在配置指定的
-`runtime/secrets/settings/tushare_token`；运行数据、密钥和报告位于已忽略的
-`runtime/`，不会进入 Git。
-
-## 唯一 CLI
-
-```powershell
-# 查看 canonical Parquet 是否就绪
-python -m factor_lab.cli data status
-
-# 首次将现有冻结数据复制并校验到 runtime/data/top500
+# 首次采用现有 frozen store
 python -m factor_lab.cli data build --full --apply-migration --hash
 
-# 增量同步三类 Tushare 日分区，并预存同时覆盖持有期和 membership 整个生效月的官方日历
+# 增量同步日行情、daily_basic、复权因子和官方日历
 python -m factor_lab.cli data sync --from 2026-08-22 --to 2026-08-28 `
   --calendar-to 2026-09-30 --resume
 
-# 下载并校验官方停复牌历史快照；结束日期扩展时必须全量原子替换，不能 --resume
+# 全量原子更新停复牌历史
 python -m factor_lab.cli data suspensions --from 2017-01-01 --to 2026-08-28 --no-resume
 
-# 续传 PIT 财务指标和历史月末名称/行业，并原子更新 canonical Parquet
-python -m factor_lab.cli data enrich --from 2017-01-01 --to 2026-08-13 --resume
+# 同步并应用 PIT 财务/历史名称行业数据
+python -m factor_lab.cli data enrich --from 2017-01-01 --to 2026-08-28 --resume
 
-# 默认主线 canary：冻结协议、四专家信号与执行入口 smoke
-python -m factor_lab.cli research run --canary --resume
+# 新方向：同步不可变的卖方盈利预测报告日分区；完整回填前须先升级 report_rc 权限
+python scripts/sync-analyst-reports.py `
+  --start-date 2017-01-01 --end-date 2024-12-31
+```
 
-# 5.0 全历史：40 个因果影子账户、50 个共同起点评分账户、冻结 gate 与路由
-python -m factor_lab.cli research run --suite adaptive --full --resume
+canonical 数据默认位于 `runtime/data/top500/`：
 
-# 4.1 hard-selector 纠正基线，仅用于复现历史诊断
+- `features.parquet`：信号日 PIT 特征与 lineage；
+- `execution.parquet`：逐日 next-open 执行与账户核算输入；
+- `membership.parquet`：月度 Top500 membership；
+- `suspensions.parquet`：停复牌事件。
+
+`report_rc` 原始分区独立放在
+`runtime/data/raw/report_rc/report_date=YYYY-MM-DD/`，每个日期包含 `part-000.parquet` 和
+逐页完整性 `manifest.json`；`pages/` 保存可在 resume 时独立重算的规范化 page。它尚未并入
+正式 fixed-core score，FY0/FY1 如何汇成一维股票分数也尚未冻结。协议与 feature-only 可行性
+证据见 [protocols/6.0-analyst-revisions.json](protocols/6.0-analyst-revisions.json) 和
+[analyst-scout.json](protocols/evidence/6.0/analyst-scout.json)。
+
+## 复现 6.0 evidence
+
+完整 exact 比较会运行 `exit15` 与 `exit25` 各十个 offset；输出 JSON 文件应放在仓库外：
+
+```powershell
+python scripts/run-low-churn-evidence.py `
+  --output H:\Download\factor-lab-6.0-low-churn-reproduction\result.json
+```
+
+检查 tracked 实现/evidence（可选同时重算约 450 MiB canonical 数据哈希），或从历史状态确定性
+重建最新一个 sleeve 的目标：
+
+```powershell
+python -m factor_lab.cli strategy status --verify-data
+python -m factor_lab.cli strategy targets --signal-date latest
+```
+
+目标构造核心是无 I/O 的纯函数，可直接嵌入后续研究或执行层：
+
+```python
+from factor_lab.strategy import (
+    LowChurnStrategyConfig,
+    fixed_core_score,
+    generate_sleeve_target_schedule,
+    select_low_churn_targets,
+)
+
+config = LowChurnStrategyConfig(retention_exit_rank=25)
+scores = fixed_core_score(signal_frame, config)
+targets = select_low_churn_targets(ranked_tickers, previous_sleeve_targets, config)
+schedule = generate_sleeve_target_schedule(signal_frame, official_calendar, config)
+```
+
+实现固定 ticker 升序 tie-break、rank25/rank26 边界、5.2 binary64 公式兼容，以及空信号日不
+重排 calendar/sleeve 的合同。
+
+## 历史诊断
+
+下列入口只用于复现历史研究，不代表当前正式路线：
+
+```powershell
 python -m factor_lab.cli research run --suite walk-forward --full --resume
-
-# 旧全历史方向/冠军榜，仅用于复现历史诊断
 python -m factor_lab.cli research run --suite results-first --full --resume
-
-# 旧保守 recovery 协议，仅保留为历史诊断
 python -m factor_lab.cli research run --suite recovery --full --resume
-
-# 已冻结的旧价值族实验，仅用于复现既有研究
 python -m factor_lab.cli research run --suite next --full --resume
-
-# 旧八因子数值回归
 python -m factor_lab.cli research run --suite legacy-regression --full --resume
-
 python -m factor_lab.cli research status
 python -m factor_lab.cli report --run latest
-
-# 5.0 tag 发布且权威 full run 绑定完成后，激活不可回填的前瞻账本
-python -m factor_lab.cli prospective activate `
-  --run <authoritative-run-id> --release-tag 5.0
-# 5.1 修复后恢复已成功的精确远端 run；不得重新 dispatch activation canary
-python -m factor_lab.cli prospective attest --purpose activation_canary `
-  --release-tag 5.0 --workflow-run-id 33132845922
-
-# 已完成的 5.4 历史步骤；正式账本中的记录不可改写
-python -m factor_lab.cli prospective upgrade `
-  --manifest protocols/5.2-target-generator.json --release-tag 5.4
-# 为保持 2026-08-31 是第一条真实前瞻 signal，本次 implementation canary 的可信 Tlog
-# 必须晚于 2026-08-28 15:00 Asia/Shanghai，且早于 2026-08-31 15:00。
-python -m factor_lab.cli prospective attest `
-  --purpose implementation_upgrade_canary --release-tag 5.0
-
-# 已完成的 5.5 历史步骤；正式账本中的实现升级与 canary receipt 不可改写
-python -m factor_lab.cli prospective upgrade `
-  --manifest protocols/5.2-target-generator.json --release-tag 5.5
-python -m factor_lab.cli prospective attest `
-  --purpose implementation_upgrade_canary --release-tag 5.0
-
-# 已完成的 5.6 历史步骤；正式账本中的实现升级与 canary receipt 不可改写
-python -m factor_lab.cli prospective upgrade `
-  --manifest protocols/5.2-target-generator.json --release-tag 5.6
-python -m factor_lab.cli prospective attest `
-  --purpose implementation_upgrade_canary --release-tag 5.0
-
-# 已完成的 5.7 历史步骤；正式账本中的实现升级与 canary receipt 不可改写
-python -m factor_lab.cli prospective upgrade `
-  --manifest protocols/5.2-target-generator.json --release-tag 5.7
-python -m factor_lab.cli prospective attest `
-  --purpose implementation_upgrade_canary --release-tag 5.0
-
-# 已完成的 5.8 历史步骤；正式账本中的实现升级与 canary receipt 不可改写
-python -m factor_lab.cli prospective upgrade `
-  --manifest protocols/5.2-target-generator.json --release-tag 5.8
-python -m factor_lab.cli prospective attest `
-  --purpose implementation_upgrade_canary --release-tag 5.0
-
-# 5.9 tag 与 GitHub 同步后，仅在仍为 0 decision、0 outcome 时追加纠错升级并见证 canary
-python -m factor_lab.cli prospective upgrade `
-  --manifest protocols/5.2-target-generator.json --release-tag 5.9
-python -m factor_lab.cli prospective attest `
-  --purpose implementation_upgrade_canary --release-tag 5.0
-
-# 严格只读：不创建 membership、input、cache 或 ledger record
-python -m factor_lab.cli prospective readiness
-# 退出码：0 ready、2 waiting、3 blocked、4 terminal；只能执行 JSON 的 action.argv。
-# --observed-at-utc 只用于确定性诊断，不会把调用者时间变成可信时间证据。
-
-# 全生命周期只按 readiness 的机器动作推进；每一步完成后重新观察，不手工拼接或修正参数。
-# 一次 controller 运行最多推进十二步；provider 暂未就绪时保留现状，下一次从当前阶段续跑。
-for ($step = 0; $step -lt 12; $step++) {
-  $readinessJson = & $factorLabPython -m factor_lab.cli prospective readiness
-  $readinessExit = $LASTEXITCODE
-  if ($readinessExit -eq 2) {
-    break
-  }
-  if ($readinessExit -ne 0) {
-    throw "prospective readiness blocked or terminal: exit $readinessExit"
-  }
-  $readiness = $readinessJson | ConvertFrom-Json
-  if (-not $readiness.ready -or -not $readiness.action.argv) {
-    throw "ready response lacks an executable action"
-  }
-  $actionArgv = @($readiness.action.argv)
-  & $factorLabPython -m factor_lab.cli @actionArgv
-  $actionExit = $LASTEXITCODE
-  if ($actionExit -eq 2) {
-    break
-  }
-  if ($actionExit -ne 0) {
-    throw "$($readiness.action.command) failed: exit $actionExit"
-  }
-}
-# 正常首轮路径为：data sync → data reference → membership → input → resumable admit → attest；
-# 成熟周期路径为：daily/daily_basic/adj_factor sync → suspensions → execution → outcome；evaluation due 时
-# readiness 会直接给出 evaluate。多个待结算周期按 calendar index、decision SHA 的稳定顺序关闭。
-# record 已提交但 snapshot 发布中断时会先出现 repair-snapshots；deadline 后只会出现已有
-# dispatch 证据的 attestation recovery，不会新派发远端运行。
-python -m factor_lab.cli prospective status
-python -m factor_lab.cli prospective audit
 ```
 
-5.9 使用同一个 controller runner 同时承担首周期推进和持续恢复。runner 本身属于 runtime
-closure；implementation upgrade 后，它由正式 release capsule 逐字节提供，并通过文件句柄锁与
-heartbeat/其他 Task Scheduler 实例互斥。发布、upgrade、canary 和 audit 全部完成后注册当前用户的
-首周期与连续 Windows 任务：
+6.0 不提供 `prospective`、`adaptive-shadow` 或真实券商下单命令。
+
+## 测试与发布
 
 ```powershell
-& pwsh -NoProfile -File scripts/register-prospective-watchdog.ps1 `
-  -ProjectRoot (Resolve-Path .).Path -ReleaseTag 5.9 -ControllerMode first_cycle
-& pwsh -NoProfile -File scripts/register-prospective-watchdog.ps1 `
-  -ProjectRoot (Resolve-Path .).Path -ReleaseTag 5.9 -ControllerMode continuous
+$testRoot = "H:\Download\factor-lab-test-" + [guid]::NewGuid().ToString("N")
+python -m pytest tests -q --basetemp $testRoot -p no:cacheprovider
+python -m compileall -q src/factor_lab
 ```
 
-两个任务都固定执行 annotated `5.9` tag 对应 capsule 中的 runner，而不是可变 working tree 文件。
-`first_cycle` 从 2026-08-31 15:00 到次日 09:15 每 30 分钟运行，07:55 后加密为每 5 分钟；
-`continuous` 在工作日覆盖收盘前、17:10 数据完整性门槛后、夜间和次日 pretrade 窗口，周末保留
-六次恢复触发；两者都在当前用户登录时补跑。注册和运行均要求 Windows 时区为
-`China Standard Time`，时区不满足就 fail closed。任务只执行 `action.argv`，单轮最多
-12 个动作；退出 2 表示安静等待或已有实例持锁，3 表示 blocked/controller 警报，4 表示正式
-terminal。每轮的实际 argv、状态和 stdout/stderr 字节数与 SHA-256 写入
-`runtime/operations/prospective-watchdog-5.9/`，不保存 provider 输出或环境变量。任务使用当前
-用户的 `Interactive/Limited` 凭据以访问本机 token/keyring；机器必须保持当前用户可登录、电脑
-接通交流电且 PowerShell 7 可用。卸载任务时保留运行日志：
+大方向变化递增 major 并将 minor 归零；同方向迭代递增 minor。tag 使用 `major.minor`，Python
+包使用 `major.minor.0`。发布只能通过：
 
 ```powershell
-Unregister-ScheduledTask -TaskName "Factor Lab Prospective Watchdog 5.9" `
-  -TaskPath "\" -Confirm:$false
-Unregister-ScheduledTask -TaskName "Factor Lab Prospective Continuous Watchdog 5.9" `
-  -TaskPath "\" -Confirm:$false
+./scripts/publish-tag.ps1 -Tag <major.minor>
 ```
 
-readiness 先从原始数据层给出 `data sync` 或 exact-date `data reference`，再依次进入
-`membership_build`、`input_build`、`decision_admission` 和 `awaiting_receipt`；已有成熟周期或
-到期 evaluation 时，先返回其唯一合法的结算动作。reference 不允许
-回退到前一交易日：同一 as-of 必须至少两次独立全量采样 canonical 一致、覆盖该日完整 daily
-universe，并绑定该 daily 分区的 SHA-256 与 ticker count。已有 artifact 必须通过完整不可变源
-重放，最终 admission 还必须在 active 发布胶囊中重放 target generator；单一
-`prospective admit` action 完成 plan、create-only store 与 ledger seal，避免 controller 在 plan
-和 seal 之间拆分推进。进入 `awaiting_receipt` 后，readiness 才返回包含完整 snapshot、decision
-hash 与 deadline 参数的 `prospective attest`。`ready` 只表示对应 `action.argv` 可以尝试，不表示
-provider/builder 必然成功、decision 已见证、独立 OOS 已验证或收益已确认。
+脚本要求 clean `main`、对应提交自己的双平台 GitHub CI 成功，并在推送 annotated tag 后核对
+本地与 GitHub 的 tag object SHA 和 peeled commit；本地 tag 不算完成发布。
 
-冻结桥之后（交易日晚于 2026-08-21）的分区不能再以首个非空响应宣告完成。每个日期必须在
-Asia/Shanghai 17:10 之后按 `daily`、`daily_basic`、`adj_factor` 三件套完成至少两轮顺序独立
-采样；两轮 canonical fingerprint 必须稳定，`daily` 与 `daily_basic` ticker 集必须相等，且
-`daily` 必须是 `adj_factor` ticker 集的子集。17:10 只是本项目的工程门槛，不是供应商完整性
-SLA；若届时仍未满足，动作以 waiting 退出并继续恢复。完全缺失 completion proof 时只能用
-readiness 给出的 exact-date 三件套 `--resume` 动作重建；proof 已存在但损坏、出现供应商修订、
-混合版本或跨端集合冲突时一律 blocked，不能覆盖已发布字节。
-
-结算动作从 sealed decision 的日历 CAS 推导 holding window，不接受 controller 手工指定日期。
-readiness 先要求持有期末的 `daily`、`daily_basic` 与 `adj_factor` immutable source 完整，再要求覆盖 holding end
-的全历史停复牌快照，然后只接受唯一、完整且与 decision 匹配的 execution bundle；缺失时生成，
-完整时幂等复用，损坏或出现多个匹配 bundle 时 blocked。outcome 封存后，达到预注册门槛才开放
-`prospective evaluate`，不能因新 signal 或同 offset 容量等待而饿死更老的待结算周期。
-
-日历/checkpoint 缺失或 horizon 不足时也会返回带精确 `--calendar-to` 的 `data sync` action；
-尚不能推导 candidate 时只同步最近最多 31 个已完成自然日，并把日历预存到未来 62 日所在月末。
-供应商暂时返回空 calendar/partition 时该 action 输出 `waiting` 并以 2 退出，controller 保留已完成
-checkpoint，下一轮继续 resume，而不是把短暂数据空窗当作永久错误。
-
-异常恢复也是机器合同的一部分：若 ledger record 已提交而 snapshot 尚未发布，readiness 只开放
-`prospective repair-snapshots`，从已验证 record prefix 确定性重建；若 attestation 在 deadline 前
-已有本地 binding，或存在 deadline 前 intent 且仍在 24 小时恢复窗内，deadline 后只允许继续
-reconcile/poll，绝不创建新 dispatch。远端可见性宽限是有界的，系统不声称分布式 exactly-once；
-重复匹配会 fail closed，而不是任选一个 run。
-
-首次通过 canary 的可信 TLog 会永久建立 prospective epoch；后续纠错版本不会重设首个 signal。
-如果 active 纠错 canary 已晚于这个固定 signal 的收盘，readiness 会 terminal，而不是静默跳到
-下一个交易日。任何 ready 动作返回前还会在账本锁内重新观察账本与数据，拒绝并发变更产生的
-旧视图。封存 membership/input 所绑定的日历 CAS 可以脱离 mutable checkpoint 自证，但仍会与
-更新、更长的 live 官方日历合并，以便跨月推进；如果下一步仍要构建 artifact，则 live checkpoint
-及其全部日历条目仍必须完整、无冲突并覆盖同一 candidate horizon。
-
-同一月份的所有 signal 复用同一个月度 membership：`as_of_date` 是自然月首之前最后一个
-官方开市日，`effective_start_date` / `effective_end_date` 是该月首个 / 最后一个官方开市日；
-自然月末只用于证明日历完整覆盖。构建完成与全部输入可用时间仍必须早于该 decision 的
-pretrade deadline；`input` 与 readiness 会通过封存 CAS 重放验证这些边界并 fail-closed。
-
-## 当前正式主线：5.x 前瞻执行闭环（协议自 5.2 冻结，当前实现 5.9）
-
-5.0 不再让一组高度相关的价值信号做 hard switch。系统固定保留 4.1 事后观察到最稳健的
-70% 防御价值核心，同时把两个可能增加复杂度的机制隔离成挑战者：市场风险覆盖层和因果
-在线分配。协议 `protocols/5.0.json` 在首次历史执行前冻结十个 offset、五类账户、四组配对
-gate 和三分支路由；看到结果后不能改阈值、挑最好相位或重写路由。
-
-权威运行 `88009f1e5309b268` 建立 40 个连续独立成本影子账户和 50 个从
-`2018-09-03` 以 5000 万现金、空仓开始的 fresh equal-AUM 账户。40/40 影子与 50/50
-评分账户通过状态、目标 cohort、完整逐日 NAV、执行输入、容量、未来输入和期末复利对账；
-feedback/overlay 未来违规均为 0。它最初由发布前审计生成，随后由 clean `5.0` tag target 和
-正式 activation record 共同绑定为权威身份；权威性来自 tag、run fingerprint、manifest、
-adaptive summary 与重算路由的逐值一致，而不是 README 中的 run id 文本。
-
-冻结 gate 全部拒绝新增复杂度，历史路由为 `fixed_core_full`：
-
-- 固定核心全仓年化收益 Q20 / median / worst 为 10.62% / 11.07% / 10.11%，Sharpe
-  Q20 为 0.674、IR Q20 为 0.162、最大回撤 Q20 为 -18.30%。
-- 核心风险覆盖层在 89.28% 的信号日降低暴露，最大回撤配对 Q20 改善 2.31 个百分点，
-  但年化收益和 Sharpe 配对 Q20 分别损失 6.49 个百分点和 0.216，0/10 offset 改善年化；
-  因此覆盖层 gate 失败。
-- 静态分散相对固定核心的年化 / Sharpe 配对 Q20 为 -1.14 个百分点 / -0.056，
-  0/10 offset 改善年化。在线分配又相对静态先验略差：年化 / Sharpe 配对 Q20 为
-  -0.04 个百分点 / -0.002，只有 1/10 offset 改善年化；因此在线挑战者 gate 失败。
-
-这不是“稳定盈利已经证明”。它表示在当前历史证据下，可靠方向反而是删去不能证明增益的
-覆盖层、分散 sleeve 和在线权重，把可执行路线收缩为单一固定核心。正式 5.0 激活后，前瞻
-账本从数据截止日之后的第一条新决策开始，确认观察数从 0 起步，历史记录不得回填；只有
-前瞻证据才能决定固定核心是否真的值得继续。
-
-5.2 补齐了此前真正阻塞第一条 decision 的缺口。route→targets 只能由已发布 commit 的隔离
-runner 从内容寻址 PIT 输入重建；十个 500 万元 sleeve 从现金独立启动，选择状态与实际账户
-状态分离；执行和 outcome 只能读取封存的市场、日历、membership、停复牌和退市证据。
-发布后的主分支可以继续修 adapter 或增加下一版本，旧周期仍用旧 tag 胶囊重放，不靠冻结
-当前 checkout 维持一致性。
-
-真实 11-session 持有窗与 10-session 同 offset 间隔会在共同开盘边界短暂形成两代在途周期，
-所以每个 offset 最多允许两个 open cycle；第三代 admission 前必须先封存最老 outcome。同一
-offset 的 execution 和 outcome 也只能按 calendar index 从老到新关闭，不能挂起亏损旧周期、
-选择性结算较新的幸存周期。日常 status/写入仍逐条重放结构、收据及全部内容寻址 artifact，
-但可复用已经过胶囊验证且仍与完整递归 CAS 树一致的前缀，只让 release runner 计算新增 suffix；
-`audit` 永远绕过该缓存做全历史胶囊重放并刷新前缀。
-
-前瞻评价不会每日改门槛：10 条且每 offset 至少一条只说明机械闭环可运行；60 条且每 offset
-至少六条时只允许在绝对和主动复利都明显普遍失败时提前否决，不能提前宣布成功；250 条且
-每 offset 至少 25 条后才运行约一年的方向 gate。正式 gate 除了逐 offset 的绝对/主动 CAGR、
-Sharpe、完整持有期日频回撤和相位一致性，还要求真实 5,000 万元 master portfolio 的终值、
-绝对/主动 CAGR、日频 Sharpe 和日频最大回撤全部过线。未启动 sleeve 按现金计，benchmark
-冻结 decision-time roster：起点缺价留现金、停牌沿用最后价格、退市归零，不能事后删除或
-重配幸存者。即使全部通过，也只表示这一年没有否决该方向，不能宣称稳定盈利或晋级实盘；
-若失败则封存终止状态，下一步按版本规则发布新的 major 方向，而不是在同一段历史上微调
-5.x 因子。
-
-当前科学信任边界仍是假定自动化使用唯一默认账本并及时执行一次官方数据采集。人为复制隐藏
-ledger root，或在首次 outcome 前反复替换原始 checkpoint、生成多个自洽 execution snapshot
-再择优提交，属于本地对抗性操作，5.2 不用远端全局 registry 阻止。工作日自动化会固定使用
-默认根并在证据首次可得时立即构建；若将来需要抵抗恶意操作者，应另发版本增加远端唯一性或
-execution-binding 记录，而不是把这层安全取证继续塞进当前结果优先的主线。
-
-## 5.9 前瞻影子 Challenger 实验
-
-`protocols/5.9-adaptive-shadow.json` 注册 `low_turnover_20_v1` 与
-`low_volatility_252_v1`。它们来自 31 个因果 trailing 公式的 2017–2022 train、2023–2024
-validation 和定义冻结后的 2025–2026 audit；三段都没有稳定战胜正式 `fixed_core_full`，因此
-这里明确是 post-selected 防御假设，不是历史赢家。先前考虑的 price-anchor 与 5 日反转已在发布前
-正式执行诊断中被否决：二者 10-offset net CAGR median 分别约 -8.75% 与 -23.78%，而重构 control
-约 +8.18%；结果 payload SHA-256 为
-`f31b9921047c314c5c7a3d753136ee7231b36fa9eabb07e9b99d1615edfd52bd`。
-新登记的低换手与低波动在相同全成本 exact execution 中虽然各自 10/10 offset 绝对 CAGR 为正，
-但相对 control 都是 0/10 offset 为正，相对 CAGR median 分别为 -0.93 与 -1.97 个百分点；结果
-payload SHA-256 为 `127143d38edafe7b14c643783bcc9dfbaf0203fb0d46b9da7abc34e4d07cca50`。
-因此 5.9 发布的是可证伪机制和负对照，不是新 alpha。
-
-每个正式 decision 的全部活跃 Challenger target 会先在 deadline 前写入一个 create-only planning
-intent，再派生单候选 plan。即使进程在第一个 plan 后崩溃，deadline 后也只能恢复 intent 中原封
-字节，不能重新计算或回填。若连 intent 都错过，该 candidate/offset 永久终止，并永久失去 major
-review 资格；其他候选和 offset 仍可独立形成与 control 的配对诊断。影子账户复用正式执行口径，
-但不会修改 `runtime/prospective/5.0`，也没有资本授权或在线 allocator。
-
-outcome 同时封存正式 execution SHA、route-neutral market wrapper、source contract 和 bundle；
-`sync`、`audit` 与 evaluation checkpoint 都会从正式 bundle、fallback raw partitions、停复牌和
-退市 CAS 深重放。评价把十个 offset 当作十个并行 sleeve：每个 cycle-end 事件只更新对应 sleeve，
-master NAV 是十条 wealth 的均值：把每个 sealed 11 点 `daily_path` 跨周期连续拼接，同一天先更新
-所有可见 offset，再计算组合 NAV；未启动 offset 按现金 wealth=1。收益、持有期内回撤以及候选与
-control 的 daily master active return 都来自这条日频路径，后者使用 lag=10 的单侧
-Newey–West/HAC，再对注册候选做 Holm 校正。250 个配对周期、
-每 offset 25 个、8/10 正相位、连续三个已闭自然月和零 missed/PIT/integrity/blocked-order 只是
-`eligible_for_major_review` 门槛，不能自动晋级。
-
-发布并完成正式 5.9 implementation upgrade 后，公开写路径只读取本机当前时钟；CLI 不接受
-activation、plan 或 sync 的历史时间覆盖：
-
-```powershell
-factor-lab adaptive-shadow activate --release-tag 5.9
-factor-lab adaptive-shadow sync
-factor-lab adaptive-shadow status
-factor-lab adaptive-shadow audit
-```
-
-## 4.1 纠正基线：否决 hard selector
-
-4.1 首先修复了 4.0 最关键的研究错误：旧 dynamic/static 账户在公共评分起点前已经拥有
-财富和持仓，而 fixed 账户从 5000 万现金开始，跨策略排名并不等资金可比。旧运行
-`97840d20b4a2ff71` 的 selector cutoff 仍没有读取未来收益，但绩效、排名和 gate 已作废。
-
-校正协议有三条硬约束：
-
-- 全历史、连续、含成本的影子账户只给 selector 提供 `end_date < signal_date` 的成熟反馈；
-  评分账户一律从同一个 `2019-08-16` 以 5000 万现金、空仓启动。
-- 七个静态候选、fixed comparator 与 dynamic 在十个 offset 上形成 90 个 fresh equal-AUM
-  账户。收益、年度/半年度指标和最大回撤来自完整逐日 NAV，不能用稀疏调仓边界替代。
-- 每个 execution session 都处理停复牌、退市和估值。生产研究只接受
-  `adjusted_total_return/open_adj`，拆股/分红影响已嵌入调整价格，不再叠加显式事件；
-  退市默认零回收，不允许脏停牌行情成交或估值。本次 90 个账户没有实际触发退市冲销，
-  因此该分支仍只有合同与测试证据。
-
-完整校正运行 `6462d5550b459fb2` 的 90/90 个评分账户均通过起点、逐日路径、执行覆盖和
-期末复利对账；每个账户有 2,028 个 daily NAV 观测，未来输入违规和容量违规均为 0，
-benchmark 收益覆盖率最低 98.996%。manifest 的 181 个文件、大小、SHA-256 与自哈希也已
-独立复核。
-
-结果否决了 hard selector：dynamic 年化收益 Q20 / median / worst 为 8.90% / 9.25% /
-6.93%，相对 fixed 的配对年化、Sharpe、IR、最大回撤 Q20 分别为 -1.41 个百分点、
--0.092、-0.045、-2.91 个百分点，只在 5/10 offset 年化更高。因此
-`historical_diagnostic_passed=false`。
-
-70% 防御价值静态候选在九个策略中排名第一，年化收益 Q20 / median / worst 为 11.16% /
-11.58% / 10.53%，Sharpe Q20 为 0.707、IR Q20 为 0.181、最大回撤 Q20 为 -18.29%。它
-相对 fixed 的配对年化和 Sharpe Q20 为 +1.22 个百分点和 +0.053，且 10/10 offset 年化
-改善，因此基于已观察的 4.1 结果被选作下一阶段固定核心。这个选择不是预注册 gate；它
-只用于冻结后续协议，仍是看过 2017–2026 历史后的 post-selection 结论，不是独立 OOS，
-也不证明未来盈利。
-
-当前 PIT lineage 会递归列出未验证 vintage 的 feature、execution、universe 和停复牌依赖，
-并保持 `investment_claim_allowed=false`。十个 offset 共用同一市场路径、不是十份独立样本；
-财务 revision vintage 和日内 ST 历史也不完整。详见 [CHANGELOG.md](CHANGELOG.md) 的 4.1
-Known limitations。
-
-## 保留的旧研究协议
-
-`results-first` 保留为旧诊断 suite：它直接用全部已观察历史确定方向并生成冠军榜，能够
-复现当时“哪种构造历史成绩最好”的问题，但不能用于证明任一历史决策是因果选择，也不再
-是 CLI 默认入口。
-
-- 训练：2017–2022，只在这里确定因子方向。
-- 验证：2023–2024，只用于 Stage B 成本后组合硬门槛，不参与 Stage A 排序。
-- 审计：2025 至数据截止日，单独报告，不伪装成盲测。
-- Stage A：每 5 个交易日计算一次非重叠 Rank IC，只根据训练段冻结方向、检查覆盖率、相关性去重，最多放行 3 个 Challenger。
-- Stage B：5000 万资金、周频、多头 Top-50（Top-75 留仓缓冲）、单股最多 2%、ADV 最多 5%，包含真实换手成本和涨跌停/停牌约束。开盘成交使用该股票上一可见交易日的 ADV/波动率，不读取当日收盘后信息。
-- 晋级还要求验证期主动收益循环区块 Bootstrap 的 95% 下界不小于 0，且基准成分收益覆盖率不低于 95%。
-- 没有因子通过时输出 0 个 validated，并在有限稳健性矩阵结束后停止，不降低门槛。
-
-旧 `recovery` 只注册一个与旧价值信号低相关的机制 Challenger：
-
-- `pit_cashflow_quality`：使用公告后下一交易日起可见的 ROIC、单季经营现金流/收入和资产负债率；至少两个分量有效，并做 PIT 行业与规模中性化。
-
-控制项仍为 `earnings_yield_over_pb`。旧四个价值变体保留在 `next` suite，旧八因子保留在 `legacy-regression` suite；它们不再自动扩展新变体。
-
-## 项目结构
-
-```text
-src/factor_lab/
-  cli.py
-  data/          本地路径、Parquet 审计、Tushare 分区同步
-  research/      因子合同、表达式、Stage A/B、断点续跑、报告
-  portfolio/     唯一多头执行、费用和账户核算
-configs/         数据、因子和研究协议
-tests/           单元、数据与集成测试
-runtime/         本地数据和运行结果（Git ignored）
-```
-
-每次研究结果写入：
-
-```text
-runtime/runs/<run-id>/
-  manifest.json
-  summary.json
-  factors/<factor>.json
-  adaptive/
-    adaptive-summary.json
-    offset-00/ ... offset-09/
-  robustness.json      # 仅在触发时存在
-  report.md
-runtime/runs/latest.json
-
-runtime/prospective/5.0/
-  records/             # create-only canonical JSON hash chain
-  snapshots/           # 可提交 GitHub attestation 的 immutable snapshot
-  bundles/             # 已验证的远端 attestation bundle
-  source-artifacts/    # 原始分区/日历/成员等逐字节SHA-256副本
-  membership/          # forward-only月度Top500快照
-  inputs/              # 单日窄PIT signal snapshot
-  executions/          # i+1..i+11 source-backed执行证据
-  release-runners/     # 对应发布commit的隔离源码胶囊
-
-runtime/adaptive-shadow/1/
-  records/             # activation/plan/missed/outcome/evaluation hash chain
-  artifacts/           # record 引用的内容寻址 canonical payload
-  market-windows/      # 复用正式来源的紧凑影子执行快照与 source manifest
-```
-
-## 测试
-
-```powershell
-$factorLabPython = (Resolve-Path `
-  "runtime/environments/5.9/Scripts/python.exe").Path
-$localTestRun = "local-" + [guid]::NewGuid().ToString("N")
-& $factorLabPython -m pytest tests/unit tests/data tests/integration -q `
-  --basetemp "runtime/test-tmp/$localTestRun" -p no:cacheprovider
-& $factorLabPython -m compileall -q src/factor_lab
-```
-
-## 数据边界
-
-冻结历史桥接样本截至 2026-08-21；此后的 signal 只由新同步且带可用时间的分区扩展。ST 与
-名称状态来自当时可见的月末
-`bak_basic.name`，日内 ST 事件历史仍不可用，因此报告固定标记
-`monthly_name_verified_daily_events_unavailable`。缺失历史参考记录的股票/月会被明确排除，
-不会静默当作普通股票。当前 3 组经正式公告确认的证券代码迁移使用左闭右开的 PIT
-有效区间解析，已恢复 24 个 member-month；不按名称或上市日期模糊猜测。最后 6 个交易日的
-execution 尾部只用于最后一批信号的退出估值，不产生新信号。全部结果仍属于已观察历史诊断，
-不能据此宣称未来盈利能力。
+wheel 只封装 `factor_lab` Python 包；版本化协议、evidence runner、配置与 canonical 数据仍属于
+Git checkout。安装 wheel 后应在 checkout 内运行 CLI，或显式传入
+`--root <checkout>`；它不是携带研究数据的独立应用包。

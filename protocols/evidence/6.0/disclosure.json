@@ -1,0 +1,35 @@
+{
+  "evidence_class": "post_selected_historical_diagnostic_only",
+  "kind": "factor_lab_6_0_low_churn_disclosure",
+  "limitations": [
+    "The candidate was chosen after adaptive historical search.",
+    "The 2025+ audit period had already been inspected and is not a holdout.",
+    "Ten offsets are overlapping robustness sleeves, not independent samples.",
+    "The historical result cannot establish future profitability.",
+    "No historical metric in this bundle authorizes promotion or a profit claim."
+  ],
+  "payload_sha256": "b859237fbf2b45b2d8f3e78cc5d783cc99941f4492e3319215638ea32eae7c8e",
+  "result": {
+    "file_sha256": "005c91101a696de936a050055b5cd2c461a089a3e146b241c0df1a365a4e8e0c",
+    "path": "protocols/evidence/6.0/result.json",
+    "payload_sha256": "ffb5c263f17a7ea2e180d65d234e7391c95202e815e941ec423df3e49a945105"
+  },
+  "schema_version": 1,
+  "selection": {
+    "file_sha256": "6ec11287ec0b7cd8283d8c26d76dbeed602358e1f476cdf146fe422bf567e27b",
+    "path": "protocols/evidence/6.0/selection.json",
+    "payload_sha256": "620ef063772d69ddbdebcdf094ce900080e2d470194854a6c4000f17bcc83961"
+  },
+  "strict_reading": {
+    "allowed_use": "freeze a simple definition for fresh prospective evidence",
+    "audit_active_cagr_q20_strictly_positive": false,
+    "audit_positive_active_offsets": 5,
+    "formal_historical_qualifier": false
+  },
+  "superseded_diagnostic_artifacts": {
+    "old_finalist_freeze_file_sha256": "aaa3bf9150050305f70c8f2779c7793508c2bbc38646ccebb4b21631c0ad594d",
+    "old_no_audit_claim_retracted": true,
+    "old_results_file_sha256": "3e2c589b092d511240c1221b6fb8a7e4db925c3ecf380455779328f5ebc0c305",
+    "reason": "signal-date-only phase boundaries allowed late-2024 t+11 outcomes to cross into 2025"
+  }
+}

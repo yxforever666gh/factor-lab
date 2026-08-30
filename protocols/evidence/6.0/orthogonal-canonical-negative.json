@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "evidence_id": "6.0-orthogonal-canonical-negative-v1",
+  "evidence_class": "physically_cutoff_proxy_futility_negative",
+  "decision": {
+    "selected_candidate_id": null,
+    "candidate_count": 129,
+    "train_q20_positive_count": 0,
+    "validation_q20_positive_count": 0,
+    "both_phases_seven_of_ten_positive_count": 0,
+    "formal_exact_finalist_count": 0,
+    "formal_score_changed": false,
+    "audit_2025_plus_opened": false,
+    "reason": "Every frozen definition failed both proxy phase q20 gates by a large margin, so formal exact evaluation had no plausible near-boundary finalist."
+  },
+  "causal_boundary": {
+    "physical_feature_and_pricing_cutoff": "2024-12-31",
+    "train_maximum_exact_end_date": "2022-12-31",
+    "validation_signal_start": "2023-01-01",
+    "validation_maximum_exact_end_date": "2024-12-31",
+    "feature_rows": 965112,
+    "execution_rows": 5151041,
+    "suspension_rows": 164289,
+    "forward_or_label_columns_loaded": [],
+    "pit_financial_availability_violation_count": 0
+  },
+  "frozen_candidate_families": {
+    "industry_size_neutral_medium_momentum": 15,
+    "fifty_two_week_high_and_trend_stability": 18,
+    "cross_sectional_residual_trend": 9,
+    "volume_price_confirmation": 42,
+    "pit_quality_times_trend": 45
+  },
+  "proxy_contract": {
+    "position_count": 10,
+    "retention_exit_rank": 25,
+    "absolute_calendar_offsets": 10,
+    "entry": "next_session_open_adj",
+    "holding_end": "t_plus_11_open_adj",
+    "cost_and_impact_approximation": true,
+    "max_adv_participation": 0.05,
+    "formal_exact_required_for_promotion": true
+  },
+  "best_joint_failure": {
+    "candidate_id": "quality_m120_minimum__raw__v1",
+    "train_active_cagr": {
+      "q20": -0.153959,
+      "median": -0.136464,
+      "worst": -0.173268,
+      "positive_offsets": 0
+    },
+    "validation_active_cagr": {
+      "q20": -0.174365,
+      "median": -0.120865,
+      "worst": -0.197793,
+      "positive_offsets": 0
+    },
+    "median_absolute_daily_score_correlation_to_fixed_core": 0.2257,
+    "mean_naked_top10_overlap": 0.0,
+    "retained_target_overlap": 0.0
+  },
+  "phase_reversal_diagnostics": {
+    "best_train_candidate_id": "quality_stable_linear_w020__industry_size_neutral__v1",
+    "best_train_q20": -0.022128,
+    "its_validation_q20": -0.336511,
+    "best_validation_candidate_id": "quality_m60_geometric__raw__v1",
+    "best_validation_q20": -0.049172,
+    "its_train_q20": -0.227689
+  },
+  "external_artifact_lineage": {
+    "search_code_sha256": "622b1b70739ff87b231295d2939b1a8a16bbca5b1e2bea70fc5cd1fc65ebef4d",
+    "selection_input_manifest_file_sha256": "21023ff4d3edeb05661f8e7cce062ad47781853ad0752aa00ae83d72773fe5c3",
+    "selection_input_manifest_payload_sha256": "4895c98809d2f15dbbbb29d13d4bf36c9d4914d090c9bcdf153da96de77a93c2",
+    "candidate_space_freeze_file_sha256": "b43ea69120382050cb097d1fd5aa92453e3f87c898fadb3833d68f3082d511a2",
+    "candidate_space_freeze_payload_sha256": "084d18a8ea9193a04f51bfc91418e941b9f368c8111c9888966f82757a7aa04a",
+    "proxy_results_file_sha256": "cdbe9b63738b8e51fff0445b1f5924c61eddf8c2d56817537994f1833aeecb43",
+    "proxy_results_payload_sha256": "29eb43bd5f353445fb62aab1989d22d02da8762aa0e5f3198582c058d7ba7466",
+    "selection_closure_file_sha256": "e23445dae9635b449a091dd78901318d25afc310ff8be3c3465856c7be24070f",
+    "selection_closure_payload_sha256": "c19729b4f6d976e1e569b15ba7a1251ca957c46a9d9ae8b47169af4551d25d33",
+    "selected_null_freeze_file_sha256": "5f1198574f8ecb8c272a8fee47a2a80396548d708cb76bb4f026a78ef1e496f4",
+    "selected_null_freeze_payload_sha256": "e0c7bc88e3376c47edc23e67d8293b14e6c238885087c6f6785ed52997c433ca",
+    "audit_skip_file_sha256": "4001e92f91e07424affb828cb242dc349336869e28b109afc373493df5f2bb83",
+    "audit_skip_payload_sha256": "f6ec9cbe35ebe74378df0e61ae3115d9f486ddad91af8858e692508e7b26ce0a",
+    "report_file_sha256": "c07e36a973088d015349ac345d3bbd2a7e675e8207096a615bda27a2be3af394"
+  },
+  "directional_implication": "Do not add another transformation of the existing price, volume, or PIT-quality fields. Keep fixed_core exit25 as the low-churn baseline and move discovery to a genuinely new information source.",
+  "payload_sha256": "a9e9e03523069487bd62611de7640ed6a1bb65e7356ff9f9134eb95d8e4b0249"
+}

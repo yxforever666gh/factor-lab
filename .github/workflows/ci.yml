@@ -26,19 +26,13 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
-      - name: Configure prospective time zone
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          Set-TimeZone -Id "China Standard Time"
-          if ([TimeZoneInfo]::Local.Id -ne "China Standard Time") {
-            throw "Windows CI did not enter the prospective runtime time zone"
-          }
       - name: Install
         run: python -m pip install -e ".[dev]"
-      - name: Test lightweight mainline
+      - name: Test research mainline
         run: python -m pytest tests/unit tests/data tests/integration -q -p no:cacheprovider
       - name: Compile production sources
         run: python -m compileall -q src/factor_lab
       - name: Verify CLI imports
-        run: python -m factor_lab.cli --help
+        run: |
+          python -m factor_lab.cli --help
+          python -m factor_lab.cli strategy status

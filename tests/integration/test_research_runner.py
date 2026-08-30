@@ -581,142 +581,16 @@ def _frames() -> tuple[pd.DataFrame, pd.DataFrame]:
     return features, pd.DataFrame(execution_rows)
 
 
-def test_adaptive_canary_binds_frozen_protocol_to_manifest(
-    tmp_path: Path,
-) -> None:
-    features, execution = _frames()
-    feature_path = tmp_path / "features.parquet"
-    execution_path = tmp_path / "execution.parquet"
-    features.to_parquet(feature_path, index=False)
-    execution.to_parquet(execution_path, index=False)
-    repository = Path(__file__).resolve().parents[2]
-    protocol_path = repository / "protocols" / "5.0.json"
-
-    result = run_research(
-        project_root=tmp_path,
-        suite="adaptive",
-        mode="canary",
-        resume=False,
-        feature_path=feature_path,
-        execution_path=execution_path,
-        factors_path=repository / "configs" / "factors.json",
-        research_config_path=repository / "configs" / "research.json",
-        protocol_path=protocol_path,
-        run_robustness=False,
-    )
-
-    assert result["schema_version"] == 5
-    assert result["engine"] == "factor-lab/research/v7"
-    assert result["adaptive"]["enabled"] is True
-    assert result["adaptive"]["canary_smoke_only"] is True
-    assert "ranking_available" not in result["adaptive"]
-    assert result["adaptive"]["protocol_sha256"] == (
-        runner_module._sha256_file(protocol_path)
-    )
-    assert result["stage_b_selected"] == (
-        result["adaptive"]["expert_registry"]
-    )
-    run_dir = tmp_path / "runtime" / "runs" / result["run_id"]
-    manifest = json.loads(
-        (run_dir / "manifest.json").read_text(encoding="utf-8")
-    )
-    protocol_inputs = [
-        row for row in manifest["inputs"] if row["role"] == "adaptive_protocol"
-    ]
-    assert protocol_inputs == [
-        {
-            "role": "adaptive_protocol",
-            "path": str(protocol_path.resolve()),
-            "size_bytes": protocol_path.stat().st_size,
-            "sha256": runner_module._sha256_file(protocol_path),
-        }
-    ]
-    assert runner_module._completed_run_valid(
-        run_dir / "summary.json",
-        run_dir,
-        result["run_fingerprint"],
-    )
-
-
-def test_public_runner_defaults_to_adaptive_suite() -> None:
+def test_public_runner_defaults_to_walk_forward_suite() -> None:
     assert (
         inspect.signature(run_research).parameters["suite"].default
-        == runner_module.ADAPTIVE_SUITE
+        == runner_module.WALK_FORWARD_SUITE
     )
 
 
-def test_adaptive_canary_rejects_drift_in_frozen_protocol(
-    tmp_path: Path,
-) -> None:
-    features, execution = _frames()
-    feature_path = tmp_path / "features.parquet"
-    execution_path = tmp_path / "execution.parquet"
-    features.to_parquet(feature_path, index=False)
-    execution.to_parquet(execution_path, index=False)
-    repository = Path(__file__).resolve().parents[2]
-    protocol = json.loads(
-        (repository / "protocols" / "5.0.json").read_text(encoding="utf-8")
-    )
-    protocol["frozen_gates"]["core_overlay"][
-        "paired_q20_net_annual_return_delta_min"
-    ] = -1.0
-    protocol_path = tmp_path / "protocol.json"
-    protocol_path.write_text(json.dumps(protocol), encoding="utf-8")
-
-    with pytest.raises(ValueError, match="gate criteria or thresholds"):
-        run_research(
-            project_root=tmp_path,
-            suite="adaptive",
-            mode="canary",
-            resume=False,
-            feature_path=feature_path,
-            execution_path=execution_path,
-            factors_path=repository / "configs" / "factors.json",
-            research_config_path=repository / "configs" / "research.json",
-            protocol_path=protocol_path,
-            run_robustness=False,
-        )
-
-
-def test_adaptive_runner_rejects_protocol_change_before_publication(
-    tmp_path: Path, monkeypatch
-) -> None:
-    features, execution = _frames()
-    feature_path = tmp_path / "features.parquet"
-    execution_path = tmp_path / "execution.parquet"
-    features.to_parquet(feature_path, index=False)
-    execution.to_parquet(execution_path, index=False)
-    repository = Path(__file__).resolve().parents[2]
-    protocol_path = tmp_path / "protocol.json"
-    protocol_path.write_bytes((repository / "protocols" / "5.0.json").read_bytes())
-    original_render = runner_module.render_report
-
-    def render_then_mutate_protocol(summary):
-        rendered = original_render(summary)
-        protocol = json.loads(protocol_path.read_text(encoding="utf-8"))
-        protocol["objective"] = str(protocol["objective"]) + " changed"
-        protocol_path.write_text(json.dumps(protocol), encoding="utf-8")
-        return rendered
-
-    monkeypatch.setattr(runner_module, "render_report", render_then_mutate_protocol)
-    with pytest.raises(RuntimeError, match="adaptive_protocol"):
-        run_research(
-            project_root=tmp_path,
-            suite="adaptive",
-            mode="canary",
-            resume=False,
-            feature_path=feature_path,
-            execution_path=execution_path,
-            factors_path=repository / "configs" / "factors.json",
-            research_config_path=repository / "configs" / "research.json",
-            protocol_path=protocol_path,
-            run_robustness=False,
-        )
-
-    runs = tmp_path / "runtime" / "runs"
-    assert not list(runs.glob("*/summary.json"))
-    assert not list(runs.glob("*/manifest.json"))
-    assert not (runs / "latest.json").exists()
+def test_public_runner_rejects_retired_adaptive_suite() -> None:
+    with pytest.raises(ValueError, match="unknown research suite: adaptive"):
+        run_research(suite="adaptive")
 
 
 def test_full_runner_writes_resumable_two_stage_outputs(tmp_path: Path) -> None:

@@ -8,38 +8,6 @@
     "role": "control"
   },
   "suites": {
-    "adaptive": [
-      {
-        "name": "value_defensive_rank",
-        "family": "value",
-        "expression": "rank(book_yield) + rank(earnings_yield) + rank(-volatility_20)",
-        "direction_policy": "fixed",
-        "params": {
-          "fixed_direction": 1
-        },
-        "role": "challenger"
-      },
-      {
-        "name": "low_volatility",
-        "family": "defensive",
-        "expression": "-volatility_20",
-        "direction_policy": "fixed",
-        "params": {
-          "fixed_direction": 1
-        },
-        "role": "challenger"
-      },
-      {
-        "name": "low_turnover",
-        "family": "liquidity",
-        "expression": "-turnover_rate",
-        "direction_policy": "fixed",
-        "params": {
-          "fixed_direction": 1
-        },
-        "role": "challenger"
-      }
-    ],
     "walk-forward": [
       {
         "name": "value_defensive_rank",
