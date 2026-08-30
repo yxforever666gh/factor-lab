@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Run the physically staged 7.0 fixed multi-asset experiment."""
+"""Run the physically staged 7.1 corrective multi-asset train replay."""
 
 from __future__ import annotations
 
@@ -52,20 +52,26 @@ from factor_lab.research.multi_asset import (  # noqa: E402
 )
 
 
+RELEASE = "7.1"
 PROTOCOL_PATH = Path("protocols/7.0-multi-asset.json")
 ASSET_SELECTION_PATH = Path("protocols/7.0-asset-selection.json")
-CLOSURE_PATH = Path("protocols/7.0-release.json")
-EVIDENCE_ROOT = Path("protocols/evidence/7.0")
+AMENDMENT_PATH = Path("protocols/7.1-corrective-amendment-1.json")
+CLOSURE_PATH = Path("protocols/7.1-release.json")
+EVIDENCE_ROOT = Path("protocols/evidence/7.1")
 WINNER_FREEZE_PATH = EVIDENCE_ROOT / "winner-freeze.json"
 AUDIT_PATH = EVIDENCE_ROOT / "historical-audit.json"
 RESULT_PATH = EVIDENCE_ROOT / "result.json"
-PRIOR_RESULT_PATH = Path("protocols/evidence/6.3/result.json")
 PRECLOSURE_TRAIN_PATH = Path("protocols/evidence/7.0/preclosure-train.json")
-PRIOR_TAG = "6.3"
-PRIOR_TAG_OBJECT = "bf923c3f757be13a8fdef566d3404c3625861721"
-PRIOR_COMMIT = "9ec3f9dd6941ae797a1407f85e00ff770e8d1c60"
-PRIOR_RESULT_PAYLOAD = "5ce9e7e92a0908f2e0fb1554801b900d746cc67fd27600fbf4fc82850323cadf"
-WORK_ROOT = ROOT / "runtime" / "data" / "multi-asset-7.0"
+PRIOR_CLOSURE_PATH = Path("protocols/7.0-release.json")
+PRIOR_FAILURE_PATH = Path("protocols/evidence/7.0/execution-failure.json")
+PRIOR_TAG = "7.0"
+PRIOR_TAG_OBJECT = "25bbc306e8842feab923380416f8329e0dd81100"
+PRIOR_COMMIT = "412026ca0370d53ca704adfd1122a811e768842e"
+PRIOR_CLOSURE_PAYLOAD = "d0b6072234d45363144a47517c8c4c535e4c9550ea36925a4b7cc54216110009"
+PRIOR_FAILURE_PAYLOAD = "04099ab6c2bd03099c9d045120578344bfe9ba3c963dfb82a0cba9f8a49f5df9"
+AMENDMENT_PAYLOAD = "7335cdbb61cd0d7b9c3e6f6896ec576c7e403b87d83cfa3d6679965691984c86"
+WORK_ROOT = ROOT / "runtime" / "data" / "multi-asset-7.1"
+PRIOR_WORK_ROOT = ROOT / "runtime" / "data" / "multi-asset-7.0"
 SOURCE_ROOT = WORK_ROOT / "sources"
 EVALUATION_ROOT = WORK_ROOT / "evaluations"
 BINDING_ROOT = WORK_ROOT / "stage-bindings"
@@ -73,8 +79,7 @@ EXPECTED_IMPLEMENTATION_PATHS = {
     ".github/workflows/ci.yml",
     "configs/data.json",
     "pyproject.toml",
-    "scripts/build-7.0-asset-selection.py",
-    "scripts/build-7.0-preselection-closure.py",
+    "scripts/build-7.1-preselection-closure.py",
     "scripts/publish-tag.ps1",
     "scripts/run-multi-asset-evidence.py",
     "src/factor_lab/__init__.py",
@@ -111,24 +116,14 @@ STAGES: dict[str, dict[str, str]] = {
         "source_end": "2019-12-31",
         "performance_start": "2015-03-02",
         "performance_end": "2019-12-31",
-    },
-    "validation": {
-        "source_start": "2014-01-15",
-        "source_end": "2022-12-30",
-        "performance_start": "2020-01-02",
-        "performance_end": "2022-12-30",
-    },
-    "audit": {
-        "source_start": "2014-01-15",
-        "source_end": "2026-08-28",
-        "performance_start": "2023-01-03",
-        "performance_end": "2026-08-28",
-    },
+    }
 }
 _CLOSURE_FIELDS = {
     "schema_version", "kind", "release", "closure_role", "direction_change",
-    "route", "status", "selection_returns_opened", "selected_candidate_id",
-    "audit_status", "protocol", "asset_selection", "prior_release",
+    "route", "status", "prior_train_returns_opened",
+    "corrective_train_returns_opened", "selected_candidate_id",
+    "audit_status", "protocol", "asset_selection", "corrective_amendment",
+    "prior_release",
     "implementation_commit", "implementation_tree", "implementation", "runtime",
     "formal_data", "claim_contract", "payload_sha256",
 }
@@ -506,9 +501,9 @@ def _create_only(path: Path, payload: Mapping[str, Any]) -> None:
 def _require_clean_main() -> str:
     branch = _git("branch", "--show-current").decode("utf-8").strip()
     if branch != "main":
-        raise RuntimeError(f"formal 7.0 evidence requires main, found {branch!r}")
+        raise RuntimeError(f"formal {RELEASE} evidence requires main, found {branch!r}")
     if _git("status", "--porcelain").strip():
-        raise RuntimeError("formal 7.0 evidence requires a clean worktree")
+        raise RuntimeError(f"formal {RELEASE} evidence requires a clean worktree")
     head = _git("rev-parse", "HEAD").decode("ascii").strip()
     _require_head_pushed_and_ci_success(head)
     return head
@@ -565,7 +560,7 @@ def _verify_winner_freeze_contract(
         or freeze.get("payload_sha256") != canonical_payload_sha256(freeze)
         or freeze.get("schema_version") != 1
         or freeze.get("kind") != "factor_lab_multi_asset_winner_freeze"
-        or freeze.get("release") != "7.0"
+        or freeze.get("release") != RELEASE
         or freeze.get("protocol_payload_sha256") != protocol.get("payload_sha256")
         or freeze.get("asset_selection_payload_sha256") != selection.get("payload_sha256")
         or freeze.get("implementation_closure_payload_sha256") != closure.get("payload_sha256")
@@ -575,7 +570,7 @@ def _verify_winner_freeze_contract(
         or freeze.get("claim_contract") != protocol.get("claim_contract")
         or not re.fullmatch(r"[0-9a-f]{32}", str(freeze.get("run_nonce") or ""))
     ):
-        raise ValueError("winner freeze does not bind the active 7.0 contracts")
+        raise ValueError(f"winner freeze does not bind the active {RELEASE} contracts")
     execution_commit = str(freeze["selection_execution_commit"])
     _verify_execution_lineage(
         execution_commit,
@@ -604,47 +599,15 @@ def _verify_winner_freeze_contract(
         predecessor=closure_predecessor,
         verify_data=verify_data,
     )
-    train_passed = train["gate"]["passed"] is True
-    validation = freeze.get("validation")
-    if closure.get("selection_returns_opened") is True:
-        _verify_disclosed_train_replay(train, _read_json(PRECLOSURE_TRAIN_PATH))
-        if train_passed or validation is not None:
-            raise ValueError(
-                "disclosed failed train cannot open validation or select a winner"
-            )
-    if train_passed:
-        if not isinstance(validation, Mapping):
-            raise ValueError("train pass requires a complete validation phase")
-        _verify_phase_reference(
-            validation,
-            stage_name="validation",
-            gate_config=protocol["validation_gate"],
-            closure_payload=str(closure["payload_sha256"]),
-            execution_commit=execution_commit,
-            run_nonce=str(freeze["run_nonce"]),
-            predecessor=_phase_predecessor("train_gate", train),
-            verify_data=verify_data,
-        )
-    elif validation is not None:
-        raise ValueError("validation opened without a passed train gate")
-    validation_passed = bool(
-        isinstance(validation, Mapping) and validation["gate"]["passed"] is True
-    )
-    selected = freeze.get("selected_candidate_id")
-    expected_status = (
-        "selected_null_frozen_train_failed"
-        if not train_passed
-        else "selected_null_frozen_validation_failed"
-        if not validation_passed
-        else "selected_candidate_frozen"
-    )
-    expected_selected = CANDIDATE_ID if validation_passed else None
+    _verify_disclosed_train_replay(train, _read_json(PRECLOSURE_TRAIN_PATH))
     if (
-        freeze.get("status") != expected_status
-        or selected != expected_selected
-        or freeze.get("validation_market_outcomes_opened") != train_passed
+        train["gate"]["passed"] is not False
+        or freeze.get("validation") is not None
+        or freeze.get("status") != "selected_null_frozen_train_failed"
+        or freeze.get("selected_candidate_id") is not None
+        or freeze.get("validation_market_outcomes_opened") is not False
     ):
-        raise ValueError("winner freeze status is inconsistent with recomputed gates")
+        raise ValueError("7.1 corrective winner freeze is not the exact train-failed null")
 
 
 def _verify_audit_contract(
@@ -661,7 +624,7 @@ def _verify_audit_contract(
         or audit.get("payload_sha256") != canonical_payload_sha256(audit)
         or audit.get("schema_version") != 1
         or audit.get("kind") != "factor_lab_multi_asset_historical_audit"
-        or audit.get("release") != "7.0"
+        or audit.get("release") != RELEASE
         or audit.get("selected_candidate_id") != CANDIDATE_ID
         or audit.get("winner_freeze_payload_sha256") != freeze.get("payload_sha256")
         or audit.get("protocol_payload_sha256") != protocol.get("payload_sha256")
@@ -698,22 +661,103 @@ def _verify_audit_contract(
         raise ValueError("historical audit status differs from its recomputed gate")
 
 
+def _verify_corrective_amendment(amendment: Mapping[str, Any]) -> None:
+    prior = amendment.get("prior_release")
+    correction = amendment.get("correction")
+    sole = correction.get("sole_permitted_change") if isinstance(correction, Mapping) else None
+    runtime = amendment.get("runtime_and_stage_contract")
+    phase = amendment.get("phase_contract")
+    unchanged = amendment.get("unchanged_contract")
+    if (
+        amendment.get("payload_sha256") != AMENDMENT_PAYLOAD
+        or amendment.get("release") != RELEASE
+        or amendment.get("direction_change") is not False
+        or amendment.get("route") != "fixed_multi_asset_causal_trend_budget"
+        or not isinstance(prior, Mapping)
+        or prior.get("tag") != PRIOR_TAG
+        or prior.get("annotated_tag_object") != PRIOR_TAG_OBJECT
+        or prior.get("peeled_commit") != PRIOR_COMMIT
+        or not isinstance(sole, Mapping)
+        or sole.get("path") != "scripts/run-multi-asset-evidence.py"
+        or sole.get("function") != "_replay_evaluation"
+        or sole.get("sort_kind") != "mergesort"
+        or sole.get("sort_key") != ["signal_date", "code"]
+        or sole.get("comparison_dtype_check_unchanged") is not True
+        or sole.get("comparison_exact_value_check_unchanged") is not True
+        or not isinstance(runtime, Mapping)
+        or runtime.get("runtime_root") != "runtime/data/multi-asset-7.1"
+        or runtime.get("reuse_7_0_derived_stages") is not False
+        or runtime.get("reuse_7_0_evaluations") is not False
+        or runtime.get("reuse_7_0_gate_or_status_views") is not False
+        or not isinstance(phase, Mapping)
+        or phase.get("formal_7_1_scope") != "train corrective replay only"
+        or phase.get("selected_candidate_id") is not None
+        or phase.get("validation_market_outcomes_opened") is not False
+        or phase.get("validation_stage_created") is not False
+        or phase.get("audit_market_outcomes_opened") is not False
+        or phase.get("audit_stage_created") is not False
+        or not isinstance(unchanged, Mapping)
+        or not unchanged
+        or any(value is not True for value in unchanged.values())
+    ):
+        raise ValueError("7.1 corrective amendment differs from its exact whitelist")
+    bound_files = (
+        ("protocol", PROTOCOL_PATH, "6f2fcd2a67d52bfae19bedcaecf495faa986195f6840da48a3a67a666589aaf0"),
+        (
+            "asset_selection",
+            ASSET_SELECTION_PATH,
+            "b00536d618c7fe46e3cbe8d258d2b2032ef4e0c16d40fb9c74ff016c34525e0b",
+        ),
+        (
+            "preclosure_train_disclosure",
+            PRECLOSURE_TRAIN_PATH,
+            "6bd2909ddc97ec84d3535d15e8f13330a5752831aead82d8fb50afdd16ac6775",
+        ),
+        ("preselection_closure", PRIOR_CLOSURE_PATH, PRIOR_CLOSURE_PAYLOAD),
+        ("execution_failure", PRIOR_FAILURE_PATH, PRIOR_FAILURE_PAYLOAD),
+    )
+    for name, path, expected_payload in bound_files:
+        binding = prior.get(name)
+        current = (ROOT / path).read_bytes()
+        value = json.loads(current.decode("utf-8"))
+        if (
+            not isinstance(binding, Mapping)
+            or binding.get("path") != path.as_posix()
+            or binding.get("file_sha256") != hashlib.sha256(current).hexdigest()
+            or binding.get("payload_sha256") != expected_payload
+            or not isinstance(value, Mapping)
+            or value.get("payload_sha256") != expected_payload
+            or canonical_payload_sha256(value) != expected_payload
+            or _git("show", f"{PRIOR_COMMIT}:{path.as_posix()}") != current
+        ):
+            raise ValueError(f"7.1 amendment does not bind the published 7.0 blob: {path}")
+
+
 def _verify_closure(
     *, verify_runtime: bool = True
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     closure = _read_json(CLOSURE_PATH)
     protocol = _read_json(PROTOCOL_PATH)
     selection = _read_json(ASSET_SELECTION_PATH)
+    amendment = _read_json(AMENDMENT_PATH)
+    disclosed = _read_json(PRECLOSURE_TRAIN_PATH)
+    prior_closure = _read_json(PRIOR_CLOSURE_PATH)
+    prior_failure = _read_json(PRIOR_FAILURE_PATH)
+    _verify_corrective_amendment(amendment)
+    _verify_disclosed_outcome_boundary(disclosed)
     if (
         set(closure) != _CLOSURE_FIELDS
         or closure.get("schema_version") != 1
         or closure.get("kind") != "factor_lab_release_closure"
-        or closure.get("release") != "7.0"
-        or closure.get("closure_role") != "post_exposure_failure_replay_root"
-        or closure.get("direction_change") is not True
+        or closure.get("release") != RELEASE
+        or closure.get("closure_role")
+        != "corrective_train_replay_after_7_0_execution_failure"
+        or closure.get("direction_change") is not False
         or closure.get("route") != "fixed_multi_asset_causal_trend_budget"
-        or closure.get("status") != "implementation_frozen_after_disclosed_train_failure"
-        or closure.get("selection_returns_opened") is not True
+        or closure.get("status")
+        != "corrective_implementation_frozen_for_exact_failed_train_replay"
+        or closure.get("prior_train_returns_opened") is not True
+        or closure.get("corrective_train_returns_opened") is not False
         or closure.get("selected_candidate_id") is not None
         or closure.get("audit_status") != "not_opened"
         or closure.get("claim_contract") != protocol.get("claim_contract")
@@ -721,41 +765,10 @@ def _verify_closure(
         != protocol.get("payload_sha256")
         or closure.get("asset_selection", {}).get("payload_sha256")
         != selection.get("payload_sha256")
+        or closure.get("corrective_amendment", {}).get("payload_sha256")
+        != amendment.get("payload_sha256")
     ):
-        raise ValueError("7.0 preselection closure contract differs")
-    disclosed = _read_json(PRECLOSURE_TRAIN_PATH)
-    _verify_disclosed_outcome_boundary(disclosed)
-    formal_data = closure.get("formal_data")
-    disclosure_binding = (
-        formal_data.get("preclosure_train_disclosure")
-        if isinstance(formal_data, Mapping)
-        else None
-    )
-    if (
-        not isinstance(disclosure_binding, Mapping)
-        or disclosure_binding.get("path") != PRECLOSURE_TRAIN_PATH.as_posix()
-        or disclosure_binding.get("file_sha256")
-        != file_sha256(ROOT / PRECLOSURE_TRAIN_PATH)
-        or disclosure_binding.get("payload_sha256")
-        != disclosed.get("payload_sha256")
-        or disclosure_binding.get("status")
-        != "train_falsified_before_preselection_closure"
-        or disclosure_binding.get("validation_market_outcomes_opened") is not False
-        or disclosure_binding.get("audit_market_outcomes_opened") is not False
-        or protocol.get("preclosure_train_disclosure", {}).get("payload_sha256")
-        != disclosed.get("payload_sha256")
-        or disclosed.get("selection", {}).get("validation_opened") is not False
-        or disclosed.get("selection", {}).get("audit_opened") is not False
-        or disclosed.get("disclosure", {}).get(
-            "validation_market_outcomes_opened"
-        )
-        is not False
-        or disclosed.get("disclosure", {}).get(
-            "audit_market_outcomes_opened"
-        )
-        is not False
-    ):
-        raise ValueError("7.0 closure does not bind the disclosed train exposure")
+        raise ValueError("7.1 corrective preselection closure contract differs")
     if (
         protocol.get("protocol_id")
         != "factor-lab/7.0/fixed-multi-asset-trend-budget-v1"
@@ -773,16 +786,55 @@ def _verify_closure(
         ]
         or set(closure.get("implementation", {})) != EXPECTED_IMPLEMENTATION_PATHS
     ):
-        raise ValueError("7.0 closure registry or implementation boundary differs")
+        raise ValueError("7.1 closure registry or implementation boundary differs")
+    formal_data = closure.get("formal_data")
+    disclosure_binding = (
+        formal_data.get("preclosure_train_disclosure")
+        if isinstance(formal_data, Mapping)
+        else None
+    )
+    failure_binding = (
+        formal_data.get("prior_execution_failure")
+        if isinstance(formal_data, Mapping)
+        else None
+    )
+    if (
+        not isinstance(disclosure_binding, Mapping)
+        or disclosure_binding.get("path") != PRECLOSURE_TRAIN_PATH.as_posix()
+        or disclosure_binding.get("file_sha256")
+        != file_sha256(ROOT / PRECLOSURE_TRAIN_PATH)
+        or disclosure_binding.get("payload_sha256") != disclosed.get("payload_sha256")
+        or disclosure_binding.get("status")
+        != "train_falsified_before_preselection_closure"
+        or disclosure_binding.get("validation_market_outcomes_opened") is not False
+        or disclosure_binding.get("audit_market_outcomes_opened") is not False
+        or not isinstance(failure_binding, Mapping)
+        or failure_binding.get("path") != PRIOR_FAILURE_PATH.as_posix()
+        or failure_binding.get("file_sha256") != file_sha256(ROOT / PRIOR_FAILURE_PATH)
+        or failure_binding.get("payload_sha256") != PRIOR_FAILURE_PAYLOAD
+        or failure_binding.get("status") != "selection_inconclusive_software_failure"
+        or failure_binding.get("classification") != "target_order_replay_false_negative"
+        or any(
+            failure_binding.get(key) is not False
+            for key in (
+                "validation_market_outcomes_opened",
+                "winner_freeze_created",
+                "audit_market_outcomes_opened",
+                "terminal_result_created",
+            )
+        )
+    ):
+        raise ValueError("7.1 closure does not bind the disclosed train and 7.0 failure")
+    for key, path in (
+        ("protocol", PROTOCOL_PATH),
+        ("asset_selection", ASSET_SELECTION_PATH),
+        ("corrective_amendment", AMENDMENT_PATH),
+    ):
+        if closure[key].get("file_sha256") != file_sha256(ROOT / path):
+            raise ValueError(f"7.1 closure bytes differ: {path}")
     current_runtime = _runtime_identity() if verify_runtime else None
     if verify_runtime and closure.get("runtime") != current_runtime:
-        raise ValueError(
-            f"formal runtime differs from closure: {current_runtime!r}"
-        )
-    if closure["protocol"].get("file_sha256") != file_sha256(ROOT / PROTOCOL_PATH):
-        raise ValueError("7.0 protocol bytes differ from the closure")
-    if closure["asset_selection"].get("file_sha256") != file_sha256(ROOT / ASSET_SELECTION_PATH):
-        raise ValueError("7.0 asset-selection bytes differ from the closure")
+        raise ValueError(f"formal runtime differs from closure: {current_runtime!r}")
     implementation_commit = str(closure.get("implementation_commit") or "")
     if not _is_commit(implementation_commit):
         raise ValueError("closure lacks implementation_commit")
@@ -805,7 +857,10 @@ def _verify_closure(
         path = _safe_repo_file(str(key))
         current_sha = file_sha256(path)
         committed = _git("show", f"{implementation_commit}:{key}")
-        if current_sha != binding["sha256"] or hashlib.sha256(committed).hexdigest() != binding["sha256"]:
+        if (
+            current_sha != binding["sha256"]
+            or hashlib.sha256(committed).hexdigest() != binding["sha256"]
+        ):
             raise ValueError(f"frozen implementation bytes differ: {key}")
     ancestor = subprocess.run(
         ["git", "merge-base", "--is-ancestor", implementation_commit, "HEAD"],
@@ -815,27 +870,55 @@ def _verify_closure(
     )
     if ancestor.returncode != 0:
         raise ValueError("current HEAD does not descend from the frozen implementation")
-    for relative in (PROTOCOL_PATH, ASSET_SELECTION_PATH, PRECLOSURE_TRAIN_PATH):
-        if _git("show", f"{implementation_commit}:{relative.as_posix()}") != (ROOT / relative).read_bytes():
-            raise ValueError(f"implementation commit lacks frozen contract: {relative}")
-    prior = closure.get("prior_release")
-    current_prior = (ROOT / PRIOR_RESULT_PATH).read_bytes()
-    if (
-        not isinstance(prior, Mapping)
-        or prior
-        != {
-            "tag": PRIOR_TAG,
-            "annotated_tag_object": PRIOR_TAG_OBJECT,
-            "peeled_commit": PRIOR_COMMIT,
-            "terminal_result_path": PRIOR_RESULT_PATH.as_posix(),
-            "terminal_result_file_sha256": hashlib.sha256(current_prior).hexdigest(),
-            "terminal_result_payload_sha256": PRIOR_RESULT_PAYLOAD,
-        }
-        or _git("rev-parse", f"refs/tags/{PRIOR_TAG}").decode("ascii").strip() != PRIOR_TAG_OBJECT
-        or _git("rev-parse", f"refs/tags/{PRIOR_TAG}^{{}}").decode("ascii").strip() != PRIOR_COMMIT
-        or _git("show", f"{PRIOR_COMMIT}:{PRIOR_RESULT_PATH.as_posix()}") != current_prior
+    for relative in (
+        PROTOCOL_PATH,
+        ASSET_SELECTION_PATH,
+        AMENDMENT_PATH,
+        PRECLOSURE_TRAIN_PATH,
+        PRIOR_CLOSURE_PATH,
+        PRIOR_FAILURE_PATH,
     ):
-        raise ValueError("closure prior-release lineage differs")
+        if _git("show", f"{implementation_commit}:{relative.as_posix()}") != (
+            ROOT / relative
+        ).read_bytes():
+            raise ValueError(f"implementation commit lacks frozen contract: {relative}")
+    current_prior_closure = (ROOT / PRIOR_CLOSURE_PATH).read_bytes()
+    current_prior_failure = (ROOT / PRIOR_FAILURE_PATH).read_bytes()
+    prior = closure.get("prior_release")
+    expected_prior = {
+        "release": "7.0",
+        "tag": PRIOR_TAG,
+        "annotated_tag_object": PRIOR_TAG_OBJECT,
+        "peeled_commit": PRIOR_COMMIT,
+        "preselection_closure": {
+            "path": PRIOR_CLOSURE_PATH.as_posix(),
+            "file_sha256": hashlib.sha256(current_prior_closure).hexdigest(),
+            "payload_sha256": PRIOR_CLOSURE_PAYLOAD,
+        },
+        "execution_failure": {
+            "path": PRIOR_FAILURE_PATH.as_posix(),
+            "file_sha256": hashlib.sha256(current_prior_failure).hexdigest(),
+            "payload_sha256": PRIOR_FAILURE_PAYLOAD,
+            "status": "selection_inconclusive_software_failure",
+            "classification": "target_order_replay_false_negative",
+        },
+    }
+    if (
+        prior != expected_prior
+        or _git("cat-file", "-t", f"refs/tags/{PRIOR_TAG}").decode("ascii").strip()
+        != "tag"
+        or _git("rev-parse", f"refs/tags/{PRIOR_TAG}").decode("ascii").strip()
+        != PRIOR_TAG_OBJECT
+        or _git("rev-parse", f"refs/tags/{PRIOR_TAG}^{{}}").decode("ascii").strip()
+        != PRIOR_COMMIT
+        or _git("show", f"{PRIOR_COMMIT}:{PRIOR_CLOSURE_PATH.as_posix()}")
+        != current_prior_closure
+        or _git("show", f"{PRIOR_COMMIT}:{PRIOR_FAILURE_PATH.as_posix()}")
+        != current_prior_failure
+        or prior_closure.get("payload_sha256") != PRIOR_CLOSURE_PAYLOAD
+        or prior_failure.get("payload_sha256") != PRIOR_FAILURE_PAYLOAD
+    ):
+        raise ValueError("7.1 closure prior-release lineage differs")
     if verify_runtime:
         _require_source_imports()
     _require_committed(CLOSURE_PATH)
@@ -876,18 +959,57 @@ def _reject_partial_entries(root: Path) -> None:
 
 
 def _assert_runtime_layout(allowed_stages: set[str]) -> None:
+    if WORK_ROOT.is_symlink() or (WORK_ROOT.exists() and not WORK_ROOT.is_dir()):
+        raise RuntimeError("7.1 runtime root must be a regular local directory")
     expected = {
         SOURCE_ROOT: {f"stage={stage}" for stage in allowed_stages},
         EVALUATION_ROOT: {f"stage={stage}" for stage in allowed_stages},
         BINDING_ROOT: {f"{stage}.json" for stage in allowed_stages},
     }
+    if WORK_ROOT.exists():
+        allowed_roots = {root.name for root in expected}
+        unexpected_roots = sorted(
+            path.name for path in WORK_ROOT.iterdir() if path.name not in allowed_roots
+        )
+        if unexpected_roots:
+            raise RuntimeError(
+                f"unexpected entry under the 7.1 runtime root: {unexpected_roots}"
+            )
     for root, allowed_names in expected.items():
+        if root.is_symlink() or (root.exists() and not root.is_dir()):
+            raise RuntimeError(f"formal runtime component is indirect or not a directory: {root}")
         _reject_partial_entries(root)
         if not root.exists():
             continue
         unexpected = sorted(path.name for path in root.iterdir() if path.name not in allowed_names)
         if unexpected:
             raise RuntimeError(f"unexpected or renamed formal stage artifacts under {root}: {unexpected}")
+    if WORK_ROOT.exists() and PRIOR_WORK_ROOT.exists():
+        prior_files = tuple(path for path in PRIOR_WORK_ROOT.rglob("*") if path.is_file())
+        for current in (path for path in WORK_ROOT.rglob("*") if path.is_file()):
+            for prior in prior_files:
+                try:
+                    same = os.path.samefile(current, prior)
+                except OSError as exc:
+                    raise RuntimeError("could not verify 7.1/7.0 physical isolation") from exc
+                if same:
+                    raise RuntimeError(
+                        f"7.1 runtime file reuses a 7.0 physical file: {current}"
+                    )
+
+
+def _assert_evidence_layout(allowed_names: set[str]) -> None:
+    root = ROOT / EVIDENCE_ROOT
+    if root.is_symlink() or (root.exists() and not root.is_dir()):
+        raise RuntimeError("7.1 evidence root must be a regular local directory")
+    if not root.exists():
+        return
+    unexpected = sorted(path.name for path in root.iterdir() if path.name not in allowed_names)
+    if unexpected:
+        raise RuntimeError(f"unexpected 7.1 evidence artifact: {unexpected}")
+    for path in root.iterdir():
+        if path.is_symlink() or not path.is_file():
+            raise RuntimeError(f"7.1 evidence artifact is indirect or not a file: {path}")
 
 
 def _verify_stage_binding(
@@ -908,7 +1030,7 @@ def _verify_stage_binding(
         set(binding) != _STAGE_BINDING_FIELDS
         or binding.get("schema_version") != 1
         or binding.get("kind") != "factor_lab_multi_asset_stage_binding"
-        or binding.get("release") != "7.0"
+        or binding.get("release") != RELEASE
         or binding.get("stage") != stage_name
         or binding.get("stage_manifest_payload_sha256") != stage.manifest.get("payload_sha256")
         or binding.get("stage_manifest_file_sha256") != file_sha256(manifest_path)
@@ -962,12 +1084,8 @@ def _stage(
     binding_path = _binding_path(stage_name)
     _reject_partial_entries(SOURCE_ROOT)
     if path.exists() or path.is_symlink():
-        return _load_bound_stage(
-            stage_name,
-            closure_payload=closure_payload,
-            execution_commit=execution_commit,
-            run_nonce=run_nonce,
-            predecessor=predecessor,
+        raise RuntimeError(
+            f"7.1 corrective replay forbids a pre-existing {stage_name} source stage"
         )
     if binding_path.exists() or binding_path.is_symlink():
         raise ValueError(f"{stage_name} binding exists without its stage")
@@ -985,7 +1103,7 @@ def _stage(
     binding: dict[str, Any] = {
         "schema_version": 1,
         "kind": "factor_lab_multi_asset_stage_binding",
-        "release": "7.0",
+        "release": RELEASE,
         "stage": stage_name,
         "stage_manifest_payload_sha256": manifest["payload_sha256"],
         "stage_manifest_file_sha256": file_sha256(stage.path / "manifest.json"),
@@ -1209,9 +1327,14 @@ def _replay_evaluation(
             end=spec["performance_end"],
         )
         try:
+            target_sort_keys = ["signal_date", "code"]
             pd.testing.assert_frame_equal(
-                targets.reset_index(drop=True),
-                expected_targets.reset_index(drop=True),
+                targets.sort_values(target_sort_keys, kind="mergesort").reset_index(
+                    drop=True
+                ),
+                expected_targets.sort_values(
+                    target_sort_keys, kind="mergesort"
+                ).reset_index(drop=True),
                 check_dtype=True,
                 check_exact=True,
             )
@@ -1328,17 +1451,6 @@ def _verify_phase_reference(
     )
 
 
-def _existing_stage_nonce(stage_name: str) -> str | None:
-    path = _binding_path(stage_name)
-    if not path.exists() and not path.is_symlink():
-        return None
-    value = _read_json(path)
-    nonce = str(value.get("run_nonce") or "")
-    if not re.fullmatch(r"[0-9a-f]{32}", nonce):
-        raise ValueError(f"{stage_name} binding has an invalid run nonce")
-    return nonce
-
-
 def _evaluate_stage(
     stage_name: str,
     *,
@@ -1360,27 +1472,9 @@ def _evaluate_stage(
     destination = EVALUATION_ROOT / f"stage={stage_name}"
     _reject_partial_entries(EVALUATION_ROOT)
     if destination.exists() or destination.is_symlink():
-        evaluation, evaluation_file_sha256 = _load_evaluation(
-            stage_name,
-            source_manifest_payload=source_payload,
-            stage_binding_payload=str(binding["payload_sha256"]),
-            closure_payload=closure_payload,
-            execution_commit=execution_commit,
-            run_nonce=run_nonce,
-            predecessor=predecessor,
+        raise RuntimeError(
+            f"7.1 corrective replay forbids a pre-existing {stage_name} evaluation"
         )
-        phase = _phase_from_evaluation(evaluation, evaluation_file_sha256)
-        _verify_phase_reference(
-            phase,
-            stage_name=stage_name,
-            gate_config=gate_config,
-            closure_payload=closure_payload,
-            execution_commit=execution_commit,
-            run_nonce=run_nonce,
-            predecessor=predecessor,
-            verify_data=True,
-        )
-        return phase
     candidate = _run_one(
         stage,
         strategy_id=CANDIDATE_ID,
@@ -1528,9 +1622,16 @@ def run_selection() -> int:
     head = _require_clean_main()
     closure, protocol, selection = _verify_closure()
     if (ROOT / WINNER_FREEZE_PATH).exists():
-        raise FileExistsError("7.0 winner freeze is create-only")
-    _assert_runtime_layout({"train", "validation"})
-    run_nonce = _existing_stage_nonce("train") or uuid.uuid4().hex
+        raise FileExistsError(f"{RELEASE} winner freeze is create-only")
+    if any((ROOT / path).exists() for path in (AUDIT_PATH, RESULT_PATH)):
+        raise RuntimeError("7.1 corrective selection forbids audit or result evidence")
+    _assert_runtime_layout({"train"})
+    _assert_evidence_layout(set())
+    if WORK_ROOT.exists() or WORK_ROOT.is_symlink():
+        raise RuntimeError(
+            "7.1 corrective selection requires an absent fresh runtime; archive any execution failure and do not retry within 7.1"
+        )
+    run_nonce = uuid.uuid4().hex
     closure_predecessor = {
         "kind": "preselection_closure",
         "payload_sha256": closure["payload_sha256"],
@@ -1544,49 +1645,27 @@ def run_selection() -> int:
         run_nonce=run_nonce,
         predecessor=closure_predecessor,
     )
+    disclosed = _read_json(PRECLOSURE_TRAIN_PATH)
+    _verify_disclosed_train_replay(train, disclosed)
+    if train["gate"]["passed"] is not False:
+        raise RuntimeError("7.1 corrective train unexpectedly passed its bound failed gate")
     validation: dict[str, Any] | None = None
     selected: str | None = None
-    if closure.get("selection_returns_opened") is True:
-        disclosed = _read_json(PRECLOSURE_TRAIN_PATH)
-        _verify_disclosed_train_replay(train, disclosed)
-    elif train["gate"]["passed"]:
-        validation = _evaluate_stage(
-            "validation",
-            gate_config=protocol["validation_gate"],
-            closure_payload=closure["payload_sha256"],
-            execution_commit=head,
-            run_nonce=run_nonce,
-            predecessor=_phase_predecessor("train_gate", train),
-        )
-        if validation["gate"]["passed"]:
-            selected = CANDIDATE_ID
-
-    status = (
-        "selected_candidate_frozen"
-        if selected is not None
-        else "selected_null_frozen_validation_failed"
-        if validation is not None
-        else "selected_null_frozen_train_failed"
-    )
+    status = "selected_null_frozen_train_failed"
     if _git("rev-parse", "HEAD").decode("ascii").strip() != head:
         raise RuntimeError("HEAD changed during formal selection")
     if _git("status", "--porcelain").strip():
         raise RuntimeError("tracked worktree changed during formal selection")
-    if not train["gate"]["passed"] and any(
-        path.exists() or path.is_symlink()
-        for path in (
-            SOURCE_ROOT / "stage=validation",
-            EVALUATION_ROOT / "stage=validation",
-            _binding_path("validation"),
-        )
-    ):
-        raise RuntimeError("validation existed despite a failed formal train gate")
+    _assert_runtime_layout({"train"})
+    _assert_evidence_layout(set())
+    if any((ROOT / path).exists() for path in (AUDIT_PATH, RESULT_PATH)):
+        raise RuntimeError("7.1 corrective replay created forbidden downstream evidence")
     _verify_closure()
     _require_head_pushed_and_ci_success(head)
     freeze: dict[str, Any] = {
         "schema_version": 1,
         "kind": "factor_lab_multi_asset_winner_freeze",
-        "release": "7.0",
+        "release": RELEASE,
         "status": status,
         "protocol_payload_sha256": protocol["payload_sha256"],
         "asset_selection_payload_sha256": selection["payload_sha256"],
@@ -1597,7 +1676,7 @@ def run_selection() -> int:
         "selected_candidate_id": selected,
         "train": train,
         "validation": validation,
-        "validation_market_outcomes_opened": validation is not None,
+        "validation_market_outcomes_opened": False,
         "audit_market_outcomes_opened": False,
         "runner_up_fallback": False,
         "claim_contract": protocol["claim_contract"],
@@ -1612,74 +1691,16 @@ def run_selection() -> int:
 
 
 def run_audit() -> int:
-    head = _require_clean_main()
-    closure, protocol, selection = _verify_closure()
-    freeze = _read_json(WINNER_FREEZE_PATH)
-    _require_committed(WINNER_FREEZE_PATH)
-    _verify_winner_freeze_contract(
-        freeze,
-        closure=closure,
-        protocol=protocol,
-        selection=selection,
-    )
-    if (
-        freeze.get("selected_candidate_id") != CANDIDATE_ID
-        or freeze.get("protocol_payload_sha256") != protocol.get("payload_sha256")
-        or freeze.get("asset_selection_payload_sha256") != selection.get("payload_sha256")
-        or freeze.get("implementation_closure_payload_sha256")
-        != closure.get("payload_sha256")
-        or freeze.get("audit_market_outcomes_opened") is not False
-    ):
-        raise RuntimeError("audit requires the frozen non-null 7.0 candidate")
-    if (ROOT / AUDIT_PATH).exists():
-        raise FileExistsError("7.0 historical audit is create-only")
-    _assert_runtime_layout({"train", "validation", "audit"})
-    run_nonce = _existing_stage_nonce("audit") or uuid.uuid4().hex
-    audit_predecessor = {
-        "kind": "winner_freeze",
-        "payload_sha256": freeze["payload_sha256"],
-    }
-    audit = _evaluate_stage(
-        "audit",
-        gate_config=protocol["audit_gate"],
-        closure_payload=closure["payload_sha256"],
-        execution_commit=head,
-        run_nonce=run_nonce,
-        predecessor=audit_predecessor,
-    )
-    if _git("rev-parse", "HEAD").decode("ascii").strip() != head:
-        raise RuntimeError("HEAD changed during historical audit")
-    if _git("status", "--porcelain").strip():
-        raise RuntimeError("tracked worktree changed during historical audit")
-    _verify_closure()
-    _require_head_pushed_and_ci_success(head)
-    value: dict[str, Any] = {
-        "schema_version": 1,
-        "kind": "factor_lab_multi_asset_historical_audit",
-        "release": "7.0",
-        "status": "historical_audit_passed" if audit["gate"]["passed"] else "historical_audit_failed",
-        "selected_candidate_id": CANDIDATE_ID,
-        "winner_freeze_payload_sha256": freeze["payload_sha256"],
-        "protocol_payload_sha256": protocol["payload_sha256"],
-        "asset_selection_payload_sha256": selection["payload_sha256"],
-        "implementation_closure_payload_sha256": closure["payload_sha256"],
-        "audit_execution_commit": head,
-        "run_nonce": run_nonce,
-        "audit": audit,
-        "runner_up_fallback": False,
-        "claim_contract": protocol["claim_contract"],
-    }
-    value["payload_sha256"] = canonical_payload_sha256(value)
-    _create_only(AUDIT_PATH, value)
-    print(f"audit status={value['status']} payload={value['payload_sha256']}", flush=True)
-    return 0
+    raise RuntimeError("7.1 corrective release is train-only and forbids audit")
 
 
 def run_finalize() -> int:
     _require_clean_main()
     closure, protocol, selection = _verify_closure()
     if (ROOT / RESULT_PATH).exists():
-        raise FileExistsError("7.0 terminal result is create-only")
+        raise FileExistsError(f"{RELEASE} terminal result is create-only")
+    _assert_evidence_layout({WINNER_FREEZE_PATH.name})
+    _assert_runtime_layout({"train"})
     freeze = _read_json(WINNER_FREEZE_PATH)
     freeze_bytes = _require_committed(WINNER_FREEZE_PATH)
     _verify_winner_freeze_contract(
@@ -1694,62 +1715,31 @@ def run_finalize() -> int:
         or freeze.get("implementation_closure_payload_sha256")
         != closure.get("payload_sha256")
     ):
-        raise ValueError("winner freeze does not bind the active 7.0 closure")
+        raise ValueError(f"winner freeze does not bind the active {RELEASE} closure")
     selected = freeze.get("selected_candidate_id")
     audit: dict[str, Any] | None = None
-    if selected is None:
-        if (ROOT / AUDIT_PATH).exists():
-            raise RuntimeError("null selection cannot have an audit artifact")
-        status = "selection_falsified_no_candidate"
-    else:
-        audit = _read_json(AUDIT_PATH)
-        audit_bytes = _require_committed(AUDIT_PATH)
-        if (
-            audit.get("selected_candidate_id") != selected
-            or audit.get("winner_freeze_payload_sha256")
-            != freeze.get("payload_sha256")
-            or audit.get("protocol_payload_sha256") != protocol.get("payload_sha256")
-            or audit.get("asset_selection_payload_sha256")
-            != selection.get("payload_sha256")
-            or audit.get("implementation_closure_payload_sha256")
-            != closure.get("payload_sha256")
-        ):
-            raise ValueError("audit candidate differs from winner freeze")
-        _verify_audit_contract(
-            audit,
-            freeze=freeze,
-            closure=closure,
-            protocol=protocol,
-            selection=selection,
-        )
-        status = (
-            "historical_audit_passed_fresh_evidence_required"
-            if audit.get("status") == "historical_audit_passed"
-            else "historical_audit_failed"
-        )
-        if hashlib.sha256(audit_bytes).hexdigest() != file_sha256(ROOT / AUDIT_PATH):
-            raise RuntimeError("audit bytes changed while finalizing")
+    if (
+        selected is not None
+        or freeze.get("validation") is not None
+        or freeze.get("validation_market_outcomes_opened") is not False
+        or (ROOT / AUDIT_PATH).exists()
+    ):
+        raise RuntimeError("7.1 corrective finalize accepts only the committed null freeze")
+    _assert_runtime_layout({"train"})
+    status = "selection_falsified_no_candidate"
     result: dict[str, Any] = {
         "schema_version": 1,
         "kind": "factor_lab_multi_asset_terminal_result",
-        "release": "7.0",
+        "release": RELEASE,
         "status": status,
         "selected_candidate_id": selected,
-        "audit_status": audit.get("status") if audit is not None else "not_opened",
+        "audit_status": "not_opened",
         "winner_freeze": {
             "path": WINNER_FREEZE_PATH.as_posix(),
             "file_sha256": hashlib.sha256(freeze_bytes).hexdigest(),
             "payload_sha256": freeze["payload_sha256"],
         },
-        "historical_audit": (
-            {
-                "path": AUDIT_PATH.as_posix(),
-                "file_sha256": file_sha256(ROOT / AUDIT_PATH),
-                "payload_sha256": audit["payload_sha256"],
-            }
-            if audit is not None
-            else None
-        ),
+        "historical_audit": None,
         "protocol_payload_sha256": protocol["payload_sha256"],
         "asset_selection_payload_sha256": selection["payload_sha256"],
         "implementation_closure_payload_sha256": closure["payload_sha256"],
@@ -1757,6 +1747,7 @@ def run_finalize() -> int:
     }
     result["payload_sha256"] = canonical_payload_sha256(result)
     _create_only(RESULT_PATH, result)
+    _assert_evidence_layout({WINNER_FREEZE_PATH.name, RESULT_PATH.name})
     print(f"terminal result status={status} payload={result['payload_sha256']}", flush=True)
     return 0
 
@@ -1775,7 +1766,7 @@ def _verify_result_contract(
         or result.get("payload_sha256") != canonical_payload_sha256(result)
         or result.get("schema_version") != 1
         or result.get("kind") != "factor_lab_multi_asset_terminal_result"
-        or result.get("release") != "7.0"
+        or result.get("release") != RELEASE
         or result.get("protocol_payload_sha256") != protocol.get("payload_sha256")
         or result.get("asset_selection_payload_sha256") != selection.get("payload_sha256")
         or result.get("implementation_closure_payload_sha256") != closure.get("payload_sha256")
@@ -1825,7 +1816,7 @@ def _verify_result_contract(
 def verify_release_state(
     *, verify_data: bool = False, verify_runtime: bool = False
 ) -> dict[str, Any]:
-    """Verify the complete committed 7.0 closure/evidence chain for CLI and CI."""
+    """Verify the complete committed 7.1 closure/evidence chain for CLI and CI."""
 
     closure, protocol, selection = _verify_closure(verify_runtime=verify_runtime)
     freeze_path = ROOT / WINNER_FREEZE_PATH
@@ -1834,8 +1825,8 @@ def verify_release_state(
     if not freeze_path.is_file():
         if audit_path.exists() or result_path.exists():
             raise ValueError("audit/result exists without a winner freeze")
-        if verify_data:
-            _assert_runtime_layout(set())
+        _assert_evidence_layout(set())
+        _assert_runtime_layout(set())
         return {
             "status": str(closure["status"]),
             "closure": closure,
@@ -1855,19 +1846,8 @@ def verify_release_state(
         verify_data=verify_data,
     )
     audit: dict[str, Any] | None = None
-    if audit_path.is_file():
-        if freeze.get("selected_candidate_id") is None:
-            raise ValueError("null winner freeze cannot have a historical audit")
-        audit = _read_json(AUDIT_PATH)
-        _require_committed(AUDIT_PATH)
-        _verify_audit_contract(
-            audit,
-            freeze=freeze,
-            closure=closure,
-            protocol=protocol,
-            selection=selection,
-            verify_data=verify_data,
-        )
+    if audit_path.exists():
+        raise ValueError("7.1 corrective release forbids historical audit evidence")
     result: dict[str, Any] | None = None
     if result_path.is_file():
         result = _read_json(RESULT_PATH)
@@ -1880,17 +1860,13 @@ def verify_release_state(
             protocol=protocol,
             selection=selection,
         )
-    if verify_data:
-        allowed = {"train"}
-        if freeze.get("validation") is not None:
-            allowed.add("validation")
-        if audit is not None:
-            allowed.add("audit")
-        _assert_runtime_layout(allowed)
+    _assert_runtime_layout({"train"})
+    allowed_evidence = {WINNER_FREEZE_PATH.name}
+    if result is not None:
+        allowed_evidence.add(RESULT_PATH.name)
+    _assert_evidence_layout(allowed_evidence)
     if result is not None:
         status = str(result["status"])
-    elif audit is not None:
-        status = str(audit["status"])
     elif freeze.get("selected_candidate_id") is None:
         status = "selection_frozen_no_candidate_pending_finalize"
     else:
@@ -1908,12 +1884,10 @@ def verify_release_state(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mode", required=True, choices=("selection", "audit", "finalize"))
+    parser.add_argument("--mode", required=True, choices=("selection", "finalize"))
     args = parser.parse_args(argv)
     if args.mode == "selection":
         return run_selection()
-    if args.mode == "audit":
-        return run_audit()
     return run_finalize()
 
 

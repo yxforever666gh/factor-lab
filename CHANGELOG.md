@@ -10,6 +10,24 @@
 
 ## [Unreleased]
 
+### Added
+
+- 新增 7.1 corrective amendment、独立 preselection closure、`multi-asset-7.1` runtime namespace
+  与 `protocols/evidence/7.1/` 证据路径；它逐字节绑定已发布的 annotated `7.0` tag、7.0 协议、
+  关闭根和 `selection_inconclusive_software_failure` 收据，不覆盖或续跑 7.0 derived stage。Amendment
+  payload 为 `7335cdbb61cd0d7b9c3e6f6896ec576c7e403b87d83cfa3d6679965691984c86`。
+
+### Fixed
+
+- 7.1 唯一生产修复是在 causal targets 完整性比较前，按唯一键 `signal_date, code` 使用稳定
+  `mergesort` 规范双方行序；dtype、列、全部值及后续 15 个 artifact 仍要求 exact。资产、窗口、
+  信号、风险预算、总回报、组合、成本、执行、容量、阶段切分、所有 gates 与 claim contract 不变。
+- Python 包版本更新为 `7.1.0`。7.1 仍只能重放已经披露且在 7.0 evaluation 中哈希一致的失败 train，
+  冻结 null 后直接 finalize；validation 与 audit 必须保持物理未创建。
+- 7.1 selection 是一次性执行：运行前整个 7.1 runtime 必须不存在，预存 source/evaluation、普通复制、
+  hardlink、symlink 和额外顶层对象全部拒绝；若执行留下 runtime 却未生成 freeze，必须归档为新的
+  execution failure，不得删除后在同一 7.1 重试。
+
 ## [7.0] - 2026-08-31
 
 ### Added

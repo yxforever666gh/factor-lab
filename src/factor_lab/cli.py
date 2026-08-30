@@ -53,6 +53,18 @@ V7_WINNER_FREEZE_PATH = "protocols/evidence/7.0/winner-freeze.json"
 V7_AUDIT_PATH = "protocols/evidence/7.0/historical-audit.json"
 V7_RESULT_PATH = "protocols/evidence/7.0/result.json"
 V7_RUNTIME_PATH = "runtime/data/multi-asset-7.0"
+V7_FAILURE_PATH = "protocols/evidence/7.0/execution-failure.json"
+V71_PROTOCOL_PATH = V7_PROTOCOL_PATH
+V71_ASSET_SELECTION_PATH = V7_ASSET_SELECTION_PATH
+V71_AMENDMENT_PATH = "protocols/7.1-corrective-amendment-1.json"
+V71_CLOSURE_PATH = "protocols/7.1-release.json"
+V71_PRECLOSURE_TRAIN_PATH = V7_PRECLOSURE_TRAIN_PATH
+V71_WINNER_FREEZE_PATH = "protocols/evidence/7.1/winner-freeze.json"
+V71_AUDIT_PATH = "protocols/evidence/7.1/historical-audit.json"
+V71_RESULT_PATH = "protocols/evidence/7.1/result.json"
+V71_RUNTIME_PATH = "runtime/data/multi-asset-7.1"
+V7_TAG_OBJECT = "25bbc306e8842feab923380416f8329e0dd81100"
+V7_TAG_COMMIT = "412026ca0370d53ca704adfd1122a811e768842e"
 
 
 def _root() -> Path:
@@ -247,7 +259,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     strategy_status.add_argument(
         "--release",
-        choices=("6.0", "6.3", "7.0"),
+        choices=("6.0", "6.3", "7.0", "7.1"),
         help="Verify one release closure; defaults to the latest tracked closure.",
     )
     strategy_targets = strategy_commands.add_parser(
@@ -1111,26 +1123,37 @@ def _v7_json_check(
         return None, check
 
 
-def _load_v7_runner(root: Path) -> Any:
+def _load_v71_runner(root: Path) -> Any:
     resolved = root.resolve()
     script = resolved / "scripts" / "run-multi-asset-evidence.py"
     if script.is_symlink() or not script.is_file():
-        raise ValueError("7.0 formal runner is missing or indirect")
-    spec = importlib.util.spec_from_file_location("factor_lab_v7_status_verifier", script)
+        raise ValueError("7.1 formal runner is missing or indirect")
+    spec = importlib.util.spec_from_file_location("factor_lab_v71_status_verifier", script)
     if spec is None or spec.loader is None:
-        raise ValueError("could not load the 7.0 formal verifier")
+        raise ValueError("could not load the 7.1 formal verifier")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    module.ROOT = resolved
-    module.SRC = resolved / "src"
-    module.WORK_ROOT = resolved / V7_RUNTIME_PATH
-    module.SOURCE_ROOT = module.WORK_ROOT / "sources"
-    module.EVALUATION_ROOT = module.WORK_ROOT / "evaluations"
-    module.BINDING_ROOT = module.WORK_ROOT / "stage-bindings"
+    if (
+        module.ROOT.resolve() != resolved
+        or module.RELEASE != "7.1"
+        or module.CLOSURE_PATH.as_posix() != V71_CLOSURE_PATH
+        or module.WORK_ROOT.resolve() != (resolved / V71_RUNTIME_PATH).resolve()
+        or module.SOURCE_ROOT.resolve()
+        != (resolved / V71_RUNTIME_PATH / "sources").resolve()
+        or module.EVALUATION_ROOT.resolve()
+        != (resolved / V71_RUNTIME_PATH / "evaluations").resolve()
+        or module.BINDING_ROOT.resolve()
+        != (resolved / V71_RUNTIME_PATH / "stage-bindings").resolve()
+        or module.PRIOR_WORK_ROOT.resolve()
+        != (resolved / V7_RUNTIME_PATH).resolve()
+        or module.EVIDENCE_ROOT.as_posix() != "protocols/evidence/7.1"
+        or module.AMENDMENT_PATH.as_posix() != V71_AMENDMENT_PATH
+    ):
+        raise ValueError("7.1 runner contains an incorrect release namespace")
     return module
 
 
-def _v7_require_head_ci(root: Path) -> str:
+def _v71_require_head_ci(root: Path) -> str:
     head = subprocess.run(
         ["git", "rev-parse", "HEAD"],
         cwd=root,
@@ -1139,20 +1162,90 @@ def _v7_require_head_ci(root: Path) -> str:
         stderr=subprocess.PIPE,
         text=True,
     ).stdout.strip()
-    _load_v7_runner(root)._require_head_pushed_and_ci_success(head)
+    _load_v71_runner(root)._require_head_pushed_and_ci_success(head)
     return head
 
 
-def _strategy_status_7_0_pending(
+def _verify_published_7_0_failure(root: Path) -> dict[str, Any]:
+    def git(*args: str, check: bool = True) -> bytes:
+        completed = subprocess.run(
+            ["git", *args],
+            cwd=root,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if check and completed.returncode != 0:
+            raise ValueError(
+                "could not verify the published 7.0 archive: "
+                + completed.stderr.decode("utf-8", errors="replace").strip()
+            )
+        return completed.stdout
+
+    if (
+        git("cat-file", "-t", "refs/tags/7.0").decode("ascii").strip() != "tag"
+        or git("rev-parse", "refs/tags/7.0").decode("ascii").strip()
+        != V7_TAG_OBJECT
+        or git("rev-parse", "refs/tags/7.0^{}").decode("ascii").strip()
+        != V7_TAG_COMMIT
+    ):
+        raise ValueError("published 7.0 annotated tag identity differs")
+    for relative in (
+        V7_PROTOCOL_PATH,
+        V7_ASSET_SELECTION_PATH,
+        V7_CLOSURE_PATH,
+        V7_PRECLOSURE_TRAIN_PATH,
+        V7_FAILURE_PATH,
+    ):
+        current = (root / relative).read_bytes()
+        if git("show", f"{V7_TAG_COMMIT}:{relative}") != current:
+            raise ValueError(f"current 7.0 archive differs from its tag: {relative}")
+    for relative in (V7_WINNER_FREEZE_PATH, V7_AUDIT_PATH, V7_RESULT_PATH):
+        if subprocess.run(
+            ["git", "cat-file", "-e", f"{V7_TAG_COMMIT}:{relative}"],
+            cwd=root,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        ).returncode == 0:
+            raise ValueError(f"published 7.0 unexpectedly contains normal evidence: {relative}")
+    failure = _read_json(root / V7_FAILURE_PATH)
+    if (
+        failure.get("payload_sha256")
+        != "04099ab6c2bd03099c9d045120578344bfe9ba3c963dfb82a0cba9f8a49f5df9"
+        or failure.get("payload_sha256") != _canonical_payload_sha256(failure)
+        or failure.get("status") != "selection_inconclusive_software_failure"
+        or failure.get("classification") != "target_order_replay_false_negative"
+    ):
+        raise ValueError("published 7.0 execution-failure receipt differs")
+    return failure
+
+
+def _strategy_status_7_1_pending(
     root: Path, *, verify_data: bool
 ) -> tuple[dict[str, Any], int]:
     checks: list[dict[str, Any]] = []
-    protocol, protocol_check = _v7_json_check(root, V7_PROTOCOL_PATH)
+    protocol, protocol_check = _v7_json_check(root, V71_PROTOCOL_PATH)
     protocol_check["category"] = "protocol_payload"
     checks.append(protocol_check)
-    selection, selection_check = _v7_json_check(root, V7_ASSET_SELECTION_PATH)
+    selection, selection_check = _v7_json_check(root, V71_ASSET_SELECTION_PATH)
     selection_check["category"] = "asset_selection_payload"
     checks.append(selection_check)
+    amendment, amendment_check = _v7_json_check(
+        root,
+        V71_AMENDMENT_PATH,
+        expected_payload="7335cdbb61cd0d7b9c3e6f6896ec576c7e403b87d83cfa3d6679965691984c86",
+    )
+    amendment_check["category"] = "corrective_amendment"
+    checks.append(amendment_check)
+    failure, failure_check = _v7_json_check(
+        root,
+        V7_FAILURE_PATH,
+        expected_payload="04099ab6c2bd03099c9d045120578344bfe9ba3c963dfb82a0cba9f8a49f5df9",
+        expected_file="674e62603f7ab9a026e9ef69dc52810889f584302e94be13a685dc708b76da53",
+    )
+    failure_check["category"] = "published_7_0_execution_failure"
+    checks.append(failure_check)
     disclosure_contract = (
         protocol.get("preclosure_train_disclosure")
         if protocol is not None
@@ -1160,7 +1253,7 @@ def _strategy_status_7_0_pending(
     )
     disclosure, disclosure_check = _v7_json_check(
         root,
-        V7_PRECLOSURE_TRAIN_PATH,
+        V71_PRECLOSURE_TRAIN_PATH,
         expected_payload=str(disclosure_contract.get("payload_sha256") or ""),
         expected_file=str(disclosure_contract.get("file_sha256") or ""),
     )
@@ -1169,20 +1262,80 @@ def _strategy_status_7_0_pending(
     failures = [
         item for item in checks if item.get("status") != "match"
     ]
+    if amendment is not None:
+        try:
+            _load_v71_runner(root)._verify_corrective_amendment(amendment)
+            checks.append(
+                {
+                    "category": "corrective_whitelist",
+                    "path": V71_AMENDMENT_PATH,
+                    "status": "match",
+                }
+            )
+        except (OSError, RuntimeError, TypeError, ValueError) as exc:
+            item = {
+                "category": "corrective_whitelist",
+                "path": V71_AMENDMENT_PATH,
+                "status": "mismatch",
+                "error": str(exc),
+            }
+            checks.append(item)
+            failures.append(item)
+    if failure is not None:
+        boundary = failure.get("evidence_boundary") or {}
+        valid_failure = (
+            failure.get("status") == "selection_inconclusive_software_failure"
+            and failure.get("classification") == "target_order_replay_false_negative"
+            and all(
+                boundary.get(key) is False
+                for key in (
+                    "validation_market_outcomes_opened",
+                    "winner_freeze_created",
+                    "audit_market_outcomes_opened",
+                    "terminal_result_created",
+                )
+            )
+        )
+        item = {
+            "category": "published_7_0_failure_boundary",
+            "path": V7_FAILURE_PATH,
+            "status": "match" if valid_failure else "mismatch",
+        }
+        checks.append(item)
+        if not valid_failure:
+            failures.append(item)
+    try:
+        _verify_published_7_0_failure(root)
+        checks.append(
+            {
+                "category": "local_7_0_tag_binding",
+                "path": "refs/tags/7.0",
+                "status": "match",
+            }
+        )
+    except (OSError, RuntimeError, TypeError, ValueError, subprocess.SubprocessError) as exc:
+        item = {
+            "category": "local_7_0_tag_binding",
+            "path": "refs/tags/7.0",
+            "status": "mismatch",
+            "error": str(exc),
+        }
+        checks.append(item)
+        failures.append(item)
     if disclosure is not None:
         try:
-            _load_v7_runner(root)._verify_disclosed_outcome_boundary(disclosure)
+            _load_v71_runner(root)._verify_disclosed_outcome_boundary(disclosure)
             checks.append(
                 {
                     "category": "preclosure_outcome_boundary",
-                    "path": V7_PRECLOSURE_TRAIN_PATH,
+                    "path": V71_PRECLOSURE_TRAIN_PATH,
                     "status": "match",
                 }
             )
         except (OSError, RuntimeError, TypeError, ValueError) as exc:
             item = {
                 "category": "preclosure_outcome_boundary",
-                "path": V7_PRECLOSURE_TRAIN_PATH,
+                "path": V71_PRECLOSURE_TRAIN_PATH,
                 "status": "mismatch",
                 "error": str(exc),
             }
@@ -1192,7 +1345,7 @@ def _strategy_status_7_0_pending(
         assets = protocol.get("assets") or {}
         if (
             assets.get("selection_evidence_file_sha256")
-            != _file_sha256(root / V7_ASSET_SELECTION_PATH)
+            != _file_sha256(root / V71_ASSET_SELECTION_PATH)
             or assets.get("selection_evidence_payload_sha256")
             != selection.get("payload_sha256")
             or selection.get("selected_codes")
@@ -1207,7 +1360,7 @@ def _strategy_status_7_0_pending(
         ):
             item = {
                 "category": "asset_selection_binding",
-                "path": V7_ASSET_SELECTION_PATH,
+                "path": V71_ASSET_SELECTION_PATH,
                 "status": "mismatch",
             }
             checks.append(item)
@@ -1216,16 +1369,16 @@ def _strategy_status_7_0_pending(
             checks.append(
                 {
                     "category": "asset_selection_binding",
-                    "path": V7_ASSET_SELECTION_PATH,
+                    "path": V71_ASSET_SELECTION_PATH,
                     "status": "match",
                 }
             )
     for relative in (
-        V7_CLOSURE_PATH,
-        V7_WINNER_FREEZE_PATH,
-        V7_AUDIT_PATH,
-        V7_RESULT_PATH,
-        V7_RUNTIME_PATH,
+        V71_CLOSURE_PATH,
+        V71_WINNER_FREEZE_PATH,
+        V71_AUDIT_PATH,
+        V71_RESULT_PATH,
+        V71_RUNTIME_PATH,
     ):
         exists = (root / relative).exists()
         item = {
@@ -1246,7 +1399,7 @@ def _strategy_status_7_0_pending(
     )
     if clean:
         try:
-            head = _v7_require_head_ci(root)
+            head = _v71_require_head_ci(root)
             checks.append(
                 {
                     "category": "preclosure_head_push_ci",
@@ -1272,7 +1425,7 @@ def _strategy_status_7_0_pending(
         status, exit_code = "implementation_pending_clean_commit", 2
     return {
         "status": status,
-        "version": "7.0",
+        "version": "7.1",
         "route": "fixed_multi_asset_causal_trend_budget",
         "protocol_id": (
             protocol.get("protocol_id") if protocol is not None else None
@@ -1293,14 +1446,14 @@ def _strategy_status_7_0_pending(
     }, exit_code
 
 
-def _strategy_status_7_0(
+def _strategy_status_7_1(
     root: Path, *, verify_data: bool
 ) -> tuple[dict[str, Any], int]:
-    if not (root / V7_CLOSURE_PATH).is_file():
-        return _strategy_status_7_0_pending(root, verify_data=verify_data)
+    if not (root / V71_CLOSURE_PATH).is_file():
+        return _strategy_status_7_1_pending(root, verify_data=verify_data)
     checks: list[dict[str, Any]] = []
     try:
-        verifier = _load_v7_runner(root)
+        verifier = _load_v71_runner(root)
         state = verifier.verify_release_state(
             verify_data=verify_data,
             verify_runtime=False,
@@ -1310,18 +1463,25 @@ def _strategy_status_7_0(
         freeze = state["freeze"]
         audit = state["audit"]
         result = state["result"]
+        data_verified = bool(verify_data and freeze is not None)
         checks.append(
             {
                 "category": "release_evidence_chain",
-                "path": V7_CLOSURE_PATH,
+                "path": V71_CLOSURE_PATH,
                 "status": "match",
             }
         )
         checks.append(
             {
                 "category": "canonical_stage_artifacts",
-                "path": V7_RUNTIME_PATH,
-                "status": "match" if verify_data else "not_verified",
+                "path": V71_RUNTIME_PATH,
+                "status": (
+                    "match"
+                    if data_verified
+                    else "not_applicable"
+                    if freeze is None
+                    else "not_verified"
+                ),
             }
         )
         clean = _working_tree_is_clean(root)
@@ -1333,8 +1493,8 @@ def _strategy_status_7_0(
             }
         )
         if not clean:
-            raise RuntimeError("7.0 formal status requires a clean worktree")
-        head = _v7_require_head_ci(root)
+            raise RuntimeError("7.1 formal status requires a clean worktree")
+        head = _v71_require_head_ci(root)
         checks.append(
             {
                 "category": "head_push_ci",
@@ -1360,7 +1520,7 @@ def _strategy_status_7_0(
         claim = protocol.get("claim_contract") or {}
         return {
             "status": state["status"],
-            "version": "7.0",
+            "version": "7.1",
             "route": closure.get("route"),
             "protocol_id": protocol.get("protocol_id"),
             "historical_evidence_class": claim.get("historical_evidence_class"),
@@ -1370,14 +1530,79 @@ def _strategy_status_7_0(
             "terminal_result_payload_sha256": (
                 result.get("payload_sha256") if result is not None else None
             ),
-            "canonical_data_hashes_verified": bool(verify_data),
+            "canonical_data_hashes_verified": data_verified,
             "checks": checks,
         }, 0
     except (OSError, RuntimeError, TypeError, ValueError, subprocess.SubprocessError) as exc:
         checks.append(
             {
                 "category": "release_evidence_chain",
-                "path": V7_CLOSURE_PATH,
+                "path": V71_CLOSURE_PATH,
+                "status": "mismatch",
+                "error": str(exc),
+            }
+        )
+        return {
+            "status": "integrity_mismatch",
+            "version": "7.1",
+            "route": "fixed_multi_asset_causal_trend_budget",
+            "protocol_id": None,
+            "historical_evidence_class": None,
+            "profit_claim_allowed": False,
+            "selected_candidate_id": None,
+            "audit_status": "unknown",
+            "terminal_result_payload_sha256": None,
+            "canonical_data_hashes_verified": False,
+            "checks": checks,
+        }, 3
+
+
+def _strategy_status_7_0_archived(
+    root: Path, *, verify_data: bool
+) -> tuple[dict[str, Any], int]:
+    checks: list[dict[str, Any]] = []
+    try:
+        failure = _verify_published_7_0_failure(root)
+        checks.extend(
+            [
+                {
+                    "category": "local_archived_annotated_tag",
+                    "path": "refs/tags/7.0",
+                    "status": "match",
+                    "tag_object": V7_TAG_OBJECT,
+                    "peeled_commit": V7_TAG_COMMIT,
+                },
+                {
+                    "category": "selection_execution_failure",
+                    "path": V7_FAILURE_PATH,
+                    "status": "match",
+                    "payload_sha256": failure["payload_sha256"],
+                },
+                {
+                    "category": "canonical_stage_artifacts",
+                    "path": V7_RUNTIME_PATH,
+                    "status": "not_retained" if not (root / V7_RUNTIME_PATH).exists() else "not_verified",
+                },
+            ]
+        )
+        return {
+            "status": "selection_inconclusive_software_failure",
+            "version": "7.0",
+            "route": "fixed_multi_asset_causal_trend_budget",
+            "protocol_id": "factor-lab/7.0/fixed-multi-asset-trend-budget-v1",
+            "historical_evidence_class": "preclosure_exposed_historical_diagnostic",
+            "profit_claim_allowed": False,
+            "selected_candidate_id": None,
+            "audit_status": "not_opened",
+            "terminal_result_payload_sha256": None,
+            "canonical_data_hashes_verified": False,
+            "checks": checks,
+        }, 0
+    except (OSError, RuntimeError, TypeError, ValueError, subprocess.SubprocessError) as exc:
+        checks.append(
+            {
+                "category": "published_7_0_failure_archive",
+                "path": V7_FAILURE_PATH,
                 "status": "mismatch",
                 "error": str(exc),
             }
@@ -1400,13 +1625,15 @@ def _strategy_status_7_0(
 def _strategy_status(
     root: Path, *, verify_data: bool, release: str | None = None
 ) -> tuple[dict[str, Any], int]:
-    selected = release or "7.0"
+    selected = release or "7.1"
     if selected == "6.0":
         return _strategy_status_6_0(root, verify_data=verify_data)
     if selected == "6.3":
         return _strategy_status_6_3(root, verify_data=verify_data)
     if selected == "7.0":
-        return _strategy_status_7_0(root, verify_data=verify_data)
+        return _strategy_status_7_0_archived(root, verify_data=verify_data)
+    if selected == "7.1":
+        return _strategy_status_7_1(root, verify_data=verify_data)
     raise ValueError(f"unsupported strategy release: {selected}")
 
 

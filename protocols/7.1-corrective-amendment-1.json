@@ -1,0 +1,116 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_protocol_amendment",
+  "amendment_id": "factor-lab/7.1/fixed-multi-asset-trend-budget-corrective-replay/amendment-1",
+  "release": "7.1",
+  "status": "frozen_before_7_1_corrective_return_replay",
+  "direction_change": false,
+  "route": "fixed_multi_asset_causal_trend_budget",
+  "prior_release": {
+    "release": "7.0",
+    "tag": "7.0",
+    "annotated_tag_object": "25bbc306e8842feab923380416f8329e0dd81100",
+    "peeled_commit": "412026ca0370d53ca704adfd1122a811e768842e",
+    "protocol": {
+      "path": "protocols/7.0-multi-asset.json",
+      "file_sha256": "2d2e96a1605b5e088a7cf5952dd816d8aecb10e39b9ba529fe81b00592bfa14f",
+      "payload_sha256": "6f2fcd2a67d52bfae19bedcaecf495faa986195f6840da48a3a67a666589aaf0",
+      "protocol_id": "factor-lab/7.0/fixed-multi-asset-trend-budget-v1"
+    },
+    "asset_selection": {
+      "path": "protocols/7.0-asset-selection.json",
+      "file_sha256": "6d2d819db2579db76f8e7830a5de090d8d471c7fdc657abd8aba626cd1b065ec",
+      "payload_sha256": "b00536d618c7fe46e3cbe8d258d2b2032ef4e0c16d40fb9c74ff016c34525e0b"
+    },
+    "preclosure_train_disclosure": {
+      "path": "protocols/evidence/7.0/preclosure-train.json",
+      "file_sha256": "01c3d97f7a3cce81bd8abe4e430c5b35b35deddefc80950403d3b40d109f7c09",
+      "payload_sha256": "6bd2909ddc97ec84d3535d15e8f13330a5752831aead82d8fb50afdd16ac6775",
+      "status": "train_falsified_before_preselection_closure"
+    },
+    "preselection_closure": {
+      "path": "protocols/7.0-release.json",
+      "file_sha256": "555e17eca0a9618e21e84133c825c447edf71999a1b8a7a39cc84b27753d4967",
+      "payload_sha256": "d0b6072234d45363144a47517c8c4c535e4c9550ea36925a4b7cc54216110009",
+      "status": "implementation_frozen_after_disclosed_train_failure"
+    },
+    "execution_failure": {
+      "path": "protocols/evidence/7.0/execution-failure.json",
+      "file_sha256": "674e62603f7ab9a026e9ef69dc52810889f584302e94be13a685dc708b76da53",
+      "payload_sha256": "04099ab6c2bd03099c9d045120578344bfe9ba3c963dfb82a0cba9f8a49f5df9",
+      "status": "selection_inconclusive_software_failure",
+      "classification": "target_order_replay_false_negative"
+    }
+  },
+  "release_transition": {
+    "published_7_0_annotated_tag_bound": true,
+    "same_release_corrective_amendment_forbidden": true,
+    "next_release": "7.1",
+    "direction_change": false
+  },
+  "correction": {
+    "created_before_any_7_1_return_replay": true,
+    "sole_permitted_change": {
+      "path": "scripts/run-multi-asset-evidence.py",
+      "function": "_replay_evaluation",
+      "from": "compare persisted targets with causal-builder targets in their raw row order",
+      "to": "stable-sort both target frames by signal_date and code before their exact comparison",
+      "sort_kind": "mergesort",
+      "sort_key": [
+        "signal_date",
+        "code"
+      ],
+      "comparison_dtype_check_unchanged": true,
+      "comparison_exact_value_check_unchanged": true,
+      "target_columns_dtypes_and_values_unchanged": true,
+      "simulation_inputs_and_outputs_unchanged": true
+    }
+  },
+  "runtime_and_stage_contract": {
+    "runtime_root": "runtime/data/multi-asset-7.1",
+    "new_runtime_namespace_required": true,
+    "new_preselection_closure_required": true,
+    "new_7_1_source_manifest_binding_and_evaluation_required": true,
+    "reuse_7_0_derived_stages": false,
+    "reuse_7_0_evaluations": false,
+    "reuse_7_0_gate_or_status_views": false,
+    "forbidden_7_0_artifacts": [
+      "train_validation_or_audit_stage_manifests_bindings_and_derived_files",
+      "candidate_control_or_stress_targets_orders_daily_nav_holdings_or_trades",
+      "train_gate_pass_fail_or_selected_candidate_decisions",
+      "winner_freeze_historical_audit_terminal_result_or_cli_status_views"
+    ]
+  },
+  "phase_contract": {
+    "formal_7_1_scope": "train corrective replay only",
+    "formal_train_must_reproduce_bound_7_0_disclosed_metrics_and_failed_gate": true,
+    "selected_candidate_id": null,
+    "validation_market_outcomes_opened": false,
+    "validation_stage_created": false,
+    "audit_market_outcomes_opened": false,
+    "audit_stage_created": false,
+    "runner_up_fallback": false
+  },
+  "unchanged_contract": {
+    "base_7_0_protocol_applies_in_full": true,
+    "asset_selection_unchanged": true,
+    "candidate_registry_unchanged": true,
+    "signal_unchanged": true,
+    "source_semantic_data_admission_unchanged": true,
+    "total_return_reconstruction_unchanged": true,
+    "portfolio_unchanged": true,
+    "execution_unchanged": true,
+    "costs_and_capacity_unchanged": true,
+    "phase_boundaries_unchanged": true,
+    "selection_gates_unchanged": true,
+    "audit_rules_unchanged": true,
+    "claim_contract_unchanged": true
+  },
+  "required_tests_add": [
+    "the 7.0 raw-order target comparison fails while stable signal_date-code mergesort makes candidate, control and stress targets exact",
+    "the correction changes only target comparison order and rejects any asset, signal, data, portfolio, execution, cost, gate, phase, audit or claim-contract drift",
+    "no 7.0 derived stage, evaluation, gate, selection or status artifact is accepted in the 7.1 runtime namespace",
+    "validation and audit remain physically absent because the bound disclosed train gate is false"
+  ],
+  "payload_sha256": "7335cdbb61cd0d7b9c3e6f6896ec576c7e403b87d83cfa3d6679965691984c86"
+}

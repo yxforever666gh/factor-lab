@@ -1,7 +1,8 @@
-# Factor Lab 7.0
+# Factor Lab 7.1
 
-Factor Lab 7.0 是一条本地、可复现的跨资产 ETF 研究链：原始交易所价格与现金分红 →
-严格滞后趋势状态 → 月末信号/下一开盘成交 → 全成本逐日账户 → train / validation / audit。
+Factor Lab 7.1 是一条本地、可复现的跨资产 ETF 研究链：原始交易所价格与现金分红 →
+严格滞后趋势状态 → 月末信号/下一开盘成交 → 全成本逐日账户 → train corrective replay。
+本次重放已知 train gate 为失败，validation 与 audit 必须保持物理未创建。
 
 已发布的 6.3 corrective replay 证明数值修复有效，但也给出正式 null：扩大 ADV20 机会集的两个
 challenger 在 train 都是 `0/10` offset 相对 control 为正，validation 与 audit 未打开，终态为
@@ -118,7 +119,7 @@ label，并再次验证 availability 必须恰好是 `report_date` 后第一个�
 拆送股稳健性对照）、FY1 相对 FY0 的预测增长，以及实际公告相对公告前共识的 earnings surprise。
 coverage/initiations、dispersion 与 active-reviser breadth 先只做诊断，不再建 selector。
 
-## 7.0 当前主线：固定多资产因果趋势预算
+## 7.1 当前主线：7.0 固定多资产路线的纠正重放
 
 固定资产与资本预算如下；`511880.SH` 只接收未启用预算和整手/容量残余：
 
@@ -162,18 +163,25 @@ audit 和 terminal result 均不存在，7.0 的策略结论不成立。Tracked�
 绑定它。修复只能进入保持全部研究语义
 不变的新 7.1 runtime 与 closure，不能覆盖或续跑现有 7.0 stage。
 
-7.0 原计划流程如下；实际只执行到 selection，audit/finalize 从未执行，且不得继续：
+7.1 已以自哈希 corrective amendment 冻结唯一修复：targets 完整性比较前，双方都按唯一键
+`signal_date, code` 使用稳定 `mergesort` 排序；dtype、列和值继续 exact，simulation 仍由 causal
+builder targets 驱动。7.1 使用全新的 `runtime/data/multi-asset-7.1`、关闭根和 evidence 路径，
+逐字节绑定已发布的 annotated 7.0 tag 与 execution-failure receipt。Runner 的阶段注册表只含 train，
+命令面只含 selection/finalize；任何意外 train pass、validation/audit 路径或 7.0 hardlink 复用均
+fail closed。Selection 是一次性的：运行前整个 7.1 runtime 必须不存在；一旦执行中留下 runtime
+却未生成 freeze，就必须归档为 execution failure，不能删除后在同一 7.1 重试。完整白名单见
+[protocols/7.1-corrective-amendment-1.json](protocols/7.1-corrective-amendment-1.json)。
+
+7.1 正式流程如下；必须逐步提交、推送并等待精确提交 CI 通过：
 
 ```powershell
-# 实现提交推送且 CI 全绿后，先封存已披露 train 越界与完整 replay 根
-python scripts/build-7.0-preselection-closure.py
+# 实现提交推送且 CI 全绿后，冻结 corrective implementation/runtime 根
+python scripts/build-7.1-preselection-closure.py
 
 # closure 单独提交、推送且 CI 全绿后
 python scripts/run-multi-asset-evidence.py --mode selection
 
-# 只有非 null winner freeze 提交并通过 CI 后才允许
-python scripts/run-multi-asset-evidence.py --mode audit
-
+# selection 只能生成 train-failed null freeze；提交、推送且 CI 全绿后
 python scripts/run-multi-asset-evidence.py --mode finalize
 ```
 

@@ -26,6 +26,9 @@ def test_cli_exposes_only_lightweight_mainline_commands() -> None:
     assert parser.parse_args(
         ["strategy", "status", "--release", "7.0"]
     ).release == "7.0"
+    assert parser.parse_args(
+        ["strategy", "status", "--release", "7.1"]
+    ).release == "7.1"
     targets = parser.parse_args(["strategy", "targets", "--signal-date", "latest"])
     assert targets.strategy_command == "targets"
 
@@ -131,10 +134,10 @@ def test_strategy_status_verifies_tracked_implementation_and_evidence(
     # require its own still-running GitHub job to have completed successfully;
     # the remote-CI and worktree-state contracts are covered by dedicated tests
     # below.
-    monkeypatch.setattr(cli, "_v7_require_head_ci", lambda _root: "a" * 40)
+    monkeypatch.setattr(cli, "_v71_require_head_ci", lambda _root: "a" * 40)
     monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
     result, exit_code = cli._strategy_status(root, verify_data=False)
-    closure_exists = (root / cli.V7_CLOSURE_PATH).is_file()
+    closure_exists = (root / cli.V71_CLOSURE_PATH).is_file()
     if closure_exists:
         assert exit_code == 0
     else:
@@ -143,7 +146,7 @@ def test_strategy_status_verifies_tracked_implementation_and_evidence(
             "implementation_ready_for_preselection_closure",
             "implementation_pending_clean_commit",
         }
-    assert result["version"] == "7.0"
+    assert result["version"] == "7.1"
     assert result["route"] == "fixed_multi_asset_causal_trend_budget"
     assert result["profit_claim_allowed"] is False
     if not closure_exists:
@@ -160,20 +163,41 @@ def test_strategy_status_verifies_tracked_implementation_and_evidence(
         assert "asset_selection_payload" in categories
 
 
-def test_default_strategy_status_reports_the_7_0_preclosure_state(
+def test_explicit_7_0_status_reports_published_execution_failure() -> None:
+    root = Path(__file__).resolve().parents[2]
+
+    result, exit_code = cli._strategy_status(
+        root, verify_data=True, release="7.0"
+    )
+
+    assert exit_code == 0
+    assert result["version"] == "7.0"
+    assert result["status"] == "selection_inconclusive_software_failure"
+    assert result["selected_candidate_id"] is None
+    assert result["audit_status"] == "not_opened"
+    assert result["terminal_result_payload_sha256"] is None
+    assert result["canonical_data_hashes_verified"] is False
+    assert any(
+        check["category"] == "selection_execution_failure"
+        and check["status"] == "match"
+        for check in result["checks"]
+    )
+
+
+def test_default_strategy_status_reports_the_7_1_preclosure_state(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root = Path(__file__).resolve().parents[2]
-    if (root / cli.V7_CLOSURE_PATH).is_file():
-        pytest.skip("7.0 closure has already superseded the preclosure state")
+    if (root / cli.V71_CLOSURE_PATH).is_file():
+        pytest.skip("7.1 closure has already superseded the preclosure state")
     monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
-    monkeypatch.setattr(cli, "_v7_require_head_ci", lambda _root: "a" * 40)
+    monkeypatch.setattr(cli, "_v71_require_head_ci", lambda _root: "a" * 40)
 
     result, exit_code = cli._strategy_status(root, verify_data=False)
 
     assert exit_code == 0
     assert result["status"] == "implementation_ready_for_preselection_closure"
-    assert result["version"] == "7.0"
+    assert result["version"] == "7.1"
     assert result["selected_candidate_id"] is None
     assert result["audit_status"] == "not_opened"
     assert result["profit_claim_allowed"] is False
@@ -184,8 +208,8 @@ def test_default_preclosure_status_does_not_claim_dirty_tree_is_ready(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root = Path(__file__).resolve().parents[2]
-    if (root / cli.V7_CLOSURE_PATH).is_file():
-        pytest.skip("7.0 closure has already superseded the preclosure state")
+    if (root / cli.V71_CLOSURE_PATH).is_file():
+        pytest.skip("7.1 closure has already superseded the preclosure state")
     monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: False)
 
     result, exit_code = cli._strategy_status(root, verify_data=False)
@@ -199,7 +223,7 @@ def test_default_preclosure_status_does_not_claim_dirty_tree_is_ready(
     )
 
 
-def test_7_0_preclosure_status_rejects_contradictory_opened_disclosure(
+def test_7_1_preclosure_status_rejects_contradictory_opened_disclosure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = Path(__file__).resolve().parents[2]
@@ -236,12 +260,17 @@ def test_7_0_preclosure_status_rejects_contradictory_opened_disclosure(
         json.dumps(protocol, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
-    runner = cli._load_v7_runner(root)
-    monkeypatch.setattr(cli, "_load_v7_runner", lambda _root: runner)
+    for relative in (cli.V71_AMENDMENT_PATH, cli.V7_FAILURE_PATH):
+        target = tmp_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((root / relative).read_bytes())
+    runner = cli._load_v71_runner(root)
+    monkeypatch.setattr(cli, "_load_v71_runner", lambda _root: runner)
+    monkeypatch.setattr(cli, "_verify_published_7_0_failure", lambda _root: {})
     monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
-    monkeypatch.setattr(cli, "_v7_require_head_ci", lambda _root: "a" * 40)
+    monkeypatch.setattr(cli, "_v71_require_head_ci", lambda _root: "a" * 40)
 
-    result, exit_code = cli._strategy_status_7_0_pending(
+    result, exit_code = cli._strategy_status_7_1_pending(
         tmp_path, verify_data=False
     )
 
@@ -258,12 +287,12 @@ def test_default_preclosure_status_requires_pushed_successful_ci(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root = Path(__file__).resolve().parents[2]
-    if (root / cli.V7_CLOSURE_PATH).is_file():
-        pytest.skip("7.0 closure has already superseded the preclosure state")
+    if (root / cli.V71_CLOSURE_PATH).is_file():
+        pytest.skip("7.1 closure has already superseded the preclosure state")
     monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
     monkeypatch.setattr(
         cli,
-        "_v7_require_head_ci",
+        "_v71_require_head_ci",
         lambda _root: (_ for _ in ()).throw(RuntimeError("push CI missing")),
     )
 
@@ -278,10 +307,10 @@ def test_default_preclosure_status_requires_pushed_successful_ci(
     )
 
 
-def test_7_0_status_rejects_orphan_audit_from_full_chain_verifier(
+def test_7_1_status_rejects_orphan_audit_from_full_chain_verifier(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    closure = tmp_path / cli.V7_CLOSURE_PATH
+    closure = tmp_path / cli.V71_CLOSURE_PATH
     closure.parent.mkdir(parents=True)
     closure.write_text("{}", encoding="utf-8")
     verifier = SimpleNamespace(
@@ -289,9 +318,9 @@ def test_7_0_status_rejects_orphan_audit_from_full_chain_verifier(
             ValueError("audit/result exists without a winner freeze")
         )
     )
-    monkeypatch.setattr(cli, "_load_v7_runner", lambda _root: verifier)
+    monkeypatch.setattr(cli, "_load_v71_runner", lambda _root: verifier)
 
-    result, exit_code = cli._strategy_status_7_0(tmp_path, verify_data=True)
+    result, exit_code = cli._strategy_status_7_1(tmp_path, verify_data=True)
 
     assert exit_code == 3
     assert result["status"] == "integrity_mismatch"
@@ -299,10 +328,10 @@ def test_7_0_status_rejects_orphan_audit_from_full_chain_verifier(
     assert "without a winner freeze" in result["checks"][-1]["error"]
 
 
-def test_7_0_verify_data_is_forwarded_to_stage_verifier(
+def test_7_1_verify_data_is_forwarded_to_stage_verifier(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    closure_path = tmp_path / cli.V7_CLOSURE_PATH
+    closure_path = tmp_path / cli.V71_CLOSURE_PATH
     closure_path.parent.mkdir(parents=True)
     closure_path.write_text("{}", encoding="utf-8")
     calls: list[tuple[bool, bool]] = []
@@ -310,7 +339,7 @@ def test_7_0_verify_data_is_forwarded_to_stage_verifier(
     def verify_release_state(*, verify_data: bool, verify_runtime: bool) -> dict:
         calls.append((verify_data, verify_runtime))
         return {
-            "status": "selection_frozen_pending_historical_audit",
+            "status": "selection_frozen_no_candidate_pending_finalize",
             "closure": {"route": "fixed_multi_asset_causal_trend_budget"},
             "protocol": {
                 "protocol_id": "factor-lab/7.0/fixed-multi-asset-trend-budget-v1",
@@ -320,20 +349,20 @@ def test_7_0_verify_data_is_forwarded_to_stage_verifier(
                 },
             },
             "selection": {},
-            "freeze": {"selected_candidate_id": "causal_multi_horizon_trend_budget"},
+            "freeze": {"selected_candidate_id": None},
             "audit": None,
             "result": None,
         }
 
     monkeypatch.setattr(
         cli,
-        "_load_v7_runner",
+        "_load_v71_runner",
         lambda _root: SimpleNamespace(verify_release_state=verify_release_state),
     )
     monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
-    monkeypatch.setattr(cli, "_v7_require_head_ci", lambda _root: "a" * 40)
+    monkeypatch.setattr(cli, "_v71_require_head_ci", lambda _root: "a" * 40)
 
-    result, exit_code = cli._strategy_status_7_0(tmp_path, verify_data=True)
+    result, exit_code = cli._strategy_status_7_1(tmp_path, verify_data=True)
 
     assert exit_code == 0
     assert calls == [(True, False)]
