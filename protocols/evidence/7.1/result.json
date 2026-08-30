@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_multi_asset_terminal_result",
+  "release": "7.1",
+  "status": "selection_falsified_no_candidate",
+  "selected_candidate_id": null,
+  "audit_status": "not_opened",
+  "winner_freeze": {
+    "path": "protocols/evidence/7.1/winner-freeze.json",
+    "file_sha256": "2b239ac699d80db0965d87f1fb96a366b7a2f820c173fa08988fb4801323fa77",
+    "payload_sha256": "451b7de8bbcba9372731b7dd7236e16a46467bdf5499eeff5e17e8e946ffabfd"
+  },
+  "historical_audit": null,
+  "protocol_payload_sha256": "6f2fcd2a67d52bfae19bedcaecf495faa986195f6840da48a3a67a666589aaf0",
+  "asset_selection_payload_sha256": "b00536d618c7fe46e3cbe8d258d2b2032ef4e0c16d40fb9c74ff016c34525e0b",
+  "implementation_closure_payload_sha256": "8cd80c7c770477cf29c2fa04348e9ed16f637f7d5ee61f31232d6f1f81ff2e55",
+  "claim_contract": {
+    "historical_evidence_class": "preclosure_exposed_historical_diagnostic",
+    "profit_claim_allowed": false,
+    "stable_future_profit_claim_allowed": false,
+    "fresh_future_evidence_required": true,
+    "first_fresh_unseen_session_not_before": "2026-08-31"
+  },
+  "payload_sha256": "869b6f1fe028378e1071a416c7f8d045650a41c17c01bd9a1d48f62b35c3a4b9"
+}

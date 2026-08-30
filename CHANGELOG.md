@@ -37,7 +37,9 @@
   33,249 行、metrics 与 gate 均通过 causal exact replay，五个结果哈希与 7.0 disclosure 完全一致。
 - Train gate 仍为 `false`，只失败既有 relative CAGR / Sharpe 两门；create-only null freeze payload 为
   `451b7de8bbcba9372731b7dd7236e16a46467bdf5499eeff5e17e8e946ffabfd`，状态
-  `selected_null_frozen_train_failed`。Validation、audit 与 runner-up 均未打开，不允许盈利声明。
+  `selected_null_frozen_train_failed`。Validation、audit 与 runner-up 均未打开；terminal result 状态为
+  `selection_falsified_no_candidate`，payload
+  `869b6f1fe028378e1071a416c7f8d045650a41c17c01bd9a1d48f62b35c3a4b9`，不允许盈利声明。
 
 ## [7.0] - 2026-08-31
 
