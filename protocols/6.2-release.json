@@ -1,0 +1,199 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_release_closure",
+  "release": "6.2",
+  "closure_role": "immutable_preselection_root",
+  "direction_change": false,
+  "status": "implementation_frozen_before_selection",
+  "selection_returns_opened": false,
+  "route": "widened_opportunity_set",
+  "selected_candidate_id": null,
+  "audit_status": "not_opened",
+  "historical_audit": {
+    "signal_start": "2025-01-01",
+    "physical_market_data_end": "2026-08-21",
+    "single_frozen_cutoff": true,
+    "result_write_policy": "create_only"
+  },
+  "protocol": {
+    "path": "protocols/6.2-wide-universe.json",
+    "file_sha256": "ab37653cc904f1860c5c1b8276925def7145ca3e7a323c388c16000fea3c479b",
+    "payload_sha256": "9f47595125ac57f6a60ddf0526cf7074d4d1f38417655b5708fe27e3ebde4e45",
+    "protocol_id": "factor-lab/6.2/widened-opportunity-set-v2"
+  },
+  "protocol_amendment": {
+    "path": "protocols/6.2-wide-universe-amendment-1.json",
+    "file_sha256": "382536870962e067a44c06f5c06b43968ae7fb79a4a153661ab46549a5770580",
+    "payload_sha256": "429d94dd570b8e1ffc0c59daff668c5a92daaae6928da4a42ad0cff0e3c7032c",
+    "amendment_id": "factor-lab/6.2/widened-opportunity-set-v2/amendment-1"
+  },
+  "runtime": {
+    "path": "protocols/6.2-runtime.json",
+    "file_sha256": "d59882e92ca11f6ef842ba67050b471d35bfe74c7c7d5f41e7cb4ce253fcf0b4",
+    "payload_sha256": "948f879e7032a509cb2068bd0f1c63c7aaf14e541418d098c4274cd78de1da17",
+    "runtime_id": "factor-lab/6.2/windows-cpython-3.10.16"
+  },
+  "superseded_preselection_closure": {
+    "path": "protocols/6.1-release-closure-3.json",
+    "file_sha256": "8928735a11827b4e01f174675a03a7278d8118ea00e470ec395744600b8248ac",
+    "payload_sha256": "254f316cc777198d1672d0804a3223927d24e5417c376748a1d71b9d189f9e54",
+    "closure_commit": "1c2f920c0202a08f865d7e67a7cd5ee4f5135485",
+    "selection_returns_opened": false,
+    "replacement_reason": "prior_release_pre_return_admission_contract_incompatible_with_provider_semantics"
+  },
+  "implementation": {
+    "ci_workflow": {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "3308662b71195caef9d01976fd503ed5deb42e448155c8ac29c2be5373e0a3f3"
+    },
+    "cli": {
+      "path": "src/factor_lab/cli.py",
+      "sha256": "e6896c3bb2f9a3e0c3bfa22955ff1d1f611ca3203005e93d591753d714c46dbe"
+    },
+    "closure_builder": {
+      "path": "scripts/build-6.2-preselection-closure.py",
+      "sha256": "17bf4e91f2f922892db6daca055f54f7c3eb56de97d30a745596efa9c0eaa240"
+    },
+    "data_build": {
+      "path": "src/factor_lab/data/build.py",
+      "sha256": "97038c076dc449aeea36b83a9429ded88c6ee8cf2e600f412a173c1fb7d7f23a"
+    },
+    "data_catalog": {
+      "path": "src/factor_lab/data/catalog.py",
+      "sha256": "e35468bc00f94426dd344b0f321c2e45501f785d44ad38b5c2a1d8c9b65f6c11"
+    },
+    "data_config": {
+      "path": "configs/data.json",
+      "sha256": "1b0c29fdf972a813f87828305951f6370ea79c8e76123ab77abfa35628ae732e"
+    },
+    "data_enrich": {
+      "path": "src/factor_lab/data/enrich.py",
+      "sha256": "9656d37f8319c8755d700a0ae44fd12447fbaa8d968a1cba5252ae2709f1ade6"
+    },
+    "data_init": {
+      "path": "src/factor_lab/data/__init__.py",
+      "sha256": "6b3ce881575c7b4355955809b1b28aaff56c27ccaa5f2dd12e02a9d17940b2b6"
+    },
+    "data_pit_lineage": {
+      "path": "src/factor_lab/data/pit_lineage.py",
+      "sha256": "21e8ca60d0eeba941ddb535debb7ca5d5a18fd12b319b31b3a20d8830cf0c024"
+    },
+    "data_sources": {
+      "path": "src/factor_lab/data/sources.py",
+      "sha256": "968b5a0395530a01d1a028b0f986ad7dfde4856e106a212089551c543a1b32a6"
+    },
+    "execution_kernel": {
+      "path": "src/factor_lab/portfolio/execution.py",
+      "sha256": "df10b31012192b778f1291ae41d88e28685e917a15ce7b8a3f32e6678f38690d"
+    },
+    "git_attributes": {
+      "path": ".gitattributes",
+      "sha256": "8c3950b23f1e220f5b2cb568cac48e175a9ef70d4e8772762b02ccc827b2dd82"
+    },
+    "long_only": {
+      "path": "src/factor_lab/portfolio/long_only.py",
+      "sha256": "fc819ea33c86ffc446d91bfcd27120919becd5859a8be6c19bf39f20ea8c6bf7"
+    },
+    "opportunity_set": {
+      "path": "src/factor_lab/data/opportunity_set.py",
+      "sha256": "88760cfe27b800359e6057d58418a7cf284b14976a7087c3c4b27063a23da429"
+    },
+    "package_init": {
+      "path": "src/factor_lab/__init__.py",
+      "sha256": "43460290cb29e002b718245d4b840efddc92854879a0b365da3b26f57054a72f"
+    },
+    "package_manifest": {
+      "path": "pyproject.toml",
+      "sha256": "81543392e439eb243e6a0553fe080d579645ed24c360bbb036d06b299485e6f1"
+    },
+    "portfolio_init": {
+      "path": "src/factor_lab/portfolio/__init__.py",
+      "sha256": "f3516816cb4dac173e99e7b9e934bcd8412cbe8f8fed645b38b74a919957c3c1"
+    },
+    "release_integrity": {
+      "path": "src/factor_lab/release_integrity.py",
+      "sha256": "da23d2871074c164bc341c7347a3a7040fd82cfd532f3bdc4cc06ea508559b95"
+    },
+    "release_script": {
+      "path": "scripts/publish-tag.ps1",
+      "sha256": "c1dba9a0b96182e0bc2f6a0c10787177f5c5e7bd6c66905282e073b7da19cb38"
+    },
+    "releasing_guide": {
+      "path": "RELEASING.md",
+      "sha256": "75d0f804f9ac636753a9f7571e585e0f99777ce1566de135796c843ee9e26232"
+    },
+    "research_config": {
+      "path": "configs/research.json",
+      "sha256": "a11e69042223b0958925be578663fe420016fd4fe21cb1a37155b99933fd0b2e"
+    },
+    "research_contracts": {
+      "path": "src/factor_lab/research/contracts.py",
+      "sha256": "e22760704d75731767208d866d013d730192fed7013d627847278bfebb55a08c"
+    },
+    "research_init": {
+      "path": "src/factor_lab/research/__init__.py",
+      "sha256": "b30350a2e41f8aca07105095507aff72c026359d4f70d69cd4b72ed511c088b9"
+    },
+    "research_reporting": {
+      "path": "src/factor_lab/research/reporting.py",
+      "sha256": "07b2b38a054348b68a9f8bab0675cab932db666da2cb23a887752b512e7829b3"
+    },
+    "research_runner": {
+      "path": "src/factor_lab/research/runner.py",
+      "sha256": "181cf477f6da3f319a59f7d39135f25705ebf1debb22078c2a34c1bb4da9a703"
+    },
+    "research_signals": {
+      "path": "src/factor_lab/research/signals.py",
+      "sha256": "8a29de3ae2db304e2d3bdb15e9df0253c2991a4c9f1bbec24ba1a54a45f70298"
+    },
+    "research_validation": {
+      "path": "src/factor_lab/research/validation.py",
+      "sha256": "8ab4cd71acafeb2c41de83ba5f1d4332014c71159f722aea364e125dbcff6d7f"
+    },
+    "research_walk_forward": {
+      "path": "src/factor_lab/research/walk_forward.py",
+      "sha256": "fc2537e06be53555fb069c77ce4fe85f2dd232c0d35a2c918b105e46b4c8775b"
+    },
+    "research_walk_forward_runtime": {
+      "path": "src/factor_lab/research/walk_forward_runtime.py",
+      "sha256": "a35e8fc2d70fd4f20994be799a33cabaca40814e6dcebf9f428daecc3985b165"
+    },
+    "security_master": {
+      "path": "src/factor_lab/data/security_master.py",
+      "sha256": "d24cb552dda4113ec8da270a38132ece7e565bc866813f9bf752c59c8ba7d70b"
+    },
+    "strategy": {
+      "path": "src/factor_lab/strategy.py",
+      "sha256": "a2fb4905e263aa09436ea17665a67eb70401451bf27f5e33e9ff58de3a9cd046"
+    },
+    "suspensions": {
+      "path": "src/factor_lab/data/suspensions.py",
+      "sha256": "c7ecd95d7513b1660bb3f59b4e7fba02d7e93ddf20117bf27651d51720e948f0"
+    },
+    "wide_pricing": {
+      "path": "src/factor_lab/data/wide_pricing.py",
+      "sha256": "07dd45b35d4535f53528bfd0dea41d492957a8df7d55d58a7b5dfa968eba52fa"
+    },
+    "wide_runner": {
+      "path": "scripts/run-wide-universe-evidence.py",
+      "sha256": "6985073be4ac556f7d93ebf9cf498daf602a7c2769ac0230ab4001953c753877"
+    },
+    "wide_universe": {
+      "path": "src/factor_lab/research/wide_universe.py",
+      "sha256": "2e054328682f020856cc1c5c3c4bb92f3a46a519a23e961debaedfcbc36fc5b8"
+    }
+  },
+  "evidence": {},
+  "canonical_data": {},
+  "claim_contract": {
+    "incremental_universe_effect_only": true,
+    "validates_fixed_core_alpha": false,
+    "historical_evidence_class": "pre_registered_historical_diagnostic_only",
+    "historical_qualification_allowed": false,
+    "profit_claim_allowed": false,
+    "fresh_future_evidence_required": true
+  },
+  "implementation_commit": "22d614b8ed0533c7484569a06643410f5ee02de3",
+  "implementation_tree": "3f186d4ff4657cea52aa9d0d9cb287123939789a",
+  "payload_sha256": "16020a1a7fc457e340e9e45cb9c2598e39b6be2d40bea91697eb37d1d613df46"
+}
