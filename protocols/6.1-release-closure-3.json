@@ -1,0 +1,199 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_release_closure",
+  "release": "6.1",
+  "closure_role": "immutable_preselection_root",
+  "direction_change": false,
+  "status": "implementation_frozen_before_selection",
+  "selection_returns_opened": false,
+  "route": "widened_opportunity_set",
+  "selected_candidate_id": null,
+  "audit_status": "not_opened",
+  "historical_audit": {
+    "signal_start": "2025-01-01",
+    "physical_market_data_end": "2026-08-21",
+    "single_frozen_cutoff": true,
+    "result_write_policy": "create_only"
+  },
+  "protocol": {
+    "path": "protocols/6.1-wide-universe.json",
+    "file_sha256": "3877950fed62eaffe0e08b18fbac1007d35cb941538d4143bf383127c9372b92",
+    "payload_sha256": "4d544251e3d64f48f1980c7886ea33418118fe7112b0a5f62d18ce270dab781f",
+    "protocol_id": "factor-lab/6.1/widened-opportunity-set-v1"
+  },
+  "protocol_amendment": {
+    "path": "protocols/6.1-wide-universe-amendment-1.json",
+    "file_sha256": "89d72259a5e55cb597a80a24f92a3a456727c0a9f3edc5bfaad634e74b559bb6",
+    "payload_sha256": "d51433e825292c3bb88dd9c3978e19c1caa20a76aa8bf701c3972e0e4919f5e2",
+    "amendment_id": "factor-lab/6.1/widened-opportunity-set-v1/amendment-1"
+  },
+  "runtime": {
+    "path": "protocols/6.1-runtime.json",
+    "file_sha256": "c4dade718ab7abe231d60a305a7333e64e34355e2fc5b8a142ed27a9ad6914fc",
+    "payload_sha256": "12fc58495d64727a4560aa62541da7517aa2fdabe405d82cc14d5ed9ec8d5889",
+    "runtime_id": "factor-lab/6.1/windows-cpython-3.10.16"
+  },
+  "superseded_preselection_closure": {
+    "path": "protocols/6.1-release-closure-2.json",
+    "file_sha256": "fccbb0af38f4dc057f2dc68411cf1117bdca3f4155f0b4c226f4abe1007c9c60",
+    "payload_sha256": "af1fc6fcff8a1abbdcf21fc3bb4764f4a653e2a306f5f434593445e5680b3685",
+    "closure_commit": "156ca1bf028bc954b1e2d1115bf92c8069f93cea",
+    "selection_returns_opened": false,
+    "replacement_reason": "github_actions_shallow_checkout_lacks_frozen_ancestors"
+  },
+  "implementation": {
+    "ci_workflow": {
+      "path": ".github/workflows/ci.yml",
+      "sha256": "3308662b71195caef9d01976fd503ed5deb42e448155c8ac29c2be5373e0a3f3"
+    },
+    "cli": {
+      "path": "src/factor_lab/cli.py",
+      "sha256": "b71ebc3c93b5014e5f7f222fa46a83cf6ea2ffd55872ccab0432f8da52b8c6c0"
+    },
+    "closure_builder": {
+      "path": "scripts/build-6.1-preselection-closure.py",
+      "sha256": "47ffbaeeb692ac92a2d5ff1dafbe4270d7822f5ce9e83353073917e75ad54a97"
+    },
+    "data_build": {
+      "path": "src/factor_lab/data/build.py",
+      "sha256": "97038c076dc449aeea36b83a9429ded88c6ee8cf2e600f412a173c1fb7d7f23a"
+    },
+    "data_catalog": {
+      "path": "src/factor_lab/data/catalog.py",
+      "sha256": "e35468bc00f94426dd344b0f321c2e45501f785d44ad38b5c2a1d8c9b65f6c11"
+    },
+    "data_config": {
+      "path": "configs/data.json",
+      "sha256": "1b0c29fdf972a813f87828305951f6370ea79c8e76123ab77abfa35628ae732e"
+    },
+    "data_enrich": {
+      "path": "src/factor_lab/data/enrich.py",
+      "sha256": "9656d37f8319c8755d700a0ae44fd12447fbaa8d968a1cba5252ae2709f1ade6"
+    },
+    "data_init": {
+      "path": "src/factor_lab/data/__init__.py",
+      "sha256": "6b3ce881575c7b4355955809b1b28aaff56c27ccaa5f2dd12e02a9d17940b2b6"
+    },
+    "data_pit_lineage": {
+      "path": "src/factor_lab/data/pit_lineage.py",
+      "sha256": "21e8ca60d0eeba941ddb535debb7ca5d5a18fd12b319b31b3a20d8830cf0c024"
+    },
+    "data_sources": {
+      "path": "src/factor_lab/data/sources.py",
+      "sha256": "968b5a0395530a01d1a028b0f986ad7dfde4856e106a212089551c543a1b32a6"
+    },
+    "execution_kernel": {
+      "path": "src/factor_lab/portfolio/execution.py",
+      "sha256": "df10b31012192b778f1291ae41d88e28685e917a15ce7b8a3f32e6678f38690d"
+    },
+    "git_attributes": {
+      "path": ".gitattributes",
+      "sha256": "8c3950b23f1e220f5b2cb568cac48e175a9ef70d4e8772762b02ccc827b2dd82"
+    },
+    "long_only": {
+      "path": "src/factor_lab/portfolio/long_only.py",
+      "sha256": "fc819ea33c86ffc446d91bfcd27120919becd5859a8be6c19bf39f20ea8c6bf7"
+    },
+    "opportunity_set": {
+      "path": "src/factor_lab/data/opportunity_set.py",
+      "sha256": "4c9bf8354bf0898d2e2a6730d89dbb9edb5729834d5b8543b8e8efe2e195e2f7"
+    },
+    "package_init": {
+      "path": "src/factor_lab/__init__.py",
+      "sha256": "c5bb4517013cfb440807d12f4097a6c2cc9fd3c9cd04f61199bd8ff3a2bf8eac"
+    },
+    "package_manifest": {
+      "path": "pyproject.toml",
+      "sha256": "b064e8a73b0089337ed490fab6cca349bb6f4db3c39d75788285d8c5521f3490"
+    },
+    "portfolio_init": {
+      "path": "src/factor_lab/portfolio/__init__.py",
+      "sha256": "f3516816cb4dac173e99e7b9e934bcd8412cbe8f8fed645b38b74a919957c3c1"
+    },
+    "release_integrity": {
+      "path": "src/factor_lab/release_integrity.py",
+      "sha256": "359007c9713bb8f4056e82fd3b27eb5c3768623c101831d3e7e8cf2069cea9d9"
+    },
+    "release_script": {
+      "path": "scripts/publish-tag.ps1",
+      "sha256": "c1dba9a0b96182e0bc2f6a0c10787177f5c5e7bd6c66905282e073b7da19cb38"
+    },
+    "releasing_guide": {
+      "path": "RELEASING.md",
+      "sha256": "75d0f804f9ac636753a9f7571e585e0f99777ce1566de135796c843ee9e26232"
+    },
+    "research_config": {
+      "path": "configs/research.json",
+      "sha256": "a11e69042223b0958925be578663fe420016fd4fe21cb1a37155b99933fd0b2e"
+    },
+    "research_contracts": {
+      "path": "src/factor_lab/research/contracts.py",
+      "sha256": "e22760704d75731767208d866d013d730192fed7013d627847278bfebb55a08c"
+    },
+    "research_init": {
+      "path": "src/factor_lab/research/__init__.py",
+      "sha256": "b30350a2e41f8aca07105095507aff72c026359d4f70d69cd4b72ed511c088b9"
+    },
+    "research_reporting": {
+      "path": "src/factor_lab/research/reporting.py",
+      "sha256": "07b2b38a054348b68a9f8bab0675cab932db666da2cb23a887752b512e7829b3"
+    },
+    "research_runner": {
+      "path": "src/factor_lab/research/runner.py",
+      "sha256": "181cf477f6da3f319a59f7d39135f25705ebf1debb22078c2a34c1bb4da9a703"
+    },
+    "research_signals": {
+      "path": "src/factor_lab/research/signals.py",
+      "sha256": "8a29de3ae2db304e2d3bdb15e9df0253c2991a4c9f1bbec24ba1a54a45f70298"
+    },
+    "research_validation": {
+      "path": "src/factor_lab/research/validation.py",
+      "sha256": "8ab4cd71acafeb2c41de83ba5f1d4332014c71159f722aea364e125dbcff6d7f"
+    },
+    "research_walk_forward": {
+      "path": "src/factor_lab/research/walk_forward.py",
+      "sha256": "fc2537e06be53555fb069c77ce4fe85f2dd232c0d35a2c918b105e46b4c8775b"
+    },
+    "research_walk_forward_runtime": {
+      "path": "src/factor_lab/research/walk_forward_runtime.py",
+      "sha256": "a35e8fc2d70fd4f20994be799a33cabaca40814e6dcebf9f428daecc3985b165"
+    },
+    "security_master": {
+      "path": "src/factor_lab/data/security_master.py",
+      "sha256": "d24cb552dda4113ec8da270a38132ece7e565bc866813f9bf752c59c8ba7d70b"
+    },
+    "strategy": {
+      "path": "src/factor_lab/strategy.py",
+      "sha256": "a2fb4905e263aa09436ea17665a67eb70401451bf27f5e33e9ff58de3a9cd046"
+    },
+    "suspensions": {
+      "path": "src/factor_lab/data/suspensions.py",
+      "sha256": "c7ecd95d7513b1660bb3f59b4e7fba02d7e93ddf20117bf27651d51720e948f0"
+    },
+    "wide_pricing": {
+      "path": "src/factor_lab/data/wide_pricing.py",
+      "sha256": "e532b43458ee33facf681e157fdd315732609615caebb408324ffd51bf3df71f"
+    },
+    "wide_runner": {
+      "path": "scripts/run-wide-universe-evidence.py",
+      "sha256": "60d2aa082d48588f2c45b01849c646bd48444e5556c97f594398a197e5905c70"
+    },
+    "wide_universe": {
+      "path": "src/factor_lab/research/wide_universe.py",
+      "sha256": "19ff8ad97584c74912332a992cc29997fe2652a295850729689e308e93959c23"
+    }
+  },
+  "evidence": {},
+  "canonical_data": {},
+  "claim_contract": {
+    "incremental_universe_effect_only": true,
+    "validates_fixed_core_alpha": false,
+    "historical_evidence_class": "pre_registered_historical_diagnostic_only",
+    "historical_qualification_allowed": false,
+    "profit_claim_allowed": false,
+    "fresh_future_evidence_required": true
+  },
+  "implementation_commit": "4a46e21c39e2e7dfb49392e892a6a01fe2b00200",
+  "implementation_tree": "63db5f9935b6d4e8490dca121cdfbc6a5816c93c",
+  "payload_sha256": "254f316cc777198d1672d0804a3223927d24e5417c376748a1d71b9d189f9e54"
+}
