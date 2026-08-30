@@ -10,6 +10,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- Froze the 6.1 widened-opportunity-set experiment before loading any widened-universe returns. The protocol compares a strictly causal daily ADV20 Top500 control with ADV20 Top1500 and ADV20 at least RMB 100 million while keeping the fixed-core score, Top10/exit25 portfolio, ten offsets, costs and next-open execution unchanged.
+- Required full-market daily ST history, an all-status stock roster, exact official-session listing age, physical 2024-12-31 selection truncation, paired candidate/control returns and explicit capacity fill/notional gates. The legacy monthly Top500 is bridge diagnostics only and cannot select a winner.
+
 ## [6.0] - 2026-08-30
 
 ### Changed

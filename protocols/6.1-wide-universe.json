@@ -1,0 +1,234 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_wide_universe_protocol",
+  "protocol_id": "factor-lab/6.1/widened-opportunity-set-v1",
+  "version": "6.1",
+  "status": "frozen_before_any_wide_return_evaluation",
+  "direction_change": false,
+  "objective": "Test whether the fixed-core low-churn route is constrained by an overly narrow opportunity set without changing its signal, portfolio, costs, or execution.",
+  "claim_contract": {
+    "incremental_universe_effect_only": true,
+    "validates_fixed_core_alpha": false,
+    "historical_evidence_class": "pre_registered_historical_diagnostic_only",
+    "historical_qualification_allowed": false,
+    "profit_claim_allowed": false,
+    "fresh_future_evidence_required": true
+  },
+  "amendment_from_6_0_scout": {
+    "frozen_before_return_open": true,
+    "reason": "Use one strictly causal full-market pipeline for every arm because the legacy monthly Top500 membership lineage cannot prove an incremental-universe-only comparison.",
+    "canonical_monthly_top500_role": "bridge_diagnostic_not_selection_or_gate"
+  },
+  "candidate_ids": [
+    "daily_adv20_top500_control",
+    "daily_adv20_ge_100m",
+    "daily_adv20_top1500"
+  ],
+  "allowed_raw_inputs": {
+    "market": [
+      "daily.ts_code",
+      "daily.trade_date",
+      "daily.open",
+      "daily.high",
+      "daily.low",
+      "daily.close",
+      "daily.pre_close",
+      "daily.pct_chg",
+      "daily.amount",
+      "daily_basic.ts_code",
+      "daily_basic.trade_date",
+      "daily_basic.pe_ttm",
+      "daily_basic.pb",
+      "adj_factor.ts_code",
+      "adj_factor.trade_date",
+      "adj_factor.adj_factor"
+    ],
+    "reference": [
+      "stock_basic.ts_code",
+      "stock_basic.exchange",
+      "stock_basic.curr_type",
+      "stock_basic.list_date",
+      "stock_basic.delist_date",
+      "stock_st.ts_code",
+      "stock_st.trade_date",
+      "trade_cal.cal_date",
+      "trade_cal.is_open",
+      "suspensions.ticker",
+      "suspensions.date"
+    ],
+    "forbidden_column_patterns": [
+      "forward",
+      "label",
+      "future",
+      "outcome",
+      "return_after"
+    ]
+  },
+  "common_base": {
+    "scope": "all-status ordinary CNY A shares on SSE or SZSE; never a current-listed-only roster",
+    "listed_age_official_sessions_inclusive_min": 120,
+    "st_source": "Tushare stock_st effective daily history",
+    "st_effective_on_signal_date_excluded": true,
+    "st_unknown_policy": "fail_build",
+    "delist_rule": "exclude iff delist_date <= signal_date; a future delist date never excludes",
+    "missing_non_suspended_bar_policy": "fail_build",
+    "suspended_amount_and_return_policy": "zero for the official session with explicit suspension evidence",
+    "finite_score_count_min_per_signal": 10,
+    "median_finite_score_coverage_min": 0.95,
+    "q05_finite_score_coverage_min": 0.90
+  },
+  "adv20": {
+    "sessions": "exactly 20 official open sessions ending at signal t inclusive",
+    "formula": "sum(amount_rmb) / 20",
+    "amount_rmb": "Tushare daily.amount * 1000",
+    "missing_bar": "zero only with listed-roster and suspension proof; otherwise fail",
+    "finite_positive_required": true
+  },
+  "signal_definition": {
+    "formula": "(1-0.70)*rank((1/pe_ttm)/pb) + 0.70*rank(rank(1/pb)+rank(1/pe_ttm)+rank(-volatility_20))",
+    "rank_scope": "each candidate universe independently on signal t",
+    "volatility_20": "sample standard deviation ddof=1 of pct_chg/100 over the same 20 official sessions; proven suspension sessions contribute zero",
+    "defensive_weight": 0.7,
+    "missing_defensive_policy": "fallback_to_control_rank",
+    "rank_tie_break": "score_desc_then_ticker_asc"
+  },
+  "universes": {
+    "daily_adv20_top500_control": {
+      "sort": [
+        "adv20 desc",
+        "ticker asc"
+      ],
+      "take": 500
+    },
+    "daily_adv20_ge_100m": {
+      "predicate": "adv20 >= 100000000.0"
+    },
+    "daily_adv20_top1500": {
+      "sort": [
+        "adv20 desc",
+        "ticker asc"
+      ],
+      "take": 1500
+    }
+  },
+  "signal_execution": {
+    "signal": "official close t; universe, score, ADV and ST state are all effective no later than t",
+    "entry": "t+1 official session open multiplied by contemporaneous adj_factor",
+    "holding_end": "t+11 official session open multiplied by contemporaneous adj_factor",
+    "next_open_inputs_may_affect_signal_or_universe": false,
+    "entry_failure": "block, carry or remain cash; never replace a target",
+    "execution_liquidity_input": "latest valid observation no later than t; never t+1 ADV or volatility",
+    "holding_days": 10,
+    "rebalance_every_days": 10,
+    "offsets": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "anchor": "2017-01-03",
+    "position_count": 10,
+    "retention_exit_rank": 25,
+    "capital": 50000000.0,
+    "target_weight": 0.1,
+    "max_adv_participation": 0.05,
+    "price_basis": "adjusted_total_return_from_contemporaneous_raw_open_times_adj_factor",
+    "costs_source": "configs/research.json"
+  },
+  "physical_cutoff": {
+    "selection_max_outcome_date": "2024-12-31",
+    "all_selection_artifacts_physically_truncated": true,
+    "post_2024_market_outcomes_forbidden_before_selected_definition_freeze": true,
+    "phase_rule": "signal_date >= phase_start and exact end_date <= phase_end",
+    "train": {
+      "signal_start": "2017-01-03",
+      "outcome_end_max": "2022-12-31"
+    },
+    "validation": {
+      "signal_start": "2023-01-01",
+      "outcome_end_max": "2024-12-31"
+    },
+    "audit": {
+      "signal_start": "2025-01-01"
+    }
+  },
+  "stage_machine": [
+    "protocol_frozen",
+    "data_admission_passed",
+    "train_opened",
+    "train_no_candidate_or_validation_opened",
+    "validation_no_candidate_or_selected_definition_frozen",
+    "audit_opened",
+    "audit_falsified_or_historical_holdout_passed_requires_future"
+  ],
+  "selection_gate": {
+    "strict_offsets": 10,
+    "train_q20_paired_relative_cagr_gt": 0.0,
+    "validation_q20_paired_relative_cagr_gt": 0.0,
+    "train_positive_offsets_min": 7,
+    "validation_positive_offsets_min": 7,
+    "worst_daily_drawdown_min": -0.35,
+    "drawdown_worsening_vs_control_max": 0.02,
+    "capacity_violation_count_max": 0,
+    "execution_input_future_violation_count_max": 0,
+    "execution_input_coverage_min": 1.0,
+    "capacity_limited_requested_notional_ratio_max": 0.05,
+    "requested_notional_fill_ratio_min": 0.95,
+    "maximum_selected": 1,
+    "no_forced_winner": true,
+    "quantile_method": "linear",
+    "positive_offset_operator": "strictly_greater_than_zero"
+  },
+  "ranking_after_gates": [
+    "max min(train_q20, validation_q20)",
+    "max validation_median_relative_cagr",
+    "min capacity_limited_requested_notional_ratio",
+    "min turnover",
+    "candidate_id asc"
+  ],
+  "audit_rule": {
+    "only_frozen_winner": true,
+    "runner_up_fallback_after_audit_fail": false,
+    "min_completed_periods_per_offset": 25,
+    "same_relative_and_execution_gates": true,
+    "historical_holdout_pass_does_not_allow_profit_claim": true
+  },
+  "benchmark": {
+    "promotion_basis": "paired net returns versus daily_adv20_top500_control at the same offset and exact dates",
+    "per_universe_equal_weight_benchmark_forbidden_for_comparison": true,
+    "common_market_benchmark": "diagnostic only; missing endpoints must remain cash, carry, or delist-zero and must never be complete-case deleted"
+  },
+  "canonical_bridge": {
+    "role": "diagnostic_only",
+    "allowed_metrics": [
+      "daily membership overlap",
+      "Top10 target overlap",
+      "turnover difference"
+    ],
+    "may_change_candidate_gate_or_selection": false
+  },
+  "required_tests": [
+    "t+1 amount cannot change U_t while t amount can",
+    "ADV uses exactly 20 official sessions and suspension zero requires proof",
+    "ADV threshold includes exactly 100000000 and TopK ties use ticker ascending",
+    "listed age 119 is excluded and 120 is included",
+    "future delist does not affect t and delist effective on t excludes",
+    "ST effective on t excludes while ST effective on t+1 does not affect t",
+    "missing next-open, suspension or one-price limit blocks without replacement",
+    "selection artifacts containing any outcome after 2024-12-31 are rejected",
+    "all universes share identical base eligibility and feature derivation",
+    "each offset owns independent retention state and calendar gaps fail",
+    "capacity clipping metrics prove why zero violations alone is insufficient",
+    "challenger and control exact signal and end dates match for every offset",
+    "label or forward-return columns are rejected by the loader",
+    "source files are hashed before and after the run",
+    "canonical bridge output cannot change gates or selection"
+  ],
+  "payload_sha256": "4d544251e3d64f48f1980c7886ea33418118fe7112b0a5f62d18ce270dab781f"
+}
