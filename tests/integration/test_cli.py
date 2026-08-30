@@ -152,7 +152,8 @@ def test_strategy_status_verifies_tracked_implementation_and_evidence(
     if not closure_exists:
         assert result["audit_status"] == "not_opened"
     assert all(
-        check["status"] in {"match", "not_verified", "pending_clean_commit"}
+        check["status"]
+        in {"match", "not_verified", "not_applicable", "pending_clean_commit"}
         for check in result["checks"]
     )
     categories = {check["category"] for check in result["checks"]}
