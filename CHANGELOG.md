@@ -71,6 +71,13 @@
   `create_time` 又晚了 1831/732 天；正式历史验证前还需用原始研报档案做 vintage 抽样，或只把
   首次捕获后的前瞻样本称为严格证据。
 
+### Release artifacts
+
+- 从候选提交 `b2901c03f0f3150aadf049da5e86ba0aa1446784` 的 `git archive` 构建
+  `factor_research_mvp-6.0.0-py3-none-any.whl`；SHA-256：
+  `4336a440a1e0b94dfc915c36ffb2b85816c38d45829701a960f953c69a0ff5dd`。全新隔离环境中
+  `pip check`、版本、CLI/协议闭包验证均通过，wheel 内 22 个 Python 文件与候选源码逐字节一致。
+
 ## [5.9] - 2026-08-30
 
 ### Added
