@@ -20,11 +20,16 @@
   前后复核 SHA-256；扩大机会集失败时不强选赢家，也不回退到 runner-up。
 - Python 包版本预置为 `6.1.0`；正式收益运行冻结为 Windows CPython 3.10.16 及精确的 NumPy、
   pandas、PyArrow、SciPy 和日期/时区依赖版本，并绑定核心 distribution 非字节码文件树、Conda
-  native artifact build/SHA-256 及 MKL/compiler/SIMD 身份。CI 同时覆盖 3.10.16 与 3.11、Windows
+  native artifact build/SHA-256 及 MKL/compiler/SIMD 身份。CI 同时覆盖 3.10 与 3.11、Windows
   与 Linux。
 
 ### Changed
 
+- 保留首次 create-only preselection closure（payload `4d0e9bc7…`）作为未打开收益的废弃尝试：
+  GitHub Actions run `33295646513` 在 Windows `setup-python` 阶段确认官方 toolcache 不提供
+  CPython 3.10.16，测试尚未开始。后继实现把通用 CI 兼容矩阵改为可获得的 3.10/3.11，但正式收益
+  runner 仍要求本机已逐字节冻结的 Conda CPython 3.10.16 capsule；新 closure 显式绑定并取代旧
+  closure，不覆盖或删除旧文件。
 - 在打开任何 widened-universe 收益前，根据真实源数据红队复现修订 6.1 数据合同：只有
   `suspend_timing` 为空的整日 S 才能证明缺 bar 或建立跨日状态；未被 R/实际 daily bar 清除的历史
   整日 S 可因果解释后续缺 bar，但必须单列为 `carried_prior_explicit_full_day_S` 推断并记录来源日，

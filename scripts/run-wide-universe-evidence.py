@@ -55,6 +55,7 @@ from factor_lab.release_integrity import (  # noqa: E402
     AUDIT_EVIDENCE_PATH,
     FROZEN_HISTORICAL_AUDIT,
     FROZEN_IMPLEMENTATION_PATHS,
+    PRESELECTION_CLOSURE_PATH,
     RELEASE_RESULT_PATH,
     RUNTIME_PATH,
     WINNER_FREEZE_PATH,
@@ -1789,7 +1790,7 @@ def _parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--release-closure",
         type=_path,
-        default=_path("protocols/6.1-release.json"),
+        default=_path(PRESELECTION_CLOSURE_PATH),
     )
     parser.add_argument(
         "--work-root", type=_path, default=_path("runtime/data/wide-universe")

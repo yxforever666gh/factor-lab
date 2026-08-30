@@ -25,6 +25,7 @@ from factor_lab.data import (
 from factor_lab.data.suspensions import SuspensionProviderWaitingError
 from factor_lab.release_integrity import (
     FROZEN_IMPLEMENTATION_PATHS,
+    PRESELECTION_CLOSURE_PATH,
     RELEASE_RESULT_PATH,
     WINNER_FREEZE_PATH,
     verify_preselection_closure,
@@ -695,7 +696,7 @@ def _strategy_status_6_0(root: Path, *, verify_data: bool) -> tuple[dict[str, An
 
 
 def _strategy_status_6_1(root: Path, *, verify_data: bool) -> tuple[dict[str, Any], int]:
-    closure_path = root / "protocols" / "6.1-release.json"
+    closure_path = root / PRESELECTION_CLOSURE_PATH
     closure: dict[str, Any] = {}
     checks: list[dict[str, Any]] = []
     integrity_error: str | None = None
@@ -796,7 +797,7 @@ def _strategy_status_6_1(root: Path, *, verify_data: bool) -> tuple[dict[str, An
     checks.append(
         {
             "category": "release_contract",
-            "path": "protocols/6.1-release.json",
+            "path": PRESELECTION_CLOSURE_PATH,
             "status": "match" if contract_valid else "mismatch",
             **({"error": integrity_error} if integrity_error else {}),
         }
@@ -822,7 +823,7 @@ def _strategy_status_6_1(root: Path, *, verify_data: bool) -> tuple[dict[str, An
             }
         )
     check_json_payload(
-        "protocols/6.1-release.json",
+        PRESELECTION_CLOSURE_PATH,
         str(closure.get("payload_sha256") or ""),
         category="release_payload",
     )
@@ -929,7 +930,7 @@ def _strategy_status(
     root: Path, *, verify_data: bool, release: str | None = None
 ) -> tuple[dict[str, Any], int]:
     selected = release or (
-        "6.1" if (root / "protocols" / "6.1-release.json").is_file() else "6.0"
+        "6.1" if (root / PRESELECTION_CLOSURE_PATH).is_file() else "6.0"
     )
     if selected == "6.0":
         return _strategy_status_6_0(root, verify_data=verify_data)

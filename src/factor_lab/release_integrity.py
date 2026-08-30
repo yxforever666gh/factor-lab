@@ -16,6 +16,8 @@ from typing import Any, Mapping
 PROTOCOL_ID = "factor-lab/6.1/widened-opportunity-set-v1"
 RUNTIME_ID = "factor-lab/6.1/windows-cpython-3.10.16"
 RUNTIME_PATH = "protocols/6.1-runtime.json"
+PRESELECTION_CLOSURE_PATH = "protocols/6.1-release-closure-2.json"
+SUPERSEDED_PRESELECTION_CLOSURE_PATH = "protocols/6.1-release.json"
 WINNER_FREEZE_PATH = "protocols/evidence/6.1/winner-freeze.json"
 AUDIT_EVIDENCE_PATH = "protocols/evidence/6.1/historical-audit.json"
 RELEASE_RESULT_PATH = "protocols/evidence/6.1/result.json"
@@ -80,6 +82,7 @@ _CLOSURE_FIELDS = {
     "protocol",
     "protocol_amendment",
     "runtime",
+    "superseded_preselection_closure",
     "implementation",
     "evidence",
     "canonical_data",
@@ -356,6 +359,68 @@ def _require_file_binding(
     return payload
 
 
+def _verify_superseded_preselection_closure(
+    root: Path,
+    raw: Any,
+    *,
+    replacement_implementation_commit: str,
+) -> dict[str, Any]:
+    expected_fields = {
+        "path",
+        "file_sha256",
+        "payload_sha256",
+        "closure_commit",
+        "selection_returns_opened",
+        "replacement_reason",
+    }
+    if not isinstance(raw, Mapping) or set(raw) != expected_fields:
+        raise ValueError("superseded preselection-closure binding differs")
+    if (
+        raw.get("path") != SUPERSEDED_PRESELECTION_CLOSURE_PATH
+        or raw.get("selection_returns_opened") is not False
+        or raw.get("replacement_reason")
+        != "github_actions_windows_lacks_cpython_3_10_16"
+    ):
+        raise ValueError("superseded preselection-closure reason differs")
+    path = root / SUPERSEDED_PRESELECTION_CLOSURE_PATH
+    if (
+        not path.is_file()
+        or path.is_symlink()
+        or file_sha256(path) != raw.get("file_sha256")
+    ):
+        raise ValueError("superseded preselection-closure file differs")
+    old = _read_json(path)
+    if (
+        old.get("payload_sha256") != canonical_payload_sha256(old)
+        or old.get("payload_sha256") != raw.get("payload_sha256")
+        or old.get("status") != "implementation_frozen_before_selection"
+        or old.get("selection_returns_opened") is not False
+        or old.get("selected_candidate_id") is not None
+        or old.get("audit_status") != "not_opened"
+    ):
+        raise ValueError("superseded preselection closure had opened evidence")
+    old_commit = str(raw.get("closure_commit") or "")
+    resolved_old_commit = _git(
+        root, "rev-parse", "--verify", f"{old_commit}^{{commit}}"
+    ).stdout.decode("ascii").strip()
+    if resolved_old_commit != old_commit or _git(
+        root,
+        "merge-base",
+        "--is-ancestor",
+        old_commit,
+        replacement_implementation_commit,
+        check=False,
+    ).returncode != 0:
+        raise ValueError("superseded closure commit is not a frozen ancestor")
+    committed = _git(
+        root, "show", f"{old_commit}:{SUPERSEDED_PRESELECTION_CLOSURE_PATH}"
+    ).stdout
+    if committed != path.read_bytes():
+        raise ValueError("superseded closure is not its original committed blob")
+    _require_tracked_head_blob(root, path)
+    return old
+
+
 def verify_preselection_closure(
     project_root: Path,
     *,
@@ -369,7 +434,7 @@ def verify_preselection_closure(
     closure_path = closure_path.resolve()
     protocol_path = protocol_path.resolve()
     amendment_path = amendment_path.resolve()
-    if _relative(root, closure_path) != "protocols/6.1-release.json":
+    if _relative(root, closure_path) != PRESELECTION_CLOSURE_PATH:
         raise ValueError("unexpected 6.1 closure path")
     if _relative(root, protocol_path) != "protocols/6.1-wide-universe.json":
         raise ValueError("unexpected 6.1 protocol path")
@@ -478,6 +543,11 @@ def verify_preselection_closure(
         check=False,
     ).returncode != 0:
         raise ValueError("6.1 implementation commit is not an ancestor of HEAD")
+    _verify_superseded_preselection_closure(
+        root,
+        closure.get("superseded_preselection_closure"),
+        replacement_implementation_commit=implementation_commit,
+    )
 
     for name, expected_relative_path in sorted(FROZEN_IMPLEMENTATION_PATHS.items()):
         raw = implementation[name]
@@ -576,10 +646,10 @@ def verify_historical_audit(
     if frozen_at_audit != (root / WINNER_FREEZE_PATH).read_bytes():
         raise ValueError("historical audit did not use the tracked winner freeze")
     closure_at_audit = _git(
-        root, "show", f"{audit_commit}:protocols/6.1-release.json"
+        root, "show", f"{audit_commit}:{PRESELECTION_CLOSURE_PATH}"
     ).stdout
     if (
-        closure_at_audit != (root / "protocols/6.1-release.json").read_bytes()
+        closure_at_audit != (root / PRESELECTION_CLOSURE_PATH).read_bytes()
         or preselection_closure.get("payload_sha256")
         != canonical_payload_sha256(preselection_closure)
     ):
@@ -736,9 +806,9 @@ def verify_winner_freeze(
     ).returncode == 0:
         raise ValueError("winner freeze predates its selection execution")
     closure_at_selection = _git(
-        root, "show", f"{selection_commit}:protocols/6.1-release.json"
+        root, "show", f"{selection_commit}:{PRESELECTION_CLOSURE_PATH}"
     ).stdout
-    if closure_at_selection != (root / "protocols/6.1-release.json").read_bytes():
+    if closure_at_selection != (root / PRESELECTION_CLOSURE_PATH).read_bytes():
         raise ValueError("winner freeze does not descend from the exact closure")
 
     from factor_lab.research.wide_universe import CONTROL_ID
@@ -944,9 +1014,11 @@ def verify_active_runtime(project_root: Path) -> dict[str, Any]:
 __all__ = [
     "FROZEN_HISTORICAL_AUDIT",
     "FROZEN_IMPLEMENTATION_PATHS",
+    "PRESELECTION_CLOSURE_PATH",
     "PROTOCOL_ID",
     "RUNTIME_ID",
     "RUNTIME_PATH",
+    "SUPERSEDED_PRESELECTION_CLOSURE_PATH",
     "AUDIT_EVIDENCE_PATH",
     "RELEASE_RESULT_PATH",
     "WINNER_FREEZE_PATH",

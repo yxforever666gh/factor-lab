@@ -21,15 +21,18 @@ if str(SOURCE_ROOT) not in sys.path:
 from factor_lab.release_integrity import (  # noqa: E402
     FROZEN_HISTORICAL_AUDIT,
     FROZEN_IMPLEMENTATION_PATHS,
+    PRESELECTION_CLOSURE_PATH,
     PROTOCOL_ID,
     RUNTIME_ID,
     RUNTIME_PATH,
+    SUPERSEDED_PRESELECTION_CLOSURE_PATH,
     canonical_payload_sha256,
     file_sha256,
 )
 
 
-CLOSURE_PATH = PROJECT_ROOT / "protocols" / "6.1-release.json"
+CLOSURE_PATH = PROJECT_ROOT / PRESELECTION_CLOSURE_PATH
+SUPERSEDED_CLOSURE_PATH = PROJECT_ROOT / SUPERSEDED_PRESELECTION_CLOSURE_PATH
 PROTOCOL_PATH = PROJECT_ROOT / "protocols" / "6.1-wide-universe.json"
 AMENDMENT_PATH = (
     PROJECT_ROOT / "protocols" / "6.1-wide-universe-amendment-1.json"
@@ -90,6 +93,39 @@ def _write_create_only(path: Path, payload: Mapping[str, Any]) -> None:
             os.close(descriptor)
         path.unlink(missing_ok=True)
         raise
+
+
+def _superseded_closure_binding() -> dict[str, Any]:
+    old = _read_json(SUPERSEDED_CLOSURE_PATH)
+    if (
+        old.get("status") != "implementation_frozen_before_selection"
+        or old.get("selection_returns_opened") is not False
+        or old.get("selected_candidate_id") is not None
+        or old.get("audit_status") != "not_opened"
+    ):
+        raise ValueError("superseded closure had opened selection or audit evidence")
+    commits = _git(
+        "log",
+        "--diff-filter=A",
+        "--format=%H",
+        "--",
+        SUPERSEDED_PRESELECTION_CLOSURE_PATH,
+    ).decode("ascii").splitlines()
+    if len(commits) != 1:
+        raise ValueError("superseded closure must have one immutable creation commit")
+    closure_commit = commits[0]
+    if _git(
+        "show", f"{closure_commit}:{SUPERSEDED_PRESELECTION_CLOSURE_PATH}"
+    ) != SUPERSEDED_CLOSURE_PATH.read_bytes():
+        raise ValueError("superseded closure differs from its creation commit")
+    return {
+        "path": SUPERSEDED_PRESELECTION_CLOSURE_PATH,
+        "file_sha256": file_sha256(SUPERSEDED_CLOSURE_PATH),
+        "payload_sha256": old["payload_sha256"],
+        "closure_commit": closure_commit,
+        "selection_returns_opened": False,
+        "replacement_reason": "github_actions_windows_lacks_cpython_3_10_16",
+    }
 
 
 def main() -> int:
@@ -154,6 +190,7 @@ def main() -> int:
         "protocol": protocol,
         "protocol_amendment": amendment,
         "runtime": runtime,
+        "superseded_preselection_closure": _superseded_closure_binding(),
         "implementation": implementation,
         "evidence": {},
         "canonical_data": {},
