@@ -21,7 +21,9 @@
   `47130f0c03268c8c13ee81e38b62d14c22ce9a45ba80b23d0d07c1a73948237b`，并生成
   create-only null winner freeze（payload
   `71a8543ea63fa949e5fee4c9a8ab792a6cc0834096778ab8cacbcef16796f55a`）。两个 challenger
-  均未通过 train，因此 validation 与 historical audit 的市场结果保持物理未打开。
+  均未通过 train，因此 validation 与 historical audit 的市场结果保持物理未打开；terminal result
+  状态为 `selection_falsified_no_candidate`（payload
+  `5ce9e7e92a0908f2e0fb1554801b900d746cc67fd27600fbf4fc82850323cadf`）。
 
 ### Changed
 

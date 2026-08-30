@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_6_3_release_result",
+  "release": "6.3",
+  "status": "selection_falsified_no_candidate",
+  "preselection_closure_payload_sha256": "2f83093f809802cac29c54e47f50dfd728cf8b0160815e4316e2083dcfcec0df",
+  "winner_freeze": {
+    "path": "protocols/evidence/6.3/winner-freeze.json",
+    "file_sha256": "84b141c1df263fa35494291cab52b5c86511d0618fbeb7a80038e1020dcd276a",
+    "payload_sha256": "71a8543ea63fa949e5fee4c9a8ab792a6cc0834096778ab8cacbcef16796f55a"
+  },
+  "selected_candidate_id": null,
+  "audit_status": "not_opened",
+  "audit": null,
+  "runner_up_fallback_used": false,
+  "claim_contract": {
+    "historical_evidence_class": "pre_registered_selection_falsified",
+    "profit_claim_allowed": false,
+    "fresh_future_evidence_required": true
+  },
+  "payload_sha256": "5ce9e7e92a0908f2e0fb1554801b900d746cc67fd27600fbf4fc82850323cadf"
+}
