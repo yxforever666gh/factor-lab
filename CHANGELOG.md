@@ -53,6 +53,12 @@
   不允许打开 validation 或 audit，也不允许从该结果提出盈利声明；它只否证当前固定信号、组合、
   成本和执行合同下的两个扩大机会集 challenger，不外推为所有选股或所有市场路线均无效。
 
+### Release artifacts
+
+- 从候选提交 `a409f9b9859d8df0c42cf528ef29d481a60acb00` 的 `git archive` 构建
+  `factor_research_mvp-6.3.0-py3-none-any.whl`；SHA-256：
+  `f441dc5d5ee53b48dc4a048f4689e1c26902fda1483d564a8b6e9ed2889a217f`。
+
 ## [6.2] - 2026-08-30
 
 ### Added
