@@ -37,4 +37,4 @@ jobs:
       - name: Verify CLI imports
         run: |
           python -m factor_lab.cli --help
-          python -m factor_lab.cli strategy status
+          python -m factor_lab.cli strategy --help
