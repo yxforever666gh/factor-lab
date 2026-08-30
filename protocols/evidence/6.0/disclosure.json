@@ -8,11 +8,18 @@
     "The historical result cannot establish future profitability.",
     "No historical metric in this bundle authorizes promotion or a profit claim."
   ],
-  "payload_sha256": "b859237fbf2b45b2d8f3e78cc5d783cc99941f4492e3319215638ea32eae7c8e",
+  "payload_sha256": "75099221ae7248d881eff00dc83ead1dbb6b1132b1b5196e44548dc5402d7f9d",
   "result": {
-    "file_sha256": "005c91101a696de936a050055b5cd2c461a089a3e146b241c0df1a365a4e8e0c",
+    "file_sha256": "da8546cd3917592f17dc983dae250fd8204699f154763ee7d806282b50c32ce4",
     "path": "protocols/evidence/6.0/result.json",
-    "payload_sha256": "ffb5c263f17a7ea2e180d65d234e7391c95202e815e941ec423df3e49a945105"
+    "payload_sha256": "98b825d44b2fd5af4f993106a58461359a1c09c0ea38e605c06de521974282a7"
+  },
+  "release_candidate_reproduction": {
+    "candidate_commit": "906df2d90ab8e681d70602b70e52e93d8d4ace87",
+    "implementation_line_endings": "repository-enforced LF",
+    "exact_definition_offset_count": 20,
+    "legacy_metric_and_trace_subset_mismatch_count": 0,
+    "comparison_scope": "Every prior summary value, per-offset phase field and NAV/period-trace hash was byte-value equal; the new artifact additionally retains gross, benchmark, IR and delist diagnostics."
   },
   "schema_version": 1,
   "selection": {

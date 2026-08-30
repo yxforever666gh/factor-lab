@@ -24,9 +24,9 @@
       "payload_sha256": "1eaa62423790cffee3cf15b632d2d1fc2203ff9a03fb41e6045da7fa9aca32d4"
     },
     "disclosure": {
-      "file_sha256": "e36e09939437ca1871721268be1018d4c8f670f6fd8c72532d08d4fc0337aa35",
+      "file_sha256": "7a951bbe0d0f0165cc73f7296f5aa4d08d8585140367af059597db229f485817",
       "path": "protocols/evidence/6.0/disclosure.json",
-      "payload_sha256": "b859237fbf2b45b2d8f3e78cc5d783cc99941f4492e3319215638ea32eae7c8e"
+      "payload_sha256": "75099221ae7248d881eff00dc83ead1dbb6b1132b1b5196e44548dc5402d7f9d"
     },
     "orthogonal_canonical_negative": {
       "file_sha256": "2bd472c0a326fea491fe6e438da5c0da25ba1197a38823354a50d27df601abd6",
@@ -44,9 +44,9 @@
       "payload_sha256": "65de91a5bac20d6b810b7d5b4373eca7908f01b42c45406a5cfb4b821efbb793"
     },
     "result": {
-      "file_sha256": "005c91101a696de936a050055b5cd2c461a089a3e146b241c0df1a365a4e8e0c",
+      "file_sha256": "da8546cd3917592f17dc983dae250fd8204699f154763ee7d806282b50c32ce4",
       "path": "protocols/evidence/6.0/result.json",
-      "payload_sha256": "ffb5c263f17a7ea2e180d65d234e7391c95202e815e941ec423df3e49a945105"
+      "payload_sha256": "98b825d44b2fd5af4f993106a58461359a1c09c0ea38e605c06de521974282a7"
     },
     "selection": {
       "file_sha256": "6ec11287ec0b7cd8283d8c26d76dbeed602358e1f476cdf146fe422bf567e27b",
@@ -126,7 +126,7 @@
   },
   "kind": "factor_lab_research_direction_protocol",
   "objective": "Use the existing fixed-core score as a stable control surface while testing whether wider per-sleeve retention preserves returns with less churn.",
-  "payload_sha256": "6b41744008a52ec378b65572d7d8335198fe4509997fe178bca6315f97c55fe4",
+  "payload_sha256": "68abe339c8eefc7327894caf480dd23fcf3ccf3f273fe3e6ab09082cb6b9dc15",
   "physical_phase_contract": {
     "audit": {
       "signal_start": "2025-01-01"
