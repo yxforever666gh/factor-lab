@@ -10,6 +10,8 @@
 
 ## [Unreleased]
 
+## [6.1] - 2026-08-30
+
 ### Added
 
 - Froze the 6.1 widened-opportunity-set experiment before loading any widened-universe returns. The protocol compares a strictly causal daily ADV20 Top500 control with ADV20 Top1500 and ADV20 at least RMB 100 million while keeping the fixed-core score, Top10/exit25 portfolio, ten offsets, costs and next-open execution unchanged.
@@ -66,6 +68,12 @@
   `protocols/evidence/6.1/admission-failure.json`。同一 widened-opportunity-set 假设的后续小版本必须
   重新冻结来源语义驱动的可评分资格合同，把结构性 PE 空值、停牌日无 snapshot 与真正抓取缺失
   分开；不得事后把 coverage 阈值调到刚好越线。
+
+### Release artifacts
+
+- 从候选提交 `ad82b005514d853e590828e6dd2f0c2b984a279c` 的 `git archive` 构建
+  `factor_research_mvp-6.1.0-py3-none-any.whl`；SHA-256：
+  `caa02c7370e914a777ac6bfb0cf2117950b435d8ed38c641e4cd783306e686e7`。
 
 ## [6.0] - 2026-08-30
 
