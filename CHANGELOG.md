@@ -10,6 +10,8 @@
 
 ## [Unreleased]
 
+## [11.2] - 2026-09-01
+
 ### Added
 
 - 新增 11.2 prospective 专用 `RateLimitedRetryingClient`：读取既有 `request_rate_per_minute`，串行 pacing，
@@ -20,6 +22,13 @@
 
 - Python 包版本更新为 `11.2.0`；11.1 策略公式、六资产、时间窗、连续账户和 create-only artifact 语义
   完全不变。活动 runtime 迁移到 `runtime/prospective/11.2`，11.1 可执行 runner/test 由 tag 保留。
+- 11.2 protocol payload/file SHA-256 为
+  `b9da758aad617d8752f9dbc628f8421fe4c04fe26f9f2a677fee1a8797b50e08` /
+  `d363ae60326b17d3b28c04201f1ab411df544b2e16f0fe93e7fba30010c728a6`；implementation candidate
+  `546f09eb9e64875e047ebfc4f29f7cadd75629a7` 的四平台 CI run `33449167435` 全部通过。
+- 从该 candidate 的 clean `git archive` 构建 `factor_research_mvp-11.2.0-py3-none-any.whl`，SHA-256
+  `518002fbc80be1d915751524277344d65abe4e13533d0c59190794ebd68d5cec`；fresh venv、`pip check`、
+  detached-checkout 11.2 loader/11.0 status 及 wheel/Git 30 个 Python 文件逐字节核对通过。
 
 ### Research status
 
