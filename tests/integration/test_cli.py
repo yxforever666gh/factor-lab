@@ -179,25 +179,34 @@ def test_strategy_status_verifies_tracked_implementation_and_evidence(
     # below.
     monkeypatch.setattr(cli, "_v9_require_head_ci", lambda _root: "a" * 40)
     monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
-    closure_exists = (root / cli.V9_CLOSURE_PATH).is_file()
-    closure_committed = (
-        closure_exists
-        and subprocess.run(
-            ["git", "cat-file", "-e", f"HEAD:{cli.V9_CLOSURE_PATH}"],
+
+    def is_committed(relative: str) -> bool:
+        return subprocess.run(
+            ["git", "cat-file", "-e", f"HEAD:{relative}"],
             cwd=root,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-        ).returncode
-        == 0
+        ).returncode == 0
+
+    closure_exists = (root / cli.V9_CLOSURE_PATH).is_file()
+    closure_committed = closure_exists and is_committed(cli.V9_CLOSURE_PATH)
+    pending_formal_artifact = any(
+        (root / relative).is_file() and not is_committed(relative)
+        for relative in (
+            cli.V9_CLOSURE_PATH,
+            cli.V9_WINNER_FREEZE_PATH,
+            cli.V9_AUDIT_PATH,
+            cli.V9_RESULT_PATH,
+        )
     )
     if not closure_exists:
         _mock_v9_preclosure_readiness(monkeypatch)
     result, exit_code = cli._strategy_status(root, verify_data=False)
-    if closure_committed:
-        assert exit_code == 0
-    elif closure_exists:
+    if pending_formal_artifact:
         assert exit_code == 3
         assert result["status"] == "integrity_mismatch"
+    elif closure_committed:
+        assert exit_code == 0
     else:
         assert exit_code in {0, 2}
         assert result["status"] in {
@@ -216,7 +225,7 @@ def test_strategy_status_verifies_tracked_implementation_and_evidence(
         "not_applicable",
         "pending_clean_commit",
     }
-    if closure_exists and not closure_committed:
+    if pending_formal_artifact:
         assert any(check["status"] == "mismatch" for check in result["checks"])
     else:
         assert all(check["status"] in allowed for check in result["checks"])

@@ -1,0 +1,979 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_multi_asset_winner_freeze",
+  "release": "9.0",
+  "status": "selected_policy_frozen",
+  "protocol_payload_sha256": "f6c7cce39e8b9a1ae5df10965a2dd607916095b2caf24fcf0a29b625c5bafc3e",
+  "implementation_closure_payload_sha256": "722d93904d3bc67792f32fb7a39ab8461336fa1956513c9ea2586d9ce31e68b3",
+  "development_execution_commit": "a3257e0f8dd066f4ebfbc4ff04b6d3b6ddc81d9a",
+  "run_nonce": "afdcaf1bb46e4ae1b822f0ccdbf1205b",
+  "candidate_registry": [
+    "causal_monthly_volatility_balanced_budget"
+  ],
+  "selected_candidate_id": "causal_monthly_volatility_balanced_budget",
+  "development_source": {
+    "source_manifest_payload_sha256": "f5903d2b24b47662a9ba4ea3d2d127c9b5dee385d5b927140b25eda68b3ff060",
+    "tag_object": "8f575ed3833c8cc01f89e7a951d4234bd7ee6622",
+    "tag_commit": "a4c0d36f727e99f6b2353facf24fd3cdedba958e"
+  },
+  "development": {
+    "source_manifest_payload_sha256": "f5903d2b24b47662a9ba4ea3d2d127c9b5dee385d5b927140b25eda68b3ff060",
+    "stage_binding_payload_sha256": "4091dcea08da57f8f05afbb6ced6a09384a1c11b6057696b3e02de95dc983f19",
+    "evaluation_payload_sha256": "98e788b5336b5ba14961fa939a9fb32609d58416c061883954d3f8df56485627",
+    "evaluation_file_sha256": "910668e77efc1f8b8d42e3461b4d57ee1115110ae92651098b68ee659edfd62f",
+    "metrics": {
+      "prefix_replay_signal_count": 94,
+      "phases": {
+        "D1": {
+          "start_date": "2015-03-02",
+          "end_date": "2019-12-31",
+          "roles": {
+            "candidate": {
+              "observations": 1184,
+              "start_date": "2015-03-02",
+              "performance_start": "2015-03-02",
+              "baseline_date": "2015-02-27",
+              "end_date": "2019-12-31",
+              "start_nav": 1000000.0,
+              "end_nav": 1251611.78016,
+              "total_return": 0.2516117801600002,
+              "cagr": 0.048926911411901086,
+              "sharpe": 1.3983640125129457,
+              "max_drawdown": -0.04251659691567233,
+              "turnover": 3.7267948337454215,
+              "annualized_turnover": 0.7932029544795999,
+              "complete_year_returns": {
+                "2016": 0.0327949961912517,
+                "2017": 0.05088438387046246,
+                "2018": 0.031200403206008254,
+                "2019": 0.08193460633452587
+              },
+              "complete_year_count": 4,
+              "positive_complete_year_count": 4,
+              "positive_complete_year_ratio": 1.0,
+              "requested_notional_fill_ratio": 1.0,
+              "capacity_limited_requested_notional_ratio": 0.0,
+              "max_abs_accounting_error": 2.772821972030215e-10,
+              "nav_reconciliation_error": 2.772821972030215e-10,
+              "execution_validity": {
+                "artifact_set_complete": true,
+                "status_values_allowed": true,
+                "status_execution_identity_exact": true,
+                "blocked_missing_open_trade_count": 0,
+                "blocked_capacity_trade_count": 0,
+                "capacity_violation_count": 0,
+                "negative_cash_observation_count": 0,
+                "leverage_observation_count": 0,
+                "minimum_cash": 201.7281599999551,
+                "maximum_gross_exposure_ratio": 0.9998340578364469,
+                "maximum_nav_reconciliation_error": 2.772821972030215e-10,
+                "requested_notional_total": 4013149.8,
+                "executed_notional_total": 4013149.8,
+                "capacity_limited_requested_notional": 0.0,
+                "capacity_fields_finite_and_nonnegative": true,
+                "executed_notional_not_above_requested": true,
+                "capacity_limited_notional_not_above_requested": true,
+                "capacity_aggregation_identity_exact": true,
+                "requested_fill_identity_exact": true,
+                "daily_trade_notional_identity_exact": true
+              }
+            },
+            "candidate_stress": {
+              "observations": 1184,
+              "start_date": "2015-03-02",
+              "performance_start": "2015-03-02",
+              "baseline_date": "2015-02-27",
+              "end_date": "2019-12-31",
+              "start_nav": 1000000.0,
+              "end_nav": 1247968.56928,
+              "total_return": 0.24796856928,
+              "cagr": 0.048276322197590815,
+              "sharpe": 1.379366157077162,
+              "max_drawdown": -0.04259044714503546,
+              "turnover": 3.748189446169956,
+              "annualized_turnover": 0.7977565375294163,
+              "complete_year_returns": {
+                "2016": 0.03244938769454264,
+                "2017": 0.050145672227772,
+                "2018": 0.030871658720714956,
+                "2019": 0.08140904902761559
+              },
+              "complete_year_count": 4,
+              "positive_complete_year_count": 4,
+              "positive_complete_year_ratio": 1.0,
+              "requested_notional_fill_ratio": 1.0,
+              "capacity_limited_requested_notional_ratio": 0.0,
+              "max_abs_accounting_error": 4.18367562815547e-10,
+              "nav_reconciliation_error": 4.18367562815547e-10,
+              "execution_validity": {
+                "artifact_set_complete": true,
+                "status_values_allowed": true,
+                "status_execution_identity_exact": true,
+                "blocked_missing_open_trade_count": 0,
+                "blocked_capacity_trade_count": 0,
+                "capacity_violation_count": 0,
+                "negative_cash_observation_count": 0,
+                "leverage_observation_count": 0,
+                "minimum_cash": 595.2927999999865,
+                "maximum_gross_exposure_ratio": 0.9994245379629313,
+                "maximum_nav_reconciliation_error": 4.18367562815547e-10,
+                "requested_notional_total": 4030644.2,
+                "executed_notional_total": 4030644.2,
+                "capacity_limited_requested_notional": 0.0,
+                "capacity_fields_finite_and_nonnegative": true,
+                "executed_notional_not_above_requested": true,
+                "capacity_limited_notional_not_above_requested": true,
+                "capacity_aggregation_identity_exact": true,
+                "requested_fill_identity_exact": true,
+                "daily_trade_notional_identity_exact": true
+              }
+            },
+            "static": {
+              "observations": 1184,
+              "start_date": "2015-03-02",
+              "performance_start": "2015-03-02",
+              "baseline_date": "2015-02-27",
+              "end_date": "2019-12-31",
+              "start_nav": 1000000.0,
+              "end_nav": 1368727.7504,
+              "total_return": 0.36872775039999994,
+              "cagr": 0.06908794127071727,
+              "sharpe": 0.7263933657449289,
+              "max_drawdown": -0.17024574801653047,
+              "turnover": 2.5367975477307048,
+              "annualized_turnover": 0.5399265050913324,
+              "complete_year_returns": {
+                "2016": 0.03890062570751174,
+                "2017": 0.11907144431643268,
+                "2018": -0.05822631943084988,
+                "2019": 0.21793512622772404
+              },
+              "complete_year_count": 4,
+              "positive_complete_year_count": 3,
+              "positive_complete_year_ratio": 0.75,
+              "requested_notional_fill_ratio": 0.9954253240120514,
+              "capacity_limited_requested_notional_ratio": 0.0,
+              "max_abs_accounting_error": 2.8558133635669947e-10,
+              "nav_reconciliation_error": 2.8558133635669947e-10,
+              "execution_validity": {
+                "artifact_set_complete": true,
+                "status_values_allowed": true,
+                "status_execution_identity_exact": true,
+                "blocked_missing_open_trade_count": 0,
+                "blocked_capacity_trade_count": 0,
+                "capacity_violation_count": 0,
+                "negative_cash_observation_count": 0,
+                "leverage_observation_count": 0,
+                "minimum_cash": 390.4843200000305,
+                "maximum_gross_exposure_ratio": 0.9996631092637175,
+                "maximum_nav_reconciliation_error": 2.8558133635669947e-10,
+                "requested_notional_total": 2712345.1,
+                "executed_notional_total": 2699937.0,
+                "capacity_limited_requested_notional": 0.0,
+                "capacity_fields_finite_and_nonnegative": true,
+                "executed_notional_not_above_requested": true,
+                "capacity_limited_notional_not_above_requested": true,
+                "capacity_aggregation_identity_exact": true,
+                "requested_fill_identity_exact": true,
+                "daily_trade_notional_identity_exact": true
+              }
+            },
+            "static_stress": {
+              "observations": 1184,
+              "start_date": "2015-03-02",
+              "performance_start": "2015-03-02",
+              "baseline_date": "2015-02-27",
+              "end_date": "2019-12-31",
+              "start_nav": 1000000.0,
+              "end_nav": 1365677.3420799999,
+              "total_return": 0.3656773420799999,
+              "cagr": 0.0685803846989721,
+              "sharpe": 0.7215851617595691,
+              "max_drawdown": -0.17031479228078583,
+              "turnover": 2.537088300222627,
+              "annualized_turnover": 0.5399883882230592,
+              "complete_year_returns": {
+                "2016": 0.03848104746196346,
+                "2017": 0.11889321537642861,
+                "2018": -0.058433113801069414,
+                "2019": 0.21753689494519612
+              },
+              "complete_year_count": 4,
+              "positive_complete_year_count": 3,
+              "positive_complete_year_ratio": 0.75,
+              "requested_notional_fill_ratio": 0.9951486761513633,
+              "capacity_limited_requested_notional_ratio": 0.0,
+              "max_abs_accounting_error": 3.1104718800634146e-10,
+              "nav_reconciliation_error": 3.1104718800634146e-10,
+              "execution_validity": {
+                "artifact_set_complete": true,
+                "status_values_allowed": true,
+                "status_execution_identity_exact": true,
+                "blocked_missing_open_trade_count": 0,
+                "blocked_capacity_trade_count": 0,
+                "capacity_violation_count": 0,
+                "negative_cash_observation_count": 0,
+                "leverage_observation_count": 0,
+                "minimum_cash": 180.37056000002656,
+                "maximum_gross_exposure_ratio": 0.9998210482714069,
+                "maximum_nav_reconciliation_error": 3.1104718800634146e-10,
+                "requested_notional_total": 2706415.9,
+                "executed_notional_total": 2693286.2,
+                "capacity_limited_requested_notional": 0.0,
+                "capacity_fields_finite_and_nonnegative": true,
+                "executed_notional_not_above_requested": true,
+                "capacity_limited_notional_not_above_requested": true,
+                "capacity_aggregation_identity_exact": true,
+                "requested_fill_identity_exact": true,
+                "daily_trade_notional_identity_exact": true
+              }
+            },
+            "cash": {
+              "observations": 1184,
+              "start_date": "2015-03-02",
+              "performance_start": "2015-03-02",
+              "baseline_date": "2015-02-27",
+              "end_date": "2019-12-31",
+              "start_nav": 1000000.0,
+              "end_nav": 1153779.6596799998,
+              "total_return": 0.15377965967999985,
+              "cagr": 0.030913196843269874,
+              "sharpe": 8.95454938642539,
+              "max_drawdown": -0.001950437590883758,
+              "turnover": 1.1187034139334324,
+              "annualized_turnover": 0.23810241580339947,
+              "complete_year_returns": {
+                "2016": 0.026152037740646783,
+                "2017": 0.034435030450105986,
+                "2018": 0.034249219572443756,
+                "2019": 0.02487224344146388
+              },
+              "complete_year_count": 4,
+              "positive_complete_year_count": 4,
+              "positive_complete_year_ratio": 1.0,
+              "requested_notional_fill_ratio": 0.8965780451229126,
+              "capacity_limited_requested_notional_ratio": 0.0,
+              "max_abs_accounting_error": 2.3283064365386963e-10,
+              "nav_reconciliation_error": 2.3283064365386963e-10,
+              "execution_validity": {
+                "artifact_set_complete": true,
+                "status_values_allowed": true,
+                "status_execution_identity_exact": true,
+                "blocked_missing_open_trade_count": 0,
+                "blocked_capacity_trade_count": 0,
+                "capacity_violation_count": 0,
+                "negative_cash_observation_count": 0,
+                "leverage_observation_count": 0,
+                "minimum_cash": 1222.2164799999446,
+                "maximum_gross_exposure_ratio": 0.998807721532734,
+                "maximum_nav_reconciliation_error": 2.3283064365386963e-10,
+                "requested_notional_total": 1258730.8,
+                "executed_notional_total": 1128550.4,
+                "capacity_limited_requested_notional": 0.0,
+                "capacity_fields_finite_and_nonnegative": true,
+                "executed_notional_not_above_requested": true,
+                "capacity_limited_notional_not_above_requested": true,
+                "capacity_aggregation_identity_exact": true,
+                "requested_fill_identity_exact": true,
+                "daily_trade_notional_identity_exact": true
+              }
+            },
+            "cash_stress": {
+              "observations": 1184,
+              "start_date": "2015-03-02",
+              "performance_start": "2015-03-02",
+              "baseline_date": "2015-02-27",
+              "end_date": "2019-12-31",
+              "start_nav": 1000000.0,
+              "end_nav": 1152876.81936,
+              "total_return": 0.15287681936000008,
+              "cagr": 0.030741448403336147,
+              "sharpe": 8.773866582374954,
+              "max_drawdown": -0.0019519646213583819,
+              "turnover": 1.118796784883404,
+              "annualized_turnover": 0.2381222886745083,
+              "complete_year_returns": {
+                "2016": 0.026148910185000984,
+                "2017": 0.034446696047609526,
+                "2018": 0.034246049810712,
+                "2019": 0.024862914336007513
+              },
+              "complete_year_count": 4,
+              "positive_complete_year_count": 4,
+              "positive_complete_year_ratio": 1.0,
+              "requested_notional_fill_ratio": 0.8965780451229126,
+              "capacity_limited_requested_notional_ratio": 0.0,
+              "max_abs_accounting_error": 1.4290435501607135e-10,
+              "nav_reconciliation_error": 1.4290435501607135e-10,
+              "execution_validity": {
+                "artifact_set_complete": true,
+                "status_values_allowed": true,
+                "status_execution_identity_exact": true,
+                "blocked_missing_open_trade_count": 0,
+                "blocked_capacity_trade_count": 0,
+                "capacity_violation_count": 0,
+                "negative_cash_observation_count": 0,
+                "leverage_observation_count": 0,
+                "minimum_cash": 423.83296000002883,
+                "maximum_gross_exposure_ratio": 0.9995862265078913,
+                "maximum_nav_reconciliation_error": 1.4290435501607135e-10,
+                "requested_notional_total": 1258730.8,
+                "executed_notional_total": 1128550.4,
+                "capacity_limited_requested_notional": 0.0,
+                "capacity_fields_finite_and_nonnegative": true,
+                "executed_notional_not_above_requested": true,
+                "capacity_limited_notional_not_above_requested": true,
+                "capacity_aggregation_identity_exact": true,
+                "requested_fill_identity_exact": true,
+                "daily_trade_notional_identity_exact": true
+              }
+            }
+          },
+          "operational": {
+            "annualized_turnover": 0.7977565375294163,
+            "requested_notional_fill_ratio": 1.0,
+            "capacity_limited_requested_notional_ratio": 0.0,
+            "nav_reconciliation_error": 4.18367562815547e-10,
+            "annualized_turnover_at_most": 1.0,
+            "requested_notional_fill_ratio_at_least": 0.99,
+            "capacity_limited_requested_notional_ratio_at_most": 0.01,
+            "nav_reconciliation_error_at_most": 1e-08
+          },
+          "base_absolute_gate": {
+            "passed": true,
+            "checks": {
+              "net_cagr_strictly_positive": true,
+              "net_sharpe_at_least": true,
+              "daily_max_drawdown_at_least": true,
+              "positive_complete_year_ratio_at_least": true,
+              "cash_excess_cagr_strictly_positive": true,
+              "annualized_turnover_at_most": true,
+              "requested_notional_fill_ratio_at_least": true,
+              "capacity_limited_requested_notional_ratio_at_most": true,
+              "nav_reconciliation_error_at_most": true
+            },
+            "values": {
+              "net_cagr_strictly_positive": {
+                "metric": 0.048926911411901086,
+                "threshold": 0.0
+              },
+              "net_sharpe_at_least": {
+                "metric": 1.3983640125129457,
+                "threshold": 0.3
+              },
+              "daily_max_drawdown_at_least": {
+                "metric": -0.04251659691567233,
+                "threshold": -0.25
+              },
+              "positive_complete_year_ratio_at_least": {
+                "metric": 1.0,
+                "threshold": 0.5
+              },
+              "cash_excess_cagr_strictly_positive": {
+                "metric": 0.01801371456863121,
+                "threshold": 0.0
+              },
+              "annualized_turnover_at_most": {
+                "metric": 0.7977565375294163,
+                "threshold": 1.0
+              },
+              "requested_notional_fill_ratio_at_least": {
+                "metric": 1.0,
+                "threshold": 0.99
+              },
+              "capacity_limited_requested_notional_ratio_at_most": {
+                "metric": 0.0,
+                "threshold": 0.01
+              },
+              "nav_reconciliation_error_at_most": {
+                "metric": 4.18367562815547e-10,
+                "threshold": 1e-08
+              }
+            }
+          },
+          "stress_absolute_gate": {
+            "passed": true,
+            "checks": {
+              "net_cagr_strictly_positive": true,
+              "net_sharpe_at_least": true,
+              "daily_max_drawdown_at_least": true,
+              "positive_complete_year_ratio_at_least": true,
+              "cash_excess_cagr_strictly_positive": true,
+              "annualized_turnover_at_most": true,
+              "requested_notional_fill_ratio_at_least": true,
+              "capacity_limited_requested_notional_ratio_at_most": true,
+              "nav_reconciliation_error_at_most": true
+            },
+            "values": {
+              "net_cagr_strictly_positive": {
+                "metric": 0.048276322197590815,
+                "threshold": 0.0
+              },
+              "net_sharpe_at_least": {
+                "metric": 1.379366157077162,
+                "threshold": 0.25
+              },
+              "daily_max_drawdown_at_least": {
+                "metric": -0.04259044714503546,
+                "threshold": -0.25
+              },
+              "positive_complete_year_ratio_at_least": {
+                "metric": 1.0,
+                "threshold": 0.5
+              },
+              "cash_excess_cagr_strictly_positive": {
+                "metric": 0.01753487379425467,
+                "threshold": 0.0
+              },
+              "annualized_turnover_at_most": {
+                "metric": 0.7977565375294163,
+                "threshold": 1.0
+              },
+              "requested_notional_fill_ratio_at_least": {
+                "metric": 1.0,
+                "threshold": 0.99
+              },
+              "capacity_limited_requested_notional_ratio_at_most": {
+                "metric": 0.0,
+                "threshold": 0.01
+              },
+              "nav_reconciliation_error_at_most": {
+                "metric": 4.18367562815547e-10,
+                "threshold": 1e-08
+              }
+            }
+          },
+          "base_relative_stability_gate": {
+            "passed": true,
+            "checks": {
+              "sharpe_delta_at_least": true,
+              "max_drawdown_delta_at_least": true,
+              "positive_complete_year_ratio_delta_at_least": true
+            },
+            "values": {
+              "sharpe_delta_at_least": {
+                "metric": 0.6719706467680169,
+                "threshold": 0.0
+              },
+              "max_drawdown_delta_at_least": {
+                "metric": 0.12772915110085814,
+                "threshold": 0.0
+              },
+              "positive_complete_year_ratio_delta_at_least": {
+                "metric": 0.25,
+                "threshold": 0.0
+              }
+            }
+          },
+          "stress_relative_stability_gate": {
+            "passed": true,
+            "checks": {
+              "sharpe_delta_at_least": true,
+              "max_drawdown_delta_at_least": true,
+              "positive_complete_year_ratio_delta_at_least": true
+            },
+            "values": {
+              "sharpe_delta_at_least": {
+                "metric": 0.6577809953175929,
+                "threshold": 0.0
+              },
+              "max_drawdown_delta_at_least": {
+                "metric": 0.12772434513575037,
+                "threshold": 0.0
+              },
+              "positive_complete_year_ratio_delta_at_least": {
+                "metric": 0.25,
+                "threshold": 0.0
+              }
+            }
+          },
+          "audit_complete_year_count_gate_passed": true,
+          "passed": true
+        },
+        "D2": {
+          "start_date": "2020-01-02",
+          "end_date": "2022-12-30",
+          "roles": {
+            "candidate": {
+              "observations": 728,
+              "start_date": "2020-01-02",
+              "performance_start": "2020-01-02",
+              "baseline_date": "2019-12-31",
+              "end_date": "2022-12-30",
+              "start_nav": 1000000.0,
+              "end_nav": 1097045.9936799998,
+              "total_return": 0.09704599367999989,
+              "cagr": 0.03258064825325957,
+              "sharpe": 0.9392983463753383,
+              "max_drawdown": -0.041916142967969305,
+              "turnover": 2.0896591344586124,
+              "annualized_turnover": 0.7233435465433659,
+              "complete_year_returns": {
+                "2020": 0.06623037415999988,
+                "2021": 0.029948629539987337,
+                "2022": -0.0010167156018792145
+              },
+              "complete_year_count": 3,
+              "positive_complete_year_count": 2,
+              "positive_complete_year_ratio": 0.6666666666666666,
+              "requested_notional_fill_ratio": 1.0,
+              "capacity_limited_requested_notional_ratio": 0.0,
+              "max_abs_accounting_error": 3.8562575355172157e-10,
+              "nav_reconciliation_error": 3.8562575355172157e-10,
+              "execution_validity": {
+                "artifact_set_complete": true,
+                "status_values_allowed": true,
+                "status_execution_identity_exact": true,
+                "blocked_missing_open_trade_count": 0,
+                "blocked_capacity_trade_count": 0,
+                "capacity_violation_count": 0,
+                "negative_cash_observation_count": 0,
+                "leverage_observation_count": 0,
+                "minimum_cash": 117.36239999988538,
+                "maximum_gross_exposure_ratio": 0.9998933714351147,
+                "maximum_nav_reconciliation_error": 3.8562575355172157e-10,
+                "requested_notional_total": 2156257.9,
+                "executed_notional_total": 2156257.9,
+                "capacity_limited_requested_notional": 0.0,
+                "capacity_fields_finite_and_nonnegative": true,
+                "executed_notional_not_above_requested": true,
+                "capacity_limited_notional_not_above_requested": true,
+                "capacity_aggregation_identity_exact": true,
+                "requested_fill_identity_exact": true,
+                "daily_trade_notional_identity_exact": true
+              }
+            },
+            "candidate_stress": {
+              "observations": 728,
+              "start_date": "2020-01-02",
+              "performance_start": "2020-01-02",
+              "baseline_date": "2019-12-31",
+              "end_date": "2022-12-30",
+              "start_nav": 1000000.0,
+              "end_nav": 1095458.12112,
+              "total_return": 0.09545812112000007,
+              "cagr": 0.03206305385114594,
+              "sharpe": 0.9249098193697659,
+              "max_drawdown": -0.04192561656133198,
+              "turnover": 2.0885691317320005,
+              "annualized_turnover": 0.722966237907231,
+              "complete_year_returns": {
+                "2020": 0.06498399024000001,
+                "2021": 0.029693268602914324,
+                "2022": -0.0010475265627546415
+              },
+              "complete_year_count": 3,
+              "positive_complete_year_count": 2,
+              "positive_complete_year_ratio": 0.6666666666666666,
+              "requested_notional_fill_ratio": 1.0,
+              "capacity_limited_requested_notional_ratio": 0.0,
+              "max_abs_accounting_error": 3.333298081997782e-10,
+              "nav_reconciliation_error": 3.333298081997782e-10,
+              "execution_validity": {
+                "artifact_set_complete": true,
+                "status_values_allowed": true,
+                "status_execution_identity_exact": true,
+                "blocked_missing_open_trade_count": 0,
+                "blocked_capacity_trade_count": 0,
+                "capacity_violation_count": 0,
+                "negative_cash_observation_count": 0,
+                "leverage_observation_count": 0,
+                "minimum_cash": 610.9459199999152,
+                "maximum_gross_exposure_ratio": 0.999442876066046,
+                "maximum_nav_reconciliation_error": 3.333298081997782e-10,
+                "requested_notional_total": 2153611.8,
+                "executed_notional_total": 2153611.8,
+                "capacity_limited_requested_notional": 0.0,
+                "capacity_fields_finite_and_nonnegative": true,
+                "executed_notional_not_above_requested": true,
+                "capacity_limited_notional_not_above_requested": true,
+                "capacity_aggregation_identity_exact": true,
+                "requested_fill_identity_exact": true,
+                "daily_trade_notional_identity_exact": true
+              }
+            },
+            "static": {
+              "observations": 728,
+              "start_date": "2020-01-02",
+              "performance_start": "2020-01-02",
+              "baseline_date": "2019-12-31",
+              "end_date": "2022-12-30",
+              "start_nav": 1000000.0,
+              "end_nav": 1068928.3204,
+              "total_return": 0.06892832040000019,
+              "cagr": 0.023341681225848232,
+              "sharpe": 0.2802144858490848,
+              "max_drawdown": -0.15963510257901115,
+              "turnover": 2.016417019668964,
+              "annualized_turnover": 0.6979905068084875,
+              "complete_year_returns": {
+                "2020": 0.14781640647999983,
+                "2021": -0.002949661340338028,
+                "2022": -0.0659737754083013
+              },
+              "complete_year_count": 3,
+              "positive_complete_year_count": 1,
+              "positive_complete_year_ratio": 0.3333333333333333,
+              "requested_notional_fill_ratio": 0.9937878146312308,
+              "capacity_limited_requested_notional_ratio": 0.0,
+              "max_abs_accounting_error": 2.519300323911011e-10,
+              "nav_reconciliation_error": 2.519300323911011e-10,
+              "execution_validity": {
+                "artifact_set_complete": true,
+                "status_values_allowed": true,
+                "status_execution_identity_exact": true,
+                "blocked_missing_open_trade_count": 0,
+                "blocked_capacity_trade_count": 0,
+                "capacity_violation_count": 0,
+                "negative_cash_observation_count": 0,
+                "leverage_observation_count": 0,
+                "minimum_cash": 828.2495199999612,
+                "maximum_gross_exposure_ratio": 0.9992930558409054,
+                "maximum_nav_reconciliation_error": 2.519300323911011e-10,
+                "requested_notional_total": 2122409.3,
+                "executed_notional_total": 2109224.5,
+                "capacity_limited_requested_notional": 0.0,
+                "capacity_fields_finite_and_nonnegative": true,
+                "executed_notional_not_above_requested": true,
+                "capacity_limited_notional_not_above_requested": true,
+                "capacity_aggregation_identity_exact": true,
+                "requested_fill_identity_exact": true,
+                "daily_trade_notional_identity_exact": true
+              }
+            },
+            "static_stress": {
+              "observations": 728,
+              "start_date": "2020-01-02",
+              "performance_start": "2020-01-02",
+              "baseline_date": "2019-12-31",
+              "end_date": "2022-12-30",
+              "start_nav": 1000000.0,
+              "end_nav": 1067202.8952000001,
+              "total_return": 0.06720289520000011,
+              "cagr": 0.02276958813593244,
+              "sharpe": 0.2746341217803783,
+              "max_drawdown": -0.16003554128774788,
+              "turnover": 2.014570116979291,
+              "annualized_turnover": 0.6973511943389854,
+              "complete_year_returns": {
+                "2020": 0.14656307455999995,
+                "2021": -0.003170194401555082,
+                "2022": -0.06625556043200265
+              },
+              "complete_year_count": 3,
+              "positive_complete_year_count": 1,
+              "positive_complete_year_ratio": 0.3333333333333333,
+              "requested_notional_fill_ratio": 0.9933553256738843,
+              "capacity_limited_requested_notional_ratio": 0.0,
+              "max_abs_accounting_error": 2.9194779926910996e-10,
+              "nav_reconciliation_error": 2.9194779926910996e-10,
+              "execution_validity": {
+                "artifact_set_complete": true,
+                "status_values_allowed": true,
+                "status_execution_identity_exact": true,
+                "blocked_missing_open_trade_count": 0,
+                "blocked_capacity_trade_count": 0,
+                "capacity_violation_count": 0,
+                "negative_cash_observation_count": 0,
+                "leverage_observation_count": 0,
+                "minimum_cash": 843.2467200000169,
+                "maximum_gross_exposure_ratio": 0.9992662024478896,
+                "maximum_nav_reconciliation_error": 2.9194779926910996e-10,
+                "requested_notional_total": 2120404.9,
+                "executed_notional_total": 2106315.5,
+                "capacity_limited_requested_notional": 0.0,
+                "capacity_fields_finite_and_nonnegative": true,
+                "executed_notional_not_above_requested": true,
+                "capacity_limited_notional_not_above_requested": true,
+                "capacity_aggregation_identity_exact": true,
+                "requested_fill_identity_exact": true,
+                "daily_trade_notional_identity_exact": true
+              }
+            },
+            "cash": {
+              "observations": 728,
+              "start_date": "2020-01-02",
+              "performance_start": "2020-01-02",
+              "baseline_date": "2019-12-31",
+              "end_date": "2022-12-30",
+              "start_nav": 1000000.0,
+              "end_nav": 1058833.25984,
+              "total_return": 0.058833259839999874,
+              "cagr": 0.019985881850830944,
+              "sharpe": 9.137407495467524,
+              "max_drawdown": -0.0008422618293424389,
+              "turnover": 1.0299341500975934,
+              "annualized_turnover": 0.35651566734147466,
+              "complete_year_returns": {
+                "2020": 0.019442760480000043,
+                "2021": 0.021052629173505366,
+                "2022": 0.01722400597538143
+              },
+              "complete_year_count": 3,
+              "positive_complete_year_count": 3,
+              "positive_complete_year_ratio": 1.0,
+              "requested_notional_fill_ratio": 0.9626129034305765,
+              "capacity_limited_requested_notional_ratio": 0.0,
+              "max_abs_accounting_error": 1.1641532182693481e-10,
+              "nav_reconciliation_error": 1.1641532182693481e-10,
+              "execution_validity": {
+                "artifact_set_complete": true,
+                "status_values_allowed": true,
+                "status_execution_identity_exact": true,
+                "blocked_missing_open_trade_count": 0,
+                "blocked_capacity_trade_count": 0,
+                "capacity_violation_count": 0,
+                "negative_cash_observation_count": 0,
+                "leverage_observation_count": 0,
+                "minimum_cash": 8028.210880000057,
+                "maximum_gross_exposure_ratio": 0.9922836070978516,
+                "maximum_nav_reconciliation_error": 1.1641532182693481e-10,
+                "requested_notional_total": 1071225.2,
+                "executed_notional_total": 1031175.2,
+                "capacity_limited_requested_notional": 0.0,
+                "capacity_fields_finite_and_nonnegative": true,
+                "executed_notional_not_above_requested": true,
+                "capacity_limited_notional_not_above_requested": true,
+                "capacity_aggregation_identity_exact": true,
+                "requested_fill_identity_exact": true,
+                "daily_trade_notional_identity_exact": true
+              }
+            },
+            "cash_stress": {
+              "observations": 728,
+              "start_date": "2020-01-02",
+              "performance_start": "2020-01-02",
+              "baseline_date": "2019-12-31",
+              "end_date": "2022-12-30",
+              "start_nav": 1000000.0,
+              "end_nav": 1058008.3196800002,
+              "total_return": 0.05800831968000009,
+              "cagr": 0.019710732276721155,
+              "sharpe": 8.435725347480785,
+              "max_drawdown": -0.0015163790399999044,
+              "turnover": 1.029964348760353,
+              "annualized_turnover": 0.3565261207247375,
+              "complete_year_returns": {
+                "2020": 0.018649920960000177,
+                "2021": 0.021053259180336292,
+                "2022": 0.017221968923679887
+              },
+              "complete_year_count": 3,
+              "positive_complete_year_count": 3,
+              "positive_complete_year_ratio": 1.0,
+              "requested_notional_fill_ratio": 0.9626129034305765,
+              "capacity_limited_requested_notional_ratio": 0.0,
+              "max_abs_accounting_error": 1.2311573982515256e-10,
+              "nav_reconciliation_error": 1.2311573982515256e-10,
+              "execution_validity": {
+                "artifact_set_complete": true,
+                "status_values_allowed": true,
+                "status_execution_identity_exact": true,
+                "blocked_missing_open_trade_count": 0,
+                "blocked_capacity_trade_count": 0,
+                "capacity_violation_count": 0,
+                "negative_cash_observation_count": 0,
+                "leverage_observation_count": 0,
+                "minimum_cash": 7219.3217600001335,
+                "maximum_gross_exposure_ratio": 0.9930556797239289,
+                "maximum_nav_reconciliation_error": 1.2311573982515256e-10,
+                "requested_notional_total": 1071225.2,
+                "executed_notional_total": 1031175.2,
+                "capacity_limited_requested_notional": 0.0,
+                "capacity_fields_finite_and_nonnegative": true,
+                "executed_notional_not_above_requested": true,
+                "capacity_limited_notional_not_above_requested": true,
+                "capacity_aggregation_identity_exact": true,
+                "requested_fill_identity_exact": true,
+                "daily_trade_notional_identity_exact": true
+              }
+            }
+          },
+          "operational": {
+            "annualized_turnover": 0.7233435465433659,
+            "requested_notional_fill_ratio": 1.0,
+            "capacity_limited_requested_notional_ratio": 0.0,
+            "nav_reconciliation_error": 3.8562575355172157e-10,
+            "annualized_turnover_at_most": 1.0,
+            "requested_notional_fill_ratio_at_least": 0.99,
+            "capacity_limited_requested_notional_ratio_at_most": 0.01,
+            "nav_reconciliation_error_at_most": 1e-08
+          },
+          "base_absolute_gate": {
+            "passed": true,
+            "checks": {
+              "net_cagr_strictly_positive": true,
+              "net_sharpe_at_least": true,
+              "daily_max_drawdown_at_least": true,
+              "positive_complete_year_ratio_at_least": true,
+              "cash_excess_cagr_strictly_positive": true,
+              "annualized_turnover_at_most": true,
+              "requested_notional_fill_ratio_at_least": true,
+              "capacity_limited_requested_notional_ratio_at_most": true,
+              "nav_reconciliation_error_at_most": true
+            },
+            "values": {
+              "net_cagr_strictly_positive": {
+                "metric": 0.03258064825325957,
+                "threshold": 0.0
+              },
+              "net_sharpe_at_least": {
+                "metric": 0.9392983463753383,
+                "threshold": 0.3
+              },
+              "daily_max_drawdown_at_least": {
+                "metric": -0.041916142967969305,
+                "threshold": -0.25
+              },
+              "positive_complete_year_ratio_at_least": {
+                "metric": 0.6666666666666666,
+                "threshold": 0.5
+              },
+              "cash_excess_cagr_strictly_positive": {
+                "metric": 0.012594766402428625,
+                "threshold": 0.0
+              },
+              "annualized_turnover_at_most": {
+                "metric": 0.7233435465433659,
+                "threshold": 1.0
+              },
+              "requested_notional_fill_ratio_at_least": {
+                "metric": 1.0,
+                "threshold": 0.99
+              },
+              "capacity_limited_requested_notional_ratio_at_most": {
+                "metric": 0.0,
+                "threshold": 0.01
+              },
+              "nav_reconciliation_error_at_most": {
+                "metric": 3.8562575355172157e-10,
+                "threshold": 1e-08
+              }
+            }
+          },
+          "stress_absolute_gate": {
+            "passed": true,
+            "checks": {
+              "net_cagr_strictly_positive": true,
+              "net_sharpe_at_least": true,
+              "daily_max_drawdown_at_least": true,
+              "positive_complete_year_ratio_at_least": true,
+              "cash_excess_cagr_strictly_positive": true,
+              "annualized_turnover_at_most": true,
+              "requested_notional_fill_ratio_at_least": true,
+              "capacity_limited_requested_notional_ratio_at_most": true,
+              "nav_reconciliation_error_at_most": true
+            },
+            "values": {
+              "net_cagr_strictly_positive": {
+                "metric": 0.03206305385114594,
+                "threshold": 0.0
+              },
+              "net_sharpe_at_least": {
+                "metric": 0.9249098193697659,
+                "threshold": 0.25
+              },
+              "daily_max_drawdown_at_least": {
+                "metric": -0.04192561656133198,
+                "threshold": -0.25
+              },
+              "positive_complete_year_ratio_at_least": {
+                "metric": 0.6666666666666666,
+                "threshold": 0.5
+              },
+              "cash_excess_cagr_strictly_positive": {
+                "metric": 0.012352321574424785,
+                "threshold": 0.0
+              },
+              "annualized_turnover_at_most": {
+                "metric": 0.7233435465433659,
+                "threshold": 1.0
+              },
+              "requested_notional_fill_ratio_at_least": {
+                "metric": 1.0,
+                "threshold": 0.99
+              },
+              "capacity_limited_requested_notional_ratio_at_most": {
+                "metric": 0.0,
+                "threshold": 0.01
+              },
+              "nav_reconciliation_error_at_most": {
+                "metric": 3.8562575355172157e-10,
+                "threshold": 1e-08
+              }
+            }
+          },
+          "base_relative_stability_gate": {
+            "passed": true,
+            "checks": {
+              "sharpe_delta_at_least": true,
+              "max_drawdown_delta_at_least": true,
+              "positive_complete_year_ratio_delta_at_least": true
+            },
+            "values": {
+              "sharpe_delta_at_least": {
+                "metric": 0.6590838605262535,
+                "threshold": 0.0
+              },
+              "max_drawdown_delta_at_least": {
+                "metric": 0.11771895961104184,
+                "threshold": 0.0
+              },
+              "positive_complete_year_ratio_delta_at_least": {
+                "metric": 0.3333333333333333,
+                "threshold": 0.0
+              }
+            }
+          },
+          "stress_relative_stability_gate": {
+            "passed": true,
+            "checks": {
+              "sharpe_delta_at_least": true,
+              "max_drawdown_delta_at_least": true,
+              "positive_complete_year_ratio_delta_at_least": true
+            },
+            "values": {
+              "sharpe_delta_at_least": {
+                "metric": 0.6502756975893875,
+                "threshold": 0.0
+              },
+              "max_drawdown_delta_at_least": {
+                "metric": 0.1181099247264159,
+                "threshold": 0.0
+              },
+              "positive_complete_year_ratio_delta_at_least": {
+                "metric": 0.3333333333333333,
+                "threshold": 0.0
+              }
+            }
+          },
+          "audit_complete_year_count_gate_passed": true,
+          "passed": true
+        }
+      }
+    },
+    "gate": {
+      "passed": true,
+      "phase_passes": {
+        "D1": true,
+        "D2": true
+      }
+    }
+  },
+  "audit_market_outcomes_opened": false,
+  "runner_up_fallback": false,
+  "claim_contract": {
+    "research_object": "causal_volatility_balanced_strategic_beta",
+    "development_is_fully_exposed_non_oos": true,
+    "alpha_claim_allowed": false,
+    "profit_claim_allowed": false,
+    "stable_future_profit_claim_allowed": false,
+    "investment_recommendation_allowed": false,
+    "historical_audit_if_passed_interpretation": "public-history strategic-beta diagnostic only",
+    "audit_2023_plus_is_fresh_future_evidence": false,
+    "fresh_future_evidence_required": true,
+    "minimum_fresh_sessions": 252,
+    "minimum_fresh_monthly_executions": 12
+  },
+  "payload_sha256": "430b45eec730084a3d82e7d392bf609e533d5c7a98b5623f9d13a471171495a7"
+}
