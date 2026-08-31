@@ -10,6 +10,8 @@
 
 ## [Unreleased]
 
+## [10.0] - 2026-08-31
+
 ### Added
 
 - 新增 10.0 results-first 路线 `quarterly_12_1_dual_momentum_rank_budget`：每个自然季度末只读
@@ -26,6 +28,13 @@
   或回撤改善掩盖收益不足，D1/D2/D3 的 base/stress CAGR 必须分别严格高于匹配现金与 static。
 - 按用户 results-first 优先级，Sharpe、最大回撤与年化换手在 10.0 完整披露但不作否决门；fill 至少
   98%、capacity-limited 至多 2%、零容量违约/负现金/杠杆及会计误差不超过 `1e-8` 仍为硬执行门。
+- 正式 evidence payload/file SHA-256 为
+  `18c9fb75f79cf71572f65a3eade0d2af8a018e7b8aef066fa8a30dce1f721253` /
+  `954be9b434d3d5c7c06ddac1f276ac032248b420956185cc372ae352685b4e89`，绑定 implementation commit
+  `0462eed7eb08b110d6356d43b6c7e13d3e0fc522`；CLI retained-data 深重放通过。
+- 从 clean `git archive` 构建的 `factor_research_mvp-10.0.0-py3-none-any.whl` SHA-256 为
+  `bfa98db8580dd700ff151465f7762c6e8e36fa9e6eca43f6666e904fe2708a57`；全新隔离 venv 安装、
+  `pip check`、版本/CLI import 与 installed-wheel + detached Git evidence status 均通过。
 
 ### Research status
 

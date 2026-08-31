@@ -244,6 +244,7 @@ def test_strategy_status_verifies_tracked_implementation_and_evidence(
 def test_default_strategy_status_tracks_10_0_results_first_stage() -> None:
     root = Path(__file__).resolve().parents[2]
     evidence_path = root / cli.V10_EVIDENCE_PATH
+    clean = cli._working_tree_is_clean(root)
     committed = (
         evidence_path.is_file()
         and subprocess.run(
@@ -262,7 +263,7 @@ def test_default_strategy_status_tracks_10_0_results_first_stage() -> None:
         assert exit_code == 2
         assert result["status"] == "implementation_pending_results_first_replay"
         assert result["selected_candidate_id"] is None
-    elif not committed:
+    elif not committed or not clean:
         assert exit_code == 3
         assert result["status"] == "integrity_mismatch"
     else:
