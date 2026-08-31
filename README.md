@@ -124,7 +124,7 @@ label，并再次验证 availability 必须恰好是 `report_date` 后第一个�
 拆送股稳健性对照）、FY1 相对 FY0 的预测增长，以及实际公告相对公告前共识的 earnings surprise。
 coverage/initiations、dispersion 与 active-reviser breadth 先只做诊断，不再建 selector。
 
-## 8.0 当前主线：固定战略资本预算
+## 8.0 归档结论：固定战略资本预算
 
 唯一政策 `static_risk_budget` 每月末固定目标为：A 股 30%、港股 10%、美股 10%、黄金 20%、
 五年国债 30%、`511880.SH` 0%。整手、容量或开盘跳空留下的金额保留为账户现金，不主动改变预算。
@@ -150,6 +150,19 @@ python scripts/run-multi-asset-evidence.py --mode audit
 # null freeze 或 audit 单独提交、推送且 CI 全绿后
 python scripts/run-multi-asset-evidence.py --mode finalize
 ```
+
+8.0 的 calibration 已执行且不可重跑。主策略 train CAGR 6.9088%、Sharpe 0.7264、最大回撤
+-17.0246%，16bp 压力 CAGR 6.8580%，相对现金 CAGR 超额 3.8175pp；核心经济门均通过。冻结 gate
+唯一失败是把 cash comparator 的 89.6578% fill 与 primary/stress 的 99.5425%/99.5149% 一起取最小值。
+现金低值来自年末分红已计入应收款但未成为可用现金时，100% 目标的整手再投资被延迟到次月；不是
+容量或缺失开盘价。随后 admission 写入前的 GitHub 远端复核遇到 `Empty reply`，因此
+[execution-failure.json](protocols/evidence/8.0/execution-failure.json) 把 8.0 归档为
+`selection_inconclusive_execution_failure`。Validation/audit 从未打开。
+
+同 release 不会重跑。若沿用该经济路线，8.1 只允许把 policy admission 的 turnover/fill/capacity
+聚合域限定为 primary+stress；现金比较器收益、完整执行诊断、四角色会计有效性，以及全部资产、权重、
+成本、日期和经济阈值保持不变。这个修正是在看过 8.0 train failure 后提出，必须标为 post-hoc
+reclassification，不能伪装成独立 train。
 
 即使 validation/audit 全部通过，也只表示这六只固定 ETF 的公开历史战略 beta 诊断通过；不等于
 alpha、稳定未来盈利或投资建议，仍需要 closure 之后至少 252 个新交易日且至少 12 次月度执行的

@@ -1,0 +1,185 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_8_0_execution_failure",
+  "release": "8.0",
+  "status": "selection_inconclusive_execution_failure",
+  "classification": "post_evaluation_github_ci_transport_failure",
+  "calibration_execution": {
+    "command": "python scripts/run-multi-asset-evidence.py --mode calibration",
+    "execution_commit": "644840a4967d69f6acc8903549705370bffdcba1",
+    "phase": "train",
+    "candidate_id": "static_risk_budget",
+    "comparator_id": "cash_only_511880",
+    "failure_function": "run-multi-asset-evidence._require_head_pushed_and_ci_success",
+    "exception_type": "RuntimeError",
+    "exception_message": "formal HEAD is not the current pushed origin/main commit",
+    "external_transport_diagnostic": "git ls-remote subsequently returned Empty reply from server",
+    "canonical_failure_code": "github_ci_empty_reply_after_train_evaluation"
+  },
+  "frozen_inputs": {
+    "protocol": {
+      "path": "protocols/8.0-static-capital-budget.json",
+      "file_sha256": "ac4a6f94cfbbe709c26120bad7499196fa36fc497f366cf445896cd486519abc",
+      "payload_sha256": "801374f58aa5edd66365e0937ed119082559f2950cc1106134a3cdb58e0099e7"
+    },
+    "asset_selection": {
+      "path": "protocols/7.0-asset-selection.json",
+      "file_sha256": "6d2d819db2579db76f8e7830a5de090d8d471c7fdc657abd8aba626cd1b065ec",
+      "payload_sha256": "b00536d618c7fe46e3cbe8d258d2b2032ef4e0c16d40fb9c74ff016c34525e0b"
+    },
+    "preclosure_train_disclosure": {
+      "path": "protocols/evidence/7.0/preclosure-train.json",
+      "file_sha256": "01c3d97f7a3cce81bd8abe4e430c5b35b35deddefc80950403d3b40d109f7c09",
+      "payload_sha256": "6bd2909ddc97ec84d3535d15e8f13330a5752831aead82d8fb50afdd16ac6775"
+    },
+    "prevalidation_closure": {
+      "path": "protocols/8.0-release.json",
+      "file_sha256": "8e4fe890efb746c15ae5f0375d8a1dfd85a061172426165af1441d5011bfa97d",
+      "payload_sha256": "7bdd27bc6365c936c7e17736920d5fbf2556608e8b59b0869b3e70b9e61e5de7",
+      "implementation_commit": "beb4c56cb875e386b5742a7ca10fa634703dbc81"
+    }
+  },
+  "train_stage": {
+    "manifest": {
+      "path": "runtime/data/multi-asset-8.0/sources/stage=train/manifest.json",
+      "file_sha256": "3d926e16927ea64549755b118b3997e93da287175678f8f04703a637a069f3de",
+      "payload_sha256": "58c0477745dd0afd6e8fad686af5379db00cf2736b25da71fd3a314217052130",
+      "price_start_date": "2014-01-15",
+      "price_end_date": "2019-12-31",
+      "calendar_end_date": "2020-01-31",
+      "asset_count": 6,
+      "asset_row_count": 8730,
+      "calendar_row_count": 1471
+    },
+    "binding": {
+      "path": "runtime/data/multi-asset-8.0/stage-bindings/train.json",
+      "file_sha256": "0a7f43f8719836717ede5e6c629e63fc9c3b92cde141e93cddbd1e564c6a01db",
+      "payload_sha256": "d265def3120e676e4cd36f64ccde40da5e785dc3f0c505587e823ceab1bb2870",
+      "execution_commit": "644840a4967d69f6acc8903549705370bffdcba1",
+      "run_nonce": "fda16561690f49f98930b44924941bb9"
+    },
+    "evaluation": {
+      "path": "runtime/data/multi-asset-8.0/evaluations/stage=train/evaluation.json",
+      "file_sha256": "fda32fb62d7fff02d4b84a11c5e6996478fabbd8b39540cadd7d26d012e711bb",
+      "payload_sha256": "05980be5f07ab6a6dbbcfc235135d6b253aa84d68dbbbca6b993f5d16b422723",
+      "source_manifest_payload_sha256": "58c0477745dd0afd6e8fad686af5379db00cf2736b25da71fd3a314217052130",
+      "stage_binding_payload_sha256": "d265def3120e676e4cd36f64ccde40da5e785dc3f0c505587e823ceab1bb2870",
+      "implementation_closure_payload_sha256": "7bdd27bc6365c936c7e17736920d5fbf2556608e8b59b0869b3e70b9e61e5de7",
+      "execution_commit": "644840a4967d69f6acc8903549705370bffdcba1",
+      "run_nonce": "fda16561690f49f98930b44924941bb9",
+      "artifact_roles": [
+        "cash",
+        "cash_stress",
+        "primary",
+        "stress"
+      ],
+      "artifact_parquet_count": 20,
+      "artifact_row_count": 43222,
+      "phase_sha256": "ab6e2f46fff90892ff9439e7e5846d3b2014adf92d86a19c28e9a9520e5dcb75",
+      "metrics_sha256": "e9f817e9b730c0807676f2b365aedc927de20915a0c7137cbbfaf70c22160348",
+      "gate_sha256": "68c2e094ec4c1f88212e6521823c43327f48fc0ca0a92820ed0af6d858546278",
+      "gate_passed": false
+    },
+    "observed_gate": {
+      "gate_passed": false,
+      "failed_checks": [
+        "requested_notional_fill_ratio_at_least"
+      ],
+      "observed_minimum_requested_notional_fill_ratio": 0.8965780451229126,
+      "threshold": 0.99,
+      "primary_requested_notional_fill_ratio": 0.9954253240120514,
+      "stress_requested_notional_fill_ratio": 0.9951486761513633,
+      "cash_requested_notional_fill_ratio": 0.8965780451229126,
+      "cash_stress_requested_notional_fill_ratio": 0.8965780451229126,
+      "would_have_admission_status": "train_admission_failed",
+      "finding": "The four-role minimum was set by four cash-comparator orders blocked while dividends were receivable but not yet available as cash; primary and stress each cleared the 0.99 policy fill floor."
+    },
+    "historical_summary": {
+      "primary_cagr": 0.06908794127071727,
+      "primary_sharpe": 0.7263933657449289,
+      "primary_max_drawdown": -0.17024574801653047,
+      "stress_16bp_cagr": 0.0685803846989721,
+      "cash_cagr": 0.030913196843269874,
+      "cash_excess_cagr": 0.038174744427447393,
+      "stress_cash_excess_cagr": 0.03783893629563595
+    },
+    "role_gate_metrics": {
+      "primary": {
+        "cagr": 0.06908794127071727,
+        "sharpe": 0.7263933657449289,
+        "max_drawdown": -0.17024574801653047,
+        "positive_complete_year_ratio": 0.75,
+        "annualized_turnover": 0.5399265050913324,
+        "requested_notional_fill_ratio": 0.9954253240120514,
+        "capacity_limited_requested_notional_ratio": 0.0,
+        "nav_reconciliation_error": 2.8558133635669947e-10
+      },
+      "stress": {
+        "cagr": 0.0685803846989721,
+        "sharpe": 0.7215851617595691,
+        "max_drawdown": -0.17031479228078583,
+        "positive_complete_year_ratio": 0.75,
+        "annualized_turnover": 0.5399883882230592,
+        "requested_notional_fill_ratio": 0.9951486761513633,
+        "capacity_limited_requested_notional_ratio": 0.0,
+        "nav_reconciliation_error": 3.1104718800634146e-10
+      },
+      "cash": {
+        "cagr": 0.030913196843269874,
+        "sharpe": 8.95454938642539,
+        "max_drawdown": -0.001950437590883758,
+        "positive_complete_year_ratio": 1.0,
+        "annualized_turnover": 0.23810241580339947,
+        "requested_notional_fill_ratio": 0.8965780451229126,
+        "capacity_limited_requested_notional_ratio": 0.0,
+        "nav_reconciliation_error": 2.3283064365386963e-10
+      },
+      "cash_stress": {
+        "cagr": 0.030741448403336147,
+        "sharpe": 8.773866582374954,
+        "max_drawdown": -0.0019519646213583819,
+        "positive_complete_year_ratio": 1.0,
+        "annualized_turnover": 0.2381222886745083,
+        "requested_notional_fill_ratio": 0.8965780451229126,
+        "capacity_limited_requested_notional_ratio": 0.0,
+        "nav_reconciliation_error": 1.4290435501607135e-10
+      }
+    }
+  },
+  "failure_boundary": {
+    "initial_head_push_ci_check_passed": true,
+    "train_source_created": true,
+    "train_evaluation_persisted": true,
+    "train_phase_deep_verified": true,
+    "disclosed_static_replay_verified": true,
+    "head_unchanged_after_evaluation": true,
+    "tracked_worktree_clean_after_evaluation": true,
+    "runtime_layout_verified": true,
+    "evidence_layout_verified_empty": true,
+    "closure_reverified": true,
+    "second_github_ci_transport_check_passed": false,
+    "train_admission_created": false,
+    "winner_freeze_created": false,
+    "validation_market_outcomes_opened": false,
+    "validation_stage_created": false,
+    "audit_market_outcomes_opened": false,
+    "audit_stage_created": false,
+    "terminal_result_created": false,
+    "normal_selection_conclusion_allowed": false,
+    "profit_claim_allowed": false
+  },
+  "archive_contract": {
+    "same_release_retry_allowed": false,
+    "normal_validation_audit_or_finalize_allowed": false,
+    "receipt_mutually_exclusive_with_admission_freeze_audit_and_result": true,
+    "runtime_may_be_removed_after_remote_tag_verification": true,
+    "next_release": "8.1",
+    "direction_change": false,
+    "permitted_change": "Restrict policy admission turnover, fill and capacity aggregation to primary and stress; keep cash and cash_stress execution diagnostics disclosed, keep four-role accounting validity, and keep every asset, weight, target, return, cost, date and economic threshold unchanged.",
+    "permitted_transport_verification_fix": "If git ls-remote transport is unavailable, query the authenticated GitHub API for origin/main and still require its exact commit SHA plus the same completed successful push CI; never accept a missing or mismatched remote identity.",
+    "correction_chosen_after_observing_8_0_train_failure": true,
+    "new_protocol_closure_evidence_and_runtime_namespaces_required": true,
+    "validation_and_audit_must_remain_unopened_until_committed_8_1_reclassification": true
+  },
+  "payload_sha256": "751b85c6c2e52b450e9c3549f7f4504af50b634599be4c32e240ee503de9823a"
+}

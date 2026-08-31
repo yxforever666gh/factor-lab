@@ -69,7 +69,14 @@ V8_TRAIN_ADMISSION_PATH = f"{V8_EVIDENCE_ROOT}/train-admission.json"
 V8_WINNER_FREEZE_PATH = "protocols/evidence/8.0/winner-freeze.json"
 V8_AUDIT_PATH = "protocols/evidence/8.0/historical-audit.json"
 V8_RESULT_PATH = "protocols/evidence/8.0/result.json"
+V8_FAILURE_PATH = "protocols/evidence/8.0/execution-failure.json"
 V8_RUNTIME_PATH = "runtime/data/multi-asset-8.0"
+V8_FAILURE_PAYLOAD_SHA256 = (
+    "751b85c6c2e52b450e9c3549f7f4504af50b634599be4c32e240ee503de9823a"
+)
+V8_FAILURE_FILE_SHA256 = (
+    "6af779495081f6ee391c6388a1e4342b878168b529f8074cf03d9ec2cc50eeaa"
+)
 V71_TAG_OBJECT = "15ea8e8de95638fdc0786ff0f35177b0ecba878d"
 V71_TAG_COMMIT = "e7f09e17646cc44d78a49f6ddc41acc471f205d4"
 
@@ -1291,6 +1298,571 @@ def _verify_published_7_1_result(root: Path) -> dict[str, Any]:
     return result
 
 
+def _v8_archive_git(
+    root: Path, *args: str, check: bool = True
+) -> tuple[int, bytes, bytes]:
+    completed = subprocess.run(
+        ["git", *args],
+        cwd=root,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if check and completed.returncode != 0:
+        raise ValueError(
+            "could not verify the 8.0 execution-failure archive: "
+            + completed.stderr.decode("utf-8", errors="replace").strip()
+        )
+    return completed.returncode, completed.stdout, completed.stderr
+
+
+def _verify_8_0_failure_archive(
+    root: Path, *, verify_data: bool
+) -> tuple[dict[str, Any], bool, bool]:
+    failure_path = root / V8_FAILURE_PATH
+    if failure_path.is_symlink() or not failure_path.is_file():
+        raise ValueError("8.0 execution-failure receipt is missing or indirect")
+    failure = _read_json(failure_path)
+    if (
+        set(failure)
+        != {
+            "schema_version",
+            "kind",
+            "release",
+            "status",
+            "classification",
+            "calibration_execution",
+            "frozen_inputs",
+            "train_stage",
+            "failure_boundary",
+            "archive_contract",
+            "payload_sha256",
+        }
+        or failure.get("schema_version") != 1
+        or failure.get("kind") != "factor_lab_8_0_execution_failure"
+        or failure.get("release") != "8.0"
+        or failure.get("status") != "selection_inconclusive_execution_failure"
+        or failure.get("classification")
+        != "post_evaluation_github_ci_transport_failure"
+        or failure.get("payload_sha256") != V8_FAILURE_PAYLOAD_SHA256
+        or failure.get("payload_sha256") != _canonical_payload_sha256(failure)
+        or _file_sha256(failure_path) != V8_FAILURE_FILE_SHA256
+    ):
+        raise ValueError("8.0 execution-failure receipt identity differs")
+
+    execution = failure.get("calibration_execution") or {}
+    if execution != {
+        "command": "python scripts/run-multi-asset-evidence.py --mode calibration",
+        "execution_commit": "644840a4967d69f6acc8903549705370bffdcba1",
+        "phase": "train",
+        "candidate_id": "static_risk_budget",
+        "comparator_id": "cash_only_511880",
+        "failure_function": (
+            "run-multi-asset-evidence._require_head_pushed_and_ci_success"
+        ),
+        "exception_type": "RuntimeError",
+        "exception_message": (
+            "formal HEAD is not the current pushed origin/main commit"
+        ),
+        "external_transport_diagnostic": (
+            "git ls-remote subsequently returned Empty reply from server"
+        ),
+        "canonical_failure_code": (
+            "github_ci_empty_reply_after_train_evaluation"
+        ),
+    }:
+        raise ValueError("8.0 calibration failure identity differs")
+
+    protocol = _read_json(root / V8_PROTOCOL_PATH)
+    selection = _read_json(root / V8_ASSET_SELECTION_PATH)
+    disclosure = _read_json(root / V7_PRECLOSURE_TRAIN_PATH)
+    closure = _read_json(root / V8_CLOSURE_PATH)
+    expected_inputs = {
+        "protocol": {
+            "path": V8_PROTOCOL_PATH,
+            "file_sha256": (
+                "ac4a6f94cfbbe709c26120bad7499196fa36fc497f366cf445896cd486519abc"
+            ),
+            "payload_sha256": (
+                "801374f58aa5edd66365e0937ed119082559f2950cc1106134a3cdb58e0099e7"
+            ),
+        },
+        "asset_selection": {
+            "path": V8_ASSET_SELECTION_PATH,
+            "file_sha256": (
+                "6d2d819db2579db76f8e7830a5de090d8d471c7fdc657abd8aba626cd1b065ec"
+            ),
+            "payload_sha256": (
+                "b00536d618c7fe46e3cbe8d258d2b2032ef4e0c16d40fb9c74ff016c34525e0b"
+            ),
+        },
+        "preclosure_train_disclosure": {
+            "path": V7_PRECLOSURE_TRAIN_PATH,
+            "file_sha256": (
+                "01c3d97f7a3cce81bd8abe4e430c5b35b35deddefc80950403d3b40d109f7c09"
+            ),
+            "payload_sha256": (
+                "6bd2909ddc97ec84d3535d15e8f13330a5752831aead82d8fb50afdd16ac6775"
+            ),
+        },
+        "prevalidation_closure": {
+            "path": V8_CLOSURE_PATH,
+            "file_sha256": (
+                "8e4fe890efb746c15ae5f0375d8a1dfd85a061172426165af1441d5011bfa97d"
+            ),
+            "payload_sha256": (
+                "7bdd27bc6365c936c7e17736920d5fbf2556608e8b59b0869b3e70b9e61e5de7"
+            ),
+            "implementation_commit": (
+                "beb4c56cb875e386b5742a7ca10fa634703dbc81"
+            ),
+        },
+    }
+    if failure.get("frozen_inputs") != expected_inputs:
+        raise ValueError("8.0 execution failure frozen inputs differ")
+    for value, binding in (
+        (protocol, expected_inputs["protocol"]),
+        (selection, expected_inputs["asset_selection"]),
+        (disclosure, expected_inputs["preclosure_train_disclosure"]),
+        (closure, expected_inputs["prevalidation_closure"]),
+    ):
+        path = root / str(binding["path"])
+        if (
+            path.is_symlink()
+            or not path.is_file()
+            or value.get("payload_sha256") != binding["payload_sha256"]
+            or value.get("payload_sha256") != _canonical_payload_sha256(value)
+            or _file_sha256(path) != binding["file_sha256"]
+        ):
+            raise ValueError(f"8.0 frozen input differs: {binding['path']}")
+
+    boundary = failure.get("failure_boundary") or {}
+    if (
+        boundary.get("train_evaluation_persisted") is not True
+        or boundary.get("train_phase_deep_verified") is not True
+        or boundary.get("disclosed_static_replay_verified") is not True
+        or boundary.get("second_github_ci_transport_check_passed") is not False
+        or boundary.get("train_admission_created") is not False
+        or boundary.get("validation_market_outcomes_opened") is not False
+        or boundary.get("audit_market_outcomes_opened") is not False
+        or boundary.get("terminal_result_created") is not False
+        or boundary.get("profit_claim_allowed") is not False
+    ):
+        raise ValueError("8.0 execution-failure evidence boundary differs")
+    observed = (failure.get("train_stage") or {}).get("observed_gate") or {}
+    if (
+        observed.get("gate_passed") is not False
+        or observed.get("failed_checks")
+        != ["requested_notional_fill_ratio_at_least"]
+        or observed.get("observed_minimum_requested_notional_fill_ratio")
+        != 0.8965780451229126
+        or observed.get("primary_requested_notional_fill_ratio")
+        != 0.9954253240120514
+        or observed.get("stress_requested_notional_fill_ratio")
+        != 0.9951486761513633
+        or observed.get("would_have_admission_status")
+        != "train_admission_failed"
+    ):
+        raise ValueError("8.0 observed failed gate differs")
+    archive_contract = failure.get("archive_contract") or {}
+    if (
+        archive_contract.get("same_release_retry_allowed") is not False
+        or archive_contract.get("normal_validation_audit_or_finalize_allowed")
+        is not False
+        or archive_contract.get("next_release") != "8.1"
+        or archive_contract.get("direction_change") is not False
+        or archive_contract.get("correction_chosen_after_observing_8_0_train_failure")
+        is not True
+    ):
+        raise ValueError("8.0 archive/corrective boundary differs")
+
+    normal_paths = (
+        V8_TRAIN_ADMISSION_PATH,
+        V8_WINNER_FREEZE_PATH,
+        V8_AUDIT_PATH,
+        V8_RESULT_PATH,
+    )
+    if any((root / relative).exists() or (root / relative).is_symlink() for relative in normal_paths):
+        raise ValueError("8.0 failure receipt is mutually exclusive with normal evidence")
+    evidence_root = root / V8_EVIDENCE_ROOT
+    if (
+        evidence_root.is_symlink()
+        or not evidence_root.is_dir()
+        or {path.name for path in evidence_root.iterdir()}
+        != {Path(V8_FAILURE_PATH).name}
+    ):
+        raise ValueError("8.0 execution-failure evidence layout differs")
+
+    execution_commit = str(execution["execution_commit"])
+    implementation_commit = str(
+        expected_inputs["prevalidation_closure"]["implementation_commit"]
+    )
+    _code, resolved, _stderr = _v8_archive_git(
+        root, "rev-parse", "--verify", f"{execution_commit}^{{commit}}"
+    )
+    if resolved.decode("ascii").strip() != execution_commit:
+        raise ValueError("8.0 calibration execution commit differs")
+    code, _stdout, _stderr = _v8_archive_git(
+        root,
+        "merge-base",
+        "--is-ancestor",
+        execution_commit,
+        "HEAD",
+        check=False,
+    )
+    if code != 0:
+        raise ValueError("8.0 calibration execution is not an ancestor of HEAD")
+    for binding in expected_inputs.values():
+        relative = str(binding["path"])
+        _code, historical, _stderr = _v8_archive_git(
+            root, "show", f"{execution_commit}:{relative}"
+        )
+        if historical != (root / relative).read_bytes():
+            raise ValueError(f"8.0 execution commit lacks frozen input: {relative}")
+    for relative in (*normal_paths, V8_FAILURE_PATH):
+        code, _stdout, _stderr = _v8_archive_git(
+            root,
+            "cat-file",
+            "-e",
+            f"{execution_commit}:{relative}",
+            check=False,
+        )
+        if code == 0:
+            raise ValueError(f"8.0 evidence predates its execution: {relative}")
+    implementation = closure.get("implementation") or {}
+    if closure.get("implementation_commit") != implementation_commit or not isinstance(
+        implementation, Mapping
+    ):
+        raise ValueError("8.0 closure implementation identity differs")
+    for relative, binding in implementation.items():
+        if not isinstance(binding, Mapping) or binding.get("path") != relative:
+            raise ValueError(f"invalid 8.0 implementation binding: {relative}")
+        _code, historical, _stderr = _v8_archive_git(
+            root, "show", f"{implementation_commit}:{relative}"
+        )
+        if hashlib.sha256(historical).hexdigest() != binding.get("sha256"):
+            raise ValueError(f"8.0 historical implementation differs: {relative}")
+
+    tag_verified = False
+    code, _stdout, _stderr = _v8_archive_git(
+        root, "show-ref", "--verify", "--quiet", "refs/tags/8.0", check=False
+    )
+    if code == 0:
+        _code, tag_type, _stderr = _v8_archive_git(
+            root, "cat-file", "-t", "refs/tags/8.0"
+        )
+        _code, tag_object_raw, _stderr = _v8_archive_git(
+            root, "rev-parse", "refs/tags/8.0"
+        )
+        _code, tag_commit_raw, _stderr = _v8_archive_git(
+            root, "rev-parse", "refs/tags/8.0^{}"
+        )
+        tag_object = tag_object_raw.decode("ascii").strip()
+        tag_commit = tag_commit_raw.decode("ascii").strip()
+        if tag_type.decode("ascii").strip() != "tag":
+            raise ValueError("local 8.0 tag is not annotated")
+        _code, remote_raw, _stderr = _v8_archive_git(
+            root,
+            "ls-remote",
+            "--exit-code",
+            "origin",
+            "refs/tags/8.0",
+            "refs/tags/8.0^{}",
+        )
+        remote_refs = {
+            ref: object_id
+            for object_id, ref in (
+                line.split() for line in remote_raw.decode("ascii").splitlines()
+            )
+        }
+        if (
+            remote_refs.get("refs/tags/8.0") != tag_object
+            or remote_refs.get("refs/tags/8.0^{}") != tag_commit
+        ):
+            raise ValueError("local and GitHub 8.0 tag identities differ")
+        code, _stdout, _stderr = _v8_archive_git(
+            root,
+            "merge-base",
+            "--is-ancestor",
+            execution_commit,
+            tag_commit,
+            check=False,
+        )
+        if code != 0:
+            raise ValueError("8.0 tag does not descend from calibration execution")
+        for relative in (
+            V8_PROTOCOL_PATH,
+            V8_ASSET_SELECTION_PATH,
+            V7_PRECLOSURE_TRAIN_PATH,
+            V8_CLOSURE_PATH,
+            V8_FAILURE_PATH,
+        ):
+            _code, tagged, _stderr = _v8_archive_git(
+                root, "show", f"{tag_commit}:{relative}"
+            )
+            if tagged != (root / relative).read_bytes():
+                raise ValueError(f"current 8.0 archive differs from tag: {relative}")
+        for relative in normal_paths:
+            code, _stdout, _stderr = _v8_archive_git(
+                root,
+                "cat-file",
+                "-e",
+                f"{tag_commit}:{relative}",
+                check=False,
+            )
+            if code == 0:
+                raise ValueError(
+                    f"published 8.0 tag contains normal evidence: {relative}"
+                )
+        tag_verified = True
+
+    data_verified = False
+    runtime_root = root / V8_RUNTIME_PATH
+    if not tag_verified and not runtime_root.is_dir():
+        raise ValueError(
+            "8.0 train runtime must be retained until the GitHub tag is verified"
+        )
+    if (verify_data or not tag_verified) and runtime_root.exists():
+        source_root = runtime_root / "sources"
+        evaluation_root = runtime_root / "evaluations"
+        binding_root = runtime_root / "stage-bindings"
+        if (
+            runtime_root.is_symlink()
+            or {path.name for path in runtime_root.iterdir()}
+            != {"sources", "evaluations", "stage-bindings"}
+            or source_root.is_symlink()
+            or {path.name for path in source_root.iterdir()} != {"stage=train"}
+            or evaluation_root.is_symlink()
+            or {path.name for path in evaluation_root.iterdir()} != {"stage=train"}
+            or binding_root.is_symlink()
+            or {path.name for path in binding_root.iterdir()} != {"train.json"}
+        ):
+            raise ValueError("8.0 archived runtime layout differs")
+        train = failure["train_stage"]
+        manifest_path = root / train["manifest"]["path"]
+        binding_path = root / train["binding"]["path"]
+        evaluation_path = root / train["evaluation"]["path"]
+        manifest = _read_json(manifest_path)
+        stage_binding = _read_json(binding_path)
+        evaluation = _read_json(evaluation_path)
+        for path, value, expected in (
+            (manifest_path, manifest, train["manifest"]),
+            (binding_path, stage_binding, train["binding"]),
+            (evaluation_path, evaluation, train["evaluation"]),
+        ):
+            if (
+                _file_sha256(path) != expected["file_sha256"]
+                or value.get("payload_sha256") != expected["payload_sha256"]
+                or value.get("payload_sha256") != _canonical_payload_sha256(value)
+            ):
+                raise ValueError(f"8.0 archived runtime identity differs: {path}")
+        if (
+            len(manifest.get("assets") or {}) != train["manifest"]["asset_count"]
+            or sum(
+                int(asset.get("row_count") or 0)
+                for asset in (manifest.get("assets") or {}).values()
+            )
+            != train["manifest"]["asset_row_count"]
+            or (manifest.get("calendar") or {}).get("row_count")
+            != train["manifest"]["calendar_row_count"]
+            or stage_binding.get("execution_commit") != execution_commit
+            or stage_binding.get("run_nonce") != train["binding"]["run_nonce"]
+            or evaluation.get("execution_commit") != execution_commit
+            or evaluation.get("run_nonce") != train["evaluation"]["run_nonce"]
+            or _canonical_payload_sha256(evaluation.get("metrics") or {})
+            != train["evaluation"]["metrics_sha256"]
+            or _canonical_payload_sha256(evaluation.get("gate") or {})
+            != train["evaluation"]["gate_sha256"]
+        ):
+            raise ValueError("8.0 archived train contract differs")
+        import pandas as pd
+
+        source_stage = manifest_path.parent
+        expected_source_files = {"manifest.json", "calendar.parquet"}
+        expected_source_files.update(
+            str(asset.get("path") or "")
+            for asset in (manifest.get("assets") or {}).values()
+        )
+        if {path.name for path in source_stage.iterdir()} != expected_source_files:
+            raise ValueError("8.0 archived source file set differs")
+        calendar_binding = manifest.get("calendar") or {}
+        calendar_path = source_stage / str(calendar_binding.get("path") or "")
+        if (
+            calendar_path.is_symlink()
+            or not calendar_path.is_file()
+            or calendar_path.stat().st_size != calendar_binding.get("size_bytes")
+            or _file_sha256(calendar_path) != calendar_binding.get("file_sha256")
+            or len(pd.read_parquet(calendar_path)) != calendar_binding.get("row_count")
+        ):
+            raise ValueError("8.0 archived calendar differs")
+        for asset in (manifest.get("assets") or {}).values():
+            asset_path = source_stage / str(asset.get("path") or "")
+            if (
+                asset_path.is_symlink()
+                or not asset_path.is_file()
+                or asset_path.stat().st_size != asset.get("size_bytes")
+                or _file_sha256(asset_path) != asset.get("file_sha256")
+                or len(pd.read_parquet(asset_path)) != asset.get("row_count")
+            ):
+                raise ValueError(f"8.0 archived source asset differs: {asset_path}")
+        artifacts = evaluation.get("artifacts") or {}
+        if set(artifacts) != set(train["evaluation"]["artifact_roles"]):
+            raise ValueError("8.0 archived evaluation role set differs")
+        phase = {
+            "source_manifest_payload_sha256": evaluation[
+                "source_manifest_payload_sha256"
+            ],
+            "stage_binding_payload_sha256": evaluation[
+                "stage_binding_payload_sha256"
+            ],
+            "evaluation_payload_sha256": evaluation["payload_sha256"],
+            "evaluation_file_sha256": _file_sha256(evaluation_path),
+            "metrics": evaluation["metrics"],
+            "gate": evaluation["gate"],
+        }
+        if _canonical_payload_sha256(phase) != train["evaluation"]["phase_sha256"]:
+            raise ValueError("8.0 archived phase hash differs")
+        evaluation_stage_root = evaluation_path.parent
+        expected_evaluation_files = {"evaluation.json"}
+        expected_evaluation_files.update(
+            str(artifact.get("path") or "")
+            for role_artifacts in artifacts.values()
+            for artifact in role_artifacts.values()
+        )
+        if {path.name for path in evaluation_stage_root.iterdir()} != expected_evaluation_files:
+            raise ValueError("8.0 archived evaluation file set differs")
+        parquet_count = 0
+        row_count = 0
+        for role_artifacts in artifacts.values():
+            for artifact in role_artifacts.values():
+                artifact_path = evaluation_stage_root / str(
+                    artifact.get("path") or ""
+                )
+                if (
+                    artifact_path.is_symlink()
+                    or not artifact_path.is_file()
+                    or artifact_path.stat().st_size != artifact.get("size_bytes")
+                    or _file_sha256(artifact_path) != artifact.get("file_sha256")
+                ):
+                    raise ValueError(f"8.0 archived artifact differs: {artifact_path}")
+                rows = len(pd.read_parquet(artifact_path))
+                if rows != artifact.get("rows"):
+                    raise ValueError(f"8.0 archived artifact rows differ: {artifact_path}")
+                parquet_count += 1
+                row_count += rows
+        if (
+            parquet_count != train["evaluation"]["artifact_parquet_count"]
+            or row_count != train["evaluation"]["artifact_row_count"]
+        ):
+            raise ValueError("8.0 archived artifact totals differ")
+        data_verified = True
+    elif runtime_root.is_symlink():
+        raise ValueError("8.0 archived runtime must not be indirect")
+    return failure, data_verified, tag_verified
+
+
+def _strategy_status_8_0_archived_failure(
+    root: Path, *, verify_data: bool
+) -> tuple[dict[str, Any], int]:
+    checks: list[dict[str, Any]] = []
+    try:
+        clean = _working_tree_is_clean(root)
+        if not clean:
+            raise RuntimeError("8.0 archive status requires a clean worktree")
+        failure, data_verified, tag_verified = _verify_8_0_failure_archive(
+            root, verify_data=verify_data
+        )
+        checks.append(
+            {
+                "category": "execution_failure_archive",
+                "path": V8_FAILURE_PATH,
+                "status": "match",
+                "payload_sha256": failure["payload_sha256"],
+            }
+        )
+        if tag_verified:
+            checks.append(
+                {
+                    "category": "local_archived_annotated_tag",
+                    "path": "refs/tags/8.0",
+                    "status": "match",
+                }
+            )
+        else:
+            head = _v8_require_head_ci(root)
+            checks.append(
+                {
+                    "category": "archive_head_push_ci",
+                    "path": ".git",
+                    "status": "match",
+                    "head": head,
+                }
+            )
+        checks.append(
+            {
+                "category": "canonical_stage_artifacts",
+                "path": V8_RUNTIME_PATH,
+                "status": (
+                    "match"
+                    if data_verified
+                    else "not_retained"
+                    if not (root / V8_RUNTIME_PATH).exists()
+                    else "not_verified"
+                ),
+            }
+        )
+        return {
+            "status": failure["status"],
+            "version": "8.0",
+            "route": "strategic_static_capital_budget_beta",
+            "protocol_id": (
+                "factor-lab/8.0/strategic-static-capital-budget-beta-v1"
+            ),
+            "historical_evidence_class": (
+                "exposed_train_execution_failure_diagnostic"
+            ),
+            "profit_claim_allowed": False,
+            "selected_candidate_id": None,
+            "observed_train_gate_passed": False,
+            "audit_status": "not_opened",
+            "terminal_result_payload_sha256": None,
+            "execution_failure_payload_sha256": failure["payload_sha256"],
+            "canonical_data_hashes_verified": data_verified,
+            "checks": checks,
+        }, 0
+    except (
+        AttributeError,
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+        subprocess.SubprocessError,
+    ) as exc:
+        checks.append(
+            {
+                "category": "execution_failure_archive",
+                "path": V8_FAILURE_PATH,
+                "status": "mismatch",
+                "error": str(exc),
+            }
+        )
+        return {
+            "status": "integrity_mismatch",
+            "version": "8.0",
+            "route": "strategic_static_capital_budget_beta",
+            "protocol_id": None,
+            "historical_evidence_class": None,
+            "profit_claim_allowed": False,
+            "selected_candidate_id": None,
+            "observed_train_gate_passed": None,
+            "audit_status": "unknown",
+            "terminal_result_payload_sha256": None,
+            "execution_failure_payload_sha256": None,
+            "canonical_data_hashes_verified": False,
+            "checks": checks,
+        }, 3
+
+
 def _strategy_status_8_0_pending(
     root: Path, *, verify_data: bool
 ) -> tuple[dict[str, Any], int]:
@@ -1466,6 +2038,10 @@ def _strategy_status_8_0_pending(
 def _strategy_status_8_0(
     root: Path, *, verify_data: bool
 ) -> tuple[dict[str, Any], int]:
+    if (root / V8_FAILURE_PATH).is_file():
+        return _strategy_status_8_0_archived_failure(
+            root, verify_data=verify_data
+        )
     if not (root / V8_CLOSURE_PATH).is_file():
         return _strategy_status_8_0_pending(root, verify_data=verify_data)
     checks: list[dict[str, Any]] = []

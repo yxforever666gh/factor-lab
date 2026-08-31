@@ -9,6 +9,21 @@ import factor_lab.cli as cli
 from factor_lab.cli import build_parser
 
 
+def _copy_8_0_failure_archive_inputs(destination: Path) -> Path:
+    source_root = Path(__file__).resolve().parents[2]
+    for relative in (
+        cli.V8_PROTOCOL_PATH,
+        cli.V8_ASSET_SELECTION_PATH,
+        cli.V7_PRECLOSURE_TRAIN_PATH,
+        cli.V8_CLOSURE_PATH,
+        cli.V8_FAILURE_PATH,
+    ):
+        target = destination / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((source_root / relative).read_bytes())
+    return source_root
+
+
 def test_cli_exposes_only_lightweight_mainline_commands() -> None:
     parser = build_parser()
     assert parser.parse_args(["data", "status"]).data_command == "status"
@@ -140,6 +155,27 @@ def test_strategy_status_verifies_tracked_implementation_and_evidence(
     monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
     result, exit_code = cli._strategy_status(root, verify_data=False)
     closure_exists = (root / cli.V8_CLOSURE_PATH).is_file()
+    local_tag_exists = (
+        cli._v8_archive_git(
+            root,
+            "show-ref",
+            "--verify",
+            "--quiet",
+            "refs/tags/8.0",
+            check=False,
+        )[0]
+        == 0
+    )
+    pretag_archive_without_runtime = (
+        (root / cli.V8_FAILURE_PATH).is_file()
+        and not (root / cli.V8_RUNTIME_PATH).exists()
+        and not local_tag_exists
+    )
+    if pretag_archive_without_runtime:
+        assert exit_code == 3
+        assert result["status"] == "integrity_mismatch"
+        assert result["checks"][-1]["category"] == "execution_failure_archive"
+        return
     if closure_exists:
         assert exit_code == 0
     else:
@@ -155,15 +191,337 @@ def test_strategy_status_verifies_tracked_implementation_and_evidence(
         assert result["audit_status"] == "not_opened"
     assert all(
         check["status"]
-        in {"match", "not_verified", "not_applicable", "pending_clean_commit"}
+        in {
+            "match",
+            "not_verified",
+            "not_retained",
+            "not_applicable",
+            "pending_clean_commit",
+        }
         for check in result["checks"]
     )
     categories = {check["category"] for check in result["checks"]}
-    if closure_exists:
+    if (root / cli.V8_FAILURE_PATH).is_file():
+        assert "execution_failure_archive" in categories
+    elif closure_exists:
         assert "release_evidence_chain" in categories
     else:
         assert "protocol_payload" in categories
         assert "asset_selection_payload" in categories
+
+
+def test_8_0_real_execution_failure_receipt_has_valid_shallow_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = Path(__file__).resolve().parents[2]
+    if not (root / cli.V8_RUNTIME_PATH).is_dir():
+        pytest.skip("pre-tag archive runtime is not retained in this checkout")
+    monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
+    monkeypatch.setattr(cli, "_v8_require_head_ci", lambda _root: "a" * 40)
+
+    result, exit_code = cli._strategy_status_8_0(root, verify_data=False)
+
+    assert exit_code == 0
+    assert result["status"] == "selection_inconclusive_execution_failure"
+    assert result["observed_train_gate_passed"] is False
+    assert result["selected_candidate_id"] is None
+    assert result["audit_status"] == "not_opened"
+    assert result["profit_claim_allowed"] is False
+    assert result["canonical_data_hashes_verified"] is True
+    assert result["execution_failure_payload_sha256"] == (
+        cli.V8_FAILURE_PAYLOAD_SHA256
+    )
+    assert any(
+        check["category"] == "execution_failure_archive"
+        and check["status"] == "match"
+        for check in result["checks"]
+    )
+    stage_check = next(
+        check
+        for check in result["checks"]
+        if check["category"] == "canonical_stage_artifacts"
+    )
+    assert stage_check["status"] == "match"
+
+
+def test_8_0_real_execution_failure_receipt_deep_verifies_only_train_runtime(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = Path(__file__).resolve().parents[2]
+    runtime_root = root / cli.V8_RUNTIME_PATH
+    if not runtime_root.is_dir():
+        pytest.skip("the archived 2015-2019 train runtime is not retained")
+    assert {path.name for path in (runtime_root / "sources").iterdir()} == {
+        "stage=train"
+    }
+    assert {path.name for path in (runtime_root / "evaluations").iterdir()} == {
+        "stage=train"
+    }
+    assert {path.name for path in (runtime_root / "stage-bindings").iterdir()} == {
+        "train.json"
+    }
+    evaluation = json.loads(
+        (
+            runtime_root
+            / "evaluations"
+            / "stage=train"
+            / "evaluation.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert evaluation["stage"] == "train"
+    assert evaluation["metrics"]["start_date"] == "2015-03-02"
+    assert evaluation["metrics"]["end_date"] == "2019-12-31"
+    monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
+    monkeypatch.setattr(cli, "_v8_require_head_ci", lambda _root: "b" * 40)
+
+    result, exit_code = cli._strategy_status_8_0(root, verify_data=True)
+
+    assert exit_code == 0
+    assert result["status"] == "selection_inconclusive_execution_failure"
+    assert result["canonical_data_hashes_verified"] is True
+    assert any(
+        check["category"] == "canonical_stage_artifacts"
+        and check["status"] == "match"
+        for check in result["checks"]
+    )
+
+
+def test_8_0_execution_failure_rejects_internally_rehashed_receipt_tamper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _copy_8_0_failure_archive_inputs(tmp_path)
+    receipt_path = tmp_path / cli.V8_FAILURE_PATH
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+    receipt["calibration_execution"]["canonical_failure_code"] = "forged_failure"
+    receipt["payload_sha256"] = cli._canonical_payload_sha256(receipt)
+    receipt_path.write_text(
+        json.dumps(receipt, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
+
+    result, exit_code = cli._strategy_status_8_0(tmp_path, verify_data=False)
+
+    assert exit_code == 3
+    assert result["status"] == "integrity_mismatch"
+    assert "receipt identity differs" in result["checks"][-1]["error"]
+
+
+def test_8_0_execution_failure_rejects_frozen_input_file_tamper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _copy_8_0_failure_archive_inputs(tmp_path)
+    protocol_path = tmp_path / cli.V8_PROTOCOL_PATH
+    protocol_path.write_bytes(protocol_path.read_bytes() + b"\n")
+    monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
+
+    result, exit_code = cli._strategy_status_8_0(tmp_path, verify_data=False)
+
+    assert exit_code == 3
+    assert result["status"] == "integrity_mismatch"
+    assert f"frozen input differs: {cli.V8_PROTOCOL_PATH}" in (
+        result["checks"][-1]["error"]
+    )
+
+
+def test_8_0_execution_failure_rejects_normal_evidence_conflict(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _copy_8_0_failure_archive_inputs(tmp_path)
+    admission_path = tmp_path / cli.V8_TRAIN_ADMISSION_PATH
+    admission_path.write_text("{}\n", encoding="utf-8")
+    monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
+
+    result, exit_code = cli._strategy_status_8_0(tmp_path, verify_data=False)
+
+    assert exit_code == 3
+    assert result["status"] == "integrity_mismatch"
+    assert "mutually exclusive with normal evidence" in (
+        result["checks"][-1]["error"]
+    )
+
+
+def test_8_0_execution_failure_rejects_missing_runtime_before_remote_tag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source_root = _copy_8_0_failure_archive_inputs(tmp_path)
+    actual_archive_git = cli._v8_archive_git
+
+    def archive_git(_root: Path, *args: str, **kwargs):
+        if args == (
+            "show-ref",
+            "--verify",
+            "--quiet",
+            "refs/tags/8.0",
+        ):
+            return 1, b"", b""
+        return actual_archive_git(source_root, *args, **kwargs)
+
+    ci_roots: list[Path] = []
+
+    def require_head_ci(root: Path) -> str:
+        ci_roots.append(root)
+        return "c" * 40
+
+    monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
+    monkeypatch.setattr(cli, "_v8_archive_git", archive_git)
+    monkeypatch.setattr(cli, "_v8_require_head_ci", require_head_ci)
+
+    result, exit_code = cli._strategy_status_8_0(tmp_path, verify_data=False)
+
+    assert exit_code == 3
+    assert ci_roots == []
+    assert result["status"] == "integrity_mismatch"
+    assert result["canonical_data_hashes_verified"] is False
+    assert "must be retained until the GitHub tag is verified" in (
+        result["checks"][-1]["error"]
+    )
+
+
+def test_8_0_execution_failure_rejects_empty_runtime_before_remote_tag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source_root = _copy_8_0_failure_archive_inputs(tmp_path)
+    (tmp_path / cli.V8_RUNTIME_PATH).mkdir(parents=True)
+    actual_archive_git = cli._v8_archive_git
+
+    def archive_git(_root: Path, *args: str, **kwargs):
+        if args == ("show-ref", "--verify", "--quiet", "refs/tags/8.0"):
+            return 1, b"", b""
+        return actual_archive_git(source_root, *args, **kwargs)
+
+    monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
+    monkeypatch.setattr(cli, "_v8_archive_git", archive_git)
+    monkeypatch.setattr(
+        cli,
+        "_v8_require_head_ci",
+        lambda _root: (_ for _ in ()).throw(
+            AssertionError("invalid runtime must fail before CI lookup")
+        ),
+    )
+
+    result, exit_code = cli._strategy_status_8_0(tmp_path, verify_data=False)
+
+    assert exit_code == 3
+    assert result["status"] == "integrity_mismatch"
+    assert "archived runtime layout differs" in result["checks"][-1]["error"]
+
+
+def test_8_0_execution_failure_rejects_local_only_tag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source_root = _copy_8_0_failure_archive_inputs(tmp_path)
+    actual_archive_git = cli._v8_archive_git
+    tag_object = "a" * 40
+    tag_commit = "b" * 40
+
+    def archive_git(_root: Path, *args: str, **kwargs):
+        if args == ("show-ref", "--verify", "--quiet", "refs/tags/8.0"):
+            return 0, b"", b""
+        if args == ("cat-file", "-t", "refs/tags/8.0"):
+            return 0, b"tag\n", b""
+        if args == ("rev-parse", "refs/tags/8.0"):
+            return 0, (tag_object + "\n").encode("ascii"), b""
+        if args == ("rev-parse", "refs/tags/8.0^{}"):
+            return 0, (tag_commit + "\n").encode("ascii"), b""
+        if args[:4] == ("ls-remote", "--exit-code", "origin", "refs/tags/8.0"):
+            remote = (
+                "c" * 40
+                + "\trefs/tags/8.0\n"
+                + tag_commit
+                + "\trefs/tags/8.0^{}\n"
+            )
+            return 0, remote.encode("ascii"), b""
+        return actual_archive_git(source_root, *args, **kwargs)
+
+    monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
+    monkeypatch.setattr(cli, "_v8_archive_git", archive_git)
+
+    result, exit_code = cli._strategy_status_8_0(tmp_path, verify_data=False)
+
+    assert exit_code == 3
+    assert result["status"] == "integrity_mismatch"
+    assert "local and GitHub 8.0 tag identities differ" in (
+        result["checks"][-1]["error"]
+    )
+
+
+def test_8_0_execution_failure_allows_missing_runtime_after_remote_tag(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source_root = _copy_8_0_failure_archive_inputs(tmp_path)
+    actual_archive_git = cli._v8_archive_git
+    tag_object = "a" * 40
+    tag_commit = "b" * 40
+    normal_paths = {
+        cli.V8_TRAIN_ADMISSION_PATH,
+        cli.V8_WINNER_FREEZE_PATH,
+        cli.V8_AUDIT_PATH,
+        cli.V8_RESULT_PATH,
+    }
+
+    def archive_git(_root: Path, *args: str, **kwargs):
+        if args == ("show-ref", "--verify", "--quiet", "refs/tags/8.0"):
+            return 0, b"", b""
+        if args == ("cat-file", "-t", "refs/tags/8.0"):
+            return 0, b"tag\n", b""
+        if args == ("rev-parse", "refs/tags/8.0"):
+            return 0, (tag_object + "\n").encode("ascii"), b""
+        if args == ("rev-parse", "refs/tags/8.0^{}"):
+            return 0, (tag_commit + "\n").encode("ascii"), b""
+        if args[:4] == ("ls-remote", "--exit-code", "origin", "refs/tags/8.0"):
+            remote = (
+                tag_object
+                + "\trefs/tags/8.0\n"
+                + tag_commit
+                + "\trefs/tags/8.0^{}\n"
+            )
+            return 0, remote.encode("ascii"), b""
+        if args == (
+            "merge-base",
+            "--is-ancestor",
+            "644840a4967d69f6acc8903549705370bffdcba1",
+            tag_commit,
+        ):
+            return 0, b"", b""
+        if len(args) == 2 and args[0] == "show" and args[1].startswith(
+            tag_commit + ":"
+        ):
+            relative = args[1].split(":", 1)[1]
+            return 0, (tmp_path / relative).read_bytes(), b""
+        if (
+            len(args) == 3
+            and args[:2] == ("cat-file", "-e")
+            and args[2].startswith(tag_commit + ":")
+            and args[2].split(":", 1)[1] in normal_paths
+        ):
+            return 1, b"", b"missing"
+        return actual_archive_git(source_root, *args, **kwargs)
+
+    monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
+    monkeypatch.setattr(cli, "_v8_archive_git", archive_git)
+    monkeypatch.setattr(
+        cli,
+        "_v8_require_head_ci",
+        lambda _root: (_ for _ in ()).throw(
+            AssertionError("published archive must not require current-main CI")
+        ),
+    )
+
+    result, exit_code = cli._strategy_status_8_0(tmp_path, verify_data=False)
+
+    assert exit_code == 0
+    assert result["status"] == "selection_inconclusive_execution_failure"
+    assert result["canonical_data_hashes_verified"] is False
+    assert any(
+        check["category"] == "local_archived_annotated_tag"
+        and check["status"] == "match"
+        for check in result["checks"]
+    )
+    assert any(
+        check["category"] == "canonical_stage_artifacts"
+        and check["status"] == "not_retained"
+        for check in result["checks"]
+    )
 
 
 def test_explicit_7_0_status_reports_published_execution_failure() -> None:

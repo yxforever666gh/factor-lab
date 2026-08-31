@@ -29,11 +29,28 @@
 - `cash_only_511880` 每月末保持 100% 现金 ETF 目标并在下一开盘执行，仅因现金分红、整手取整或
   残余现金造成偏离时产生交易；它只是一条政策门槛，不构成 alpha comparator。
 
+### Research result
+
+- 8.0 formal train 已完整持久化并深度重放：主策略 CAGR 6.9088%、Sharpe 0.7264、最大回撤
+  -17.0246%；16bp 压力 CAGR 6.8580%，相对可投资现金 CAGR 超额分别为 3.8175pp 与
+  3.7839pp。除成交满足率外的全部预注册经济、风险、成本、容量和会计检查都通过。
+- 唯一失败项是四角色最小成交满足率 89.6578% < 99%：primary/stress 各为 99.5425%/99.5149%，
+  低值来自现金比较器在股息已成为应收款但尚未到账时请求整手再投资，四笔订单因可用现金不足一手
+  而延迟到次月。该行为符合冻结会计/整手合同，但表明把 comparator fill 纳入 policy admission 是
+  协议聚合域错配。
+- Train gate 持久化为 false 后，admission 写入前的第二次 GitHub 核验遇到 `Empty reply`，因此 8.0
+  以 `selection_inconclusive_execution_failure` 归档，而不是正常的 null selection。Receipt payload
+  为 `751b85c6c2e52b450e9c3549f7f4504af50b634599be4c32e240ee503de9823a`；validation 与 audit 从未打开，
+  同 release 禁止重跑。
+
 ### Known limitations
 
 - Static 策略是在 control 的 2015–2019 结果已知后升格，train 不是独立证据；2020–2026 虽未被
   本项目正式打开，仍是公开历史。代表 ETF 选择存在幸存与研究者选择偏差，任何历史通过都只能
   解释为这六只固定工具的战略 beta 诊断，不能承诺未来盈利或外推到资产类别指数。
+- 8.0 没有形成正常 admission/freeze/result，不能声称策略通过或已完成正式 falsification；若继续
+  同一经济路线，8.1 只能公开地修正 operational role scope，且必须保持资产、权重、现金收益门、
+  成本、日期与所有经济阈值不变。
 
 ## [7.1] - 2026-08-31
 
