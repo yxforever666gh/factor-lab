@@ -148,11 +148,11 @@ V11_ROUTE = "quarterly_dual_confirm_top3_borda_blend_75_25"
 V11_PROTOCOL_ID = "factor-lab/11.0/results-first-dual-confirm-blend-v1"
 V11_PROTOCOL_PAYLOAD_SHA256 = "d23739b85fa02d0cfeca977ba5f60fe003ae5753a387f7b10fa611a6688ae0bf"
 V11_PROTOCOL_FILE_SHA256 = "8c6b20996e1e735a020fd71a31b0401570948549a041c5f3848a3dd19ae8fc7c"
-V111_PROTOCOL_PATH = "protocols/11.1-quarterly-prospective-cycle.json"
-V111_RUNNER_PATH = "scripts/run-11.1-quarterly-cycle.py"
-V111_PROTOCOL_ID = "factor-lab/11.1/quarterly-prospective-cycle-v1"
-V111_PROTOCOL_PAYLOAD_SHA256 = "457e54d57b3bf821ced04bd4c638f686243ee40ee64431e63a67dbc5ff692a5d"
-V111_PROTOCOL_FILE_SHA256 = "81ce81f15ca43c714cc7d40d5c966850214fee28460608e5a855ce950ce95adf"
+V112_PROTOCOL_PATH = "protocols/11.2-quarterly-prospective-cycle.json"
+V112_RUNNER_PATH = "scripts/run-11.2-quarterly-cycle.py"
+V112_PROTOCOL_ID = "factor-lab/11.2/quarterly-prospective-cycle-v1"
+V112_PROTOCOL_PAYLOAD_SHA256 = "b9da758aad617d8752f9dbc628f8421fe4c04fe26f9f2a677fee1a8797b50e08"
+V112_PROTOCOL_FILE_SHA256 = "d363ae60326b17d3b28c04201f1ab411df544b2e16f0fe93e7fba30010c728a6"
 
 
 def _root() -> Path:
@@ -361,7 +361,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
 
     prospective = commands.add_parser(
-        "prospective", help="Run the lightweight 11.1 quarterly paper cycle."
+        "prospective", help="Run the resilient 11.2 quarterly paper cycle."
     )
     prospective_commands = prospective.add_subparsers(
         dest="prospective_command", required=True
@@ -3563,37 +3563,39 @@ def _strategy_command(arguments: argparse.Namespace) -> int:
     raise AssertionError(arguments.strategy_command)
 
 
-def _load_v111_cycle(root: Path) -> Any:
+def _load_v112_cycle(root: Path) -> Any:
     resolved = root.resolve()
-    script = resolved / V111_RUNNER_PATH
+    script = resolved / V112_RUNNER_PATH
     if script.is_symlink() or not script.is_file():
-        raise ValueError("11.1 prospective cycle runner is missing or indirect")
-    spec = importlib.util.spec_from_file_location("factor_lab_v111_cycle", script)
+        raise ValueError("11.2 prospective cycle runner is missing or indirect")
+    spec = importlib.util.spec_from_file_location("factor_lab_v112_cycle", script)
     if spec is None or spec.loader is None:
-        raise ValueError("could not load the 11.1 prospective cycle runner")
+        raise ValueError("could not load the 11.2 prospective cycle runner")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     if (
         module.ROOT.resolve() != resolved
-        or module.RELEASE != "11.1"
+        or module.RELEASE != "11.2"
         or module.ROUTE != V11_ROUTE
         or module.QUARTERLY_DUAL_CONFIRM_BLEND_ID != V11_ROUTE
-        or module.PROTOCOL_ID != V111_PROTOCOL_ID
-        or module.PROTOCOL_PATH.as_posix() != V111_PROTOCOL_PATH
-        or module.PROTOCOL_PAYLOAD != V111_PROTOCOL_PAYLOAD_SHA256
-        or module.PROTOCOL_FILE_SHA256 != V111_PROTOCOL_FILE_SHA256
+        or module.PROTOCOL_ID != V112_PROTOCOL_ID
+        or module.PROTOCOL_PATH.as_posix() != V112_PROTOCOL_PATH
+        or module.PROTOCOL_PAYLOAD != V112_PROTOCOL_PAYLOAD_SHA256
+        or module.PROTOCOL_FILE_SHA256 != V112_PROTOCOL_FILE_SHA256
         or module.DEFAULT_RUNTIME_ROOT.resolve()
-        != (resolved / "runtime" / "prospective" / "11.1").resolve()
-        or module.SOURCE_RECEIPT_CONTRACT != "factor-lab/11.1/stable-source-v1"
+        != (resolved / "runtime" / "prospective" / "11.2").resolve()
+        or module.SOURCE_RECEIPT_CONTRACT != "factor-lab/11.2/stable-source-v1"
+        or module.REQUEST_RATE_PER_MINUTE != 300.0
+        or module.MAX_PROVIDER_ATTEMPTS != 3
         or module.GENESIS_MANIFEST_PAYLOAD != V10_SOURCE_MANIFEST_PAYLOAD_SHA256
         or module.GENESIS_MANIFEST_FILE_SHA256 != V10_SOURCE_MANIFEST_FILE_SHA256
     ):
-        raise ValueError("11.1 prospective runner namespace differs")
+        raise ValueError("11.2 prospective runner namespace differs")
     return module
 
 
 def _prospective_command(arguments: argparse.Namespace) -> int:
-    runner = _load_v111_cycle(arguments.root.resolve())
+    runner = _load_v112_cycle(arguments.root.resolve())
     argv = [arguments.prospective_command, "--as-of", str(arguments.as_of)]
     if arguments.prospective_command in {"signal", "outcome"}:
         argv.extend(

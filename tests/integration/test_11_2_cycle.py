@@ -10,10 +10,10 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "scripts" / "run-11.1-quarterly-cycle.py"
+SCRIPT = ROOT / "scripts" / "run-11.2-quarterly-cycle.py"
 
 
-def _load(name: str = "factor_lab_v111_cycle") -> ModuleType:
+def _load(name: str = "factor_lab_v112_cycle") -> ModuleType:
     spec = importlib.util.spec_from_file_location(name, SCRIPT)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -95,22 +95,54 @@ def _install_sources(monkeypatch, module: ModuleType, mapping: dict[str, object]
     monkeypatch.setattr(module, "load_multi_asset_stage", load)
 
 
-def test_11_1_namespace_runtime_and_core_binding_are_exact() -> None:
-    module = _load("factor_lab_v111_namespace")
-    assert module.RELEASE == "11.1"
+def test_11_2_namespace_runtime_and_core_binding_are_exact() -> None:
+    module = _load("factor_lab_v112_namespace")
+    assert module.RELEASE == "11.2"
     assert module.ROUTE == module.QUARTERLY_DUAL_CONFIRM_BLEND_ID == (
         "quarterly_dual_confirm_top3_borda_blend_75_25"
     )
-    assert module.PROTOCOL_ID == "factor-lab/11.1/quarterly-prospective-cycle-v1"
+    assert module.PROTOCOL_ID == "factor-lab/11.2/quarterly-prospective-cycle-v1"
     assert module.PROTOCOL_PATH.as_posix() == (
-        "protocols/11.1-quarterly-prospective-cycle.json"
+        "protocols/11.2-quarterly-prospective-cycle.json"
     )
     assert module.DEFAULT_RUNTIME_ROOT == (
-        ROOT / "runtime" / "prospective" / "11.1"
+        ROOT / "runtime" / "prospective" / "11.2"
     )
-    assert module.SOURCE_RECEIPT_CONTRACT == "factor-lab/11.1/stable-source-v1"
-    assert module.PROTOCOL_PAYLOAD == "457e54d57b3bf821ced04bd4c638f686243ee40ee64431e63a67dbc5ff692a5d"
-    assert module.PROTOCOL_FILE_SHA256 == "81ce81f15ca43c714cc7d40d5c966850214fee28460608e5a855ce950ce95adf"
+    assert module.SOURCE_RECEIPT_CONTRACT == "factor-lab/11.2/stable-source-v1"
+    assert module.REQUEST_RATE_PER_MINUTE == 300.0
+    assert module.MAX_PROVIDER_ATTEMPTS == 3
+    assert module.PROTOCOL_PAYLOAD == "b9da758aad617d8752f9dbc628f8421fe4c04fe26f9f2a677fee1a8797b50e08"
+    assert module.PROTOCOL_FILE_SHA256 == "d363ae60326b17d3b28c04201f1ab411df544b2e16f0fe93e7fba30010c728a6"
+
+
+def test_default_client_wraps_configured_provider_with_frozen_retry_policy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load("factor_lab_v112_default_client")
+    raw = SimpleNamespace(query=lambda _endpoint, **_kwargs: pd.DataFrame())
+    layout = object()
+    monkeypatch.setattr(
+        module,
+        "load_data_config",
+        lambda _path: {"sync": {"request_rate_per_minute": 300}},
+    )
+    monkeypatch.setattr(
+        module.RuntimeLayout,
+        "from_config",
+        lambda *_args, **_kwargs: layout,
+    )
+    monkeypatch.setattr(
+        module,
+        "_configured_tushare_client",
+        lambda sync, observed_layout: raw
+        if sync["request_rate_per_minute"] == 300 and observed_layout is layout
+        else pytest.fail("wrong configured provider namespace"),
+    )
+    client = module._default_client()
+    assert isinstance(client, module.RateLimitedRetryingClient)
+    assert client._client is raw
+    assert client._minimum_interval == 0.2
+    assert client.MAX_ATTEMPTS == 3
 
 
 def test_signal_then_outcome_then_next_signal_is_continuous_and_create_only(
@@ -198,7 +230,7 @@ def test_signal_rejects_outside_the_frozen_window(
     when: tuple[str, int, int],
     message: str,
 ) -> None:
-    module = _load(f"factor_lab_v111_time_{message}")
+    module = _load(f"factor_lab_v112_time_{message}")
     runtime = tmp_path / "runtime"
     source_root = runtime / "sources"
     stage = _stage(module, source_root, "2025-12-31")
@@ -220,7 +252,7 @@ def test_signal_rejects_outside_the_frozen_window(
 def test_signal_rechecks_deadline_immediately_before_atomic_seal(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    module = _load("factor_lab_v111_signal_toctou")
+    module = _load("factor_lab_v112_signal_toctou")
     runtime = tmp_path / "runtime"
     source_root = runtime / "sources"
     stage = _stage(module, source_root, "2025-12-31")
@@ -251,7 +283,7 @@ def test_signal_rechecks_deadline_immediately_before_atomic_seal(
 def test_signal_rejects_non_quarter_end_and_source_cutoff_mismatch(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    module = _load("factor_lab_v111_bad_signal")
+    module = _load("factor_lab_v112_bad_signal")
     runtime = tmp_path / "runtime"
     source_root = runtime / "sources"
     stage = _stage(module, source_root, "2025-12-30")
@@ -281,7 +313,7 @@ def test_signal_rejects_non_quarter_end_and_source_cutoff_mismatch(
 def test_outcome_rejects_wrong_quarter_and_rewritten_decision_prefix(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    module = _load("factor_lab_v111_bad_outcome")
+    module = _load("factor_lab_v112_bad_outcome")
     runtime = tmp_path / "runtime"
     source_root = runtime / "sources"
     first = _stage(module, source_root, "2025-12-31")
@@ -321,30 +353,30 @@ def test_outcome_rejects_wrong_quarter_and_rewritten_decision_prefix(
 
 
 def test_artifact_payload_tamper_is_rejected(tmp_path: Path) -> None:
-    module = _load("factor_lab_v111_tamper")
+    module = _load("factor_lab_v112_tamper")
     path = tmp_path / "decision.json"
     path.write_text(
-        json_text := '{"kind":"factor_lab_11_1_quarterly_decision","payload_sha256":"' + "0" * 64 + '"}',
+        json_text := '{"kind":"factor_lab_11_2_quarterly_decision","payload_sha256":"' + "0" * 64 + '"}',
         encoding="utf-8",
     )
     assert json_text
     with pytest.raises(ValueError, match="artifact differs"):
-        module._read_artifact(path, kind="factor_lab_11_1_quarterly_decision")
+        module._read_artifact(path, kind="factor_lab_11_2_quarterly_decision")
     fake_outcome = module._payload(
-        {"kind": "factor_lab_11_1_quarterly_outcome"}
+        {"kind": "factor_lab_11_2_quarterly_outcome"}
     )
     outcome_path = tmp_path / "outcome.json"
     outcome_path.write_text(json.dumps(fake_outcome) + "\n", encoding="utf-8")
     with pytest.raises(ValueError, match="artifact differs"):
         module._read_artifact(
-            outcome_path, kind="factor_lab_11_1_quarterly_outcome"
+            outcome_path, kind="factor_lab_11_2_quarterly_outcome"
         )
 
 
 def test_outcome_rejects_same_quarter_alias_for_a_different_signal(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    module = _load("factor_lab_v111_signal_alias")
+    module = _load("factor_lab_v112_signal_alias")
     runtime = tmp_path / "runtime"
     source_root = runtime / "sources"
     first = _stage(module, source_root, "2025-12-31")
@@ -378,7 +410,7 @@ def test_outcome_rejects_same_quarter_alias_for_a_different_signal(
 def test_outcome_rejects_missing_exact_next_open_and_writes_nothing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    module = _load("factor_lab_v111_missing_open")
+    module = _load("factor_lab_v112_missing_open")
     runtime = tmp_path / "runtime"
     source_root = runtime / "sources"
     first = _stage(module, source_root, "2025-12-31")
@@ -417,7 +449,7 @@ def test_outcome_rejects_missing_exact_next_open_and_writes_nothing(
 def test_outcome_rejects_replaced_bound_source_manifest(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    module = _load("factor_lab_v111_source_identity")
+    module = _load("factor_lab_v112_source_identity")
     runtime = tmp_path / "runtime"
     source_root = runtime / "sources"
     first = _stage(module, source_root, "2025-12-31")
@@ -452,7 +484,7 @@ def test_outcome_rejects_replaced_bound_source_manifest(
 def test_next_signal_rejects_self_hashed_fake_terminal_state(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    module = _load("factor_lab_v111_fake_terminal")
+    module = _load("factor_lab_v112_fake_terminal")
     runtime = tmp_path / "runtime"
     source_root = runtime / "sources"
     first = _stage(module, source_root, "2025-12-31")
@@ -501,7 +533,7 @@ def test_next_signal_rejects_self_hashed_fake_terminal_state(
 def test_exact_unit_event_scales_execution_plan_without_rewriting_the_seal(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    module = _load("factor_lab_v111_unit_event")
+    module = _load("factor_lab_v112_unit_event")
     runtime = tmp_path / "runtime"
     source_root = runtime / "sources"
     first = _stage(module, source_root, "2025-12-31")
@@ -555,7 +587,7 @@ def test_exact_unit_event_scales_execution_plan_without_rewriting_the_seal(
 def test_no_trade_next_signal_is_a_valid_empty_sealed_plan(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    module = _load("factor_lab_v111_empty_plan")
+    module = _load("factor_lab_v112_empty_plan")
     runtime = tmp_path / "runtime"
     source_root = runtime / "sources"
     first = _stage(module, source_root, "2025-12-31")
@@ -601,7 +633,7 @@ def test_no_trade_next_signal_is_a_valid_empty_sealed_plan(
 def test_dividend_receivable_continues_exactly_into_the_next_signal(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    module = _load("factor_lab_v111_receivable")
+    module = _load("factor_lab_v112_receivable")
     runtime = tmp_path / "runtime"
     source_root = runtime / "sources"
     first = _stage(module, source_root, "2025-12-31")
@@ -651,7 +683,7 @@ def test_dividend_receivable_continues_exactly_into_the_next_signal(
 def test_capture_command_uses_fixed_runtime_and_injected_client(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
 ) -> None:
-    module = _load("factor_lab_v111_capture")
+    module = _load("factor_lab_v112_capture")
     calls = []
 
     def capture(as_of, **kwargs):
@@ -676,7 +708,7 @@ def test_capture_command_uses_fixed_runtime_and_injected_client(
 def test_capture_rejects_before_close_without_touching_client(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    module = _load("factor_lab_v111_capture_time")
+    module = _load("factor_lab_v112_capture_time")
     monkeypatch.setattr(module, "_read_protocol", lambda: {})
     calls = []
     with pytest.raises(RuntimeError, match="17:10"):
@@ -708,9 +740,9 @@ def _install_release_git(
             return SimpleNamespace(returncode=0, stdout="", stderr="")
         if args == ("git", "rev-parse", "HEAD"):
             return SimpleNamespace(returncode=0, stdout=peeled + "\n", stderr="")
-        if args == ("git", "rev-parse", "refs/tags/11.1^{}"):
+        if args == ("git", "rev-parse", "refs/tags/11.2^{}"):
             return SimpleNamespace(returncode=0, stdout=peeled + "\n", stderr="")
-        if args == ("git", "rev-parse", "refs/tags/11.1"):
+        if args == ("git", "rev-parse", "refs/tags/11.2"):
             return SimpleNamespace(returncode=0, stdout=tag_object + "\n", stderr="")
         if args == ("git", "status", "--porcelain"):
             return SimpleNamespace(
@@ -718,8 +750,8 @@ def _install_release_git(
             )
         if args[:4] == ("git", "ls-remote", "--exit-code", "origin"):
             output = (
-                f"{remote_tag or tag_object}\trefs/tags/11.1\n"
-                f"{remote_peeled or peeled}\trefs/tags/11.1^{{}}\n"
+                f"{remote_tag or tag_object}\trefs/tags/11.2\n"
+                f"{remote_peeled or peeled}\trefs/tags/11.2^{{}}\n"
             )
             return SimpleNamespace(returncode=0, stdout=output, stderr="")
         raise AssertionError(args)
@@ -731,7 +763,7 @@ def _install_release_git(
 def test_release_checkout_requires_exact_clean_local_and_remote_annotated_tag(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    module = _load("factor_lab_v111_release_exact")
+    module = _load("factor_lab_v112_release_exact")
     tag_object, peeled = _install_release_git(monkeypatch, module)
     assert module._require_release_tag() == {
         "annotated_tag_object": tag_object,
@@ -750,16 +782,16 @@ def test_release_checkout_requires_exact_clean_local_and_remote_annotated_tag(
 def test_release_checkout_fails_closed_on_dirty_or_remote_mismatch(
     monkeypatch: pytest.MonkeyPatch, kwargs: dict[str, object]
 ) -> None:
-    module = _load(f"factor_lab_v111_release_bad_{len(kwargs)}_{next(iter(kwargs))}")
+    module = _load(f"factor_lab_v112_release_bad_{len(kwargs)}_{next(iter(kwargs))}")
     _install_release_git(monkeypatch, module, **kwargs)
-    with pytest.raises(RuntimeError, match="published annotated 11.1 tag"):
+    with pytest.raises(RuntimeError, match="published annotated 11.2 tag"):
         module._require_release_tag()
 
 
 def test_atomic_create_only_never_exposes_partial_or_overwrites_existing(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    module = _load("factor_lab_v111_atomic")
+    module = _load("factor_lab_v112_atomic")
     path = tmp_path / "cycle=2025Q4" / "decision.json"
     with monkeypatch.context() as scoped:
         scoped.setattr(module.os, "fsync", lambda _fd: (_ for _ in ()).throw(OSError("boom")))
@@ -779,7 +811,7 @@ def test_atomic_create_only_never_exposes_partial_or_overwrites_existing(
 def test_retained_2026q2_signal_matches_11_0_and_seals_pending_plan(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    module = _load("factor_lab_v111_retained_regression")
+    module = _load("factor_lab_v112_retained_regression")
     retained_root = ROOT / "runtime/data/multi-asset-9.0/sources"
     if not (retained_root / "stage=audit").is_dir():
         pytest.skip("retained 9.0 source is not present")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Run one minimal prospective 11.1 quarterly signal or outcome cycle."""
+"""Run one minimal prospective 11.2 quarterly signal or outcome cycle."""
 
 from __future__ import annotations
 
@@ -29,7 +29,10 @@ sys.path.insert(0, str(SRC))
 
 from factor_lab.data.etf_assets import MultiAssetStage, load_multi_asset_stage  # noqa: E402
 from factor_lab.data.catalog import RuntimeLayout, load_data_config  # noqa: E402
-from factor_lab.data.etf_live import stable_capture_multi_asset_stage  # noqa: E402
+from factor_lab.data.etf_live import (  # noqa: E402
+    RateLimitedRetryingClient,
+    stable_capture_multi_asset_stage,
+)
 from factor_lab.data.sources import _configured_tushare_client  # noqa: E402
 from factor_lab.release_integrity import canonical_payload_sha256, file_sha256  # noqa: E402
 from factor_lab.research.multi_asset import (  # noqa: E402
@@ -41,20 +44,22 @@ from factor_lab.research.multi_asset import (  # noqa: E402
 )
 
 
-RELEASE = "11.1"
+RELEASE = "11.2"
 ROUTE = "quarterly_dual_confirm_top3_borda_blend_75_25"
-PROTOCOL_ID = "factor-lab/11.1/quarterly-prospective-cycle-v1"
-PROTOCOL_PATH = Path("protocols/11.1-quarterly-prospective-cycle.json")
-PROTOCOL_PAYLOAD = "457e54d57b3bf821ced04bd4c638f686243ee40ee64431e63a67dbc5ff692a5d"
-PROTOCOL_FILE_SHA256 = "81ce81f15ca43c714cc7d40d5c966850214fee28460608e5a855ce950ce95adf"
-DEFAULT_RUNTIME_ROOT = ROOT / "runtime" / "prospective" / "11.1"
+PROTOCOL_ID = "factor-lab/11.2/quarterly-prospective-cycle-v1"
+PROTOCOL_PATH = Path("protocols/11.2-quarterly-prospective-cycle.json")
+PROTOCOL_PAYLOAD = "b9da758aad617d8752f9dbc628f8421fe4c04fe26f9f2a677fee1a8797b50e08"
+PROTOCOL_FILE_SHA256 = "d363ae60326b17d3b28c04201f1ab411df544b2e16f0fe93e7fba30010c728a6"
+DEFAULT_RUNTIME_ROOT = ROOT / "runtime" / "prospective" / "11.2"
 GENESIS_SOURCE_ROOT = ROOT / "runtime" / "data" / "multi-asset-9.0" / "sources"
 GENESIS_MANIFEST_PAYLOAD = "050ad4ddcb86dc4fbc71befad54c400b48a44f72ab6fecc33936b6da0c8f9aff"
 GENESIS_MANIFEST_FILE_SHA256 = "cdbf8ba498142adff04216b476522f47ee18df6f0fa02f3395d0e141191adbfa"
 SHANGHAI = ZoneInfo("Asia/Shanghai")
 SIGNAL_READY_TIME = time(17, 10)
 DECISION_DEADLINE = time(9, 15)
-SOURCE_RECEIPT_CONTRACT = "factor-lab/11.1/stable-source-v1"
+SOURCE_RECEIPT_CONTRACT = "factor-lab/11.2/stable-source-v1"
+REQUEST_RATE_PER_MINUTE = 300.0
+MAX_PROVIDER_ATTEMPTS = 3
 PLAN_FIELDS = (
     "code",
     "side",
@@ -130,12 +135,12 @@ def _read_protocol() -> dict[str, Any]:
         or value.get("route") != ROUTE
         or value.get("frozen_strategy", {}).get("strategy_id") != QUARTERLY_DUAL_CONFIRM_BLEND_ID
     ):
-        raise ValueError("11.1 prospective protocol differs")
+        raise ValueError("11.2 prospective protocol differs")
     return value
 
 
 def _require_release_tag() -> dict[str, str]:
-    tag = "refs/tags/11.1"
+    tag = "refs/tags/11.2"
     tag_type = subprocess.run(
         ["git", "cat-file", "-t", tag], cwd=ROOT, check=False,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
@@ -183,7 +188,7 @@ def _require_release_tag() -> dict[str, str]:
         or head.stdout.strip() != tagged.stdout.strip()
     ):
         raise RuntimeError(
-            "prospective 11.1 cycle requires checkout of the published annotated 11.1 tag"
+            "prospective 11.2 cycle requires checkout of the published annotated 11.2 tag"
         )
     return {
         "annotated_tag_object": tag_object.stdout.strip(),
@@ -254,7 +259,7 @@ def _validate_source_receipt(
             baseline.manifest.get("payload_sha256") != GENESIS_MANIFEST_PAYLOAD
             or file_sha256(baseline_manifest) != GENESIS_MANIFEST_FILE_SHA256
         ):
-            raise ValueError("11.1 genesis source differs from the frozen 9.0 baseline")
+            raise ValueError("11.2 genesis source differs from the frozen 9.0 baseline")
     baseline_end = _date(
         str(baseline.manifest["price_end_date"]), field="baseline price_end_date"
     )
@@ -424,7 +429,7 @@ def _payload(value: dict[str, Any]) -> dict[str, Any]:
 
 def _read_artifact(path: Path, *, kind: str) -> dict[str, Any]:
     value = json.loads(path.read_text(encoding="utf-8"))
-    fields = DECISION_FIELDS if kind == "factor_lab_11_1_quarterly_decision" else OUTCOME_FIELDS
+    fields = DECISION_FIELDS if kind == "factor_lab_11_2_quarterly_decision" else OUTCOME_FIELDS
     source = value.get("source")
     if (
         value.get("kind") != kind
@@ -452,7 +457,7 @@ def _read_artifact(path: Path, *, kind: str) -> dict[str, Any]:
     recorded = _aware_datetime(value["recorded_at_utc"], field="recorded_at_utc")
     if recorded.utcoffset() != timedelta(0):
         raise ValueError(f"prospective artifact recorded_at_utc is not UTC: {path}")
-    if kind == "factor_lab_11_1_quarterly_decision":
+    if kind == "factor_lab_11_2_quarterly_decision":
         targets = value.get("targets")
         holdings = value.get("signal_close_holdings")
         if (
@@ -560,7 +565,7 @@ def _decision_paths(runtime_root: Path) -> list[Path]:
 
 
 def _load_decisions(runtime_root: Path) -> list[dict[str, Any]]:
-    return [_read_artifact(path, kind="factor_lab_11_1_quarterly_decision") for path in _decision_paths(runtime_root)]
+    return [_read_artifact(path, kind="factor_lab_11_2_quarterly_decision") for path in _decision_paths(runtime_root)]
 
 
 def _combined_targets(decisions: Sequence[Mapping[str, Any]]) -> pd.DataFrame:
@@ -587,7 +592,17 @@ def _default_client() -> Any:
     layout = RuntimeLayout.from_config(
         config, config_path=config_path, repo_root=ROOT
     )
-    return _configured_tushare_client(dict(config.get("sync") or {}), layout)
+    sync = dict(config.get("sync") or {})
+    rate = float(sync.get("request_rate_per_minute") or 0.0)
+    if rate != REQUEST_RATE_PER_MINUTE:
+        raise ValueError("11.2 requires sync.request_rate_per_minute=300")
+    client = RateLimitedRetryingClient(
+        _configured_tushare_client(sync, layout),
+        request_rate_per_minute=rate,
+    )
+    if client.MAX_ATTEMPTS != MAX_PROVIDER_ATTEMPTS:
+        raise ValueError("11.2 requires exactly three provider attempts")
+    return client
 
 
 def capture_source(
@@ -613,7 +628,7 @@ def capture_source(
             baseline.manifest.get("payload_sha256") != GENESIS_MANIFEST_PAYLOAD
             or file_sha256(manifest_path) != GENESIS_MANIFEST_FILE_SHA256
         ):
-            raise ValueError("11.1 genesis source differs from the frozen 9.0 baseline")
+            raise ValueError("11.2 genesis source differs from the frozen 9.0 baseline")
     start = str(baseline.manifest["price_start_date"])
     stage_name = f"asof-{as_of:%Y%m%d}"
     destination = source_root / f"stage={stage_name}"
@@ -731,7 +746,7 @@ def create_signal(
     _read_protocol()
     release_identity = _require_release_tag()
     if source_root.resolve() != (runtime_root / "sources").resolve():
-        raise ValueError("formal signal source must use the frozen 11.1 sources root")
+        raise ValueError("formal signal source must use the frozen 11.2 sources root")
     cycle = _cycle_id(signal_date)
     decision_path = runtime_root / f"cycle={cycle}" / "decision.json"
     if decision_path.exists():
@@ -754,7 +769,7 @@ def create_signal(
         if not outcome_path.is_file():
             raise RuntimeError("prior quarter outcome must be confirmed before the next signal")
         predecessor = _read_artifact(
-            outcome_path, kind="factor_lab_11_1_quarterly_outcome"
+            outcome_path, kind="factor_lab_11_2_quarterly_outcome"
         )
         if (
             _date(predecessor["signal_date"], field="predecessor signal date")
@@ -776,7 +791,7 @@ def create_signal(
         raise RuntimeError("signal must select exactly the current quarter's six target rows")
     candidate = {
         "schema_version": 1,
-        "kind": "factor_lab_11_1_quarterly_decision",
+        "kind": "factor_lab_11_2_quarterly_decision",
         "release": RELEASE,
         "mode": "prospective_quarterly_cycle",
         "cycle_id": cycle,
@@ -846,10 +861,10 @@ def create_outcome(
     _read_protocol()
     release_identity = _require_release_tag()
     if source_root.resolve() != (runtime_root / "sources").resolve():
-        raise ValueError("formal outcome source must use the frozen 11.1 sources root")
+        raise ValueError("formal outcome source must use the frozen 11.2 sources root")
     cycle = _cycle_id(signal_date)
     decision_path = runtime_root / f"cycle={cycle}" / "decision.json"
-    decision = _read_artifact(decision_path, kind="factor_lab_11_1_quarterly_decision")
+    decision = _read_artifact(decision_path, kind="factor_lab_11_2_quarterly_decision")
     if _date(decision["signal_date"], field="decision signal date") != signal_date:
         raise ValueError("outcome signal_date does not match its sealed decision")
     outcome_path = runtime_root / f"cycle={cycle}" / "outcome.json"
@@ -924,7 +939,7 @@ def create_outcome(
     value = _payload(
         {
             "schema_version": 1,
-            "kind": "factor_lab_11_1_quarterly_outcome",
+            "kind": "factor_lab_11_2_quarterly_outcome",
             "release": RELEASE,
             "mode": "prospective_quarterly_cycle",
             "cycle_id": cycle,

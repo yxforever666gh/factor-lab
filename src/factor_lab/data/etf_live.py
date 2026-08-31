@@ -12,11 +12,13 @@ module neither creates a network client nor sleeps until an end-of-day gate.
 from __future__ import annotations
 
 import json
+import math
 import os
 from pathlib import Path
 import re
 import shutil
 import tempfile
+import time
 from typing import Any, Callable, Mapping
 
 import pandas as pd
@@ -30,6 +32,126 @@ from .etf_assets import (
     load_multi_asset_stage,
 )
 from ..release_integrity import canonical_payload_sha256
+
+
+def _http_status_code(error: Exception) -> int | None:
+    response = getattr(error, "response", None)
+    for source in (error, response):
+        if source is None:
+            continue
+        for name in ("status_code", "status", "code"):
+            value = getattr(source, name, None)
+            if type(value) is int:
+                return value
+    return None
+
+
+def _temporary_provider_error(error: Exception) -> bool:
+    """Classify only transport, throttling and server-side failures."""
+
+    if isinstance(error, (ValueError, TypeError, PermissionError)):
+        return False
+    message = str(error).lower()
+    if any(
+        marker in message
+        for marker in (
+            "permission",
+            "not authorized",
+            "unauthorized",
+            "forbidden",
+            "parameter",
+            "参数",
+            "权限",
+            "schema",
+        )
+    ):
+        return False
+    status = _http_status_code(error)
+    if status == 429 or status is not None and 500 <= status <= 599:
+        return True
+    if isinstance(error, (TimeoutError, ConnectionError)):
+        return True
+    name = type(error).__name__.lower()
+    if "timeout" in name or "connection" in name:
+        return True
+    return bool(
+        any(
+            marker in message
+            for marker in (
+                "timeout",
+                "timed out",
+                "connection reset",
+                "connection aborted",
+                "connection refused",
+                "too many requests",
+                "rate limit",
+                "bad gateway",
+                "service unavailable",
+                "gateway timeout",
+                "频率",
+                "频繁",
+                "每分钟",
+                "访问次数",
+                "请求次数",
+            )
+        )
+        or re.search(r"(?<!\d)5\d\d(?!\d)", message) is not None
+    )
+
+
+class RateLimitedRetryingClient:
+    """Transparent opt-in pacing and bounded retry for provider queries."""
+
+    MAX_ATTEMPTS = 3
+    RETRY_BACKOFF_SECONDS = (1.0, 2.0)
+
+    def __init__(
+        self,
+        client: Any,
+        request_rate_per_minute: float,
+        *,
+        monotonic_fn: Callable[[], float] = time.monotonic,
+        sleep_fn: Callable[[float], None] = time.sleep,
+    ) -> None:
+        rate = float(request_rate_per_minute)
+        if not math.isfinite(rate) or rate < 0.0:
+            raise ValueError("request_rate_per_minute must be finite and non-negative")
+        if not callable(getattr(client, "query", None)):
+            raise TypeError("wrapped provider client must expose query")
+        self._client = client
+        self._minimum_interval = 60.0 / rate if rate else 0.0
+        self._monotonic = monotonic_fn
+        self._sleep = sleep_fn
+        self._last_attempt: float | None = None
+
+    def _pace(self) -> None:
+        if self._last_attempt is not None and self._minimum_interval:
+            remaining = self._minimum_interval - (
+                float(self._monotonic()) - self._last_attempt
+            )
+            if remaining > 0.0:
+                self._sleep(remaining)
+        self._last_attempt = float(self._monotonic())
+
+    def query(self, endpoint: str, **kwargs: Any) -> pd.DataFrame:
+        for attempt in range(self.MAX_ATTEMPTS):
+            self._pace()
+            try:
+                value = self._client.query(endpoint, **kwargs)
+            except Exception as exc:
+                if (
+                    attempt + 1 >= self.MAX_ATTEMPTS
+                    or not _temporary_provider_error(exc)
+                ):
+                    raise
+                self._sleep(self.RETRY_BACKOFF_SECONDS[attempt])
+                continue
+            if not isinstance(value, pd.DataFrame):
+                raise TypeError(
+                    f"provider endpoint {endpoint!r} did not return a DataFrame"
+                )
+            return value.copy()
+        raise AssertionError("unreachable provider retry state")
 
 
 def _date(value: str, *, field: str) -> pd.Timestamp:
@@ -338,4 +460,4 @@ def stable_capture_multi_asset_stage(
             shutil.rmtree(transaction)
 
 
-__all__ = ["stable_capture_multi_asset_stage"]
+__all__ = ["RateLimitedRetryingClient", "stable_capture_multi_asset_stage"]

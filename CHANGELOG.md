@@ -10,6 +10,27 @@
 
 ## [Unreleased]
 
+### Added
+
+- 新增 11.2 prospective 专用 `RateLimitedRetryingClient`：读取既有 `request_rate_per_minute`，串行 pacing，
+  对 timeout、connection reset、HTTP 429/5xx 和明确频率限制最多尝试 3 次，退避 1/2 秒；权限、参数、
+  schema、空数据及稳定性审计失败不重试。
+
+### Changed
+
+- Python 包版本更新为 `11.2.0`；11.1 策略公式、六资产、时间窗、连续账户和 create-only artifact 语义
+  完全不变。活动 runtime 迁移到 `runtime/prospective/11.2`，11.1 可执行 runner/test 由 tag 保留。
+
+### Research status
+
+- 本版只提高约 238 次双抓请求的完成率，不增加历史收益、prospective decision 或 outcome；所有盈利结论
+  继续沿用 11.0 的 fully exposed 限制，发布时 fresh future evidence 仍为 0。
+
+### Known limitations
+
+- 重试预算耗尽后仍整轮失败并清理 transaction；不缓存半个 sample，也不把空响应、schema/hash 差异
+  当作临时网络错误。没有后台调度或数据库。
+
 ## [11.1] - 2026-09-01
 
 ### Added

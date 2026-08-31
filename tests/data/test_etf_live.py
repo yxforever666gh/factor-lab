@@ -100,6 +100,38 @@ class FakeClient:
         self.capture_count = 0
 
 
+class QueryClient:
+    def __init__(self, outcomes: list[Any]) -> None:
+        self.outcomes = list(outcomes)
+        self.calls: list[tuple[str, dict[str, Any]]] = []
+
+    def query(self, endpoint: str, **kwargs: Any) -> Any:
+        self.calls.append((endpoint, dict(kwargs)))
+        outcome = self.outcomes.pop(0)
+        if isinstance(outcome, BaseException):
+            raise outcome
+        return outcome
+
+
+class HttpError(RuntimeError):
+    def __init__(self, status_code: int) -> None:
+        super().__init__(f"HTTP {status_code}")
+        self.status_code = status_code
+
+
+class FakeClock:
+    def __init__(self) -> None:
+        self.value = 0.0
+        self.sleeps: list[float] = []
+
+    def monotonic(self) -> float:
+        return self.value
+
+    def sleep(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+        self.value += seconds
+
+
 def _install_fake_io(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_capture(
         client: FakeClient,
@@ -145,6 +177,153 @@ def _baseline(tmp_path: Path) -> MultiAssetStage:
 def _assert_no_transaction_or_stage(root: Path) -> None:
     assert not (root / f"stage={STAGE}").exists()
     assert not list(root.glob(f".stable-capture-{STAGE}-*"))
+
+
+def test_rate_limited_client_paces_every_query_with_injected_clock() -> None:
+    frame = pd.DataFrame({"value": [1]})
+    client = QueryClient([frame, frame, frame])
+    clock = FakeClock()
+    wrapped = etf_live.RateLimitedRetryingClient(
+        client,
+        30,
+        monotonic_fn=clock.monotonic,
+        sleep_fn=clock.sleep,
+    )
+
+    for value in range(3):
+        wrapped.query("fund_daily", ts_code=f"{value:06d}.SH")
+
+    assert clock.sleeps == [2.0, 2.0]
+    assert [name for name, _kwargs in client.calls] == ["fund_daily"] * 3
+
+
+def test_rate_limited_client_retries_twice_then_returns_exact_frame() -> None:
+    frame = pd.DataFrame(
+        {"value": pd.Series([3, 1], dtype="Int64")},
+    )
+    frame.index = pd.Index([9, 4], name="source_index")
+    client = QueryClient([TimeoutError("timeout"), TimeoutError("timeout"), frame])
+    clock = FakeClock()
+    wrapped = etf_live.RateLimitedRetryingClient(
+        client,
+        0,
+        monotonic_fn=clock.monotonic,
+        sleep_fn=clock.sleep,
+    )
+
+    actual = wrapped.query("fund_adj", ts_code="510300.SH")
+
+    pd.testing.assert_frame_equal(actual, frame, check_exact=True)
+    assert actual is not frame
+    assert len(client.calls) == 3
+    assert clock.sleeps == [1.0, 2.0]
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        ConnectionError("connection reset"),
+        HttpError(429),
+        HttpError(503),
+        RuntimeError("每分钟最多访问该接口 200 次"),
+    ],
+    ids=("connection", "http-429", "http-503", "frequency-message"),
+)
+def test_rate_limited_client_retries_each_temporary_error(error: Exception) -> None:
+    frame = pd.DataFrame({"value": [1]})
+    client = QueryClient([error, frame])
+    clock = FakeClock()
+    actual = etf_live.RateLimitedRetryingClient(
+        client,
+        0,
+        monotonic_fn=clock.monotonic,
+        sleep_fn=clock.sleep,
+    ).query("trade_cal")
+
+    pd.testing.assert_frame_equal(actual, frame, check_exact=True)
+    assert len(client.calls) == 2
+    assert clock.sleeps == [1.0]
+
+
+def test_rate_limited_client_exhausts_exact_three_attempts() -> None:
+    client = QueryClient([HttpError(503), HttpError(503), HttpError(503)])
+    clock = FakeClock()
+    wrapped = etf_live.RateLimitedRetryingClient(
+        client,
+        0,
+        monotonic_fn=clock.monotonic,
+        sleep_fn=clock.sleep,
+    )
+
+    with pytest.raises(HttpError, match="503"):
+        wrapped.query("fund_daily")
+    assert len(client.calls) == 3
+    assert clock.sleeps == [1.0, 2.0]
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        ValueError("频率字段参数错误"),
+        TypeError("schema mismatch"),
+        PermissionError("permission denied"),
+        RuntimeError("没有接口权限"),
+        RuntimeError("invalid parameter"),
+        HttpError(400),
+    ],
+    ids=("value", "schema", "permission", "permission-message", "parameter", "http-400"),
+)
+def test_rate_limited_client_never_retries_non_temporary_error(
+    error: Exception,
+) -> None:
+    client = QueryClient([error])
+    clock = FakeClock()
+    wrapped = etf_live.RateLimitedRetryingClient(
+        client,
+        0,
+        monotonic_fn=clock.monotonic,
+        sleep_fn=clock.sleep,
+    )
+
+    with pytest.raises(type(error)):
+        wrapped.query("fund_daily")
+    assert len(client.calls) == 1
+    assert clock.sleeps == []
+
+
+def test_rate_limited_client_returns_deep_exact_copy_without_reordering() -> None:
+    frame = pd.DataFrame(
+        {
+            "category": pd.Series(
+                pd.Categorical(["b", "a"], categories=["a", "b"], ordered=True)
+            ),
+            "nullable": pd.Series([1, None], dtype="Int64"),
+            "when": pd.to_datetime(["2024-01-02", "2024-01-01"]),
+        },
+    )
+    frame.index = pd.Index([8, 3], name="vendor_order")
+    client = QueryClient([frame])
+    actual = etf_live.RateLimitedRetryingClient(client, 0).query("fund_daily")
+
+    pd.testing.assert_frame_equal(actual, frame, check_exact=True)
+    assert actual is not frame
+    actual.iloc[0, 1] = 99
+    assert frame.iloc[0, 1] != 99
+
+
+def test_rate_limited_client_rejects_non_dataframe_without_retry() -> None:
+    client = QueryClient([{"not": "a frame"}])
+    clock = FakeClock()
+    wrapped = etf_live.RateLimitedRetryingClient(
+        client,
+        0,
+        monotonic_fn=clock.monotonic,
+        sleep_fn=clock.sleep,
+    )
+    with pytest.raises(TypeError, match="did not return a DataFrame"):
+        wrapped.query("fund_daily")
+    assert len(client.calls) == 1
+    assert clock.sleeps == []
 
 
 def test_stable_capture_publishes_once_and_existing_stage_is_zero_query(

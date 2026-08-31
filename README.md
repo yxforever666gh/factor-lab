@@ -1,8 +1,9 @@
-# Factor Lab 11.1
+# Factor Lab 11.2
 
-Factor Lab 11.1 不修改 11.0 的任何策略参数，只把已发布赢家接入季度 prospective paper cycle：双抓
-稳定 source、窗口内 create-only decision、exact next-open 与连续账户 outcome。当前仍为 0 decision、
-0 confirmed outcome，不能称未来盈利已验证。
+Factor Lab 11.2 不修改 11.0 的任何策略参数；它在 11.1 prospective cycle 外只增加透明的供应商
+pacing/retry：300 requests/minute，临时 timeout/connection/429/5xx 最多 3 次，退避 1/2 秒。成功返回的
+DataFrame 不排序、过滤或改 dtype；非临时错误和审计失败不重试。当前仍为 0 decision、0 confirmed
+outcome，不能称未来盈利已验证。
 
 底层 11.0 把 10.0 的单周期季度 Borda 换成双周期确认混合：每个季度末同时计算 12-1 与 6-1
 相对现金动量，75% 配给两者均为正的 long-momentum top-3 等权组合，25% 保留 10.0 Borda。它仍只用
@@ -26,24 +27,24 @@ Full 最大回撤约 -24.82%、Sharpe 0.865、年化换手 2.34，fill 99.88%，
 协议与正式证据见 [11.0 protocol](protocols/11.0-results-first-dual-confirm-blend.json) 和
 [11.0 evidence](protocols/evidence/11.0/results-first-diagnostic.json)。这些数值全部来自已暴露历史。
 
-## 11.1 当前运行层
+## 11.2 当前运行层
 
-正式运行必须 checkout 已同步 GitHub 的 annotated `11.1` tag，且 source 和 decision 必须在季度末
+正式运行必须 checkout 已同步 GitHub 的 annotated `11.2` tag，且 source 和 decision 必须在季度末
 17:10 至下一官方 session 09:15 的窗口内完成：
 
 ```powershell
 python -m factor_lab.cli prospective capture --as-of YYYY-MM-DD
 
 python -m factor_lab.cli prospective signal `
-  --source-root runtime/prospective/11.1/sources `
+  --source-root runtime/prospective/11.2/sources `
   --stage asof-YYYYMMDD --as-of YYYY-MM-DD
 
 python -m factor_lab.cli prospective outcome `
-  --source-root runtime/prospective/11.1/sources `
+  --source-root runtime/prospective/11.2/sources `
   --stage asof-NEXTYYYYMMDD --signal-date YYYY-MM-DD --as-of NEXT-YYYY-MM-DD
 ```
 
-协议见 [11.1 prospective protocol](protocols/11.1-quarterly-prospective-cycle.json)。失败抓取可在窗口内
+协议见 [11.2 prospective protocol](protocols/11.2-quarterly-prospective-cycle.json)。失败抓取可在窗口内
 整轮重跑，但已有 source/decision/outcome 不覆盖；缺失 exact next-open 时 outcome 保持未确认。
 
 底层 10.0 把 9.0 的低波动风险预算降为 comparator，主线改为严格因果的季度 12-1 双动量：

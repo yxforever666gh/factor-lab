@@ -87,7 +87,7 @@ def test_cli_exposes_only_lightweight_mainline_commands() -> None:
             "prospective",
             "signal",
             "--source-root",
-            "runtime/prospective/11.1/sources",
+            "runtime/prospective/11.2/sources",
             "--stage",
             "asof-20260930",
             "--as-of",
@@ -190,12 +190,12 @@ def test_explicit_root_does_not_require_implicit_discovery(
     assert captured == [tmp_path]
 
 
-def test_11_1_prospective_cli_delegates_without_clock_or_runtime_override(
+def test_11_2_prospective_cli_delegates_without_clock_or_runtime_override(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     captured = []
     runner = SimpleNamespace(main=lambda argv: captured.append(argv) or 0)
-    monkeypatch.setattr(cli, "_load_v111_cycle", lambda root: runner)
+    monkeypatch.setattr(cli, "_load_v112_cycle", lambda root: runner)
     assert cli.main(
         [
             "--root",
@@ -227,12 +227,14 @@ def test_11_1_prospective_cli_delegates_without_clock_or_runtime_override(
     ]
 
 
-def test_11_1_prospective_loader_binds_the_current_namespace() -> None:
+def test_11_2_prospective_loader_binds_the_current_namespace() -> None:
     root = Path(__file__).resolve().parents[2]
-    runner = cli._load_v111_cycle(root)
-    assert runner.RELEASE == "11.1"
+    runner = cli._load_v112_cycle(root)
+    assert runner.RELEASE == "11.2"
     assert runner.ROUTE == cli.V11_ROUTE
-    assert runner.DEFAULT_RUNTIME_ROOT == root / "runtime" / "prospective" / "11.1"
+    assert runner.DEFAULT_RUNTIME_ROOT == root / "runtime" / "prospective" / "11.2"
+    assert runner.REQUEST_RATE_PER_MINUTE == 300.0
+    assert runner.MAX_PROVIDER_ATTEMPTS == 3
 
 
 def test_strategy_status_verifies_tracked_implementation_and_evidence(
