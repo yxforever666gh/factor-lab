@@ -1,0 +1,438 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_policy_operational_train_reclassification",
+  "release": "8.1",
+  "status": "train_reclassification_passed",
+  "protocol_payload_sha256": "2fc5ea8316173f7fd19fbf5c34248e5a70b2a901c99345dcf8d933826fa15ee5",
+  "asset_selection_payload_sha256": "b00536d618c7fe46e3cbe8d258d2b2032ef4e0c16d40fb9c74ff016c34525e0b",
+  "implementation_closure_payload_sha256": "f4a47421d08ca77eca6b27fd6417909a04c3eaf789c11d9ca069366412440ef5",
+  "reclassification_execution_commit": "d573b12d1e4cd804d87919c8ada3329b3e917cc5",
+  "run_nonce": "c4b02bc0be6d4e57932f78f7f1a1eeea",
+  "source_receipt": {
+    "path": "protocols/evidence/8.0/execution-failure.json",
+    "file_sha256": "6af779495081f6ee391c6388a1e4342b878168b529f8074cf03d9ec2cc50eeaa",
+    "payload_sha256": "751b85c6c2e52b450e9c3549f7f4504af50b634599be4c32e240ee503de9823a"
+  },
+  "role_gate_metrics": {
+    "primary": {
+      "cagr": 0.06908794127071727,
+      "sharpe": 0.7263933657449289,
+      "max_drawdown": -0.17024574801653047,
+      "positive_complete_year_ratio": 0.75,
+      "annualized_turnover": 0.5399265050913324,
+      "requested_notional_fill_ratio": 0.9954253240120514,
+      "capacity_limited_requested_notional_ratio": 0.0,
+      "nav_reconciliation_error": 2.8558133635669947e-10
+    },
+    "stress": {
+      "cagr": 0.0685803846989721,
+      "sharpe": 0.7215851617595691,
+      "max_drawdown": -0.17031479228078583,
+      "positive_complete_year_ratio": 0.75,
+      "annualized_turnover": 0.5399883882230592,
+      "requested_notional_fill_ratio": 0.9951486761513633,
+      "capacity_limited_requested_notional_ratio": 0.0,
+      "nav_reconciliation_error": 3.1104718800634146e-10
+    },
+    "cash": {
+      "cagr": 0.030913196843269874,
+      "sharpe": 8.95454938642539,
+      "max_drawdown": -0.001950437590883758,
+      "positive_complete_year_ratio": 1.0,
+      "annualized_turnover": 0.23810241580339947,
+      "requested_notional_fill_ratio": 0.8965780451229126,
+      "capacity_limited_requested_notional_ratio": 0.0,
+      "nav_reconciliation_error": 2.3283064365386963e-10
+    },
+    "cash_stress": {
+      "cagr": 0.030741448403336147,
+      "sharpe": 8.773866582374954,
+      "max_drawdown": -0.0019519646213583819,
+      "positive_complete_year_ratio": 1.0,
+      "annualized_turnover": 0.2381222886745083,
+      "requested_notional_fill_ratio": 0.8965780451229126,
+      "capacity_limited_requested_notional_ratio": 0.0,
+      "nav_reconciliation_error": 1.4290435501607135e-10
+    }
+  },
+  "metrics": {
+    "annualized_turnover": 0.5399883882230592,
+    "cagr": 0.06908794127071727,
+    "capacity_limited_requested_notional_ratio": 0.0,
+    "max_drawdown": -0.17024574801653047,
+    "nav_reconciliation_error": 2.8558133635669947e-10,
+    "positive_complete_year_ratio": 0.75,
+    "requested_notional_fill_ratio": 0.9954253240120514,
+    "sharpe": 0.7263933657449289,
+    "stress_cagr": 0.0685803846989721,
+    "stress_cost_cagr": 0.0685803846989721,
+    "cash_cagr": 0.030913196843269874,
+    "cash_stress_cagr": 0.030741448403336147,
+    "cash_excess_cagr": 0.038174744427447393,
+    "stress_cash_excess_cagr": 0.03783893629563595,
+    "minimum_requested_notional_fill_ratio": 0.9951486761513633,
+    "maximum_capacity_limited_requested_notional_ratio": 0.0,
+    "maximum_nav_reconciliation_error": 3.1104718800634146e-10,
+    "stress": {
+      "annualized_turnover": 0.5399883882230592,
+      "cagr": 0.0685803846989721,
+      "capacity_limited_requested_notional_ratio": 0.0,
+      "max_drawdown": -0.17031479228078583,
+      "nav_reconciliation_error": 3.1104718800634146e-10,
+      "positive_complete_year_ratio": 0.75,
+      "requested_notional_fill_ratio": 0.9951486761513633,
+      "sharpe": 0.7215851617595691
+    },
+    "cash": {
+      "annualized_turnover": 0.23810241580339947,
+      "cagr": 0.030913196843269874,
+      "capacity_limited_requested_notional_ratio": 0.0,
+      "max_drawdown": -0.001950437590883758,
+      "nav_reconciliation_error": 2.3283064365386963e-10,
+      "positive_complete_year_ratio": 1.0,
+      "requested_notional_fill_ratio": 0.8965780451229126,
+      "sharpe": 8.95454938642539
+    },
+    "cash_stress": {
+      "annualized_turnover": 0.2381222886745083,
+      "cagr": 0.030741448403336147,
+      "capacity_limited_requested_notional_ratio": 0.0,
+      "max_drawdown": -0.0019519646213583819,
+      "nav_reconciliation_error": 1.4290435501607135e-10,
+      "positive_complete_year_ratio": 1.0,
+      "requested_notional_fill_ratio": 0.8965780451229126,
+      "sharpe": 8.773866582374954
+    },
+    "role_gate_metrics": {
+      "primary": {
+        "annualized_turnover": 0.5399265050913324,
+        "cagr": 0.06908794127071727,
+        "capacity_limited_requested_notional_ratio": 0.0,
+        "max_drawdown": -0.17024574801653047,
+        "nav_reconciliation_error": 2.8558133635669947e-10,
+        "positive_complete_year_ratio": 0.75,
+        "requested_notional_fill_ratio": 0.9954253240120514,
+        "sharpe": 0.7263933657449289
+      },
+      "stress": {
+        "annualized_turnover": 0.5399883882230592,
+        "cagr": 0.0685803846989721,
+        "capacity_limited_requested_notional_ratio": 0.0,
+        "max_drawdown": -0.17031479228078583,
+        "nav_reconciliation_error": 3.1104718800634146e-10,
+        "positive_complete_year_ratio": 0.75,
+        "requested_notional_fill_ratio": 0.9951486761513633,
+        "sharpe": 0.7215851617595691
+      },
+      "cash": {
+        "annualized_turnover": 0.23810241580339947,
+        "cagr": 0.030913196843269874,
+        "capacity_limited_requested_notional_ratio": 0.0,
+        "max_drawdown": -0.001950437590883758,
+        "nav_reconciliation_error": 2.3283064365386963e-10,
+        "positive_complete_year_ratio": 1.0,
+        "requested_notional_fill_ratio": 0.8965780451229126,
+        "sharpe": 8.95454938642539
+      },
+      "cash_stress": {
+        "annualized_turnover": 0.2381222886745083,
+        "cagr": 0.030741448403336147,
+        "capacity_limited_requested_notional_ratio": 0.0,
+        "max_drawdown": -0.0019519646213583819,
+        "nav_reconciliation_error": 1.4290435501607135e-10,
+        "positive_complete_year_ratio": 1.0,
+        "requested_notional_fill_ratio": 0.8965780451229126,
+        "sharpe": 8.773866582374954
+      }
+    },
+    "execution_validity": {
+      "source": "receipt_bound_8_0_train_artifacts",
+      "receipt_train_phase_deep_verified": true,
+      "artifact_parquet_count": 20,
+      "artifact_row_count": 43222,
+      "roles": {
+        "primary": {
+          "artifact_set_complete": true,
+          "status_values_allowed": true,
+          "status_execution_identity_exact": true,
+          "blocked_missing_open_trade_count": 0,
+          "blocked_capacity_trade_count": 0,
+          "capacity_violation_count": 0,
+          "negative_cash_observation_count": 0,
+          "leverage_observation_count": 0,
+          "minimum_cash": 390.4843200000305,
+          "maximum_gross_exposure_ratio": 0.9996631092637175,
+          "maximum_nav_reconciliation_error": 2.8558133635669947e-10,
+          "requested_notional_total": 2712345.1,
+          "executed_notional_total": 2699937.0,
+          "capacity_limited_requested_notional": 0.0,
+          "capacity_fields_finite_and_nonnegative": true,
+          "executed_notional_not_above_requested": true,
+          "capacity_limited_notional_not_above_requested": true,
+          "capacity_aggregation_identity_exact": true,
+          "requested_fill_identity_exact": true,
+          "daily_trade_notional_identity_exact": true
+        },
+        "stress": {
+          "artifact_set_complete": true,
+          "status_values_allowed": true,
+          "status_execution_identity_exact": true,
+          "blocked_missing_open_trade_count": 0,
+          "blocked_capacity_trade_count": 0,
+          "capacity_violation_count": 0,
+          "negative_cash_observation_count": 0,
+          "leverage_observation_count": 0,
+          "minimum_cash": 180.37056000002656,
+          "maximum_gross_exposure_ratio": 0.9998210482714069,
+          "maximum_nav_reconciliation_error": 3.1104718800634146e-10,
+          "requested_notional_total": 2706415.9,
+          "executed_notional_total": 2693286.2,
+          "capacity_limited_requested_notional": 0.0,
+          "capacity_fields_finite_and_nonnegative": true,
+          "executed_notional_not_above_requested": true,
+          "capacity_limited_notional_not_above_requested": true,
+          "capacity_aggregation_identity_exact": true,
+          "requested_fill_identity_exact": true,
+          "daily_trade_notional_identity_exact": true
+        },
+        "cash": {
+          "artifact_set_complete": true,
+          "status_values_allowed": true,
+          "status_execution_identity_exact": true,
+          "blocked_missing_open_trade_count": 0,
+          "blocked_capacity_trade_count": 0,
+          "capacity_violation_count": 0,
+          "negative_cash_observation_count": 0,
+          "leverage_observation_count": 0,
+          "minimum_cash": 1222.2164799999446,
+          "maximum_gross_exposure_ratio": 0.998807721532734,
+          "maximum_nav_reconciliation_error": 2.3283064365386963e-10,
+          "requested_notional_total": 1258730.8,
+          "executed_notional_total": 1128550.4,
+          "capacity_limited_requested_notional": 0.0,
+          "capacity_fields_finite_and_nonnegative": true,
+          "executed_notional_not_above_requested": true,
+          "capacity_limited_notional_not_above_requested": true,
+          "capacity_aggregation_identity_exact": true,
+          "requested_fill_identity_exact": true,
+          "daily_trade_notional_identity_exact": true
+        },
+        "cash_stress": {
+          "artifact_set_complete": true,
+          "status_values_allowed": true,
+          "status_execution_identity_exact": true,
+          "blocked_missing_open_trade_count": 0,
+          "blocked_capacity_trade_count": 0,
+          "capacity_violation_count": 0,
+          "negative_cash_observation_count": 0,
+          "leverage_observation_count": 0,
+          "minimum_cash": 423.83296000002883,
+          "maximum_gross_exposure_ratio": 0.9995862265078913,
+          "maximum_nav_reconciliation_error": 1.4290435501607135e-10,
+          "requested_notional_total": 1258730.8,
+          "executed_notional_total": 1128550.4,
+          "capacity_limited_requested_notional": 0.0,
+          "capacity_fields_finite_and_nonnegative": true,
+          "executed_notional_not_above_requested": true,
+          "capacity_limited_notional_not_above_requested": true,
+          "capacity_aggregation_identity_exact": true,
+          "requested_fill_identity_exact": true,
+          "daily_trade_notional_identity_exact": true
+        }
+      }
+    }
+  },
+  "corrected_gate": {
+    "passed": true,
+    "checks": {
+      "nominal_cagr_strictly_positive": true,
+      "sharpe_at_least": true,
+      "max_drawdown_at_least": true,
+      "positive_complete_year_ratio_at_least": true,
+      "cash_excess_cagr_strictly_positive": true,
+      "stress_nominal_cagr_strictly_positive": true,
+      "stress_cash_excess_cagr_strictly_positive": true,
+      "stress_sharpe_at_least": true,
+      "stress_max_drawdown_at_least": true,
+      "stress_positive_complete_year_ratio_at_least": true,
+      "annualized_turnover_at_most": true,
+      "requested_notional_fill_ratio_at_least": true,
+      "capacity_limited_requested_notional_ratio_at_most": true,
+      "nav_reconciliation_error_at_most": true
+    },
+    "values": {
+      "nominal_cagr_strictly_positive": {
+        "metric": 0.06908794127071727,
+        "threshold": 0.0
+      },
+      "sharpe_at_least": {
+        "metric": 0.7263933657449289,
+        "threshold": 0.3
+      },
+      "max_drawdown_at_least": {
+        "metric": -0.17024574801653047,
+        "threshold": -0.25
+      },
+      "positive_complete_year_ratio_at_least": {
+        "metric": 0.75,
+        "threshold": 0.5
+      },
+      "cash_excess_cagr_strictly_positive": {
+        "metric": 0.038174744427447393,
+        "threshold": 0.0
+      },
+      "stress_nominal_cagr_strictly_positive": {
+        "metric": 0.0685803846989721,
+        "threshold": 0.0
+      },
+      "stress_cash_excess_cagr_strictly_positive": {
+        "metric": 0.03783893629563595,
+        "threshold": 0.0
+      },
+      "stress_sharpe_at_least": {
+        "metric": 0.7215851617595691,
+        "threshold": 0.25
+      },
+      "stress_max_drawdown_at_least": {
+        "metric": -0.17031479228078583,
+        "threshold": -0.25
+      },
+      "stress_positive_complete_year_ratio_at_least": {
+        "metric": 0.75,
+        "threshold": 0.5
+      },
+      "annualized_turnover_at_most": {
+        "metric": 0.5399883882230592,
+        "threshold": 1.0
+      },
+      "requested_notional_fill_ratio_at_least": {
+        "metric": 0.9951486761513633,
+        "threshold": 0.99
+      },
+      "capacity_limited_requested_notional_ratio_at_most": {
+        "metric": 0.0,
+        "threshold": 0.01
+      },
+      "nav_reconciliation_error_at_most": {
+        "metric": 3.1104718800634146e-10,
+        "threshold": 1e-08
+      }
+    }
+  },
+  "execution_validity": {
+    "source": "receipt_bound_8_0_train_artifacts",
+    "receipt_train_phase_deep_verified": true,
+    "artifact_parquet_count": 20,
+    "artifact_row_count": 43222,
+    "roles": {
+      "primary": {
+        "artifact_set_complete": true,
+        "status_values_allowed": true,
+        "status_execution_identity_exact": true,
+        "blocked_missing_open_trade_count": 0,
+        "blocked_capacity_trade_count": 0,
+        "capacity_violation_count": 0,
+        "negative_cash_observation_count": 0,
+        "leverage_observation_count": 0,
+        "minimum_cash": 390.4843200000305,
+        "maximum_gross_exposure_ratio": 0.9996631092637175,
+        "maximum_nav_reconciliation_error": 2.8558133635669947e-10,
+        "requested_notional_total": 2712345.1,
+        "executed_notional_total": 2699937.0,
+        "capacity_limited_requested_notional": 0.0,
+        "capacity_fields_finite_and_nonnegative": true,
+        "executed_notional_not_above_requested": true,
+        "capacity_limited_notional_not_above_requested": true,
+        "capacity_aggregation_identity_exact": true,
+        "requested_fill_identity_exact": true,
+        "daily_trade_notional_identity_exact": true
+      },
+      "stress": {
+        "artifact_set_complete": true,
+        "status_values_allowed": true,
+        "status_execution_identity_exact": true,
+        "blocked_missing_open_trade_count": 0,
+        "blocked_capacity_trade_count": 0,
+        "capacity_violation_count": 0,
+        "negative_cash_observation_count": 0,
+        "leverage_observation_count": 0,
+        "minimum_cash": 180.37056000002656,
+        "maximum_gross_exposure_ratio": 0.9998210482714069,
+        "maximum_nav_reconciliation_error": 3.1104718800634146e-10,
+        "requested_notional_total": 2706415.9,
+        "executed_notional_total": 2693286.2,
+        "capacity_limited_requested_notional": 0.0,
+        "capacity_fields_finite_and_nonnegative": true,
+        "executed_notional_not_above_requested": true,
+        "capacity_limited_notional_not_above_requested": true,
+        "capacity_aggregation_identity_exact": true,
+        "requested_fill_identity_exact": true,
+        "daily_trade_notional_identity_exact": true
+      },
+      "cash": {
+        "artifact_set_complete": true,
+        "status_values_allowed": true,
+        "status_execution_identity_exact": true,
+        "blocked_missing_open_trade_count": 0,
+        "blocked_capacity_trade_count": 0,
+        "capacity_violation_count": 0,
+        "negative_cash_observation_count": 0,
+        "leverage_observation_count": 0,
+        "minimum_cash": 1222.2164799999446,
+        "maximum_gross_exposure_ratio": 0.998807721532734,
+        "maximum_nav_reconciliation_error": 2.3283064365386963e-10,
+        "requested_notional_total": 1258730.8,
+        "executed_notional_total": 1128550.4,
+        "capacity_limited_requested_notional": 0.0,
+        "capacity_fields_finite_and_nonnegative": true,
+        "executed_notional_not_above_requested": true,
+        "capacity_limited_notional_not_above_requested": true,
+        "capacity_aggregation_identity_exact": true,
+        "requested_fill_identity_exact": true,
+        "daily_trade_notional_identity_exact": true
+      },
+      "cash_stress": {
+        "artifact_set_complete": true,
+        "status_values_allowed": true,
+        "status_execution_identity_exact": true,
+        "blocked_missing_open_trade_count": 0,
+        "blocked_capacity_trade_count": 0,
+        "capacity_violation_count": 0,
+        "negative_cash_observation_count": 0,
+        "leverage_observation_count": 0,
+        "minimum_cash": 423.83296000002883,
+        "maximum_gross_exposure_ratio": 0.9995862265078913,
+        "maximum_nav_reconciliation_error": 1.4290435501607135e-10,
+        "requested_notional_total": 1258730.8,
+        "executed_notional_total": 1128550.4,
+        "capacity_limited_requested_notional": 0.0,
+        "capacity_fields_finite_and_nonnegative": true,
+        "executed_notional_not_above_requested": true,
+        "capacity_limited_notional_not_above_requested": true,
+        "capacity_aggregation_identity_exact": true,
+        "requested_fill_identity_exact": true,
+        "daily_trade_notional_identity_exact": true
+      }
+    }
+  },
+  "post_hoc_non_independent": true,
+  "new_market_data_queried": false,
+  "retained_8_0_train_artifacts_accessed": true,
+  "runtime_created": false,
+  "validation_market_outcomes_opened": false,
+  "audit_market_outcomes_opened": false,
+  "claim_contract": {
+    "research_object": "strategic_asset_allocation_beta",
+    "alpha_claim_allowed": false,
+    "profit_claim_allowed": false,
+    "stable_future_profit_claim_allowed": false,
+    "historical_pass_interpretation": "historical fixed-instrument strategic beta diagnostic only",
+    "validation_and_audit_are_public_history_not_fresh_future_evidence": true,
+    "fresh_future_evidence_required": true,
+    "minimum_fresh_sessions": 252,
+    "minimum_fresh_monthly_executions": 12,
+    "first_fresh_session_rule": "first official session after the immutable 8.0 closure and never earlier than 2026-08-31",
+    "investment_recommendation_allowed": false
+  },
+  "payload_sha256": "4f498ffc12deac61144c77c56ba89cb9abccc034d2d73df4f1df8a6c50184c79"
+}
