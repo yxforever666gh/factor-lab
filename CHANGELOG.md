@@ -10,6 +10,8 @@
 
 ## [Unreleased]
 
+## [9.0] - 2026-08-31
+
 ### Added
 
 - 冻结 9.0 大方向 `causal_monthly_volatility_balanced_budget`：每月末用截至信号收盘的 127 个已观测
@@ -30,6 +32,9 @@
 - 9.0 development 直接读取并深验 published 8.1 validation source，不重新查询 provider，也不在 9.0
   runtime 复制 development source；runtime 只保存 development binding/evaluation。只有提交并推送的
   non-null freeze 与精确 CI 成功后，audit 才能首次 capture 2023+。
+- 从 clean `git archive` 构建的 `factor_research_mvp-9.0.0-py3-none-any.whl` SHA-256 为
+  `a20a7b11689dbc0853b317194baeef7f586f6d271514e9ac3a5e5b63c55ea350`；全新隔离 venv 的精确依赖
+  安装、`pip check`、版本/CLI import 与 installed-wheel + detached Git evidence status 均通过。
 
 ### Research status
 
