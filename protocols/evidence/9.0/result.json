@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_multi_asset_terminal_result",
+  "release": "9.0",
+  "status": "historical_adaptive_beta_diagnostic_passed_fresh_evidence_required",
+  "selected_candidate_id": "causal_monthly_volatility_balanced_budget",
+  "audit_status": "historical_audit_passed",
+  "winner_freeze": {
+    "path": "protocols/evidence/9.0/winner-freeze.json",
+    "file_sha256": "98bdff4454b1a9430ca5f343bc4ce08a63924701b3a17e780f57c2454b3b413b",
+    "payload_sha256": "430b45eec730084a3d82e7d392bf609e533d5c7a98b5623f9d13a471171495a7"
+  },
+  "historical_audit": {
+    "path": "protocols/evidence/9.0/historical-audit.json",
+    "file_sha256": "737ccdd9146334732a6e6a60e52423e45f0e7b9eb76837200b232e2a34601018",
+    "payload_sha256": "7a034510cc38aaca5ea2b2113265c2ff2b984c302f366cd68f34f8c73af98681"
+  },
+  "protocol_payload_sha256": "f6c7cce39e8b9a1ae5df10965a2dd607916095b2caf24fcf0a29b625c5bafc3e",
+  "implementation_closure_payload_sha256": "722d93904d3bc67792f32fb7a39ab8461336fa1956513c9ea2586d9ce31e68b3",
+  "claim_contract": {
+    "research_object": "causal_volatility_balanced_strategic_beta",
+    "development_is_fully_exposed_non_oos": true,
+    "alpha_claim_allowed": false,
+    "profit_claim_allowed": false,
+    "stable_future_profit_claim_allowed": false,
+    "investment_recommendation_allowed": false,
+    "historical_audit_if_passed_interpretation": "public-history strategic-beta diagnostic only",
+    "audit_2023_plus_is_fresh_future_evidence": false,
+    "fresh_future_evidence_required": true,
+    "minimum_fresh_sessions": 252,
+    "minimum_fresh_monthly_executions": 12
+  },
+  "payload_sha256": "3b6fbcab3dafb1086be3062109d02c1c05f408d30913dc15146ed2b7eb3aa7b2"
+}
