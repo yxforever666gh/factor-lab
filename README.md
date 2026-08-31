@@ -1,6 +1,10 @@
-# Factor Lab 11.0
+# Factor Lab 11.1
 
-Factor Lab 11.0 把 10.0 的单周期季度 Borda 换成双周期确认混合：每个季度末同时计算 12-1 与 6-1
+Factor Lab 11.1 不修改 11.0 的任何策略参数，只把已发布赢家接入季度 prospective paper cycle：双抓
+稳定 source、窗口内 create-only decision、exact next-open 与连续账户 outcome。当前仍为 0 decision、
+0 confirmed outcome，不能称未来盈利已验证。
+
+底层 11.0 把 10.0 的单周期季度 Borda 换成双周期确认混合：每个季度末同时计算 12-1 与 6-1
 相对现金动量，75% 配给两者均为正的 long-momentum top-3 等权组合，25% 保留 10.0 Borda。它仍只用
 信号时点已观察数据、下一官方开盘、整手、ADV20 容量、分红与全成本会计。
 
@@ -21,6 +25,26 @@ Factor Lab 11.0 把 10.0 的单周期季度 Borda 换成双周期确认混合：
 Full 最大回撤约 -24.82%、Sharpe 0.865、年化换手 2.34，fill 99.88%，capacity-limited 0.03%。
 协议与正式证据见 [11.0 protocol](protocols/11.0-results-first-dual-confirm-blend.json) 和
 [11.0 evidence](protocols/evidence/11.0/results-first-diagnostic.json)。这些数值全部来自已暴露历史。
+
+## 11.1 当前运行层
+
+正式运行必须 checkout 已同步 GitHub 的 annotated `11.1` tag，且 source 和 decision 必须在季度末
+17:10 至下一官方 session 09:15 的窗口内完成：
+
+```powershell
+python -m factor_lab.cli prospective capture --as-of YYYY-MM-DD
+
+python -m factor_lab.cli prospective signal `
+  --source-root runtime/prospective/11.1/sources `
+  --stage asof-YYYYMMDD --as-of YYYY-MM-DD
+
+python -m factor_lab.cli prospective outcome `
+  --source-root runtime/prospective/11.1/sources `
+  --stage asof-NEXTYYYYMMDD --signal-date YYYY-MM-DD --as-of NEXT-YYYY-MM-DD
+```
+
+协议见 [11.1 prospective protocol](protocols/11.1-quarterly-prospective-cycle.json)。失败抓取可在窗口内
+整轮重跑，但已有 source/decision/outcome 不覆盖；缺失 exact next-open 时 outcome 保持未确认。
 
 底层 10.0 把 9.0 的低波动风险预算降为 comparator，主线改为严格因果的季度 12-1 双动量：
 每个自然季度最后一个上交所交易日，只用该时点之前第 252 与第 21 个官方 session 的六只 ETF
@@ -159,33 +183,8 @@ coverage/initiations、dispersion 与 active-reviser breadth 先只做诊断，�
 
 协议见 [protocols/10.1-quarterly-prospective-cycle.json](protocols/10.1-quarterly-prospective-cycle.json)。
 它在 0 decision/0 outcome 时被 11.0 替代，仅保留作发布历史和实现参考；不要再开启新的 10.1 周期。
-若复核旧实现，必须 checkout 已发布的 annotated `10.1` tag。
-
-每个 as-of source 使用两次独立完整 provider capture。两份 manifest、calendar 和六资产必须逐值一致，
-而且历史前缀必须与 retained 9.0（以后与上一正式 as-of stage）完全相同，才会原子发布一份 source。
-Source manifest 同时封存双抓原始 payload、10.1 tag object/commit、协议、上一 stage hash 和窗口内时间；
-同一 stage 已存在时只深验 receipt 链与完整前缀并复用，不再次请求 provider。
-
-```powershell
-# 季度末 17:10 Asia/Shanghai 后：双抓并发布 source
-python -m factor_lab.cli prospective capture --as-of YYYY-MM-DD
-
-# 同日 17:10 至下一官方交易日 09:15：封存本季 targets 与 pending shares
-python -m factor_lab.cli prospective signal `
-  --source-root runtime/prospective/10.1/sources `
-  --stage asof-YYYYMMDD --as-of YYYY-MM-DD
-
-# 下一季度末 17:10 后：连续账户重放成交、NAV、分红和会计，先结束旧周期
-python -m factor_lab.cli prospective outcome `
-  --source-root runtime/prospective/10.1/sources `
-  --stage asof-NEXTYYYYMMDD --signal-date YYYY-MM-DD --as-of NEXT-YYYY-MM-DD
-```
-
-每周期只保留 `cycle=YYYYQn/decision.json` 与 `outcome.json`；source 为
-`sources/stage=asof-YYYYMMDD/`。首周期从 100 万现金开始，之后严格继承上一 outcome 的现金、持仓、
-应收分红和 NAV，不能每季重新投入。缺失 exact next-open 会阻断 outcome；官方份额折算只能按精确
-multiplier 调整执行 share，不能改封存权重、价格、ADV 或人民币名义金额。当前 completed prospective
-outcome 仍为 0，不能据此声称稳定盈利。Receipt 没有外部 attestation，不能防止有意的本地全量伪造。
+协议和历史 evidence 继续留在 main；可执行实现与完整测试只保存在 annotated tag `10.1`，当前 main
+不再维护旧 runner。
 
 ## 10.0 历史方向：季度 12-1 双动量 Borda
 

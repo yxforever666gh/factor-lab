@@ -10,6 +10,28 @@
 
 ## [Unreleased]
 
+### Added
+
+- 新增 11.1 `quarterly prospective paper cycle`，把已发布 11.0 双周期确认混合直接接入稳定双抓、
+  create-only decision/outcome、exact next-open 和连续账户；不修改任何资产、窗口、权重、成本或选择门。
+
+### Changed
+
+- Python 包版本更新为 `11.1.0`。正式 source、decision、outcome 路径迁移到
+  `runtime/prospective/11.1`，并要求 clean checkout 精确匹配已同步 GitHub 的 annotated `11.1` tag。
+- 10.1 prospective runner、historical dry-run runner 及其大体积集成测试从当前 main 删除；不可变实现仍在
+  GitHub tag `10.1`，协议和历史 evidence 留在主线供审计，从而避免同时维护两套已归档运行代码。
+
+### Research status
+
+- 发布时 11.1 prospective decision/outcome 数均为 0；首个 eligible signal 仍需由 2026Q3 fresh official
+  stage 证明。11.0 的历史通过不等于 11.1 已盈利，只有发布后的新 outcome 才能升级结论。
+
+### Known limitations
+
+- 每次 source 仍是两次完整历史 provider capture，没有后台调度、增量 append 或数据库。临时网络失败会
+  清理 transaction，操作员须在窗口内重跑；已发布 artifact 不覆盖、不回填。
+
 ## [11.0] - 2026-09-01
 
 ### Added
