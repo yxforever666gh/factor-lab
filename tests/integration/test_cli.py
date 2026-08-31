@@ -75,23 +75,11 @@ def test_cli_exposes_only_lightweight_mainline_commands() -> None:
     assert parser.parse_args(
         ["strategy", "status", "--release", "10.0"]
     ).release == "10.0"
+    assert parser.parse_args(
+        ["strategy", "status", "--release", "11.0"]
+    ).release == "11.0"
     targets = parser.parse_args(["strategy", "targets", "--signal-date", "latest"])
     assert targets.strategy_command == "targets"
-    capture = parser.parse_args(["prospective", "capture", "--as-of", "2026-09-30"])
-    assert capture.prospective_command == "capture"
-    signal = parser.parse_args(
-        [
-            "prospective",
-            "signal",
-            "--source-root",
-            "runtime/prospective/10.1/sources",
-            "--stage",
-            "asof-20260930",
-            "--as-of",
-            "2026-09-30",
-        ]
-    )
-    assert signal.prospective_command == "signal"
 
     enrich = parser.parse_args(
         ["data", "enrich", "--from", "2017-01-01", "--to", "2026-08-13"]
@@ -130,7 +118,7 @@ def test_help_imports_without_retired_runtime(capsys: pytest.CaptureFixture[str]
     assert "research" in help_text
     assert "strategy" in help_text
     assert "report" in help_text
-    assert "prospective" in help_text
+    assert "prospective" not in help_text
     assert "adaptive-shadow" not in help_text
 
 
@@ -185,43 +173,6 @@ def test_explicit_root_does_not_require_implicit_discovery(
 
     assert cli.main(["--root", str(tmp_path), "data", "status"]) == 0
     assert captured == [tmp_path]
-
-
-def test_prospective_cli_delegates_without_clock_or_runtime_override(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    captured = []
-    runner = SimpleNamespace(main=lambda argv: captured.append(argv) or 0)
-    monkeypatch.setattr(cli, "_load_v101_cycle", lambda root: runner)
-    assert cli.main(
-        [
-            "--root",
-            str(tmp_path),
-            "prospective",
-            "outcome",
-            "--source-root",
-            str(tmp_path / "sources"),
-            "--stage",
-            "asof-20261231",
-            "--signal-date",
-            "2026-09-30",
-            "--as-of",
-            "2026-12-31",
-        ]
-    ) == 0
-    assert captured == [
-        [
-            "outcome",
-            "--as-of",
-            "2026-12-31",
-            "--source-root",
-            str(tmp_path / "sources"),
-            "--stage",
-            "asof-20261231",
-            "--signal-date",
-            "2026-09-30",
-        ]
-    ]
 
 
 def test_strategy_status_verifies_tracked_implementation_and_evidence(
@@ -293,14 +244,14 @@ def test_strategy_status_verifies_tracked_implementation_and_evidence(
         assert "retained_8_1_development_readiness" in categories
 
 
-def test_default_strategy_status_tracks_10_0_results_first_stage() -> None:
+def test_default_strategy_status_tracks_11_0_results_first_stage() -> None:
     root = Path(__file__).resolve().parents[2]
-    evidence_path = root / cli.V10_EVIDENCE_PATH
+    evidence_path = root / cli.V11_EVIDENCE_PATH
     clean = cli._working_tree_is_clean(root)
     committed = (
         evidence_path.is_file()
         and subprocess.run(
-            ["git", "cat-file", "-e", f"HEAD:{cli.V10_EVIDENCE_PATH}"],
+            ["git", "cat-file", "-e", f"HEAD:{cli.V11_EVIDENCE_PATH}"],
             cwd=root,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -308,8 +259,8 @@ def test_default_strategy_status_tracks_10_0_results_first_stage() -> None:
         == 0
     )
     result, exit_code = cli._strategy_status(root, verify_data=False)
-    assert result["version"] == "10.0"
-    assert result["route"] == cli.V10_ROUTE
+    assert result["version"] == "11.0"
+    assert result["route"] == cli.V11_ROUTE
     assert result["profit_claim_allowed"] is False
     if not evidence_path.is_file():
         assert exit_code == 2
@@ -321,7 +272,7 @@ def test_default_strategy_status_tracks_10_0_results_first_stage() -> None:
     else:
         assert exit_code == 0
         assert result["status"] == "candidate_passed_all_results_first_gates"
-        assert result["selected_candidate_id"] == cli.V10_ROUTE
+        assert result["selected_candidate_id"] == cli.V11_ROUTE
 
 
 def test_10_0_status_delegates_exact_and_deep_evidence_verification(
@@ -376,6 +327,67 @@ def test_10_0_status_delegates_exact_and_deep_evidence_verification(
     assert exit_code == 3
     assert result["status"] == "integrity_mismatch"
     assert any("forged evidence" in check.get("error", "") for check in result["checks"])
+
+
+def test_11_0_status_delegates_exact_and_deep_evidence_verification(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = Path(__file__).resolve().parents[2]
+    protocol_target = tmp_path / cli.V11_PROTOCOL_PATH
+    protocol_target.parent.mkdir(parents=True, exist_ok=True)
+    protocol_target.write_bytes((root / cli.V11_PROTOCOL_PATH).read_bytes())
+    evidence = {
+        "status": "candidate_passed_all_results_first_gates",
+        "evidence_class": "fully_exposed_results_first_causal_historical_diagnostic",
+        "selection": {"selected_candidate_id": cli.V11_ROUTE},
+        "periods": {
+            "full": {
+                "metrics": {
+                    "candidate": {"cagr": 0.12, "max_drawdown": -0.24},
+                    "candidate_stress": {"cagr": 0.119},
+                    "v10": {"cagr": 0.104},
+                    "static": {"cagr": 0.078},
+                }
+            }
+        },
+    }
+    evidence["payload_sha256"] = cli._canonical_payload_sha256(evidence)
+    evidence_target = tmp_path / cli.V11_EVIDENCE_PATH
+    evidence_target.parent.mkdir(parents=True, exist_ok=True)
+    evidence_target.write_text(
+        json.dumps(evidence, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    evidence_bytes = evidence_target.read_bytes()
+    calls: list[bool] = []
+    runner = SimpleNamespace(
+        verify_evidence=lambda _value, *, verify_data: calls.append(verify_data)
+    )
+    monkeypatch.setattr(cli, "_load_v11_runner", lambda _root: runner)
+    monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
+    monkeypatch.setattr(
+        cli.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0, stdout=evidence_bytes, stderr=b""
+        ),
+    )
+    result, exit_code = cli._strategy_status_11_0(tmp_path, verify_data=True)
+    assert exit_code == 0
+    assert result["canonical_data_hashes_verified"] is True
+    assert result["full_cagr"] == 0.12
+    assert result["full_published_10_0_cagr"] == 0.104
+    assert calls == [True]
+
+    runner.verify_evidence = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+        ValueError("forged 11.0 evidence")
+    )
+    result, exit_code = cli._strategy_status_11_0(tmp_path, verify_data=False)
+    assert exit_code == 3
+    assert result["status"] == "integrity_mismatch"
+    assert any(
+        "forged 11.0 evidence" in check.get("error", "")
+        for check in result["checks"]
+    )
 
 
 def test_8_0_real_execution_failure_receipt_has_valid_shallow_status(

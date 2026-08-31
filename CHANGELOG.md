@@ -10,6 +10,37 @@
 
 ## [Unreleased]
 
+### Added
+
+- 新增 11.0 results-first 路线 `quarterly_dual_confirm_top3_borda_blend_75_25`：季度末同时计算
+  12-1 与 6-1 相对现金动量；75% 分配给双周期都为正的 long-momentum top-3 等权组合，25% 保留
+  10.0 全 positive-set Borda，下一官方开盘继续使用 100 万元、整手、10% ADV20、分红和 8bp/16bp
+  成本会计。
+- 新增 11.0 compact protocol、exact results-first runner、物理 prefix replay 与 10.0/static/cash 同口径
+  对照；正式 evidence 只接受三个分段和 full 在 base/stress 下全部通过固定收益及执行门。
+
+### Changed
+
+- Python 包版本更新为 `11.0.0`。这是策略公式的大方向切换，不是 10.1 运行层小修；10.1 在 0 个
+  prospective decision、0 个 outcome 时被历史收益更强的候选替代，不会再开启首周期。
+- 11.0 选择门要求 candidate 在 D1/D2/D3/full 的 8bp 与 16bp CAGR 均至少高于 matching cash、static
+  和已发布 10.0 `50bp`，且 stress CAGR 严格高于 matching 10.0 base；Sharpe 和回撤仍只披露。
+
+### Research status
+
+- 第一轮 fully exposed scratch 冻结 8 个季度集中度/现金门/持有缓冲候选，无一通过；其中
+  `dual_confirm_top3_equal` 虽在每个分段提高 CAGR，但 D1 fill 与正收益年份稳定性失败。第二轮完整披露
+  25%/50%/75% 三个与 10.0 Borda 的固定混合，`dual75_borda25` 按预定最差分段 edge 规则胜出。
+- Scratch exact 结果中，赢家 D1/D2/D3 base CAGR 为 8.532% / 6.857% / 21.768%，10.0 为
+  7.365% / 5.547% / 19.028%；full base/stress 为 12.118% / 11.916%，10.0 为
+  10.450% / 10.276%。Full fill 99.88%、capacity-limited 0.03%，target prefix mismatch 为 0。
+
+### Known limitations
+
+- 两轮候选和三个历史分段均在选择前完全暴露，11.0 只能称
+  `fully_exposed_results_first_causal_historical_diagnostic`，不是独立 OOS、alpha 或未来稳定盈利证据。
+  新公式仍需另一个 prospective 小版本及 fresh future outcome 验证。
+
 ## [10.1] - 2026-09-01
 
 ### Added

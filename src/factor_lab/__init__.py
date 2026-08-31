@@ -1,3 +1,3 @@
 """Causal point-in-time strategy research with exact cost-aware execution."""
 
-__version__ = "10.1.0"
+__version__ = "11.0.0"

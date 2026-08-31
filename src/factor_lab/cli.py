@@ -141,11 +141,13 @@ V10_PROTOCOL_PAYLOAD_SHA256 = "dc79550ee9fefe4fdb01f54fe0c299a40c2d118a687f6e557
 V10_PROTOCOL_FILE_SHA256 = "6a949ce4374f407a6084053a08b76dedbb3f1478fbe56edf233bb23befe730dd"
 V10_SOURCE_MANIFEST_PAYLOAD_SHA256 = "050ad4ddcb86dc4fbc71befad54c400b48a44f72ab6fecc33936b6da0c8f9aff"
 V10_SOURCE_MANIFEST_FILE_SHA256 = "cdbf8ba498142adff04216b476522f47ee18df6f0fa02f3395d0e141191adbfa"
-V101_PROTOCOL_PATH = "protocols/10.1-quarterly-prospective-cycle.json"
-V101_RUNNER_PATH = "scripts/run-10.1-quarterly-cycle.py"
-V101_PROTOCOL_ID = "factor-lab/10.1/quarterly-prospective-cycle-v1"
-V101_PROTOCOL_PAYLOAD_SHA256 = "0c3f2240cc404c1084230f1efbfe3f9fd3f0fa73dbbdc69ec63e5465ef7610ca"
-V101_PROTOCOL_FILE_SHA256 = "81240134127de2fedde6e231f8a3a02dd74950ff9da67e5298e71834c61843b5"
+V11_PROTOCOL_PATH = "protocols/11.0-results-first-dual-confirm-blend.json"
+V11_EVIDENCE_PATH = "protocols/evidence/11.0/results-first-diagnostic.json"
+V11_RUNNER_PATH = "scripts/run-11.0-results-first.py"
+V11_ROUTE = "quarterly_dual_confirm_top3_borda_blend_75_25"
+V11_PROTOCOL_ID = "factor-lab/11.0/results-first-dual-confirm-blend-v1"
+V11_PROTOCOL_PAYLOAD_SHA256 = "d23739b85fa02d0cfeca977ba5f60fe003ae5753a387f7b10fa611a6688ae0bf"
+V11_PROTOCOL_FILE_SHA256 = "8c6b20996e1e735a020fd71a31b0401570948549a041c5f3848a3dd19ae8fc7c"
 
 
 def _root() -> Path:
@@ -340,7 +342,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     strategy_status.add_argument(
         "--release",
-        choices=("6.0", "6.3", "7.0", "7.1", "8.0", "8.1", "9.0", "10.0"),
+        choices=("6.0", "6.3", "7.0", "7.1", "8.0", "8.1", "9.0", "10.0", "11.0"),
         help="Verify one release closure; defaults to the latest tracked closure.",
     )
     strategy_targets = strategy_commands.add_parser(
@@ -352,24 +354,6 @@ def build_parser() -> argparse.ArgumentParser:
         default="latest",
         help="Official session date or 'latest' (latest date with a signal).",
     )
-
-    prospective = commands.add_parser(
-        "prospective", help="Run the lightweight 10.1 quarterly paper cycle."
-    )
-    prospective_commands = prospective.add_subparsers(
-        dest="prospective_command", required=True
-    )
-    capture = prospective_commands.add_parser(
-        "capture", help="Publish one stable double-captured ETF as-of source."
-    )
-    capture.add_argument("--as-of", required=True)
-    for name in ("signal", "outcome"):
-        command = prospective_commands.add_parser(name)
-        command.add_argument("--source-root", type=Path, required=True)
-        command.add_argument("--stage", required=True)
-        command.add_argument("--as-of", required=True)
-        if name == "outcome":
-            command.add_argument("--signal-date", required=True)
 
     report = commands.add_parser("report", help="Print a completed Markdown report.")
     report.add_argument("--run", default="latest", help="Run id or 'latest'.")
@@ -1347,6 +1331,33 @@ def _load_v10_runner(root: Path) -> Any:
         or module.SOURCE_MANIFEST_FILE_SHA256 != V10_SOURCE_MANIFEST_FILE_SHA256
     ):
         raise ValueError("10.0 runner contains an incorrect release namespace")
+    return module
+
+
+def _load_v11_runner(root: Path) -> Any:
+    resolved = root.resolve()
+    script = resolved / V11_RUNNER_PATH
+    if script.is_symlink() or not script.is_file():
+        raise ValueError("11.0 results-first runner is missing or indirect")
+    spec = importlib.util.spec_from_file_location("factor_lab_v11_status_verifier", script)
+    if spec is None or spec.loader is None:
+        raise ValueError("could not load the 11.0 results-first verifier")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    if (
+        module.ROOT.resolve() != resolved
+        or module.RELEASE != "11.0"
+        or module.ROUTE != V11_ROUTE
+        or module.QUARTERLY_DUAL_CONFIRM_BLEND_ID != V11_ROUTE
+        or module.PROTOCOL_ID != V11_PROTOCOL_ID
+        or module.PROTOCOL_PATH.as_posix() != V11_PROTOCOL_PATH
+        or module.PROTOCOL_PAYLOAD != V11_PROTOCOL_PAYLOAD_SHA256
+        or module.PROTOCOL_FILE_SHA256 != V11_PROTOCOL_FILE_SHA256
+        or module.EVIDENCE_PATH.as_posix() != V11_EVIDENCE_PATH
+        or module.SOURCE_MANIFEST_PAYLOAD != V10_SOURCE_MANIFEST_PAYLOAD_SHA256
+        or module.SOURCE_MANIFEST_FILE_SHA256 != V10_SOURCE_MANIFEST_FILE_SHA256
+    ):
+        raise ValueError("11.0 runner contains an incorrect release namespace")
     return module
 
 
@@ -3123,6 +3134,181 @@ def _strategy_status_10_0(
     }, 0
 
 
+def _strategy_status_11_0(
+    root: Path, *, verify_data: bool
+) -> tuple[dict[str, Any], int]:
+    checks: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
+    runner: Any | None = None
+    try:
+        runner = _load_v11_runner(root)
+        checks.append(
+            {
+                "category": "results_first_runner_namespace",
+                "path": V11_RUNNER_PATH,
+                "status": "match",
+            }
+        )
+    except (AttributeError, OSError, TypeError, ValueError) as exc:
+        item = {
+            "category": "results_first_runner_namespace",
+            "path": V11_RUNNER_PATH,
+            "status": "mismatch",
+            "error": str(exc),
+        }
+        checks.append(item)
+        failures.append(item)
+
+    protocol, protocol_check = _v7_json_check(
+        root,
+        V11_PROTOCOL_PATH,
+        expected_payload=V11_PROTOCOL_PAYLOAD_SHA256,
+        expected_file=V11_PROTOCOL_FILE_SHA256,
+    )
+    protocol_check["category"] = "results_first_protocol"
+    checks.append(protocol_check)
+    if protocol_check.get("status") != "match":
+        failures.append(protocol_check)
+    elif not (
+        protocol.get("release") == "11.0"
+        and protocol.get("route") == V11_ROUTE
+        and protocol.get("protocol_id") == V11_PROTOCOL_ID
+        and protocol.get("frozen_strategy", {}).get("strategy_id") == V11_ROUTE
+        and protocol.get("claim_contract", {}).get("profit_claim_allowed") is False
+    ):
+        item = {
+            "category": "results_first_protocol_contract",
+            "path": V11_PROTOCOL_PATH,
+            "status": "mismatch",
+        }
+        checks.append(item)
+        failures.append(item)
+
+    evidence_path = root / V11_EVIDENCE_PATH
+    if not evidence_path.is_file():
+        checks.append(
+            {
+                "category": "results_first_evidence",
+                "path": V11_EVIDENCE_PATH,
+                "status": "not_created",
+            }
+        )
+        return {
+            "status": "implementation_pending_results_first_replay",
+            "version": "11.0",
+            "route": V11_ROUTE,
+            "protocol_id": V11_PROTOCOL_ID if protocol is not None else None,
+            "evidence_class": "fully_exposed_results_first_causal_historical_diagnostic",
+            "profit_claim_allowed": False,
+            "selected_candidate_id": None,
+            "evidence_payload_sha256": None,
+            "canonical_data_hashes_verified": False,
+            "checks": checks,
+        }, 3 if failures else 2
+
+    evidence, evidence_check = _v7_json_check(root, V11_EVIDENCE_PATH)
+    evidence_check["category"] = "results_first_evidence"
+    checks.append(evidence_check)
+    if evidence_check.get("status") != "match":
+        failures.append(evidence_check)
+    data_verified = False
+    if evidence is not None and protocol is not None and runner is not None:
+        try:
+            runner.verify_evidence(evidence, verify_data=verify_data)
+            data_verified = bool(verify_data)
+            checks.append(
+                {
+                    "category": "results_first_evidence_contract",
+                    "path": V11_EVIDENCE_PATH,
+                    "status": "match",
+                }
+            )
+        except (
+            AttributeError,
+            KeyError,
+            OSError,
+            OverflowError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            subprocess.SubprocessError,
+        ) as exc:
+            item = {
+                "category": "results_first_evidence_contract",
+                "path": V11_EVIDENCE_PATH,
+                "status": "mismatch",
+                "error": str(exc),
+            }
+            checks.append(item)
+            failures.append(item)
+
+    clean = _working_tree_is_clean(root)
+    if not clean:
+        item = {
+            "category": "results_first_worktree",
+            "path": ".",
+            "status": "mismatch",
+            "error": "11.0 evidence status requires a clean worktree",
+        }
+        checks.append(item)
+        failures.append(item)
+    else:
+        committed = subprocess.run(
+            ["git", "show", f"HEAD:{V11_EVIDENCE_PATH}"],
+            cwd=root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        exact = committed.returncode == 0 and committed.stdout == evidence_path.read_bytes()
+        item = {
+            "category": "results_first_committed_evidence",
+            "path": V11_EVIDENCE_PATH,
+            "status": "match" if exact else "mismatch",
+        }
+        checks.append(item)
+        if not exact:
+            failures.append(item)
+
+    if data_verified:
+        checks.append(
+            {
+                "category": "retained_9_0_source_and_metric_replay",
+                "path": V10_SOURCE_MANIFEST_PATH,
+                "status": "match",
+            }
+        )
+    if failures or evidence is None:
+        return {
+            "status": "integrity_mismatch",
+            "version": "11.0",
+            "route": V11_ROUTE,
+            "protocol_id": V11_PROTOCOL_ID,
+            "profit_claim_allowed": False,
+            "selected_candidate_id": None,
+            "evidence_payload_sha256": None,
+            "canonical_data_hashes_verified": False,
+            "checks": checks,
+        }, 3
+    full = evidence["periods"]["full"]["metrics"]
+    return {
+        "status": evidence["status"],
+        "version": "11.0",
+        "route": V11_ROUTE,
+        "protocol_id": V11_PROTOCOL_ID,
+        "evidence_class": evidence["evidence_class"],
+        "profit_claim_allowed": False,
+        "selected_candidate_id": evidence["selection"]["selected_candidate_id"],
+        "evidence_payload_sha256": evidence["payload_sha256"],
+        "full_cagr": full["candidate"]["cagr"],
+        "full_stress_cagr": full["candidate_stress"]["cagr"],
+        "full_published_10_0_cagr": full["v10"]["cagr"],
+        "full_static_cagr": full["static"]["cagr"],
+        "full_max_drawdown": full["candidate"]["max_drawdown"],
+        "canonical_data_hashes_verified": data_verified,
+        "checks": checks,
+    }, 0
+
+
 def _strategy_status_7_0_archived(
     root: Path, *, verify_data: bool
 ) -> tuple[dict[str, Any], int]:
@@ -3256,7 +3442,7 @@ def _strategy_status_7_1_archived(
 def _strategy_status(
     root: Path, *, verify_data: bool, release: str | None = None
 ) -> tuple[dict[str, Any], int]:
-    selected = release or "10.0"
+    selected = release or "11.0"
     if selected == "6.0":
         return _strategy_status_6_0(root, verify_data=verify_data)
     if selected == "6.3":
@@ -3273,6 +3459,8 @@ def _strategy_status(
         return _strategy_status_9_0_archived(root, verify_data=verify_data)
     if selected == "10.0":
         return _strategy_status_10_0(root, verify_data=verify_data)
+    if selected == "11.0":
+        return _strategy_status_11_0(root, verify_data=verify_data)
     raise ValueError(f"unsupported strategy release: {selected}")
 
 
@@ -3352,44 +3540,6 @@ def _strategy_command(arguments: argparse.Namespace) -> int:
     raise AssertionError(arguments.strategy_command)
 
 
-def _load_v101_cycle(root: Path) -> Any:
-    script = root.resolve() / V101_RUNNER_PATH
-    if script.is_symlink() or not script.is_file():
-        raise ValueError("10.1 prospective cycle runner is missing or indirect")
-    spec = importlib.util.spec_from_file_location("factor_lab_v101_cycle", script)
-    if spec is None or spec.loader is None:
-        raise ValueError("could not load the 10.1 prospective cycle runner")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    if (
-        module.ROOT.resolve() != root.resolve()
-        or module.RELEASE != "10.1"
-        or module.ROUTE != V10_ROUTE
-        or module.PROTOCOL_PATH.as_posix() != V101_PROTOCOL_PATH
-        or module.PROTOCOL_PAYLOAD != V101_PROTOCOL_PAYLOAD_SHA256
-        or module.PROTOCOL_FILE_SHA256 != V101_PROTOCOL_FILE_SHA256
-    ):
-        raise ValueError("10.1 prospective runner namespace differs")
-    return module
-
-
-def _prospective_command(arguments: argparse.Namespace) -> int:
-    runner = _load_v101_cycle(arguments.root.resolve())
-    argv = [arguments.prospective_command, "--as-of", str(arguments.as_of)]
-    if arguments.prospective_command in {"signal", "outcome"}:
-        argv.extend(
-            [
-                "--source-root",
-                str(arguments.source_root),
-                "--stage",
-                str(arguments.stage),
-            ]
-        )
-    if arguments.prospective_command == "outcome":
-        argv.extend(["--signal-date", str(arguments.signal_date)])
-    return int(runner.main(argv))
-
-
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = build_parser().parse_args(argv)
     if arguments.root is None:
@@ -3400,8 +3550,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _research_command(arguments)
     if arguments.command == "strategy":
         return _strategy_command(arguments)
-    if arguments.command == "prospective":
-        return _prospective_command(arguments)
     if arguments.command == "report":
         return _report_command(arguments)
     raise AssertionError(arguments.command)

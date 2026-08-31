@@ -22,6 +22,12 @@ from factor_lab.research.multi_asset import (
     QUARTERLY_BORDA_END_LAG,
     QUARTERLY_BORDA_ID,
     QUARTERLY_BORDA_START_LAG,
+    QUARTERLY_DUAL_CONFIRM_BASE_WEIGHT,
+    QUARTERLY_DUAL_CONFIRM_BLEND_ID,
+    QUARTERLY_DUAL_CONFIRM_DIAGNOSTIC_COLUMNS,
+    QUARTERLY_DUAL_CONFIRM_SHORT_START_LAG,
+    QUARTERLY_DUAL_CONFIRM_TOP_K,
+    QUARTERLY_DUAL_CONFIRM_WEIGHT,
     RISK_BUDGETS,
     RISK_CODES,
     STRESS_COST_BPS_PER_SIDE,
@@ -563,6 +569,149 @@ def test_quarterly_borda_rejects_weight_and_each_frozen_diagnostic_tamper() -> N
     id_tamper["strategy_id"] = CONTROL_ID
     with pytest.raises(ValueError, match="diagnostics require the exact strategy_id"):
         simulate_targets(market, id_tamper, official)
+
+
+def test_quarterly_dual_confirm_blends_exact_long_borda_and_short_top3() -> None:
+    market, official = _market()
+    signal_index, execution_index = _quarter_end_pair(official, minimum_index=300)
+    signal = official[signal_index]
+    selected = build_monthly_targets(
+        market, official, QUARTERLY_DUAL_CONFIRM_BLEND_ID
+    ).loc[lambda frame: frame["signal_date"].eq(signal)].set_index("code")
+
+    assert QUARTERLY_DUAL_CONFIRM_BLEND_ID == (
+        "quarterly_dual_confirm_top3_borda_blend_75_25"
+    )
+    assert QUARTERLY_DUAL_CONFIRM_SHORT_START_LAG == 126
+    assert QUARTERLY_DUAL_CONFIRM_TOP_K == 3
+    assert QUARTERLY_DUAL_CONFIRM_WEIGHT == 0.75
+    assert QUARTERLY_DUAL_CONFIRM_BASE_WEIGHT == 0.25
+    assert set(QUARTERLY_DUAL_CONFIRM_DIAGNOSTIC_COLUMNS).issubset(
+        selected.columns
+    )
+    assert selected["execution_date"].eq(official[execution_index]).all()
+    assert selected["momentum_start_date"].eq(official[signal_index - 252]).all()
+    assert selected["short_momentum_start_date"].eq(
+        official[signal_index - 126]
+    ).all()
+    assert selected["momentum_end_date"].eq(official[signal_index - 21]).all()
+    dual_codes = {"510300.SH", "513100.SH", "511010.SH"}
+    assert set(selected.index[selected["dual_selected"]]) == dual_codes
+    assert selected["dual_eligible_count"].eq(3).all()
+    base = {
+        "510300.SH": 3.0 / 6.0,
+        "513100.SH": 2.0 / 6.0,
+        "511010.SH": 1.0 / 6.0,
+    }
+    expected = {}
+    for code in RISK_CODES:
+        expected[code] = 0.75 * (1.0 / 3.0 if code in dual_codes else 0.0) + 0.25 * base.get(code, 0.0)
+        assert selected.at[code, "base_borda_weight"] == base.get(code, 0.0)
+        assert selected.at[code, "dual_top3_weight"] == (
+            1.0 / 3.0 if code in dual_codes else 0.0
+        )
+        assert selected.at[code, "target_weight"] == expected[code]
+    assert selected.at[CASH_CODE, "target_weight"] == 1.0 - math.fsum(
+        expected.values()
+    )
+    assert math.fsum(selected["target_weight"]) == 1.0
+
+
+def test_quarterly_dual_confirm_requires_positive_short_momentum() -> None:
+    market, official = _market()
+    signal_index, _ = _quarter_end_pair(official, minimum_index=300)
+    signal = official[signal_index]
+    code = "511010.SH"
+    source = market[code].set_index("trade_date")
+    source.at[official[signal_index - 252], "total_return_index"] = 1.0
+    source.at[official[signal_index - 126], "total_return_index"] = 2.0
+    source.at[official[signal_index - 21], "total_return_index"] = 1.5
+    market[code] = source.reset_index()
+    selected = build_monthly_targets(
+        market, official, QUARTERLY_DUAL_CONFIRM_BLEND_ID
+    ).loc[lambda frame: frame["signal_date"].eq(signal)].set_index("code")
+
+    assert selected.at[code, "relative_cash_log_momentum"] > 0.0
+    assert selected.at[code, "short_relative_cash_log_momentum"] < 0.0
+    assert bool(selected.at[code, "dual_eligible"]) is False
+    assert bool(selected.at[code, "dual_selected"]) is False
+    assert selected.at[code, "dual_top3_weight"] == 0.0
+    assert selected.at[code, "base_borda_weight"] > 0.0
+    for risk_code in RISK_CODES:
+        assert selected.at[risk_code, "target_weight"] == (
+            0.75 * selected.at[risk_code, "dual_top3_weight"]
+            + 0.25 * selected.at[risk_code, "base_borda_weight"]
+        )
+
+
+def test_quarterly_dual_confirm_missing_short_endpoint_falls_back_all_cash() -> None:
+    market, official = _market()
+    signal_index, _ = _quarter_end_pair(official, minimum_index=300)
+    signal = official[signal_index]
+    missing = official[signal_index - QUARTERLY_DUAL_CONFIRM_SHORT_START_LAG]
+    code = "513100.SH"
+    market[code] = market[code].loc[
+        market[code]["trade_date"].ne(missing)
+    ].reset_index(drop=True)
+    selected = build_monthly_targets(
+        market, official, QUARTERLY_DUAL_CONFIRM_BLEND_ID
+    ).loc[lambda frame: frame["signal_date"].eq(signal)].set_index("code")
+
+    assert selected["endpoint_fallback_all_cash"].eq(True).all()
+    assert selected.loc[list(RISK_CODES), "target_weight"].eq(0.0).all()
+    assert selected.at[CASH_CODE, "target_weight"] == 1.0
+    assert selected["short_relative_cash_log_momentum"].isna().all()
+    assert selected["dual_selected"].eq(False).all()
+
+
+def test_quarterly_dual_confirm_is_future_tail_invariant_and_rejects_tamper() -> None:
+    market, official = _market()
+    signal_index, _ = _quarter_end_pair(official, minimum_index=330)
+    signal = official[signal_index]
+    prefix = {
+        code: frame.loc[frame["trade_date"].le(signal)].copy()
+        for code, frame in market.items()
+    }
+    prefix_targets = build_monthly_targets(
+        prefix, official, QUARTERLY_DUAL_CONFIRM_BLEND_ID
+    )
+    poisoned = {code: frame.copy() for code, frame in market.items()}
+    for frame in poisoned.values():
+        future = frame["trade_date"].gt(signal)
+        frame.loc[future, ["open", "close", "total_return_index"]] *= 11.0
+    full_targets = build_monthly_targets(
+        poisoned, official, QUARTERLY_DUAL_CONFIRM_BLEND_ID
+    )
+    comparable = full_targets.loc[full_targets["signal_date"].le(signal)].reset_index(
+        drop=True
+    )
+    pdt.assert_frame_equal(prefix_targets.reset_index(drop=True), comparable)
+
+    one = prefix_targets.loc[prefix_targets["signal_date"].eq(signal)].reset_index(
+        drop=True
+    )
+    risk = one["code"].eq("510300.SH")
+    cash = one["code"].eq(CASH_CODE)
+    weight = one.copy()
+    weight.loc[risk, "target_weight"] -= 0.01
+    weight.loc[cash, "target_weight"] += 0.01
+    with pytest.raises(ValueError, match="target weights differ from causal history"):
+        simulate_targets(prefix, weight, official)
+    for column in (
+        "short_relative_cash_log_momentum",
+        "base_borda_weight",
+        "dual_selected",
+        "dual_top3_weight",
+    ):
+        tampered = one.copy()
+        if column == "dual_selected":
+            tampered.loc[risk, column] = ~tampered.loc[risk, column]
+        else:
+            tampered.loc[risk, column] += 1.0
+        with pytest.raises(ValueError, match="diagnostics differ from causal history"):
+            simulate_targets(prefix, tampered, official)
+    with pytest.raises(ValueError, match="lack frozen diagnostics"):
+        simulate_targets(prefix, one.drop(columns="dual_top3_weight"), official)
 
 
 def test_cash_only_uses_exact_cash_weight_and_next_official_open() -> None:

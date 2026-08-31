@@ -1,0 +1,351 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_research_protocol",
+  "protocol_id": "factor-lab/11.0/results-first-dual-confirm-blend-v1",
+  "release": "11.0",
+  "direction_change": true,
+  "route": "quarterly_dual_confirm_top3_borda_blend_75_25",
+  "status": "frozen_after_fully_exposed_two_stage_results_first_selection_before_formal_diagnostic",
+  "prior_release": {
+    "release": "10.1",
+    "tag": "10.1",
+    "annotated_tag_object": "4eb27037a855e8f5ff12397b07cdfb20f27b405f",
+    "peeled_commit": "3c777777ba3446b3302fc444324778964f6a07b8",
+    "protocol": {
+      "path": "protocols/10.1-quarterly-prospective-cycle.json",
+      "file_sha256": "81240134127de2fedde6e231f8a3a02dd74950ff9da67e5298e71834c61843b5",
+      "payload_sha256": "0c3f2240cc404c1084230f1efbfe3f9fd3f0fa73dbbdc69ec63e5465ef7610ca"
+    },
+    "historical_asof_evidence": {
+      "path": "protocols/evidence/10.1/historical-asof-dry-run.json",
+      "file_sha256": "888313dd86c9c15bf6e915d087a784c1a8e4d48e85f3832b4e0945e77e3e27c3",
+      "payload_sha256": "0d2103896410f8800cf9351cb8fb31b807df7ff06c79413b0c2ed45fbc3fed47",
+      "target_prefix_mismatch_count": 0,
+      "sealed_plan_prefix_mismatch_count": 0,
+      "signal_close_state_prefix_mismatch_count": 0,
+      "outcome_prefix_mismatch_count": 0
+    },
+    "prospective_state_at_direction_change": {
+      "decision_count": 0,
+      "confirmed_outcome_count": 0,
+      "may_be_relabelled_as_11_0_evidence": false
+    }
+  },
+  "published_10_0_reference": {
+    "protocol": {
+      "path": "protocols/10.0-results-first-quarterly-borda.json",
+      "file_sha256": "6a949ce4374f407a6084053a08b76dedbb3f1478fbe56edf233bb23befe730dd",
+      "payload_sha256": "dc79550ee9fefe4fdb01f54fe0c299a40c2d118a687f6e5571156dff5701cb7b"
+    },
+    "evidence": {
+      "path": "protocols/evidence/10.0/results-first-diagnostic.json",
+      "file_sha256": "954be9b434d3d5c7c06ddac1f276ac032248b420956185cc372ae352685b4e89",
+      "payload_sha256": "18c9fb75f79cf71572f65a3eade0d2af8a018e7b8aef066fa8a30dce1f721253"
+    }
+  },
+  "retained_source": {
+    "path": "runtime/data/multi-asset-9.0/sources/stage=audit",
+    "manifest_file_sha256": "cdbf8ba498142adff04216b476522f47ee18df6f0fa02f3395d0e141191adbfa",
+    "manifest_payload_sha256": "050ad4ddcb86dc4fbc71befad54c400b48a44f72ab6fecc33936b6da0c8f9aff",
+    "price_start_date": "2014-01-15",
+    "price_end_date": "2026-08-28"
+  },
+  "results_first_selection_disclosure": {
+    "selection_mode": "fully_exposed_full_history_results_first_two_stage_search",
+    "all_D1_D2_D3_and_full_outcomes_observed_before_both_search_stages": true,
+    "historical_rule_was_not_selected_at_each_historical_time": true,
+    "selection_is_independent_oos": false,
+    "stage_count": 2,
+    "total_candidate_evaluation_count": 11,
+    "selected_scratch_candidate_id": "dual75_borda25",
+    "selected_formal_strategy_id": "quarterly_dual_confirm_top3_borda_blend_75_25",
+    "post_selection_parameter_or_formula_change_allowed": false,
+    "additional_search_after_freeze_allowed": false,
+    "historical_profit_claim_allowed": false
+  },
+  "fully_exposed_scratch": {
+    "stage_1_quarterly_concentration_search": {
+      "status": "no_candidate_passed",
+      "external_script_path": "H:/Download/factor-lab-v110-quarterly-concentration-search.py",
+      "external_script_file_sha256": "5a1958609cdc404103e646435c92c6b066fc5344c77244b077dff817abcec391",
+      "external_result_path": "H:/Download/factor-lab-v110-quarterly-concentration-search-result.json",
+      "external_result_file_sha256": "749444e91d1cbf84537d98853e0bfa0e0bd462d667c68d33e268d94f6d71092c",
+      "external_result_payload_sha256": "cc34efe5a5a07e6741787e01b24368270e0b204553c800ecf4bae79f4983f826",
+      "candidate_count": 8,
+      "candidate_order_and_results": [
+        {
+          "registry_order": 1,
+          "id": "top3_equal",
+          "rule": "top min(3, |P12|) by 12-1 cash-excess momentum, equal risk weights",
+          "minimum_cagr_edge": -0.003928003299886962,
+          "period_passes": {"D1": false, "D2": false, "D3": true, "full": false},
+          "all_return_and_execution_gates_passed": false
+        },
+        {
+          "registry_order": 2,
+          "id": "dual_confirm_top3_equal",
+          "rule": "top min(3, |P12 & P6|), where both 12-1 and 6-1 cash-excess momentum are positive, equal weights",
+          "minimum_cagr_edge": 0.015831424127127125,
+          "period_passes": {"D1": false, "D2": false, "D3": true, "full": false},
+          "all_return_and_execution_gates_passed": false,
+          "relevant_failure": "D1 fill and D1/D2/full positive-year stability gates failed despite higher CAGR"
+        },
+        {
+          "registry_order": 3,
+          "id": "breadth_scaled_top3_equal",
+          "rule": "top3 equal; total risk exposure |P12|/5; residual cash",
+          "minimum_cagr_edge": -0.024119046552372847,
+          "period_passes": {"D1": false, "D2": false, "D3": false, "full": false},
+          "all_return_and_execution_gates_passed": false
+        },
+        {
+          "registry_order": 4,
+          "id": "top3_borda",
+          "rule": "top3 positive 12-1 ranks with weights 1/2, 1/3, 1/6",
+          "minimum_cagr_edge": -0.007466324312116912,
+          "period_passes": {"D1": false, "D2": true, "D3": false, "full": false},
+          "all_return_and_execution_gates_passed": false
+        },
+        {
+          "registry_order": 5,
+          "id": "top2_borda",
+          "rule": "top2 positive 12-1 ranks with weights 2/3, 1/3",
+          "minimum_cagr_edge": -0.0277700368299445,
+          "period_passes": {"D1": false, "D2": true, "D3": false, "full": false},
+          "all_return_and_execution_gates_passed": false
+        },
+        {
+          "registry_order": 6,
+          "id": "mean_gate_top3_equal",
+          "rule": "all cash when mean five-asset 12-1 cash-excess momentum <= 0; otherwise top3 equal",
+          "minimum_cagr_edge": -0.052118982694487004,
+          "period_passes": {"D1": false, "D2": true, "D3": true, "full": false},
+          "all_return_and_execution_gates_passed": false
+        },
+        {
+          "registry_order": 7,
+          "id": "buffered_top3_equal",
+          "rule": "retain prior selected assets while 12-1 momentum stays positive, fill remaining top3 slots by current rank, equal weights",
+          "minimum_cagr_edge": -0.030660858137799174,
+          "period_passes": {"D1": false, "D2": false, "D3": false, "full": false},
+          "all_return_and_execution_gates_passed": false
+        },
+        {
+          "registry_order": 8,
+          "id": "semiannual_top3_equal",
+          "rule": "top3 equal only at June/December quarter ends; no March/September rebalance",
+          "minimum_cagr_edge": -0.028627610725575625,
+          "period_passes": {"D1": false, "D2": false, "D3": false, "full": false},
+          "all_return_and_execution_gates_passed": false
+        }
+      ],
+      "selected_candidate_id": null
+    },
+    "stage_2_disclosed_dual_confirm_blend_search": {
+      "status": "winner_found",
+      "parent_result_file_sha256": "749444e91d1cbf84537d98853e0bfa0e0bd462d667c68d33e268d94f6d71092c",
+      "parent_result_payload_sha256": "cc34efe5a5a07e6741787e01b24368270e0b204553c800ecf4bae79f4983f826",
+      "reason_for_second_stage": "dual_confirm_top3_equal beat 10.0 CAGR in every segment but failed D1 fill and positive-year stability gates",
+      "external_script_path": "H:/Download/factor-lab-v110-dual-confirm-blend-search.py",
+      "external_script_file_sha256": "490aa1bbe3e16282da6d0af44de4f2b105048a95c2bea7a31bc8e57044c4f069",
+      "external_result_path": "H:/Download/factor-lab-v110-dual-confirm-blend-search-result.json",
+      "external_result_file_sha256": "2b8553d08d15c3bc9a9cb64186f119eefa3bba813c45b09f55331244e5a0520c",
+      "external_result_payload_sha256": "0688e0c8555d535b7d2ed96a492fdf71362a8b39b67124a3b288c38e412958a0",
+      "candidate_order_and_results": [
+        {
+          "registry_order": 1,
+          "id": "dual25_borda75",
+          "dual_weight": 0.25,
+          "borda_weight": 0.75,
+          "minimum_cagr_edge": 0.004357471435288751,
+          "period_passes": {"D1": true, "D2": false, "D3": true, "full": true},
+          "all_return_and_execution_gates_passed": false
+        },
+        {
+          "registry_order": 2,
+          "id": "dual50_borda50",
+          "dual_weight": 0.5,
+          "borda_weight": 0.5,
+          "minimum_cagr_edge": 0.008442030431469183,
+          "period_passes": {"D1": true, "D2": true, "D3": true, "full": true},
+          "all_return_and_execution_gates_passed": true
+        },
+        {
+          "registry_order": 3,
+          "id": "dual75_borda25",
+          "dual_weight": 0.75,
+          "borda_weight": 0.25,
+          "minimum_cagr_edge": 0.011575950499677967,
+          "period_passes": {"D1": true, "D2": true, "D3": true, "full": true},
+          "all_return_and_execution_gates_passed": true
+        }
+      ],
+      "selection_order": [
+        "maximum minimum_cagr_edge across all period/base-stress roles",
+        "maximum full-period stress CAGR",
+        "minimum full-period base annualized turnover",
+        "earlier registry order"
+      ],
+      "selected_candidate_id": "dual75_borda25"
+    }
+  },
+  "assets": {
+    "risk_codes_in_frozen_tie_order": [
+      "510300.SH",
+      "159920.SZ",
+      "513100.SH",
+      "518880.SH",
+      "511010.SH"
+    ],
+    "cash_code": "511880.SH",
+    "asset_substitution_allowed": false
+  },
+  "frozen_strategy": {
+    "strategy_id": "quarterly_dual_confirm_top3_borda_blend_75_25",
+    "signal_schedule": "last official SSE session of each natural calendar quarter after close",
+    "execution": "immediate next official SSE session open",
+    "session_index_semantics": "t is the official-session index of the quarter-end signal; t-252, t-126 and t-21 are exact earlier official-session indices",
+    "long_momentum_formula": "m12_i(t) = log(TRI_i[t-21] / TRI_i[t-252]) - log(TRI_511880.SH[t-21] / TRI_511880.SH[t-252])",
+    "short_momentum_formula": "m6_i(t) = log(TRI_i[t-21] / TRI_i[t-126]) - log(TRI_511880.SH[t-21] / TRI_511880.SH[t-126])",
+    "long_positive_set": "P12(t) = {i in risk_codes_in_frozen_tie_order: m12_i(t) > 0}",
+    "dual_positive_set": "D(t) = {i in P12(t): m6_i(t) > 0}",
+    "ranking": "sort P12 and D by m12 descending; an exact tie uses risk_codes_in_frozen_tie_order",
+    "dual_component": "select the first min(3, |D|) assets; give each selected asset 1/k when k>0 and otherwise allocate 100% to 511880.SH",
+    "borda_component": "for n=|P12| and one-based m12 rank r_i, b_i=(n-r_i+1)/(n*(n+1)/2); nonmembers have zero; if P12 is empty allocate 100% to 511880.SH",
+    "blend_formula": "for each risk asset i, w_i=0.75*d_i+0.25*b_i; w_511880.SH=1-math.fsum(risk weights)",
+    "required_endpoint_rule": {
+      "long_window": "all six assets require observed TRI rows at t-252 and t-21; any missing endpoint makes both components and the final target 100% 511880.SH",
+      "short_window": "all six assets require observed TRI rows at t-126 and t-21; any missing endpoint makes both components and the final target 100% 511880.SH",
+      "malformed_source": "non-finite or non-positive TRI is malformed source data and is rejected before target construction"
+    },
+    "dual_top_k": 3,
+    "dual_weight": 0.75,
+    "published_10_0_borda_weight": 0.25,
+    "volatility_weighting": false,
+    "leverage": false,
+    "post_selection_parameter_grid": false,
+    "stress_reuses_base_targets_exactly": true,
+    "future_tail_prefix_invariance_required": true,
+    "parameter_or_formula_change_after_selection": false
+  },
+  "inherited_execution_contract": {
+    "initial_capital_rmb": 1000000.0,
+    "lot_size_units": 100,
+    "long_only": true,
+    "maximum_gross_exposure": 1.0,
+    "base_cost_bps_per_side": 8.0,
+    "stress_cost_bps_per_side": 16.0,
+    "capacity_limit_fraction_of_signal_date_adv20": 0.1,
+    "order_sizing": "signal-close NAV, close, lot and ADV seal shares; next open cannot increase requested shares",
+    "dividend_accounting": "ex-date receivable becomes spendable cash only on pay date",
+    "daily_nav_accounting_required": true,
+    "blocked_order_substitution": false
+  },
+  "fully_exposed_periods": {
+    "D1": {"performance_start": "2015-03-02", "performance_end": "2019-12-31", "fresh_cash": true, "target_signal_count": 19},
+    "D2": {"performance_start": "2020-01-02", "performance_end": "2022-12-30", "fresh_cash": true, "target_signal_count": 12},
+    "D3": {"performance_start": "2023-01-03", "performance_end": "2026-08-28", "fresh_cash": true, "target_signal_count": 15},
+    "full": {"performance_start": "2015-03-02", "performance_end": "2026-08-28", "fresh_cash": true, "target_signal_count": 46}
+  },
+  "results_first_gate": {
+    "applies_to_each": [
+      "D1.base_8bp", "D1.stress_16bp",
+      "D2.base_8bp", "D2.stress_16bp",
+      "D3.base_8bp", "D3.stress_16bp",
+      "full.base_8bp", "full.stress_16bp"
+    ],
+    "candidate_cagr_at_least_matching_cash_static_and_published_10_0_plus": 0.005,
+    "stress_cagr_strictly_above_matching_published_10_0_base_cagr": true,
+    "positive_complete_year_ratio_at_least": 0.5,
+    "positive_complete_year_count_at_least_matching_10_0_and_static": true,
+    "requested_notional_fill_ratio_at_least": 0.98,
+    "capacity_limited_requested_notional_ratio_at_most": 0.02,
+    "capacity_violation_count_at_most": 0,
+    "negative_cash_observation_count_at_most": 0,
+    "leverage_observation_count_at_most": 0,
+    "nav_reconciliation_error_at_most": 1e-08,
+    "base_stress_targets_exact": true,
+    "target_prefix_mismatch_count_at_most": 0,
+    "sharpe_is_disclosure_only": true,
+    "max_drawdown_is_disclosure_only": true,
+    "annualized_turnover_is_disclosure_only": true,
+    "all_eight_period_cost_roles_must_pass": true,
+    "pooled_period_rescue": false
+  },
+  "selected_scratch_evidence": {
+    "candidate_id": "dual75_borda25",
+    "minimum_cagr_edge": 0.011575950499677967,
+    "target_prefix_mismatch_count": 0,
+    "periods": {
+      "D1": {
+        "base": {"cagr": 0.08532126927320705, "sharpe": 0.6083426918054416, "max_drawdown": -0.24822434447815966, "annualized_turnover": 2.4479476257470423, "fill_ratio": 0.9982445082696701, "capacity_limited_ratio": 0.0010574466380418948, "max_abs_accounting_error": 3.7834979593753815e-10},
+        "stress": {"cagr": 0.08326829158485838, "sharpe": 0.5959627115912598, "max_drawdown": -0.2482677483038782, "annualized_turnover": 2.4473628505956433, "fill_ratio": 0.9979439103998925, "capacity_limited_ratio": 0.0010233214061212722, "max_abs_accounting_error": 4.43833414465189e-10},
+        "published_10_0_base_cagr": 0.07364877835037564,
+        "published_10_0_stress_cagr": 0.07169234108518041,
+        "static_base_cagr": 0.06908794127071727,
+        "static_stress_cagr": 0.0685803846989721,
+        "cash_base_cagr": 0.030913196843269874,
+        "cash_stress_cagr": 0.030741448403336147,
+        "passed": true
+      },
+      "D2": {
+        "base": {"cagr": 0.06856923618585409, "sharpe": 0.56419855762555, "max_drawdown": -0.16514399159669246, "annualized_turnover": 2.6628842549137848, "fill_ratio": 0.9986058981798067, "capacity_limited_ratio": 0.0, "max_abs_accounting_error": 4.001776687800884e-10},
+        "stress": {"cagr": 0.06629630780446916, "sharpe": 0.5481071557307969, "max_drawdown": -0.1668744622936671, "annualized_turnover": 2.6734233487283086, "fill_ratio": 0.9995668407636903, "capacity_limited_ratio": 0.0, "max_abs_accounting_error": 4.220055416226387e-10},
+        "published_10_0_base_cagr": 0.05546630913987105,
+        "published_10_0_stress_cagr": 0.05385367703839572,
+        "static_base_cagr": 0.023341681225848232,
+        "static_stress_cagr": 0.02276958813593244,
+        "cash_base_cagr": 0.019985881850830944,
+        "cash_stress_cagr": 0.019710732276721155,
+        "passed": true
+      },
+      "D3": {
+        "base": {"cagr": 0.21768153991203865, "sharpe": 1.487588242162766, "max_drawdown": -0.1632038603201681, "annualized_turnover": 2.026633746246693, "fill_ratio": 0.9964446487840567, "capacity_limited_ratio": 0.0, "max_abs_accounting_error": 4.2928149923682213e-10},
+        "stress": {"cagr": 0.21581478327654957, "sharpe": 1.4768423869352965, "max_drawdown": -0.16322816611754432, "annualized_turnover": 2.027659509969643, "fill_ratio": 0.9962481604364932, "capacity_limited_ratio": 0.0, "max_abs_accounting_error": 4.220055416226387e-10},
+        "published_10_0_base_cagr": 0.1902750099508057,
+        "published_10_0_stress_cagr": 0.18856253016143532,
+        "static_base_cagr": 0.13643870922329415,
+        "static_stress_cagr": 0.13590696984406803,
+        "cash_base_cagr": 0.014169895755681061,
+        "cash_stress_cagr": 0.013941104181692143,
+        "passed": true
+      },
+      "full": {
+        "base": {"cagr": 0.12117746965636633, "sharpe": 0.8653750881221672, "max_drawdown": -0.24822434447815966, "annualized_turnover": 2.3382529503607636, "fill_ratio": 0.9987962247859118, "capacity_limited_ratio": 0.00033040891695590045, "max_abs_accounting_error": 8.149072527885437e-10},
+        "stress": {"cagr": 0.11915757928017512, "sharpe": 0.8528151627428007, "max_drawdown": -0.2482677483038782, "annualized_turnover": 2.3374659671518687, "fill_ratio": 0.9987269988138817, "capacity_limited_ratio": 0.0003220846947686986, "max_abs_accounting_error": 8.149072527885437e-10},
+        "published_10_0_base_cagr": 0.10449764189987287,
+        "published_10_0_stress_cagr": 0.10276333131947957,
+        "static_base_cagr": 0.07782699326441977,
+        "static_stress_cagr": 0.07741079586559518,
+        "cash_base_cagr": 0.022912721508978384,
+        "cash_stress_cagr": 0.02281471069400509,
+        "passed": true
+      }
+    },
+    "all_return_and_execution_gates_passed": true
+  },
+  "selection_contract": {
+    "formal_candidate_count": 1,
+    "maximum_winners": 1,
+    "selected_strategy_id": "quarterly_dual_confirm_top3_borda_blend_75_25",
+    "parameter_or_formula_change_after_selection": false,
+    "additional_candidate_after_selection": false,
+    "runner_up_fallback": false,
+    "null_if_formal_exact_replay_differs_or_fails": true
+  },
+  "evidence": {
+    "path": "protocols/evidence/11.0/results-first-diagnostic.json",
+    "create_only": true
+  },
+  "claim_contract": {
+    "evidence_class": "fully_exposed_results_first_causal_historical_diagnostic",
+    "independent_oos": false,
+    "alpha_claim_allowed": false,
+    "profit_claim_allowed": false,
+    "stable_future_profit_claim_allowed": false,
+    "investment_recommendation_allowed": false,
+    "fresh_future_evidence_required": true,
+    "historical_pass_interpretation": "post-selection fully exposed public-history diagnostic only"
+  },
+  "payload_sha256": "d23739b85fa02d0cfeca977ba5f60fe003ae5753a387f7b10fa611a6688ae0bf"
+}

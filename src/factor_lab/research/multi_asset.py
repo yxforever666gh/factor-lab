@@ -24,6 +24,9 @@ CONTROL_ID = "static_risk_budget"
 CASH_ONLY_ID = "cash_only_511880"
 VOLATILITY_BALANCED_ID = "causal_monthly_volatility_balanced_budget"
 QUARTERLY_BORDA_ID = "quarterly_12_1_dual_momentum_rank_budget"
+QUARTERLY_DUAL_CONFIRM_BLEND_ID = (
+    "quarterly_dual_confirm_top3_borda_blend_75_25"
+)
 CASH_CODE = "511880.SH"
 RISK_BUDGETS: dict[str, float] = {
     "510300.SH": 0.30,
@@ -48,6 +51,29 @@ QUARTERLY_BORDA_DIAGNOSTIC_COLUMNS = (
     "borda_rank",
     "borda_points",
     "positive_momentum_count",
+    "endpoint_fallback_all_cash",
+)
+QUARTERLY_DUAL_CONFIRM_SHORT_START_LAG = 126
+QUARTERLY_DUAL_CONFIRM_TOP_K = 3
+QUARTERLY_DUAL_CONFIRM_WEIGHT = 0.75
+QUARTERLY_DUAL_CONFIRM_BASE_WEIGHT = 0.25
+QUARTERLY_DUAL_CONFIRM_DIAGNOSTIC_COLUMNS = (
+    "momentum_start_date",
+    "short_momentum_start_date",
+    "momentum_end_date",
+    "cash_log_momentum",
+    "short_cash_log_momentum",
+    "relative_cash_log_momentum",
+    "short_relative_cash_log_momentum",
+    "base_borda_rank",
+    "base_borda_points",
+    "base_positive_momentum_count",
+    "base_borda_weight",
+    "dual_eligible",
+    "dual_rank",
+    "dual_selected",
+    "dual_eligible_count",
+    "dual_top3_weight",
     "endpoint_fallback_all_cash",
 )
 FIRST_SIGNAL_DATE = pd.Timestamp("2015-02-27")
@@ -427,6 +453,129 @@ def _quarterly_borda_snapshot(
     }
 
 
+def _quarterly_dual_confirm_snapshot(
+    frames: Mapping[str, pd.DataFrame], signal_date: pd.Timestamp
+) -> dict[str, Any]:
+    """Blend a causal short-confirmed top-three sleeve with 10.0 Borda."""
+
+    base = _quarterly_borda_snapshot(frames, signal_date)
+    available = tuple(frames[CASH_CODE].index)
+    position = {date: index for index, date in enumerate(available)}.get(
+        pd.Timestamp(signal_date).normalize()
+    )
+    short_start = (
+        pd.Timestamp(available[position - QUARTERLY_DUAL_CONFIRM_SHORT_START_LAG])
+        if position is not None
+        and position >= QUARTERLY_DUAL_CONFIRM_SHORT_START_LAG
+        else pd.NaT
+    )
+
+    def all_cash() -> dict[str, Any]:
+        empty_float = {code: math.nan for code in ALL_CODES}
+        empty_rank = {code: None for code in ALL_CODES}
+        empty_bool = {code: False for code in ALL_CODES}
+        empty_weight = {code: 0.0 for code in ALL_CODES}
+        return {
+            "weights": {**empty_weight, CASH_CODE: 1.0},
+            "momentum_start_date": base["momentum_start_date"],
+            "short_momentum_start_date": short_start,
+            "momentum_end_date": base["momentum_end_date"],
+            "cash_log_momentum": math.nan,
+            "short_cash_log_momentum": math.nan,
+            "relative_cash_log_momentum": empty_float,
+            "short_relative_cash_log_momentum": dict(empty_float),
+            "base_borda_rank": empty_rank,
+            "base_borda_points": {code: 0 for code in ALL_CODES},
+            "base_positive_momentum_count": 0,
+            "base_borda_weight": {**empty_weight, CASH_CODE: 1.0},
+            "dual_eligible": empty_bool,
+            "dual_rank": dict(empty_rank),
+            "dual_selected": dict(empty_bool),
+            "dual_eligible_count": 0,
+            "dual_top3_weight": dict(empty_weight),
+            "endpoint_fallback_all_cash": True,
+        }
+
+    end_date = base["momentum_end_date"]
+    if (
+        bool(base["endpoint_fallback_all_cash"])
+        or pd.isna(short_start)
+        or pd.isna(end_date)
+        or not short_start < end_date < signal_date
+    ):
+        return all_cash()
+
+    levels: dict[str, tuple[float, float]] = {}
+    for code in ALL_CODES:
+        frame = frames[code]
+        if (
+            short_start not in frame.index
+            or not bool(frame.at[short_start, "_observed"])
+        ):
+            return all_cash()
+        start_level = float(frame.at[short_start, "total_return_index"])
+        end_level = float(frame.at[end_date, "total_return_index"])
+        if (
+            not math.isfinite(start_level)
+            or not math.isfinite(end_level)
+            or start_level <= 0.0
+            or end_level <= 0.0
+        ):
+            return all_cash()
+        levels[code] = start_level, end_level
+
+    cash_start, cash_end = levels[CASH_CODE]
+    short_cash = math.log(cash_end / cash_start)
+    short_relative = {code: math.nan for code in ALL_CODES}
+    for code in RISK_CODES:
+        start_level, end_level = levels[code]
+        short_relative[code] = math.log(end_level / start_level) - short_cash
+    order = {code: index for index, code in enumerate(RISK_CODES)}
+    eligible = sorted(
+        (
+            code
+            for code in RISK_CODES
+            if base["relative_cash_log_momentum"][code] > 0.0
+            and short_relative[code] > 0.0
+        ),
+        key=lambda code: (-base["relative_cash_log_momentum"][code], order[code]),
+    )
+    selected = eligible[:QUARTERLY_DUAL_CONFIRM_TOP_K]
+    dual_weights = {code: 0.0 for code in ALL_CODES}
+    if selected:
+        for code in selected:
+            dual_weights[code] = 1.0 / len(selected)
+    ranks: dict[str, int | None] = {code: None for code in ALL_CODES}
+    for rank, code in enumerate(eligible, start=1):
+        ranks[code] = rank
+    final = {
+        code: QUARTERLY_DUAL_CONFIRM_WEIGHT * dual_weights[code]
+        + QUARTERLY_DUAL_CONFIRM_BASE_WEIGHT * base["weights"][code]
+        for code in RISK_CODES
+    }
+    final[CASH_CODE] = 1.0 - math.fsum(final.values())
+    return {
+        "weights": final,
+        "momentum_start_date": base["momentum_start_date"],
+        "short_momentum_start_date": short_start,
+        "momentum_end_date": end_date,
+        "cash_log_momentum": base["cash_log_momentum"],
+        "short_cash_log_momentum": short_cash,
+        "relative_cash_log_momentum": base["relative_cash_log_momentum"],
+        "short_relative_cash_log_momentum": short_relative,
+        "base_borda_rank": base["borda_rank"],
+        "base_borda_points": base["borda_points"],
+        "base_positive_momentum_count": base["positive_momentum_count"],
+        "base_borda_weight": base["weights"],
+        "dual_eligible": {code: code in eligible for code in ALL_CODES},
+        "dual_rank": ranks,
+        "dual_selected": {code: code in selected for code in ALL_CODES},
+        "dual_eligible_count": len(eligible),
+        "dual_top3_weight": dual_weights,
+        "endpoint_fallback_all_cash": False,
+    }
+
+
 def build_monthly_targets(
     market_data: Mapping[str, pd.DataFrame],
     official_sessions: Sequence[Any],
@@ -440,6 +589,7 @@ def build_monthly_targets(
         CASH_ONLY_ID,
         VOLATILITY_BALANCED_ID,
         QUARTERLY_BORDA_ID,
+        QUARTERLY_DUAL_CONFIRM_BLEND_ID,
     }:
         raise ValueError(f"unknown multi-asset strategy_id: {strategy_id}")
     frames, official = _normalize_market_data(market_data, official_sessions)
@@ -454,7 +604,10 @@ def build_monthly_targets(
         same_signal_period = (
             (signal_date.year, (signal_date.month - 1) // 3)
             == (execution_date.year, (execution_date.month - 1) // 3)
-            if strategy_id == QUARTERLY_BORDA_ID
+            if strategy_id in {
+                QUARTERLY_BORDA_ID,
+                QUARTERLY_DUAL_CONFIRM_BLEND_ID,
+            }
             else (signal_date.year, signal_date.month)
             == (execution_date.year, execution_date.month)
         )
@@ -472,6 +625,7 @@ def build_monthly_targets(
         volatilities: dict[str, float] = {}
         volatility_fallback_static = False
         borda_snapshot: dict[str, Any] | None = None
+        dual_snapshot: dict[str, Any] | None = None
         if strategy_id == VOLATILITY_BALANCED_ID:
             (
                 weights,
@@ -481,6 +635,9 @@ def build_monthly_targets(
         elif strategy_id == QUARTERLY_BORDA_ID:
             borda_snapshot = _quarterly_borda_snapshot(frames, signal_date)
             weights = dict(borda_snapshot["weights"])
+        elif strategy_id == QUARTERLY_DUAL_CONFIRM_BLEND_ID:
+            dual_snapshot = _quarterly_dual_confirm_snapshot(frames, signal_date)
+            weights = dict(dual_snapshot["weights"])
         else:
             for code, budget in RISK_BUDGETS.items():
                 if strategy_id == CASH_ONLY_ID:
@@ -554,6 +711,10 @@ def build_monthly_targets(
                         ],
                     }
                 )
+            if dual_snapshot is not None:
+                for column in QUARTERLY_DUAL_CONFIRM_DIAGNOSTIC_COLUMNS:
+                    value = dual_snapshot[column]
+                    row[column] = value[code] if isinstance(value, Mapping) else value
             rows.append(row)
     columns = [
         "strategy_id",
@@ -576,6 +737,16 @@ def build_monthly_targets(
             "target_weight",
             "signal_adv20_rmb",
             *QUARTERLY_BORDA_DIAGNOSTIC_COLUMNS,
+        ]
+    elif strategy_id == QUARTERLY_DUAL_CONFIRM_BLEND_ID:
+        columns = [
+            "strategy_id",
+            "signal_date",
+            "execution_date",
+            "code",
+            "target_weight",
+            "signal_adv20_rmb",
+            *QUARTERLY_DUAL_CONFIRM_DIAGNOSTIC_COLUMNS,
         ]
     return pd.DataFrame(rows, columns=columns)
 
@@ -606,6 +777,7 @@ def _validate_targets(
         CASH_ONLY_ID,
         VOLATILITY_BALANCED_ID,
         QUARTERLY_BORDA_ID,
+        QUARTERLY_DUAL_CONFIRM_BLEND_ID,
     }:
         raise ValueError("targets must contain exactly one registered strategy")
     strategy_id = str(work["strategy_id"].iloc[0])
@@ -648,9 +820,49 @@ def _validate_targets(
             "positive_momentum_count",
         ):
             work[column] = pd.to_numeric(work[column], errors="coerce")
-    elif borda_columns & set(work.columns):
+    elif (
+        strategy_id != QUARTERLY_DUAL_CONFIRM_BLEND_ID
+        and borda_columns & set(work.columns)
+    ):
         raise ValueError(
             "quarterly Borda diagnostics require the exact strategy_id"
+        )
+    dual_columns = set(QUARTERLY_DUAL_CONFIRM_DIAGNOSTIC_COLUMNS)
+    if strategy_id == QUARTERLY_DUAL_CONFIRM_BLEND_ID:
+        dual_missing = sorted(dual_columns - set(work.columns))
+        if dual_missing:
+            raise ValueError(
+                f"quarterly dual-confirm targets lack frozen diagnostics: {dual_missing}"
+            )
+        for column in (
+            "momentum_start_date",
+            "short_momentum_start_date",
+            "momentum_end_date",
+        ):
+            raw = work[column]
+            parsed = pd.to_datetime(raw, errors="coerce").dt.normalize()
+            if bool((raw.notna() & parsed.isna()).any()):
+                raise ValueError(
+                    "quarterly dual-confirm targets contain an invalid endpoint date"
+                )
+            work[column] = parsed
+        for column in (
+            "cash_log_momentum",
+            "short_cash_log_momentum",
+            "relative_cash_log_momentum",
+            "short_relative_cash_log_momentum",
+            "base_borda_rank",
+            "base_borda_points",
+            "base_positive_momentum_count",
+            "base_borda_weight",
+            "dual_rank",
+            "dual_eligible_count",
+            "dual_top3_weight",
+        ):
+            work[column] = pd.to_numeric(work[column], errors="coerce")
+    elif (dual_columns - borda_columns) & set(work.columns):
+        raise ValueError(
+            "quarterly dual-confirm diagnostics require the exact strategy_id"
         )
     for column in ("signal_date", "execution_date"):
         work[column] = pd.to_datetime(work[column], errors="coerce").dt.normalize()
@@ -681,14 +893,18 @@ def _validate_targets(
         same_signal_period = (
             (signal_date.year, (signal_date.month - 1) // 3)
             == (execution_date.year, (execution_date.month - 1) // 3)
-            if strategy_id == QUARTERLY_BORDA_ID
+            if strategy_id in {
+                QUARTERLY_BORDA_ID,
+                QUARTERLY_DUAL_CONFIRM_BLEND_ID,
+            }
             else (signal_date.year, signal_date.month)
             == (execution_date.year, execution_date.month)
         )
         if same_signal_period:
             raise ValueError(
                 "signal must be an official calendar quarter end"
-                if strategy_id == QUARTERLY_BORDA_ID
+                if strategy_id
+                in {QUARTERLY_BORDA_ID, QUARTERLY_DUAL_CONFIRM_BLEND_ID}
                 else "signal must be an official calendar month end"
             )
         if not math.isclose(
@@ -773,6 +989,41 @@ def _validate_targets(
             if not diagnostics_match:
                 raise ValueError(
                     "quarterly Borda diagnostics differ from causal history"
+                )
+        if strategy_id == QUARTERLY_DUAL_CONFIRM_BLEND_ID:
+            indexed = group.set_index("code")
+            expected = _quarterly_dual_confirm_snapshot(frames, signal_date)
+            if any(
+                float(indexed.at[code, "target_weight"])
+                != float(expected["weights"][code])
+                for code in ALL_CODES
+            ):
+                raise ValueError(
+                    "quarterly dual-confirm target weights differ from causal history"
+                )
+            diagnostics_match = True
+            boolean_columns = {
+                "dual_eligible",
+                "dual_selected",
+                "endpoint_fallback_all_cash",
+            }
+            for code in ALL_CODES:
+                for column in QUARTERLY_DUAL_CONFIRM_DIAGNOSTIC_COLUMNS:
+                    frozen = expected[column]
+                    if isinstance(frozen, Mapping):
+                        frozen = frozen[code]
+                    actual = indexed.at[code, column]
+                    matches = (
+                        bool(pd.isna(actual))
+                        if pd.isna(frozen)
+                        else bool(not pd.isna(actual) and actual == frozen)
+                    )
+                    if column in boolean_columns:
+                        matches &= isinstance(actual, (bool, np.bool_))
+                    diagnostics_match &= matches
+            if not diagnostics_match:
+                raise ValueError(
+                    "quarterly dual-confirm diagnostics differ from causal history"
                 )
         for row in group.itertuples(index=False):
             if not bool(frames[row.code].at[signal_date, "_observed"]):

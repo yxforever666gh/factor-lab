@@ -1,9 +1,13 @@
-# Factor Lab 10.1
+# Factor Lab 11.0
 
-Factor Lab 10.1 不修改 10.0 的季度双动量公式，只增加一个薄 prospective paper cycle：季度末稳定双抓
-六只 ETF 数据后，在 17:10 至下一官方交易日 09:15 之间 create-only 封存 targets、连续账户状态与
-pending shares；下一季度末用同一封单重放成交和 NAV，生成 outcome。没有 ledger、watchdog、数据库、
-attestation 或后台调度。
+Factor Lab 11.0 把 10.0 的单周期季度 Borda 换成双周期确认混合：每个季度末同时计算 12-1 与 6-1
+相对现金动量，75% 配给两者均为正的 long-momentum top-3 等权组合，25% 保留 10.0 Borda。它仍只用
+信号时点已观察数据、下一官方开盘、整手、ADV20 容量、分红与全成本会计。
+
+这次大方向切换来自两轮完全披露的 results-first 搜索，不是 OOS。第一轮 8 个集中度/现金门候选没有
+通过全部门；第二轮固定比较 25%/50%/75% 双周期混合，75% 版本在 D1/D2/D3 和 full、8bp/16bp 下均
+至少领先已发布 10.0 与 static 50bp，同时通过 fill、容量和会计门。10.1 prospective 尚无任何 decision
+或 outcome，因此在首周期前被替代；11.0 仍是历史诊断，未来运行需后续 prospective 小版本。
 
 底层 10.0 把 9.0 的低波动风险预算降为 comparator，主线改为严格因果的季度 12-1 双动量：
 每个自然季度最后一个上交所交易日，只用该时点之前第 252 与第 21 个官方 session 的六只 ETF
@@ -138,10 +142,11 @@ label，并再次验证 availability 必须恰好是 `report_date` 后第一个�
 拆送股稳健性对照）、FY1 相对 FY0 的预测增长，以及实际公告相对公告前共识的 earnings surprise。
 coverage/initiations、dispersion 与 active-reviser breadth 先只做诊断，不再建 selector。
 
-## 10.1 当前运行层：季度 prospective paper cycle
+## 10.1 已归档运行层：季度 prospective paper cycle
 
 协议见 [protocols/10.1-quarterly-prospective-cycle.json](protocols/10.1-quarterly-prospective-cycle.json)。
-正式运行必须 checkout 已发布的 annotated `10.1` tag；main 后续变化不能悄悄改变一个正在持有的周期。
+它在 0 decision/0 outcome 时被 11.0 替代，仅保留作发布历史和实现参考；不要再开启新的 10.1 周期。
+若复核旧实现，必须 checkout 已发布的 annotated `10.1` tag。
 
 每个 as-of source 使用两次独立完整 provider capture。两份 manifest、calendar 和六资产必须逐值一致，
 而且历史前缀必须与 retained 9.0（以后与上一正式 as-of stage）完全相同，才会原子发布一份 source。
