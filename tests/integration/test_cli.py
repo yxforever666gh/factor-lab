@@ -77,6 +77,21 @@ def test_cli_exposes_only_lightweight_mainline_commands() -> None:
     ).release == "10.0"
     targets = parser.parse_args(["strategy", "targets", "--signal-date", "latest"])
     assert targets.strategy_command == "targets"
+    capture = parser.parse_args(["prospective", "capture", "--as-of", "2026-09-30"])
+    assert capture.prospective_command == "capture"
+    signal = parser.parse_args(
+        [
+            "prospective",
+            "signal",
+            "--source-root",
+            "runtime/prospective/10.1/sources",
+            "--stage",
+            "asof-20260930",
+            "--as-of",
+            "2026-09-30",
+        ]
+    )
+    assert signal.prospective_command == "signal"
 
     enrich = parser.parse_args(
         ["data", "enrich", "--from", "2017-01-01", "--to", "2026-08-13"]
@@ -115,7 +130,7 @@ def test_help_imports_without_retired_runtime(capsys: pytest.CaptureFixture[str]
     assert "research" in help_text
     assert "strategy" in help_text
     assert "report" in help_text
-    assert "prospective" not in help_text
+    assert "prospective" in help_text
     assert "adaptive-shadow" not in help_text
 
 
@@ -170,6 +185,43 @@ def test_explicit_root_does_not_require_implicit_discovery(
 
     assert cli.main(["--root", str(tmp_path), "data", "status"]) == 0
     assert captured == [tmp_path]
+
+
+def test_prospective_cli_delegates_without_clock_or_runtime_override(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured = []
+    runner = SimpleNamespace(main=lambda argv: captured.append(argv) or 0)
+    monkeypatch.setattr(cli, "_load_v101_cycle", lambda root: runner)
+    assert cli.main(
+        [
+            "--root",
+            str(tmp_path),
+            "prospective",
+            "outcome",
+            "--source-root",
+            str(tmp_path / "sources"),
+            "--stage",
+            "asof-20261231",
+            "--signal-date",
+            "2026-09-30",
+            "--as-of",
+            "2026-12-31",
+        ]
+    ) == 0
+    assert captured == [
+        [
+            "outcome",
+            "--as-of",
+            "2026-12-31",
+            "--source-root",
+            str(tmp_path / "sources"),
+            "--stage",
+            "asof-20261231",
+            "--signal-date",
+            "2026-09-30",
+        ]
+    ]
 
 
 def test_strategy_status_verifies_tracked_implementation_and_evidence(

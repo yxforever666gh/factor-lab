@@ -1,6 +1,11 @@
-# Factor Lab 10.0
+# Factor Lab 10.1
 
-Factor Lab 10.0 把 9.0 的低波动风险预算降为 comparator，主线改为严格因果的季度 12-1 双动量：
+Factor Lab 10.1 不修改 10.0 的季度双动量公式，只增加一个薄 prospective paper cycle：季度末稳定双抓
+六只 ETF 数据后，在 17:10 至下一官方交易日 09:15 之间 create-only 封存 targets、连续账户状态与
+pending shares；下一季度末用同一封单重放成交和 NAV，生成 outcome。没有 ledger、watchdog、数据库、
+attestation 或后台调度。
+
+底层 10.0 把 9.0 的低波动风险预算降为 comparator，主线改为严格因果的季度 12-1 双动量：
 每个自然季度最后一个上交所交易日，只用该时点之前第 252 与第 21 个官方 session 的六只 ETF
 总回报指数；五只风险资产分别减去现金代理同期 log return，只保留正值，并按相对动量从高到低
 赋 Borda `n…1` 权重。下一官方交易日开盘执行，继续计入整手、ADV20 容量、8bp/16bp、分红与逐日会计。
@@ -133,7 +138,38 @@ label，并再次验证 availability 必须恰好是 `report_date` 后第一个�
 拆送股稳健性对照）、FY1 相对 FY0 的预测增长，以及实际公告相对公告前共识的 earnings surprise。
 coverage/initiations、dispersion 与 active-reviser breadth 先只做诊断，不再建 selector。
 
-## 10.0 当前方向：季度 12-1 双动量 Borda
+## 10.1 当前运行层：季度 prospective paper cycle
+
+协议见 [protocols/10.1-quarterly-prospective-cycle.json](protocols/10.1-quarterly-prospective-cycle.json)。
+正式运行必须 checkout 已发布的 annotated `10.1` tag；main 后续变化不能悄悄改变一个正在持有的周期。
+
+每个 as-of source 使用两次独立完整 provider capture。两份 manifest、calendar 和六资产必须逐值一致，
+而且历史前缀必须与 retained 9.0（以后与上一正式 as-of stage）完全相同，才会原子发布一份 source。
+Source manifest 同时封存双抓原始 payload、10.1 tag object/commit、协议、上一 stage hash 和窗口内时间；
+同一 stage 已存在时只深验 receipt 链与完整前缀并复用，不再次请求 provider。
+
+```powershell
+# 季度末 17:10 Asia/Shanghai 后：双抓并发布 source
+python -m factor_lab.cli prospective capture --as-of YYYY-MM-DD
+
+# 同日 17:10 至下一官方交易日 09:15：封存本季 targets 与 pending shares
+python -m factor_lab.cli prospective signal `
+  --source-root runtime/prospective/10.1/sources `
+  --stage asof-YYYYMMDD --as-of YYYY-MM-DD
+
+# 下一季度末 17:10 后：连续账户重放成交、NAV、分红和会计，先结束旧周期
+python -m factor_lab.cli prospective outcome `
+  --source-root runtime/prospective/10.1/sources `
+  --stage asof-NEXTYYYYMMDD --signal-date YYYY-MM-DD --as-of NEXT-YYYY-MM-DD
+```
+
+每周期只保留 `cycle=YYYYQn/decision.json` 与 `outcome.json`；source 为
+`sources/stage=asof-YYYYMMDD/`。首周期从 100 万现金开始，之后严格继承上一 outcome 的现金、持仓、
+应收分红和 NAV，不能每季重新投入。缺失 exact next-open 会阻断 outcome；官方份额折算只能按精确
+multiplier 调整执行 share，不能改封存权重、价格、ADV 或人民币名义金额。当前 completed prospective
+outcome 仍为 0，不能据此声称稳定盈利。Receipt 没有外部 attestation，不能防止有意的本地全量伪造。
+
+## 10.0 历史方向：季度 12-1 双动量 Borda
 
 精确合同见
 [protocols/10.0-results-first-quarterly-borda.json](protocols/10.0-results-first-quarterly-borda.json)。

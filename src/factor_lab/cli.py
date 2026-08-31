@@ -141,6 +141,11 @@ V10_PROTOCOL_PAYLOAD_SHA256 = "dc79550ee9fefe4fdb01f54fe0c299a40c2d118a687f6e557
 V10_PROTOCOL_FILE_SHA256 = "6a949ce4374f407a6084053a08b76dedbb3f1478fbe56edf233bb23befe730dd"
 V10_SOURCE_MANIFEST_PAYLOAD_SHA256 = "050ad4ddcb86dc4fbc71befad54c400b48a44f72ab6fecc33936b6da0c8f9aff"
 V10_SOURCE_MANIFEST_FILE_SHA256 = "cdbf8ba498142adff04216b476522f47ee18df6f0fa02f3395d0e141191adbfa"
+V101_PROTOCOL_PATH = "protocols/10.1-quarterly-prospective-cycle.json"
+V101_RUNNER_PATH = "scripts/run-10.1-quarterly-cycle.py"
+V101_PROTOCOL_ID = "factor-lab/10.1/quarterly-prospective-cycle-v1"
+V101_PROTOCOL_PAYLOAD_SHA256 = "0c3f2240cc404c1084230f1efbfe3f9fd3f0fa73dbbdc69ec63e5465ef7610ca"
+V101_PROTOCOL_FILE_SHA256 = "81240134127de2fedde6e231f8a3a02dd74950ff9da67e5298e71834c61843b5"
 
 
 def _root() -> Path:
@@ -347,6 +352,24 @@ def build_parser() -> argparse.ArgumentParser:
         default="latest",
         help="Official session date or 'latest' (latest date with a signal).",
     )
+
+    prospective = commands.add_parser(
+        "prospective", help="Run the lightweight 10.1 quarterly paper cycle."
+    )
+    prospective_commands = prospective.add_subparsers(
+        dest="prospective_command", required=True
+    )
+    capture = prospective_commands.add_parser(
+        "capture", help="Publish one stable double-captured ETF as-of source."
+    )
+    capture.add_argument("--as-of", required=True)
+    for name in ("signal", "outcome"):
+        command = prospective_commands.add_parser(name)
+        command.add_argument("--source-root", type=Path, required=True)
+        command.add_argument("--stage", required=True)
+        command.add_argument("--as-of", required=True)
+        if name == "outcome":
+            command.add_argument("--signal-date", required=True)
 
     report = commands.add_parser("report", help="Print a completed Markdown report.")
     report.add_argument("--run", default="latest", help="Run id or 'latest'.")
@@ -3329,6 +3352,44 @@ def _strategy_command(arguments: argparse.Namespace) -> int:
     raise AssertionError(arguments.strategy_command)
 
 
+def _load_v101_cycle(root: Path) -> Any:
+    script = root.resolve() / V101_RUNNER_PATH
+    if script.is_symlink() or not script.is_file():
+        raise ValueError("10.1 prospective cycle runner is missing or indirect")
+    spec = importlib.util.spec_from_file_location("factor_lab_v101_cycle", script)
+    if spec is None or spec.loader is None:
+        raise ValueError("could not load the 10.1 prospective cycle runner")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    if (
+        module.ROOT.resolve() != root.resolve()
+        or module.RELEASE != "10.1"
+        or module.ROUTE != V10_ROUTE
+        or module.PROTOCOL_PATH.as_posix() != V101_PROTOCOL_PATH
+        or module.PROTOCOL_PAYLOAD != V101_PROTOCOL_PAYLOAD_SHA256
+        or module.PROTOCOL_FILE_SHA256 != V101_PROTOCOL_FILE_SHA256
+    ):
+        raise ValueError("10.1 prospective runner namespace differs")
+    return module
+
+
+def _prospective_command(arguments: argparse.Namespace) -> int:
+    runner = _load_v101_cycle(arguments.root.resolve())
+    argv = [arguments.prospective_command, "--as-of", str(arguments.as_of)]
+    if arguments.prospective_command in {"signal", "outcome"}:
+        argv.extend(
+            [
+                "--source-root",
+                str(arguments.source_root),
+                "--stage",
+                str(arguments.stage),
+            ]
+        )
+    if arguments.prospective_command == "outcome":
+        argv.extend(["--signal-date", str(arguments.signal_date)])
+    return int(runner.main(argv))
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     arguments = build_parser().parse_args(argv)
     if arguments.root is None:
@@ -3339,6 +3400,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _research_command(arguments)
     if arguments.command == "strategy":
         return _strategy_command(arguments)
+    if arguments.command == "prospective":
+        return _prospective_command(arguments)
     if arguments.command == "report":
         return _report_command(arguments)
     raise AssertionError(arguments.command)

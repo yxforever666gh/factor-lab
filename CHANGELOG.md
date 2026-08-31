@@ -10,6 +10,43 @@
 
 ## [Unreleased]
 
+### Added
+
+- 新增 10.1 `quarterly prospective paper cycle`：稳定 source、decision、outcome 三类 create-only 状态，
+  复用 10.0 的季度 Borda core 与 next-open/full-cost simulator，不引入 ledger、watchdog、数据库、
+  attestation 或后台调度。
+- 新增 ETF stable capture：同一 as-of 两次独立全量抓取必须 manifest/calendar/六资产逐值一致，并与
+  retained 9.0 或上一正式 stage 的完整历史前缀逐值一致，才在同盘原子发布一份 as-of source。
+- 新增 `prospective capture/signal/outcome` CLI。Signal 只在季度末 17:10 至下一官方交易日 09:15
+  之间封存 targets、连续账户 NAV/持仓和 pending shares；outcome 在下一季度末 17:10 后按同一封单
+  连续重放成交、日 NAV、分红和会计。
+- Source manifest 内嵌稳定双抓 receipt，绑定 10.1 annotated tag object/peeled commit、协议、正式路径、
+  两次一致抓取的原始 payload、上一 stage 和验证时间；decision/outcome 采用同目录 fsync 后 atomic
+  create-only hardlink，既存文件或并发写入不能覆盖。
+
+### Changed
+
+- Python 包版本更新为 `10.1.0`；10.0 公式、资产、252/21 session、Borda 权重、8bp 成本、100 万元、
+  整手和 ADV 容量不变。正式 prospective cycle 必须 checkout 精确的 published annotated `10.1` tag。
+- 首周期从 100 万现金开始，后续周期必须继承上一 outcome 的现金、持仓、应收分红和 NAV；禁止
+  fresh-cash reset、错过决策窗口后的回填、用更晚 open 替代 frozen next open，或任选有利 outcome 日。
+- Exact next-open 缺失会阻断 outcome。若 next-open 发生官方份额折算，只允许按官方 multiplier 确定性
+  缩放执行视图中的 share 字段；decision 内的权重、信号价、ADV、冻结人民币名义金额和原封单不变。
+
+### Research status
+
+- Retained 全历史物理前缀 dry-run 覆盖 46 个季度 signal 和 45 个完整 outcome；target、sealed plan、
+  signal-close account state 及 daily NAV/holdings/trades outcome prefix mismatch 均为 0，正式路径写入为 0。
+  Synthetic 回归另覆盖 missing-open 拒绝、空封单、官方份额折算和跨季应收分红连续性。
+- 发布时 prospective decision/outcome 数仍为 0；10.1 只让路线具备未来运行能力，不增加任何新盈利证据。
+
+### Known limitations
+
+- 每个新 source 仍需约两次完整历史 provider capture；没有增量 append、自动重试或调度器。若供应商
+  历史发生任何修订，前缀 exact 门会阻断本周期，而不是接受修订后继续运行。
+- Receipt 是本地 self-hash 证据，不使用 attestation 或外部透明日志；它能发现意外损坏和市场 payload
+  重写，但不能用密码学阻止拥有本地写权限的人同时伪造时间和重算全部 hash。
+
 ## [10.0] - 2026-08-31
 
 ### Added

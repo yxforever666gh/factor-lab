@@ -1,0 +1,272 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_quarterly_prospective_cycle_protocol",
+  "protocol_id": "factor-lab/10.1/quarterly-prospective-cycle-v1",
+  "release": "10.1",
+  "direction_change": false,
+  "route": "quarterly_12_1_dual_momentum_rank_budget",
+  "status": "frozen_before_first_prospective_cycle",
+  "prior_release": {
+    "release": "10.0",
+    "tag": "10.0",
+    "annotated_tag_object": "c3cfa2221a27a4bed2ace3ed1f3324896cd15828",
+    "peeled_commit": "267d446e16af8fd8555cc676de32e4770f39dcde",
+    "protocol": {
+      "path": "protocols/10.0-results-first-quarterly-borda.json",
+      "file_sha256": "6a949ce4374f407a6084053a08b76dedbb3f1478fbe56edf233bb23befe730dd",
+      "payload_sha256": "dc79550ee9fefe4fdb01f54fe0c299a40c2d118a687f6e5571156dff5701cb7b"
+    },
+    "historical_diagnostic": {
+      "path": "protocols/evidence/10.0/results-first-diagnostic.json",
+      "file_sha256": "954be9b434d3d5c7c06ddac1f276ac032248b420956185cc372ae352685b4e89",
+      "payload_sha256": "18c9fb75f79cf71572f65a3eade0d2af8a018e7b8aef066fa8a30dce1f721253",
+      "status": "candidate_passed_all_results_first_gates",
+      "evidence_class": "fully_exposed_results_first_causal_historical_diagnostic"
+    }
+  },
+  "release_checkout_contract": {
+    "formal_tag_ref": "refs/tags/10.1",
+    "local_tag_object_type": "tag",
+    "head_must_equal_local_tag_peeled_commit": true,
+    "local_tag_must_be_an_ancestor_of_head": true,
+    "worktree_must_be_clean_including_untracked_files": true,
+    "remote": "origin",
+    "remote_annotated_tag_object_must_equal_local": true,
+    "remote_peeled_commit_must_equal_local": true,
+    "any_local_git_remote_git_or_network_check_failure_is_fail_closed": true
+  },
+  "formal_runtime_contract": {
+    "formal_runtime_root": "runtime/prospective/10.1",
+    "formal_source_root": "runtime/prospective/10.1/sources",
+    "source_stage_name_template": "asof-YYYYMMDD",
+    "stage_name_must_exactly_encode_price_end_date": true,
+    "formal_entrypoint": "factor-lab prospective {capture,signal,outcome}",
+    "python_runtime_root_injection_is_test_only_and_not_formal_evidence": true
+  },
+  "frozen_strategy": {
+    "strategy_id": "quarterly_12_1_dual_momentum_rank_budget",
+    "target_builder": "factor_lab.research.multi_asset.build_monthly_targets",
+    "execution_simulator": "factor_lab.research.multi_asset.simulate_targets",
+    "signal_schedule": "last official SSE session of each natural calendar quarter after close",
+    "execution": "immediate next official SSE session open",
+    "session_index_semantics": "t is the official-session index of the quarter-end signal; t-252 and t-21 are exact earlier official-session indices",
+    "momentum_formula": "m_i(t) = log(TRI_i[t-21] / TRI_i[t-252]) - log(TRI_511880.SH[t-21] / TRI_511880.SH[t-252])",
+    "required_endpoint_rule": "all six assets must have observed TRI rows at both t-252 and t-21; a missing or unobserved required endpoint makes the entire target 100% 511880.SH, while non-finite or non-positive TRI is malformed source data rejected before target construction",
+    "positive_set": "P(t) = {i in risk_codes_in_frozen_tie_order: m_i(t) > 0}",
+    "ranking": "sort P by m_i descending; an exact tie uses risk_codes_in_frozen_tie_order",
+    "borda_score": "for n = |P| and one-based rank r_i, q_i = n - r_i + 1",
+    "target_weight": "w_i = q_i / (n*(n+1)/2) for i in P; all other risk weights are zero; w_cash = 1 - math.fsum(risk weights); if P is empty w_cash = 1",
+    "risk_codes_in_frozen_tie_order": [
+      "510300.SH",
+      "159920.SZ",
+      "513100.SH",
+      "518880.SH",
+      "511010.SH"
+    ],
+    "cash_code": "511880.SH",
+    "parameter_or_formula_change_allowed": false,
+    "asset_substitution_allowed": false,
+    "next_open_may_change_target_or_sealed_plan": false
+  },
+  "source_capture_contract": {
+    "timezone": "Asia/Shanghai",
+    "full_capture_count": 2,
+    "captures_are_independent_complete_provider_pulls": true,
+    "each_capture_not_before_signal_local_time": "17:10:00",
+    "each_capture_market_cutoff_is_exact_signal_date": true,
+    "market_rows_after_signal_date_allowed": false,
+    "official_calendar_must_include_immediate_next_session": true,
+    "calendar_schedule_after_signal_is_not_market_outcome_data": true,
+    "canonical_market_payload_sha256_must_match_across_both_captures": true,
+    "one_capture_or_mismatched_capture_may_create_source_receipt": false,
+    "both_captures_validation_and_atomic_publication_must_finish_before_decision_deadline": true,
+    "fresh_clock_is_rechecked_immediately_before_receipt_freeze_and_after_publication": true,
+    "existing_stage_is_reused_only_after_deep_load_receipt_chain_and_exact_prefix_validation": true,
+    "baseline_prefix": {
+      "source_root": "runtime/data/multi-asset-9.0/sources/stage=audit",
+      "cutoff": "2026-08-28",
+      "manifest_file_sha256": "cdbf8ba498142adff04216b476522f47ee18df6f0fa02f3395d0e141191adbfa",
+      "manifest_payload_sha256": "050ad4ddcb86dc4fbc71befad54c400b48a44f72ab6fecc33936b6da0c8f9aff",
+      "calendar_and_all_six_asset_rows_through_cutoff_must_match_exactly": true,
+      "append_only_after_cutoff": true,
+      "historical_revision_or_deletion_allowed": false
+    },
+    "subsequent_capture_baseline": "the immediately preceding published as-of stage; its complete price history is an exact prefix of the new stage",
+    "publisher": "factor_lab.data.etf_live.stable_capture_multi_asset_stage"
+  },
+  "stable_capture_receipt_contract": {
+    "contract_id": "factor-lab/10.1/stable-source-v1",
+    "embedded_in_source_manifest_before_atomic_publication": true,
+    "source_manifest_payload_sha256_covers_the_receipt": true,
+    "required_fields": [
+      "schema_version",
+      "contract_id",
+      "release",
+      "release_tag",
+      "release_annotated_tag_object",
+      "release_peeled_commit",
+      "protocol_payload_sha256",
+      "formal_source_root",
+      "stage",
+      "price_end_date",
+      "full_capture_count",
+      "independent_complete_provider_pulls",
+      "canonical_payloads_match_exactly",
+      "canonical_capture_payload_sha256",
+      "baseline_manifest_path",
+      "baseline_manifest_file_sha256",
+      "baseline_manifest_payload_sha256",
+      "validated_at_utc"
+    ],
+    "release_tag_objects_must_equal_the_verified_checkout": true,
+    "baseline_manifest_file_and_payload_sha256_must_match_the_immediate_predecessor_or_frozen_genesis": true,
+    "validated_at_local_time_window": "inclusive 17:10 on signal_date and exclusive 09:15 on the immediate next official SSE session",
+    "canonical_capture_market_payload_or_prefix_rewrite_may_be_rehashed_and_accepted": false,
+    "local_receipt_timestamp_has_external_attestation": false,
+    "deliberate_local_receipt_rewrite_is_cryptographically_prevented": false
+  },
+  "time_contract": {
+    "timezone": "Asia/Shanghai",
+    "signal_source_not_before_local_time": "17:10:00",
+    "decision_deadline": "09:15:00 on the immediate next official SSE session",
+    "execution_open": "09:30:00 on the immediate next official SSE session",
+    "quarter_end_identity": "signal_date and its immediate next official SSE session must belong to different natural calendar quarters",
+    "non_quarter_end_may_select_a_prior_target": false,
+    "missing_immediate_next_official_session_may_create_a_decision": false,
+    "decision_recorded_at_or_after_deadline_is_prospective": false,
+    "next_open_price_is_forbidden_from_decision_inputs": true,
+    "signal_window_lower_bound_is_inclusive": true,
+    "decision_deadline_upper_bound_is_exclusive": true,
+    "decision_atomic_final_path_creation_must_finish_inside_the_window": true
+  },
+  "state_machine": {
+    "states": [
+      "waiting_signal",
+      "source_ready",
+      "decision_sealed",
+      "awaiting_terminal_quarter_close",
+      "outcome_confirmed",
+      "missed_cycle"
+    ],
+    "source_ready": "after 17:10 on an exact official quarter-end signal, both complete captures match, the baseline prefix matches exactly, and the immediate next official session is known",
+    "decision_sealed": "before next-session 09:15, select exactly six target rows whose signal_date equals the current signal date and persist the signal-close NAV, account state, target rows and pending sealed-order plan; never fall back to the most recent older target",
+    "awaiting_terminal_quarter_close": "the sealed decision executes only at its frozen immediate next official open; missing exact next-open evidence remains unresolved and a later open is never substituted",
+    "outcome_confirmed": "after 17:10 on the next natural quarter's last official SSE session, replay only through that close, bind exact next-open execution and daily accounting, and persist the terminal account state before sealing any new decision at the same close",
+    "missed_cycle": "if no decision exists by next-session 09:15, that quarter can never be backfilled or relabelled prospective",
+    "next_open_can_change_only": [
+      "execution_price",
+      "execution_status",
+      "executed_shares",
+      "execution_cost",
+      "cash_feasibility",
+      "execution_unit_multiplier",
+      "share_fields_scaled_by_the_exact_official_unit_multiplier"
+    ],
+    "next_open_cannot_change": [
+      "target_weights",
+      "signal_price",
+      "signal_adv20_rmb",
+      "requested_signal_notional",
+      "planned_signal_notional",
+      "capacity_limited_signal_notional"
+    ],
+    "official_unit_event_rule": "an exact next-open official unit multiplier may deterministically scale pre-signal, desired, requested, capacity-capped, planned and capacity-limited share fields while every frozen signal weight, price, ADV and RMB notional remains exact",
+    "missing_exact_next_open_may_create_confirmed_outcome": false,
+    "later_open_substitution_allowed": false,
+    "future_tail_may_change_prior_decision_or_outcome_prefix": false
+  },
+  "continuous_account_contract": {
+    "first_formal_prospective_cycle_genesis": "CNY 1000000 cash, empty holdings and no receivables at its signal close",
+    "fresh_cash_or_empty_holdings_reset_after_genesis": false,
+    "each_next_cycle_opening_state": "exact prior confirmed outcome terminal cash, holdings and dividend receivables",
+    "signal_close_order_sizing_uses_continuous_account_nav_and_holdings": true,
+    "dividend_receivables_and_unit_events_carry_across_cycles": true,
+    "outcome_is_finalized_before_a_same_close_next_decision": true,
+    "next_signal_nav_cash_holdings_and_receivables_must_equal_the_exact_prior_terminal_state": true,
+    "base_cost_bps_per_side": 8.0,
+    "lot_size_units": 100,
+    "maximum_signal_adv_participation": 0.1,
+    "accounting_error_absolute_tolerance_rmb": 1e-08
+  },
+  "formal_artifacts": {
+    "source": {
+      "path_template": "runtime/prospective/10.1/sources/stage=asof-YYYYMMDD/manifest.json",
+      "create_only": true,
+      "requires_two_exact_full_captures_before_atomic_publication": true,
+      "temporary_second_capture_is_not_persistent_state": true,
+      "requires_embedded_stable_capture_receipt": true,
+      "existing_path_behavior": "deep-validate and reuse without a provider query"
+    },
+    "decision": {
+      "path_template": "runtime/prospective/10.1/cycle={YYYYQn}/decision.json",
+      "create_only": true,
+      "requires_source_payload_sha256": true,
+      "requires_exact_six_targets_and_pending_plan": true,
+      "existing_path_behavior": "raise FileExistsError without changing bytes"
+    },
+    "outcome": {
+      "path_template": "runtime/prospective/10.1/cycle={YYYYQn}/outcome.json",
+      "create_only": true,
+      "requires_decision_payload_sha256": true,
+      "contains_execution_and_terminal_account_state": true,
+      "existing_path_behavior": "raise FileExistsError without changing bytes"
+    }
+  },
+  "atomic_create_only_contract": {
+    "decision_and_outcome_encoding_must_complete_in_a_same_directory_temporary_file": true,
+    "temporary_file_must_be_flushed_and_fsynced_before_final_path_exposure": true,
+    "final_path_is_exposed_by_one_atomic_create_only_hardlink": true,
+    "existing_or_concurrently_created_final_path_may_be_overwritten": false,
+    "failure_before_final_path_exposure_leaves_no_final_or_partial_artifact": true
+  },
+  "historical_asof_dry_run": {
+    "label": "historical_asof_dry_run",
+    "implementation_form": "test_and_explicit_non-formal_summary_only",
+    "prospective_label_allowed": false,
+    "formal_artifact_write_allowed": false,
+    "continuous_account_advance_allowed": false,
+    "for_each_historical_signal": "physically slice every market frame through signal_date and the official calendar through the immediate next session before building the exact signal-date target",
+    "target_prefix_exact": "the six sorted target rows from the physical prefix must equal the same signal rows from full history exactly",
+    "sealed_plan_prefix_exact": "the signal-close sealed artifact remains exact after appending or adversarially perturbing future rows; a full-history execution view may differ only by the frozen official-unit-multiplier share transformation",
+    "outcome_cutoff_rule": "each outcome cutoff is the immediate next official natural-quarter end derived independently from the calendar, whether or not that date can produce a new target",
+    "outcome_prefix_exact": "daily NAV, holdings and trades through each independently derived historical outcome cutoff must equal the corresponding full-history prefix exactly",
+    "required_summary": {
+      "signal_count_strictly_positive": true,
+      "target_prefix_mismatch_count": 0,
+      "sealed_plan_prefix_mismatch_count": 0,
+      "signal_close_state_prefix_mismatch_count": 0,
+      "outcome_prefix_mismatch_count": 0,
+      "formal_path_write_count": 0
+    },
+    "may_be_promoted_or_renamed_as_prospective_evidence": false
+  },
+  "mode_isolation": {
+    "prospective_label": "prospective_quarterly_cycle",
+    "prospective_requires_release_published_before_signal_close": true,
+    "prospective_requires_exact_published_10_1_tag_checkout": true,
+    "prospective_requires_clean_worktree_and_exact_matching_remote_tag_objects": true,
+    "prospective_requires_source_and_decision_created_inside_frozen_time_window": true,
+    "historical_dry_run_output_may_enter_formal_paths": false,
+    "late_or_reconstructed_decision_may_be_relabelled_prospective": false
+  },
+  "infrastructure_contract": {
+    "ledger_used": false,
+    "watchdog_used": false,
+    "attestation_used": false,
+    "transparency_log_used": false,
+    "formal_create_only_path_count": 3,
+    "formal_paths_are_the_only_persistent_protocol_state": true
+  },
+  "claim_contract": {
+    "evidence_class": "prospective_quarterly_paper_cycle",
+    "historical_dry_run_is_independent_oos": false,
+    "prospective_cycle_is_live_trading": false,
+    "alpha_claim_allowed": false,
+    "profit_claim_allowed": false,
+    "stable_future_profit_claim_allowed": false,
+    "investment_recommendation_allowed": false,
+    "fresh_future_outcomes_required": true,
+    "completed_prospective_outcome_count_at_freeze": 0
+  },
+  "payload_sha256": "0c3f2240cc404c1084230f1efbfe3f9fd3f0fa73dbbdc69ec63e5465ef7610ca"
+}
