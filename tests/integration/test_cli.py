@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import subprocess
 from types import SimpleNamespace
 
 import pandas as pd
@@ -179,11 +180,24 @@ def test_strategy_status_verifies_tracked_implementation_and_evidence(
     monkeypatch.setattr(cli, "_v9_require_head_ci", lambda _root: "a" * 40)
     monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
     closure_exists = (root / cli.V9_CLOSURE_PATH).is_file()
+    closure_committed = (
+        closure_exists
+        and subprocess.run(
+            ["git", "cat-file", "-e", f"HEAD:{cli.V9_CLOSURE_PATH}"],
+            cwd=root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        ).returncode
+        == 0
+    )
     if not closure_exists:
         _mock_v9_preclosure_readiness(monkeypatch)
     result, exit_code = cli._strategy_status(root, verify_data=False)
-    if closure_exists:
+    if closure_committed:
         assert exit_code == 0
+    elif closure_exists:
+        assert exit_code == 3
+        assert result["status"] == "integrity_mismatch"
     else:
         assert exit_code in {0, 2}
         assert result["status"] in {
@@ -195,17 +209,17 @@ def test_strategy_status_verifies_tracked_implementation_and_evidence(
     assert result["profit_claim_allowed"] is False
     if not closure_exists:
         assert result["audit_status"] == "not_opened"
-    assert all(
-        check["status"]
-        in {
-            "match",
-            "not_verified",
-            "not_retained",
-            "not_applicable",
-            "pending_clean_commit",
-        }
-        for check in result["checks"]
-    )
+    allowed = {
+        "match",
+        "not_verified",
+        "not_retained",
+        "not_applicable",
+        "pending_clean_commit",
+    }
+    if closure_exists and not closure_committed:
+        assert any(check["status"] == "mismatch" for check in result["checks"])
+    else:
+        assert all(check["status"] in allowed for check in result["checks"])
     categories = {check["category"] for check in result["checks"]}
     if closure_exists:
         assert "release_evidence_chain" in categories
