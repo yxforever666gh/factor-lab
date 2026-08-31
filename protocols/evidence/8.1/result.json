@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_multi_asset_terminal_result",
+  "release": "8.1",
+  "status": "selection_falsified_no_candidate",
+  "selected_candidate_id": null,
+  "audit_status": "not_opened",
+  "winner_freeze": {
+    "path": "protocols/evidence/8.1/winner-freeze.json",
+    "file_sha256": "b865e80cb899f7e5274d72b46ab1e0d88dad64b0ab2eb4e46750c5cec2167387",
+    "payload_sha256": "d10f51b522a16838a4744fa16d770a720d34c2d340c2bf0bd5a05bedc61ceb76"
+  },
+  "historical_audit": null,
+  "protocol_payload_sha256": "2fc5ea8316173f7fd19fbf5c34248e5a70b2a901c99345dcf8d933826fa15ee5",
+  "asset_selection_payload_sha256": "b00536d618c7fe46e3cbe8d258d2b2032ef4e0c16d40fb9c74ff016c34525e0b",
+  "implementation_closure_payload_sha256": "f4a47421d08ca77eca6b27fd6417909a04c3eaf789c11d9ca069366412440ef5",
+  "claim_contract": {
+    "research_object": "strategic_asset_allocation_beta",
+    "alpha_claim_allowed": false,
+    "profit_claim_allowed": false,
+    "stable_future_profit_claim_allowed": false,
+    "historical_pass_interpretation": "historical fixed-instrument strategic beta diagnostic only",
+    "validation_and_audit_are_public_history_not_fresh_future_evidence": true,
+    "fresh_future_evidence_required": true,
+    "minimum_fresh_sessions": 252,
+    "minimum_fresh_monthly_executions": 12,
+    "first_fresh_session_rule": "first official session after the immutable 8.0 closure and never earlier than 2026-08-31",
+    "investment_recommendation_allowed": false
+  },
+  "payload_sha256": "d4496b9a64def6a443827737987d44ec77532cc9d11137a247302376a00ad6a4"
+}
