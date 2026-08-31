@@ -1,3 +1,3 @@
-"""Local A-share point-in-time research with exact cost-aware execution."""
+"""Causal point-in-time strategy research with exact cost-aware execution."""
 
-__version__ = "7.1.0"
+__version__ = "8.0.0"

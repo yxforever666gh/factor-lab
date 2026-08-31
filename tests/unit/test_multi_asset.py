@@ -13,6 +13,7 @@ from factor_lab.research.multi_asset import (
     BASE_COST_BPS_PER_SIDE,
     CANDIDATE_ID,
     CASH_CODE,
+    CASH_ONLY_ID,
     CONTROL_ID,
     INITIAL_CAPITAL_RMB,
     LOT_SIZE,
@@ -191,6 +192,61 @@ def test_static_control_uses_exact_base_budgets() -> None:
     assert {code: weights[code] for code in RISK_BUDGETS} == RISK_BUDGETS
     assert weights[CASH_CODE] == 0.0
     assert math.fsum(weights.values()) == pytest.approx(1.0)
+
+
+def test_cash_only_uses_exact_cash_weight_and_next_official_open() -> None:
+    market, official = _market()
+    targets = build_monthly_targets(market, official, CASH_ONLY_ID)
+
+    assert not targets.empty
+    assert set(targets["strategy_id"]) == {CASH_ONLY_ID}
+    official_position = {date: index for index, date in enumerate(official)}
+    for signal_date, group in targets.groupby("signal_date", sort=True):
+        weights = group.set_index("code")["target_weight"]
+        fractions = group.set_index("code")["trend_positive_fraction"]
+        execution_dates = set(group["execution_date"])
+        assert len(execution_dates) == 1
+        execution_date = next(iter(execution_dates))
+        assert official_position[execution_date] == official_position[signal_date] + 1
+        assert (signal_date.year, signal_date.month) != (
+            execution_date.year,
+            execution_date.month,
+        )
+        assert weights.loc[list(RISK_BUDGETS)].eq(0.0).all()
+        assert weights.at[CASH_CODE] == 1.0
+        assert fractions.loc[list(RISK_BUDGETS)].eq(0.0).all()
+        assert pd.isna(fractions.at[CASH_CODE])
+
+    result = simulate_targets(market, targets, official)
+    assert result["strategy_id"] == CASH_ONLY_ID
+    assert not result["trades"].empty
+    assert set(result["trades"]["code"]) == {CASH_CODE}
+
+
+def test_cash_only_rejects_weight_and_strategy_id_tampering() -> None:
+    market, official = _market()
+    targets = build_monthly_targets(market, official, CASH_ONLY_ID)
+    first_signal = targets["signal_date"].min()
+
+    weight_tamper = targets.copy()
+    first_cash = weight_tamper["signal_date"].eq(first_signal) & weight_tamper[
+        "code"
+    ].eq(CASH_CODE)
+    first_risk = weight_tamper["signal_date"].eq(first_signal) & weight_tamper[
+        "code"
+    ].eq("510300.SH")
+    weight_tamper.loc[first_cash, "target_weight"] = 0.99
+    weight_tamper.loc[first_risk, "target_weight"] = 0.01
+    with pytest.raises(ValueError, match="cash-only targets must allocate exactly"):
+        simulate_targets(market, weight_tamper, official)
+
+    id_tamper = targets.copy()
+    id_tamper.loc[id_tamper.index[0], "strategy_id"] = CONTROL_ID
+    with pytest.raises(ValueError, match="exactly one registered strategy"):
+        simulate_targets(market, id_tamper, official)
+
+    with pytest.raises(ValueError, match="unknown multi-asset strategy_id"):
+        build_monthly_targets(market, official, "cash_only_typo")
 
 
 def test_signal_adv_capacity_is_ten_percent_and_rejected_fraction_not_full_order() -> None:

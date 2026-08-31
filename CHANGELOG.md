@@ -10,6 +10,31 @@
 
 ## [Unreleased]
 
+### Added
+
+- 冻结 8.0 大方向 `strategic_static_capital_budget_beta`：在已披露 7.x train 中，静态预算 CAGR
+  高趋势过滤约 1.802pp、Sharpe 高约 0.00249，但最大回撤差约 1.646pp；项目在看到该结果后把
+  `static_risk_budget` 升为唯一主策略。权重固定为 30% A 股、10% 港股、10% 美股、20% 黄金、
+  30% 五年国债与 0% 现金 ETF，并新增同执行合同的 `cash_only_511880` 可投资现金门槛。
+- 新增独立 8.0 protocol、prevalidation closure、`multi-asset-8.0` runtime 与 evidence chain。
+  Train 只作已披露 static control 的 exact calibration；通过基础/16bp 压力、现金超额、风险、
+  换手、容量和会计门后才允许打开 2020–2022 validation，validation 通过并提交 freeze 后才允许
+  2023–2026 audit。
+
+### Changed
+
+- Python 包版本更新为 `8.0.0`。8.0 不再注册趋势、波动目标、再平衡带、参数网格、第二候选或
+  runner-up；现有 ETF 总回报、公司行动、月末信号/下一开盘、整手、成本、ADV20 容量和会计内核
+  原样复用。
+- `cash_only_511880` 每月末保持 100% 现金 ETF 目标并在下一开盘执行，仅因现金分红、整手取整或
+  残余现金造成偏离时产生交易；它只是一条政策门槛，不构成 alpha comparator。
+
+### Known limitations
+
+- Static 策略是在 control 的 2015–2019 结果已知后升格，train 不是独立证据；2020–2026 虽未被
+  本项目正式打开，仍是公开历史。代表 ETF 选择存在幸存与研究者选择偏差，任何历史通过都只能
+  解释为这六只固定工具的战略 beta 诊断，不能承诺未来盈利或外推到资产类别指数。
+
 ## [7.1] - 2026-08-31
 
 ### Added

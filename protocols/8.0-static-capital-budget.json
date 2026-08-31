@@ -1,0 +1,294 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_research_protocol",
+  "protocol_id": "factor-lab/8.0/strategic-static-capital-budget-beta-v1",
+  "release": "8.0",
+  "direction_change": true,
+  "route": "strategic_static_capital_budget_beta",
+  "status": "frozen_after_disclosed_train_before_any_2020_plus_market_access",
+  "prior_release": {
+    "release": "7.1",
+    "tag": "7.1",
+    "annotated_tag_object": "15ea8e8de95638fdc0786ff0f35177b0ecba878d",
+    "peeled_commit": "e7f09e17646cc44d78a49f6ddc41acc471f205d4",
+    "preselection_closure": {
+      "path": "protocols/7.1-release.json",
+      "file_sha256": "794b11d55cfbdf1f33e5e15c917691b76f244a9fd5f8f400a5f862d7830f11cd",
+      "payload_sha256": "8cd80c7c770477cf29c2fa04348e9ed16f637f7d5ee61f31232d6f1f81ff2e55"
+    },
+    "winner_freeze": {
+      "path": "protocols/evidence/7.1/winner-freeze.json",
+      "file_sha256": "2b239ac699d80db0965d87f1fb96a366b7a2f820c173fa08988fb4801323fa77",
+      "payload_sha256": "451b7de8bbcba9372731b7dd7236e16a46467bdf5499eeff5e17e8e946ffabfd",
+      "status": "selected_null_frozen_train_failed",
+      "selected_candidate_id": null
+    },
+    "terminal_result": {
+      "path": "protocols/evidence/7.1/result.json",
+      "file_sha256": "ff0278104d1e7fd5f940671322e1987ea416bb4eeb7b3a343ec814393053449a",
+      "payload_sha256": "869b6f1fe028378e1071a416c7f8d045650a41c17c01bd9a1d48f62b35c3a4b9",
+      "status": "selection_falsified_no_candidate",
+      "selected_candidate_id": null,
+      "audit_status": "not_opened"
+    }
+  },
+  "prior_train_exposure": {
+    "static_control_returns_opened": true,
+    "independent_train_evidence": false,
+    "thresholds_frozen_after_train_exposure": true,
+    "role": "disclosed_calibration_and_implementation_replay_only",
+    "source": {
+      "path": "protocols/evidence/7.0/preclosure-train.json",
+      "file_sha256": "01c3d97f7a3cce81bd8abe4e430c5b35b35deddefc80950403d3b40d109f7c09",
+      "payload_sha256": "6bd2909ddc97ec84d3535d15e8f13330a5752831aead82d8fb50afdd16ac6775"
+    },
+    "prior_control_id": "static_risk_budget",
+    "static_control_metrics_sha256": "fb1b146e34d62486dfd2c7ff39102ca7418419260f7eda99b11b6c2768c12492",
+    "observed_summary": {
+      "cagr": 0.06908794127071727,
+      "sharpe": 0.7263933657449289,
+      "max_drawdown": -0.17024574801653047,
+      "annualized_turnover": 0.5399265050913324,
+      "positive_complete_year_count": 3,
+      "requested_notional_fill_ratio": 0.9954253240120514,
+      "capacity_limited_requested_notional_ratio": 0.0,
+      "max_abs_accounting_error": 2.8558133635669947e-10
+    },
+    "static_stress_outcome_previously_opened": false,
+    "cash_benchmark_outcome_previously_opened": false,
+    "selection_bias_acknowledged": true
+  },
+  "research_question": {
+    "objective": "test whether one fixed strategic capital budget historically clears absolute risk, cash-excess, cost, capacity and accounting floors",
+    "alpha_hypothesis": null,
+    "trend_or_timing_model": null,
+    "best_of_n_selection": false,
+    "post_train_weight_optimization": false
+  },
+  "assets": {
+    "asset_selection_evidence": {
+      "path": "protocols/7.0-asset-selection.json",
+      "file_sha256": "6d2d819db2579db76f8e7830a5de090d8d471c7fdc657abd8aba626cd1b065ec",
+      "payload_sha256": "b00536d618c7fe46e3cbe8d258d2b2032ef4e0c16d40fb9c74ff016c34525e0b"
+    },
+    "fixed_capital_budgets": [
+      {
+        "ts_code": "510300.SH",
+        "role": "mainland_china_large_equity",
+        "target_weight": 0.3
+      },
+      {
+        "ts_code": "159920.SZ",
+        "role": "hong_kong_equity",
+        "target_weight": 0.1
+      },
+      {
+        "ts_code": "513100.SH",
+        "role": "united_states_equity",
+        "target_weight": 0.1
+      },
+      {
+        "ts_code": "518880.SH",
+        "role": "gold",
+        "target_weight": 0.2
+      },
+      {
+        "ts_code": "511010.SH",
+        "role": "five_year_government_bond",
+        "target_weight": 0.3
+      },
+      {
+        "ts_code": "511880.SH",
+        "role": "exchange_traded_money_market_cash_proxy",
+        "target_weight": 0.0
+      }
+    ],
+    "target_weight_sum": 1.0,
+    "cash_proxy_residual_only": true,
+    "asset_substitution_allowed": false
+  },
+  "strategy_registry": [
+    {
+      "strategy_id": "static_risk_budget",
+      "kind": "single_fixed_strategic_beta_policy",
+      "weights_source": "assets.fixed_capital_budgets",
+      "rebalance_schedule": "monthly_next_open",
+      "alpha_model": null,
+      "trend_filter": null,
+      "parameter_grid": null,
+      "runner_up": null
+    }
+  ],
+  "cash_comparator": {
+    "comparator_id": "cash_only_511880",
+    "selection_role": "fixed_policy_hurdle_only",
+    "target_weight": 1.0,
+    "execution": "same fresh phase seed, next-open, lot, cost and dividend accounting as the strategic policy",
+    "rebalance": "constant 100% target at every month-end signal for next-open execution; trades arise only when cash distributions, lot rounding or residual cash require them",
+    "cash_excess_cagr_definition": "strategic policy CAGR minus investable cash-only CAGR over the identical phase",
+    "cash_excess_is_alpha_claim": false
+  },
+  "inherited_data_execution_contract": {
+    "source": {
+      "path": "protocols/7.0-multi-asset.json",
+      "file_sha256": "2d2e96a1605b5e088a7cf5952dd816d8aecb10e39b9ba529fe81b00592bfa14f",
+      "payload_sha256": "6f2fcd2a67d52bfae19bedcaecf495faa986195f6840da48a3a67a666589aaf0"
+    },
+    "applied_sections": [
+      "assets",
+      "data_contract",
+      "signal_and_execution",
+      "metrics"
+    ],
+    "excluded_sections": [
+      "candidate_registry",
+      "control",
+      "train_gate",
+      "validation_gate",
+      "selection",
+      "audit_gate",
+      "audit_failure_action",
+      "claim_contract"
+    ],
+    "initial_capital_rmb": 1000000.0,
+    "lot_size_units": 100,
+    "long_only": true,
+    "maximum_gross_exposure": 1.0,
+    "capacity_limit_fraction_of_signal_date_adv20": 0.1,
+    "capacity_lookback_sessions": 20,
+    "future_input_allowed": false
+  },
+  "cost_contract": {
+    "base_cost_bps_per_side": 8.0,
+    "stress_cost_bps_per_side": 16.0,
+    "stress_applies_to_policy_and_cash_comparator": true,
+    "stamp_tax": 0.0
+  },
+  "physical_phases": {
+    "train": {
+      "performance_start": "2015-03-02",
+      "performance_end": "2019-12-31",
+      "role": "disclosed_calibration_replay",
+      "market_outcome_previously_opened": true,
+      "source_root": "runtime/data/multi-asset-8.0/sources/stage=train",
+      "evaluation_root": "runtime/data/multi-asset-8.0/evaluations/stage=train",
+      "binding_path": "runtime/data/multi-asset-8.0/stage-bindings/train.json"
+    },
+    "validation": {
+      "performance_start": "2020-01-02",
+      "performance_end": "2022-12-30",
+      "market_outcome_opened": false,
+      "opened_only_after_committed_train_pass": true,
+      "source_root": "runtime/data/multi-asset-8.0/sources/stage=validation",
+      "evaluation_root": "runtime/data/multi-asset-8.0/evaluations/stage=validation",
+      "binding_path": "runtime/data/multi-asset-8.0/stage-bindings/validation.json"
+    },
+    "audit": {
+      "performance_start": "2023-01-03",
+      "performance_end": "2026-08-28",
+      "market_outcome_opened": false,
+      "opened_only_after_committed_validation_pass_and_policy_freeze": true,
+      "source_root": "runtime/data/multi-asset-8.0/sources/stage=audit",
+      "evaluation_root": "runtime/data/multi-asset-8.0/evaluations/stage=audit",
+      "binding_path": "runtime/data/multi-asset-8.0/stage-bindings/audit.json"
+    },
+    "fresh_cash_each_phase": true,
+    "cross_phase_holdings_nav_or_derived_stage_reuse": false
+  },
+  "metric_contract": {
+    "annualization_sessions": 252,
+    "risk_free_rate": 0.0,
+    "cash_excess_metric": "difference between policy CAGR and investable cash-only CAGR over identical dates",
+    "positive_complete_year_ratio": "strictly positive complete calendar years divided by all complete calendar years in the phase",
+    "complete_train_years": [
+      2016,
+      2017,
+      2018,
+      2019
+    ],
+    "complete_validation_years": [
+      2020,
+      2021,
+      2022
+    ],
+    "complete_audit_years": [
+      2023,
+      2024,
+      2025
+    ],
+    "turnover": "executed traded notional divided by daily pre-trade NAV and annualized by phase sessions",
+    "nav_reconciliation_error_unit": "maximum absolute daily RMB identity error",
+    "phase_session_coverage_must_equal_official_calendar": true
+  },
+  "shared_absolute_gate": {
+    "base": {
+      "net_cagr_strictly_positive": true,
+      "net_sharpe_at_least": 0.3,
+      "daily_max_drawdown_at_least": -0.25,
+      "positive_complete_year_ratio_at_least": 0.5,
+      "cash_excess_cagr_strictly_positive": true
+    },
+    "stress_16bp": {
+      "net_cagr_strictly_positive": true,
+      "net_sharpe_at_least": 0.25,
+      "daily_max_drawdown_at_least": -0.25,
+      "positive_complete_year_ratio_at_least": 0.5,
+      "cash_excess_cagr_strictly_positive": true
+    },
+    "operational": {
+      "annualized_turnover_at_most": 1.0,
+      "requested_notional_fill_ratio_at_least": 0.99,
+      "capacity_limited_requested_notional_ratio_at_most": 0.01,
+      "nav_reconciliation_error_at_most": 1e-8
+    }
+  },
+  "phase_gates": {
+    "train": {
+      "gate_ref": "shared_absolute_gate"
+    },
+    "validation": {
+      "gate_ref": "shared_absolute_gate"
+    },
+    "audit": {
+      "gate_ref": "shared_absolute_gate"
+    }
+  },
+  "selection_contract": {
+    "candidate_count": 1,
+    "maximum_policies": 1,
+    "best_of_n_selection": false,
+    "relative_to_trend_gate": null,
+    "train_failure_action": "terminal failure with validation unopened",
+    "validation_failure_action": "terminal failure with audit unopened",
+    "audit_failure_action": "terminal historical diagnostic failure without replacement",
+    "parameter_or_weight_change_after_any_phase": false,
+    "asset_or_comparator_substitution": false,
+    "runner_up_fallback": false
+  },
+  "survivorship_and_selection_bias": {
+    "survivorship_bias_eliminated": false,
+    "current_2026_survival_known_when_direction_chosen": true,
+    "cutoff_reconstruction_includes_later_delisted_candidates": true,
+    "cutoff_reconstruction_reduces_but_does_not_remove_bias": true,
+    "historical_fund_basic_vintage_available": false,
+    "researcher_asset_class_and_representative_choice_bias_present": true,
+    "claim_scope": "these six fixed instruments and this fixed capital budget only",
+    "universe_generalization_allowed": false,
+    "asset_class_index_generalization_allowed": false,
+    "replacement_after_failure_or_delisting": false
+  },
+  "claim_contract": {
+    "research_object": "strategic_asset_allocation_beta",
+    "alpha_claim_allowed": false,
+    "profit_claim_allowed": false,
+    "stable_future_profit_claim_allowed": false,
+    "historical_pass_interpretation": "historical fixed-instrument strategic beta diagnostic only",
+    "validation_and_audit_are_public_history_not_fresh_future_evidence": true,
+    "fresh_future_evidence_required": true,
+    "minimum_fresh_sessions": 252,
+    "minimum_fresh_monthly_executions": 12,
+    "first_fresh_session_rule": "first official session after the immutable 8.0 closure and never earlier than 2026-08-31",
+    "investment_recommendation_allowed": false
+  },
+  "payload_sha256": "801374f58aa5edd66365e0937ed119082559f2950cc1106134a3cdb58e0099e7"
+}

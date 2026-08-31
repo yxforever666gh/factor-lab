@@ -1,8 +1,9 @@
-# Factor Lab 7.1
+# Factor Lab 8.0
 
-Factor Lab 7.1 是一条本地、可复现的跨资产 ETF 研究链：原始交易所价格与现金分红 →
-严格滞后趋势状态 → 月末信号/下一开盘成交 → 全成本逐日账户 → train corrective replay。
-本次重放已知 train gate 为失败，validation 与 audit 必须保持物理未创建。
+Factor Lab 8.0 是一条固定跨资产战略 beta 研究链：原始交易所价格与现金分红 → 固定资本预算 →
+月末信号/下一开盘成交 → 全成本逐日账户 → disclosed train calibration / validation / audit。
+它不再把 timing、selector 或 allocator 当作收益来源，只检验一套固定政策能否在现金超额、压力成本、
+风险、换手、容量和会计底线上站得住。
 
 已发布的 6.3 corrective replay 证明数值修复有效，但也给出正式 null：扩大 ADV20 机会集的两个
 challenger 在 train 都是 `0/10` offset 相对 control 为正，validation 与 audit 未打开，终态为
@@ -13,6 +14,10 @@ challenger 在 train 都是 `0/10` offset 相对 control 为正，validation 与
 63/126/252 个交易日相对现金代理的正总回报比例启用各资产的预定预算，未启用部分进入现金代理；
 唯一 control 是同预算、无趋势过滤的静态组合。资产、窗口、风险预算、100 万元资本、10% ADV20
 容量、8bp 单边全成本、双倍成本压力和全部阶段门在打开正式收益前一次冻结，不做参数网格。
+
+已发布的 7.1 corrective replay 证明软件排序误报已经消除，同时给出正式 null：趋势过滤 train CAGR
+约 5.11%，静态预算约 6.91%；趋势只改善约 1.65 个百分点回撤，却损失约 1.80 个百分点 CAGR，
+换手约为静态的 5.6 倍。因此 8.0 升格原 `static_risk_budget` control，而不再调趋势窗口或门槛。
 
 卖方盈利预期修正仍是潜在更正交的信息源，但本机没有带原始发布时间和修订版本的可信历史 archive，
 既有 `report_rc.create_time` 又已出现多年后回填。7.0 不会用不可信 vintage 凑成绩；该路线只有在
@@ -119,7 +124,38 @@ label，并再次验证 availability 必须恰好是 `report_date` 后第一个�
 拆送股稳健性对照）、FY1 相对 FY0 的预测增长，以及实际公告相对公告前共识的 earnings surprise。
 coverage/initiations、dispersion 与 active-reviser breadth 先只做诊断，不再建 selector。
 
-## 7.1 当前主线：7.0 固定多资产路线的纠正重放
+## 8.0 当前主线：固定战略资本预算
+
+唯一政策 `static_risk_budget` 每月末固定目标为：A 股 30%、港股 10%、美股 10%、黄金 20%、
+五年国债 30%、`511880.SH` 0%。整手、容量或开盘跳空留下的金额保留为账户现金，不主动改变预算。
+`cash_only_511880` 用相同月末/下一开盘、整手、成本、分红和会计合同维持 100% 现金 ETF 目标，
+只作可投资政策门槛。
+
+Train（2015–2019）static 结果已经可见，只能 exact replay；2020–2022 validation 是 8.0 对这六只
+ETF 的正式链中首个未打开阶段，只有 train 通过预注册统一绝对门才创建。Validation 通过并提交
+non-null freeze 后，才允许打开 2023–2026 audit。三个阶段使用同一门：CAGR 与现金超额 CAGR 为正、Sharpe ≥ 0.30、最大回撤
+不低于 -25%、完整正年份比例 ≥ 50%；16bp 压力下 Sharpe ≥ 0.25 且仍为正现金超额；年化换手 ≤ 1、
+成交满足率 ≥ 99%、容量受限请求 ≤ 1%、会计误差 ≤ `1e-8` 元。
+
+协议见 [protocols/8.0-static-capital-budget.json](protocols/8.0-static-capital-budget.json)。正式顺序：
+
+```powershell
+python scripts/build-8.0-preselection-closure.py
+# closure 单独提交、推送且 CI 全绿后
+python scripts/run-multi-asset-evidence.py --mode calibration
+# train-admission 单独提交、推送且 CI 全绿后
+python scripts/run-multi-asset-evidence.py --mode validation
+# 仅 non-null policy freeze 单独提交、推送且 CI 全绿后
+python scripts/run-multi-asset-evidence.py --mode audit
+# null freeze 或 audit 单独提交、推送且 CI 全绿后
+python scripts/run-multi-asset-evidence.py --mode finalize
+```
+
+即使 validation/audit 全部通过，也只表示这六只固定 ETF 的公开历史战略 beta 诊断通过；不等于
+alpha、稳定未来盈利或投资建议，仍需要 closure 之后至少 252 个新交易日且至少 12 次月度执行的
+前瞻证据。
+
+## 7.1 已归档路线：7.0 固定多资产路线的纠正重放
 
 固定资产与资本预算如下；`511880.SH` 只接收未启用预算和整手/容量残余：
 
@@ -172,9 +208,11 @@ fail closed。Selection 是一次性的：运行前整个 7.1 runtime 必须不�
 却未生成 freeze，就必须归档为 execution failure，不能删除后在同一 7.1 重试。完整白名单见
 [protocols/7.1-corrective-amendment-1.json](protocols/7.1-corrective-amendment-1.json)。
 
-7.1 正式流程如下；必须逐步提交、推送并等待精确提交 CI 通过：
+7.1 正式流程如下；这是归档重现说明，只能在 checkout `7.1` tag 的独立 worktree 中运行，
+当前 `main` 的 runner 已迁移到 8.0。各步仍须逐步提交、推送并等待精确提交 CI 通过：
 
 ```powershell
+# 仅限已 checkout 7.1 tag 的独立归档 worktree
 # 实现提交推送且 CI 全绿后，冻结 corrective implementation/runtime 根
 python scripts/build-7.1-preselection-closure.py
 

@@ -21,6 +21,7 @@ import pandas as pd
 
 CANDIDATE_ID = "causal_multi_horizon_trend_budget"
 CONTROL_ID = "static_risk_budget"
+CASH_ONLY_ID = "cash_only_511880"
 CASH_CODE = "511880.SH"
 RISK_BUDGETS: dict[str, float] = {
     "510300.SH": 0.30,
@@ -264,7 +265,7 @@ def build_monthly_targets(
 ) -> pd.DataFrame:
     """Build targets from official month ends without reading next-session prices."""
 
-    if strategy_id not in {CANDIDATE_ID, CONTROL_ID}:
+    if strategy_id not in {CANDIDATE_ID, CONTROL_ID, CASH_ONLY_ID}:
         raise ValueError(f"unknown multi-asset strategy_id: {strategy_id}")
     frames, official = _normalize_market_data(market_data, official_sessions)
     available = tuple(frames[CASH_CODE].index)
@@ -288,7 +289,9 @@ def build_monthly_targets(
         weights: dict[str, float] = {}
         fractions: dict[str, float] = {}
         for code, budget in RISK_BUDGETS.items():
-            if strategy_id == CONTROL_ID:
+            if strategy_id == CASH_ONLY_ID:
+                fraction = 0.0
+            elif strategy_id == CONTROL_ID:
                 fraction = 1.0
             elif signal_index < max(TREND_HORIZONS):
                 fraction = 0.0
@@ -363,8 +366,10 @@ def _validate_targets(
     if len(set(work["strategy_id"])) != 1 or work["strategy_id"].iloc[0] not in {
         CANDIDATE_ID,
         CONTROL_ID,
+        CASH_ONLY_ID,
     }:
         raise ValueError("targets must contain exactly one registered strategy")
+    strategy_id = str(work["strategy_id"].iloc[0])
     for column in ("signal_date", "execution_date"):
         work[column] = pd.to_datetime(work[column], errors="coerce").dt.normalize()
     work["code"] = work["code"].astype(str)
@@ -403,6 +408,16 @@ def _validate_targets(
             abs_tol=1e-12,
         ):
             raise ValueError("target weights must sum to one")
+        if strategy_id == CASH_ONLY_ID:
+            cash_only_weights = group.set_index("code")["target_weight"]
+            if (
+                any(float(cash_only_weights.at[code]) != 0.0 for code in RISK_CODES)
+                or float(cash_only_weights.at[CASH_CODE]) != 1.0
+            ):
+                raise ValueError(
+                    "cash-only targets must allocate exactly zero to every risk ETF "
+                    f"and one to {CASH_CODE}"
+                )
         for row in group.itertuples(index=False):
             if not bool(frames[row.code].at[signal_date, "_observed"]):
                 raise ValueError("target uses an unobserved signal row")
