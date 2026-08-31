@@ -99,7 +99,7 @@ def test_historical_dry_run_uses_physical_prefixes_and_continuous_account(
     assert report["label"] == "historical_asof_dry_run"
     assert report["prospective"] is False
     assert report["strategy_id"] == module.QUARTERLY_BORDA_ID
-    assert not Path(report["source"]["path"]).is_absolute()
+    assert report["source"]["path"] == "external/synthetic-stage"
     assert len(report["implementation"]["git_head"]) == 40
     assert set(report["implementation"]["files"]) == {
             module.DRY_RUN_PATH.as_posix(),

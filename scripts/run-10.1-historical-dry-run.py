@@ -250,7 +250,11 @@ def _next_quarter_end(
 
 
 def _repo_relative(path: Path) -> str:
-    return Path(os.path.relpath(path.resolve(), ROOT.resolve())).as_posix()
+    resolved = path.resolve()
+    try:
+        return resolved.relative_to(ROOT.resolve()).as_posix()
+    except ValueError:
+        return f"external/{resolved.name}"
 
 
 def _implementation_identity() -> dict[str, Any]:
