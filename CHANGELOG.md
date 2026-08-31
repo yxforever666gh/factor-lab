@@ -10,6 +10,38 @@
 
 ## [Unreleased]
 
+### Added
+
+- 新增 10.0 results-first 路线 `quarterly_12_1_dual_momentum_rank_budget`：每个自然季度末只读
+  `t-252` 与 `t-21` 官方 session 的六只 ETF TRI，风险资产减去现金同期 log return，所有正分资产
+  按固定顺序破同值并赋 Borda `n…1` 权重；任一必要端点缺失/未观测时整组进入现金，畸形 TRI 源直接拒绝。
+  下一官方开盘、100 万元、
+  100 份整手、10% ADV20、分红、逐日会计及 8bp/16bp 成本保持不变。
+- 新增 compact 10.0 protocol、纯因果 core、create-only results-first runner 与 CLI 默认状态；正式 runner
+  直接复用 retained 9.0 audit source，不复制数据，也不引入 closure/attestation/调度平台。
+
+### Changed
+
+- Python 包版本更新为 `10.0.0`。9.0 的 inverse-vol 路线降为 comparator；10.0 不再允许仅凭 Sharpe
+  或回撤改善掩盖收益不足，D1/D2/D3 的 base/stress CAGR 必须分别严格高于匹配现金与 static。
+- 按用户 results-first 优先级，Sharpe、最大回撤与年化换手在 10.0 完整披露但不作否决门；fill 至少
+  98%、capacity-limited 至多 2%、零容量违约/负现金/杠杆及会计误差不超过 `1e-8` 仍为硬执行门。
+
+### Research status
+
+- 三条一次性 prototype 均在完整查看 2015–2026 历史后选择，全部是 fully exposed causal diagnostic，
+  不是独立 OOS。月度 top-2 虽有全段 CAGR 13.31%，但 D1 输 static、最大回撤 -29.25%、换手 5.83，
+  且 fill/capacity 失败；在线三专家全段 CAGR 5.76%，低于 static 7.78%，二者均拒绝 runner-up。
+- 入选季度 Borda 的 D1/D2/D3 base CAGR 为 7.365% / 5.547% / 19.028%，同期 static 为
+  6.909% / 2.334% / 13.644%；对应 stress CAGR 7.169% / 5.385% / 18.856%。全段 CAGR
+  10.450%，static 7.783%，16bp stress 10.276%；46 个信号 prefix replay 为零差异。
+
+### Known limitations
+
+- 季度 Borda 全段最大回撤为 -25.85%、Sharpe 0.737、年化换手约 2.02；三个历史分段都已暴露，
+  且历史中现金退避从未触发。10.0 只能证明当前固定历史上的因果收益诊断，不能证明 alpha、稳定盈利
+  或未来适应性；必须由发布后的新数据继续检验。
+
 ## [9.0] - 2026-08-31
 
 ### Added

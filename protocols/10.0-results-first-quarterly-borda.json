@@ -1,0 +1,194 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_research_protocol",
+  "protocol_id": "factor-lab/10.0/results-first-quarterly-borda-v1",
+  "release": "10.0",
+  "direction_change": true,
+  "route": "quarterly_12_1_dual_momentum_rank_budget",
+  "status": "frozen_after_fully_exposed_results_first_selection_before_formal_diagnostic",
+  "prior_release": {
+    "release": "9.0",
+    "tag": "9.0",
+    "annotated_tag_object": "c5e00f055183cceab44e3f8d182727e198af5714",
+    "peeled_commit": "ed7627c974d9d04cd653be61b2966397e075719f",
+    "protocol": {
+      "path": "protocols/9.0-causal-volatility-balanced-budget.json",
+      "file_sha256": "19ecf56b5bd9c8b42b9f4df50761f719e2ca544eaea959a88c62d0ea4178d620",
+      "payload_sha256": "f6c7cce39e8b9a1ae5df10965a2dd607916095b2caf24fcf0a29b625c5bafc3e"
+    },
+    "winner_freeze": {
+      "path": "protocols/evidence/9.0/winner-freeze.json",
+      "file_sha256": "98bdff4454b1a9430ca5f343bc4ce08a63924701b3a17e780f57c2454b3b413b",
+      "payload_sha256": "430b45eec730084a3d82e7d392bf609e533d5c7a98b5623f9d13a471171495a7"
+    },
+    "historical_audit": {
+      "path": "protocols/evidence/9.0/historical-audit.json",
+      "file_sha256": "737ccdd9146334732a6e6a60e52423e45f0e7b9eb76837200b232e2a34601018",
+      "payload_sha256": "7a034510cc38aaca5ea2b2113265c2ff2b984c302f366cd68f34f8c73af98681"
+    },
+    "terminal_result": {
+      "path": "protocols/evidence/9.0/result.json",
+      "file_sha256": "816bdb1837b75a8110bb863fa5584dc54166107a26671a402d17f5dc23f4f076",
+      "payload_sha256": "3b6fbcab3dafb1086be3062109d02c1c05f408d30913dc15146ed2b7eb3aa7b2"
+    },
+    "retained_audit_source_manifest": {
+      "path": "runtime/data/multi-asset-9.0/sources/stage=audit/manifest.json",
+      "file_sha256": "cdbf8ba498142adff04216b476522f47ee18df6f0fa02f3395d0e141191adbfa",
+      "payload_sha256": "050ad4ddcb86dc4fbc71befad54c400b48a44f72ab6fecc33936b6da0c8f9aff",
+      "price_start_date": "2014-01-15",
+      "price_end_date": "2026-08-28"
+    }
+  },
+  "results_first_selection_disclosure": {
+    "selection_mode": "results_first_after_observing_all_three_fully_exposed_historical_prototypes",
+    "all_2015_2026_market_outcomes_observed_before_selection": true,
+    "selection_is_independent_oos": false,
+    "selected_strategy_id": "quarterly_12_1_dual_momentum_rank_budget",
+    "selection_basis": "the only disclosed prototype that passed the frozen results-first D1/D2/D3 base-and-stress return, positive-year, fill, capacity, validity and accounting gates",
+    "post_selection_parameter_or_formula_change_allowed": false,
+    "runner_up_fallback": false,
+    "historical_profit_claim_allowed": false
+  },
+  "fully_exposed_prototypes": {
+    "monthly_top2_inverse_volatility_dual_momentum": {
+      "selected": false,
+      "external_script_path": "H:/Download/factor-lab-v100-dual-momentum-prototype/run_prototype.py",
+      "external_script_file_sha256": "3b0268399369cf03c3062a3bc59f29b187959ddae35664b460e81a4ef80b472e",
+      "external_result_path": "H:/Download/factor-lab-v100-dual-momentum-prototype/result.json",
+      "external_result_file_sha256": "64d6e06054f6d8c248520a0c478c764a71db2e03012b0871f8694e66c02ca801",
+      "rejection": "D1 base and stress CAGR did not beat static and its D1 fill/capacity checks failed"
+    },
+    "monthly_online_three_expert_selector": {
+      "selected": false,
+      "external_script_path": "H:/Download/factor-lab-v100-online-experts-prototype/prototype.py",
+      "external_script_file_sha256": "8bba7fd6095d61d38b9f574c7e1a968162a33fb2922a8369e8216e4d3b26bea1",
+      "external_result_path": "H:/Download/factor-lab-v100-online-experts-prototype/result.json",
+      "external_result_file_sha256": "9d4f0697d18aca4053923f10820cec1a8c22999ba3114071f13dedf56b07014c",
+      "external_result_payload_sha256": "8e24c84bef40d9b2661faacef667a51c7d76241c3489d5e6441c8cca0ba1d9b8",
+      "rejection": "base and stress CAGR did not beat static in D1, D2 or D3"
+    },
+    "quarterly_cash_excess_borda": {
+      "selected": true,
+      "external_script_path": "H:/Download/factor-lab-v100-quarterly-borda-prototype/run_prototype.py",
+      "external_script_file_sha256": "5162dc747320ee91e38cea72382550c7cff688308759485859086d8462ecb54d",
+      "external_result_path": "H:/Download/factor-lab-v100-quarterly-borda-prototype/result.json",
+      "external_result_file_sha256": "db820d0227d7c27f05f3fbee7cdd967de384c5fa1766442c94904c7fe2b73887",
+      "selection": "passed the frozen results-first gate in D1, D2 and D3 at both 8bp and 16bp"
+    }
+  },
+  "assets": {
+    "risk_codes_in_frozen_tie_order": [
+      "510300.SH",
+      "159920.SZ",
+      "513100.SH",
+      "518880.SH",
+      "511010.SH"
+    ],
+    "cash_code": "511880.SH",
+    "asset_substitution_allowed": false
+  },
+  "frozen_strategy": {
+    "strategy_id": "quarterly_12_1_dual_momentum_rank_budget",
+    "signal_schedule": "last official SSE session of each natural calendar quarter after close",
+    "execution": "immediate next official SSE session open",
+    "session_index_semantics": "t is the official-session index of the quarter-end signal; t-252 and t-21 are exact earlier official-session indices",
+    "momentum_formula": "m_i(t) = log(TRI_i[t-21] / TRI_i[t-252]) - log(TRI_511880.SH[t-21] / TRI_511880.SH[t-252])",
+    "required_endpoint_rule": "all six assets must have observed TRI rows at both t-252 and t-21; a missing or unobserved required endpoint makes the entire target 100% 511880.SH, while non-finite or non-positive TRI is malformed source data rejected before target construction",
+    "positive_set": "P(t) = {i in risk_codes_in_frozen_tie_order: m_i(t) > 0}",
+    "ranking": "sort P by m_i descending; an exact tie uses risk_codes_in_frozen_tie_order",
+    "borda_score": "for n = |P| and one-based rank r_i, q_i = n - r_i + 1",
+    "target_weight": "w_i = q_i / (n*(n+1)/2) for i in P; all other risk weights are zero; w_cash = 1 - math.fsum(risk weights); if P is empty w_cash = 1",
+    "top_k": null,
+    "volatility_weighting": false,
+    "base_budget_multiplier": false,
+    "leverage": false,
+    "parameter_grid": false,
+    "second_model": false,
+    "stress_reuses_base_targets_exactly": true,
+    "future_tail_prefix_invariance_required": true
+  },
+  "inherited_execution_contract": {
+    "initial_capital_rmb": 1000000.0,
+    "lot_size_units": 100,
+    "long_only": true,
+    "maximum_gross_exposure": 1.0,
+    "base_cost_bps_per_side": 8.0,
+    "stress_cost_bps_per_side": 16.0,
+    "capacity_limit_fraction_of_signal_date_adv20": 0.1,
+    "order_sizing": "signal-close NAV, close, lot and ADV seal shares; next open cannot increase requested shares",
+    "dividend_accounting": "ex-date receivable becomes spendable cash only on pay date",
+    "daily_nav_accounting_required": true,
+    "blocked_order_substitution": false
+  },
+  "fully_exposed_periods": {
+    "D1": {
+      "performance_start": "2015-03-02",
+      "performance_end": "2019-12-31",
+      "fresh_cash": true
+    },
+    "D2": {
+      "performance_start": "2020-01-02",
+      "performance_end": "2022-12-30",
+      "fresh_cash": true
+    },
+    "D3": {
+      "performance_start": "2023-01-03",
+      "performance_end": "2026-08-28",
+      "fresh_cash": true
+    },
+    "full": {
+      "performance_start": "2015-03-02",
+      "performance_end": "2026-08-28",
+      "disclosure_only": true
+    }
+  },
+  "results_first_gate": {
+    "applies_to_each": [
+      "D1.base_8bp",
+      "D1.stress_16bp",
+      "D2.base_8bp",
+      "D2.stress_16bp",
+      "D3.base_8bp",
+      "D3.stress_16bp"
+    ],
+    "candidate_cagr_strictly_above_matching_investable_cash_cagr": true,
+    "candidate_cagr_strictly_above_matching_static_risk_budget_cagr": true,
+    "positive_complete_year_ratio_at_least": 0.5,
+    "requested_notional_fill_ratio_at_least": 0.98,
+    "capacity_limited_requested_notional_ratio_at_most": 0.02,
+    "capacity_violation_count_at_most": 0,
+    "negative_cash_observation_count_at_most": 0,
+    "leverage_observation_count_at_most": 0,
+    "nav_reconciliation_error_at_most": 1e-08,
+    "sharpe_is_disclosure_only": true,
+    "max_drawdown_is_disclosure_only": true,
+    "annualized_turnover_is_disclosure_only": true,
+    "full_period_is_disclosure_only": true,
+    "all_six_D1_D2_D3_roles_must_pass": true,
+    "pooled_period_rescue": false
+  },
+  "selection_contract": {
+    "formal_candidate_count": 1,
+    "maximum_winners": 1,
+    "selected_strategy_id": "quarterly_12_1_dual_momentum_rank_budget",
+    "parameter_or_formula_change_after_selection": false,
+    "additional_prototype_after_selection": false,
+    "runner_up_fallback": false,
+    "null_if_formal_exact_replay_differs_or_fails": true
+  },
+  "evidence": {
+    "path": "protocols/evidence/10.0/results-first-diagnostic.json",
+    "create_only": true
+  },
+  "claim_contract": {
+    "evidence_class": "fully_exposed_results_first_causal_historical_diagnostic",
+    "independent_oos": false,
+    "alpha_claim_allowed": false,
+    "profit_claim_allowed": false,
+    "stable_future_profit_claim_allowed": false,
+    "investment_recommendation_allowed": false,
+    "fresh_future_evidence_required": true,
+    "historical_pass_interpretation": "post-selection public-history diagnostic only"
+  },
+  "payload_sha256": "dc79550ee9fefe4fdb01f54fe0c299a40c2d118a687f6e5571156dff5701cb7b"
+}

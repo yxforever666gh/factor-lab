@@ -18,7 +18,12 @@ from factor_lab.research.multi_asset import (
     INITIAL_CAPITAL_RMB,
     LOT_SIZE,
     MAX_SIGNAL_ADV_PARTICIPATION,
+    QUARTERLY_BORDA_DIAGNOSTIC_COLUMNS,
+    QUARTERLY_BORDA_END_LAG,
+    QUARTERLY_BORDA_ID,
+    QUARTERLY_BORDA_START_LAG,
     RISK_BUDGETS,
+    RISK_CODES,
     STRESS_COST_BPS_PER_SIDE,
     VOLATILITY_BALANCED_ID,
     VOLATILITY_FLOOR,
@@ -138,6 +143,17 @@ def _month_end_pair(dates: pd.DatetimeIndex, *, minimum_index: int = 260) -> tup
         if dates[index].month != dates[index + 1].month:
             return index, index + 1
     raise AssertionError("fixture lacks a usable month end")
+
+
+def _quarter_end_pair(
+    dates: pd.DatetimeIndex, *, minimum_index: int = 260
+) -> tuple[int, int]:
+    for index in range(minimum_index, len(dates) - 1):
+        current = (dates[index].year, (dates[index].month - 1) // 3)
+        following = (dates[index + 1].year, (dates[index + 1].month - 1) // 3)
+        if current != following:
+            return index, index + 1
+    raise AssertionError("fixture lacks a usable quarter end")
 
 
 def test_fixed_registry_and_official_month_end_need_no_future_price_row() -> None:
@@ -382,6 +398,171 @@ def test_volatility_balanced_targets_reject_weight_diagnostic_and_id_tampering()
     missing_diagnostic = targets.drop(columns="realized_volatility")
     with pytest.raises(ValueError, match="lack frozen diagnostics"):
         simulate_targets(market, missing_diagnostic, official)
+
+
+def test_quarterly_borda_uses_exact_session_lags_cash_excess_and_borda_points() -> None:
+    market, official = _market()
+    signal_index, execution_index = _quarter_end_pair(official, minimum_index=300)
+    signal_date = official[signal_index]
+    targets = build_monthly_targets(market, official, QUARTERLY_BORDA_ID)
+    selected = targets.loc[targets["signal_date"].eq(signal_date)].set_index("code")
+
+    assert QUARTERLY_BORDA_ID == "quarterly_12_1_dual_momentum_rank_budget"
+    assert QUARTERLY_BORDA_START_LAG == 252
+    assert QUARTERLY_BORDA_END_LAG == 21
+    assert set(QUARTERLY_BORDA_DIAGNOSTIC_COLUMNS).issubset(targets.columns)
+    assert set(targets["strategy_id"]) == {QUARTERLY_BORDA_ID}
+    assert selected["execution_date"].eq(official[execution_index]).all()
+    assert selected["momentum_start_date"].eq(
+        official[signal_index - QUARTERLY_BORDA_START_LAG]
+    ).all()
+    assert selected["momentum_end_date"].eq(
+        official[signal_index - QUARTERLY_BORDA_END_LAG]
+    ).all()
+    assert selected["endpoint_fallback_all_cash"].eq(False).all()
+
+    start = official[signal_index - QUARTERLY_BORDA_START_LAG]
+    end = official[signal_index - QUARTERLY_BORDA_END_LAG]
+    levels = {
+        code: market[code].set_index("trade_date")["total_return_index"]
+        for code in ALL_CODES
+    }
+    cash_log = math.log(levels[CASH_CODE].at[end] / levels[CASH_CODE].at[start])
+    relative = {
+        code: math.log(levels[code].at[end] / levels[code].at[start]) - cash_log
+        for code in RISK_BUDGETS
+    }
+    order = {code: index for index, code in enumerate(RISK_BUDGETS)}
+    ranked = sorted(
+        (code for code in RISK_BUDGETS if relative[code] > 0.0),
+        key=lambda code: (-relative[code], order[code]),
+    )
+    assert ranked == ["510300.SH", "513100.SH", "511010.SH"]
+    assert selected["cash_log_momentum"].eq(cash_log).all()
+    for rank, code in enumerate(ranked, start=1):
+        points = len(ranked) - rank + 1
+        assert selected.at[code, "relative_cash_log_momentum"] == relative[code]
+        assert selected.at[code, "borda_rank"] == rank
+        assert selected.at[code, "borda_points"] == points
+    assert selected["positive_momentum_count"].eq(len(ranked)).all()
+    assert selected.at["510300.SH", "target_weight"] == 3.0 / 6.0
+    assert selected.at["513100.SH", "target_weight"] == 2.0 / 6.0
+    assert selected.at["511010.SH", "target_weight"] == 1.0 / 6.0
+    assert selected.at[CASH_CODE, "target_weight"] == 0.0
+
+    prefix = {
+        code: frame.loc[frame["trade_date"].le(signal_date)].copy()
+        for code, frame in market.items()
+    }
+    prefix_targets = build_monthly_targets(prefix, official, QUARTERLY_BORDA_ID)
+    comparable = targets.loc[targets["signal_date"].le(signal_date)].reset_index(
+        drop=True
+    )
+    pdt.assert_frame_equal(prefix_targets.reset_index(drop=True), comparable)
+
+
+def test_quarterly_borda_exact_ties_use_all_risk_codes_in_frozen_order() -> None:
+    market, official = _market()
+    index = np.arange(len(official), dtype=float)
+    for code in RISK_BUDGETS:
+        market[code]["total_return_index"] = np.power(1.0005, index)
+    signal_index, _ = _quarter_end_pair(official, minimum_index=300)
+    signal_date = official[signal_index]
+    selected = build_monthly_targets(
+        market, official, QUARTERLY_BORDA_ID
+    ).loc[lambda frame: frame["signal_date"].eq(signal_date)].set_index("code")
+
+    assert selected["positive_momentum_count"].eq(len(RISK_BUDGETS)).all()
+    expected_weights = {
+        code: (len(RISK_BUDGETS) - rank + 1) / 15.0
+        for rank, code in enumerate(RISK_BUDGETS, start=1)
+    }
+    for rank, code in enumerate(RISK_BUDGETS, start=1):
+        points = len(RISK_BUDGETS) - rank + 1
+        assert selected.at[code, "borda_rank"] == rank
+        assert selected.at[code, "borda_points"] == points
+        assert selected.at[code, "target_weight"] == expected_weights[code]
+    assert selected.at[CASH_CODE, "target_weight"] == 1.0 - math.fsum(
+        expected_weights[code] for code in RISK_CODES
+    )
+    assert math.fsum(selected["target_weight"]) == 1.0
+
+
+def test_quarterly_borda_missing_any_required_endpoint_falls_back_as_one_group() -> None:
+    market, official = _market()
+    signal_index, _ = _quarter_end_pair(official, minimum_index=300)
+    signal_date = official[signal_index]
+    missing_date = official[signal_index - QUARTERLY_BORDA_START_LAG]
+    market["513100.SH"] = market["513100.SH"].loc[
+        market["513100.SH"]["trade_date"].ne(missing_date)
+    ].reset_index(drop=True)
+    selected = build_monthly_targets(
+        market, official, QUARTERLY_BORDA_ID
+    ).loc[lambda frame: frame["signal_date"].eq(signal_date)].set_index("code")
+
+    assert selected["endpoint_fallback_all_cash"].eq(True).all()
+    assert selected["positive_momentum_count"].eq(0).all()
+    assert selected["cash_log_momentum"].isna().all()
+    assert selected["relative_cash_log_momentum"].isna().all()
+    assert selected["borda_rank"].isna().all()
+    assert selected["borda_points"].eq(0).all()
+    assert selected.loc[list(RISK_BUDGETS), "target_weight"].eq(0.0).all()
+    assert selected.at[CASH_CODE, "target_weight"] == 1.0
+    assert simulate_targets(market, selected.reset_index(), official)[
+        "strategy_id"
+    ] == QUARTERLY_BORDA_ID
+
+
+def test_quarterly_borda_rejects_malformed_tri_instead_of_calling_it_cash_fallback() -> None:
+    market, official = _market()
+    signal_index, _ = _quarter_end_pair(official, minimum_index=300)
+    endpoint = official[signal_index - QUARTERLY_BORDA_START_LAG]
+    market["513100.SH"].loc[
+        market["513100.SH"]["trade_date"].eq(endpoint), "total_return_index"
+    ] = np.nan
+    with pytest.raises(ValueError, match="invalid total_return_index"):
+        build_monthly_targets(market, official, QUARTERLY_BORDA_ID)
+
+
+def test_quarterly_borda_rejects_weight_and_each_frozen_diagnostic_tamper() -> None:
+    market, official = _market()
+    targets = build_monthly_targets(market, official, QUARTERLY_BORDA_ID)
+    signal_date = targets["signal_date"].max()
+    one_signal = targets.loc[targets["signal_date"].eq(signal_date)].reset_index(
+        drop=True
+    )
+    risk = one_signal["code"].eq("510300.SH")
+    cash = one_signal["code"].eq(CASH_CODE)
+
+    weight_tamper = one_signal.copy()
+    weight_tamper.loc[risk, "target_weight"] -= 0.01
+    weight_tamper.loc[cash, "target_weight"] += 0.01
+    with pytest.raises(ValueError, match="target weights differ from causal history"):
+        simulate_targets(market, weight_tamper, official)
+
+    for name in QUARTERLY_BORDA_DIAGNOSTIC_COLUMNS:
+        tampered = one_signal.copy()
+        if name == "momentum_start_date":
+            tampered[name] += pd.Timedelta(days=1)
+        elif name == "momentum_end_date":
+            tampered[name] -= pd.Timedelta(days=1)
+        elif name in {"cash_log_momentum", "positive_momentum_count"}:
+            tampered[name] += 1
+        elif name in {"relative_cash_log_momentum", "borda_rank", "borda_points"}:
+            tampered.loc[risk, name] += 1
+        else:
+            tampered[name] = True
+        with pytest.raises(ValueError, match="diagnostics differ from causal history"):
+            simulate_targets(market, tampered, official)
+
+    with pytest.raises(ValueError, match="lack frozen diagnostics"):
+        simulate_targets(
+            market, one_signal.drop(columns="borda_points"), official
+        )
+    id_tamper = one_signal.copy()
+    id_tamper["strategy_id"] = CONTROL_ID
+    with pytest.raises(ValueError, match="diagnostics require the exact strategy_id"):
+        simulate_targets(market, id_tamper, official)
 
 
 def test_cash_only_uses_exact_cash_weight_and_next_official_open() -> None:

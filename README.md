@@ -1,21 +1,18 @@
-# Factor Lab 9.0
+# Factor Lab 10.0
 
-Factor Lab 9.0 把路线从固定资本权重切换为因果月度波动平衡：五只风险 ETF 的目标权重按
-`8.0 固定预算 / 截至信号收盘的 126 个已观测总回报日收益波动率` 归一，`511880.SH` 目标为零；
-任一资产历史不足或波动无效时，整组回退固定预算。没有资产上限、目标波动、杠杆、参数网格、
-第二候选或 runner-up。
+Factor Lab 10.0 把 9.0 的低波动风险预算降为 comparator，主线改为严格因果的季度 12-1 双动量：
+每个自然季度最后一个上交所交易日，只用该时点之前第 252 与第 21 个官方 session 的六只 ETF
+总回报指数；五只风险资产分别减去现金代理同期 log return，只保留正值，并按相对动量从高到低
+赋 Borda `n…1` 权重。下一官方交易日开盘执行，继续计入整手、ADV20 容量、8bp/16bp、分红与逐日会计。
 
-这个公式是在完整看过 2015–2022 结果后从两个一次性 prototype 中选出的，因此 D1（2015–2019）和
-D2（2020–2022）都是 fully exposed development，不是独立 OOS。入选公式平均约 74.42% 配到五年
-国债 ETF，显著改善历史 Sharpe 和回撤，但它高度债券化，不能把平滑曲线解释成 alpha 或稳定盈利。
-另一条三专家 exponentiated-gradient 在线混合因 base/stress Sharpe 均未胜静态、三个两年分段仅一个
-跑赢现金而被明确拒绝，不进入 9.0 registry。
+这条路线是在完整查看 2015–2026 市场历史和三条一次性 prototype 后做出的 results-first 选择，
+不是独立 OOS。正式 exact replay 的历史目标是：D1、D2、D3 在 base/stress 下都严格跑赢匹配现金和
+static CAGR；Sharpe、回撤与换手完整披露，但按用户“先跑出收益”的优先级不作为本版否决门。
 
-在 development exact replay 的 D1/D2、base/stress、绝对与相对稳定门全部通过，且 non-null freeze
-单独提交并由 CI 验证后，9.0 才首次打开 2023-01-03 至 2026-08-28 公共历史 audit。候选 base CAGR
-6.665%、Sharpe 2.834、最大回撤 -1.38%，现金超额 5.248pp，3/3 个完整年度为正，audit 通过；但同段
-static CAGR 为 13.644%，高出候选约 6.979pp。结论是“高度债券化的低波动历史配置通过既定门”，不是
-alpha 或稳定盈利。终态仍明确要求至少 252 个新交易日和 12 次新月度执行。
+隔离原型中，季度 Borda 在 2015–2019、2020–2022、2023–2026 的 base CAGR 分别为 7.365%、
+5.547%、19.028%，同期 static 为 6.909%、2.334%、13.644%；全段 CAGR 10.450%，static 为 7.783%，
+16bp stress 为 10.276%。代价同样明确：全段最大回撤 -25.85%、Sharpe 0.737、年化换手约 2.02，
+不能据此声称稳定盈利、alpha 或投资建议。
 
 已发布的 6.3 corrective replay 证明数值修复有效，但也给出正式 null：扩大 ADV20 机会集的两个
 challenger 在 train 都是 `0/10` offset 相对 control 为正，validation 与 audit 未打开，终态为
@@ -136,7 +133,47 @@ label，并再次验证 availability 必须恰好是 `report_date` 后第一个�
 拆送股稳健性对照）、FY1 相对 FY0 的预测增长，以及实际公告相对公告前共识的 earnings surprise。
 coverage/initiations、dispersion 与 active-reviser breadth 先只做诊断，不再建 selector。
 
-## 9.0 当前方向：因果月度波动平衡
+## 10.0 当前方向：季度 12-1 双动量 Borda
+
+精确合同见
+[protocols/10.0-results-first-quarterly-borda.json](protocols/10.0-results-first-quarterly-borda.json)。
+正式 registry 只有 `quarterly_12_1_dual_momentum_rank_budget`；没有 top-k、波动率缩放、温度、
+参数网格、第二模型或 runner-up。
+
+对季度末信号 session `t`，风险资产 `i` 的分数为：
+
+```text
+m_i(t) = log(TRI_i[t-21] / TRI_i[t-252])
+       - log(TRI_cash[t-21] / TRI_cash[t-252])
+```
+
+任一六资产在两个端点缺少当时已观测的 TRI 行，整期进入现金；非有限或非正 TRI 属于畸形源并直接拒绝。
+否则只保留 `m_i>0` 的
+风险资产，按分数降序、固定资产顺序破同值，给予 `n,n-1,…,1` 的 Borda 分并归一；现金承接 binary64
+残差。全部输入不晚于信号收盘，成交只使用下一官方开盘。
+
+| fully exposed 分段 | Candidate CAGR | Static CAGR | Candidate Sharpe | 最大回撤 | 年化换手 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 2015–2019 | 7.365% | 6.909% | 0.531 | -25.85% | 2.326 |
+| 2020–2022 | 5.547% | 2.334% | 0.438 | -16.88% | 1.907 |
+| 2023–2026-08 | 19.028% | 13.644% | 1.301 | -17.35% | 1.857 |
+| 全段 | 10.450% | 7.783% | 0.737 | -25.85% | 2.017 |
+
+月度 top-2 原型虽然全段 CAGR 13.31%，但 D1 输 static、最大回撤 -29.25%、换手 5.83，且 fill/capacity
+失败；因果在线三专家选择器全段 CAGR 5.76%，低于 static 7.78%。两者都被记录为 fully exposed
+负面边界，不作为 fallback。
+
+正式复现命令只有一个，默认 create-only 写 evidence；它必须在 core、protocol 与 runner 的 clean
+implementation commit 之后运行：
+
+```powershell
+python scripts/run-10.0-results-first.py
+```
+
+`python -m factor_lab.cli strategy status` 默认核验 10.0；`--release 9.0` 保留已发布低波动路线的
+tag 与六个 JSON 证据归档核验，但不深验 retained runtime。
+
+## 9.0 已归档方向：因果月度波动平衡
 
 预协议 scout 与正式合同分别见
 [protocols/9.0-preprotocol-scout.json](protocols/9.0-preprotocol-scout.json) 和

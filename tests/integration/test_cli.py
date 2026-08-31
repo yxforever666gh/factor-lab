@@ -72,6 +72,9 @@ def test_cli_exposes_only_lightweight_mainline_commands() -> None:
     assert parser.parse_args(
         ["strategy", "status", "--release", "9.0"]
     ).release == "9.0"
+    assert parser.parse_args(
+        ["strategy", "status", "--release", "10.0"]
+    ).release == "10.0"
     targets = parser.parse_args(["strategy", "targets", "--signal-date", "latest"])
     assert targets.strategy_command == "targets"
 
@@ -201,7 +204,7 @@ def test_strategy_status_verifies_tracked_implementation_and_evidence(
     )
     if not closure_exists:
         _mock_v9_preclosure_readiness(monkeypatch)
-    result, exit_code = cli._strategy_status(root, verify_data=False)
+    result, exit_code = cli._strategy_status(root, verify_data=False, release="9.0")
     if pending_formal_artifact:
         assert exit_code == 3
         assert result["status"] == "integrity_mismatch"
@@ -236,6 +239,90 @@ def test_strategy_status_verifies_tracked_implementation_and_evidence(
         assert "protocol_payload" in categories
         assert "published_8_1_archive" in categories
         assert "retained_8_1_development_readiness" in categories
+
+
+def test_default_strategy_status_tracks_10_0_results_first_stage() -> None:
+    root = Path(__file__).resolve().parents[2]
+    evidence_path = root / cli.V10_EVIDENCE_PATH
+    committed = (
+        evidence_path.is_file()
+        and subprocess.run(
+            ["git", "cat-file", "-e", f"HEAD:{cli.V10_EVIDENCE_PATH}"],
+            cwd=root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        ).returncode
+        == 0
+    )
+    result, exit_code = cli._strategy_status(root, verify_data=False)
+    assert result["version"] == "10.0"
+    assert result["route"] == cli.V10_ROUTE
+    assert result["profit_claim_allowed"] is False
+    if not evidence_path.is_file():
+        assert exit_code == 2
+        assert result["status"] == "implementation_pending_results_first_replay"
+        assert result["selected_candidate_id"] is None
+    elif not committed:
+        assert exit_code == 3
+        assert result["status"] == "integrity_mismatch"
+    else:
+        assert exit_code == 0
+        assert result["status"] == "candidate_passed_all_results_first_gates"
+        assert result["selected_candidate_id"] == cli.V10_ROUTE
+
+
+def test_10_0_status_delegates_exact_and_deep_evidence_verification(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = Path(__file__).resolve().parents[2]
+    protocol_target = tmp_path / cli.V10_PROTOCOL_PATH
+    protocol_target.parent.mkdir(parents=True, exist_ok=True)
+    protocol_target.write_bytes((root / cli.V10_PROTOCOL_PATH).read_bytes())
+    evidence = {
+        "status": "candidate_passed_all_results_first_gates",
+        "evidence_class": "fully_exposed_results_first_causal_historical_diagnostic",
+        "selection": {"selected_candidate_id": cli.V10_ROUTE},
+        "periods": {
+            "full": {
+                "metrics": {
+                    "candidate": {"cagr": 0.10, "max_drawdown": -0.25},
+                    "static": {"cagr": 0.08},
+                }
+            }
+        },
+    }
+    evidence["payload_sha256"] = cli._canonical_payload_sha256(evidence)
+    evidence_target = tmp_path / cli.V10_EVIDENCE_PATH
+    evidence_target.parent.mkdir(parents=True, exist_ok=True)
+    evidence_target.write_text(
+        json.dumps(evidence, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    evidence_bytes = evidence_target.read_bytes()
+    calls: list[bool] = []
+    runner = SimpleNamespace(
+        verify_evidence=lambda _value, *, verify_data: calls.append(verify_data)
+    )
+    monkeypatch.setattr(cli, "_load_v10_runner", lambda _root: runner)
+    monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
+    monkeypatch.setattr(
+        cli.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0, stdout=evidence_bytes, stderr=b""
+        ),
+    )
+    result, exit_code = cli._strategy_status_10_0(tmp_path, verify_data=True)
+    assert exit_code == 0
+    assert result["canonical_data_hashes_verified"] is True
+    assert calls == [True]
+
+    runner.verify_evidence = lambda *_args, **_kwargs: (_ for _ in ()).throw(
+        ValueError("forged evidence")
+    )
+    result, exit_code = cli._strategy_status_10_0(tmp_path, verify_data=False)
+    assert exit_code == 3
+    assert result["status"] == "integrity_mismatch"
+    assert any("forged evidence" in check.get("error", "") for check in result["checks"])
 
 
 def test_8_0_real_execution_failure_receipt_has_valid_shallow_status(
@@ -628,7 +715,7 @@ def test_default_strategy_status_reports_the_9_0_preclosure_state(
     monkeypatch.setattr(cli, "_v9_require_head_ci", lambda _root: "a" * 40)
     _mock_v9_preclosure_readiness(monkeypatch)
 
-    result, exit_code = cli._strategy_status(root, verify_data=False)
+    result, exit_code = cli._strategy_status(root, verify_data=False, release="9.0")
 
     assert exit_code == 0
     assert result["status"] == "implementation_ready_for_preselection_closure"
@@ -649,7 +736,7 @@ def test_default_preclosure_status_does_not_claim_dirty_tree_is_ready(
     monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: False)
     _mock_v9_preclosure_readiness(monkeypatch)
 
-    result, exit_code = cli._strategy_status(root, verify_data=False)
+    result, exit_code = cli._strategy_status(root, verify_data=False, release="9.0")
 
     assert exit_code == 2
     assert result["status"] == "implementation_pending_clean_commit"
@@ -749,7 +836,7 @@ def test_default_preclosure_status_requires_pushed_successful_ci(
         lambda _root: (_ for _ in ()).throw(RuntimeError("push CI missing")),
     )
 
-    result, exit_code = cli._strategy_status(root, verify_data=False)
+    result, exit_code = cli._strategy_status(root, verify_data=False, release="9.0")
 
     assert exit_code == 3
     assert result["status"] == "integrity_mismatch"

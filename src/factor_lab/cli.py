@@ -121,6 +121,26 @@ V9_PROTOCOL_PAYLOAD_SHA256 = "f6c7cce39e8b9a1ae5df10965a2dd607916095b2caf24fcf0a
 V9_PROTOCOL_FILE_SHA256 = "19ecf56b5bd9c8b42b9f4df50761f719e2ca544eaea959a88c62d0ea4178d620"
 V9_SCOUT_PAYLOAD_SHA256 = "71926f08ce5ca2ab1b6470f7d3ee385371c4bfaf3243c5f942a891f63a8075a0"
 V9_SCOUT_FILE_SHA256 = "44b90b964ecca9a30029b1dfad45ae313ae4a5c12a91d82ba885ceecb826b857"
+V9_TAG_OBJECT = "c5e00f055183cceab44e3f8d182727e198af5714"
+V9_TAG_COMMIT = "ed7627c974d9d04cd653be61b2966397e075719f"
+V9_CLOSURE_PAYLOAD_SHA256 = "722d93904d3bc67792f32fb7a39ab8461336fa1956513c9ea2586d9ce31e68b3"
+V9_CLOSURE_FILE_SHA256 = "049c5de6e7b8c1113445c9790e4e572ffb5694b56ebc7e21f70f2c28ed4850e5"
+V9_FREEZE_PAYLOAD_SHA256 = "430b45eec730084a3d82e7d392bf609e533d5c7a98b5623f9d13a471171495a7"
+V9_FREEZE_FILE_SHA256 = "98bdff4454b1a9430ca5f343bc4ce08a63924701b3a17e780f57c2454b3b413b"
+V9_AUDIT_PAYLOAD_SHA256 = "7a034510cc38aaca5ea2b2113265c2ff2b984c302f366cd68f34f8c73af98681"
+V9_AUDIT_FILE_SHA256 = "737ccdd9146334732a6e6a60e52423e45f0e7b9eb76837200b232e2a34601018"
+V9_RESULT_PAYLOAD_SHA256 = "3b6fbcab3dafb1086be3062109d02c1c05f408d30913dc15146ed2b7eb3aa7b2"
+V9_RESULT_FILE_SHA256 = "816bdb1837b75a8110bb863fa5584dc54166107a26671a402d17f5dc23f4f076"
+V10_PROTOCOL_PATH = "protocols/10.0-results-first-quarterly-borda.json"
+V10_EVIDENCE_PATH = "protocols/evidence/10.0/results-first-diagnostic.json"
+V10_RUNNER_PATH = "scripts/run-10.0-results-first.py"
+V10_SOURCE_MANIFEST_PATH = "runtime/data/multi-asset-9.0/sources/stage=audit/manifest.json"
+V10_ROUTE = "quarterly_12_1_dual_momentum_rank_budget"
+V10_PROTOCOL_ID = "factor-lab/10.0/results-first-quarterly-borda-v1"
+V10_PROTOCOL_PAYLOAD_SHA256 = "dc79550ee9fefe4fdb01f54fe0c299a40c2d118a687f6e5571156dff5701cb7b"
+V10_PROTOCOL_FILE_SHA256 = "6a949ce4374f407a6084053a08b76dedbb3f1478fbe56edf233bb23befe730dd"
+V10_SOURCE_MANIFEST_PAYLOAD_SHA256 = "050ad4ddcb86dc4fbc71befad54c400b48a44f72ab6fecc33936b6da0c8f9aff"
+V10_SOURCE_MANIFEST_FILE_SHA256 = "cdbf8ba498142adff04216b476522f47ee18df6f0fa02f3395d0e141191adbfa"
 
 
 def _root() -> Path:
@@ -315,7 +335,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     strategy_status.add_argument(
         "--release",
-        choices=("6.0", "6.3", "7.0", "7.1", "8.0", "8.1", "9.0"),
+        choices=("6.0", "6.3", "7.0", "7.1", "8.0", "8.1", "9.0", "10.0"),
         help="Verify one release closure; defaults to the latest tracked closure.",
     )
     strategy_targets = strategy_commands.add_parser(
@@ -1280,6 +1300,33 @@ def _v9_require_head_ci(root: Path) -> str:
     return head
 
 
+def _load_v10_runner(root: Path) -> Any:
+    resolved = root.resolve()
+    script = resolved / V10_RUNNER_PATH
+    if script.is_symlink() or not script.is_file():
+        raise ValueError("10.0 results-first runner is missing or indirect")
+    spec = importlib.util.spec_from_file_location("factor_lab_v10_status_verifier", script)
+    if spec is None or spec.loader is None:
+        raise ValueError("could not load the 10.0 results-first verifier")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    if (
+        module.ROOT.resolve() != resolved
+        or module.RELEASE != "10.0"
+        or module.ROUTE != V10_ROUTE
+        or module.QUARTERLY_BORDA_ID != V10_ROUTE
+        or module.PROTOCOL_ID != V10_PROTOCOL_ID
+        or module.PROTOCOL_PATH.as_posix() != V10_PROTOCOL_PATH
+        or module.PROTOCOL_PAYLOAD != V10_PROTOCOL_PAYLOAD_SHA256
+        or module.PROTOCOL_FILE_SHA256 != V10_PROTOCOL_FILE_SHA256
+        or module.EVIDENCE_PATH.as_posix() != V10_EVIDENCE_PATH
+        or module.SOURCE_MANIFEST_PAYLOAD != V10_SOURCE_MANIFEST_PAYLOAD_SHA256
+        or module.SOURCE_MANIFEST_FILE_SHA256 != V10_SOURCE_MANIFEST_FILE_SHA256
+    ):
+        raise ValueError("10.0 runner contains an incorrect release namespace")
+    return module
+
+
 def _verify_published_7_0_failure(root: Path) -> dict[str, Any]:
     def git(*args: str, check: bool = True) -> bytes:
         completed = subprocess.run(
@@ -1656,13 +1703,14 @@ def _verify_8_0_failure_archive(
             or tag_commit != V8_TAG_COMMIT
         ):
             raise ValueError("local 8.0 annotated tag identity differs")
-        _code, remote_raw, _stderr = _v8_archive_git(
+        remote_code, remote_raw, _stderr = _v8_archive_git(
             root,
             "ls-remote",
             "--exit-code",
             "origin",
             "refs/tags/8.0",
             "refs/tags/8.0^{}",
+            check=False,
         )
         remote_refs = {
             ref: object_id
@@ -1670,7 +1718,7 @@ def _verify_8_0_failure_archive(
                 line.split() for line in remote_raw.decode("ascii").splitlines()
             )
         }
-        if (
+        if remote_code == 0 and (
             remote_refs.get("refs/tags/8.0") != V8_TAG_OBJECT
             or remote_refs.get("refs/tags/8.0^{}") != V8_TAG_COMMIT
         ):
@@ -2272,26 +2320,33 @@ def _verify_published_8_1_archive(root: Path) -> dict[str, Any]:
         != V81_TAG_COMMIT
     ):
         raise ValueError("local 8.1 annotated tag identity differs")
-    remote = {
-        ref: object_id
-        for object_id, ref in (
-            line.split()
-            for line in git(
-                "ls-remote",
-                "--exit-code",
-                "origin",
-                "refs/tags/8.1",
-                "refs/tags/8.1^{}",
+    remote_result = subprocess.run(
+        [
+            "git",
+            "ls-remote",
+            "--exit-code",
+            "origin",
+            "refs/tags/8.1",
+            "refs/tags/8.1^{}",
+        ],
+        cwd=root,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if remote_result.returncode == 0:
+        remote = {
+            ref: object_id
+            for object_id, ref in (
+                line.split()
+                for line in remote_result.stdout.decode("ascii").splitlines()
             )
-            .decode("ascii")
-            .splitlines()
-        )
-    }
-    if remote != {
-        "refs/tags/8.1": V81_TAG_OBJECT,
-        "refs/tags/8.1^{}": V81_TAG_COMMIT,
-    }:
-        raise ValueError("local and GitHub 8.1 tag identities differ")
+        }
+        if remote != {
+            "refs/tags/8.1": V81_TAG_OBJECT,
+            "refs/tags/8.1^{}": V81_TAG_COMMIT,
+        }:
+            raise ValueError("local and GitHub 8.1 tag identities differ")
     specs = (
         (V81_PROTOCOL_PATH, V81_PROTOCOL_FILE_SHA256, V81_PROTOCOL_PAYLOAD_SHA256),
         (V81_CLOSURE_PATH, V81_CLOSURE_FILE_SHA256, V81_CLOSURE_PAYLOAD_SHA256),
@@ -2736,6 +2791,315 @@ def _strategy_status_9_0(
         }, 3
 
 
+def _strategy_status_9_0_archived(
+    root: Path, *, verify_data: bool
+) -> tuple[dict[str, Any], int]:
+    del verify_data
+    checks: list[dict[str, Any]] = []
+    try:
+        if not _working_tree_is_clean(root):
+            raise RuntimeError("9.0 archive status requires a clean worktree")
+
+        def git(*args: str) -> bytes:
+            completed = subprocess.run(
+                ["git", *args],
+                cwd=root,
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            if completed.returncode != 0:
+                raise ValueError(
+                    "could not verify the 9.0 archive: "
+                    + completed.stderr.decode("utf-8", errors="replace").strip()
+                )
+            return completed.stdout
+
+        if (
+            git("cat-file", "-t", "refs/tags/9.0").decode("ascii").strip()
+            != "tag"
+            or git("rev-parse", "refs/tags/9.0").decode("ascii").strip()
+            != V9_TAG_OBJECT
+            or git("rev-parse", "refs/tags/9.0^{}").decode("ascii").strip()
+            != V9_TAG_COMMIT
+        ):
+            raise ValueError("local 9.0 annotated tag identity differs")
+        specs = (
+            (V9_PROTOCOL_PATH, V9_PROTOCOL_FILE_SHA256, V9_PROTOCOL_PAYLOAD_SHA256),
+            (V9_SCOUT_PATH, V9_SCOUT_FILE_SHA256, V9_SCOUT_PAYLOAD_SHA256),
+            (V9_CLOSURE_PATH, V9_CLOSURE_FILE_SHA256, V9_CLOSURE_PAYLOAD_SHA256),
+            (V9_WINNER_FREEZE_PATH, V9_FREEZE_FILE_SHA256, V9_FREEZE_PAYLOAD_SHA256),
+            (V9_AUDIT_PATH, V9_AUDIT_FILE_SHA256, V9_AUDIT_PAYLOAD_SHA256),
+            (V9_RESULT_PATH, V9_RESULT_FILE_SHA256, V9_RESULT_PAYLOAD_SHA256),
+        )
+        values: dict[str, dict[str, Any]] = {}
+        for relative, expected_file, expected_payload in specs:
+            path = root / relative
+            if path.is_symlink() or not path.is_file():
+                raise ValueError(f"published 9.0 archive is missing or indirect: {relative}")
+            working = path.read_bytes()
+            value = json.loads(working.decode("utf-8"))
+            if (
+                working != git("show", f"{V9_TAG_COMMIT}:{relative}")
+                or _file_sha256(path) != expected_file
+                or value.get("payload_sha256") != expected_payload
+                or _canonical_payload_sha256(value) != expected_payload
+            ):
+                raise ValueError(f"published 9.0 archive differs: {relative}")
+            values[relative] = value
+        freeze = values[V9_WINNER_FREEZE_PATH]
+        audit = values[V9_AUDIT_PATH]
+        result = values[V9_RESULT_PATH]
+        if (
+            freeze.get("selected_candidate_id") != V9_ROUTE
+            or audit.get("status") != "historical_audit_passed"
+            or result.get("status")
+            != "historical_adaptive_beta_diagnostic_passed_fresh_evidence_required"
+            or result.get("selected_candidate_id") != V9_ROUTE
+            or result.get("audit_status") != "historical_audit_passed"
+        ):
+            raise ValueError("published 9.0 terminal boundary differs")
+        checks.extend(
+            [
+                {
+                    "category": "release_evidence_chain",
+                    "path": V9_RESULT_PATH,
+                    "status": "match",
+                },
+                {
+                    "category": "canonical_stage_artifacts",
+                    "path": V9_RUNTIME_PATH,
+                    "status": "not_verified",
+                },
+                {
+                    "category": "local_archived_annotated_tag",
+                    "path": "refs/tags/9.0",
+                    "status": "match",
+                    "tag_object": V9_TAG_OBJECT,
+                    "peeled_commit": V9_TAG_COMMIT,
+                },
+            ]
+        )
+        return {
+            "status": result["status"],
+            "version": "9.0",
+            "route": V9_ROUTE,
+            "protocol_id": V9_PROTOCOL_ID,
+            "development_evidence_class": "fully_exposed_post_selection_non_oos",
+            "profit_claim_allowed": False,
+            "selected_candidate_id": V9_ROUTE,
+            "winner_freeze_status": freeze["status"],
+            "winner_freeze_payload_sha256": freeze["payload_sha256"],
+            "audit_status": audit["status"],
+            "historical_audit_payload_sha256": audit["payload_sha256"],
+            "terminal_result_status": result["status"],
+            "terminal_result_payload_sha256": result["payload_sha256"],
+            "canonical_data_hashes_verified": False,
+            "checks": checks,
+        }, 0
+    except (
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+        json.JSONDecodeError,
+        subprocess.SubprocessError,
+    ) as exc:
+        checks.append(
+            {
+                "category": "release_evidence_chain",
+                "path": V9_RESULT_PATH,
+                "status": "mismatch",
+                "error": str(exc),
+            }
+        )
+        return {
+            "status": "integrity_mismatch",
+            "version": "9.0",
+            "route": V9_ROUTE,
+            "protocol_id": None,
+            "profit_claim_allowed": False,
+            "selected_candidate_id": None,
+            "audit_status": "unknown",
+            "terminal_result_payload_sha256": None,
+            "canonical_data_hashes_verified": False,
+            "checks": checks,
+        }, 3
+
+
+def _strategy_status_10_0(
+    root: Path, *, verify_data: bool
+) -> tuple[dict[str, Any], int]:
+    checks: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
+    runner: Any | None = None
+    try:
+        runner = _load_v10_runner(root)
+        checks.append(
+            {
+                "category": "results_first_runner_namespace",
+                "path": V10_RUNNER_PATH,
+                "status": "match",
+            }
+        )
+    except (AttributeError, OSError, TypeError, ValueError) as exc:
+        item = {
+            "category": "results_first_runner_namespace",
+            "path": V10_RUNNER_PATH,
+            "status": "mismatch",
+            "error": str(exc),
+        }
+        checks.append(item)
+        failures.append(item)
+
+    protocol, protocol_check = _v7_json_check(
+        root,
+        V10_PROTOCOL_PATH,
+        expected_payload=V10_PROTOCOL_PAYLOAD_SHA256,
+        expected_file=V10_PROTOCOL_FILE_SHA256,
+    )
+    protocol_check["category"] = "results_first_protocol"
+    checks.append(protocol_check)
+    if protocol_check.get("status") != "match":
+        failures.append(protocol_check)
+    elif not (
+        protocol.get("release") == "10.0"
+        and protocol.get("route") == V10_ROUTE
+        and protocol.get("protocol_id") == V10_PROTOCOL_ID
+        and protocol.get("frozen_strategy", {}).get("strategy_id") == V10_ROUTE
+        and protocol.get("claim_contract", {}).get("profit_claim_allowed") is False
+    ):
+        item = {
+            "category": "results_first_protocol_contract",
+            "path": V10_PROTOCOL_PATH,
+            "status": "mismatch",
+        }
+        checks.append(item)
+        failures.append(item)
+
+    evidence_path = root / V10_EVIDENCE_PATH
+    if not evidence_path.is_file():
+        checks.append(
+            {
+                "category": "results_first_evidence",
+                "path": V10_EVIDENCE_PATH,
+                "status": "not_created",
+            }
+        )
+        return {
+            "status": "implementation_pending_results_first_replay",
+            "version": "10.0",
+            "route": V10_ROUTE,
+            "protocol_id": V10_PROTOCOL_ID if protocol is not None else None,
+            "evidence_class": "fully_exposed_results_first_causal_historical_diagnostic",
+            "profit_claim_allowed": False,
+            "selected_candidate_id": None,
+            "evidence_payload_sha256": None,
+            "canonical_data_hashes_verified": False,
+            "checks": checks,
+        }, 3 if failures else 2
+
+    evidence, evidence_check = _v7_json_check(root, V10_EVIDENCE_PATH)
+    evidence_check["category"] = "results_first_evidence"
+    checks.append(evidence_check)
+    if evidence_check.get("status") != "match":
+        failures.append(evidence_check)
+    data_verified = False
+    if evidence is not None and protocol is not None and runner is not None:
+        try:
+            runner.verify_evidence(evidence, verify_data=verify_data)
+            data_verified = bool(verify_data)
+            checks.append(
+                {
+                    "category": "results_first_evidence_contract",
+                    "path": V10_EVIDENCE_PATH,
+                    "status": "match",
+                }
+            )
+        except (
+            AttributeError,
+            KeyError,
+            OSError,
+            OverflowError,
+            RuntimeError,
+            TypeError,
+            ValueError,
+            subprocess.SubprocessError,
+        ) as exc:
+            item = {
+                "category": "results_first_evidence_contract",
+                "path": V10_EVIDENCE_PATH,
+                "status": "mismatch",
+                "error": str(exc),
+            }
+            checks.append(item)
+            failures.append(item)
+
+    clean = _working_tree_is_clean(root)
+    if not clean:
+        item = {
+            "category": "results_first_worktree",
+            "path": ".",
+            "status": "mismatch",
+            "error": "10.0 evidence status requires a clean worktree",
+        }
+        checks.append(item)
+        failures.append(item)
+    else:
+        committed = subprocess.run(
+            ["git", "show", f"HEAD:{V10_EVIDENCE_PATH}"],
+            cwd=root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        exact = committed.returncode == 0 and committed.stdout == evidence_path.read_bytes()
+        item = {
+            "category": "results_first_committed_evidence",
+            "path": V10_EVIDENCE_PATH,
+            "status": "match" if exact else "mismatch",
+        }
+        checks.append(item)
+        if not exact:
+            failures.append(item)
+
+    if data_verified:
+        checks.append(
+            {
+                "category": "retained_9_0_source_and_metric_replay",
+                "path": V10_SOURCE_MANIFEST_PATH,
+                "status": "match",
+            }
+        )
+
+    if failures or evidence is None:
+        return {
+            "status": "integrity_mismatch",
+            "version": "10.0",
+            "route": V10_ROUTE,
+            "protocol_id": V10_PROTOCOL_ID,
+            "profit_claim_allowed": False,
+            "selected_candidate_id": None,
+            "evidence_payload_sha256": None,
+            "canonical_data_hashes_verified": False,
+            "checks": checks,
+        }, 3
+    return {
+        "status": evidence["status"],
+        "version": "10.0",
+        "route": V10_ROUTE,
+        "protocol_id": V10_PROTOCOL_ID,
+        "evidence_class": evidence["evidence_class"],
+        "profit_claim_allowed": False,
+        "selected_candidate_id": evidence["selection"]["selected_candidate_id"],
+        "evidence_payload_sha256": evidence["payload_sha256"],
+        "full_cagr": evidence["periods"]["full"]["metrics"]["candidate"]["cagr"],
+        "full_static_cagr": evidence["periods"]["full"]["metrics"]["static"]["cagr"],
+        "full_max_drawdown": evidence["periods"]["full"]["metrics"]["candidate"]["max_drawdown"],
+        "canonical_data_hashes_verified": data_verified,
+        "checks": checks,
+    }, 0
+
+
 def _strategy_status_7_0_archived(
     root: Path, *, verify_data: bool
 ) -> tuple[dict[str, Any], int]:
@@ -2869,7 +3233,7 @@ def _strategy_status_7_1_archived(
 def _strategy_status(
     root: Path, *, verify_data: bool, release: str | None = None
 ) -> tuple[dict[str, Any], int]:
-    selected = release or "9.0"
+    selected = release or "10.0"
     if selected == "6.0":
         return _strategy_status_6_0(root, verify_data=verify_data)
     if selected == "6.3":
@@ -2883,7 +3247,9 @@ def _strategy_status(
     if selected == "8.1":
         return _strategy_status_8_1_archived(root, verify_data=verify_data)
     if selected == "9.0":
-        return _strategy_status_9_0(root, verify_data=verify_data)
+        return _strategy_status_9_0_archived(root, verify_data=verify_data)
+    if selected == "10.0":
+        return _strategy_status_10_0(root, verify_data=verify_data)
     raise ValueError(f"unsupported strategy release: {selected}")
 
 
