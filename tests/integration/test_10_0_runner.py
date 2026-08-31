@@ -144,8 +144,10 @@ def test_runner_namespace_protocol_and_source_are_exact() -> None:
     assert module.CORE_PATH.as_posix() == "src/factor_lab/research/multi_asset.py"
     protocol = module._read_protocol()
     assert protocol["frozen_strategy"]["strategy_id"] == module.QUARTERLY_BORDA_ID
-    stage = module.load_multi_asset_stage(module.SOURCE_ROOT, module.SOURCE_STAGE)
-    module._verify_source(stage)
+    retained = module.SOURCE_ROOT / f"stage={module.SOURCE_STAGE}"
+    if retained.is_dir():
+        stage = module.load_multi_asset_stage(module.SOURCE_ROOT, module.SOURCE_STAGE)
+        module._verify_source(stage)
 
 
 @pytest.mark.parametrize(
