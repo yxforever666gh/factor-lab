@@ -11,9 +11,11 @@ D2（2020–2022）都是 fully exposed development，不是独立 OOS。入选�
 另一条三专家 exponentiated-gradient 在线混合因 base/stress Sharpe 均未胜静态、三个两年分段仅一个
 跑赢现金而被明确拒绝，不进入 9.0 registry。
 
-截至协议与实现冻结，2023-01-03 之后的 multi-asset audit 仍未读取或创建。9.0 只有在 fully exposed
-development exact replay 的 D1/D2、base/stress、绝对与相对稳定门全部通过并提交 non-null freeze 后，
-才允许首次打开该阶段；任何历史通过都不允许 alpha、盈利、稳定未来收益或投资建议声明。
+在 development exact replay 的 D1/D2、base/stress、绝对与相对稳定门全部通过，且 non-null freeze
+单独提交并由 CI 验证后，9.0 才首次打开 2023-01-03 至 2026-08-28 公共历史 audit。候选 base CAGR
+6.665%、Sharpe 2.834、最大回撤 -1.38%，现金超额 5.248pp，3/3 个完整年度为正，audit 通过；但同段
+static CAGR 为 13.644%，高出候选约 6.979pp。结论是“高度债券化的低波动历史配置通过既定门”，不是
+alpha 或稳定盈利。终态仍明确要求至少 252 个新交易日和 12 次新月度执行。
 
 已发布的 6.3 corrective replay 证明数值修复有效，但也给出正式 null：扩大 ADV20 机会集的两个
 challenger 在 train 都是 `0/10` offset 相对 control 为正，validation 与 audit 未打开，终态为
@@ -147,6 +149,12 @@ Scout 中 D1 base CAGR 4.893%、Sharpe 1.398、最大回撤 -4.25%，现金超�
 CAGR 3.258%、Sharpe 0.939、最大回撤 -4.19%，现金超额 1.259pp。两段的 base/stress 均通过已冻结
 绝对门，并在 Sharpe、回撤和正年份比例上不差于同成本 static；D1 允许牺牲 static CAGR，因为协议
 没有 candidate-minus-static CAGR 门，但仍严格要求跑赢可投资现金。这些数字只是选择后披露。
+
+首次未打开的 2023–2026 audit 已按顺序完成。候选 base/stress CAGR 为 6.665% / 6.614%，Sharpe
+为 2.834 / 2.816，最大回撤为 -1.38% / -1.36%，3/3 个完整年度为正；base/stress 均严格跑赢匹配现金，
+六角色执行、容量和会计门全部通过。与此同时 static base/stress CAGR 为 13.644% / 13.591%，所以
+9.0 的通过来自风险调整收益和回撤改善，而不是绝对收益更高。terminal result 是
+`historical_adaptive_beta_diagnostic_passed_fresh_evidence_required`，仍禁止 alpha、盈利或投资建议声明。
 
 正式顺序：
 

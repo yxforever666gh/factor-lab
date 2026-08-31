@@ -17,7 +17,7 @@
   8.0 固定预算除以波动率并归一；现金目标为零。任一资产样本不足或波动无效时整组回退静态预算，
   不增加 cap、目标波动、杠杆、band、参数网格、第二模型或 runner-up。
 - 新增 9.0 preprotocol scout、protocol、preselection closure、retained-8.1 development exact replay、
-  create-only winner freeze、首次未打开 audit 与 terminal result 链。每阶段固定六角色、每角色五类
+  create-only winner freeze、首次在已提交 non-null freeze 后打开的 audit 与 terminal result 链。每阶段固定六角色、每角色五类
   artifact；stress 必须复用 base targets，target prefix、执行、会计与全部 Parquet 可 exact replay。
 - CLI 默认 `strategy status` 迁移到 9.0，并映射 winner freeze、audit 与 terminal result。显式
   `--release 8.1` 改为只核验已发布 annotated tag 及 protocol/closure/reclassification/freeze/result
@@ -42,7 +42,17 @@
   但仍要求每段严格跑赢现金。该集中度原样披露，不能在看过结果后增加 cap。
 - 三专家 exponentiated-gradient prototype 平均约 82.22% 回到 strategic beta，base/stress Sharpe
   分别比 static 低约 0.0012/0.0031，三个两年 fold 仅一个现金超额为正，因此拒绝 formalization；
-  不允许把它作为 runner-up。2023–2026 audit 仍未打开。
+  不允许把它作为 runner-up。
+- 2023-01-03 至 2026-08-28 的首次未打开公共历史 audit 通过：candidate base CAGR 6.665%、
+  Sharpe 2.834、最大回撤 -1.38%，现金超额 5.248pp，3/3 个完整年度为正；16bp stress CAGR
+  6.614%、Sharpe 2.816、最大回撤 -1.36%。但同段 static base CAGR 为 13.644%，高出候选约
+  6.979pp；候选胜在 Sharpe 与回撤，不是更高收益。终态为
+  `historical_adaptive_beta_diagnostic_passed_fresh_evidence_required`，不能称为 alpha 或稳定盈利。
+- 9.0 closure / winner freeze / audit / result payload 分别为
+  `722d93904d3bc67792f32fb7a39ab8461336fa1956513c9ea2586d9ce31e68b3`、
+  `430b45eec730084a3d82e7d392bf609e533d5c7a98b5623f9d13a471171495a7`、
+  `7a034510cc38aaca5ea2b2113265c2ff2b984c302f366cd68f34f8c73af98681` 和
+  `3b6fbcab3dafb1086be3062109d02c1c05f408d30913dc15146ed2b7eb3aa7b2`。
 
 ### Known limitations
 
