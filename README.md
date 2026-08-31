@@ -1,9 +1,16 @@
-# Factor Lab 8.0
+# Factor Lab 8.1
 
-Factor Lab 8.0 是一条固定跨资产战略 beta 研究链：原始交易所价格与现金分红 → 固定资本预算 →
-月末信号/下一开盘成交 → 全成本逐日账户 → disclosed train calibration / validation / audit。
-它不再把 timing、selector 或 allocator 当作收益来源，只检验一套固定政策能否在现金超额、压力成本、
-风险、换手、容量和会计底线上站得住。
+Factor Lab 8.1 是 8.0 固定跨资产战略 beta 路线的透明纠错小版本，不更换资产、权重、目标、成本、
+日期、收益定义或经济阈值。唯一变化是把“政策自身”的换手、成交满足率和容量聚合域限定为
+`primary + stress`；`cash + cash_stress` 仍必须完整披露、参与现金超额收益计算，并与前两者共同通过
+四角色会计有效性检查。
+
+这项修正是在看到 8.0 train 唯一失败项以后选择的，所以明确属于 post-hoc reclassification，不能
+当作独立 train，也不能写成新增 alpha。8.1 禁止重新查询、重建或重跑 2015–2019 train；经济指标
+只能逐字段取自 annotated `8.0` tag 的失败收据，但会只读深验该收据绑定的 retained artifacts 来证明
+执行与会计 validity。该 8.0 runtime 必须保留到 8.1 validation/audit/finalize 全部完成，之后才可按
+发布归档规则清理。截至 8.1 协议冻结和本次实现提交，2020–2022 validation 与 2023–2026 audit 仍未
+打开；没有通过、盈利或稳定未来收益结论。
 
 已发布的 6.3 corrective replay 证明数值修复有效，但也给出正式 null：扩大 ADV20 机会集的两个
 challenger 在 train 都是 `0/10` offset 相对 control 为正，validation 与 audit 未打开，终态为
@@ -124,6 +131,41 @@ label，并再次验证 availability 必须恰好是 `report_date` 后第一个�
 拆送股稳健性对照）、FY1 相对 FY0 的预测增长，以及实际公告相对公告前共识的 earnings surprise。
 coverage/initiations、dispersion 与 active-reviser breadth 先只做诊断，不再建 selector。
 
+## 8.1 当前方向：政策运行指标重分类
+
+8.1 逐字节绑定已发布的 annotated `8.0` tag（tag object
+`3fcbd73f7497b074e484ce7793e2d3603bf5a177`，peeled commit
+`78aba86bf4e741699afca1acd1470493785fd952`）及其
+`selection_inconclusive_execution_failure` 收据。Train 不创建新的 8.1 source、binding、evaluation
+或 runtime；`train-reclassification.json` 的经济 role metrics 只能来自该发布收据，同时只读深验
+收据绑定的 retained 8.0 train artifacts，以提取 missing-open、capacity、负现金与杠杆 validity。
+它禁止重新查询、重建、重跑 train，也禁止从 artifacts 重算经济指标：
+
+- 收益、Sharpe、回撤、完整正年份和现金超额仍分别使用 `primary/stress/cash/cash_stress` 的原值；
+- 年化换手取 `primary, stress` 最大值，成交满足率取二者最小值，容量受限比例取二者最大值；
+- NAV 会计误差仍取四角色最大值，现金角色的执行诊断不得删除或隐藏。
+
+协议见
+[protocols/8.1-policy-operational-metric-reclassification.json](protocols/8.1-policy-operational-metric-reclassification.json)。
+正式顺序为：
+
+```powershell
+python scripts/build-8.1-preselection-closure.py
+# closure 单独提交、推送且精确提交 CI 全绿后；核验收据与其绑定的 retained artifacts，不重跑 train
+python scripts/run-multi-asset-evidence.py --mode reclassify
+# reclassification 单独提交、推送且 CI 全绿后；仅 pass 才能首次打开 validation
+python scripts/run-multi-asset-evidence.py --mode validation
+# 仅 non-null freeze 单独提交、推送且 CI 全绿后
+python scripts/run-multi-asset-evidence.py --mode audit
+# null freeze 或 audit 单独提交、推送且 CI 全绿后
+python scripts/run-multi-asset-evidence.py --mode finalize
+```
+
+`python -m factor_lab.cli strategy status` 默认核验 8.1，并分别显示 reclassification、freeze、audit、
+result 状态；`--release 8.0` 始终核验上述不可变失败档案。即使后续 validation/audit 全部通过，含义也
+只限这六只固定 ETF 的公开历史战略 beta 诊断，不能推出 alpha、未来稳定盈利或投资建议；仍需至少
+252 个新交易日和 12 次新月度执行。
+
 ## 8.0 归档结论：固定战略资本预算
 
 唯一政策 `static_risk_budget` 每月末固定目标为：A 股 30%、港股 10%、美股 10%、黄金 20%、
@@ -137,7 +179,9 @@ non-null freeze 后，才允许打开 2023–2026 audit。三个阶段使用同�
 不低于 -25%、完整正年份比例 ≥ 50%；16bp 压力下 Sharpe ≥ 0.25 且仍为正现金超额；年化换手 ≤ 1、
 成交满足率 ≥ 99%、容量受限请求 ≤ 1%、会计误差 ≤ `1e-8` 元。
 
-协议见 [protocols/8.0-static-capital-budget.json](protocols/8.0-static-capital-budget.json)。正式顺序：
+协议见 [protocols/8.0-static-capital-budget.json](protocols/8.0-static-capital-budget.json)。下列是 8.0
+当时的正式顺序，只能在 checkout `8.0` tag 的归档 worktree 中重现；当前 `main` runner 已迁移到
+8.1：
 
 ```powershell
 python scripts/build-8.0-preselection-closure.py
@@ -159,9 +203,9 @@ python scripts/run-multi-asset-evidence.py --mode finalize
 [execution-failure.json](protocols/evidence/8.0/execution-failure.json) 把 8.0 归档为
 `selection_inconclusive_execution_failure`。Validation/audit 从未打开。
 
-同 release 不会重跑。若沿用该经济路线，8.1 只允许把 policy admission 的 turnover/fill/capacity
-聚合域限定为 primary+stress；现金比较器收益、完整执行诊断、四角色会计有效性，以及全部资产、权重、
-成本、日期和经济阈值保持不变。这个修正是在看过 8.0 train failure 后提出，必须标为 post-hoc
+同 release 不会重跑。后继 8.1 只把 policy admission 的 turnover/fill/capacity 聚合域限定为
+primary+stress；现金比较器收益、完整执行诊断、四角色会计有效性，以及全部资产、权重、成本、日期
+和经济阈值保持不变。这个修正是在看过 8.0 train failure 后提出，明确标为 post-hoc
 reclassification，不能伪装成独立 train。
 
 即使 validation/audit 全部通过，也只表示这六只固定 ETF 的公开历史战略 beta 诊断通过；不等于
@@ -222,7 +266,7 @@ fail closed。Selection 是一次性的：运行前整个 7.1 runtime 必须不�
 [protocols/7.1-corrective-amendment-1.json](protocols/7.1-corrective-amendment-1.json)。
 
 7.1 正式流程如下；这是归档重现说明，只能在 checkout `7.1` tag 的独立 worktree 中运行，
-当前 `main` 的 runner 已迁移到 8.0。各步仍须逐步提交、推送并等待精确提交 CI 通过：
+当前 `main` 的 runner 已迁移到 8.1。各步仍须逐步提交、推送并等待精确提交 CI 通过：
 
 ```powershell
 # 仅限已 checkout 7.1 tag 的独立归档 worktree

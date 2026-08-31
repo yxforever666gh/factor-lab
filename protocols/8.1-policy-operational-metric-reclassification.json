@@ -1,0 +1,321 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_research_protocol",
+  "protocol_id": "factor-lab/8.1/policy-operational-metric-reclassification-v1",
+  "release": "8.1",
+  "direction_change": false,
+  "route": "policy_operational_metric_reclassification",
+  "status": "frozen_after_8_0_train_evaluation_before_8_1_reclassification",
+  "prior_release": {
+    "release": "8.0",
+    "tag": "8.0",
+    "annotated_tag_object": "3fcbd73f7497b074e484ce7793e2d3603bf5a177",
+    "peeled_commit": "78aba86bf4e741699afca1acd1470493785fd952",
+    "protocol": {
+      "path": "protocols/8.0-static-capital-budget.json",
+      "file_sha256": "ac4a6f94cfbbe709c26120bad7499196fa36fc497f366cf445896cd486519abc",
+      "payload_sha256": "801374f58aa5edd66365e0937ed119082559f2950cc1106134a3cdb58e0099e7"
+    },
+    "prevalidation_closure": {
+      "path": "protocols/8.0-release.json",
+      "file_sha256": "8e4fe890efb746c15ae5f0375d8a1dfd85a061172426165af1441d5011bfa97d",
+      "payload_sha256": "7bdd27bc6365c936c7e17736920d5fbf2556608e8b59b0869b3e70b9e61e5de7"
+    },
+    "execution_failure_receipt": {
+      "path": "protocols/evidence/8.0/execution-failure.json",
+      "file_sha256": "6af779495081f6ee391c6388a1e4342b878168b529f8074cf03d9ec2cc50eeaa",
+      "payload_sha256": "751b85c6c2e52b450e9c3549f7f4504af50b634599be4c32e240ee503de9823a",
+      "status": "selection_inconclusive_execution_failure",
+      "classification": "post_evaluation_github_ci_transport_failure"
+    }
+  },
+  "correction_boundary": {
+    "correction_chosen_after_observing_8_0_train_failure": true,
+    "post_hoc_reclassification": true,
+    "original_8_0_failure_record_remains_valid": true,
+    "same_release_retry_allowed": false,
+    "sole_research_correction": "Restrict policy admission turnover, fill and capacity aggregation to primary and stress; keep cash and cash_stress execution diagnostics disclosed, keep four-role accounting validity, and keep every asset, weight, target, return, cost, date and economic threshold unchanged.",
+    "train_market_data_reaccess_allowed": false,
+    "train_source_rebuild_allowed": false,
+    "train_strategy_rerun_allowed": false,
+    "train_artifact_read_allowed": "receipt-bound retained 8.0 artifacts, read-only, for execution-validity extraction and integrity verification only",
+    "train_artifact_metric_recomputation_allowed": false,
+    "train_reclassification_source": "published 8.0 receipt for economic role metrics plus receipt-bound retained 8.0 artifacts for validity extraction only",
+    "validation_market_outcomes_previously_opened": false,
+    "audit_market_outcomes_previously_opened": false,
+    "parameter_weight_asset_cost_date_or_threshold_change_allowed": false,
+    "second_candidate_or_runner_up_allowed": false
+  },
+  "frozen_economic_contract": {
+    "source": {
+      "path": "protocols/8.0-static-capital-budget.json",
+      "file_sha256": "ac4a6f94cfbbe709c26120bad7499196fa36fc497f366cf445896cd486519abc",
+      "payload_sha256": "801374f58aa5edd66365e0937ed119082559f2950cc1106134a3cdb58e0099e7"
+    },
+    "strategy_id": "static_risk_budget",
+    "cash_comparator_id": "cash_only_511880",
+    "unchanged_sections": [
+      "assets",
+      "strategy_registry",
+      "cash_comparator",
+      "inherited_data_execution_contract",
+      "cost_contract",
+      "metric_contract",
+      "shared_absolute_gate",
+      "selection_contract",
+      "survivorship_and_selection_bias",
+      "claim_contract"
+    ],
+    "asset_weights_unchanged": true,
+    "return_metrics_unchanged": true,
+    "cash_excess_definition_unchanged": true,
+    "base_and_stress_costs_unchanged": true,
+    "phase_dates_unchanged": true,
+    "execution_and_accounting_unchanged": true,
+    "economic_thresholds_unchanged": true
+  },
+  "train_reclassification_input": {
+    "source_receipt": {
+      "path": "protocols/evidence/8.0/execution-failure.json",
+      "file_sha256": "6af779495081f6ee391c6388a1e4342b878168b529f8074cf03d9ec2cc50eeaa",
+      "payload_sha256": "751b85c6c2e52b450e9c3549f7f4504af50b634599be4c32e240ee503de9823a"
+    },
+    "phase": "train",
+    "performance_start": "2015-03-02",
+    "performance_end": "2019-12-31",
+    "execution_commit": "644840a4967d69f6acc8903549705370bffdcba1",
+    "run_nonce": "fda16561690f49f98930b44924941bb9",
+    "source_manifest_payload_sha256": "58c0477745dd0afd6e8fad686af5379db00cf2736b25da71fd3a314217052130",
+    "stage_binding_payload_sha256": "d265def3120e676e4cd36f64ccde40da5e785dc3f0c505587e823ceab1bb2870",
+    "evaluation_payload_sha256": "05980be5f07ab6a6dbbcfc235135d6b253aa84d68dbbbca6b993f5d16b422723",
+    "evaluation_file_sha256": "fda32fb62d7fff02d4b84a11c5e6996478fabbd8b39540cadd7d26d012e711bb",
+    "phase_sha256": "ab6e2f46fff90892ff9439e7e5846d3b2014adf92d86a19c28e9a9520e5dcb75",
+    "metrics_sha256": "e9f817e9b730c0807676f2b365aedc927de20915a0c7137cbbfaf70c22160348",
+    "gate_sha256": "68c2e094ec4c1f88212e6521823c43327f48fc0ca0a92820ed0af6d858546278",
+    "role_gate_metrics_sha256": "9bcc5b80025d57837e9330a33953040acf0cecb4185b3e4791146623b3b146ab",
+    "role_metric_sha256": {
+      "primary": "a05994165b12666927a688f52124aff90aa88c9b3a169cb8178dcfa9110595ea",
+      "stress": "b557a24807435edf2d92ef5b4637263486f9a21b51302988afb7b117312345ab",
+      "cash": "a633fdb41c8e70aaa211d4bd5b29af20a6b006e9201e666dd5b89a2f45f22307",
+      "cash_stress": "73c5395def008908eab64c023abeb1d1be634e6709cedd02568b58ef57b04f98"
+    },
+    "historical_summary_sha256": "db6a408bfe1f7e54d099b9affea423f59fc5f363c125fb5d1ccced0eb7451204",
+    "observed_8_0_gate_sha256": "d11d8b4a87828e76d2c9d9b7b634e5bf91bc5398063dc451974948e77620cc16",
+    "observed_8_0_gate_passed": false,
+    "observed_8_0_failed_checks": [
+      "requested_notional_fill_ratio_at_least"
+    ],
+    "role_gate_metrics": {
+      "primary": {
+        "cagr": 0.06908794127071727,
+        "sharpe": 0.7263933657449289,
+        "max_drawdown": -0.17024574801653047,
+        "positive_complete_year_ratio": 0.75,
+        "annualized_turnover": 0.5399265050913324,
+        "requested_notional_fill_ratio": 0.9954253240120514,
+        "capacity_limited_requested_notional_ratio": 0.0,
+        "nav_reconciliation_error": 2.8558133635669947e-10
+      },
+      "stress": {
+        "cagr": 0.0685803846989721,
+        "sharpe": 0.7215851617595691,
+        "max_drawdown": -0.17031479228078583,
+        "positive_complete_year_ratio": 0.75,
+        "annualized_turnover": 0.5399883882230592,
+        "requested_notional_fill_ratio": 0.9951486761513633,
+        "capacity_limited_requested_notional_ratio": 0.0,
+        "nav_reconciliation_error": 3.1104718800634146e-10
+      },
+      "cash": {
+        "cagr": 0.030913196843269874,
+        "sharpe": 8.95454938642539,
+        "max_drawdown": -0.001950437590883758,
+        "positive_complete_year_ratio": 1.0,
+        "annualized_turnover": 0.23810241580339947,
+        "requested_notional_fill_ratio": 0.8965780451229126,
+        "capacity_limited_requested_notional_ratio": 0.0,
+        "nav_reconciliation_error": 2.3283064365386963e-10
+      },
+      "cash_stress": {
+        "cagr": 0.030741448403336147,
+        "sharpe": 8.773866582374954,
+        "max_drawdown": -0.0019519646213583819,
+        "positive_complete_year_ratio": 1.0,
+        "annualized_turnover": 0.2381222886745083,
+        "requested_notional_fill_ratio": 0.8965780451229126,
+        "capacity_limited_requested_notional_ratio": 0.0,
+        "nav_reconciliation_error": 1.4290435501607135e-10
+      }
+    },
+    "historical_summary": {
+      "primary_cagr": 0.06908794127071727,
+      "primary_sharpe": 0.7263933657449289,
+      "primary_max_drawdown": -0.17024574801653047,
+      "stress_16bp_cagr": 0.0685803846989721,
+      "cash_cagr": 0.030913196843269874,
+      "cash_excess_cagr": 0.038174744427447393,
+      "stress_cash_excess_cagr": 0.03783893629563595
+    },
+    "receipt_train_phase_deep_verified_required": true,
+    "economic_role_metrics_source_is_receipt_only": true,
+    "receipt_bound_8_0_runtime_read_required": true,
+    "receipt_bound_artifact_metrics_must_not_replace_or_recompute_receipt_metrics": true,
+    "new_train_market_access_required": false
+  },
+  "metric_role_contract": {
+    "required_roles_exact": [
+      "primary",
+      "stress",
+      "cash",
+      "cash_stress"
+    ],
+    "economic_metrics": {
+      "base_policy_role": "primary",
+      "stress_policy_role": "stress",
+      "base_cash_role": "cash",
+      "stress_cash_role": "cash_stress",
+      "base_cash_excess": "primary.cagr - cash.cagr",
+      "stress_cash_excess": "stress.cagr - cash_stress.cagr",
+      "return_sharpe_drawdown_and_complete_year_values_recomputed_or_changed": false
+    },
+    "policy_operational_metrics": {
+      "roles": [
+        "primary",
+        "stress"
+      ],
+      "annualized_turnover": "maximum across primary and stress",
+      "requested_notional_fill_ratio": "minimum across primary and stress",
+      "capacity_limited_requested_notional_ratio": "maximum across primary and stress",
+      "cash_roles_included": false
+    },
+    "cash_role_diagnostics": {
+      "roles": [
+        "cash",
+        "cash_stress"
+      ],
+      "required_and_disclosed": true,
+      "required_for_cash_excess": true,
+      "excluded_only_from_policy_turnover_fill_and_capacity_aggregation": true,
+      "cash_fill_is_not_policy_fill": true
+    },
+    "accounting_validity": {
+      "roles": [
+        "primary",
+        "stress",
+        "cash",
+        "cash_stress"
+      ],
+      "nav_reconciliation_error": "maximum across all four roles",
+      "cash_roles_included": true
+    }
+  },
+  "shared_absolute_gate": {
+    "base": {
+      "net_cagr_strictly_positive": true,
+      "net_sharpe_at_least": 0.3,
+      "daily_max_drawdown_at_least": -0.25,
+      "positive_complete_year_ratio_at_least": 0.5,
+      "cash_excess_cagr_strictly_positive": true
+    },
+    "stress_16bp": {
+      "net_cagr_strictly_positive": true,
+      "net_sharpe_at_least": 0.25,
+      "daily_max_drawdown_at_least": -0.25,
+      "positive_complete_year_ratio_at_least": 0.5,
+      "cash_excess_cagr_strictly_positive": true
+    },
+    "operational": {
+      "annualized_turnover_at_most": 1.0,
+      "requested_notional_fill_ratio_at_least": 0.99,
+      "capacity_limited_requested_notional_ratio_at_most": 0.01,
+      "nav_reconciliation_error_at_most": 1e-8
+    }
+  },
+  "execution_validity_hard_fail": {
+    "applies_before_gate_classification": true,
+    "required_role_set_must_match_exactly": true,
+    "artifact_set_complete_for_every_newly_executed_role": true,
+    "blocked_missing_open_trade_count_must_be_exact_nonnegative_integer": true,
+    "blocked_missing_open_trade_count_is_hard_failure": false,
+    "blocked_capacity_trade_count_must_be_exact_nonnegative_integer": true,
+    "blocked_capacity_trade_count_is_hard_failure": false,
+    "capacity_violation_count_at_most": 0,
+    "capacity_violation_is_frozen_execution_contract_breach": true,
+    "negative_cash_observation_count_at_most": 0,
+    "leverage_observation_count_at_most": 0,
+    "capacity_fields_must_be_finite_and_nonnegative": true,
+    "capacity_limited_notional_must_not_exceed_requested_notional": true,
+    "capacity_aggregation_identity_must_reconcile_exactly": true,
+    "accounting_error_must_be_finite_for_all_four_roles": true,
+    "invalid_execution_cannot_be_reclassified_as_gate_failure": true,
+    "reused_train_validity_source": "deep-verify the retained receipt-bound 8.0 manifest, binding, evaluation and twenty artifacts read-only; derive actual four-role validity counts, minimum cash and maximum gross exposure without rerunning the train strategy or recomputing economic role metrics"
+  },
+  "physical_phases": {
+    "train_reclassification": {
+      "performance_start": "2015-03-02",
+      "performance_end": "2019-12-31",
+      "market_outcome_previously_opened": true,
+      "economic_role_metrics_source": "published_8_0_execution_failure_receipt_only",
+      "validity_source": "receipt-bound retained 8.0 train runtime artifacts read-only",
+      "runtime_stage": "runtime/data/multi-asset-8.0",
+      "evidence_path": "protocols/evidence/8.1/train-reclassification.json",
+      "opened_or_recomputed_return_data": false,
+      "strategy_rerun_or_new_train_artifact_creation": false
+    },
+    "validation": {
+      "performance_start": "2020-01-02",
+      "performance_end": "2022-12-30",
+      "market_outcome_opened": false,
+      "opened_only_after_committed_train_reclassification_pass": true,
+      "source_root": "runtime/data/multi-asset-8.1/sources/stage=validation",
+      "evaluation_root": "runtime/data/multi-asset-8.1/evaluations/stage=validation",
+      "binding_path": "runtime/data/multi-asset-8.1/stage-bindings/validation.json"
+    },
+    "audit": {
+      "performance_start": "2023-01-03",
+      "performance_end": "2026-08-28",
+      "market_outcome_opened": false,
+      "opened_only_after_committed_validation_pass_and_policy_freeze": true,
+      "source_root": "runtime/data/multi-asset-8.1/sources/stage=audit",
+      "evaluation_root": "runtime/data/multi-asset-8.1/evaluations/stage=audit",
+      "binding_path": "runtime/data/multi-asset-8.1/stage-bindings/audit.json"
+    },
+    "fresh_cash_each_new_phase": true,
+    "cross_phase_holdings_nav_or_derived_stage_reuse": false
+  },
+  "selection_contract": {
+    "candidate_count": 1,
+    "maximum_policies": 1,
+    "strategy_id": "static_risk_budget",
+    "best_of_n_selection": false,
+    "train_reclassification_failure_action": "terminal failure with validation unopened",
+    "validation_failure_action": "terminal failure with audit unopened",
+    "audit_failure_action": "terminal historical diagnostic failure without replacement",
+    "parameter_or_weight_change_after_any_phase": false,
+    "asset_or_comparator_substitution": false,
+    "runner_up_fallback": false
+  },
+  "transport_verification": {
+    "primary": "exact git ls-remote origin ref SHA verification",
+    "github_api_fallback_allowed_only_on_transport_failure": true,
+    "github_repository": "yxforever666gh/factor-lab",
+    "fallback_must_verify_exact_origin_main_commit": true,
+    "fallback_must_verify_same_completed_successful_push_ci": true,
+    "fallback_must_verify_exact_annotated_tag_object_and_peeled_commit": true,
+    "missing_or_mismatched_remote_identity_allowed": false
+  },
+  "claim_contract": {
+    "research_object": "strategic_asset_allocation_beta",
+    "alpha_claim_allowed": false,
+    "profit_claim_allowed": false,
+    "stable_future_profit_claim_allowed": false,
+    "historical_pass_interpretation": "historical fixed-instrument strategic beta diagnostic only",
+    "validation_and_audit_are_public_history_not_fresh_future_evidence": true,
+    "fresh_future_evidence_required": true,
+    "minimum_fresh_sessions": 252,
+    "minimum_fresh_monthly_executions": 12,
+    "first_fresh_session_rule": "first official session after the immutable 8.0 closure and never earlier than 2026-08-31",
+    "investment_recommendation_allowed": false
+  },
+  "payload_sha256": "2fc5ea8316173f7fd19fbf5c34248e5a70b2a901c99345dcf8d933826fa15ee5"
+}

@@ -10,6 +10,47 @@
 
 ## [Unreleased]
 
+### Added
+
+- 冻结 8.1 corrective protocol `policy_operational_metric_reclassification`，逐字节绑定已发布的 annotated
+  `8.0` tag（object `3fcbd73f7497b074e484ce7793e2d3603bf5a177`，peeled commit
+  `78aba86bf4e741699afca1acd1470493785fd952`）、8.0 protocol/closure 和
+  `selection_inconclusive_execution_failure` 收据。协议 payload 为
+  `2fc5ea8316173f7fd19fbf5c34248e5a70b2a901c99345dcf8d933826fa15ee5`。
+- 新增 receipt-bound `reclassify` 阶段和独立的 8.1 closure、evidence、runtime namespace。经济
+  role metrics 只取已发布收据；为证明四角色 missing-open、capacity、负现金和杠杆有效性，阶段会
+  只读深验收据绑定的 retained 8.0 train artifacts，但禁止重新查询、重建、重跑 train 或从 artifacts
+  重算经济指标，也不会创建 8.1 train runtime。只有重分类证据单独提交、推送且精确提交 CI 成功后，
+  才允许首次打开 2020–2022 validation。
+- CLI 默认 `strategy status` 迁移到 8.1，分别报告 train reclassification、winner freeze、historical
+  audit 与 terminal result；显式 `--release 8.0` 固定核验已经发布的失败档案及其精确 tag 身份。
+
+### Changed
+
+- Python 包版本更新为 `8.1.0`。策略、六只 ETF、固定权重、现金比较器、月末/下一开盘执行、8bp/16bp
+  成本、阶段日期、收益/风险定义与全部经济阈值均保持 8.0 不变。
+- 政策运行门的年化换手、成交满足率和容量受限比例只在 `primary + stress` 上聚合；
+  `cash + cash_stress` 仍完整披露并参与现金超额计算，NAV 会计误差仍要求四角色共同有效。这是看到 8.0
+  train failure 后作出的 post-hoc gate-scope reclassification，不是独立 train 或新收益发现。
+- `blocked_missing_open` 与 `blocked_capacity` 只作严格整数诊断，继续由原 fill/capacity ratio 门反映，
+  不新增经济阈值；但 `planned_signal_notional > 10% signal-date ADV20` 的 capacity violation 仍是继承
+  执行合同违约，和负现金、杠杆、会计不一致一样 fail closed。
+
+### Research status
+
+- 截至协议冻结和本次实现提交，2020–2022 validation 与 2023–2026 audit 仍未打开，8.1 尚无
+  freeze、audit 或 terminal result。8.0 train 本身早已暴露，任何重分类通过最多只允许进入首个
+  未打开阶段，不能表述为策略、alpha、盈利或稳定未来收益通过。
+
+### Known limitations
+
+- 8.1 没有新增信息源，也不能修复固定 ETF 的幸存/研究者选择偏差。即使后续公开历史 validation 和
+  audit 均通过，结论仍只属于 fixed-instrument strategic beta diagnostic；至少 252 个新交易日与
+  12 次新月度执行之前，禁止盈利、稳定未来收益或投资建议声明。
+- 收据绑定的 8.0 train runtime 必须保留到 8.1 validation、audit 与 finalize 全部完成，以便每个正式
+  阶段递归深验 validity；只有终态与远端 tag 均核对后才能清理。经济 role metrics 始终只取发布收据，
+  retained artifacts 只提供执行/会计证明。
+
 ## [8.0] - 2026-08-31
 
 ### Added
