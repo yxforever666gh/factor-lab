@@ -24,27 +24,22 @@ def _copy_8_0_failure_archive_inputs(destination: Path) -> Path:
     return source_root
 
 
-def _mock_v81_preclosure_admission(monkeypatch: pytest.MonkeyPatch) -> None:
-    receipt = {"train_stage": {"role_gate_metrics": {"receipt_bound": True}}}
-    validity = {
-        "artifact_parquet_count": 20,
-        "artifact_row_count": 43222,
-        "roles": {},
-    }
+def _mock_v9_preclosure_readiness(monkeypatch: pytest.MonkeyPatch) -> None:
     runner = SimpleNamespace(
-        _verify_prior_train_artifacts=lambda _receipt: validity,
-        _combine_receipt_role_gate_metrics=(
-            lambda _metrics, *, execution_validity: {
-                "execution_validity": execution_validity
-            }
-        ),
-        _require_execution_validity=lambda _metrics, _config: None,
+        _verify_prior_8_1_archive=lambda **_: {
+            "status": "selection_falsified_no_candidate",
+            "deep_data_verified": True,
+            "deep_runtime_verified": True,
+            "artifact_parquet_count": 20,
+            "artifact_row_count": 62654,
+            "archive_identity_sha256": "a" * 64,
+        }
     )
-    monkeypatch.setattr(cli, "_load_v81_runner", lambda _root: runner)
+    monkeypatch.setattr(cli, "_load_v9_runner", lambda _root: runner)
     monkeypatch.setattr(
         cli,
-        "_verify_8_0_failure_archive",
-        lambda _root, *, verify_data: (receipt, False, True),
+        "_verify_published_8_1_archive",
+        lambda _root: {"result": {"payload_sha256": cli.V81_RESULT_PAYLOAD_SHA256}},
     )
 
 
@@ -73,6 +68,9 @@ def test_cli_exposes_only_lightweight_mainline_commands() -> None:
     assert parser.parse_args(
         ["strategy", "status", "--release", "8.1"]
     ).release == "8.1"
+    assert parser.parse_args(
+        ["strategy", "status", "--release", "9.0"]
+    ).release == "9.0"
     targets = parser.parse_args(["strategy", "targets", "--signal-date", "latest"])
     assert targets.strategy_command == "targets"
 
@@ -178,23 +176,22 @@ def test_strategy_status_verifies_tracked_implementation_and_evidence(
     # require its own still-running GitHub job to have completed successfully;
     # the remote-CI and worktree-state contracts are covered by dedicated tests
     # below.
-    monkeypatch.setattr(cli, "_v81_require_head_ci", lambda _root: "a" * 40)
+    monkeypatch.setattr(cli, "_v9_require_head_ci", lambda _root: "a" * 40)
     monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
-    closure_exists = (root / cli.V81_CLOSURE_PATH).is_file()
+    closure_exists = (root / cli.V9_CLOSURE_PATH).is_file()
     if not closure_exists:
-        _mock_v81_preclosure_admission(monkeypatch)
+        _mock_v9_preclosure_readiness(monkeypatch)
     result, exit_code = cli._strategy_status(root, verify_data=False)
     if closure_exists:
         assert exit_code == 0
     else:
         assert exit_code in {0, 2}
         assert result["status"] in {
-            "implementation_ready_for_prevalidation_closure",
+            "implementation_ready_for_preselection_closure",
             "implementation_pending_clean_commit",
         }
-    assert result["version"] == "8.1"
-    assert result["route"] == cli.V81_ROUTE
-    assert result["post_hoc_reclassification"] is True
+    assert result["version"] == "9.0"
+    assert result["route"] == cli.V9_ROUTE
     assert result["profit_claim_allowed"] is False
     if not closure_exists:
         assert result["audit_status"] == "not_opened"
@@ -214,7 +211,8 @@ def test_strategy_status_verifies_tracked_implementation_and_evidence(
         assert "release_evidence_chain" in categories
     else:
         assert "protocol_payload" in categories
-        assert "published_8_0_failure_archive" in categories
+        assert "published_8_1_archive" in categories
+        assert "retained_8_1_development_readiness" in categories
 
 
 def test_8_0_real_execution_failure_receipt_has_valid_shallow_status(
@@ -570,23 +568,49 @@ def test_explicit_7_1_status_reports_published_null_result() -> None:
     assert result["canonical_data_hashes_verified"] is False
 
 
-def test_default_strategy_status_reports_the_8_1_preclosure_state(
+def test_explicit_8_1_status_reports_published_validation_null(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root = Path(__file__).resolve().parents[2]
-    if (root / cli.V81_CLOSURE_PATH).is_file():
-        pytest.skip("8.1 closure has already superseded the preclosure state")
     monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
-    monkeypatch.setattr(cli, "_v81_require_head_ci", lambda _root: "a" * 40)
-    _mock_v81_preclosure_admission(monkeypatch)
+
+    result, exit_code = cli._strategy_status(
+        root, verify_data=True, release="8.1"
+    )
+
+    assert exit_code == 0
+    assert result["version"] == "8.1"
+    assert result["status"] == "selection_falsified_no_candidate"
+    assert result["train_reclassification_status"] == (
+        "train_reclassification_passed"
+    )
+    assert result["winner_freeze_status"] == (
+        "selected_null_frozen_validation_failed"
+    )
+    assert result["selected_candidate_id"] is None
+    assert result["audit_status"] == "not_opened"
+    assert result["terminal_result_payload_sha256"] == (
+        cli.V81_RESULT_PAYLOAD_SHA256
+    )
+    assert result["canonical_data_hashes_verified"] is False
+
+
+def test_default_strategy_status_reports_the_9_0_preclosure_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root = Path(__file__).resolve().parents[2]
+    if (root / cli.V9_CLOSURE_PATH).is_file():
+        pytest.skip("9.0 closure has already superseded the preclosure state")
+    monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
+    monkeypatch.setattr(cli, "_v9_require_head_ci", lambda _root: "a" * 40)
+    _mock_v9_preclosure_readiness(monkeypatch)
 
     result, exit_code = cli._strategy_status(root, verify_data=False)
 
     assert exit_code == 0
-    assert result["status"] == "implementation_ready_for_prevalidation_closure"
-    assert result["version"] == "8.1"
-    assert result["route"] == cli.V81_ROUTE
-    assert result["post_hoc_reclassification"] is True
+    assert result["status"] == "implementation_ready_for_preselection_closure"
+    assert result["version"] == "9.0"
+    assert result["route"] == cli.V9_ROUTE
     assert result["selected_candidate_id"] is None
     assert result["audit_status"] == "not_opened"
     assert result["profit_claim_allowed"] is False
@@ -597,10 +621,10 @@ def test_default_preclosure_status_does_not_claim_dirty_tree_is_ready(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root = Path(__file__).resolve().parents[2]
-    if (root / cli.V81_CLOSURE_PATH).is_file():
-        pytest.skip("8.1 closure has already superseded the preclosure state")
+    if (root / cli.V9_CLOSURE_PATH).is_file():
+        pytest.skip("9.0 closure has already superseded the preclosure state")
     monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: False)
-    _mock_v81_preclosure_admission(monkeypatch)
+    _mock_v9_preclosure_readiness(monkeypatch)
 
     result, exit_code = cli._strategy_status(root, verify_data=False)
 
@@ -692,13 +716,13 @@ def test_default_preclosure_status_requires_pushed_successful_ci(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     root = Path(__file__).resolve().parents[2]
-    if (root / cli.V81_CLOSURE_PATH).is_file():
-        pytest.skip("8.1 closure has already superseded the preclosure state")
+    if (root / cli.V9_CLOSURE_PATH).is_file():
+        pytest.skip("9.0 closure has already superseded the preclosure state")
     monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
-    _mock_v81_preclosure_admission(monkeypatch)
+    _mock_v9_preclosure_readiness(monkeypatch)
     monkeypatch.setattr(
         cli,
-        "_v81_require_head_ci",
+        "_v9_require_head_ci",
         lambda _root: (_ for _ in ()).throw(RuntimeError("push CI missing")),
     )
 
@@ -711,6 +735,85 @@ def test_default_preclosure_status_requires_pushed_successful_ci(
         and check["status"] == "mismatch"
         for check in result["checks"]
     )
+
+
+def test_9_0_pending_status_loads_the_9_0_runner(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = Path(__file__).resolve().parents[2]
+    for relative in (cli.V9_PROTOCOL_PATH, cli.V9_SCOUT_PATH):
+        target = tmp_path / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes((root / relative).read_bytes())
+    monkeypatch.setattr(
+        cli,
+        "_load_v9_runner",
+        lambda _root: (_ for _ in ()).throw(ValueError("stale 8.1 runner")),
+    )
+    monkeypatch.setattr(
+        cli,
+        "_verify_published_8_1_archive",
+        lambda _root: (_ for _ in ()).throw(ValueError("runner unavailable")),
+    )
+    monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: False)
+
+    result, exit_code = cli._strategy_status_9_0(tmp_path, verify_data=False)
+
+    assert exit_code == 3
+    assert result["status"] == "integrity_mismatch"
+    assert result["version"] == "9.0"
+    assert any(
+        check["category"] == "formal_runner_namespace"
+        and "stale 8.1 runner" in check["error"]
+        for check in result["checks"]
+    )
+
+
+def test_9_0_freeze_audit_and_result_status_mapping(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    closure_path = tmp_path / cli.V9_CLOSURE_PATH
+    closure_path.parent.mkdir(parents=True)
+    closure_path.write_text("{}", encoding="utf-8")
+    freeze = {
+        "status": "selected_policy_frozen",
+        "selected_candidate_id": cli.V9_ROUTE,
+        "payload_sha256": "1" * 64,
+    }
+    audit = {"status": "historical_audit_passed", "payload_sha256": "2" * 64}
+    result = {
+        "status": "historical_adaptive_beta_diagnostic_passed_fresh_evidence_required",
+        "selected_candidate_id": cli.V9_ROUTE,
+        "audit_status": "historical_audit_passed",
+        "payload_sha256": "3" * 64,
+    }
+    verifier = SimpleNamespace(
+        verify_release_state=lambda **_: {
+            "status": result["status"],
+            "closure": {"route": cli.V9_ROUTE},
+            "protocol": {"protocol_id": cli.V9_PROTOCOL_ID},
+            "freeze": freeze,
+            "audit": audit,
+            "result": result,
+        }
+    )
+    monkeypatch.setattr(cli, "_load_v9_runner", lambda _root: verifier)
+    monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
+    monkeypatch.setattr(cli, "_v9_require_head_ci", lambda _root: "a" * 40)
+
+    value, exit_code = cli._strategy_status_9_0(tmp_path, verify_data=True)
+
+    assert exit_code == 0
+    assert value["status"] == result["status"]
+    assert value["selected_candidate_id"] == cli.V9_ROUTE
+    assert value["winner_freeze_status"] == "selected_policy_frozen"
+    assert value["winner_freeze_payload_sha256"] == "1" * 64
+    assert value["audit_status"] == "historical_audit_passed"
+    assert value["historical_audit_payload_sha256"] == "2" * 64
+    assert value["terminal_result_status"] == result["status"]
+    assert value["terminal_result_payload_sha256"] == "3" * 64
+    assert value["canonical_data_hashes_verified"] is True
+    assert value["profit_claim_allowed"] is False
 
 
 def test_8_0_status_rejects_orphan_audit_from_full_chain_verifier(
@@ -843,165 +946,6 @@ def test_8_0_train_admission_pending_validation_shallow_and_deep_status(
         check for check in deep["checks"]
         if check["category"] == "canonical_stage_artifacts"
     )["status"] == "match"
-
-
-def test_8_1_pending_status_loads_the_8_1_runner(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    root = Path(__file__).resolve().parents[2]
-    protocol_path = tmp_path / cli.V81_PROTOCOL_PATH
-    protocol_path.parent.mkdir(parents=True)
-    protocol_path.write_bytes((root / cli.V81_PROTOCOL_PATH).read_bytes())
-    monkeypatch.setattr(
-        cli,
-        "_load_v81_runner",
-        lambda _root: (_ for _ in ()).throw(ValueError("stale 8.0 runner")),
-    )
-    monkeypatch.setattr(
-        cli,
-        "_verify_8_0_failure_archive",
-        lambda _root, *, verify_data: ({}, False, True),
-    )
-    monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: False)
-
-    result, exit_code = cli._strategy_status_8_1(tmp_path, verify_data=False)
-
-    assert exit_code == 3
-    assert result["status"] == "integrity_mismatch"
-    assert result["version"] == "8.1"
-    assert any(
-        check["category"] == "formal_runner_namespace"
-        and check["status"] == "mismatch"
-        and "stale 8.0 runner" in check["error"]
-        for check in result["checks"]
-    )
-
-
-def test_8_1_reclassification_only_status_maps_without_claiming_data_verification(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    closure_path = tmp_path / cli.V81_CLOSURE_PATH
-    closure_path.parent.mkdir(parents=True)
-    closure_path.write_text("{}", encoding="utf-8")
-    calls: list[tuple[bool, bool]] = []
-
-    def verify_release_state(*, verify_data: bool, verify_runtime: bool) -> dict:
-        calls.append((verify_data, verify_runtime))
-        return {
-            "status": "train_reclassification_passed_pending_validation",
-            "closure": {"route": cli.V81_ROUTE},
-            "protocol": {
-                "protocol_id": cli.V81_PROTOCOL_ID,
-                "claim_contract": {
-                    "historical_pass_interpretation": (
-                        "historical fixed-instrument strategic beta diagnostic only"
-                    ),
-                    "profit_claim_allowed": False,
-                },
-            },
-            "selection": {},
-            "train_reclassification": {
-                "status": "train_reclassification_passed",
-                "payload_sha256": "a" * 64,
-            },
-            "freeze": None,
-            "audit": None,
-            "result": None,
-        }
-
-    monkeypatch.setattr(
-        cli,
-        "_load_v81_runner",
-        lambda _root: SimpleNamespace(verify_release_state=verify_release_state),
-    )
-    monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
-    monkeypatch.setattr(cli, "_v81_require_head_ci", lambda _root: "b" * 40)
-
-    result, exit_code = cli._strategy_status_8_1(tmp_path, verify_data=True)
-
-    assert exit_code == 0
-    assert calls == [(True, False)]
-    assert result["status"] == "train_reclassification_passed_pending_validation"
-    assert result["train_reclassification_status"] == (
-        "train_reclassification_passed"
-    )
-    assert result["train_reclassification_payload_sha256"] == "a" * 64
-    assert result["winner_freeze_status"] == "not_created"
-    assert result["selected_candidate_id"] is None
-    assert result["audit_status"] == "not_opened"
-    assert result["terminal_result_status"] == "not_created"
-    assert result["terminal_result_payload_sha256"] is None
-    assert result["post_hoc_reclassification"] is True
-    assert result["profit_claim_allowed"] is False
-    assert result["canonical_data_hashes_verified"] is False
-    assert next(
-        check
-        for check in result["checks"]
-        if check["category"] == "canonical_stage_artifacts"
-    )["status"] == "not_applicable"
-
-
-def test_8_1_freeze_audit_and_result_status_mapping(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    closure_path = tmp_path / cli.V81_CLOSURE_PATH
-    closure_path.parent.mkdir(parents=True)
-    closure_path.write_text("{}", encoding="utf-8")
-
-    def verify_release_state(**_: bool) -> dict:
-        return {
-            "status": "historical_diagnostic_complete",
-            "closure": {"route": cli.V81_ROUTE},
-            "protocol": {
-                "protocol_id": cli.V81_PROTOCOL_ID,
-                "claim_contract": {
-                    "historical_pass_interpretation": "historical diagnostic only",
-                    "profit_claim_allowed": False,
-                },
-            },
-            "selection": {},
-            "train_reclassification": {
-                "status": "train_reclassification_passed",
-                "payload_sha256": "1" * 64,
-            },
-            "freeze": {
-                "status": "selected_policy_frozen",
-                "selected_candidate_id": "static_risk_budget",
-                "payload_sha256": "2" * 64,
-                "validation": {},
-            },
-            "audit": {
-                "status": "historical_audit_passed",
-                "payload_sha256": "3" * 64,
-            },
-            "result": {
-                "status": "historical_diagnostic_complete",
-                "selected_candidate_id": "static_risk_budget",
-                "audit_status": "historical_audit_passed",
-                "payload_sha256": "4" * 64,
-            },
-        }
-
-    monkeypatch.setattr(
-        cli,
-        "_load_v81_runner",
-        lambda _root: SimpleNamespace(verify_release_state=verify_release_state),
-    )
-    monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
-    monkeypatch.setattr(cli, "_v81_require_head_ci", lambda _root: "c" * 40)
-
-    result, exit_code = cli._strategy_status_8_1(tmp_path, verify_data=True)
-
-    assert exit_code == 0
-    assert result["selected_candidate_id"] == "static_risk_budget"
-    assert result["winner_freeze_status"] == "selected_policy_frozen"
-    assert result["winner_freeze_payload_sha256"] == "2" * 64
-    assert result["audit_status"] == "historical_audit_passed"
-    assert result["historical_audit_payload_sha256"] == "3" * 64
-    assert result["terminal_result_status"] == "historical_diagnostic_complete"
-    assert result["terminal_result_payload_sha256"] == "4" * 64
-    assert result["canonical_data_hashes_verified"] is True
-    assert result["profit_claim_allowed"] is False
 
 
 def test_strategy_status_detects_implementation_tamper(

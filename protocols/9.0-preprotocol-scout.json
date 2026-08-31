@@ -1,0 +1,307 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_preprotocol_scout",
+  "scout_id": "factor-lab/9.0/preprotocol-scout-v1",
+  "release": "9.0",
+  "direction_change": true,
+  "route": "causal_monthly_volatility_balanced_budget",
+  "status": "selected_volatility_balanced_after_fully_exposed_development",
+  "scope": {
+    "market_data_maximum_date": "2022-12-30",
+    "source_stage": "runtime/data/multi-asset-8.1/sources/stage=validation",
+    "source_manifest_payload_sha256": "f5903d2b24b47662a9ba4ea3d2d127c9b5dee385d5b927140b25eda68b3ff060",
+    "source_manifest_file_sha256": "e4b995095af7015c7b5380340e0f761337335ea4b1a70dca56de3aefed402553",
+    "development_outcomes_fully_exposed": true,
+    "development_is_independent_oos": false,
+    "audit_2023_plus_read": false,
+    "audit_2023_plus_runtime_created": false,
+    "profit_or_promotion_claim_allowed": false
+  },
+  "prior_release": {
+    "release": "8.1",
+    "tag": "8.1",
+    "annotated_tag_object": "8f575ed3833c8cc01f89e7a951d4234bd7ee6622",
+    "peeled_commit": "a4c0d36f727e99f6b2353facf24fd3cdedba958e",
+    "terminal_status": "selection_falsified_no_candidate",
+    "audit_status": "not_opened"
+  },
+  "uniform_development_contract": {
+    "D1": {
+      "performance_start": "2015-03-02",
+      "performance_end": "2019-12-31"
+    },
+    "D2": {
+      "performance_start": "2020-01-02",
+      "performance_end": "2022-12-30"
+    },
+    "both_periods_are_fully_exposed_development": true,
+    "fresh_cash_each_development_subperiod": true,
+    "development_subperiod_account_reuse": false,
+    "base_cost_bps_per_side": 8.0,
+    "stress_cost_bps_per_side": 16.0,
+    "absolute_gate_each_period_and_cost_role": {
+      "candidate_cagr_strictly_above_investable_cash": true,
+      "base_sharpe_at_least": 0.3,
+      "stress_sharpe_at_least": 0.25,
+      "daily_max_drawdown_at_least": -0.25,
+      "positive_complete_year_ratio_at_least": 0.5,
+      "annualized_turnover_at_most": 1.0,
+      "requested_notional_fill_ratio_at_least": 0.99,
+      "capacity_limited_requested_notional_ratio_at_most": 0.01,
+      "nav_reconciliation_error_at_most": 1e-8
+    },
+    "relative_stability_gate_each_period_and_cost_role": {
+      "sharpe_minus_static_at_least": 0.0,
+      "max_drawdown_minus_static_positive_is_better_at_least": 0.0,
+      "positive_complete_year_ratio_minus_static_at_least": 0.0,
+      "candidate_minus_static_cagr_gate_exists": false
+    },
+    "hard_execution_validity": {
+      "capacity_violation_count_at_most": 0,
+      "negative_cash_observation_count_at_most": 0,
+      "leverage_observation_count_at_most": 0,
+      "six_role_accounting_and_artifact_integrity_required": true
+    },
+    "selection_rule": "A prototype advances only if D1 and D2 each pass base, stress, cash-excess, risk, positive-year, relative-stability and operational gates. No pooled-period rescue, best-fold selection or runner-up is allowed."
+  },
+  "prototypes": {
+    "causal_volatility_balanced_budget_v0": {
+      "prototype_class": "one_off_fully_exposed_development_diagnostic",
+      "selected_for_formalization": true,
+      "post_hoc_parameter_search": false,
+      "source_end": "2022-12-30",
+      "audit_or_2023_plus_read": false,
+      "formula": {
+        "signal_schedule": "official month end",
+        "execution": "next official session open",
+        "risk_assets": [
+          "510300.SH",
+          "159920.SZ",
+          "513100.SH",
+          "518880.SH",
+          "511010.SH"
+        ],
+        "cash_asset": "511880.SH",
+        "frozen_base_budget": {
+          "510300.SH": 0.3,
+          "159920.SZ": 0.1,
+          "513100.SH": 0.1,
+          "518880.SH": 0.2,
+          "511010.SH": 0.3,
+          "511880.SH": 0.0
+        },
+        "volatility_return_count": 126,
+        "required_observed_total_return_levels": 127,
+        "volatility_definition": "sample standard deviation with ddof=1 of the 126 simple returns between the latest 127 observed total-return-index levels not later than the signal close, multiplied by sqrt(252) before binary64 division to reproduce the selected prototype exactly",
+        "raw_risk_target": "frozen_base_budget_i / annualized_realized_volatility_i",
+        "normalization": "in fixed RISK_CODES order compute the first four weights as raw_i / math.fsum(raw), then set the fifth weight to 1.0 - math.fsum(the first four); the residual-normalized risk-weight sum is accepted within the frozen 1e-12 target-sum tolerance",
+        "volatility_floor": 1e-12,
+        "cash_target_weight": 0.0,
+        "invalid_or_insufficient_volatility_action": "fall back for the entire signal to the frozen static risk budget",
+        "per_asset_cap": null,
+        "portfolio_target_volatility": null,
+        "leverage": false,
+        "rebalance_band": null,
+        "parameter_grid": false
+      },
+      "captured_artifacts": {
+        "prototype_path_outside_repository": "H:/Download/factor-lab-v90-vol-balanced-prototype/prototype.py",
+        "prototype_file_sha256": "8dcf6617a25d49be7929b9f5348983f84daaf81c07e24a4c3432e602e1f5b218",
+        "result_path_outside_repository": "H:/Download/factor-lab-v90-vol-balanced-prototype/result.json",
+        "result_file_sha256": "665344f3bced8f7dad1437fac60a6c10e74d5be36dcd37b072582ff48e0dbcf3",
+        "tracked_formal_evidence": false,
+        "accounting_annotation_audit": {
+          "prior_source_result_annotation_mismatch_disclosed": true,
+          "prior_prototype_source_annotation": "continuous_2015_account_slice",
+          "prior_captured_result_annotation": "fresh_cash_independent_phase",
+          "correction": "prototype source was rewritten to execute each reported period from fresh cash and empty holdings, then result.json was regenerated twice",
+          "corrected_prototype_source_annotation": "fresh_cash_independent_phase",
+          "corrected_result_annotation": "fresh_cash_independent_phase",
+          "corrected_source_and_result_annotations_match": true,
+          "deterministic_second_execution_bytes_matched": true,
+          "selection_values_source": "captured fresh-cash independent D1 and D2 reruns in result.json",
+          "formal_replay_required_accounting": "fresh cash, empty holdings and independent execution state for each development subperiod"
+        }
+      },
+      "target_diagnostics": {
+        "signal_count": 94,
+        "adaptive_signal_count": 94,
+        "static_fallback_signal_count": 0,
+        "mean_target_weights": {
+          "510300.SH": 0.0900,
+          "159920.SZ": 0.0321,
+          "513100.SH": 0.0314,
+          "518880.SH": 0.1023,
+          "511010.SH": 0.7442,
+          "511880.SH": 0.0
+        },
+        "concentration_disclosure": "The prototype mostly became a five-year-government-bond allocation; this is disclosed rather than capped after observing development returns."
+      },
+      "development": {
+        "D1": {
+          "base": {
+            "cagr": 0.048926911411901086,
+            "cash_cagr": 0.030913196843269874,
+            "cash_excess_cagr": 0.01801371456863121,
+            "sharpe": 1.3983640125129457,
+            "max_drawdown": -0.04251659691567233,
+            "positive_complete_year_ratio": 1.0,
+            "annualized_turnover": 0.7932029544795999,
+            "requested_notional_fill_ratio": 1.0,
+            "capacity_limited_requested_notional_ratio": 0.0,
+            "nav_reconciliation_error": 2.772821972030215e-10,
+            "cagr_minus_static": -0.020161029858816182,
+            "sharpe_minus_static": 0.6719706467680169,
+            "max_drawdown_minus_static_positive_is_better": 0.12772915110085814,
+            "positive_complete_year_ratio_minus_static": 0.25,
+            "gate_passed": true
+          },
+          "stress_16bp": {
+            "cagr": 0.048276322197590815,
+            "cash_cagr": 0.030741448403336147,
+            "cash_excess_cagr": 0.01753487379425467,
+            "sharpe": 1.379366157077162,
+            "max_drawdown": -0.04259044714503546,
+            "positive_complete_year_ratio": 1.0,
+            "annualized_turnover": 0.7977565375294163,
+            "requested_notional_fill_ratio": 1.0,
+            "capacity_limited_requested_notional_ratio": 0.0,
+            "nav_reconciliation_error": 4.18367562815547e-10,
+            "cagr_minus_static": -0.02030406250138128,
+            "sharpe_minus_static": 0.6577809953175929,
+            "max_drawdown_minus_static_positive_is_better": 0.12772434513575037,
+            "positive_complete_year_ratio_minus_static": 0.25,
+            "gate_passed": true
+          }
+        },
+        "D2": {
+          "base": {
+            "cagr": 0.03258064825325957,
+            "cash_cagr": 0.019985881850830944,
+            "cash_excess_cagr": 0.012594766402428625,
+            "sharpe": 0.9392983463753383,
+            "max_drawdown": -0.041916142967969305,
+            "positive_complete_year_ratio": 0.6666666666666666,
+            "annualized_turnover": 0.7233435465433659,
+            "requested_notional_fill_ratio": 1.0,
+            "capacity_limited_requested_notional_ratio": 0.0,
+            "nav_reconciliation_error": 3.8562575355172157e-10,
+            "cagr_minus_static": 0.009238967027411338,
+            "sharpe_minus_static": 0.6590838605262535,
+            "max_drawdown_minus_static_positive_is_better": 0.11771895961104184,
+            "positive_complete_year_ratio_minus_static": 0.3333333333333333,
+            "gate_passed": true
+          },
+          "stress_16bp": {
+            "cagr": 0.03206305385114594,
+            "cash_cagr": 0.019710732276721155,
+            "cash_excess_cagr": 0.012352321574424785,
+            "sharpe": 0.9249098193697659,
+            "max_drawdown": -0.04192561656133198,
+            "positive_complete_year_ratio": 0.6666666666666666,
+            "annualized_turnover": 0.722966237907231,
+            "requested_notional_fill_ratio": 1.0,
+            "capacity_limited_requested_notional_ratio": 0.0,
+            "nav_reconciliation_error": 3.333298081997782e-10,
+            "cagr_minus_static": 0.0092934657152135,
+            "sharpe_minus_static": 0.6502756975893875,
+            "max_drawdown_minus_static_positive_is_better": 0.1181099247264159,
+            "positive_complete_year_ratio_minus_static": 0.3333333333333333,
+            "gate_passed": true
+          }
+        }
+      },
+      "selection_interpretation": "Both fully exposed periods pass the uniform absolute and relative-stability gates at base and stress cost. D1 sacrifices static CAGR, which is permitted because no static-relative CAGR gate exists; it materially improves Sharpe, drawdown and positive-year frequency while retaining strictly positive investable-cash excess."
+    },
+    "causal_three_expert_exponentiated_gradient_v0": {
+      "prototype_class": "one_off_fully_exposed_development_diagnostic",
+      "selected_for_formalization": false,
+      "post_hoc_parameter_search": false,
+      "prototype_path_outside_repository": "H:/Download/factor-lab-9.0-eg-prototype/prototype.py",
+      "prototype_file_sha256": "fdebe597addbaa2d58e4e22228439be6a9fa4a4dbb9b299f67b21a78606a12bc",
+      "canonical_result_payload_sha256": "cf2b2481783c94e128ef4b197438fa84bf138394a55ae71fd382418ce8e46166",
+      "deterministic_second_execution_payload_matched": true,
+      "audit_or_2023_plus_read": false,
+      "experts": [
+        "strategic_beta",
+        "defensive_sleeve_40pct_gold_60pct_bond",
+        "cash_511880"
+      ],
+      "algorithm": {
+        "initial_probabilities": "one third per expert",
+        "gradient": "expert net interval return divided by one plus the previous-probability mixture net interval return",
+        "learning_rate": "sqrt(2*ln(3)/cumulative_max_gradient_square)",
+        "stress_reuses_base_target_trace": true
+      },
+      "development_2017_2022": {
+        "base_cagr": 0.04769613867220479,
+        "base_cash_cagr": 0.026310296703399683,
+        "base_cash_excess_cagr": 0.021385841968805108,
+        "base_sharpe": 0.6645269108090304,
+        "base_max_drawdown": -0.13881175251545042,
+        "base_positive_complete_year_ratio": 0.5,
+        "base_cagr_minus_static": -0.008793556231579736,
+        "base_sharpe_minus_static": -0.0012248027928901672,
+        "base_max_drawdown_minus_static_positive_is_better": 0.020932073666453332,
+        "stress_cagr": 0.04729779652143451,
+        "stress_cash_excess_cagr": 0.021009270531682223,
+        "stress_sharpe": 0.6593563221496395,
+        "stress_sharpe_minus_static": -0.003102707198618382,
+        "stress_max_drawdown": -0.13919334903597114,
+        "mean_expert_probabilities": {
+          "strategic_beta": 0.8222334561006797,
+          "defensive_sleeve": 0.044139875309580905,
+          "cash_511880": 0.1336266685897395
+        }
+      },
+      "stability_folds": {
+        "2017_2018_cash_excess_cagr": -0.008149511577106194,
+        "2019_2020_cash_excess_cagr": 0.1316908219783972,
+        "2021_2022_cash_excess_cagr": -0.051271350751454836,
+        "folds_beating_cash": 1,
+        "fold_count": 3
+      },
+      "failed_checks": [
+        "base_sharpe_minus_static_at_least_zero",
+        "stress_sharpe_minus_static_at_least_zero",
+        "cash_excess_cagr_positive_in_each_stability_fold"
+      ],
+      "rejection_interpretation": "The online mixture averaged 82.22% strategic beta, did not improve full-development Sharpe over static, and beat cash in only one of three two-year folds. Its added registry, reward, learning-rate and counterfactual-shadow complexity is not admitted."
+    }
+  },
+  "selection_decision": {
+    "prototype_count": 2,
+    "formal_candidate_count": 1,
+    "selected_strategy_id": "causal_monthly_volatility_balanced_budget",
+    "rejected_strategy_id": "causal_three_expert_exponentiated_gradient_v0",
+    "selection_was_made_after_observing_all_development_results": true,
+    "selected_candidate_is_independent_oos": false,
+    "parameter_or_formula_change_after_selection_allowed": false,
+    "additional_candidate_allowed": false,
+    "runner_up_fallback": false
+  },
+  "parallel_analyst_archive": {
+    "belongs_to_release_9_0_candidate": false,
+    "workstream": "data_engineering_only",
+    "returns_or_labels_may_be_joined": false,
+    "historical_vendor_vintage_is_currently_proven": false,
+    "required_before_future_direction_freeze": [
+      "original report or bitemporal snapshot lineage",
+      "immutable publication timestamp and broker/fiscal-period identity",
+      "complete pagination and coverage admission",
+      "score freeze before any return join"
+    ],
+    "future_direction_if_admitted": "new major release, not a 9.0 runner-up"
+  },
+  "claim_contract": {
+    "research_object": "causal_volatility_balanced_strategic_beta",
+    "development_is_fully_exposed_non_oos": true,
+    "alpha_claim_allowed": false,
+    "profit_claim_allowed": false,
+    "stable_future_profit_claim_allowed": false,
+    "investment_recommendation_allowed": false,
+    "first_unopened_historical_stage": "2023-01-03 through 2026-08-28 audit",
+    "fresh_future_evidence_required": true
+  },
+  "payload_sha256": "71926f08ce5ca2ab1b6470f7d3ee385371c4bfaf3243c5f942a891f63a8075a0"
+}

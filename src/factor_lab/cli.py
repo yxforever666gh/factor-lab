@@ -97,6 +97,30 @@ V81_PROTOCOL_PAYLOAD_SHA256 = (
 V81_PROTOCOL_FILE_SHA256 = (
     "b0a213b62cf6f2723425e77d01565fd8c29721960d50d4a25d19306f3817c583"
 )
+V81_TAG_OBJECT = "8f575ed3833c8cc01f89e7a951d4234bd7ee6622"
+V81_TAG_COMMIT = "a4c0d36f727e99f6b2353facf24fd3cdedba958e"
+V81_CLOSURE_PAYLOAD_SHA256 = "f4a47421d08ca77eca6b27fd6417909a04c3eaf789c11d9ca069366412440ef5"
+V81_CLOSURE_FILE_SHA256 = "ef1596fa5cfbfdfd0c27d74c2747dcc852b7f209a4e27de2b7c01c6d8dbcc557"
+V81_RECLASSIFICATION_PAYLOAD_SHA256 = "4f498ffc12deac61144c77c56ba89cb9abccc034d2d73df4f1df8a6c50184c79"
+V81_RECLASSIFICATION_FILE_SHA256 = "bfd2c0c801259394861eba000a8e34bc9617cba3adcf6629d7e8b501ccf3c51b"
+V81_FREEZE_PAYLOAD_SHA256 = "d10f51b522a16838a4744fa16d770a720d34c2d340c2bf0bd5a05bedc61ceb76"
+V81_FREEZE_FILE_SHA256 = "b865e80cb899f7e5274d72b46ab1e0d88dad64b0ab2eb4e46750c5cec2167387"
+V81_RESULT_PAYLOAD_SHA256 = "d4496b9a64def6a443827737987d44ec77532cc9d11137a247302376a00ad6a4"
+V81_RESULT_FILE_SHA256 = "bcbcb09974e6314190de7a835560c4abbc1cde79734ed4fcef759061653cd95d"
+V9_PROTOCOL_PATH = "protocols/9.0-causal-volatility-balanced-budget.json"
+V9_SCOUT_PATH = "protocols/9.0-preprotocol-scout.json"
+V9_CLOSURE_PATH = "protocols/9.0-release.json"
+V9_EVIDENCE_ROOT = "protocols/evidence/9.0"
+V9_WINNER_FREEZE_PATH = f"{V9_EVIDENCE_ROOT}/winner-freeze.json"
+V9_AUDIT_PATH = f"{V9_EVIDENCE_ROOT}/historical-audit.json"
+V9_RESULT_PATH = f"{V9_EVIDENCE_ROOT}/result.json"
+V9_RUNTIME_PATH = "runtime/data/multi-asset-9.0"
+V9_ROUTE = "causal_monthly_volatility_balanced_budget"
+V9_PROTOCOL_ID = "factor-lab/9.0/causal-monthly-volatility-balanced-budget-v1"
+V9_PROTOCOL_PAYLOAD_SHA256 = "f6c7cce39e8b9a1ae5df10965a2dd607916095b2caf24fcf0a29b625c5bafc3e"
+V9_PROTOCOL_FILE_SHA256 = "19ecf56b5bd9c8b42b9f4df50761f719e2ca544eaea959a88c62d0ea4178d620"
+V9_SCOUT_PAYLOAD_SHA256 = "71926f08ce5ca2ab1b6470f7d3ee385371c4bfaf3243c5f942a891f63a8075a0"
+V9_SCOUT_FILE_SHA256 = "44b90b964ecca9a30029b1dfad45ae313ae4a5c12a91d82ba885ceecb826b857"
 
 
 def _root() -> Path:
@@ -291,7 +315,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     strategy_status.add_argument(
         "--release",
-        choices=("6.0", "6.3", "7.0", "7.1", "8.0", "8.1"),
+        choices=("6.0", "6.3", "7.0", "7.1", "8.0", "8.1", "9.0"),
         help="Verify one release closure; defaults to the latest tracked closure.",
     )
     strategy_targets = strategy_commands.add_parser(
@@ -1207,53 +1231,43 @@ def _v8_require_head_ci(root: Path) -> str:
     return head
 
 
-def _load_v81_runner(root: Path) -> Any:
-    """Load the live 8.1 verifier while rejecting a stale 8.0 namespace."""
-
+def _load_v9_runner(root: Path) -> Any:
     resolved = root.resolve()
     script = resolved / "scripts" / "run-multi-asset-evidence.py"
     if script.is_symlink() or not script.is_file():
-        raise ValueError("8.1 formal runner is missing or indirect")
-    spec = importlib.util.spec_from_file_location("factor_lab_v81_status_verifier", script)
+        raise ValueError("9.0 formal runner is missing or indirect")
+    spec = importlib.util.spec_from_file_location("factor_lab_v9_status_verifier", script)
     if spec is None or spec.loader is None:
-        raise ValueError("could not load the 8.1 formal verifier")
+        raise ValueError("could not load the 9.0 formal verifier")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     if (
         module.ROOT.resolve() != resolved
-        or module.RELEASE != "8.1"
-        or module.ROUTE != V81_ROUTE
-        or module.PROTOCOL_ID != V81_PROTOCOL_ID
-        or module.PROTOCOL_PATH.as_posix() != V81_PROTOCOL_PATH
-        or module.PROTOCOL_PAYLOAD != V81_PROTOCOL_PAYLOAD_SHA256
-        or module.PROTOCOL_FILE_SHA256 != V81_PROTOCOL_FILE_SHA256
-        or module.CLOSURE_PATH.as_posix() != V81_CLOSURE_PATH
-        or module.EVIDENCE_ROOT.as_posix() != V81_EVIDENCE_ROOT
-        or module.TRAIN_RECLASSIFICATION_PATH.as_posix()
-        != V81_RECLASSIFICATION_PATH
-        or module.WINNER_FREEZE_PATH.as_posix() != V81_WINNER_FREEZE_PATH
-        or module.AUDIT_PATH.as_posix() != V81_AUDIT_PATH
-        or module.RESULT_PATH.as_posix() != V81_RESULT_PATH
-        or module.WORK_ROOT.resolve() != (resolved / V81_RUNTIME_PATH).resolve()
-        or module.SOURCE_ROOT.resolve()
-        != (resolved / V81_RUNTIME_PATH / "sources").resolve()
-        or module.EVALUATION_ROOT.resolve()
-        != (resolved / V81_RUNTIME_PATH / "evaluations").resolve()
-        or module.BINDING_ROOT.resolve()
-        != (resolved / V81_RUNTIME_PATH / "stage-bindings").resolve()
-        or module.PRIOR_RECEIPT_PATH.as_posix() != V8_FAILURE_PATH
-        or module.PRIOR_TAG_OBJECT != V8_TAG_OBJECT
-        or module.PRIOR_COMMIT != V8_TAG_COMMIT
-        or module.PRIOR_RECEIPT_PAYLOAD != V8_FAILURE_PAYLOAD_SHA256
-        or module.PRIOR_RECEIPT_FILE_SHA256 != V8_FAILURE_FILE_SHA256
-        or module.PRIOR_WORK_ROOT.resolve() != (resolved / V8_RUNTIME_PATH).resolve()
-        or module.INHERITED_PROTOCOL_PATH.as_posix() != V7_PROTOCOL_PATH
+        or module.RELEASE != "9.0"
+        or module.ROUTE != V9_ROUTE
+        or module.PRIMARY_ID != V9_ROUTE
+        or module.VOLATILITY_FLOOR != 1e-12
+        or module.PROTOCOL_ID != V9_PROTOCOL_ID
+        or module.PROTOCOL_PATH.as_posix() != V9_PROTOCOL_PATH
+        or module.PROTOCOL_PAYLOAD != V9_PROTOCOL_PAYLOAD_SHA256
+        or module.PROTOCOL_FILE_SHA256 != V9_PROTOCOL_FILE_SHA256
+        or module.SCOUT_PATH.as_posix() != V9_SCOUT_PATH
+        or module.SCOUT_PAYLOAD != V9_SCOUT_PAYLOAD_SHA256
+        or module.SCOUT_FILE_SHA256 != V9_SCOUT_FILE_SHA256
+        or module.CLOSURE_PATH.as_posix() != V9_CLOSURE_PATH
+        or module.EVIDENCE_ROOT.as_posix() != V9_EVIDENCE_ROOT
+        or module.WINNER_FREEZE_PATH.as_posix() != V9_WINNER_FREEZE_PATH
+        or module.AUDIT_PATH.as_posix() != V9_AUDIT_PATH
+        or module.RESULT_PATH.as_posix() != V9_RESULT_PATH
+        or module.WORK_ROOT.resolve() != (resolved / V9_RUNTIME_PATH).resolve()
+        or module.PRIOR_TAG_OBJECT != V81_TAG_OBJECT
+        or module.PRIOR_COMMIT != V81_TAG_COMMIT
     ):
-        raise ValueError("8.1 runner contains an incorrect release namespace")
+        raise ValueError("9.0 runner contains an incorrect release namespace")
     return module
 
 
-def _v81_require_head_ci(root: Path) -> str:
+def _v9_require_head_ci(root: Path) -> str:
     head = subprocess.run(
         ["git", "rev-parse", "HEAD"],
         cwd=root,
@@ -1262,7 +1276,7 @@ def _v81_require_head_ci(root: Path) -> str:
         stderr=subprocess.PIPE,
         text=True,
     ).stdout.strip()
-    _load_v81_runner(root)._require_head_pushed_and_ci_success(head)
+    _load_v9_runner(root)._require_head_pushed_and_ci_success(head)
     return head
 
 
@@ -2234,17 +2248,194 @@ def _strategy_status_8_0(
         }, 3
 
 
-def _strategy_status_8_1_pending(
+def _verify_published_8_1_archive(root: Path) -> dict[str, Any]:
+    def git(*args: str, check: bool = True) -> bytes:
+        completed = subprocess.run(
+            ["git", *args],
+            cwd=root,
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if check and completed.returncode != 0:
+            raise ValueError(
+                "could not verify the published 8.1 archive: "
+                + completed.stderr.decode("utf-8", errors="replace").strip()
+            )
+        return completed.stdout
+
+    if (
+        git("cat-file", "-t", "refs/tags/8.1").decode("ascii").strip() != "tag"
+        or git("rev-parse", "refs/tags/8.1").decode("ascii").strip()
+        != V81_TAG_OBJECT
+        or git("rev-parse", "refs/tags/8.1^{}").decode("ascii").strip()
+        != V81_TAG_COMMIT
+    ):
+        raise ValueError("local 8.1 annotated tag identity differs")
+    remote = {
+        ref: object_id
+        for object_id, ref in (
+            line.split()
+            for line in git(
+                "ls-remote",
+                "--exit-code",
+                "origin",
+                "refs/tags/8.1",
+                "refs/tags/8.1^{}",
+            )
+            .decode("ascii")
+            .splitlines()
+        )
+    }
+    if remote != {
+        "refs/tags/8.1": V81_TAG_OBJECT,
+        "refs/tags/8.1^{}": V81_TAG_COMMIT,
+    }:
+        raise ValueError("local and GitHub 8.1 tag identities differ")
+    specs = (
+        (V81_PROTOCOL_PATH, V81_PROTOCOL_FILE_SHA256, V81_PROTOCOL_PAYLOAD_SHA256),
+        (V81_CLOSURE_PATH, V81_CLOSURE_FILE_SHA256, V81_CLOSURE_PAYLOAD_SHA256),
+        (
+            V81_RECLASSIFICATION_PATH,
+            V81_RECLASSIFICATION_FILE_SHA256,
+            V81_RECLASSIFICATION_PAYLOAD_SHA256,
+        ),
+        (V81_WINNER_FREEZE_PATH, V81_FREEZE_FILE_SHA256, V81_FREEZE_PAYLOAD_SHA256),
+        (V81_RESULT_PATH, V81_RESULT_FILE_SHA256, V81_RESULT_PAYLOAD_SHA256),
+    )
+    values: dict[str, dict[str, Any]] = {}
+    for relative, expected_file, expected_payload in specs:
+        path = root / relative
+        if path.is_symlink() or not path.is_file():
+            raise ValueError(f"published 8.1 archive file is missing or indirect: {relative}")
+        working = path.read_bytes()
+        tagged = git("show", f"{V81_TAG_COMMIT}:{relative}")
+        value = json.loads(working.decode("utf-8"))
+        if (
+            working != tagged
+            or _file_sha256(path) != expected_file
+            or value.get("payload_sha256") != expected_payload
+            or _canonical_payload_sha256(value) != expected_payload
+        ):
+            raise ValueError(f"published 8.1 archive differs: {relative}")
+        values[relative] = value
+    protocol = values[V81_PROTOCOL_PATH]
+    closure = values[V81_CLOSURE_PATH]
+    reclassification = values[V81_RECLASSIFICATION_PATH]
+    freeze = values[V81_WINNER_FREEZE_PATH]
+    result = values[V81_RESULT_PATH]
+    audit_in_tag = subprocess.run(
+        ["git", "cat-file", "-e", f"{V81_TAG_COMMIT}:{V81_AUDIT_PATH}"],
+        cwd=root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    ).returncode == 0
+    if (
+        protocol.get("release") != "8.1"
+        or protocol.get("protocol_id") != V81_PROTOCOL_ID
+        or closure.get("release") != "8.1"
+        or reclassification.get("status") != "train_reclassification_passed"
+        or freeze.get("status") != "selected_null_frozen_validation_failed"
+        or freeze.get("selected_candidate_id") is not None
+        or freeze.get("validation_market_outcomes_opened") is not True
+        or freeze.get("audit_market_outcomes_opened") is not False
+        or result.get("status") != "selection_falsified_no_candidate"
+        or result.get("selected_candidate_id") is not None
+        or result.get("audit_status") != "not_opened"
+        or (root / V81_AUDIT_PATH).exists()
+        or audit_in_tag
+    ):
+        raise ValueError("published 8.1 terminal null archive differs")
+    return {
+        "protocol": protocol,
+        "closure": closure,
+        "train_reclassification": reclassification,
+        "freeze": freeze,
+        "result": result,
+    }
+
+
+def _strategy_status_8_1_archived(
     root: Path, *, verify_data: bool
 ) -> tuple[dict[str, Any], int]:
-    """Report the 8.1 pre-closure state without opening any market outcomes."""
+    del verify_data
+    checks: list[dict[str, Any]] = []
+    try:
+        if not _working_tree_is_clean(root):
+            raise RuntimeError("8.1 archive status requires a clean worktree")
+        archive = _verify_published_8_1_archive(root)
+        checks.extend(
+            [
+                {
+                    "category": "local_archived_annotated_tag",
+                    "path": "refs/tags/8.1",
+                    "status": "match",
+                    "tag_object": V81_TAG_OBJECT,
+                    "peeled_commit": V81_TAG_COMMIT,
+                },
+                {
+                    "category": "terminal_result",
+                    "path": V81_RESULT_PATH,
+                    "status": "match",
+                    "payload_sha256": archive["result"]["payload_sha256"],
+                },
+            ]
+        )
+        return {
+            "status": "selection_falsified_no_candidate",
+            "version": "8.1",
+            "route": V81_ROUTE,
+            "protocol_id": V81_PROTOCOL_ID,
+            "historical_evidence_class": "post_hoc_train_reclassification_then_public_validation",
+            "post_hoc_reclassification": True,
+            "profit_claim_allowed": False,
+            "selected_candidate_id": None,
+            "train_reclassification_status": "train_reclassification_passed",
+            "winner_freeze_status": "selected_null_frozen_validation_failed",
+            "audit_status": "not_opened",
+            "terminal_result_status": "selection_falsified_no_candidate",
+            "terminal_result_payload_sha256": archive["result"]["payload_sha256"],
+            "canonical_data_hashes_verified": False,
+            "checks": checks,
+        }, 0
+    except (
+        OSError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+        subprocess.SubprocessError,
+    ) as exc:
+        checks.append(
+            {
+                "category": "published_8_1_archive",
+                "path": "refs/tags/8.1",
+                "status": "mismatch",
+                "error": str(exc),
+            }
+        )
+        return {
+            "status": "integrity_mismatch",
+            "version": "8.1",
+            "route": V81_ROUTE,
+            "protocol_id": None,
+            "profit_claim_allowed": False,
+            "selected_candidate_id": None,
+            "audit_status": "unknown",
+            "terminal_result_payload_sha256": None,
+            "canonical_data_hashes_verified": False,
+            "checks": checks,
+        }, 3
 
-    del verify_data  # Prior-train admission is always deep; no 8.1 stage exists yet.
+
+def _strategy_status_9_0_pending(
+    root: Path, *, verify_data: bool
+) -> tuple[dict[str, Any], int]:
+    del verify_data  # Prior 8.1 readiness is always deep before the 9.0 closure.
     checks: list[dict[str, Any]] = []
     failures: list[dict[str, Any]] = []
     runner: Any | None = None
     try:
-        runner = _load_v81_runner(root)
+        runner = _load_v9_runner(root)
         checks.append(
             {
                 "category": "formal_runner_namespace",
@@ -2261,87 +2452,90 @@ def _strategy_status_8_1_pending(
         }
         checks.append(item)
         failures.append(item)
-
     protocol, protocol_check = _v7_json_check(
         root,
-        V81_PROTOCOL_PATH,
-        expected_payload=V81_PROTOCOL_PAYLOAD_SHA256,
-        expected_file=V81_PROTOCOL_FILE_SHA256,
+        V9_PROTOCOL_PATH,
+        expected_payload=V9_PROTOCOL_PAYLOAD_SHA256,
+        expected_file=V9_PROTOCOL_FILE_SHA256,
     )
     protocol_check["category"] = "protocol_payload"
     checks.append(protocol_check)
     if protocol_check.get("status") != "match":
         failures.append(protocol_check)
-    if protocol is not None:
-        prior = protocol.get("prior_release") or {}
-        correction = protocol.get("correction_boundary") or {}
-        role_contract = protocol.get("metric_role_contract") or {}
+    scout, scout_check = _v7_json_check(
+        root,
+        V9_SCOUT_PATH,
+        expected_payload=V9_SCOUT_PAYLOAD_SHA256,
+        expected_file=V9_SCOUT_FILE_SHA256,
+    )
+    scout_check["category"] = "preprotocol_scout_payload"
+    checks.append(scout_check)
+    if scout_check.get("status") != "match":
+        failures.append(scout_check)
+    if protocol is not None and scout is not None:
         valid = (
-            protocol.get("release") == "8.1"
-            and protocol.get("direction_change") is False
-            and protocol.get("route") == V81_ROUTE
-            and protocol.get("protocol_id") == V81_PROTOCOL_ID
-            and prior.get("annotated_tag_object") == V8_TAG_OBJECT
-            and prior.get("peeled_commit") == V8_TAG_COMMIT
-            and correction.get("post_hoc_reclassification") is True
-            and correction.get("train_market_data_reaccess_allowed") is False
-            and correction.get("train_strategy_rerun_allowed") is False
-            and (role_contract.get("policy_operational_metrics") or {}).get("roles")
-            == ["primary", "stress"]
-            and (role_contract.get("cash_role_diagnostics") or {}).get(
-                "required_and_disclosed"
+            protocol.get("release") == "9.0"
+            and protocol.get("direction_change") is True
+            and protocol.get("route") == V9_ROUTE
+            and protocol.get("strategy_id") == V9_ROUTE
+            and protocol.get("protocol_id") == V9_PROTOCOL_ID
+            and protocol.get("development_disclosure", {}).get(
+                "development_is_independent_oos"
             )
-            is True
+            is False
+            and protocol.get("physical_phases", {}).get("audit", {}).get(
+                "market_outcome_opened"
+            )
+            is False
+            and protocol.get("preprotocol_scout", {}).get("payload_sha256")
+            == scout.get("payload_sha256")
+            and scout.get("status")
+            == "selected_volatility_balanced_after_fully_exposed_development"
             and (protocol.get("claim_contract") or {}).get("profit_claim_allowed")
             is False
         )
         item = {
-            "category": "post_hoc_reclassification_contract",
-            "path": V81_PROTOCOL_PATH,
+            "category": "causal_volatility_balanced_contract",
+            "path": V9_PROTOCOL_PATH,
             "status": "match" if valid else "mismatch",
         }
         checks.append(item)
         if not valid:
             failures.append(item)
-
     try:
-        failure, _data_verified, tag_verified = _verify_8_0_failure_archive(
-            root, verify_data=False
+        archive = _verify_published_8_1_archive(root)
+        if runner is None:
+            raise ValueError("9.0 runner unavailable for retained 8.1 readiness")
+        readiness = runner._verify_prior_8_1_archive(
+            verify_data=True, verify_runtime=True
         )
-        if not tag_verified:
-            raise ValueError("published 8.0 annotated tag is required")
-        if runner is None or protocol is None:
-            raise ValueError("8.1 runner/protocol is unavailable for train admission")
-        execution_validity = runner._verify_prior_train_artifacts(failure)
-        admission_metrics = runner._combine_receipt_role_gate_metrics(
-            failure["train_stage"]["role_gate_metrics"],
-            execution_validity=execution_validity,
-        )
-        runner._require_execution_validity(
-            admission_metrics, protocol["execution_validity_hard_fail"]
-        )
-        checks.append(
-            {
-                "category": "published_8_0_failure_archive",
-                "path": "refs/tags/8.0",
-                "status": "match",
-                "tag_object": V8_TAG_OBJECT,
-                "tag_commit": V8_TAG_COMMIT,
-            }
-        )
-        checks.append(
-            {
-                "category": "retained_8_0_train_admission",
-                "path": V8_RUNTIME_PATH,
-                "status": "match",
-                "artifact_parquet_count": execution_validity[
-                    "artifact_parquet_count"
-                ],
-                "artifact_row_count": execution_validity["artifact_row_count"],
-                "execution_validity_sha256": _canonical_payload_sha256(
-                    execution_validity
-                ),
-            }
+        if (
+            readiness.get("status") != "selection_falsified_no_candidate"
+            or readiness.get("deep_data_verified") is not True
+            or readiness.get("deep_runtime_verified") is not True
+            or readiness.get("artifact_parquet_count") != 20
+            or readiness.get("artifact_row_count") != 62654
+        ):
+            raise ValueError("retained 8.1 archive readiness differs")
+        checks.extend(
+            [
+                {
+                    "category": "published_8_1_archive",
+                    "path": "refs/tags/8.1",
+                    "status": "match",
+                    "terminal_payload_sha256": archive["result"]["payload_sha256"],
+                },
+                {
+                    "category": "retained_8_1_development_readiness",
+                    "path": V81_RUNTIME_PATH,
+                    "status": "match",
+                    "archive_identity_sha256": readiness[
+                        "archive_identity_sha256"
+                    ],
+                    "artifact_parquet_count": 20,
+                    "artifact_row_count": 62654,
+                },
+            ]
         )
     except (
         AttributeError,
@@ -2352,15 +2546,14 @@ def _strategy_status_8_1_pending(
         subprocess.SubprocessError,
     ) as exc:
         item = {
-            "category": "published_8_0_failure_archive",
-            "path": "refs/tags/8.0",
+            "category": "retained_8_1_development_readiness",
+            "path": V81_RUNTIME_PATH,
             "status": "mismatch",
             "error": str(exc),
         }
         checks.append(item)
         failures.append(item)
-
-    for relative in (V81_CLOSURE_PATH, V81_EVIDENCE_ROOT, V81_RUNTIME_PATH):
+    for relative in (V9_CLOSURE_PATH, V9_EVIDENCE_ROOT, V9_RUNTIME_PATH):
         path = root / relative
         exists = path.exists() or path.is_symlink()
         item = {
@@ -2371,7 +2564,6 @@ def _strategy_status_8_1_pending(
         checks.append(item)
         if exists:
             failures.append(item)
-
     clean = _working_tree_is_clean(root)
     checks.append(
         {
@@ -2382,7 +2574,7 @@ def _strategy_status_8_1_pending(
     )
     if clean and not failures:
         try:
-            head = _v81_require_head_ci(root)
+            head = _v9_require_head_ci(root)
             checks.append(
                 {
                     "category": "preclosure_head_push_ci",
@@ -2400,100 +2592,70 @@ def _strategy_status_8_1_pending(
             }
             checks.append(item)
             failures.append(item)
-
     status, exit_code = (
         ("integrity_mismatch", 3)
         if failures
-        else ("implementation_ready_for_prevalidation_closure", 0)
+        else ("implementation_ready_for_preselection_closure", 0)
         if clean
         else ("implementation_pending_clean_commit", 2)
     )
-    claim = protocol.get("claim_contract") if protocol is not None else {}
     return {
         "status": status,
-        "version": "8.1",
-        "route": V81_ROUTE,
-        "protocol_id": protocol.get("protocol_id") if protocol is not None else None,
-        "historical_evidence_class": (
-            claim.get("historical_pass_interpretation")
-            if isinstance(claim, Mapping)
-            else None
-        ),
-        "post_hoc_reclassification": True,
+        "version": "9.0",
+        "route": V9_ROUTE,
+        "protocol_id": protocol.get("protocol_id") if protocol else None,
+        "development_evidence_class": "fully_exposed_post_selection_non_oos",
         "profit_claim_allowed": False,
         "selected_candidate_id": None,
-        "train_reclassification_status": "not_created",
-        "train_reclassification_payload_sha256": None,
         "winner_freeze_status": "not_created",
-        "winner_freeze_payload_sha256": None,
         "audit_status": "not_opened",
-        "historical_audit_payload_sha256": None,
         "terminal_result_status": "not_created",
         "terminal_result_payload_sha256": None,
-        "canonical_data_hashes_verified": any(
-            check.get("category") == "retained_8_0_train_admission"
-            and check.get("status") == "match"
-            for check in checks
-        ),
+        "canonical_data_hashes_verified": False,
         "checks": checks,
     }, exit_code
 
 
-def _strategy_status_8_1(
+def _strategy_status_9_0(
     root: Path, *, verify_data: bool
 ) -> tuple[dict[str, Any], int]:
-    if not (root / V81_CLOSURE_PATH).is_file():
-        return _strategy_status_8_1_pending(root, verify_data=verify_data)
-
+    if not (root / V9_CLOSURE_PATH).is_file():
+        return _strategy_status_9_0_pending(root, verify_data=verify_data)
     checks: list[dict[str, Any]] = []
     try:
-        verifier = _load_v81_runner(root)
+        verifier = _load_v9_runner(root)
         state = verifier.verify_release_state(
-            verify_data=verify_data,
-            verify_runtime=False,
+            verify_data=verify_data, verify_runtime=False
         )
         closure = state["closure"]
         protocol = state["protocol"]
-        reclassification = state["train_reclassification"]
         freeze = state["freeze"]
         audit = state["audit"]
         result = state["result"]
-        new_phase_evidence_present = bool(
-            (freeze is not None and freeze.get("validation") is not None)
-            or audit is not None
+        data_verified = bool(verify_data and freeze is not None)
+        checks.extend(
+            [
+                {
+                    "category": "release_evidence_chain",
+                    "path": V9_CLOSURE_PATH,
+                    "status": "match",
+                },
+                {
+                    "category": "canonical_stage_artifacts",
+                    "path": V9_RUNTIME_PATH,
+                    "status": (
+                        "match"
+                        if data_verified
+                        else "not_applicable"
+                        if freeze is None
+                        else "not_verified"
+                    ),
+                },
+            ]
         )
-        data_verified = bool(verify_data and new_phase_evidence_present)
-        checks.append(
-            {
-                "category": "release_evidence_chain",
-                "path": V81_CLOSURE_PATH,
-                "status": "match",
-            }
-        )
-        checks.append(
-            {
-                "category": "canonical_stage_artifacts",
-                "path": V81_RUNTIME_PATH,
-                "status": (
-                    "match"
-                    if data_verified
-                    else "not_applicable"
-                    if not new_phase_evidence_present
-                    else "not_verified"
-                ),
-            }
-        )
-        clean = _working_tree_is_clean(root)
-        checks.append(
-            {
-                "category": "working_tree",
-                "path": ".",
-                "status": "match" if clean else "mismatch",
-            }
-        )
-        if not clean:
-            raise RuntimeError("8.1 formal status requires a clean worktree")
-        head = _v81_require_head_ci(root)
+        if not _working_tree_is_clean(root):
+            raise RuntimeError("9.0 formal status requires a clean worktree")
+        head = _v9_require_head_ci(root)
         checks.append(
             {
                 "category": "head_push_ci",
@@ -2509,42 +2671,27 @@ def _strategy_status_8_1(
             if freeze is not None
             else None
         )
-        audit_status = (
-            result.get("audit_status")
-            if result is not None
-            else audit.get("status")
-            if audit is not None
-            else "not_opened"
-        )
-        claim = protocol.get("claim_contract") or {}
         return {
             "status": state["status"],
-            "version": "8.1",
-            "route": closure.get("route", V81_ROUTE),
+            "version": "9.0",
+            "route": closure.get("route", V9_ROUTE),
             "protocol_id": protocol.get("protocol_id"),
-            "historical_evidence_class": claim.get(
-                "historical_pass_interpretation"
-            ),
-            "post_hoc_reclassification": True,
+            "development_evidence_class": "fully_exposed_post_selection_non_oos",
             "profit_claim_allowed": False,
             "selected_candidate_id": selected,
-            "train_reclassification_status": (
-                reclassification.get("status")
-                if reclassification is not None
-                else "not_created"
-            ),
-            "train_reclassification_payload_sha256": (
-                reclassification.get("payload_sha256")
-                if reclassification is not None
-                else None
-            ),
             "winner_freeze_status": (
                 freeze.get("status") if freeze is not None else "not_created"
             ),
             "winner_freeze_payload_sha256": (
                 freeze.get("payload_sha256") if freeze is not None else None
             ),
-            "audit_status": audit_status,
+            "audit_status": (
+                result.get("audit_status")
+                if result is not None
+                else audit.get("status")
+                if audit is not None
+                else "not_opened"
+            ),
             "historical_audit_payload_sha256": (
                 audit.get("payload_sha256") if audit is not None else None
             ),
@@ -2568,26 +2715,20 @@ def _strategy_status_8_1(
         checks.append(
             {
                 "category": "release_evidence_chain",
-                "path": V81_CLOSURE_PATH,
+                "path": V9_CLOSURE_PATH,
                 "status": "mismatch",
                 "error": str(exc),
             }
         )
         return {
             "status": "integrity_mismatch",
-            "version": "8.1",
-            "route": V81_ROUTE,
+            "version": "9.0",
+            "route": V9_ROUTE,
             "protocol_id": None,
-            "historical_evidence_class": None,
-            "post_hoc_reclassification": True,
             "profit_claim_allowed": False,
             "selected_candidate_id": None,
-            "train_reclassification_status": "unknown",
-            "train_reclassification_payload_sha256": None,
             "winner_freeze_status": "unknown",
-            "winner_freeze_payload_sha256": None,
             "audit_status": "unknown",
-            "historical_audit_payload_sha256": None,
             "terminal_result_status": "unknown",
             "terminal_result_payload_sha256": None,
             "canonical_data_hashes_verified": False,
@@ -2728,7 +2869,7 @@ def _strategy_status_7_1_archived(
 def _strategy_status(
     root: Path, *, verify_data: bool, release: str | None = None
 ) -> tuple[dict[str, Any], int]:
-    selected = release or "8.1"
+    selected = release or "9.0"
     if selected == "6.0":
         return _strategy_status_6_0(root, verify_data=verify_data)
     if selected == "6.3":
@@ -2740,7 +2881,9 @@ def _strategy_status(
     if selected == "8.0":
         return _strategy_status_8_0(root, verify_data=verify_data)
     if selected == "8.1":
-        return _strategy_status_8_1(root, verify_data=verify_data)
+        return _strategy_status_8_1_archived(root, verify_data=verify_data)
+    if selected == "9.0":
+        return _strategy_status_9_0(root, verify_data=verify_data)
     raise ValueError(f"unsupported strategy release: {selected}")
 
 

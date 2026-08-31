@@ -22,6 +22,7 @@ import pandas as pd
 CANDIDATE_ID = "causal_multi_horizon_trend_budget"
 CONTROL_ID = "static_risk_budget"
 CASH_ONLY_ID = "cash_only_511880"
+VOLATILITY_BALANCED_ID = "causal_monthly_volatility_balanced_budget"
 CASH_CODE = "511880.SH"
 RISK_BUDGETS: dict[str, float] = {
     "510300.SH": 0.30,
@@ -33,6 +34,9 @@ RISK_BUDGETS: dict[str, float] = {
 RISK_CODES = tuple(RISK_BUDGETS)
 ALL_CODES = (*RISK_CODES, CASH_CODE)
 TREND_HORIZONS = (63, 126, 252)
+VOLATILITY_LEVEL_LOOKBACK = 127
+VOLATILITY_RETURN_COUNT = VOLATILITY_LEVEL_LOOKBACK - 1
+VOLATILITY_FLOOR = 1e-12
 FIRST_SIGNAL_DATE = pd.Timestamp("2015-02-27")
 INITIAL_CAPITAL_RMB = 1_000_000.0
 LOT_SIZE = 100
@@ -258,6 +262,54 @@ def _normalize_market_data(
     return normalized, official
 
 
+def _volatility_balanced_snapshot(
+    frames: Mapping[str, pd.DataFrame], signal_date: pd.Timestamp
+) -> tuple[dict[str, float], dict[str, float], bool]:
+    """Return one all-or-static causal inverse-volatility snapshot."""
+
+    volatilities: dict[str, float] = {}
+    for code in RISK_CODES:
+        frame = frames[code]
+        observed = frame.loc[
+            frame.index.to_series().le(signal_date) & frame["_observed"],
+            "total_return_index",
+        ].tail(VOLATILITY_LEVEL_LOOKBACK)
+        if len(observed) != VOLATILITY_LEVEL_LOOKBACK:
+            return ({**RISK_BUDGETS, CASH_CODE: 0.0}, {}, True)
+        levels = observed.to_numpy(dtype=float)
+        returns = levels[1:] / levels[:-1] - 1.0
+        if len(returns) != VOLATILITY_RETURN_COUNT or not np.isfinite(returns).all():
+            return ({**RISK_BUDGETS, CASH_CODE: 0.0}, {}, True)
+        volatility = float(
+            np.std(returns, ddof=1) * math.sqrt(TRADING_DAYS_PER_YEAR)
+        )
+        if not math.isfinite(volatility) or volatility <= VOLATILITY_FLOOR:
+            return ({**RISK_BUDGETS, CASH_CODE: 0.0}, {}, True)
+        volatilities[code] = volatility
+
+    raw = {
+        code: float(RISK_BUDGETS[code]) / volatilities[code]
+        for code in RISK_CODES
+    }
+    denominator = math.fsum(raw.values())
+    if not math.isfinite(denominator) or denominator <= 0.0:
+        return ({**RISK_BUDGETS, CASH_CODE: 0.0}, {}, True)
+    weights = {code: raw[code] / denominator for code in RISK_CODES}
+    last_code = RISK_CODES[-1]
+    weights[last_code] = 1.0 - math.fsum(
+        weights[code] for code in RISK_CODES[:-1]
+    )
+    if (
+        any(not math.isfinite(value) or value < 0.0 for value in weights.values())
+        or not math.isclose(
+            math.fsum(weights.values()), 1.0, rel_tol=0.0, abs_tol=1e-12
+        )
+    ):
+        return ({**RISK_BUDGETS, CASH_CODE: 0.0}, {}, True)
+    weights[CASH_CODE] = 0.0
+    return weights, volatilities, False
+
+
 def build_monthly_targets(
     market_data: Mapping[str, pd.DataFrame],
     official_sessions: Sequence[Any],
@@ -265,7 +317,12 @@ def build_monthly_targets(
 ) -> pd.DataFrame:
     """Build targets from official month ends without reading next-session prices."""
 
-    if strategy_id not in {CANDIDATE_ID, CONTROL_ID, CASH_ONLY_ID}:
+    if strategy_id not in {
+        CANDIDATE_ID,
+        CONTROL_ID,
+        CASH_ONLY_ID,
+        VOLATILITY_BALANCED_ID,
+    }:
         raise ValueError(f"unknown multi-asset strategy_id: {strategy_id}")
     frames, official = _normalize_market_data(market_data, official_sessions)
     available = tuple(frames[CASH_CODE].index)
@@ -288,27 +345,36 @@ def build_monthly_targets(
         signal_index = available_position[signal_date]
         weights: dict[str, float] = {}
         fractions: dict[str, float] = {}
-        for code, budget in RISK_BUDGETS.items():
-            if strategy_id == CASH_ONLY_ID:
-                fraction = 0.0
-            elif strategy_id == CONTROL_ID:
-                fraction = 1.0
-            elif signal_index < max(TREND_HORIZONS):
-                fraction = 0.0
-            else:
-                tri = frames[code]["total_return_index"].to_numpy(dtype=float)
-                positives = sum(
-                    (
-                        (tri[signal_index] / tri[signal_index - horizon])
-                        / (cash_tri[signal_index] / cash_tri[signal_index - horizon])
+        volatilities: dict[str, float] = {}
+        volatility_fallback_static = False
+        if strategy_id == VOLATILITY_BALANCED_ID:
+            (
+                weights,
+                volatilities,
+                volatility_fallback_static,
+            ) = _volatility_balanced_snapshot(frames, signal_date)
+        else:
+            for code, budget in RISK_BUDGETS.items():
+                if strategy_id == CASH_ONLY_ID:
+                    fraction = 0.0
+                elif strategy_id == CONTROL_ID:
+                    fraction = 1.0
+                elif signal_index < max(TREND_HORIZONS):
+                    fraction = 0.0
+                else:
+                    tri = frames[code]["total_return_index"].to_numpy(dtype=float)
+                    positives = sum(
+                        (
+                            (tri[signal_index] / tri[signal_index - horizon])
+                            / (cash_tri[signal_index] / cash_tri[signal_index - horizon])
+                        )
+                        > 1.0
+                        for horizon in TREND_HORIZONS
                     )
-                    > 1.0
-                    for horizon in TREND_HORIZONS
-                )
-                fraction = float(positives) / len(TREND_HORIZONS)
-            fractions[code] = fraction
-            weights[code] = float(budget) * fraction
-        weights[CASH_CODE] = 1.0 - math.fsum(weights.values())
+                    fraction = float(positives) / len(TREND_HORIZONS)
+                fractions[code] = fraction
+                weights[code] = float(budget) * fraction
+            weights[CASH_CODE] = 1.0 - math.fsum(weights.values())
 
         for code in ALL_CODES:
             adv = frames[code].at[signal_date, "adv20_rmb"]
@@ -326,21 +392,32 @@ def build_monthly_targets(
                         float(fractions[code]) if code in fractions else np.nan
                     ),
                     "signal_adv20_rmb": float(adv),
+                    "realized_volatility": (
+                        float(volatilities[code])
+                        if strategy_id == VOLATILITY_BALANCED_ID
+                        and code in volatilities
+                        else np.nan
+                    ),
+                    "volatility_fallback_static": (
+                        bool(volatility_fallback_static)
+                        if strategy_id == VOLATILITY_BALANCED_ID
+                        else np.nan
+                    ),
                 }
             )
-    return pd.DataFrame(
-        rows,
-        columns=[
-            "strategy_id",
-            "signal_date",
-            "execution_date",
-            "code",
-            "target_weight",
-            "base_budget",
-            "trend_positive_fraction",
-            "signal_adv20_rmb",
-        ],
-    )
+    columns = [
+        "strategy_id",
+        "signal_date",
+        "execution_date",
+        "code",
+        "target_weight",
+        "base_budget",
+        "trend_positive_fraction",
+        "signal_adv20_rmb",
+    ]
+    if strategy_id == VOLATILITY_BALANCED_ID:
+        columns.extend(["realized_volatility", "volatility_fallback_static"])
+    return pd.DataFrame(rows, columns=columns)
 
 
 def _validate_targets(
@@ -367,9 +444,28 @@ def _validate_targets(
         CANDIDATE_ID,
         CONTROL_ID,
         CASH_ONLY_ID,
+        VOLATILITY_BALANCED_ID,
     }:
         raise ValueError("targets must contain exactly one registered strategy")
     strategy_id = str(work["strategy_id"].iloc[0])
+    volatility_columns = {"realized_volatility", "volatility_fallback_static"}
+    if strategy_id == VOLATILITY_BALANCED_ID:
+        volatility_required = {
+            "base_budget",
+            "trend_positive_fraction",
+            *volatility_columns,
+        }
+        volatility_missing = sorted(volatility_required - set(work.columns))
+        if volatility_missing:
+            raise ValueError(
+                "volatility-balanced targets lack frozen diagnostics: "
+                f"{volatility_missing}"
+            )
+        work["realized_volatility"] = pd.to_numeric(
+            work["realized_volatility"], errors="coerce"
+        )
+    elif volatility_columns & set(work.columns):
+        raise ValueError("volatility diagnostics require the exact volatility strategy_id")
     for column in ("signal_date", "execution_date"):
         work[column] = pd.to_datetime(work[column], errors="coerce").dt.normalize()
     work["code"] = work["code"].astype(str)
@@ -418,6 +514,42 @@ def _validate_targets(
                     "cash-only targets must allocate exactly zero to every risk ETF "
                     f"and one to {CASH_CODE}"
                 )
+        if strategy_id == VOLATILITY_BALANCED_ID:
+            indexed = group.set_index("code")
+            expected_weights, expected_volatilities, expected_fallback = (
+                _volatility_balanced_snapshot(frames, signal_date)
+            )
+            if any(
+                float(indexed.at[code, "target_weight"])
+                != float(expected_weights[code])
+                for code in ALL_CODES
+            ):
+                raise ValueError(
+                    "volatility-balanced target weights differ from causal history"
+                )
+            if any(
+                float(indexed.at[code, "base_budget"])
+                != float(RISK_BUDGETS.get(code, 0.0))
+                for code in ALL_CODES
+            ) or not indexed["trend_positive_fraction"].isna().all():
+                raise ValueError("volatility-balanced frozen diagnostics differ")
+            fallback_values = indexed["volatility_fallback_static"]
+            if not fallback_values.map(
+                lambda value: isinstance(value, (bool, np.bool_))
+            ).all() or not fallback_values.map(bool).eq(expected_fallback).all():
+                raise ValueError("volatility-balanced fallback identity differs")
+            if expected_fallback:
+                if not indexed["realized_volatility"].isna().all():
+                    raise ValueError("static fallback must not disclose partial volatility")
+            else:
+                if not pd.isna(indexed.at[CASH_CODE, "realized_volatility"]) or any(
+                    float(indexed.at[code, "realized_volatility"])
+                    != float(expected_volatilities[code])
+                    for code in RISK_CODES
+                ):
+                    raise ValueError(
+                        "volatility-balanced realized volatility differs from causal history"
+                    )
         for row in group.itertuples(index=False):
             if not bool(frames[row.code].at[signal_date, "_observed"]):
                 raise ValueError("target uses an unobserved signal row")

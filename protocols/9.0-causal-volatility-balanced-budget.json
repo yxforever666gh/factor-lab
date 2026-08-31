@@ -1,0 +1,361 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_research_protocol",
+  "protocol_id": "factor-lab/9.0/causal-monthly-volatility-balanced-budget-v1",
+  "release": "9.0",
+  "direction_change": true,
+  "route": "causal_monthly_volatility_balanced_budget",
+  "status": "frozen_after_fully_exposed_development_before_formal_replay_and_first_2023_plus_audit",
+  "prior_release": {
+    "release": "8.1",
+    "tag": "8.1",
+    "annotated_tag_object": "8f575ed3833c8cc01f89e7a951d4234bd7ee6622",
+    "peeled_commit": "a4c0d36f727e99f6b2353facf24fd3cdedba958e",
+    "protocol": {
+      "path": "protocols/8.1-policy-operational-metric-reclassification.json",
+      "file_sha256": "b0a213b62cf6f2723425e77d01565fd8c29721960d50d4a25d19306f3817c583",
+      "payload_sha256": "2fc5ea8316173f7fd19fbf5c34248e5a70b2a901c99345dcf8d933826fa15ee5"
+    },
+    "preselection_closure": {
+      "path": "protocols/8.1-release.json",
+      "file_sha256": "ef1596fa5cfbfdfd0c27d74c2747dcc852b7f209a4e27de2b7c01c6d8dbcc557",
+      "payload_sha256": "f4a47421d08ca77eca6b27fd6417909a04c3eaf789c11d9ca069366412440ef5"
+    },
+    "train_reclassification": {
+      "path": "protocols/evidence/8.1/train-reclassification.json",
+      "file_sha256": "bfd2c0c801259394861eba000a8e34bc9617cba3adcf6629d7e8b501ccf3c51b",
+      "payload_sha256": "4f498ffc12deac61144c77c56ba89cb9abccc034d2d73df4f1df8a6c50184c79",
+      "status": "train_reclassification_passed"
+    },
+    "winner_freeze": {
+      "path": "protocols/evidence/8.1/winner-freeze.json",
+      "file_sha256": "b865e80cb899f7e5274d72b46ab1e0d88dad64b0ab2eb4e46750c5cec2167387",
+      "payload_sha256": "d10f51b522a16838a4744fa16d770a720d34c2d340c2bf0bd5a05bedc61ceb76",
+      "status": "selected_null_frozen_validation_failed"
+    },
+    "terminal_result": {
+      "path": "protocols/evidence/8.1/result.json",
+      "file_sha256": "bcbcb09974e6314190de7a835560c4abbc1cde79734ed4fcef759061653cd95d",
+      "payload_sha256": "d4496b9a64def6a443827737987d44ec77532cc9d11137a247302376a00ad6a4",
+      "status": "selection_falsified_no_candidate",
+      "selected_candidate_id": null,
+      "audit_status": "not_opened"
+    }
+  },
+  "preprotocol_scout": {
+    "path": "protocols/9.0-preprotocol-scout.json",
+    "file_sha256": "44b90b964ecca9a30029b1dfad45ae313ae4a5c12a91d82ba885ceecb826b857",
+    "payload_sha256": "71926f08ce5ca2ab1b6470f7d3ee385371c4bfaf3243c5f942a891f63a8075a0",
+    "status": "selected_volatility_balanced_after_fully_exposed_development",
+    "prototype_count": 2,
+    "formal_candidate_count": 1
+  },
+  "development_disclosure": {
+    "all_2015_2022_market_outcomes_were_opened_before_this_protocol": true,
+    "candidate_was_selected_after_observing_development_results": true,
+    "development_is_independent_oos": false,
+    "fresh_cash_each_development_subperiod": true,
+    "development_subperiod_account_reuse": false,
+    "development_can_only_admit_a_fixed_candidate_to_the_first_unopened_audit": true,
+    "D1": {
+      "performance_start": "2015-03-02",
+      "performance_end": "2019-12-31",
+      "volatility_balanced_base_gate_passed_in_scout": true,
+      "volatility_balanced_stress_gate_passed_in_scout": true
+    },
+    "D2": {
+      "performance_start": "2020-01-02",
+      "performance_end": "2022-12-30",
+      "volatility_balanced_base_gate_passed_in_scout": true,
+      "volatility_balanced_stress_gate_passed_in_scout": true
+    },
+    "exponentiated_gradient_mixture_rejected": true,
+    "post_selection_formula_or_parameter_change_allowed": false,
+    "profit_or_reliability_claim_from_development_allowed": false
+  },
+  "strategy_id": "causal_monthly_volatility_balanced_budget",
+  "shared_absolute_gate": {
+    "base": {
+      "net_cagr_strictly_positive": true,
+      "candidate_cagr_strictly_above_investable_cash": true,
+      "net_sharpe_at_least": 0.3,
+      "daily_max_drawdown_at_least": -0.25,
+      "positive_complete_year_ratio_at_least": 0.5
+    },
+    "stress_16bp": {
+      "net_cagr_strictly_positive": true,
+      "candidate_cagr_strictly_above_investable_cash": true,
+      "net_sharpe_at_least": 0.25,
+      "daily_max_drawdown_at_least": -0.25,
+      "positive_complete_year_ratio_at_least": 0.5
+    },
+    "operational": {
+      "annualized_turnover_at_most": 1.0,
+      "requested_notional_fill_ratio_at_least": 0.99,
+      "capacity_limited_requested_notional_ratio_at_most": 0.01,
+      "nav_reconciliation_error_at_most": 1e-8
+    }
+  },
+  "relative_stability_gate": {
+    "sharpe_delta_at_least": 0.0,
+    "max_drawdown_delta_at_least": 0.0,
+    "positive_complete_year_ratio_delta_at_least": 0.0
+  },
+  "candidate_registry": {
+    "candidate_count": 1,
+    "maximum_candidate_count": 1,
+    "ordered_strategy_ids": [
+      "causal_monthly_volatility_balanced_budget"
+    ],
+    "strategy": {
+      "strategy_id": "causal_monthly_volatility_balanced_budget",
+      "strategy_class": "causal_monthly_volatility_balanced_strategic_beta",
+      "signal_schedule": "last official open session of each calendar month",
+      "execution_schedule": "next official open session",
+      "risk_assets": [
+        "510300.SH",
+        "159920.SZ",
+        "513100.SH",
+        "518880.SH",
+        "511010.SH"
+      ],
+      "cash_asset": "511880.SH",
+      "frozen_base_budget": {
+        "510300.SH": 0.3,
+        "159920.SZ": 0.1,
+        "513100.SH": 0.1,
+        "518880.SH": 0.2,
+        "511010.SH": 0.3,
+        "511880.SH": 0.0
+      },
+      "volatility_return_count": 126,
+      "required_observed_total_return_levels": 127,
+      "volatility_definition": "sample standard deviation with ddof=1 of the 126 simple returns between the latest 127 observed total-return-index levels not later than the signal close, multiplied by sqrt(252) before binary64 division to reproduce the selected prototype exactly",
+      "raw_risk_target": "frozen_base_budget_i / annualized_realized_volatility_i",
+      "normalization": "in fixed RISK_CODES order compute the first four weights as raw_i / math.fsum(raw), then set the fifth weight to 1.0 - math.fsum(the first four); the residual-normalized risk-weight sum is accepted within the frozen 1e-12 target-sum tolerance",
+      "cash_target_weight": 0.0,
+      "group_fallback": "if any risk asset lacks exactly 127 observed levels or has non-finite volatility or volatility not strictly greater than 1e-12, use the complete frozen static risk budget for that signal",
+      "volatility_floor": 1e-12,
+      "per_asset_cap": null,
+      "portfolio_target_volatility": null,
+      "leverage": false,
+      "rebalance_band": null,
+      "parameter_grid": false,
+      "second_model": false,
+      "runner_up_fallback": false
+    }
+  },
+  "frozen_source_and_execution_contract": {
+    "asset_selection": {
+      "path": "protocols/7.0-asset-selection.json",
+      "file_sha256": "6d2d819db2579db76f8e7830a5de090d8d471c7fdc657abd8aba626cd1b065ec",
+      "payload_sha256": "b00536d618c7fe46e3cbe8d258d2b2032ef4e0c16d40fb9c74ff016c34525e0b"
+    },
+    "data_and_execution_protocol": {
+      "path": "protocols/7.0-multi-asset.json",
+      "file_sha256": "2d2e96a1605b5e088a7cf5952dd816d8aecb10e39b9ba529fe81b00592bfa14f",
+      "payload_sha256": "6f2fcd2a67d52bfae19bedcaecf495faa986195f6840da48a3a67a666589aaf0"
+    },
+    "economic_gate_source": {
+      "path": "protocols/8.0-static-capital-budget.json",
+      "file_sha256": "ac4a6f94cfbbe709c26120bad7499196fa36fc497f366cf445896cd486519abc",
+      "payload_sha256": "801374f58aa5edd66365e0937ed119082559f2950cc1106134a3cdb58e0099e7"
+    },
+    "initial_capital_rmb": 1000000,
+    "base_cost_bps_per_side": 8.0,
+    "stress_cost_bps_per_side": 16.0,
+    "maximum_signal_adv20_fraction": 0.1,
+    "lot_size_shares": 100,
+    "fresh_cash_each_formal_stage": true,
+    "fresh_cash_each_development_subperiod": true,
+    "next_open_execution": true,
+    "daily_nav_and_full_accounting_required": true
+  },
+  "formal_phases": {
+    "development": {
+      "source_start": "2014-01-15",
+      "source_end": "2022-12-30",
+      "source_root": "runtime/data/multi-asset-8.1/sources/stage=validation",
+      "runtime_stage": null,
+      "evaluation_root": "runtime/data/multi-asset-9.0/evaluations/stage=development",
+      "binding_path": "runtime/data/multi-asset-9.0/stage-bindings/development.json",
+      "winner_freeze_path": "protocols/evidence/9.0/winner-freeze.json",
+      "subperiods": {
+        "D1": {
+          "performance_start": "2015-03-02",
+          "performance_end": "2019-12-31"
+        },
+        "D2": {
+          "performance_start": "2020-01-02",
+          "performance_end": "2022-12-30"
+        }
+      },
+      "market_outcomes_previously_opened": true,
+      "fresh_source_stage_created": false,
+      "published_8_1_tag_and_receipt_bound_source_required": true,
+      "exact_target_execution_and_accounting_replay_required": true,
+      "winner_freeze_is_created_directly_by_development_mode": true,
+      "winner_freeze_is_create_only": true,
+      "fresh_cash_each_development_subperiod": true,
+      "development_subperiod_account_reuse": false,
+      "selected_candidate_id_if_all_gates_pass": "causal_monthly_volatility_balanced_budget",
+      "selected_candidate_id_if_any_gate_fails": null
+    },
+    "audit": {
+      "source_start": "2014-01-15",
+      "source_end": "2026-08-28",
+      "performance_start": "2023-01-03",
+      "performance_end": "2026-08-28",
+      "runtime_stage": "runtime/data/multi-asset-9.0/sources/stage=audit",
+      "evaluation_root": "runtime/data/multi-asset-9.0/evaluations/stage=audit",
+      "binding_path": "runtime/data/multi-asset-9.0/stage-bindings/audit.json",
+      "evidence_path": "protocols/evidence/9.0/historical-audit.json",
+      "market_outcomes_opened": false,
+      "opened_only_after_committed_non_null_development_winner_freeze_and_successful_push_ci": true,
+      "minimum_positive_complete_year_count": 2,
+      "complete_year_count": 3
+    },
+    "terminal_result_path": "protocols/evidence/9.0/result.json",
+    "audit_or_2023_plus_data_must_remain_absent_before_non_null_freeze": true,
+    "cross_phase_source_evaluation_nav_or_holdings_reuse": false
+  },
+  "physical_phases": {
+    "development": {
+      "source_release": "8.1",
+      "source_start": "2014-01-15",
+      "source_end": "2022-12-30",
+      "performance_start": "2015-03-02",
+      "performance_end": "2022-12-30",
+      "D1_start": "2015-03-02",
+      "D1_end": "2019-12-31",
+      "D2_start": "2020-01-02",
+      "D2_end": "2022-12-30",
+      "market_outcomes_previously_opened": true,
+      "source_root": "runtime/data/multi-asset-8.1/sources/stage=validation",
+      "runtime_stage": null,
+      "evaluation_root": "runtime/data/multi-asset-9.0/evaluations/stage=development",
+      "binding_path": "runtime/data/multi-asset-9.0/stage-bindings/development.json",
+      "winner_freeze_path": "protocols/evidence/9.0/winner-freeze.json",
+      "fresh_source_stage_created": false,
+      "fresh_cash_each_development_subperiod": true,
+      "development_subperiod_account_reuse": false,
+      "exact_replay_required": true
+    },
+    "audit": {
+      "source_start": "2014-01-15",
+      "source_end": "2026-08-28",
+      "performance_start": "2023-01-03",
+      "performance_end": "2026-08-28",
+      "market_outcome_opened": false,
+      "minimum_positive_complete_year_count": 2,
+      "complete_year_count": 3,
+      "runtime_stage": "runtime/data/multi-asset-9.0/sources/stage=audit"
+    }
+  },
+  "development_gate": {
+    "applies_to_each": [
+      "D1.base",
+      "D1.stress_16bp",
+      "D2.base",
+      "D2.stress_16bp"
+    ],
+    "fresh_cash_each_development_subperiod": true,
+    "development_subperiod_account_reuse": false,
+    "absolute": {
+      "candidate_cagr_strictly_above_matching_investable_cash_cagr": true,
+      "base_sharpe_at_least": 0.3,
+      "stress_sharpe_at_least": 0.25,
+      "daily_max_drawdown_at_least": -0.25,
+      "positive_complete_year_ratio_at_least": 0.5
+    },
+    "relative_stability": {
+      "sharpe_minus_matching_static_at_least": 0.0,
+      "max_drawdown_minus_matching_static_positive_is_better_at_least": 0.0,
+      "positive_complete_year_ratio_minus_matching_static_at_least": 0.0,
+      "candidate_minus_static_cagr_gate_exists": false,
+      "static_cagr_sacrifice_is_permitted_only_while_candidate_cagr_remains_strictly_above_cash": true
+    },
+    "operational": {
+      "annualized_turnover_at_most": 1.0,
+      "requested_notional_fill_ratio_at_least": 0.99,
+      "capacity_limited_requested_notional_ratio_at_most": 0.01,
+      "nav_reconciliation_error_at_most": 1e-8
+    },
+    "hard_execution_validity": {
+      "required_role_set": [
+        "candidate",
+        "candidate_stress",
+        "static",
+        "static_stress",
+        "cash",
+        "cash_stress"
+      ],
+      "capacity_violation_count_at_most": 0,
+      "negative_cash_observation_count_at_most": 0,
+      "leverage_observation_count_at_most": 0,
+      "artifact_set_complete_for_every_role": true,
+      "accounting_error_finite_and_bound_for_every_role": true
+    },
+    "decision": "all absolute, relative-stability, operational and hard-validity checks must pass for all four D1/D2 base/stress evaluations",
+    "pooled_2015_2022_result_may_rescue_a_failed_subperiod": false
+  },
+  "audit_gate": {
+    "same_absolute_relative_operational_and_hard_validity_contract_as_development": true,
+    "candidate_cagr_strictly_above_matching_investable_cash_cagr": true,
+    "base_sharpe_at_least": 0.3,
+    "stress_sharpe_at_least": 0.25,
+    "daily_max_drawdown_at_least": -0.25,
+    "minimum_positive_complete_year_count": 2,
+    "complete_year_count": 3,
+    "positive_complete_year_ratio_at_least": 0.6666666666666666,
+    "sharpe_minus_matching_static_at_least": 0.0,
+    "max_drawdown_minus_matching_static_positive_is_better_at_least": 0.0,
+    "positive_complete_year_ratio_minus_matching_static_at_least": 0.0,
+    "candidate_minus_static_cagr_gate_exists": false,
+    "audit_failure_action": "terminal historical diagnostic failure without replacement or parameter change"
+  },
+  "selection_contract": {
+    "candidate_count": 1,
+    "strategy_id": "causal_monthly_volatility_balanced_budget",
+    "best_of_n_selection": false,
+    "parameter_grid": false,
+    "per_asset_cap": false,
+    "portfolio_target_volatility": false,
+    "second_candidate": false,
+    "runner_up_fallback": false,
+    "development_failure_action": "freeze null and keep audit unopened",
+    "audit_failure_action": "keep the frozen candidate identity but record terminal audit failure",
+    "formula_weight_asset_window_cost_date_or_gate_change_after_any_formal_phase": false
+  },
+  "parallel_analyst_archive": {
+    "release_9_0_candidate_input": false,
+    "workstream": "data_engineering_only",
+    "returns_or_labels_join_allowed": false,
+    "may_create_a_9_0_runner_up": false,
+    "eligible_future_route_only_after_original_report_or_bitemporal_vintage_admission_and_score_freeze": true,
+    "future_route_requires_new_major_release": true
+  },
+  "transport_and_release_contract": {
+    "repository": "yxforever666gh/factor-lab",
+    "preselection_closure_requires_clean_main": true,
+    "exact_origin_main_commit_required": true,
+    "successful_completed_push_ci_required": true,
+    "prior_annotated_tag_object_and_peeled_commit_must_match_local_and_github": true,
+    "github_api_fallback_allowed_only_on_explicit_git_transport_failure": true,
+    "local_only_tag_is_not_a_release": true
+  },
+  "claim_contract": {
+    "research_object": "causal_volatility_balanced_strategic_beta",
+    "development_is_fully_exposed_non_oos": true,
+    "alpha_claim_allowed": false,
+    "profit_claim_allowed": false,
+    "stable_future_profit_claim_allowed": false,
+    "investment_recommendation_allowed": false,
+    "historical_audit_if_passed_interpretation": "public-history strategic-beta diagnostic only",
+    "audit_2023_plus_is_fresh_future_evidence": false,
+    "fresh_future_evidence_required": true,
+    "minimum_fresh_sessions": 252,
+    "minimum_fresh_monthly_executions": 12
+  },
+  "payload_sha256": "f6c7cce39e8b9a1ae5df10965a2dd607916095b2caf24fcf0a29b625c5bafc3e"
+}

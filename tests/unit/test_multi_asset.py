@@ -20,6 +20,10 @@ from factor_lab.research.multi_asset import (
     MAX_SIGNAL_ADV_PARTICIPATION,
     RISK_BUDGETS,
     STRESS_COST_BPS_PER_SIDE,
+    VOLATILITY_BALANCED_ID,
+    VOLATILITY_FLOOR,
+    VOLATILITY_LEVEL_LOOKBACK,
+    VOLATILITY_RETURN_COUNT,
     SimulationConfig,
     build_monthly_targets,
     combine_phase_metrics,
@@ -79,6 +83,29 @@ def _flat_market(
                 "adv20_rmb": np.full(len(dates), 100_000_000.0),
             }
         )
+    return market, dates
+
+
+def _volatility_market(
+    periods: int = 430,
+) -> tuple[dict[str, pd.DataFrame], pd.DatetimeIndex]:
+    market, dates = _market(periods)
+    scales = {
+        "510300.SH": 0.010,
+        "159920.SZ": 0.014,
+        "513100.SH": 0.008,
+        "518880.SH": 0.004,
+        "511010.SH": 0.002,
+    }
+    index = np.arange(periods, dtype=float)
+    for offset, (code, scale) in enumerate(scales.items(), start=1):
+        returns = (
+            0.0002
+            + scale * np.sin(index * (0.11 + offset * 0.013))
+            + scale * 0.35 * np.cos(index * (0.07 + offset * 0.009))
+        )
+        assert np.all(returns > -1.0)
+        market[code]["total_return_index"] = np.cumprod(1.0 + returns)
     return market, dates
 
 
@@ -192,6 +219,169 @@ def test_static_control_uses_exact_base_budgets() -> None:
     assert {code: weights[code] for code in RISK_BUDGETS} == RISK_BUDGETS
     assert weights[CASH_CODE] == 0.0
     assert math.fsum(weights.values()) == pytest.approx(1.0)
+
+
+def test_volatility_balanced_budget_uses_exact_causal_sample_std_weights() -> None:
+    market, official = _volatility_market()
+    signal_index, execution_index = _month_end_pair(official, minimum_index=300)
+    signal_date = official[signal_index]
+    targets = build_monthly_targets(
+        market, official, VOLATILITY_BALANCED_ID
+    )
+    selected = targets.loc[targets["signal_date"].eq(signal_date)].set_index("code")
+
+    assert VOLATILITY_LEVEL_LOOKBACK == 127
+    assert VOLATILITY_RETURN_COUNT == 126
+    assert VOLATILITY_FLOOR == 1e-12
+    assert set(targets["strategy_id"]) == {VOLATILITY_BALANCED_ID}
+    assert selected["execution_date"].eq(official[execution_index]).all()
+    volatilities: dict[str, float] = {}
+    for code in RISK_BUDGETS:
+        source = market[code].loc[
+            market[code]["trade_date"].le(signal_date), "total_return_index"
+        ].tail(VOLATILITY_LEVEL_LOOKBACK)
+        levels = source.to_numpy(dtype=float)
+        simple_returns = levels[1:] / levels[:-1] - 1.0
+        assert len(simple_returns) == VOLATILITY_RETURN_COUNT
+        volatilities[code] = float(
+            np.std(simple_returns, ddof=1) * math.sqrt(252.0)
+        )
+        assert selected.at[code, "realized_volatility"] == volatilities[code]
+    raw = {
+        code: RISK_BUDGETS[code] / volatilities[code]
+        for code in RISK_BUDGETS
+    }
+    denominator = math.fsum(raw.values())
+    expected = {code: raw[code] / denominator for code in RISK_BUDGETS}
+    last_code = tuple(RISK_BUDGETS)[-1]
+    expected[last_code] = 1.0 - math.fsum(
+        expected[code] for code in tuple(RISK_BUDGETS)[:-1]
+    )
+    assert {
+        code: float(selected.at[code, "target_weight"])
+        for code in RISK_BUDGETS
+    } == expected
+    assert selected.at[CASH_CODE, "target_weight"] == 0.0
+    assert pd.isna(selected.at[CASH_CODE, "realized_volatility"])
+    assert selected["volatility_fallback_static"].eq(False).all()
+    assert math.isclose(
+        math.fsum(selected["target_weight"]),
+        1.0,
+        rel_tol=0.0,
+        abs_tol=1e-12,
+    )
+
+
+def test_volatility_balanced_budget_is_prefix_invariant() -> None:
+    market, official = _volatility_market()
+    signal_index, _execution_index = _month_end_pair(official, minimum_index=330)
+    signal_date = official[signal_index]
+    prefix = {
+        code: frame.loc[frame["trade_date"].le(signal_date)].copy()
+        for code, frame in market.items()
+    }
+
+    prefix_targets = build_monthly_targets(
+        prefix, official, VOLATILITY_BALANCED_ID
+    )
+    full_targets = build_monthly_targets(
+        market, official, VOLATILITY_BALANCED_ID
+    )
+    comparable = full_targets.loc[
+        full_targets["signal_date"].le(signal_date)
+    ].reset_index(drop=True)
+    pdt.assert_frame_equal(prefix_targets.reset_index(drop=True), comparable)
+
+
+@pytest.mark.parametrize("fallback_kind", ["insufficient", "zero_volatility"])
+def test_volatility_balanced_budget_falls_back_as_one_static_group(
+    fallback_kind: str,
+) -> None:
+    if fallback_kind == "insufficient":
+        market, official = _volatility_market(periods=120)
+    else:
+        market, official = _volatility_market()
+        market["513100.SH"]["total_return_index"] = 1.0
+    targets = build_monthly_targets(
+        market, official, VOLATILITY_BALANCED_ID
+    )
+
+    assert not targets.empty
+    for _signal_date, group in targets.groupby("signal_date", sort=True):
+        indexed = group.set_index("code")
+        assert {
+            code: float(indexed.at[code, "target_weight"])
+            for code in RISK_BUDGETS
+        } == RISK_BUDGETS
+        assert indexed.at[CASH_CODE, "target_weight"] == 0.0
+        assert indexed["realized_volatility"].isna().all()
+        assert indexed["volatility_fallback_static"].eq(True).all()
+
+
+def test_volatility_balanced_budget_uses_observed_levels_not_carried_levels() -> None:
+    market, official = _volatility_market()
+    signal_index, _execution_index = _month_end_pair(official, minimum_index=330)
+    signal_date = official[signal_index]
+    code = "510300.SH"
+    removed_date = official[signal_index - 20]
+    market[code] = market[code].loc[
+        market[code]["trade_date"].ne(removed_date)
+    ].reset_index(drop=True)
+
+    targets = build_monthly_targets(
+        market, official, VOLATILITY_BALANCED_ID
+    )
+    selected = targets.loc[targets["signal_date"].eq(signal_date)].set_index("code")
+    observed = market[code].loc[
+        market[code]["trade_date"].le(signal_date), "total_return_index"
+    ].tail(VOLATILITY_LEVEL_LOOKBACK)
+    levels = observed.to_numpy(dtype=float)
+    expected = float(
+        np.std(levels[1:] / levels[:-1] - 1.0, ddof=1) * math.sqrt(252.0)
+    )
+
+    assert selected.at[code, "realized_volatility"] == expected
+    assert selected["volatility_fallback_static"].eq(False).all()
+
+
+def test_volatility_balanced_targets_reject_weight_diagnostic_and_id_tampering() -> None:
+    market, official = _volatility_market()
+    targets = build_monthly_targets(
+        market, official, VOLATILITY_BALANCED_ID
+    )
+    signal_date = targets["signal_date"].max()
+    first_risk = targets["signal_date"].eq(signal_date) & targets["code"].eq(
+        "510300.SH"
+    )
+    cash = targets["signal_date"].eq(signal_date) & targets["code"].eq(CASH_CODE)
+
+    weight_tamper = targets.copy()
+    weight_tamper.loc[first_risk, "target_weight"] -= 0.01
+    weight_tamper.loc[cash, "target_weight"] += 0.01
+    with pytest.raises(ValueError, match="weights differ from causal history"):
+        simulate_targets(market, weight_tamper, official)
+
+    volatility_tamper = targets.copy()
+    volatility_tamper.loc[first_risk, "realized_volatility"] *= 2.0
+    with pytest.raises(ValueError, match="realized volatility differs"):
+        simulate_targets(market, volatility_tamper, official)
+
+    fallback_tamper = targets.copy()
+    fallback_tamper.loc[
+        fallback_tamper["signal_date"].eq(signal_date),
+        "volatility_fallback_static",
+    ] = True
+    with pytest.raises(ValueError, match="fallback identity differs"):
+        simulate_targets(market, fallback_tamper, official)
+
+    id_tamper = targets.copy()
+    id_tamper["strategy_id"] = CONTROL_ID
+    with pytest.raises(ValueError, match="diagnostics require the exact"):
+        simulate_targets(market, id_tamper, official)
+
+    missing_diagnostic = targets.drop(columns="realized_volatility")
+    with pytest.raises(ValueError, match="lack frozen diagnostics"):
+        simulate_targets(market, missing_diagnostic, official)
 
 
 def test_cash_only_uses_exact_cash_weight_and_next_official_open() -> None:

@@ -10,6 +10,46 @@
 
 ## [Unreleased]
 
+### Added
+
+- 冻结 9.0 大方向 `causal_monthly_volatility_balanced_budget`：每月末用截至信号收盘的 127 个已观测
+  total-return-index 水平形成 126 个简单收益、`ddof=1` 波动率，再令五只风险 ETF 的 raw weight 等于
+  8.0 固定预算除以波动率并归一；现金目标为零。任一资产样本不足或波动无效时整组回退静态预算，
+  不增加 cap、目标波动、杠杆、band、参数网格、第二模型或 runner-up。
+- 新增 9.0 preprotocol scout、protocol、preselection closure、retained-8.1 development exact replay、
+  create-only winner freeze、首次未打开 audit 与 terminal result 链。每阶段固定六角色、每角色五类
+  artifact；stress 必须复用 base targets，target prefix、执行、会计与全部 Parquet 可 exact replay。
+- CLI 默认 `strategy status` 迁移到 9.0，并映射 winner freeze、audit 与 terminal result。显式
+  `--release 8.1` 改为只核验已发布 annotated tag 及 protocol/closure/reclassification/freeze/result
+  精确字节，并要求 audit 缺失；它不加载当前 9.0 runner，也不依赖 retained runtime。
+
+### Changed
+
+- Python 包版本更新为 `9.0.0`。资产、总回报、月末/下一开盘、100 万元、整手、ADV20 容量、
+  8bp/16bp 成本、分红应收与逐日会计保持不变；改变的是风险资产资本预算随因果历史波动连续调整。
+- 9.0 development 直接读取并深验 published 8.1 validation source，不重新查询 provider，也不在 9.0
+  runtime 复制 development source；runtime 只保存 development binding/evaluation。只有提交并推送的
+  non-null freeze 与精确 CI 成功后，audit 才能首次 capture 2023+。
+
+### Research status
+
+- Scout 穷尽两个一次性 prototype，且选择发生在完整查看 2015–2022 结果之后。入选波动平衡公式的
+  D1 base CAGR/Sharpe/最大回撤为 4.893% / 1.398 / -4.25%，现金超额 1.801pp；D2 为
+  3.258% / 0.939 / -4.19%，现金超额 1.259pp。D1/D2 的 base/stress 均通过绝对与相对稳定门；
+  这些结果全部是 fully exposed development，不能称为独立 OOS。
+- 入选 prototype 的平均目标约 74.42% 在 `511010.SH`，实质高度债券化。D1 相对 static 牺牲约
+  2.016pp CAGR，但 Sharpe 提高约 0.672、回撤改善约 12.773pp；协议没有 static-relative CAGR 门，
+  但仍要求每段严格跑赢现金。该集中度原样披露，不能在看过结果后增加 cap。
+- 三专家 exponentiated-gradient prototype 平均约 82.22% 回到 strategic beta，base/stress Sharpe
+  分别比 static 低约 0.0012/0.0031，三个两年 fold 仅一个现金超额为正，因此拒绝 formalization；
+  不允许把它作为 runner-up。2023–2026 audit 仍未打开。
+
+### Known limitations
+
+- 9.0 没有新信息源；它是同一固定 ETF 历史上的风险预算变换。两个 prototype、D1/D2 和选择决策均
+  已暴露，任何 development 通过都不能证明 alpha、盈利或稳定未来收益。即使公共历史 audit 通过，
+  仍需至少 252 个新交易日和 12 次新月度执行，且不构成投资建议。
+
 ## [8.1] - 2026-08-31
 
 ### Added

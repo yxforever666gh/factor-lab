@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Run the staged 8.1 policy-operational metric correction and evaluation."""
+"""Run the staged 9.0 causal volatility-balanced development and audit."""
 
 from __future__ import annotations
 
@@ -33,6 +33,7 @@ sys.path.insert(0, str(SRC))
 from factor_lab.data.catalog import RuntimeLayout, load_data_config  # noqa: E402
 from factor_lab.data.etf_assets import (  # noqa: E402
     MultiAssetStage,
+    _frame_content_sha256,
     capture_multi_asset_stage,
     load_multi_asset_stage,
 )
@@ -42,50 +43,85 @@ from factor_lab.release_integrity import (  # noqa: E402
     file_sha256,
 )
 from factor_lab.research.multi_asset import (  # noqa: E402
+    ALL_CODES,
+    BASE_COST_BPS_PER_SIDE,
+    CASH_CODE,
     CASH_ONLY_ID,
     CONTROL_ID,
+    INITIAL_CAPITAL_RMB,
+    LOT_SIZE,
+    MAX_SIGNAL_ADV_PARTICIPATION,
+    RISK_BUDGETS,
+    RISK_CODES,
     SimulationConfig,
+    STRESS_COST_BPS_PER_SIDE,
+    VOLATILITY_BALANCED_ID,
+    VOLATILITY_FLOOR,
+    VOLATILITY_LEVEL_LOOKBACK,
+    VOLATILITY_RETURN_COUNT,
     build_monthly_targets,
     phase_metrics,
     simulate_targets,
 )
 
 
-RELEASE = "8.1"
-ROUTE = "policy_operational_metric_reclassification"
-PROTOCOL_ID = "factor-lab/8.1/policy-operational-metric-reclassification-v1"
-PROTOCOL_PATH = Path("protocols/8.1-policy-operational-metric-reclassification.json")
+RELEASE = "9.0"
+ROUTE = "causal_monthly_volatility_balanced_budget"
+PROTOCOL_ID = "factor-lab/9.0/causal-monthly-volatility-balanced-budget-v1"
+PROTOCOL_PATH = Path("protocols/9.0-causal-volatility-balanced-budget.json")
+SCOUT_PATH = Path("protocols/9.0-preprotocol-scout.json")
 ASSET_SELECTION_PATH = Path("protocols/7.0-asset-selection.json")
 INHERITED_PROTOCOL_PATH = Path("protocols/7.0-multi-asset.json")
-CLOSURE_PATH = Path("protocols/8.1-release.json")
-EVIDENCE_ROOT = Path("protocols/evidence/8.1")
-TRAIN_RECLASSIFICATION_PATH = EVIDENCE_ROOT / "train-reclassification.json"
+ECONOMIC_GATE_PROTOCOL_PATH = Path("protocols/8.0-static-capital-budget.json")
+CLOSURE_PATH = Path("protocols/9.0-release.json")
+EVIDENCE_ROOT = Path("protocols/evidence/9.0")
 WINNER_FREEZE_PATH = EVIDENCE_ROOT / "winner-freeze.json"
 AUDIT_PATH = EVIDENCE_ROOT / "historical-audit.json"
 RESULT_PATH = EVIDENCE_ROOT / "result.json"
-PRIOR_RECEIPT_PATH = Path("protocols/evidence/8.0/execution-failure.json")
-PRIOR_PROTOCOL_PATH = Path("protocols/8.0-static-capital-budget.json")
-PRIOR_CLOSURE_PATH = Path("protocols/8.0-release.json")
-PRIOR_TAG = "8.0"
-PRIOR_TAG_OBJECT = "3fcbd73f7497b074e484ce7793e2d3603bf5a177"
-PRIOR_COMMIT = "78aba86bf4e741699afca1acd1470493785fd952"
-PRIOR_RECEIPT_PAYLOAD = "751b85c6c2e52b450e9c3549f7f4504af50b634599be4c32e240ee503de9823a"
-PRIOR_RECEIPT_FILE_SHA256 = "6af779495081f6ee391c6388a1e4342b878168b529f8074cf03d9ec2cc50eeaa"
-PRIOR_CLOSURE_PAYLOAD = "7bdd27bc6365c936c7e17736920d5fbf2556608e8b59b0869b3e70b9e61e5de7"
-PRIOR_CLOSURE_FILE_SHA256 = "8e4fe890efb746c15ae5f0375d8a1dfd85a061172426165af1441d5011bfa97d"
-PRIOR_PROTOCOL_PAYLOAD = "801374f58aa5edd66365e0937ed119082559f2950cc1106134a3cdb58e0099e7"
-PRIOR_PROTOCOL_FILE_SHA256 = "ac4a6f94cfbbe709c26120bad7499196fa36fc497f366cf445896cd486519abc"
-PROTOCOL_PAYLOAD = "2fc5ea8316173f7fd19fbf5c34248e5a70b2a901c99345dcf8d933826fa15ee5"
-PROTOCOL_FILE_SHA256 = "b0a213b62cf6f2723425e77d01565fd8c29721960d50d4a25d19306f3817c583"
+PRIOR_PROTOCOL_PATH = Path("protocols/8.1-policy-operational-metric-reclassification.json")
+PRIOR_CLOSURE_PATH = Path("protocols/8.1-release.json")
+PRIOR_RECLASSIFICATION_PATH = Path("protocols/evidence/8.1/train-reclassification.json")
+PRIOR_FREEZE_PATH = Path("protocols/evidence/8.1/winner-freeze.json")
+PRIOR_RESULT_PATH = Path("protocols/evidence/8.1/result.json")
+PRIOR_TAG = "8.1"
+PRIOR_TAG_OBJECT = "8f575ed3833c8cc01f89e7a951d4234bd7ee6622"
+PRIOR_COMMIT = "a4c0d36f727e99f6b2353facf24fd3cdedba958e"
+PRIOR_PROTOCOL_PAYLOAD = "2fc5ea8316173f7fd19fbf5c34248e5a70b2a901c99345dcf8d933826fa15ee5"
+PRIOR_PROTOCOL_FILE_SHA256 = "b0a213b62cf6f2723425e77d01565fd8c29721960d50d4a25d19306f3817c583"
+PRIOR_CLOSURE_PAYLOAD = "f4a47421d08ca77eca6b27fd6417909a04c3eaf789c11d9ca069366412440ef5"
+PRIOR_CLOSURE_FILE_SHA256 = "ef1596fa5cfbfdfd0c27d74c2747dcc852b7f209a4e27de2b7c01c6d8dbcc557"
+PRIOR_RECLASSIFICATION_PAYLOAD = "4f498ffc12deac61144c77c56ba89cb9abccc034d2d73df4f1df8a6c50184c79"
+PRIOR_RECLASSIFICATION_FILE_SHA256 = "bfd2c0c801259394861eba000a8e34bc9617cba3adcf6629d7e8b501ccf3c51b"
+PRIOR_FREEZE_PAYLOAD = "d10f51b522a16838a4744fa16d770a720d34c2d340c2bf0bd5a05bedc61ceb76"
+PRIOR_FREEZE_FILE_SHA256 = "b865e80cb899f7e5274d72b46ab1e0d88dad64b0ab2eb4e46750c5cec2167387"
+PRIOR_RESULT_PAYLOAD = "d4496b9a64def6a443827737987d44ec77532cc9d11137a247302376a00ad6a4"
+PRIOR_RESULT_FILE_SHA256 = "bcbcb09974e6314190de7a835560c4abbc1cde79734ed4fcef759061653cd95d"
+PRIOR_VALIDATION_MANIFEST_PAYLOAD = "f5903d2b24b47662a9ba4ea3d2d127c9b5dee385d5b927140b25eda68b3ff060"
+PRIOR_VALIDATION_MANIFEST_FILE_SHA256 = "e4b995095af7015c7b5380340e0f761337335ea4b1a70dca56de3aefed402553"
+PRIOR_VALIDATION_BINDING_PAYLOAD = "7479aa06071d34544b6ce880d6a2986a09988e3905853dbab7127eaeb0e13d5b"
+PRIOR_VALIDATION_BINDING_FILE_SHA256 = "d6adfe439984574dda1ef1c3ceab20a51a64a964d80d13a24bb505ef79f7697e"
+PRIOR_VALIDATION_EVALUATION_PAYLOAD = "7794ee8c81cc784d262a464c55d37f3017b1e75cbc4bb421b5e4b8eb85685981"
+PRIOR_VALIDATION_EVALUATION_FILE_SHA256 = "f5e630ff2c881bae179c884714b29a592456ced50c154ca38bcde3d43fab2fd5"
+PRIOR_VALIDATION_PARQUET_COUNT = 20
+PRIOR_VALIDATION_ROW_COUNT = 62654
+PROTOCOL_PAYLOAD = "f6c7cce39e8b9a1ae5df10965a2dd607916095b2caf24fcf0a29b625c5bafc3e"
+PROTOCOL_FILE_SHA256 = "19ecf56b5bd9c8b42b9f4df50761f719e2ca544eaea959a88c62d0ea4178d620"
+SCOUT_PAYLOAD = "71926f08ce5ca2ab1b6470f7d3ee385371c4bfaf3243c5f942a891f63a8075a0"
+SCOUT_FILE_SHA256 = "44b90b964ecca9a30029b1dfad45ae313ae4a5c12a91d82ba885ceecb826b857"
 INHERITED_PROTOCOL_FILE_SHA256 = (
     "2d2e96a1605b5e088a7cf5952dd816d8aecb10e39b9ba529fe81b00592bfa14f"
 )
 INHERITED_PROTOCOL_PAYLOAD = (
     "6f2fcd2a67d52bfae19bedcaecf495faa986195f6840da48a3a67a666589aaf0"
 )
-PRIMARY_ID = CONTROL_ID
-WORK_ROOT = ROOT / "runtime" / "data" / "multi-asset-8.1"
-PRIOR_WORK_ROOT = ROOT / "runtime" / "data" / "multi-asset-8.0"
+ASSET_SELECTION_FILE_SHA256 = "6d2d819db2579db76f8e7830a5de090d8d471c7fdc657abd8aba626cd1b065ec"
+ASSET_SELECTION_PAYLOAD = "b00536d618c7fe46e3cbe8d258d2b2032ef4e0c16d40fb9c74ff016c34525e0b"
+ECONOMIC_GATE_PROTOCOL_FILE_SHA256 = "ac4a6f94cfbbe709c26120bad7499196fa36fc497f366cf445896cd486519abc"
+ECONOMIC_GATE_PROTOCOL_PAYLOAD = "801374f58aa5edd66365e0937ed119082559f2950cc1106134a3cdb58e0099e7"
+PRIMARY_ID = VOLATILITY_BALANCED_ID
+WORK_ROOT = ROOT / "runtime" / "data" / "multi-asset-9.0"
+PRIOR_WORK_ROOT = ROOT / "runtime" / "data" / "multi-asset-8.1"
+PRIOR_SOURCE_ROOT = PRIOR_WORK_ROOT / "sources"
 SOURCE_ROOT = WORK_ROOT / "sources"
 EVALUATION_ROOT = WORK_ROOT / "evaluations"
 BINDING_ROOT = WORK_ROOT / "stage-bindings"
@@ -93,7 +129,7 @@ EXPECTED_IMPLEMENTATION_PATHS = {
     ".github/workflows/ci.yml",
     "configs/data.json",
     "pyproject.toml",
-    "scripts/build-8.1-preselection-closure.py",
+    "scripts/build-9.0-preselection-closure.py",
     "scripts/publish-tag.ps1",
     "scripts/run-multi-asset-evidence.py",
     "src/factor_lab/__init__.py",
@@ -118,9 +154,82 @@ EXPECTED_IMPLEMENTATION_PATHS = {
     "src/factor_lab/research/wide_universe.py",
     "src/factor_lab/strategy.py",
 }
+CLOSURE_FIELDS = {
+    "schema_version",
+    "kind",
+    "release",
+    "closure_role",
+    "direction_change",
+    "route",
+    "status",
+    "development_outcomes_opened",
+    "audit_market_outcomes_opened",
+    "protocol",
+    "preprotocol_scout",
+    "prior_8_1_archive",
+    "implementation_commit",
+    "implementation_tree",
+    "implementation",
+    "runtime",
+    "formal_data",
+    "claim_contract",
+    "payload_sha256",
+}
+FREEZE_FIELDS = {
+    "schema_version",
+    "kind",
+    "release",
+    "status",
+    "protocol_payload_sha256",
+    "implementation_closure_payload_sha256",
+    "development_execution_commit",
+    "run_nonce",
+    "candidate_registry",
+    "selected_candidate_id",
+    "development_source",
+    "development",
+    "audit_market_outcomes_opened",
+    "runner_up_fallback",
+    "claim_contract",
+    "payload_sha256",
+}
+AUDIT_FIELDS = {
+    "schema_version",
+    "kind",
+    "release",
+    "status",
+    "selected_candidate_id",
+    "winner_freeze_payload_sha256",
+    "protocol_payload_sha256",
+    "implementation_closure_payload_sha256",
+    "audit_execution_commit",
+    "run_nonce",
+    "audit",
+    "pre_2023_source_prefix",
+    "runner_up_fallback",
+    "claim_contract",
+    "payload_sha256",
+}
+RESULT_FIELDS = {
+    "schema_version",
+    "kind",
+    "release",
+    "status",
+    "selected_candidate_id",
+    "audit_status",
+    "winner_freeze",
+    "historical_audit",
+    "protocol_payload_sha256",
+    "implementation_closure_payload_sha256",
+    "claim_contract",
+    "payload_sha256",
+}
+EVIDENCE_REFERENCE_FIELDS = {"path", "file_sha256", "payload_sha256"}
 RUNTIME_DISTRIBUTIONS = ("numpy", "pandas", "pyarrow", "scipy", "tushare")
 NATIVE_SUFFIXES = (".dll", ".dylib", ".pyd", ".so")
-EVALUATION_ROLES = ("primary", "stress", "cash", "cash_stress")
+EVALUATION_ROLES = (
+    "candidate", "candidate_stress", "static", "static_stress", "cash", "cash_stress"
+)
 EVALUATION_ARTIFACTS = ("targets", "orders", "daily_nav", "holdings", "trades")
 GITHUB_REPOSITORY = "yxforever666gh/factor-lab"
 ALLOWED_TRADE_STATUSES = frozenset(
@@ -137,10 +246,10 @@ NOTIONAL_REL_TOL = 1e-12
 _SHA256_RE = re.compile(r"[0-9a-f]{64}")
 _COMMIT_RE = re.compile(r"[0-9a-f]{40}")
 STAGES: dict[str, dict[str, str]] = {
-    "validation": {
+    "development": {
         "source_start": "2014-01-15",
         "source_end": "2022-12-30",
-        "performance_start": "2020-01-02",
+        "performance_start": "2015-03-02",
         "performance_end": "2022-12-30",
     },
     "audit": {
@@ -149,47 +258,6 @@ STAGES: dict[str, dict[str, str]] = {
         "performance_start": "2023-01-03",
         "performance_end": "2026-08-28",
     },
-}
-_CLOSURE_FIELDS = {
-    "schema_version", "kind", "release", "closure_role", "direction_change",
-    "route", "status", "post_hoc_reclassification", "prior_train_returns_opened",
-    "train_reexecution_allowed", "train_reclassification_status",
-    "validation_market_outcomes_opened", "audit_status", "protocol",
-    "prior_release", "train_reclassification_source",
-    "implementation_commit", "implementation_tree", "implementation", "runtime",
-    "formal_data", "claim_contract", "payload_sha256",
-}
-_FREEZE_FIELDS = {
-    "schema_version", "kind", "release", "status", "protocol_payload_sha256",
-    "asset_selection_payload_sha256", "implementation_closure_payload_sha256",
-    "selection_execution_commit", "run_nonce", "candidate_registry",
-    "selected_candidate_id", "train_reclassification", "validation",
-    "validation_market_outcomes_opened", "audit_market_outcomes_opened",
-    "runner_up_fallback", "claim_contract", "payload_sha256",
-}
-_TRAIN_RECLASSIFICATION_FIELDS = {
-    "schema_version", "kind", "release", "status",
-    "protocol_payload_sha256", "asset_selection_payload_sha256",
-    "implementation_closure_payload_sha256", "reclassification_execution_commit",
-    "run_nonce", "source_receipt", "role_gate_metrics", "metrics", "corrected_gate",
-    "execution_validity",
-    "post_hoc_non_independent", "new_market_data_queried",
-    "retained_8_0_train_artifacts_accessed", "runtime_created",
-    "validation_market_outcomes_opened",
-    "audit_market_outcomes_opened", "claim_contract", "payload_sha256",
-}
-_AUDIT_FIELDS = {
-    "schema_version", "kind", "release", "status", "selected_candidate_id",
-    "winner_freeze_payload_sha256", "protocol_payload_sha256",
-    "asset_selection_payload_sha256", "implementation_closure_payload_sha256",
-    "audit_execution_commit", "run_nonce", "audit", "runner_up_fallback",
-    "claim_contract", "payload_sha256",
-}
-_RESULT_FIELDS = {
-    "schema_version", "kind", "release", "status", "selected_candidate_id",
-    "audit_status", "winner_freeze", "historical_audit",
-    "protocol_payload_sha256", "asset_selection_payload_sha256",
-    "implementation_closure_payload_sha256", "claim_contract", "payload_sha256",
 }
 _PHASE_FIELDS = {
     "source_manifest_payload_sha256", "stage_binding_payload_sha256",
@@ -569,131 +637,6 @@ def _read_json(path: Path, *, self_hashed: bool = True) -> dict[str, Any]:
     return value
 
 
-def _verify_prior_train_artifacts(receipt: Mapping[str, Any]) -> dict[str, Any]:
-    """Deep-verify the receipt-bound 8.0 artifacts and extract validity only.
-
-    Economic role metrics remain sourced from the published receipt.  This
-    function never calls a provider or creates/replays an 8.1 train stage.
-    """
-
-    train = receipt.get("train_stage")
-    boundary = receipt.get("failure_boundary")
-    if (
-        not isinstance(train, Mapping)
-        or not isinstance(boundary, Mapping)
-        or boundary.get("train_phase_deep_verified") is not True
-        or boundary.get("validation_market_outcomes_opened") is not False
-        or boundary.get("audit_market_outcomes_opened") is not False
-    ):
-        raise ValueError("8.0 receipt lacks its closed, deeply verified train boundary")
-    manifest_receipt = train.get("manifest")
-    binding_receipt = train.get("binding")
-    evaluation_receipt = train.get("evaluation")
-    role_metrics = train.get("role_gate_metrics")
-    if any(
-        not isinstance(item, Mapping)
-        for item in (manifest_receipt, binding_receipt, evaluation_receipt, role_metrics)
-    ):
-        raise ValueError("8.0 receipt lacks train artifact bindings")
-
-    source_root = PRIOR_WORK_ROOT / "sources"
-    stage = load_multi_asset_stage(source_root, "train")
-    manifest_path = stage.path / "manifest.json"
-    if (
-        manifest_path.resolve() != (ROOT / str(manifest_receipt["path"])).resolve()
-        or stage.manifest.get("payload_sha256")
-        != manifest_receipt.get("payload_sha256")
-        or file_sha256(manifest_path) != manifest_receipt.get("file_sha256")
-    ):
-        raise ValueError("8.0 train manifest differs from its published receipt")
-
-    binding_path = PRIOR_WORK_ROOT / "stage-bindings" / "train.json"
-    binding = _read_json(binding_path)
-    if (
-        binding_path.resolve() != (ROOT / str(binding_receipt["path"])).resolve()
-        or binding.get("release") != "8.0"
-        or binding.get("stage") != "train"
-        or binding.get("payload_sha256") != binding_receipt.get("payload_sha256")
-        or file_sha256(binding_path) != binding_receipt.get("file_sha256")
-        or binding.get("stage_manifest_payload_sha256")
-        != stage.manifest.get("payload_sha256")
-    ):
-        raise ValueError("8.0 train stage binding differs from its published receipt")
-
-    evaluation_dir = PRIOR_WORK_ROOT / "evaluations" / "stage=train"
-    evaluation_path = evaluation_dir / "evaluation.json"
-    evaluation = _read_json(evaluation_path)
-    expected_files = {
-        "evaluation.json",
-        *(
-            f"{role}-{artifact}.parquet"
-            for role in EVALUATION_ROLES
-            for artifact in EVALUATION_ARTIFACTS
-        ),
-    }
-    if (
-        evaluation_path.resolve()
-        != (ROOT / str(evaluation_receipt["path"])).resolve()
-        or evaluation_dir.is_symlink()
-        or {path.name for path in evaluation_dir.iterdir()} != expected_files
-        or evaluation.get("payload_sha256")
-        != evaluation_receipt.get("payload_sha256")
-        or file_sha256(evaluation_path) != evaluation_receipt.get("file_sha256")
-        or evaluation.get("source_manifest_payload_sha256")
-        != stage.manifest.get("payload_sha256")
-        or evaluation.get("stage_binding_payload_sha256")
-        != binding.get("payload_sha256")
-        or canonical_payload_sha256(evaluation.get("metrics", {}))
-        != evaluation_receipt.get("metrics_sha256")
-        or canonical_payload_sha256(evaluation.get("gate", {}))
-        != evaluation_receipt.get("gate_sha256")
-    ):
-        raise ValueError("8.0 train evaluation differs from its published receipt")
-    artifacts = evaluation.get("artifacts")
-    if not isinstance(artifacts, Mapping) or set(artifacts) != set(EVALUATION_ROLES):
-        raise ValueError("8.0 train evaluation role set differs")
-    role_validity: dict[str, Any] = {}
-    artifact_rows = 0
-    for role in EVALUATION_ROLES:
-        entries = artifacts.get(role)
-        if not isinstance(entries, Mapping) or set(entries) != set(EVALUATION_ARTIFACTS):
-            raise ValueError(f"8.0 {role} artifact set differs")
-        frames: dict[str, Any] = {}
-        for artifact in EVALUATION_ARTIFACTS:
-            entry = entries[artifact]
-            name = f"{role}-{artifact}.parquet"
-            path = evaluation_dir / name
-            if (
-                not isinstance(entry, Mapping)
-                or entry.get("path") != name
-                or path.is_symlink()
-                or not path.is_file()
-                or path.stat().st_size != entry.get("size_bytes")
-                or file_sha256(path) != entry.get("file_sha256")
-            ):
-                raise ValueError(f"8.0 train artifact differs: {name}")
-            frame = pd.read_parquet(path)
-            if len(frame) != entry.get("rows"):
-                raise ValueError(f"8.0 train artifact row count differs: {name}")
-            artifact_rows += len(frame)
-            frames[artifact] = frame
-        role_validity[role] = _role_execution_validity(
-            frames, expected_role_metrics=role_metrics[role]
-        )
-    if (
-        evaluation_receipt.get("artifact_parquet_count") != 20
-        or evaluation_receipt.get("artifact_row_count") != artifact_rows
-    ):
-        raise ValueError("8.0 train artifact aggregate differs from its receipt")
-    return {
-        "source": "receipt_bound_8_0_train_artifacts",
-        "receipt_train_phase_deep_verified": True,
-        "artifact_parquet_count": 20,
-        "artifact_row_count": artifact_rows,
-        "roles": role_validity,
-    }
-
-
 def _create_only(path: Path, payload: Mapping[str, Any]) -> None:
     target = ROOT / path
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -731,629 +674,6 @@ def _require_committed(path: Path) -> bytes:
     return working
 
 
-def _verify_execution_lineage(
-    commit: str,
-    *,
-    evidence_path: Path,
-    required_files: tuple[Path, ...],
-) -> None:
-    if not _is_commit(commit):
-        raise ValueError(f"invalid execution commit: {commit!r}")
-    resolved = _git("rev-parse", "--verify", f"{commit}^{{commit}}").decode(
-        "ascii"
-    ).strip()
-    if resolved != commit or subprocess.run(
-        ["git", "merge-base", "--is-ancestor", commit, "HEAD"],
-        cwd=ROOT,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    ).returncode != 0:
-        raise ValueError("execution commit is not an ancestor of HEAD")
-    for relative in required_files:
-        if _git("show", f"{commit}:{relative.as_posix()}") != (ROOT / relative).read_bytes():
-            raise ValueError(f"execution commit lacks the exact predecessor: {relative}")
-    if subprocess.run(
-        ["git", "cat-file", "-e", f"{commit}:{evidence_path.as_posix()}"],
-        cwd=ROOT,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    ).returncode == 0:
-        raise ValueError(f"evidence predates its execution: {evidence_path}")
-
-
-def _verify_train_reclassification_contract(
-    reclassification: Mapping[str, Any],
-    *,
-    closure: Mapping[str, Any],
-    protocol: Mapping[str, Any],
-    selection: Mapping[str, Any],
-    verify_data: bool = True,
-) -> None:
-    receipt = _read_json(PRIOR_RECEIPT_PATH)
-    receipt_bytes = _require_committed(PRIOR_RECEIPT_PATH)
-    role_metrics = receipt.get("train_stage", {}).get("role_gate_metrics")
-    if (
-        set(reclassification) != _TRAIN_RECLASSIFICATION_FIELDS
-        or reclassification.get("payload_sha256")
-        != canonical_payload_sha256(reclassification)
-        or reclassification.get("schema_version") != 1
-        or reclassification.get("kind")
-        != "factor_lab_policy_operational_train_reclassification"
-        or reclassification.get("release") != RELEASE
-        or reclassification.get("protocol_payload_sha256")
-        != protocol.get("payload_sha256")
-        or reclassification.get("asset_selection_payload_sha256")
-        != selection.get("payload_sha256")
-        or reclassification.get("implementation_closure_payload_sha256")
-        != closure.get("payload_sha256")
-        or reclassification.get("post_hoc_non_independent") is not True
-        or reclassification.get("new_market_data_queried") is not False
-        or reclassification.get("retained_8_0_train_artifacts_accessed") is not True
-        or reclassification.get("runtime_created") is not False
-        or reclassification.get("validation_market_outcomes_opened") is not False
-        or reclassification.get("audit_market_outcomes_opened") is not False
-        or reclassification.get("claim_contract") != protocol.get("claim_contract")
-        or not re.fullmatch(
-            r"[0-9a-f]{32}", str(reclassification.get("run_nonce") or "")
-        )
-    ):
-        raise ValueError("8.1 train reclassification contract differs")
-    execution_commit = str(reclassification["reclassification_execution_commit"])
-    _verify_execution_lineage(
-        execution_commit,
-        evidence_path=TRAIN_RECLASSIFICATION_PATH,
-        required_files=(
-            CLOSURE_PATH,
-            PROTOCOL_PATH,
-            INHERITED_PROTOCOL_PATH,
-            ASSET_SELECTION_PATH,
-            PRIOR_PROTOCOL_PATH,
-            PRIOR_CLOSURE_PATH,
-            PRIOR_RECEIPT_PATH,
-        ),
-    )
-    expected_source = {
-        "path": PRIOR_RECEIPT_PATH.as_posix(),
-        "file_sha256": hashlib.sha256(receipt_bytes).hexdigest(),
-        "payload_sha256": receipt["payload_sha256"],
-    }
-    if (
-        reclassification.get("source_receipt") != expected_source
-        or receipt.get("payload_sha256") != PRIOR_RECEIPT_PAYLOAD
-        or hashlib.sha256(receipt_bytes).hexdigest() != PRIOR_RECEIPT_FILE_SHA256
-        or reclassification.get("role_gate_metrics") != role_metrics
-        or role_metrics
-        != protocol.get("train_reclassification_input", {}).get("role_gate_metrics")
-    ):
-        raise ValueError("8.1 reclassification does not bind the published 8.0 metrics")
-    execution_validity = reclassification.get("execution_validity")
-    source_binding = closure.get("train_reclassification_source") or {}
-    if (
-        not isinstance(execution_validity, Mapping)
-        or canonical_payload_sha256(execution_validity)
-        != source_binding.get("execution_validity_sha256")
-        or execution_validity.get("artifact_parquet_count")
-        != source_binding.get("artifact_parquet_count")
-        or execution_validity.get("artifact_row_count")
-        != source_binding.get("artifact_row_count")
-    ):
-        raise ValueError("8.1 reclassification validity differs from the closure")
-    if verify_data and execution_validity != _verify_prior_train_artifacts(receipt):
-        raise ValueError("8.1 train validity differs from the receipt-bound artifacts")
-    metrics = _combine_receipt_role_gate_metrics(
-        role_metrics,
-        execution_validity=execution_validity,
-    )
-    corrected_gate = _evaluate_static_gate(
-        metrics,
-        protocol["shared_absolute_gate"],
-        protocol["execution_validity_hard_fail"],
-    )
-    if (
-        reclassification.get("metrics") != metrics
-        or reclassification.get("corrected_gate") != corrected_gate
-    ):
-        raise ValueError("8.1 corrected train gate does not replay deterministically")
-    expected_status = (
-        "train_reclassification_passed"
-        if corrected_gate["passed"] is True
-        else "train_reclassification_failed"
-    )
-    if reclassification.get("status") != expected_status:
-        raise ValueError("8.1 reclassification status differs from its corrected gate")
-
-
-def _verify_winner_freeze_contract(
-    freeze: Mapping[str, Any],
-    *,
-    closure: Mapping[str, Any],
-    protocol: Mapping[str, Any],
-    selection: Mapping[str, Any],
-    verify_data: bool = True,
-) -> None:
-    if (
-        set(freeze) != _FREEZE_FIELDS
-        or freeze.get("payload_sha256") != canonical_payload_sha256(freeze)
-        or freeze.get("schema_version") != 1
-        or freeze.get("kind") != "factor_lab_multi_asset_winner_freeze"
-        or freeze.get("release") != RELEASE
-        or freeze.get("protocol_payload_sha256") != protocol.get("payload_sha256")
-        or freeze.get("asset_selection_payload_sha256") != selection.get("payload_sha256")
-        or freeze.get("implementation_closure_payload_sha256") != closure.get("payload_sha256")
-        or freeze.get("audit_market_outcomes_opened") is not False
-        or freeze.get("candidate_registry") != [PRIMARY_ID]
-        or freeze.get("runner_up_fallback") is not False
-        or freeze.get("claim_contract") != protocol.get("claim_contract")
-        or not re.fullmatch(r"[0-9a-f]{32}", str(freeze.get("run_nonce") or ""))
-    ):
-        raise ValueError(f"winner freeze does not bind the active {RELEASE} contracts")
-    execution_commit = str(freeze["selection_execution_commit"])
-    _verify_execution_lineage(
-        execution_commit,
-        evidence_path=WINNER_FREEZE_PATH,
-        required_files=(
-            CLOSURE_PATH,
-            PROTOCOL_PATH,
-            INHERITED_PROTOCOL_PATH,
-            ASSET_SELECTION_PATH,
-            PRIOR_RECEIPT_PATH,
-            TRAIN_RECLASSIFICATION_PATH,
-        ),
-    )
-    reclassification = _read_json(TRAIN_RECLASSIFICATION_PATH)
-    reclassification_bytes = _require_committed(TRAIN_RECLASSIFICATION_PATH)
-    _verify_train_reclassification_contract(
-        reclassification,
-        closure=closure,
-        protocol=protocol,
-        selection=selection,
-        verify_data=verify_data,
-    )
-    if execution_commit == reclassification.get("reclassification_execution_commit"):
-        raise ValueError("8.1 freeze validation commit must follow reclassification commit")
-    reclassification_binding = freeze.get("train_reclassification")
-    if (
-        not isinstance(reclassification_binding, Mapping)
-        or reclassification_binding
-        != {
-            "path": TRAIN_RECLASSIFICATION_PATH.as_posix(),
-            "file_sha256": hashlib.sha256(reclassification_bytes).hexdigest(),
-            "payload_sha256": reclassification["payload_sha256"],
-        }
-        or freeze.get("run_nonce") == reclassification.get("run_nonce")
-    ):
-        raise ValueError(
-            "8.1 winner freeze does not bind an independently committed reclassification"
-        )
-    train_passed = reclassification["corrected_gate"]["passed"] is True
-    validation = freeze.get("validation")
-    if train_passed:
-        if not isinstance(validation, Mapping):
-            raise ValueError("8.1 reclassification pass requires a complete validation phase")
-        _verify_phase_reference(
-            validation,
-            stage_name="validation",
-            gate_config=protocol["shared_absolute_gate"],
-            validity_config=protocol["execution_validity_hard_fail"],
-            closure_payload=str(closure["payload_sha256"]),
-            execution_commit=execution_commit,
-            run_nonce=str(freeze["run_nonce"]),
-            predecessor={
-                "kind": "train_reclassification",
-                "payload_sha256": reclassification["payload_sha256"],
-            },
-            verify_data=verify_data,
-        )
-    elif validation is not None:
-        raise ValueError("8.1 validation opened without a passed corrected train gate")
-    validation_passed = bool(
-        isinstance(validation, Mapping) and validation["gate"]["passed"] is True
-    )
-    expected_status = (
-        "selected_policy_frozen"
-        if validation_passed
-        else "selected_null_frozen_validation_failed"
-        if validation is not None
-        else "selected_null_frozen_reclassification_failed"
-    )
-    expected_selected = PRIMARY_ID if validation_passed else None
-    if (
-        freeze.get("status") != expected_status
-        or freeze.get("selected_candidate_id") != expected_selected
-        or freeze.get("validation_market_outcomes_opened") != train_passed
-    ):
-        raise ValueError("8.1 winner freeze is inconsistent with recomputed gates")
-
-
-def _verify_audit_contract(
-    audit: Mapping[str, Any],
-    *,
-    freeze: Mapping[str, Any],
-    closure: Mapping[str, Any],
-    protocol: Mapping[str, Any],
-    selection: Mapping[str, Any],
-    verify_data: bool = True,
-) -> None:
-    if (
-        set(audit) != _AUDIT_FIELDS
-        or audit.get("payload_sha256") != canonical_payload_sha256(audit)
-        or audit.get("schema_version") != 1
-        or audit.get("kind") != "factor_lab_multi_asset_historical_audit"
-        or audit.get("release") != RELEASE
-        or audit.get("selected_candidate_id") != PRIMARY_ID
-        or audit.get("winner_freeze_payload_sha256") != freeze.get("payload_sha256")
-        or audit.get("protocol_payload_sha256") != protocol.get("payload_sha256")
-        or audit.get("asset_selection_payload_sha256") != selection.get("payload_sha256")
-        or audit.get("implementation_closure_payload_sha256") != closure.get("payload_sha256")
-        or audit.get("runner_up_fallback") is not False
-        or audit.get("claim_contract") != protocol.get("claim_contract")
-        or not re.fullmatch(r"[0-9a-f]{32}", str(audit.get("run_nonce") or ""))
-        or audit.get("run_nonce") == freeze.get("run_nonce")
-    ):
-        raise ValueError("historical audit contract bindings differ")
-    execution_commit = str(audit["audit_execution_commit"])
-    _verify_execution_lineage(
-        execution_commit,
-        evidence_path=AUDIT_PATH,
-        required_files=(
-            CLOSURE_PATH,
-            PROTOCOL_PATH,
-            INHERITED_PROTOCOL_PATH,
-            ASSET_SELECTION_PATH,
-            WINNER_FREEZE_PATH,
-        ),
-    )
-    phase = audit.get("audit")
-    if not isinstance(phase, Mapping):
-        raise ValueError("historical audit lacks a complete audit phase")
-    _verify_phase_reference(
-        phase,
-        stage_name="audit",
-        gate_config=protocol["shared_absolute_gate"],
-        validity_config=protocol["execution_validity_hard_fail"],
-        closure_payload=str(closure["payload_sha256"]),
-        execution_commit=execution_commit,
-        run_nonce=str(audit["run_nonce"]),
-        predecessor={"kind": "winner_freeze", "payload_sha256": freeze["payload_sha256"]},
-        verify_data=verify_data,
-    )
-    expected_status = (
-        "historical_audit_passed" if phase["gate"]["passed"] is True else "historical_audit_failed"
-    )
-    if audit.get("status") != expected_status:
-        raise ValueError("historical audit status differs from its recomputed gate")
-
-
-def _verify_protocol_contract(protocol: Mapping[str, Any]) -> None:
-    prior = protocol.get("prior_release")
-    correction = protocol.get("correction_boundary")
-    frozen = protocol.get("frozen_economic_contract")
-    reclassification = protocol.get("train_reclassification_input")
-    roles = protocol.get("metric_role_contract")
-    validity = protocol.get("execution_validity_hard_fail")
-    phases = protocol.get("physical_phases")
-    selection = protocol.get("selection_contract")
-    transport = protocol.get("transport_verification")
-    claim = protocol.get("claim_contract")
-    if (
-        protocol.get("payload_sha256") != PROTOCOL_PAYLOAD
-        or file_sha256(ROOT / PROTOCOL_PATH) != PROTOCOL_FILE_SHA256
-        or protocol.get("release") != RELEASE
-        or protocol.get("protocol_id") != PROTOCOL_ID
-        or protocol.get("direction_change") is not False
-        or protocol.get("route") != ROUTE
-        or not isinstance(prior, Mapping)
-        or prior.get("tag") != PRIOR_TAG
-        or prior.get("annotated_tag_object") != PRIOR_TAG_OBJECT
-        or prior.get("peeled_commit") != PRIOR_COMMIT
-        or prior.get("protocol", {}).get("payload_sha256") != PRIOR_PROTOCOL_PAYLOAD
-        or prior.get("prevalidation_closure", {}).get("payload_sha256")
-        != PRIOR_CLOSURE_PAYLOAD
-        or prior.get("execution_failure_receipt", {}).get("payload_sha256")
-        != PRIOR_RECEIPT_PAYLOAD
-        or not isinstance(correction, Mapping)
-        or correction.get("post_hoc_reclassification") is not True
-        or correction.get("train_market_data_reaccess_allowed") is not False
-        or correction.get("train_source_rebuild_allowed") is not False
-        or correction.get("train_strategy_rerun_allowed") is not False
-        or correction.get("validation_market_outcomes_previously_opened") is not False
-        or correction.get("audit_market_outcomes_previously_opened") is not False
-        or not isinstance(frozen, Mapping)
-        or frozen.get("strategy_id") != PRIMARY_ID
-        or frozen.get("cash_comparator_id") != CASH_ONLY_ID
-        or frozen.get("economic_thresholds_unchanged") is not True
-        or not isinstance(reclassification, Mapping)
-        or reclassification.get("source_receipt", {}).get("payload_sha256")
-        != PRIOR_RECEIPT_PAYLOAD
-        or reclassification.get("phase") != "train"
-        or reclassification.get("role_gate_metrics_sha256")
-        != canonical_payload_sha256(reclassification.get("role_gate_metrics", {}))
-        or reclassification.get("economic_role_metrics_source_is_receipt_only")
-        is not True
-        or reclassification.get("receipt_bound_8_0_runtime_read_required")
-        is not True
-        or reclassification.get("new_train_market_access_required") is not False
-        or not isinstance(roles, Mapping)
-        or roles.get("required_roles_exact") != list(EVALUATION_ROLES)
-        or roles.get("policy_operational_metrics", {}).get("roles")
-        != ["primary", "stress"]
-        or roles.get("accounting_validity", {}).get("roles")
-        != list(EVALUATION_ROLES)
-        or not isinstance(validity, Mapping)
-        or validity.get(
-            "blocked_missing_open_trade_count_must_be_exact_nonnegative_integer"
-        )
-        is not True
-        or validity.get("blocked_missing_open_trade_count_is_hard_failure")
-        is not False
-        or validity.get(
-            "blocked_capacity_trade_count_must_be_exact_nonnegative_integer"
-        )
-        is not True
-        or validity.get("blocked_capacity_trade_count_is_hard_failure") is not False
-        or validity.get("capacity_violation_count_at_most") != 0
-        or validity.get("capacity_violation_is_frozen_execution_contract_breach")
-        is not True
-        or validity.get("negative_cash_observation_count_at_most") != 0
-        or validity.get("leverage_observation_count_at_most") != 0
-        or validity.get("invalid_execution_cannot_be_reclassified_as_gate_failure")
-        is not True
-        or not isinstance(phases, Mapping)
-        or phases.get("train_reclassification", {}).get("runtime_stage")
-        != PRIOR_WORK_ROOT.relative_to(ROOT).as_posix()
-        or phases.get("train_reclassification", {}).get("evidence_path")
-        != TRAIN_RECLASSIFICATION_PATH.as_posix()
-        or phases.get("validation", {}).get("source_root")
-        != (WORK_ROOT / "sources" / "stage=validation").relative_to(ROOT).as_posix()
-        or phases.get("audit", {}).get("source_root")
-        != (WORK_ROOT / "sources" / "stage=audit").relative_to(ROOT).as_posix()
-        or not isinstance(selection, Mapping)
-        or selection.get("strategy_id") != PRIMARY_ID
-        or selection.get("candidate_count") != 1
-        or selection.get("runner_up_fallback") is not False
-        or not isinstance(transport, Mapping)
-        or transport.get("github_repository") != "yxforever666gh/factor-lab"
-        or transport.get("fallback_must_verify_exact_origin_main_commit") is not True
-        or not isinstance(claim, Mapping)
-        or claim.get("alpha_claim_allowed") is not False
-        or claim.get("profit_claim_allowed") is not False
-        or claim.get("stable_future_profit_claim_allowed") is not False
-        or claim.get("fresh_future_evidence_required") is not True
-        or claim.get("minimum_fresh_sessions") != 252
-        or claim.get("minimum_fresh_monthly_executions") != 12
-    ):
-        raise ValueError("8.1 corrective protocol differs from its exact contract")
-
-
-def _verify_implementation_map(
-    closure: Mapping[str, Any], implementation_commit: str
-) -> None:
-    implementation = closure.get("implementation")
-    if (
-        not isinstance(implementation, Mapping)
-        or set(implementation) != EXPECTED_IMPLEMENTATION_PATHS
-    ):
-        raise ValueError("closure implementation path set differs")
-    for key, binding in implementation.items():
-        if (
-            not isinstance(binding, Mapping)
-            or set(binding) != {"path", "sha256"}
-            or binding.get("path") != key
-            or not _is_sha256(binding.get("sha256"))
-        ):
-            raise ValueError(f"invalid implementation binding: {key}")
-        path = _safe_repo_file(str(key))
-        committed = _git("show", f"{implementation_commit}:{key}")
-        if (
-            file_sha256(path) != binding["sha256"]
-            or hashlib.sha256(committed).hexdigest() != binding["sha256"]
-        ):
-            raise ValueError(f"frozen implementation bytes differ: {key}")
-
-
-def _verify_prior_runtime_closure_admission(
-    source_binding: Any,
-    *,
-    prior_receipt: Mapping[str, Any],
-    protocol: Mapping[str, Any],
-    verify_runtime: bool,
-) -> dict[str, Any]:
-    if (
-        not isinstance(source_binding, Mapping)
-        or not _is_sha256(source_binding.get("execution_validity_sha256"))
-        or source_binding.get("artifact_parquet_count") != 20
-        or source_binding.get("artifact_row_count") != 43222
-    ):
-        raise ValueError("8.1 closure lacks prior-runtime admission identity")
-    if verify_runtime:
-        execution_validity = _verify_prior_train_artifacts(prior_receipt)
-        role_metrics = prior_receipt["train_stage"]["role_gate_metrics"]
-        admission_metrics = _combine_receipt_role_gate_metrics(
-            role_metrics, execution_validity=execution_validity
-        )
-        _require_execution_validity(
-            admission_metrics, protocol["execution_validity_hard_fail"]
-        )
-        if (
-            canonical_payload_sha256(execution_validity)
-            != source_binding["execution_validity_sha256"]
-            or execution_validity.get("artifact_parquet_count")
-            != source_binding["artifact_parquet_count"]
-            or execution_validity.get("artifact_row_count")
-            != source_binding["artifact_row_count"]
-        ):
-            raise ValueError("8.1 closure prior-runtime admission differs")
-    return {
-        "execution_validity_sha256": source_binding["execution_validity_sha256"],
-        "artifact_parquet_count": 20,
-        "artifact_row_count": 43222,
-    }
-
-
-def _verify_closure(
-    *, verify_runtime: bool = True
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    closure = _read_json(CLOSURE_PATH)
-    protocol = _read_json(PROTOCOL_PATH)
-    selection = _read_json(ASSET_SELECTION_PATH)
-    inherited_protocol = _read_json(INHERITED_PROTOCOL_PATH)
-    prior_protocol = _read_json(PRIOR_PROTOCOL_PATH)
-    prior_closure = _read_json(PRIOR_CLOSURE_PATH)
-    prior_receipt = _read_json(PRIOR_RECEIPT_PATH)
-    _verify_protocol_contract(protocol)
-    if (
-        inherited_protocol.get("payload_sha256") != INHERITED_PROTOCOL_PAYLOAD
-        or canonical_payload_sha256(inherited_protocol) != INHERITED_PROTOCOL_PAYLOAD
-        or file_sha256(ROOT / INHERITED_PROTOCOL_PATH)
-        != INHERITED_PROTOCOL_FILE_SHA256
-    ):
-        raise ValueError("inherited 7.0 data/execution protocol bytes differ")
-    if (
-        set(closure) != _CLOSURE_FIELDS
-        or closure.get("schema_version") != 1
-        or closure.get("kind") != "factor_lab_release_closure"
-        or closure.get("release") != RELEASE
-        or closure.get("closure_role")
-        != "policy_operational_reclassification_prevalidation_root"
-        or closure.get("direction_change") is not False
-        or closure.get("route") != protocol.get("route")
-        or closure.get("status")
-        != "implementation_frozen_before_8_1_reclassification"
-        or closure.get("post_hoc_reclassification") is not True
-        or closure.get("prior_train_returns_opened") is not True
-        or closure.get("train_reexecution_allowed") is not False
-        or closure.get("train_reclassification_status") != "pending"
-        or closure.get("validation_market_outcomes_opened") is not False
-        or closure.get("audit_status") != "not_opened"
-        or closure.get("claim_contract") != protocol.get("claim_contract")
-        or closure.get("protocol", {}).get("payload_sha256") != PROTOCOL_PAYLOAD
-        or closure.get("protocol", {}).get("path") != PROTOCOL_PATH.as_posix()
-        or closure.get("protocol", {}).get("protocol_id") != PROTOCOL_ID
-        or closure.get("protocol", {}).get("file_sha256")
-        != file_sha256(ROOT / PROTOCOL_PATH)
-        or closure.get("formal_data") != {}
-    ):
-        raise ValueError("8.1 prevalidation closure contract differs")
-    asset_binding = prior_protocol.get("assets", {}).get(
-        "asset_selection_evidence", {}
-    )
-    if (
-        selection.get("payload_sha256")
-        != "b00536d618c7fe46e3cbe8d258d2b2032ef4e0c16d40fb9c74ff016c34525e0b"
-        or asset_binding.get("payload_sha256") != selection.get("payload_sha256")
-        or asset_binding.get("file_sha256")
-        != file_sha256(ROOT / ASSET_SELECTION_PATH)
-        or selection.get("selected_codes")
-        != [
-            "510300.SH",
-            "159920.SZ",
-            "513100.SH",
-            "518880.SH",
-            "511010.SH",
-            "511880.SH",
-        ]
-    ):
-        raise ValueError("8.1 inherited asset-selection binding differs")
-    current_prior_protocol = (ROOT / PRIOR_PROTOCOL_PATH).read_bytes()
-    current_prior_closure = (ROOT / PRIOR_CLOSURE_PATH).read_bytes()
-    current_prior_receipt = (ROOT / PRIOR_RECEIPT_PATH).read_bytes()
-    expected_prior = protocol["prior_release"]
-    prior_train = prior_receipt["train_stage"]
-    prior_binding = prior_train["binding"]
-    prior_evaluation = prior_train["evaluation"]
-    role_metrics = prior_train["role_gate_metrics"]
-    observed = prior_train["observed_gate"]
-    source_binding = closure.get("train_reclassification_source")
-    runtime_admission = _verify_prior_runtime_closure_admission(
-        source_binding,
-        prior_receipt=prior_receipt,
-        protocol=protocol,
-        verify_runtime=verify_runtime,
-    )
-    expected_source = {
-        "source_release": "8.0",
-        "receipt_path": PRIOR_RECEIPT_PATH.as_posix(),
-        "receipt_file_sha256": PRIOR_RECEIPT_FILE_SHA256,
-        "receipt_payload_sha256": PRIOR_RECEIPT_PAYLOAD,
-        "execution_commit": prior_binding["execution_commit"],
-        "run_nonce": prior_binding["run_nonce"],
-        "source_manifest_payload_sha256": prior_train["manifest"]["payload_sha256"],
-        "stage_binding_payload_sha256": prior_binding["payload_sha256"],
-        "evaluation_payload_sha256": prior_evaluation["payload_sha256"],
-        "evaluation_file_sha256": prior_evaluation["file_sha256"],
-        "role_gate_metrics_sha256": canonical_payload_sha256(role_metrics),
-        "original_gate_sha256": canonical_payload_sha256(observed),
-        "original_gate_passed": False,
-        "train_strategy_rerun_allowed": False,
-        "economic_role_metrics_source": "published_receipt_only",
-        "validity_source": "receipt_bound_retained_8_0_artifacts_read_only",
-        "validation_market_outcomes_opened": False,
-        "audit_market_outcomes_opened": False,
-        **runtime_admission,
-    }
-    if (
-        closure.get("prior_release") != expected_prior
-        or closure.get("train_reclassification_source") != expected_source
-        or _git("cat-file", "-t", f"refs/tags/{PRIOR_TAG}").decode("ascii").strip()
-        != "tag"
-        or _git("rev-parse", f"refs/tags/{PRIOR_TAG}").decode("ascii").strip()
-        != PRIOR_TAG_OBJECT
-        or _git("rev-parse", f"refs/tags/{PRIOR_TAG}^{{}}").decode("ascii").strip()
-        != PRIOR_COMMIT
-        or hashlib.sha256(current_prior_protocol).hexdigest()
-        != PRIOR_PROTOCOL_FILE_SHA256
-        or hashlib.sha256(current_prior_closure).hexdigest()
-        != PRIOR_CLOSURE_FILE_SHA256
-        or hashlib.sha256(current_prior_receipt).hexdigest()
-        != PRIOR_RECEIPT_FILE_SHA256
-        or prior_protocol.get("payload_sha256") != PRIOR_PROTOCOL_PAYLOAD
-        or prior_closure.get("payload_sha256") != PRIOR_CLOSURE_PAYLOAD
-        or prior_receipt.get("payload_sha256") != PRIOR_RECEIPT_PAYLOAD
-        or _git("show", f"{PRIOR_COMMIT}:{PRIOR_PROTOCOL_PATH.as_posix()}")
-        != current_prior_protocol
-        or _git("show", f"{PRIOR_COMMIT}:{PRIOR_CLOSURE_PATH.as_posix()}")
-        != current_prior_closure
-        or _git("show", f"{PRIOR_COMMIT}:{PRIOR_RECEIPT_PATH.as_posix()}")
-        != current_prior_receipt
-    ):
-        raise ValueError("8.1 closure prior-release lineage differs")
-    current_runtime = _runtime_identity() if verify_runtime else None
-    if verify_runtime and closure.get("runtime") != current_runtime:
-        raise ValueError(f"formal runtime differs from closure: {current_runtime!r}")
-    implementation_commit = str(closure.get("implementation_commit") or "")
-    if not _is_commit(implementation_commit):
-        raise ValueError("closure lacks implementation_commit")
-    resolved_tree = _git("rev-parse", f"{implementation_commit}^{{tree}}").decode(
-        "ascii"
-    ).strip()
-    if closure.get("implementation_tree") != resolved_tree:
-        raise ValueError("closure implementation tree differs from its commit")
-    _verify_implementation_map(closure, implementation_commit)
-    if subprocess.run(
-        ["git", "merge-base", "--is-ancestor", implementation_commit, "HEAD"],
-        cwd=ROOT,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    ).returncode != 0:
-        raise ValueError("current HEAD does not descend from the frozen implementation")
-    for relative in (
-        PROTOCOL_PATH,
-        INHERITED_PROTOCOL_PATH,
-        ASSET_SELECTION_PATH,
-        PRIOR_PROTOCOL_PATH,
-        PRIOR_CLOSURE_PATH,
-        PRIOR_RECEIPT_PATH,
-    ):
-        if _git("show", f"{implementation_commit}:{relative.as_posix()}") != (
-            ROOT / relative
-        ).read_bytes():
-            raise ValueError(f"implementation commit lacks frozen contract: {relative}")
-    if verify_runtime:
-        _require_source_imports()
-    _require_committed(CLOSURE_PATH)
-    return closure, protocol, selection
-
-
 def _client() -> Any:
     config_path = ROOT / "configs" / "data.json"
     config = load_data_config(config_path)
@@ -1363,129 +683,6 @@ def _client() -> Any:
         repo_root=ROOT,
     )
     return _configured_tushare_client(dict(config.get("sync") or {}), layout)
-
-
-def _combine_static_metrics(
-    primary: Mapping[str, Any],
-    stress: Mapping[str, Any],
-    cash: Mapping[str, Any],
-    cash_stress: Mapping[str, Any],
-) -> dict[str, Any]:
-    roles = (primary, stress, cash, cash_stress)
-    for key in (
-        "observations",
-        "start_date",
-        "performance_start",
-        "baseline_date",
-        "end_date",
-        "start_nav",
-    ):
-        if any(item.get(key) != primary.get(key) for item in roles[1:]):
-            raise ValueError(f"8.0 role metrics do not share one phase identity: {key}")
-    combined = dict(primary)
-    policy_roles = (primary, stress)
-    combined.update(
-        {
-            # 8.1 corrects only the role aggregation.  These are policy
-            # operational metrics, so the cash comparator cannot set them.
-            "annualized_turnover": max(
-                float(item["annualized_turnover"]) for item in policy_roles
-            ),
-            "stress_cagr": float(stress["cagr"]),
-            "stress_cost_cagr": float(stress["cagr"]),
-            "cash_cagr": float(cash["cagr"]),
-            "cash_stress_cagr": float(cash_stress["cagr"]),
-            "cash_excess_cagr": float(primary["cagr"]) - float(cash["cagr"]),
-            "stress_cash_excess_cagr": float(stress["cagr"])
-            - float(cash_stress["cagr"]),
-            "minimum_requested_notional_fill_ratio": min(
-                float(item["requested_notional_fill_ratio"])
-                for item in policy_roles
-            ),
-            "maximum_capacity_limited_requested_notional_ratio": max(
-                float(item["capacity_limited_requested_notional_ratio"])
-                for item in policy_roles
-            ),
-            "maximum_nav_reconciliation_error": max(
-                float(item["nav_reconciliation_error"]) for item in roles
-            ),
-            "stress": dict(stress),
-            "cash": dict(cash),
-            "cash_stress": dict(cash_stress),
-            "execution_validity": {
-                "source": "new_phase_artifacts",
-                "roles": {
-                    "primary": dict(primary["execution_validity"]),
-                    "stress": dict(stress["execution_validity"]),
-                    "cash": dict(cash["execution_validity"]),
-                    "cash_stress": dict(cash_stress["execution_validity"]),
-                },
-            },
-        }
-    )
-    return combined
-
-
-def _combine_receipt_role_gate_metrics(
-    role_gate_metrics: Mapping[str, Any], *, execution_validity: Mapping[str, Any]
-) -> dict[str, Any]:
-    """Reclassify the published 8.0 role metrics without touching train runtime."""
-
-    if set(role_gate_metrics) != set(EVALUATION_ROLES):
-        raise ValueError("8.0 receipt role set differs from the exact four-role contract")
-    required = {
-        "cagr",
-        "sharpe",
-        "max_drawdown",
-        "positive_complete_year_ratio",
-        "annualized_turnover",
-        "requested_notional_fill_ratio",
-        "capacity_limited_requested_notional_ratio",
-        "nav_reconciliation_error",
-    }
-    normalized: dict[str, dict[str, float]] = {}
-    for role in EVALUATION_ROLES:
-        raw = role_gate_metrics[role]
-        if not isinstance(raw, Mapping) or set(raw) != required:
-            raise ValueError(f"8.0 receipt {role} gate-metric field set differs")
-        values = {key: float(raw[key]) for key in sorted(required)}
-        if any(not pd.notna(value) or not float("-inf") < value < float("inf") for value in values.values()):
-            raise ValueError(f"8.0 receipt {role} gate metrics are not finite")
-        if values["capacity_limited_requested_notional_ratio"] < 0.0:
-            raise ValueError(f"8.0 receipt {role} capacity ratio is negative")
-        normalized[role] = values
-    primary = normalized["primary"]
-    stress = normalized["stress"]
-    cash = normalized["cash"]
-    cash_stress = normalized["cash_stress"]
-    return {
-        **primary,
-        "annualized_turnover": max(
-            primary["annualized_turnover"], stress["annualized_turnover"]
-        ),
-        "stress_cagr": stress["cagr"],
-        "stress_cost_cagr": stress["cagr"],
-        "cash_cagr": cash["cagr"],
-        "cash_stress_cagr": cash_stress["cagr"],
-        "cash_excess_cagr": primary["cagr"] - cash["cagr"],
-        "stress_cash_excess_cagr": stress["cagr"] - cash_stress["cagr"],
-        "minimum_requested_notional_fill_ratio": min(
-            primary["requested_notional_fill_ratio"],
-            stress["requested_notional_fill_ratio"],
-        ),
-        "maximum_capacity_limited_requested_notional_ratio": max(
-            primary["capacity_limited_requested_notional_ratio"],
-            stress["capacity_limited_requested_notional_ratio"],
-        ),
-        "maximum_nav_reconciliation_error": max(
-            values["nav_reconciliation_error"] for values in normalized.values()
-        ),
-        "stress": stress,
-        "cash": cash,
-        "cash_stress": cash_stress,
-        "role_gate_metrics": normalized,
-        "execution_validity": dict(execution_validity),
-    }
 
 
 def _notional_close(left: float, right: float) -> bool:
@@ -1761,294 +958,6 @@ def _role_execution_validity(
     }
 
 
-def _phase_role_metrics(
-    result: Mapping[str, Any], *, start: str, end: str
-) -> dict[str, Any]:
-    metrics = phase_metrics(result, start=start, end=end)
-    metrics["execution_validity"] = _role_execution_validity(
-        result, expected_role_metrics=metrics
-    )
-    return metrics
-
-
-def _require_execution_validity(
-    metrics: Mapping[str, Any], validity_config: Mapping[str, Any]
-) -> None:
-    validity = metrics.get("execution_validity")
-    if not isinstance(validity, Mapping):
-        raise RuntimeError("execution validity evidence is absent")
-    source = validity.get("source")
-    if source == "receipt_bound_8_0_train_artifacts":
-        if (
-            set(validity)
-            != {
-                "source",
-                "receipt_train_phase_deep_verified",
-                "artifact_parquet_count",
-                "artifact_row_count",
-                "roles",
-            }
-            or validity.get("receipt_train_phase_deep_verified") is not True
-            or validity.get("artifact_parquet_count") != 20
-            or validity.get("artifact_row_count") != 43222
-        ):
-            raise RuntimeError("receipt-bound execution validity identity differs")
-    elif source == "new_phase_artifacts":
-        if set(validity) != {"source", "roles"}:
-            raise RuntimeError("new-phase execution validity identity differs")
-    else:
-        raise RuntimeError("execution validity source differs")
-    roles = validity.get("roles")
-    if not isinstance(roles, Mapping) or set(roles) != set(EVALUATION_ROLES):
-        raise RuntimeError("execution validity role set differs")
-    configured_counts = {
-        "capacity_violation_count": validity_config[
-            "capacity_violation_count_at_most"
-        ],
-        "negative_cash_observation_count": validity_config[
-            "negative_cash_observation_count_at_most"
-        ],
-        "leverage_observation_count": validity_config.get(
-            "leverage_observation_count_at_most", 0
-        ),
-    }
-    if not all(_is_exact_nonnegative_int(value) for value in configured_counts.values()):
-        raise RuntimeError("execution validity count thresholds must be exact integers")
-    required = {
-        "artifact_set_complete",
-        "status_values_allowed",
-        "status_execution_identity_exact",
-        "blocked_missing_open_trade_count",
-        "blocked_capacity_trade_count",
-        "capacity_violation_count",
-        "negative_cash_observation_count",
-        "leverage_observation_count",
-        "minimum_cash",
-        "maximum_gross_exposure_ratio",
-        "maximum_nav_reconciliation_error",
-        "requested_notional_total",
-        "executed_notional_total",
-        "capacity_limited_requested_notional",
-        "capacity_fields_finite_and_nonnegative",
-        "executed_notional_not_above_requested",
-        "capacity_limited_notional_not_above_requested",
-        "capacity_aggregation_identity_exact",
-        "requested_fill_identity_exact",
-        "daily_trade_notional_identity_exact",
-    }
-    metric_roles = {
-        "primary": metrics,
-        "stress": metrics.get("stress"),
-        "cash": metrics.get("cash"),
-        "cash_stress": metrics.get("cash_stress"),
-    }
-    for role in EVALUATION_ROLES:
-        item = roles[role]
-        metric_role = metric_roles[role]
-        count_values = {
-            key: item.get(key) if isinstance(item, Mapping) else None
-            for key in (
-                "blocked_missing_open_trade_count",
-                "blocked_capacity_trade_count",
-                "capacity_violation_count",
-                "negative_cash_observation_count",
-                "leverage_observation_count",
-            )
-        }
-        if (
-            not isinstance(item, Mapping)
-            or set(item) != required
-            or item.get("artifact_set_complete") is not True
-            or item.get("status_values_allowed") is not True
-            or item.get("status_execution_identity_exact") is not True
-            or not all(
-                _is_exact_nonnegative_int(value) for value in count_values.values()
-            )
-            or any(
-                count_values[key] > threshold
-                for key, threshold in configured_counts.items()
-            )
-            or not math.isfinite(float(item["minimum_cash"]))
-            or float(item["minimum_cash"]) < -1e-8
-            or not math.isfinite(float(item["maximum_gross_exposure_ratio"]))
-            or float(item["maximum_gross_exposure_ratio"]) < 0.0
-            or float(item["maximum_gross_exposure_ratio"]) > 1.0 + 1e-8
-            or not math.isfinite(float(item["maximum_nav_reconciliation_error"]))
-            or float(item["maximum_nav_reconciliation_error"]) < 0.0
-            or not isinstance(metric_role, Mapping)
-            or float(item["maximum_nav_reconciliation_error"])
-            != float(metric_role.get("nav_reconciliation_error", float("nan")))
-            or not math.isfinite(float(item["requested_notional_total"]))
-            or float(item["requested_notional_total"]) < 0.0
-            or not math.isfinite(float(item["executed_notional_total"]))
-            or float(item["executed_notional_total"]) < 0.0
-            or float(item["executed_notional_total"])
-            > float(item["requested_notional_total"]) + NOTIONAL_ABS_TOL_RMB
-            or not math.isfinite(
-                float(item["capacity_limited_requested_notional"])
-            )
-            or float(item["capacity_limited_requested_notional"]) < 0.0
-            or float(item["capacity_limited_requested_notional"])
-            > float(item["requested_notional_total"]) + NOTIONAL_ABS_TOL_RMB
-            or item.get("capacity_fields_finite_and_nonnegative") is not True
-            or item.get("executed_notional_not_above_requested") is not True
-            or item.get("capacity_limited_notional_not_above_requested") is not True
-            or item.get("capacity_aggregation_identity_exact") is not True
-            or item.get("requested_fill_identity_exact") is not True
-            or item.get("daily_trade_notional_identity_exact") is not True
-        ):
-            raise RuntimeError(f"{role} execution validity hard fail")
-
-
-def _evaluate_static_gate(
-    metrics: Mapping[str, Any],
-    gate_config: Mapping[str, Any],
-    validity_config: Mapping[str, Any] | None = None,
-) -> dict[str, Any]:
-    if validity_config is not None:
-        _require_execution_validity(metrics, validity_config)
-    base_gate = gate_config["base"]
-    stress_gate = gate_config["stress_16bp"]
-    operational_gate = gate_config["operational"]
-    if any(
-        section.get(key) is not True
-        for section, key in (
-            (base_gate, "net_cagr_strictly_positive"),
-            (base_gate, "cash_excess_cagr_strictly_positive"),
-            (stress_gate, "net_cagr_strictly_positive"),
-            (stress_gate, "cash_excess_cagr_strictly_positive"),
-        )
-    ):
-        raise ValueError("8.1 strict-positive gate switches must remain enabled")
-    values = {
-        "nominal_cagr_strictly_positive": {
-            "metric": float(metrics["cagr"]),
-            "threshold": 0.0,
-        },
-        "sharpe_at_least": {
-            "metric": float(metrics["sharpe"]),
-            "threshold": float(base_gate["net_sharpe_at_least"]),
-        },
-        "max_drawdown_at_least": {
-            "metric": float(metrics["max_drawdown"]),
-            "threshold": float(base_gate["daily_max_drawdown_at_least"]),
-        },
-        "positive_complete_year_ratio_at_least": {
-            "metric": float(metrics["positive_complete_year_ratio"]),
-            "threshold": float(
-                base_gate["positive_complete_year_ratio_at_least"]
-            ),
-        },
-        "cash_excess_cagr_strictly_positive": {
-            "metric": float(metrics["cash_excess_cagr"]),
-            "threshold": 0.0,
-        },
-        "stress_nominal_cagr_strictly_positive": {
-            "metric": float(metrics["stress"]["cagr"]),
-            "threshold": 0.0,
-        },
-        "stress_cash_excess_cagr_strictly_positive": {
-            "metric": float(metrics["stress_cash_excess_cagr"]),
-            "threshold": 0.0,
-        },
-        "stress_sharpe_at_least": {
-            "metric": float(metrics["stress"]["sharpe"]),
-            "threshold": float(stress_gate["net_sharpe_at_least"]),
-        },
-        "stress_max_drawdown_at_least": {
-            "metric": float(metrics["stress"]["max_drawdown"]),
-            "threshold": float(stress_gate["daily_max_drawdown_at_least"]),
-        },
-        "stress_positive_complete_year_ratio_at_least": {
-            "metric": float(metrics["stress"]["positive_complete_year_ratio"]),
-            "threshold": float(
-                stress_gate["positive_complete_year_ratio_at_least"]
-            ),
-        },
-        "annualized_turnover_at_most": {
-            "metric": float(metrics["annualized_turnover"]),
-            "threshold": float(operational_gate["annualized_turnover_at_most"]),
-        },
-        "requested_notional_fill_ratio_at_least": {
-            "metric": float(metrics["minimum_requested_notional_fill_ratio"]),
-            "threshold": float(
-                operational_gate["requested_notional_fill_ratio_at_least"]
-            ),
-        },
-        "capacity_limited_requested_notional_ratio_at_most": {
-            "metric": float(
-                metrics["maximum_capacity_limited_requested_notional_ratio"]
-            ),
-            "threshold": float(
-                operational_gate[
-                    "capacity_limited_requested_notional_ratio_at_most"
-                ]
-            ),
-        },
-        "nav_reconciliation_error_at_most": {
-            "metric": float(metrics["maximum_nav_reconciliation_error"]),
-            "threshold": float(
-                operational_gate["nav_reconciliation_error_at_most"]
-            ),
-        },
-    }
-    checks = {
-        "nominal_cagr_strictly_positive": values[
-            "nominal_cagr_strictly_positive"
-        ]["metric"]
-        > 0.0,
-        "sharpe_at_least": values["sharpe_at_least"]["metric"]
-        >= values["sharpe_at_least"]["threshold"],
-        "max_drawdown_at_least": values["max_drawdown_at_least"]["metric"]
-        >= values["max_drawdown_at_least"]["threshold"],
-        "positive_complete_year_ratio_at_least": values[
-            "positive_complete_year_ratio_at_least"
-        ]["metric"]
-        >= values["positive_complete_year_ratio_at_least"]["threshold"],
-        "cash_excess_cagr_strictly_positive": values[
-            "cash_excess_cagr_strictly_positive"
-        ]["metric"]
-        > 0.0,
-        "stress_nominal_cagr_strictly_positive": values[
-            "stress_nominal_cagr_strictly_positive"
-        ]["metric"]
-        > 0.0,
-        "stress_cash_excess_cagr_strictly_positive": values[
-            "stress_cash_excess_cagr_strictly_positive"
-        ]["metric"]
-        > 0.0,
-        "stress_sharpe_at_least": values["stress_sharpe_at_least"]["metric"]
-        >= values["stress_sharpe_at_least"]["threshold"],
-        "stress_max_drawdown_at_least": values[
-            "stress_max_drawdown_at_least"
-        ]["metric"]
-        >= values["stress_max_drawdown_at_least"]["threshold"],
-        "stress_positive_complete_year_ratio_at_least": values[
-            "stress_positive_complete_year_ratio_at_least"
-        ]["metric"]
-        >= values["stress_positive_complete_year_ratio_at_least"]["threshold"],
-        "annualized_turnover_at_most": values[
-            "annualized_turnover_at_most"
-        ]["metric"]
-        <= values["annualized_turnover_at_most"]["threshold"],
-        "requested_notional_fill_ratio_at_least": values[
-            "requested_notional_fill_ratio_at_least"
-        ]["metric"]
-        >= values["requested_notional_fill_ratio_at_least"]["threshold"],
-        "capacity_limited_requested_notional_ratio_at_most": values[
-            "capacity_limited_requested_notional_ratio_at_most"
-        ]["metric"]
-        <= values["capacity_limited_requested_notional_ratio_at_most"][
-            "threshold"
-        ],
-        "nav_reconciliation_error_at_most": values[
-            "nav_reconciliation_error_at_most"
-        ]["metric"]
-        <= values["nav_reconciliation_error_at_most"]["threshold"],
-    }
-    return {"passed": all(checks.values()), "checks": checks, "values": values}
-
-
 def _binding_path(stage_name: str) -> Path:
     return BINDING_ROOT / f"{stage_name}.json"
 
@@ -2064,14 +973,16 @@ def _reject_partial_entries(root: Path) -> None:
 
 
 def _assert_runtime_layout(allowed_stages: set[str]) -> None:
-    if not allowed_stages.issubset({"validation", "audit"}):
-        raise RuntimeError("8.1 runtime may contain only validation and audit stages")
+    if not allowed_stages.issubset({"development", "audit"}):
+        raise RuntimeError("9.0 runtime may contain only development and audit stages")
     if WORK_ROOT.is_symlink() or (WORK_ROOT.exists() and not WORK_ROOT.is_dir()):
-        raise RuntimeError("8.1 runtime root must be a regular local directory")
+        raise RuntimeError("9.0 runtime root must be a regular local directory")
     if not allowed_stages and WORK_ROOT.exists():
-        raise RuntimeError("8.1 reclassification-only state requires an absent runtime root")
+        raise RuntimeError("9.0 pre-development state requires an absent runtime root")
     expected = {
-        SOURCE_ROOT: {f"stage={stage}" for stage in allowed_stages},
+        # Development must consume the retained 8.1 validation source in place;
+        # only the first unopened 2023+ audit may create a new source stage.
+        SOURCE_ROOT: ({"stage=audit"} if "audit" in allowed_stages else set()),
         EVALUATION_ROOT: {f"stage={stage}" for stage in allowed_stages},
         BINDING_ROOT: {f"{stage}.json" for stage in allowed_stages},
     }
@@ -2082,7 +993,7 @@ def _assert_runtime_layout(allowed_stages: set[str]) -> None:
         )
         if unexpected_roots:
             raise RuntimeError(
-                f"unexpected entry under the 8.1 runtime root: {unexpected_roots}"
+                f"unexpected entry under the 9.0 runtime root: {unexpected_roots}"
             )
     for root, allowed_names in expected.items():
         if root.is_symlink() or (root.exists() and not root.is_dir()):
@@ -2100,25 +1011,25 @@ def _assert_runtime_layout(allowed_stages: set[str]) -> None:
                 try:
                     same = os.path.samefile(current, prior)
                 except OSError as exc:
-                    raise RuntimeError("could not verify 8.1/8.0 physical isolation") from exc
+                    raise RuntimeError("could not verify 9.0/8.1 physical isolation") from exc
                 if same:
                     raise RuntimeError(
-                        f"8.1 runtime file reuses an 8.0 physical file: {current}"
+                        f"9.0 runtime file reuses an 8.1 physical file: {current}"
                     )
 
 
 def _assert_evidence_layout(allowed_names: set[str]) -> None:
     root = ROOT / EVIDENCE_ROOT
     if root.is_symlink() or (root.exists() and not root.is_dir()):
-        raise RuntimeError("8.1 evidence root must be a regular local directory")
+        raise RuntimeError("9.0 evidence root must be a regular local directory")
     if not root.exists():
         return
     unexpected = sorted(path.name for path in root.iterdir() if path.name not in allowed_names)
     if unexpected:
-        raise RuntimeError(f"unexpected 8.1 evidence artifact: {unexpected}")
+        raise RuntimeError(f"unexpected 9.0 evidence artifact: {unexpected}")
     for path in root.iterdir():
         if path.is_symlink() or not path.is_file():
-            raise RuntimeError(f"8.1 evidence artifact is indirect or not a file: {path}")
+            raise RuntimeError(f"9.0 evidence artifact is indirect or not a file: {path}")
 
 
 def _verify_stage_binding(
@@ -2194,7 +1105,7 @@ def _stage(
     _reject_partial_entries(SOURCE_ROOT)
     if path.exists() or path.is_symlink():
         raise RuntimeError(
-            f"8.1 corrective run forbids a pre-existing {stage_name} source stage"
+            f"9.0 formal run forbids a pre-existing {stage_name} source stage"
         )
     if binding_path.exists() or binding_path.is_symlink():
         raise ValueError(f"{stage_name} binding exists without its stage")
@@ -2229,40 +1140,6 @@ def _stage(
         execution_commit=execution_commit,
         run_nonce=run_nonce,
         predecessor=predecessor,
-    )
-
-
-def _filter_targets(
-    targets: pd.DataFrame,
-    *,
-    start: str,
-    end: str,
-) -> pd.DataFrame:
-    executions = pd.to_datetime(targets["execution_date"], errors="coerce").dt.normalize()
-    selected = targets.loc[
-        executions.between(pd.Timestamp(start), pd.Timestamp(end))
-    ].copy()
-    if selected.empty:
-        raise ValueError(f"phase has no targets between {start} and {end}")
-    return selected.reset_index(drop=True)
-
-
-def _run_one(
-    stage: MultiAssetStage,
-    *,
-    strategy_id: str,
-    start: str,
-    end: str,
-    cost_bps: float,
-) -> dict[str, Any]:
-    sessions = tuple(pd.to_datetime(stage.calendar["trade_date"]).dt.normalize())
-    targets = build_monthly_targets(stage.assets, sessions, strategy_id)
-    targets = _filter_targets(targets, start=start, end=end)
-    return simulate_targets(
-        stage.assets,
-        targets,
-        sessions,
-        SimulationConfig(cost_bps_per_side=cost_bps),
     )
 
 
@@ -2412,608 +1289,1996 @@ def _phase_from_evaluation(
     }
 
 
-def _replay_evaluation(
+def _v9_verify_result(
+    result: Mapping[str, Any],
+    *,
+    freeze: Mapping[str, Any],
+    audit: Mapping[str, Any] | None,
+    closure: Mapping[str, Any],
+    protocol: Mapping[str, Any],
+) -> None:
+    freeze_reference = result.get("winner_freeze")
+    audit_reference = result.get("historical_audit")
+    if (
+        set(result) != RESULT_FIELDS
+        or result.get("payload_sha256") != canonical_payload_sha256(result)
+        or result.get("schema_version") != 1
+        or result.get("kind") != "factor_lab_multi_asset_terminal_result"
+        or result.get("release") != RELEASE
+        or result.get("selected_candidate_id") != freeze.get("selected_candidate_id")
+        or result.get("protocol_payload_sha256") != protocol.get("payload_sha256")
+        or result.get("implementation_closure_payload_sha256")
+        != closure.get("payload_sha256")
+        or result.get("claim_contract") != protocol.get("claim_contract")
+        or not isinstance(freeze_reference, Mapping)
+        or set(freeze_reference) != EVIDENCE_REFERENCE_FIELDS
+        or freeze_reference.get("payload_sha256")
+        != freeze.get("payload_sha256")
+        or freeze_reference.get("path") != WINNER_FREEZE_PATH.as_posix()
+        or freeze_reference.get("file_sha256")
+        != file_sha256(ROOT / WINNER_FREEZE_PATH)
+    ):
+        raise ValueError("9.0 terminal result contract differs")
+    if freeze.get("selected_candidate_id") is None:
+        if (
+            audit is not None
+            or result.get("historical_audit") is not None
+            or result.get("status") != "selection_falsified_no_candidate"
+            or result.get("audit_status") != "not_opened"
+        ):
+            raise ValueError("9.0 null terminal result differs")
+        return
+    if audit is None:
+        raise ValueError("9.0 selected terminal result lacks audit evidence")
+    expected = (
+        "historical_adaptive_beta_diagnostic_passed_fresh_evidence_required"
+        if audit.get("status") == "historical_audit_passed"
+        else "historical_adaptive_beta_diagnostic_failed"
+    )
+    if (
+        result.get("status") != expected
+        or result.get("audit_status") != audit.get("status")
+        or not isinstance(audit_reference, Mapping)
+        or set(audit_reference) != EVIDENCE_REFERENCE_FIELDS
+        or audit_reference.get("path") != AUDIT_PATH.as_posix()
+        or audit_reference.get("payload_sha256")
+        != audit.get("payload_sha256")
+        or audit_reference.get("file_sha256")
+        != file_sha256(ROOT / AUDIT_PATH)
+    ):
+        raise ValueError("9.0 selected terminal result differs")
+
+
+def verify_release_state(
+    *, verify_data: bool = False, verify_runtime: bool = False
+) -> dict[str, Any]:
+    """Verify the committed 9.0 closure and staged evidence chain."""
+
+    closure, protocol = _v9_verify_closure(verify_runtime=verify_runtime)
+    freeze_path = ROOT / WINNER_FREEZE_PATH
+    audit_path = ROOT / AUDIT_PATH
+    result_path = ROOT / RESULT_PATH
+    if not freeze_path.is_file():
+        if audit_path.exists() or result_path.exists():
+            raise ValueError("9.0 audit/result exists without winner freeze")
+        _assert_evidence_layout(set())
+        _assert_runtime_layout(set())
+        return {
+            "status": str(closure["status"]),
+            "closure": closure,
+            "protocol": protocol,
+            "freeze": None,
+            "audit": None,
+            "result": None,
+        }
+    freeze = _read_json(WINNER_FREEZE_PATH)
+    _require_committed(WINNER_FREEZE_PATH)
+    _v9_verify_freeze(
+        freeze,
+        closure=closure,
+        protocol=protocol,
+        verify_data=verify_data,
+    )
+    audit: dict[str, Any] | None = None
+    if audit_path.is_file():
+        if freeze.get("selected_candidate_id") != PRIMARY_ID:
+            raise ValueError("null 9.0 selection cannot have audit evidence")
+        audit = _read_json(AUDIT_PATH)
+        _require_committed(AUDIT_PATH)
+        _v9_verify_audit(
+            audit,
+            freeze=freeze,
+            closure=closure,
+            protocol=protocol,
+            verify_data=verify_data,
+        )
+    result: dict[str, Any] | None = None
+    if result_path.is_file():
+        result = _read_json(RESULT_PATH)
+        _require_committed(RESULT_PATH)
+        _v9_verify_result(
+            result,
+            freeze=freeze,
+            audit=audit,
+            closure=closure,
+            protocol=protocol,
+        )
+    allowed_stages = {"development"}
+    allowed_evidence = {WINNER_FREEZE_PATH.name}
+    if audit is not None:
+        allowed_stages.add("audit")
+        allowed_evidence.add(AUDIT_PATH.name)
+    if result is not None:
+        allowed_evidence.add(RESULT_PATH.name)
+    _assert_runtime_layout(allowed_stages)
+    _assert_evidence_layout(allowed_evidence)
+    status = (
+        str(result["status"])
+        if result is not None
+        else str(audit["status"])
+        if audit is not None
+        else "selection_frozen_no_candidate_pending_finalize"
+        if freeze.get("selected_candidate_id") is None
+        else "selection_frozen_pending_historical_audit"
+    )
+    return {
+        "status": status,
+        "closure": closure,
+        "protocol": protocol,
+        "freeze": freeze,
+        "audit": audit,
+        "result": result,
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--mode", required=True, choices=("development", "audit", "finalize")
+    )
+    args = parser.parse_args(argv)
+    if args.mode == "development":
+        return run_development()
+    if args.mode == "audit":
+        return run_audit()
+    return run_finalize()
+
+
+def _v9_remote_prior_tag_refs() -> dict[str, str]:
+    remote = subprocess.run(
+        [
+            "git",
+            "ls-remote",
+            "--exit-code",
+            "origin",
+            f"refs/tags/{PRIOR_TAG}",
+            f"refs/tags/{PRIOR_TAG}^{{}}",
+        ],
+        cwd=ROOT,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if remote.returncode != 0:
+        raise RuntimeError("could not verify the exact published 8.1 tag")
+    try:
+        return {
+            ref: object_id
+            for object_id, ref in (
+                line.split() for line in remote.stdout.decode("ascii").splitlines()
+            )
+        }
+    except ValueError as exc:
+        raise ValueError("published 8.1 tag response is malformed") from exc
+
+
+def _v9_tagged_json(
+    path: Path, *, expected_file: str, expected_payload: str
+) -> dict[str, Any]:
+    current = (ROOT / path).read_bytes()
+    tagged = _git("show", f"{PRIOR_COMMIT}:{path.as_posix()}")
+    value = json.loads(current.decode("utf-8"))
+    if (
+        current != tagged
+        or hashlib.sha256(current).hexdigest() != expected_file
+        or not isinstance(value, dict)
+        or value.get("payload_sha256") != expected_payload
+        or canonical_payload_sha256(value) != expected_payload
+    ):
+        raise ValueError(f"published 8.1 artifact differs: {path}")
+    return value
+
+
+def _v9_assert_frame_exact(actual: pd.DataFrame, expected: pd.DataFrame, *, role: str) -> None:
+    try:
+        pd.testing.assert_frame_equal(
+            actual.reset_index(drop=True),
+            expected.reset_index(drop=True),
+            check_dtype=True,
+            check_exact=True,
+        )
+    except AssertionError as exc:
+        raise ValueError(f"{role} does not replay exactly") from exc
+
+
+def _verify_prior_8_1_archive(
+    *, verify_data: bool = True, verify_runtime: bool = True
+) -> dict[str, Any]:
+    """Verify the published null 8.1 chain and its retained validation stage."""
+
+    if verify_data and not verify_runtime:
+        raise ValueError("deep prior-data verification requires the retained runtime")
+    if (
+        _git("cat-file", "-t", f"refs/tags/{PRIOR_TAG}").decode("ascii").strip()
+        != "tag"
+        or _git("rev-parse", f"refs/tags/{PRIOR_TAG}").decode("ascii").strip()
+        != PRIOR_TAG_OBJECT
+        or _git("rev-parse", f"refs/tags/{PRIOR_TAG}^{{}}").decode("ascii").strip()
+        != PRIOR_COMMIT
+        or _v9_remote_prior_tag_refs()
+        != {
+            f"refs/tags/{PRIOR_TAG}": PRIOR_TAG_OBJECT,
+            f"refs/tags/{PRIOR_TAG}^{{}}": PRIOR_COMMIT,
+        }
+    ):
+        raise ValueError("published 8.1 annotated tag identity differs")
+    if subprocess.run(
+        ["git", "merge-base", "--is-ancestor", PRIOR_COMMIT, "HEAD"],
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    ).returncode != 0:
+        raise ValueError("current HEAD does not descend from published 8.1")
+
+    protocol = _v9_tagged_json(
+        PRIOR_PROTOCOL_PATH,
+        expected_file=PRIOR_PROTOCOL_FILE_SHA256,
+        expected_payload=PRIOR_PROTOCOL_PAYLOAD,
+    )
+    closure = _v9_tagged_json(
+        PRIOR_CLOSURE_PATH,
+        expected_file=PRIOR_CLOSURE_FILE_SHA256,
+        expected_payload=PRIOR_CLOSURE_PAYLOAD,
+    )
+    reclassification = _v9_tagged_json(
+        PRIOR_RECLASSIFICATION_PATH,
+        expected_file=PRIOR_RECLASSIFICATION_FILE_SHA256,
+        expected_payload=PRIOR_RECLASSIFICATION_PAYLOAD,
+    )
+    freeze = _v9_tagged_json(
+        PRIOR_FREEZE_PATH,
+        expected_file=PRIOR_FREEZE_FILE_SHA256,
+        expected_payload=PRIOR_FREEZE_PAYLOAD,
+    )
+    result = _v9_tagged_json(
+        PRIOR_RESULT_PATH,
+        expected_file=PRIOR_RESULT_FILE_SHA256,
+        expected_payload=PRIOR_RESULT_PAYLOAD,
+    )
+    validation = freeze.get("validation")
+    if (
+        protocol.get("release") != "8.1"
+        or closure.get("release") != "8.1"
+        or reclassification.get("status") != "train_reclassification_passed"
+        or freeze.get("status") != "selected_null_frozen_validation_failed"
+        or freeze.get("selected_candidate_id") is not None
+        or freeze.get("validation_market_outcomes_opened") is not True
+        or freeze.get("audit_market_outcomes_opened") is not False
+        or not isinstance(validation, Mapping)
+        or result.get("status") != "selection_falsified_no_candidate"
+        or result.get("selected_candidate_id") is not None
+        or result.get("audit_status") != "not_opened"
+    ):
+        raise ValueError("published 8.1 terminal null boundary differs")
+
+    projection: dict[str, Any] = {
+        "release": "8.1",
+        "status": "selection_falsified_no_candidate",
+        "selected_candidate_id": None,
+        "audit_status": "not_opened",
+        "validation_market_outcomes_opened": True,
+        "audit_market_outcomes_opened": False,
+        "tag_object": PRIOR_TAG_OBJECT,
+        "tag_commit": PRIOR_COMMIT,
+        "protocol_payload_sha256": PRIOR_PROTOCOL_PAYLOAD,
+        "closure_payload_sha256": PRIOR_CLOSURE_PAYLOAD,
+        "reclassification_payload_sha256": PRIOR_RECLASSIFICATION_PAYLOAD,
+        "freeze_payload_sha256": PRIOR_FREEZE_PAYLOAD,
+        "result_payload_sha256": PRIOR_RESULT_PAYLOAD,
+        "validation_manifest_payload_sha256": PRIOR_VALIDATION_MANIFEST_PAYLOAD,
+        "validation_binding_payload_sha256": PRIOR_VALIDATION_BINDING_PAYLOAD,
+        "validation_evaluation_payload_sha256": PRIOR_VALIDATION_EVALUATION_PAYLOAD,
+        "artifact_parquet_count": PRIOR_VALIDATION_PARQUET_COUNT,
+        "artifact_row_count": PRIOR_VALIDATION_ROW_COUNT,
+        "deep_data_verified": bool(verify_data),
+        "deep_runtime_verified": bool(verify_runtime),
+    }
+    if verify_runtime:
+        stage = load_multi_asset_stage(PRIOR_SOURCE_ROOT, "validation")
+        manifest_path = stage.path / "manifest.json"
+        binding_path = PRIOR_WORK_ROOT / "stage-bindings" / "validation.json"
+        evaluation_path = (
+            PRIOR_WORK_ROOT / "evaluations" / "stage=validation" / "evaluation.json"
+        )
+        binding = _read_json(binding_path)
+        evaluation = _read_json(evaluation_path)
+        if (
+            stage.manifest.get("payload_sha256") != PRIOR_VALIDATION_MANIFEST_PAYLOAD
+            or file_sha256(manifest_path) != PRIOR_VALIDATION_MANIFEST_FILE_SHA256
+            or binding.get("payload_sha256") != PRIOR_VALIDATION_BINDING_PAYLOAD
+            or file_sha256(binding_path) != PRIOR_VALIDATION_BINDING_FILE_SHA256
+            or evaluation.get("payload_sha256") != PRIOR_VALIDATION_EVALUATION_PAYLOAD
+            or file_sha256(evaluation_path) != PRIOR_VALIDATION_EVALUATION_FILE_SHA256
+            or validation.get("source_manifest_payload_sha256")
+            != PRIOR_VALIDATION_MANIFEST_PAYLOAD
+            or validation.get("stage_binding_payload_sha256")
+            != PRIOR_VALIDATION_BINDING_PAYLOAD
+            or validation.get("evaluation_payload_sha256")
+            != PRIOR_VALIDATION_EVALUATION_PAYLOAD
+            or validation.get("evaluation_file_sha256")
+            != PRIOR_VALIDATION_EVALUATION_FILE_SHA256
+        ):
+            raise ValueError("retained 8.1 validation identities differ")
+        artifacts = evaluation.get("artifacts")
+        if not isinstance(artifacts, Mapping) or set(artifacts) != {
+            "primary", "stress", "cash", "cash_stress"
+        }:
+            raise ValueError("retained 8.1 evaluation role set differs")
+        parquet_count = 0
+        row_count = 0
+        for role, values in artifacts.items():
+            if not isinstance(values, Mapping) or set(values) != set(EVALUATION_ARTIFACTS):
+                raise ValueError(f"retained 8.1 {role} artifact set differs")
+            for artifact, entry in values.items():
+                path = evaluation_path.parent / str(entry.get("path") or "")
+                if (
+                    path.is_symlink()
+                    or not path.is_file()
+                    or file_sha256(path) != entry.get("file_sha256")
+                ):
+                    raise ValueError(f"retained 8.1 artifact differs: {path}")
+                rows = len(pd.read_parquet(path))
+                if rows != entry.get("rows"):
+                    raise ValueError(f"retained 8.1 artifact row count differs: {path}")
+                parquet_count += 1
+                row_count += rows
+        if (
+            parquet_count != PRIOR_VALIDATION_PARQUET_COUNT
+            or row_count != PRIOR_VALIDATION_ROW_COUNT
+        ):
+            raise ValueError("retained 8.1 evaluation totals differ")
+        if verify_data:
+            sessions = tuple(pd.to_datetime(stage.calendar["trade_date"]).dt.normalize())
+            role_specs = {
+                "primary": (CONTROL_ID, 8.0),
+                "stress": (CONTROL_ID, 16.0),
+                "cash": (CASH_ONLY_ID, 8.0),
+                "cash_stress": (CASH_ONLY_ID, 16.0),
+            }
+            for role, (strategy_id, cost) in role_specs.items():
+                expected_targets = _v9_filter_targets(
+                    build_monthly_targets(stage.assets, sessions, strategy_id),
+                    start="2020-01-02",
+                    end="2022-12-30",
+                )
+                replay = simulate_targets(
+                    stage.assets,
+                    expected_targets,
+                    sessions,
+                    SimulationConfig(cost_bps_per_side=cost),
+                )
+                for artifact in EVALUATION_ARTIFACTS:
+                    persisted = pd.read_parquet(
+                        evaluation_path.parent / artifacts[role][artifact]["path"]
+                    )
+                    _v9_assert_frame_exact(
+                        persisted, replay[artifact], role=f"8.1 {role} {artifact}"
+                    )
+    immutable_identity = {
+        key: value
+        for key, value in projection.items()
+        if key not in {"deep_data_verified", "deep_runtime_verified"}
+    }
+    projection["archive_identity_sha256"] = canonical_payload_sha256(
+        immutable_identity
+    )
+    return projection
+
+
+def _v9_verify_protocol_contract(protocol: Mapping[str, Any]) -> None:
+    if not _is_sha256(PROTOCOL_PAYLOAD) or not _is_sha256(PROTOCOL_FILE_SHA256):
+        raise RuntimeError("9.0 protocol hash constants are pending and fail closed")
+    scout = _read_json(SCOUT_PATH)
+    asset_selection = _read_json(ASSET_SELECTION_PATH)
+    inherited = _read_json(INHERITED_PROTOCOL_PATH)
+    economic_gate = _read_json(ECONOMIC_GATE_PROTOCOL_PATH)
+    frozen = protocol.get("frozen_source_and_execution_contract")
+    strategy = protocol.get("candidate_registry", {}).get("strategy")
+    claim = protocol.get("claim_contract")
+    phases = protocol.get("physical_phases")
+    relative = protocol.get("relative_stability_gate")
+    if (
+        protocol.get("payload_sha256") != PROTOCOL_PAYLOAD
+        or canonical_payload_sha256(protocol) != PROTOCOL_PAYLOAD
+        or file_sha256(ROOT / PROTOCOL_PATH) != PROTOCOL_FILE_SHA256
+        or protocol.get("release") != RELEASE
+        or protocol.get("direction_change") is not True
+        or protocol.get("route") != ROUTE
+        or protocol.get("protocol_id") != PROTOCOL_ID
+        or protocol.get("strategy_id") != PRIMARY_ID
+        or not isinstance(strategy, Mapping)
+        or strategy.get("risk_assets") != list(RISK_CODES)
+        or strategy.get("cash_asset") != CASH_CODE
+        or strategy.get("frozen_base_budget")
+        != {**RISK_BUDGETS, CASH_CODE: 0.0}
+        or strategy.get("required_observed_total_return_levels")
+        != VOLATILITY_LEVEL_LOOKBACK
+        or strategy.get("volatility_return_count") != VOLATILITY_RETURN_COUNT
+        or asset_selection.get("payload_sha256") != ASSET_SELECTION_PAYLOAD
+        or canonical_payload_sha256(asset_selection) != ASSET_SELECTION_PAYLOAD
+        or file_sha256(ROOT / ASSET_SELECTION_PATH)
+        != ASSET_SELECTION_FILE_SHA256
+        or inherited.get("payload_sha256") != INHERITED_PROTOCOL_PAYLOAD
+        or canonical_payload_sha256(inherited) != INHERITED_PROTOCOL_PAYLOAD
+        or file_sha256(ROOT / INHERITED_PROTOCOL_PATH)
+        != INHERITED_PROTOCOL_FILE_SHA256
+        or economic_gate.get("payload_sha256")
+        != ECONOMIC_GATE_PROTOCOL_PAYLOAD
+        or canonical_payload_sha256(economic_gate)
+        != ECONOMIC_GATE_PROTOCOL_PAYLOAD
+        or file_sha256(ROOT / ECONOMIC_GATE_PROTOCOL_PATH)
+        != ECONOMIC_GATE_PROTOCOL_FILE_SHA256
+        or not isinstance(frozen, Mapping)
+        or frozen.get("asset_selection")
+        != {
+            "path": ASSET_SELECTION_PATH.as_posix(),
+            "file_sha256": ASSET_SELECTION_FILE_SHA256,
+            "payload_sha256": ASSET_SELECTION_PAYLOAD,
+        }
+        or frozen.get("data_and_execution_protocol")
+        != {
+            "path": INHERITED_PROTOCOL_PATH.as_posix(),
+            "file_sha256": INHERITED_PROTOCOL_FILE_SHA256,
+            "payload_sha256": INHERITED_PROTOCOL_PAYLOAD,
+        }
+        or frozen.get("economic_gate_source")
+        != {
+            "path": ECONOMIC_GATE_PROTOCOL_PATH.as_posix(),
+            "file_sha256": ECONOMIC_GATE_PROTOCOL_FILE_SHA256,
+            "payload_sha256": ECONOMIC_GATE_PROTOCOL_PAYLOAD,
+        }
+        or frozen.get("initial_capital_rmb") != INITIAL_CAPITAL_RMB
+        or frozen.get("lot_size_shares") != LOT_SIZE
+        or frozen.get("maximum_signal_adv20_fraction")
+        != MAX_SIGNAL_ADV_PARTICIPATION
+        or frozen.get("base_cost_bps_per_side") != BASE_COST_BPS_PER_SIDE
+        or frozen.get("stress_cost_bps_per_side")
+        != STRESS_COST_BPS_PER_SIDE
+        or VOLATILITY_FLOOR != 1e-12
+        or protocol.get("candidate_registry", {}).get("strategy", {}).get(
+            "volatility_floor"
+        )
+        != VOLATILITY_FLOOR
+        or scout.get("payload_sha256") != SCOUT_PAYLOAD
+        or canonical_payload_sha256(scout) != SCOUT_PAYLOAD
+        or file_sha256(ROOT / SCOUT_PATH) != SCOUT_FILE_SHA256
+        or protocol.get("preprotocol_scout", {}).get("payload_sha256")
+        != SCOUT_PAYLOAD
+        or protocol.get("preprotocol_scout", {}).get("file_sha256")
+        != SCOUT_FILE_SHA256
+        or not isinstance(protocol.get("shared_absolute_gate"), Mapping)
+        or not isinstance(relative, Mapping)
+        or relative
+        != {
+            "sharpe_delta_at_least": 0.0,
+            "max_drawdown_delta_at_least": 0.0,
+            "positive_complete_year_ratio_delta_at_least": 0.0,
+        }
+        or not isinstance(phases, Mapping)
+        or phases.get("development", {}).get("source_release") != "8.1"
+        or phases.get("development", {}).get("source_root")
+        != "runtime/data/multi-asset-8.1/sources/stage=validation"
+        or phases.get("development", {}).get("runtime_stage") is not None
+        or phases.get("development", {}).get("performance_start") != "2015-03-02"
+        or phases.get("development", {}).get("performance_end") != "2022-12-30"
+        or phases.get("audit", {}).get("performance_start") != "2023-01-03"
+        or phases.get("audit", {}).get("market_outcome_opened") is not False
+        or not isinstance(claim, Mapping)
+        or claim.get("research_object") != "causal_volatility_balanced_strategic_beta"
+        or any(
+            claim.get(key) is not False
+            for key in (
+                "alpha_claim_allowed",
+                "profit_claim_allowed",
+                "stable_future_profit_claim_allowed",
+                "investment_recommendation_allowed",
+            )
+        )
+    ):
+        raise ValueError("9.0 protocol differs from its exact runner contract")
+
+
+def _v9_verify_implementation_map(
+    closure: Mapping[str, Any], implementation_commit: str
+) -> None:
+    implementation = closure.get("implementation")
+    if not isinstance(implementation, Mapping) or set(implementation) != EXPECTED_IMPLEMENTATION_PATHS:
+        raise ValueError("9.0 closure implementation path set differs")
+    for relative, binding in implementation.items():
+        path = _safe_repo_file(str(relative))
+        committed = _git("show", f"{implementation_commit}:{relative}")
+        if (
+            not isinstance(binding, Mapping)
+            or binding.get("path") != relative
+            or file_sha256(path) != binding.get("sha256")
+            or hashlib.sha256(committed).hexdigest() != binding.get("sha256")
+        ):
+            raise ValueError(f"9.0 frozen implementation differs: {relative}")
+
+
+def _v9_verify_closure(
+    *, verify_runtime: bool = True
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    closure = _read_json(CLOSURE_PATH)
+    protocol = _read_json(PROTOCOL_PATH)
+    _v9_verify_protocol_contract(protocol)
+    prior = closure.get("prior_8_1_archive")
+    implementation_commit = str(closure.get("implementation_commit") or "")
+    expected_protocol_reference = {
+        "path": PROTOCOL_PATH.as_posix(),
+        "file_sha256": PROTOCOL_FILE_SHA256,
+        "payload_sha256": PROTOCOL_PAYLOAD,
+        "protocol_id": PROTOCOL_ID,
+    }
+    expected_scout_reference = {
+        "path": SCOUT_PATH.as_posix(),
+        "file_sha256": SCOUT_FILE_SHA256,
+        "payload_sha256": SCOUT_PAYLOAD,
+        "status": "selected_volatility_balanced_after_fully_exposed_development",
+    }
+    if (
+        set(closure) != CLOSURE_FIELDS
+        or closure.get("payload_sha256") != canonical_payload_sha256(closure)
+        or closure.get("schema_version") != 1
+        or closure.get("kind") != "factor_lab_release_closure"
+        or closure.get("release") != RELEASE
+        or closure.get("closure_role") != "causal_volatility_balanced_preselection_root"
+        or closure.get("status") != "implementation_frozen_before_formal_development_replay"
+        or closure.get("direction_change") is not True
+        or closure.get("route") != ROUTE
+        or closure.get("development_outcomes_opened") is not True
+        or closure.get("audit_market_outcomes_opened") is not False
+        or closure.get("protocol") != expected_protocol_reference
+        or closure.get("preprotocol_scout") != expected_scout_reference
+        or closure.get("formal_data") != {}
+        or not isinstance(prior, Mapping)
+        or prior.get("tag_object") != PRIOR_TAG_OBJECT
+        or prior.get("tag_commit") != PRIOR_COMMIT
+        or not _is_commit(implementation_commit)
+        or closure.get("claim_contract") != protocol.get("claim_contract")
+    ):
+        raise ValueError("9.0 preselection closure contract differs")
+    implementation_tree = _git(
+        "rev-parse", f"{implementation_commit}^{{tree}}"
+    ).decode("ascii").strip()
+    if closure.get("implementation_tree") != implementation_tree:
+        raise ValueError("9.0 preselection closure implementation tree differs")
+    archived = _verify_prior_8_1_archive(
+        verify_data=verify_runtime, verify_runtime=verify_runtime
+    )
+    expected_prior = {
+        "release": "8.1",
+        "tag": PRIOR_TAG,
+        "tag_object": PRIOR_TAG_OBJECT,
+        "tag_commit": PRIOR_COMMIT,
+        "files": {
+            PRIOR_PROTOCOL_PATH.as_posix(): {
+                "path": PRIOR_PROTOCOL_PATH.as_posix(),
+                "file_sha256": PRIOR_PROTOCOL_FILE_SHA256,
+                "payload_sha256": PRIOR_PROTOCOL_PAYLOAD,
+                "status": "frozen_after_8_0_train_evaluation_before_8_1_reclassification",
+            },
+            PRIOR_CLOSURE_PATH.as_posix(): {
+                "path": PRIOR_CLOSURE_PATH.as_posix(),
+                "file_sha256": PRIOR_CLOSURE_FILE_SHA256,
+                "payload_sha256": PRIOR_CLOSURE_PAYLOAD,
+                "status": "implementation_frozen_before_8_1_reclassification",
+            },
+            PRIOR_RECLASSIFICATION_PATH.as_posix(): {
+                "path": PRIOR_RECLASSIFICATION_PATH.as_posix(),
+                "file_sha256": PRIOR_RECLASSIFICATION_FILE_SHA256,
+                "payload_sha256": PRIOR_RECLASSIFICATION_PAYLOAD,
+                "status": "train_reclassification_passed",
+            },
+            PRIOR_FREEZE_PATH.as_posix(): {
+                "path": PRIOR_FREEZE_PATH.as_posix(),
+                "file_sha256": PRIOR_FREEZE_FILE_SHA256,
+                "payload_sha256": PRIOR_FREEZE_PAYLOAD,
+                "status": "selected_null_frozen_validation_failed",
+            },
+            PRIOR_RESULT_PATH.as_posix(): {
+                "path": PRIOR_RESULT_PATH.as_posix(),
+                "file_sha256": PRIOR_RESULT_FILE_SHA256,
+                "payload_sha256": PRIOR_RESULT_PAYLOAD,
+                "status": "selection_falsified_no_candidate",
+            },
+        },
+        "status": "selection_falsified_no_candidate",
+        "selected_candidate_id": None,
+        "audit_status": "not_opened",
+        "validation_market_outcomes_opened": True,
+        "audit_market_outcomes_opened": False,
+        "protocol_payload_sha256": PRIOR_PROTOCOL_PAYLOAD,
+        "closure_payload_sha256": PRIOR_CLOSURE_PAYLOAD,
+        "reclassification_payload_sha256": PRIOR_RECLASSIFICATION_PAYLOAD,
+        "freeze_payload_sha256": PRIOR_FREEZE_PAYLOAD,
+        "result_payload_sha256": PRIOR_RESULT_PAYLOAD,
+        "validation_manifest_payload_sha256": PRIOR_VALIDATION_MANIFEST_PAYLOAD,
+        "validation_binding_payload_sha256": PRIOR_VALIDATION_BINDING_PAYLOAD,
+        "validation_evaluation_payload_sha256": PRIOR_VALIDATION_EVALUATION_PAYLOAD,
+        "artifact_parquet_count": PRIOR_VALIDATION_PARQUET_COUNT,
+        "artifact_row_count": PRIOR_VALIDATION_ROW_COUNT,
+        "deep_data_verified": True,
+        "deep_runtime_verified": True,
+        "archive_identity_sha256": archived["archive_identity_sha256"],
+    }
+    if prior != expected_prior:
+        raise ValueError("9.0 closure prior-8.1 archive identity differs")
+    _v9_verify_implementation_map(closure, implementation_commit)
+    for relative in (
+        PROTOCOL_PATH,
+        SCOUT_PATH,
+        ASSET_SELECTION_PATH,
+        INHERITED_PROTOCOL_PATH,
+        ECONOMIC_GATE_PROTOCOL_PATH,
+        PRIOR_PROTOCOL_PATH,
+        PRIOR_CLOSURE_PATH,
+        PRIOR_RECLASSIFICATION_PATH,
+        PRIOR_FREEZE_PATH,
+        PRIOR_RESULT_PATH,
+    ):
+        if _git("show", f"{implementation_commit}:{relative.as_posix()}") != (
+            ROOT / relative
+        ).read_bytes():
+            raise ValueError(
+                f"9.0 implementation commit lacks exact contract: {relative}"
+            )
+    if subprocess.run(
+        ["git", "merge-base", "--is-ancestor", implementation_commit, "HEAD"],
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    ).returncode != 0:
+        raise ValueError("current HEAD does not descend from the 9.0 implementation")
+    if verify_runtime:
+        _require_source_imports()
+        if closure.get("runtime") != _runtime_identity():
+            raise ValueError("9.0 formal runtime differs from closure")
+    _require_committed(CLOSURE_PATH)
+    return closure, protocol
+
+
+def _v9_filter_targets(targets: pd.DataFrame, *, start: str, end: str) -> pd.DataFrame:
+    executions = pd.to_datetime(targets["execution_date"], errors="coerce").dt.normalize()
+    selected = targets.loc[
+        executions.between(pd.Timestamp(start), pd.Timestamp(end))
+    ].copy()
+    if selected.empty:
+        raise ValueError(f"9.0 phase has no targets between {start} and {end}")
+    return selected.reset_index(drop=True)
+
+
+def _v9_prefix_replay_count(
+    stage: MultiAssetStage, targets: pd.DataFrame, sessions: tuple[pd.Timestamp, ...]
+) -> int:
+    count = 0
+    for signal_date, expected in targets.groupby("signal_date", sort=True):
+        signal = pd.Timestamp(signal_date).normalize()
+        execution = pd.Timestamp(expected["execution_date"].iloc[0]).normalize()
+        prefix_assets = {
+            code: frame.loc[
+                pd.to_datetime(frame["trade_date"]).dt.normalize().le(signal)
+            ].copy()
+            for code, frame in stage.assets.items()
+        }
+        prefix_sessions = tuple(value for value in sessions if value <= execution)
+        rebuilt = build_monthly_targets(prefix_assets, prefix_sessions, PRIMARY_ID)
+        actual = rebuilt.loc[
+            pd.to_datetime(rebuilt["signal_date"]).dt.normalize().eq(signal)
+        ]
+        if actual.empty:
+            raise ValueError(f"9.0 target prefix omitted signal {signal.date()}")
+        _v9_assert_frame_exact(
+            actual.sort_values("code", kind="mergesort"),
+            expected.sort_values("code", kind="mergesort"),
+            role=f"9.0 target prefix {signal.date()}",
+        )
+        count += 1
+    return count
+
+
+def _v9_role_metrics(
+    result: Mapping[str, Any], *, start: str, end: str
+) -> dict[str, Any]:
+    values = phase_metrics(result, start=start, end=end)
+    # Each D1/D2 result is a separate fresh-cash account whose market/calendar
+    # view was physically cut at that phase end before target construction.
+    validity = _role_execution_validity(result)
+    # The account-wide artifact validity is shared by D1/D2, while accounting
+    # reconciliation is an exact metric of the reported phase slice.
+    validity["maximum_nav_reconciliation_error"] = values[
+        "nav_reconciliation_error"
+    ]
+    values["execution_validity"] = validity
+    return values
+
+
+def _v9_absolute_gate(
+    candidate: Mapping[str, Any],
+    cash: Mapping[str, Any],
+    *,
+    thresholds: Mapping[str, Any],
+    operational: Mapping[str, float],
+) -> dict[str, Any]:
+    values = {
+        "net_cagr_strictly_positive": {
+            "metric": float(candidate["cagr"]), "threshold": 0.0
+        },
+        "net_sharpe_at_least": {
+            "metric": float(candidate["sharpe"]),
+            "threshold": float(thresholds["net_sharpe_at_least"]),
+        },
+        "daily_max_drawdown_at_least": {
+            "metric": float(candidate["max_drawdown"]),
+            "threshold": float(thresholds["daily_max_drawdown_at_least"]),
+        },
+        "positive_complete_year_ratio_at_least": {
+            "metric": float(candidate["positive_complete_year_ratio"]),
+            "threshold": float(thresholds["positive_complete_year_ratio_at_least"]),
+        },
+        "cash_excess_cagr_strictly_positive": {
+            "metric": float(candidate["cagr"]) - float(cash["cagr"]),
+            "threshold": 0.0,
+        },
+        "annualized_turnover_at_most": {
+            "metric": float(operational["annualized_turnover"]),
+            "threshold": float(operational["annualized_turnover_at_most"]),
+        },
+        "requested_notional_fill_ratio_at_least": {
+            "metric": float(operational["requested_notional_fill_ratio"]),
+            "threshold": float(operational["requested_notional_fill_ratio_at_least"]),
+        },
+        "capacity_limited_requested_notional_ratio_at_most": {
+            "metric": float(operational["capacity_limited_requested_notional_ratio"]),
+            "threshold": float(
+                operational["capacity_limited_requested_notional_ratio_at_most"]
+            ),
+        },
+        "nav_reconciliation_error_at_most": {
+            "metric": float(operational["nav_reconciliation_error"]),
+            "threshold": float(operational["nav_reconciliation_error_at_most"]),
+        },
+    }
+    checks = {
+        key: value["metric"] > value["threshold"]
+        if key in {"net_cagr_strictly_positive", "cash_excess_cagr_strictly_positive"}
+        else value["metric"] <= value["threshold"]
+        if key.endswith("_at_most")
+        else value["metric"] >= value["threshold"]
+        for key, value in values.items()
+    }
+    return {"passed": all(checks.values()), "checks": checks, "values": values}
+
+
+def _v9_relative_gate(
+    candidate: Mapping[str, Any],
+    static: Mapping[str, Any],
+    config: Mapping[str, Any],
+) -> dict[str, Any]:
+    values = {
+        "sharpe_delta_at_least": {
+            "metric": float(candidate["sharpe"]) - float(static["sharpe"]),
+            "threshold": float(config["sharpe_delta_at_least"]),
+        },
+        "max_drawdown_delta_at_least": {
+            "metric": float(candidate["max_drawdown"])
+            - float(static["max_drawdown"]),
+            "threshold": float(config["max_drawdown_delta_at_least"]),
+        },
+        "positive_complete_year_ratio_delta_at_least": {
+            "metric": float(candidate["positive_complete_year_ratio"])
+            - float(static["positive_complete_year_ratio"]),
+            "threshold": float(
+                config["positive_complete_year_ratio_delta_at_least"]
+            ),
+        },
+    }
+    checks = {
+        key: value["metric"] >= value["threshold"] for key, value in values.items()
+    }
+    return {"passed": all(checks.values()), "checks": checks, "values": values}
+
+
+def _v9_require_hard_validity(roles: Mapping[str, Mapping[str, Any]]) -> None:
+    if set(roles) != set(EVALUATION_ROLES):
+        raise RuntimeError("9.0 hard-validity role set differs")
+    for role, metrics in roles.items():
+        validity = metrics.get("execution_validity")
+        required = {
+            "artifact_set_complete",
+            "status_values_allowed",
+            "status_execution_identity_exact",
+            "blocked_missing_open_trade_count",
+            "blocked_capacity_trade_count",
+            "capacity_violation_count",
+            "negative_cash_observation_count",
+            "leverage_observation_count",
+            "minimum_cash",
+            "maximum_gross_exposure_ratio",
+            "maximum_nav_reconciliation_error",
+            "requested_notional_total",
+            "executed_notional_total",
+            "capacity_limited_requested_notional",
+            "capacity_fields_finite_and_nonnegative",
+            "executed_notional_not_above_requested",
+            "capacity_limited_notional_not_above_requested",
+            "capacity_aggregation_identity_exact",
+            "requested_fill_identity_exact",
+            "daily_trade_notional_identity_exact",
+        }
+        counts = (
+            "blocked_missing_open_trade_count",
+            "blocked_capacity_trade_count",
+            "capacity_violation_count",
+            "negative_cash_observation_count",
+            "leverage_observation_count",
+        )
+        if (
+            not isinstance(validity, Mapping)
+            or set(validity) != required
+            or validity.get("artifact_set_complete") is not True
+            or validity.get("status_values_allowed") is not True
+            or validity.get("status_execution_identity_exact") is not True
+            or not all(_is_exact_nonnegative_int(validity.get(key)) for key in counts)
+            or validity.get("capacity_violation_count") != 0
+            or validity.get("negative_cash_observation_count") != 0
+            or validity.get("leverage_observation_count") != 0
+            or not math.isfinite(float(validity.get("minimum_cash", float("nan"))))
+            or float(validity["minimum_cash"]) < -1e-8
+            or not math.isfinite(
+                float(validity.get("maximum_gross_exposure_ratio", float("nan")))
+            )
+            or float(validity["maximum_gross_exposure_ratio"]) < 0.0
+            or float(validity["maximum_gross_exposure_ratio"]) > 1.0 + 1e-8
+            or not math.isfinite(
+                float(validity.get("maximum_nav_reconciliation_error", float("nan")))
+            )
+            or float(validity["maximum_nav_reconciliation_error"]) < 0.0
+            or float(validity["maximum_nav_reconciliation_error"])
+            != float(metrics["nav_reconciliation_error"])
+            or not math.isfinite(
+                float(validity.get("requested_notional_total", float("nan")))
+            )
+            or float(validity["requested_notional_total"]) < 0.0
+            or not math.isfinite(
+                float(validity.get("executed_notional_total", float("nan")))
+            )
+            or float(validity["executed_notional_total"]) < 0.0
+            or float(validity["executed_notional_total"])
+            > float(validity["requested_notional_total"]) + NOTIONAL_ABS_TOL_RMB
+            or not math.isfinite(
+                float(
+                    validity.get(
+                        "capacity_limited_requested_notional", float("nan")
+                    )
+                )
+            )
+            or float(validity["capacity_limited_requested_notional"]) < 0.0
+            or float(validity["capacity_limited_requested_notional"])
+            > float(validity["requested_notional_total"]) + NOTIONAL_ABS_TOL_RMB
+            or validity.get("capacity_fields_finite_and_nonnegative") is not True
+            or validity.get("executed_notional_not_above_requested") is not True
+            or validity.get("capacity_limited_notional_not_above_requested") is not True
+            or validity.get("capacity_aggregation_identity_exact") is not True
+            or validity.get("requested_fill_identity_exact") is not True
+            or validity.get("daily_trade_notional_identity_exact") is not True
+        ):
+            raise RuntimeError(f"9.0 {role} execution validity hard fail")
+
+
+def _v9_phase_bundle(
+    results: Mapping[str, Mapping[str, Any]],
+    *,
+    start: str,
+    end: str,
+    protocol: Mapping[str, Any],
+) -> dict[str, Any]:
+    roles = {
+        role: _v9_role_metrics(result, start=start, end=end)
+        for role, result in results.items()
+    }
+    return _v9_bundle_from_roles(roles, start=start, end=end, protocol=protocol)
+
+
+def _v9_bundle_from_roles(
+    roles: Mapping[str, Mapping[str, Any]],
+    *,
+    start: str,
+    end: str,
+    protocol: Mapping[str, Any],
+) -> dict[str, Any]:
+    if set(roles) != set(EVALUATION_ROLES):
+        raise ValueError("9.0 phase result role set differs")
+    _v9_require_hard_validity(roles)
+    is_audit = pd.Timestamp(start) >= pd.Timestamp("2023-01-01")
+    operational_config = protocol["shared_absolute_gate"]["operational"]
+    operational = {
+        "annualized_turnover": max(
+            float(roles[role]["annualized_turnover"])
+            for role in ("candidate", "candidate_stress")
+        ),
+        "requested_notional_fill_ratio": min(
+            float(roles[role]["requested_notional_fill_ratio"])
+            for role in ("candidate", "candidate_stress")
+        ),
+        "capacity_limited_requested_notional_ratio": max(
+            float(roles[role]["capacity_limited_requested_notional_ratio"])
+            for role in ("candidate", "candidate_stress")
+        ),
+        "nav_reconciliation_error": max(
+            float(values["nav_reconciliation_error"]) for values in roles.values()
+        ),
+        **{key: float(value) for key, value in operational_config.items()},
+    }
+    base_thresholds = dict(protocol["shared_absolute_gate"]["base"])
+    stress_thresholds = dict(protocol["shared_absolute_gate"]["stress_16bp"])
+    if is_audit:
+        audit_gate = protocol["audit_gate"]
+        base_thresholds.update(
+            {
+                "net_sharpe_at_least": audit_gate["base_sharpe_at_least"],
+                "daily_max_drawdown_at_least": audit_gate[
+                    "daily_max_drawdown_at_least"
+                ],
+                "positive_complete_year_ratio_at_least": audit_gate[
+                    "positive_complete_year_ratio_at_least"
+                ],
+            }
+        )
+        stress_thresholds.update(
+            {
+                "net_sharpe_at_least": audit_gate["stress_sharpe_at_least"],
+                "daily_max_drawdown_at_least": audit_gate[
+                    "daily_max_drawdown_at_least"
+                ],
+                "positive_complete_year_ratio_at_least": audit_gate[
+                    "positive_complete_year_ratio_at_least"
+                ],
+            }
+        )
+    base_absolute = _v9_absolute_gate(
+        roles["candidate"],
+        roles["cash"],
+        thresholds=base_thresholds,
+        operational=operational,
+    )
+    stress_absolute = _v9_absolute_gate(
+        roles["candidate_stress"],
+        roles["cash_stress"],
+        thresholds=stress_thresholds,
+        operational=operational,
+    )
+    base_relative = _v9_relative_gate(
+        roles["candidate"], roles["static"], protocol["relative_stability_gate"]
+    )
+    stress_relative = _v9_relative_gate(
+        roles["candidate_stress"],
+        roles["static_stress"],
+        protocol["relative_stability_gate"],
+    )
+    audit_years_passed = (
+        not is_audit
+        or (
+            int(roles["candidate"]["complete_year_count"])
+            == int(protocol["audit_gate"]["complete_year_count"])
+            and int(roles["candidate"]["positive_complete_year_count"])
+            >= int(protocol["audit_gate"]["minimum_positive_complete_year_count"])
+            and int(roles["candidate_stress"]["complete_year_count"])
+            == int(protocol["audit_gate"]["complete_year_count"])
+            and int(roles["candidate_stress"]["positive_complete_year_count"])
+            >= int(protocol["audit_gate"]["minimum_positive_complete_year_count"])
+        )
+    )
+    passed = audit_years_passed and all(
+        value["passed"]
+        for value in (base_absolute, stress_absolute, base_relative, stress_relative)
+    )
+    return {
+        "start_date": start,
+        "end_date": end,
+        "roles": roles,
+        "operational": operational,
+        "base_absolute_gate": base_absolute,
+        "stress_absolute_gate": stress_absolute,
+        "base_relative_stability_gate": base_relative,
+        "stress_relative_stability_gate": stress_relative,
+        "audit_complete_year_count_gate_passed": audit_years_passed,
+        "passed": passed,
+    }
+
+
+def _v9_run_roles(
+    stage: MultiAssetStage, *, start: str, end: str
+) -> tuple[dict[str, Mapping[str, Any]], int]:
+    sessions = tuple(pd.to_datetime(stage.calendar["trade_date"]).dt.normalize())
+    candidate_targets = _v9_filter_targets(
+        build_monthly_targets(stage.assets, sessions, PRIMARY_ID), start=start, end=end
+    )
+    static_targets = _v9_filter_targets(
+        build_monthly_targets(stage.assets, sessions, CONTROL_ID), start=start, end=end
+    )
+    cash_targets = _v9_filter_targets(
+        build_monthly_targets(stage.assets, sessions, CASH_ONLY_ID), start=start, end=end
+    )
+    prefix_count = _v9_prefix_replay_count(stage, candidate_targets, sessions)
+    specs = {
+        "candidate": (candidate_targets, 8.0),
+        "candidate_stress": (candidate_targets, 16.0),
+        "static": (static_targets, 8.0),
+        "static_stress": (static_targets, 16.0),
+        "cash": (cash_targets, 8.0),
+        "cash_stress": (cash_targets, 16.0),
+    }
+    results = {
+        role: simulate_targets(
+            stage.assets,
+            targets,
+            sessions,
+            SimulationConfig(cost_bps_per_side=cost),
+        )
+        for role, (targets, cost) in specs.items()
+    }
+    for first, second in (
+        ("candidate", "candidate_stress"),
+        ("static", "static_stress"),
+        ("cash", "cash_stress"),
+    ):
+        _v9_assert_frame_exact(
+            results[first]["targets"],
+            results[second]["targets"],
+            role=f"9.0 {first}/{second} targets",
+        )
+    return results, prefix_count
+
+
+def _v9_trim_development_result(
+    result: Mapping[str, Any],
+    *,
+    phase_name: str,
+    start: str,
+    end: str,
+    sessions: tuple[pd.Timestamp, ...],
+) -> dict[str, pd.DataFrame]:
+    start_date = pd.Timestamp(start)
+    end_date = pd.Timestamp(end)
+    baseline = max(value for value in sessions if value < start_date)
+    trimmed: dict[str, pd.DataFrame] = {}
+    for artifact in EVALUATION_ARTIFACTS:
+        frame = result[artifact].copy()
+        if artifact in {"daily_nav", "holdings"}:
+            dates = pd.to_datetime(frame["trade_date"], errors="raise").dt.normalize()
+            frame = frame.loc[dates.between(baseline, end_date)].copy()
+        frame["development_phase"] = phase_name
+        trimmed[artifact] = frame.reset_index(drop=True)
+    return trimmed
+
+
+def _v9_causal_stage_through(
+    stage: MultiAssetStage, *, end: str
+) -> MultiAssetStage:
+    cutoff = pd.Timestamp(end).normalize()
+
+    def through(frame: pd.DataFrame) -> pd.DataFrame:
+        dates = pd.to_datetime(frame["trade_date"], errors="raise").dt.normalize()
+        selected = frame.loc[dates.le(cutoff)].copy().reset_index(drop=True)
+        if selected.empty or pd.to_datetime(selected["trade_date"]).max().normalize() > cutoff:
+            raise ValueError(f"9.0 causal stage could not enforce cutoff {end}")
+        return selected
+
+    assets = {code: through(frame) for code, frame in stage.assets.items()}
+    calendar = through(stage.calendar)
+    manifest = dict(stage.manifest)
+    manifest["price_end_date"] = cutoff.date().isoformat()
+    return MultiAssetStage(
+        path=stage.path,
+        manifest=manifest,
+        calendar=calendar,
+        assets=assets,
+    )
+
+
+def _v9_run_development_roles(
+    stage: MultiAssetStage,
+) -> tuple[
+    dict[str, Mapping[str, Any]],
+    dict[str, dict[str, Mapping[str, Any]]],
+    int,
+]:
+    phase_specs = {
+        "D1": ("2015-03-02", "2019-12-31"),
+        "D2": ("2020-01-02", "2022-12-30"),
+    }
+    phases: dict[str, dict[str, Mapping[str, Any]]] = {}
+    persisted_parts = {
+        role: {artifact: [] for artifact in EVALUATION_ARTIFACTS}
+        for role in EVALUATION_ROLES
+    }
+    prefix_count = 0
+    for phase_name, (start, end) in phase_specs.items():
+        phase_stage = _v9_causal_stage_through(stage, end=end)
+        sessions = tuple(
+            pd.to_datetime(phase_stage.calendar["trade_date"]).dt.normalize()
+        )
+        all_targets = {
+            "candidate": build_monthly_targets(
+                phase_stage.assets, sessions, PRIMARY_ID
+            ),
+            "static": build_monthly_targets(
+                phase_stage.assets, sessions, CONTROL_ID
+            ),
+            "cash": build_monthly_targets(
+                phase_stage.assets, sessions, CASH_ONLY_ID
+            ),
+        }
+        candidate_targets = _v9_filter_targets(
+            all_targets["candidate"], start=start, end=end
+        )
+        static_targets = _v9_filter_targets(all_targets["static"], start=start, end=end)
+        cash_targets = _v9_filter_targets(all_targets["cash"], start=start, end=end)
+        prefix_count += _v9_prefix_replay_count(
+            phase_stage, candidate_targets, sessions
+        )
+        role_specs = {
+            "candidate": (candidate_targets, 8.0),
+            "candidate_stress": (candidate_targets, 16.0),
+            "static": (static_targets, 8.0),
+            "static_stress": (static_targets, 16.0),
+            "cash": (cash_targets, 8.0),
+            "cash_stress": (cash_targets, 16.0),
+        }
+        results = {
+            role: simulate_targets(
+                phase_stage.assets,
+                targets,
+                sessions,
+                SimulationConfig(cost_bps_per_side=cost),
+            )
+            for role, (targets, cost) in role_specs.items()
+        }
+        for first, second in (
+            ("candidate", "candidate_stress"),
+            ("static", "static_stress"),
+            ("cash", "cash_stress"),
+        ):
+            _v9_assert_frame_exact(
+                results[first]["targets"],
+                results[second]["targets"],
+                role=f"9.0 {phase_name} {first}/{second} targets",
+            )
+        phases[phase_name] = results
+        for role, result in results.items():
+            trimmed = _v9_trim_development_result(
+                result,
+                phase_name=phase_name,
+                start=start,
+                end=end,
+                sessions=sessions,
+            )
+            for artifact, frame in trimmed.items():
+                persisted_parts[role][artifact].append(frame)
+    persisted = {
+        role: {
+            artifact: pd.concat(parts, ignore_index=True)
+            for artifact, parts in artifacts.items()
+        }
+        for role, artifacts in persisted_parts.items()
+    }
+    return persisted, phases, prefix_count
+
+
+def _v9_development_phases(
+    phase_results: Mapping[str, Mapping[str, Mapping[str, Any]]],
+    protocol: Mapping[str, Any],
+) -> dict[str, Any]:
+    return {
+        "D1": _v9_phase_bundle(
+            phase_results["D1"],
+            start="2015-03-02",
+            end="2019-12-31",
+            protocol=protocol,
+        ),
+        "D2": _v9_phase_bundle(
+            phase_results["D2"],
+            start="2020-01-02",
+            end="2022-12-30",
+            protocol=protocol,
+        ),
+    }
+
+
+def _v9_verify_scout_development(phases: Mapping[str, Mapping[str, Any]]) -> None:
+    scout = _read_json(SCOUT_PATH)
+    expected = scout["prototypes"]["causal_volatility_balanced_budget_v0"][
+        "development"
+    ]
+    actual: dict[str, Any] = {}
+    for phase_name in ("D1", "D2"):
+        phase = phases[phase_name]
+        roles = phase["roles"]
+        values: dict[str, Any] = {}
+        for label, candidate_role, static_role, cash_role, absolute_key, relative_key in (
+            (
+                "base",
+                "candidate",
+                "static",
+                "cash",
+                "base_absolute_gate",
+                "base_relative_stability_gate",
+            ),
+            (
+                "stress_16bp",
+                "candidate_stress",
+                "static_stress",
+                "cash_stress",
+                "stress_absolute_gate",
+                "stress_relative_stability_gate",
+            ),
+        ):
+            candidate = roles[candidate_role]
+            static = roles[static_role]
+            cash = roles[cash_role]
+            values[label] = {
+                "cagr": candidate["cagr"],
+                "cash_cagr": cash["cagr"],
+                "cash_excess_cagr": candidate["cagr"] - cash["cagr"],
+                "sharpe": candidate["sharpe"],
+                "max_drawdown": candidate["max_drawdown"],
+                "positive_complete_year_ratio": candidate[
+                    "positive_complete_year_ratio"
+                ],
+                "annualized_turnover": candidate["annualized_turnover"],
+                "requested_notional_fill_ratio": candidate[
+                    "requested_notional_fill_ratio"
+                ],
+                "capacity_limited_requested_notional_ratio": candidate[
+                    "capacity_limited_requested_notional_ratio"
+                ],
+                "nav_reconciliation_error": candidate[
+                    "nav_reconciliation_error"
+                ],
+                "cagr_minus_static": candidate["cagr"] - static["cagr"],
+                "sharpe_minus_static": candidate["sharpe"] - static["sharpe"],
+                "max_drawdown_minus_static_positive_is_better": candidate[
+                    "max_drawdown"
+                ]
+                - static["max_drawdown"],
+                "positive_complete_year_ratio_minus_static": candidate[
+                    "positive_complete_year_ratio"
+                ]
+                - static["positive_complete_year_ratio"],
+                "gate_passed": bool(
+                    phase[absolute_key]["passed"]
+                    and phase[relative_key]["passed"]
+                ),
+            }
+        actual[phase_name] = values
+    if actual != expected:
+        raise ValueError("9.0 formal development does not exactly replay scout metrics")
+
+
+def _v9_create_development_binding(
+    stage: MultiAssetStage,
+    *,
+    closure_payload: str,
+    execution_commit: str,
+    run_nonce: str,
+) -> dict[str, Any]:
+    path = _binding_path("development")
+    if path.exists() or path.is_symlink():
+        raise FileExistsError("9.0 development binding is create-only")
+    value = {
+        "schema_version": 1,
+        "kind": "factor_lab_multi_asset_stage_binding",
+        "release": RELEASE,
+        "stage": "development",
+        "stage_manifest_payload_sha256": stage.manifest["payload_sha256"],
+        "stage_manifest_file_sha256": file_sha256(stage.path / "manifest.json"),
+        "implementation_closure_payload_sha256": closure_payload,
+        "execution_commit": execution_commit,
+        "predecessor": {
+            "kind": "published_8_1_validation_source",
+            "tag_object": PRIOR_TAG_OBJECT,
+            "tag_commit": PRIOR_COMMIT,
+        },
+        "run_nonce": run_nonce,
+    }
+    value["payload_sha256"] = canonical_payload_sha256(value)
+    _create_only(path, value)
+    return value
+
+
+def _v9_load_stage_and_binding(
+    stage_name: str,
+    *,
+    closure_payload: str,
+    execution_commit: str,
+    run_nonce: str,
+    predecessor: Mapping[str, Any],
+) -> tuple[MultiAssetStage, dict[str, Any]]:
+    stage = (
+        load_multi_asset_stage(PRIOR_SOURCE_ROOT, "validation")
+        if stage_name == "development"
+        else load_multi_asset_stage(SOURCE_ROOT, stage_name)
+    )
+    binding = _verify_stage_binding(
+        stage_name,
+        stage,
+        closure_payload=closure_payload,
+        execution_commit=execution_commit,
+        run_nonce=run_nonce,
+        predecessor=predecessor,
+    )
+    return stage, binding
+
+
+def _v9_evaluate_stage(
+    stage_name: str,
+    *,
+    stage: MultiAssetStage,
+    binding: Mapping[str, Any],
+    closure_payload: str,
+    execution_commit: str,
+    run_nonce: str,
+    predecessor: Mapping[str, Any],
+    protocol: Mapping[str, Any],
+) -> dict[str, Any]:
+    spec = STAGES[stage_name]
+    if stage_name == "development":
+        results, phase_results, prefix_count = _v9_run_development_roles(stage)
+        phases = _v9_development_phases(phase_results, protocol)
+        _v9_verify_scout_development(phases)
+    else:
+        results, prefix_count = _v9_run_roles(
+            stage, start=spec["performance_start"], end=spec["performance_end"]
+        )
+        phases = {
+            "audit": _v9_phase_bundle(
+                results,
+                start=spec["performance_start"],
+                end=spec["performance_end"],
+                protocol=protocol,
+            )
+        }
+    metrics = {
+        "prefix_replay_signal_count": prefix_count,
+        "phases": phases,
+    }
+    gate = {
+        "passed": all(value["passed"] for value in phases.values()),
+        "phase_passes": {key: value["passed"] for key, value in phases.items()},
+    }
+    evaluation = _persist_evaluation(
+        stage_name,
+        source_manifest_payload=stage.manifest["payload_sha256"],
+        results=results,
+        metrics=metrics,
+        gate=gate,
+        closure_payload=closure_payload,
+        stage_binding_payload=binding["payload_sha256"],
+        execution_commit=execution_commit,
+        run_nonce=run_nonce,
+        predecessor=predecessor,
+    )
+    evaluation_file = file_sha256(
+        EVALUATION_ROOT / f"stage={stage_name}" / "evaluation.json"
+    )
+    _v9_replay_evaluation(
+        stage_name,
+        stage=stage,
+        evaluation=evaluation,
+        protocol=protocol,
+    )
+    return _phase_from_evaluation(evaluation, evaluation_file)
+
+
+def _v9_replay_evaluation(
     stage_name: str,
     *,
     stage: MultiAssetStage,
     evaluation: Mapping[str, Any],
-    gate_config: Mapping[str, Any],
-    validity_config: Mapping[str, Any],
+    protocol: Mapping[str, Any],
 ) -> None:
-    directory = EVALUATION_ROOT / f"stage={stage_name}"
-    sessions = tuple(pd.to_datetime(stage.calendar["trade_date"]).dt.normalize())
-    regenerated: dict[str, Mapping[str, Any]] = {}
-    for role, strategy_id, cost_bps in (
-        ("primary", PRIMARY_ID, 8.0),
-        ("stress", PRIMARY_ID, 16.0),
-        ("cash", CASH_ONLY_ID, 8.0),
-        ("cash_stress", CASH_ONLY_ID, 16.0),
-    ):
-        target_path = directory / f"{role}-targets.parquet"
-        targets = pd.read_parquet(target_path)
-        spec = STAGES[stage_name]
-        expected_targets = _filter_targets(
-            build_monthly_targets(stage.assets, sessions, strategy_id),
-            start=spec["performance_start"],
-            end=spec["performance_end"],
+    spec = STAGES[stage_name]
+    if stage_name == "development":
+        results, phase_results, prefix_count = _v9_run_development_roles(stage)
+        phases = _v9_development_phases(phase_results, protocol)
+        _v9_verify_scout_development(phases)
+    else:
+        results, prefix_count = _v9_run_roles(
+            stage, start=spec["performance_start"], end=spec["performance_end"]
         )
-        try:
-            target_sort_keys = ["signal_date", "code"]
-            pd.testing.assert_frame_equal(
-                targets.sort_values(target_sort_keys, kind="mergesort").reset_index(
-                    drop=True
-                ),
-                expected_targets.sort_values(
-                    target_sort_keys, kind="mergesort"
-                ).reset_index(drop=True),
-                check_dtype=True,
-                check_exact=True,
+        phases = {
+            "audit": _v9_phase_bundle(
+                results,
+                start=spec["performance_start"],
+                end=spec["performance_end"],
+                protocol=protocol,
             )
-        except AssertionError as exc:
-            raise ValueError(
-                f"{stage_name} {role} targets do not match the causal builder"
-            ) from exc
-        result = simulate_targets(
-            stage.assets,
-            expected_targets,
-            sessions,
-            SimulationConfig(cost_bps_per_side=cost_bps),
-        )
+        }
+    expected_metrics = {"prefix_replay_signal_count": prefix_count, "phases": phases}
+    expected_gate = {
+        "passed": all(value["passed"] for value in phases.values()),
+        "phase_passes": {key: value["passed"] for key, value in phases.items()},
+    }
+    if evaluation.get("metrics") != expected_metrics or evaluation.get("gate") != expected_gate:
+        raise ValueError(f"9.0 {stage_name} evaluation metrics do not replay")
+    directory = EVALUATION_ROOT / f"stage={stage_name}"
+    for role in EVALUATION_ROLES:
         for artifact in EVALUATION_ARTIFACTS:
             persisted = pd.read_parquet(directory / f"{role}-{artifact}.parquet")
-            try:
-                pd.testing.assert_frame_equal(
-                    persisted.reset_index(drop=True),
-                    result[artifact].reset_index(drop=True),
-                    check_dtype=True,
-                    check_exact=True,
-                )
-            except AssertionError as exc:
-                raise ValueError(
-                    f"{stage_name} {role} {artifact} does not replay exactly"
-                ) from exc
-        regenerated[role] = result
-    spec = STAGES[stage_name]
-    primary_metrics = _phase_role_metrics(
-        regenerated["primary"],
-        start=spec["performance_start"],
-        end=spec["performance_end"],
-    )
-    stress_metrics = _phase_role_metrics(
-        regenerated["stress"],
-        start=spec["performance_start"],
-        end=spec["performance_end"],
-    )
-    cash_metrics = _phase_role_metrics(
-        regenerated["cash"],
-        start=spec["performance_start"],
-        end=spec["performance_end"],
-    )
-    cash_stress_metrics = _phase_role_metrics(
-        regenerated["cash_stress"],
-        start=spec["performance_start"],
-        end=spec["performance_end"],
-    )
-    metrics = _combine_static_metrics(
-        primary_metrics, stress_metrics, cash_metrics, cash_stress_metrics
-    )
-    gate = _evaluate_static_gate(metrics, gate_config, validity_config)
-    if evaluation.get("metrics") != metrics or evaluation.get("gate") != gate:
-        raise ValueError(f"{stage_name} evaluation metrics do not replay")
+            _v9_assert_frame_exact(
+                persisted,
+                results[role][artifact],
+                role=f"9.0 {stage_name} {role} {artifact}",
+            )
 
 
-def _verify_phase_reference(
-    phase: Mapping[str, Any],
-    *,
+def _v9_reference_from_runtime(
     stage_name: str,
-    gate_config: Mapping[str, Any],
-    validity_config: Mapping[str, Any],
+    *,
     closure_payload: str,
     execution_commit: str,
     run_nonce: str,
     predecessor: Mapping[str, Any],
+    protocol: Mapping[str, Any],
+    verify_data: bool,
+) -> dict[str, Any]:
+    stage, binding = _v9_load_stage_and_binding(
+        stage_name,
+        closure_payload=closure_payload,
+        execution_commit=execution_commit,
+        run_nonce=run_nonce,
+        predecessor=predecessor,
+    )
+    evaluation, evaluation_file = _load_evaluation(
+        stage_name,
+        source_manifest_payload=stage.manifest["payload_sha256"],
+        stage_binding_payload=binding["payload_sha256"],
+        closure_payload=closure_payload,
+        execution_commit=execution_commit,
+        run_nonce=run_nonce,
+        predecessor=predecessor,
+    )
+    if verify_data:
+        _v9_replay_evaluation(
+            stage_name, stage=stage, evaluation=evaluation, protocol=protocol
+        )
+    return _phase_from_evaluation(evaluation, evaluation_file)
+
+
+def _v9_verify_development_reference(
+    reference: Any,
+    *,
+    closure: Mapping[str, Any],
+    protocol: Mapping[str, Any],
+    execution_commit: str,
+    run_nonce: str,
     verify_data: bool,
 ) -> None:
-    spec = STAGES[stage_name]
-    metrics = phase.get("metrics")
-    gate = phase.get("gate")
-    if (
-        set(phase) != _PHASE_FIELDS
-        or not _is_sha256(phase.get("source_manifest_payload_sha256"))
-        or not _is_sha256(phase.get("stage_binding_payload_sha256"))
-        or not _is_sha256(phase.get("evaluation_payload_sha256"))
-        or not _is_sha256(phase.get("evaluation_file_sha256"))
-        or not isinstance(metrics, Mapping)
-        or not isinstance(gate, Mapping)
-        or metrics.get("start_date") != spec["performance_start"]
-        or metrics.get("end_date") != spec["performance_end"]
-    ):
-        raise ValueError(f"{stage_name} phase reference is incomplete or truncated")
-    recomputed_gate = _evaluate_static_gate(metrics, gate_config, validity_config)
-    if gate != recomputed_gate:
-        raise ValueError(f"{stage_name} gate differs from metrics and protocol")
-    if not verify_data:
-        return
-    stage, binding = _load_bound_stage(
-        stage_name,
-        closure_payload=closure_payload,
-        execution_commit=execution_commit,
-        run_nonce=run_nonce,
-        predecessor=predecessor,
-    )
-    if (
-        stage.manifest.get("payload_sha256") != phase["source_manifest_payload_sha256"]
-        or binding.get("payload_sha256") != phase["stage_binding_payload_sha256"]
-    ):
-        raise ValueError(f"{stage_name} phase source binding differs")
-    evaluation, evaluation_file_sha256 = _load_evaluation(
-        stage_name,
-        source_manifest_payload=str(phase["source_manifest_payload_sha256"]),
-        stage_binding_payload=str(phase["stage_binding_payload_sha256"]),
-        closure_payload=closure_payload,
-        execution_commit=execution_commit,
-        run_nonce=run_nonce,
-        predecessor=predecessor,
-    )
-    if (
-        evaluation.get("payload_sha256") != phase["evaluation_payload_sha256"]
-        or evaluation_file_sha256 != phase["evaluation_file_sha256"]
-        or evaluation.get("metrics") != metrics
-        or evaluation.get("gate") != gate
-    ):
-        raise ValueError(f"{stage_name} evaluation differs from frozen evidence")
-    _replay_evaluation(
-        stage_name,
-        stage=stage,
-        evaluation=evaluation,
-        gate_config=gate_config,
-        validity_config=validity_config,
-    )
-
-
-def _evaluate_stage(
-    stage_name: str,
-    *,
-    gate_config: Mapping[str, Any],
-    validity_config: Mapping[str, Any],
-    closure_payload: str,
-    execution_commit: str,
-    run_nonce: str,
-    predecessor: Mapping[str, Any],
-) -> dict[str, Any]:
-    spec = STAGES[stage_name]
-    stage, binding = _stage(
-        stage_name,
-        closure_payload=closure_payload,
-        execution_commit=execution_commit,
-        run_nonce=run_nonce,
-        predecessor=predecessor,
-    )
-    source_payload = str(stage.manifest["payload_sha256"])
-    destination = EVALUATION_ROOT / f"stage={stage_name}"
-    _reject_partial_entries(EVALUATION_ROOT)
-    if destination.exists() or destination.is_symlink():
-        raise RuntimeError(
-            f"8.1 corrective run forbids a pre-existing {stage_name} evaluation"
-        )
-    primary = _run_one(
-        stage,
-        strategy_id=PRIMARY_ID,
-        start=spec["performance_start"],
-        end=spec["performance_end"],
-        cost_bps=8.0,
-    )
-    stress = _run_one(
-        stage,
-        strategy_id=PRIMARY_ID,
-        start=spec["performance_start"],
-        end=spec["performance_end"],
-        cost_bps=16.0,
-    )
-    cash = _run_one(
-        stage,
-        strategy_id=CASH_ONLY_ID,
-        start=spec["performance_start"],
-        end=spec["performance_end"],
-        cost_bps=8.0,
-    )
-    cash_stress = _run_one(
-        stage,
-        strategy_id=CASH_ONLY_ID,
-        start=spec["performance_start"],
-        end=spec["performance_end"],
-        cost_bps=16.0,
-    )
-    primary_metrics = _phase_role_metrics(
-        primary,
-        start=spec["performance_start"],
-        end=spec["performance_end"],
-    )
-    stress_metrics = _phase_role_metrics(
-        stress,
-        start=spec["performance_start"],
-        end=spec["performance_end"],
-    )
-    cash_metrics = _phase_role_metrics(
-        cash,
-        start=spec["performance_start"],
-        end=spec["performance_end"],
-    )
-    cash_stress_metrics = _phase_role_metrics(
-        cash_stress,
-        start=spec["performance_start"],
-        end=spec["performance_end"],
-    )
-    combined = _combine_static_metrics(
-        primary_metrics,
-        stress_metrics,
-        cash_metrics,
-        cash_stress_metrics,
-    )
-    if (
-        combined.get("start_date") != spec["performance_start"]
-        or combined.get("end_date") != spec["performance_end"]
-    ):
-        raise RuntimeError(
-            f"{stage_name} metrics do not cover the exact protocol boundary"
-        )
-    gate = _evaluate_static_gate(combined, gate_config, validity_config)
-    evaluation = _persist_evaluation(
-        stage_name,
-        source_manifest_payload=source_payload,
-        results={
-            "primary": primary,
-            "stress": stress,
-            "cash": cash,
-            "cash_stress": cash_stress,
-        },
-        metrics=combined,
-        gate=gate,
-        closure_payload=closure_payload,
-        stage_binding_payload=str(binding["payload_sha256"]),
-        execution_commit=execution_commit,
-        run_nonce=run_nonce,
-        predecessor=predecessor,
-    )
-    verified = load_multi_asset_stage(SOURCE_ROOT, stage_name)
-    if verified.manifest.get("payload_sha256") != source_payload:
-        raise RuntimeError(f"{stage_name} source changed during evaluation")
-    print(
-        f"{stage_name} gate passed={gate['passed']} "
-        f"cagr={combined['cagr']:.6f} sharpe={combined['sharpe']:.6f} "
-        f"maxdd={combined['max_drawdown']:.6f}",
-        flush=True,
-    )
-    phase = _phase_from_evaluation(
-        evaluation,
-        file_sha256(EVALUATION_ROOT / f"stage={stage_name}" / "evaluation.json"),
-    )
-    _verify_phase_reference(
-        phase,
-        stage_name=stage_name,
-        gate_config=gate_config,
-        validity_config=validity_config,
-        closure_payload=closure_payload,
-        execution_commit=execution_commit,
-        run_nonce=run_nonce,
-        predecessor=predecessor,
-        verify_data=True,
-    )
-    return phase
-
-
-def run_reclassify() -> int:
-    head = _require_clean_main()
-    closure, protocol, selection = _verify_closure()
-    if (ROOT / TRAIN_RECLASSIFICATION_PATH).exists():
-        raise FileExistsError("8.1 train reclassification is create-only")
-    if any(
-        (ROOT / path).exists()
-        for path in (WINNER_FREEZE_PATH, AUDIT_PATH, RESULT_PATH)
-    ):
-        raise RuntimeError("8.1 reclassification forbids downstream evidence")
-    _assert_runtime_layout(set())
-    _assert_evidence_layout(set())
-    receipt = _read_json(PRIOR_RECEIPT_PATH)
-    receipt_bytes = _require_committed(PRIOR_RECEIPT_PATH)
-    execution_validity = _verify_prior_train_artifacts(receipt)
-    role_metrics = receipt["train_stage"]["role_gate_metrics"]
-    metrics = _combine_receipt_role_gate_metrics(
-        role_metrics, execution_validity=execution_validity
-    )
-    corrected_gate = _evaluate_static_gate(
-        metrics,
-        protocol["shared_absolute_gate"],
-        protocol["execution_validity_hard_fail"],
-    )
-    run_nonce = uuid.uuid4().hex
-    if _git("rev-parse", "HEAD").decode("ascii").strip() != head:
-        raise RuntimeError("HEAD changed during formal reclassification")
-    if _git("status", "--porcelain").strip():
-        raise RuntimeError("tracked worktree changed during formal reclassification")
-    _assert_runtime_layout(set())
-    _assert_evidence_layout(set())
-    _verify_closure()
-    _require_head_pushed_and_ci_success(head)
-    value: dict[str, Any] = {
-        "schema_version": 1,
-        "kind": "factor_lab_policy_operational_train_reclassification",
-        "release": RELEASE,
-        "status": (
-            "train_reclassification_passed"
-            if corrected_gate["passed"] is True
-            else "train_reclassification_failed"
-        ),
-        "protocol_payload_sha256": protocol["payload_sha256"],
-        "asset_selection_payload_sha256": selection["payload_sha256"],
-        "implementation_closure_payload_sha256": closure["payload_sha256"],
-        "reclassification_execution_commit": head,
-        "run_nonce": run_nonce,
-        "source_receipt": {
-            "path": PRIOR_RECEIPT_PATH.as_posix(),
-            "file_sha256": hashlib.sha256(receipt_bytes).hexdigest(),
-            "payload_sha256": receipt["payload_sha256"],
-        },
-        "role_gate_metrics": role_metrics,
-        "metrics": metrics,
-        "corrected_gate": corrected_gate,
-        "execution_validity": execution_validity,
-        "post_hoc_non_independent": True,
-        "new_market_data_queried": False,
-        "retained_8_0_train_artifacts_accessed": True,
-        "runtime_created": False,
-        "validation_market_outcomes_opened": False,
-        "audit_market_outcomes_opened": False,
-        "claim_contract": protocol["claim_contract"],
+    predecessor = {
+        "kind": "published_8_1_validation_source",
+        "tag_object": PRIOR_TAG_OBJECT,
+        "tag_commit": PRIOR_COMMIT,
     }
-    value["payload_sha256"] = canonical_payload_sha256(value)
-    _create_only(TRAIN_RECLASSIFICATION_PATH, value)
-    _assert_runtime_layout(set())
-    _assert_evidence_layout({TRAIN_RECLASSIFICATION_PATH.name})
-    print(
-        f"train reclassification status={value['status']} "
-        f"payload={value['payload_sha256']}",
-        flush=True,
+    if (
+        not isinstance(reference, Mapping)
+        or set(reference) != _PHASE_FIELDS
+        or reference.get("source_manifest_payload_sha256")
+        != PRIOR_VALIDATION_MANIFEST_PAYLOAD
+        or not _is_sha256(reference.get("stage_binding_payload_sha256"))
+        or not _is_sha256(reference.get("evaluation_payload_sha256"))
+        or not _is_sha256(reference.get("evaluation_file_sha256"))
+        or not isinstance(reference.get("metrics"), Mapping)
+        or set(reference["metrics"].get("phases", {})) != {"D1", "D2"}
+        or reference.get("gate", {}).get("phase_passes")
+        != {
+            "D1": bool(reference["metrics"]["phases"]["D1"].get("passed")),
+            "D2": bool(reference["metrics"]["phases"]["D2"].get("passed")),
+        }
+        or reference.get("gate", {}).get("passed")
+        is not all(
+            bool(reference["metrics"]["phases"][name].get("passed"))
+            for name in ("D1", "D2")
+        )
+    ):
+        raise ValueError("9.0 development reference is incomplete or inconsistent")
+    for name, start, end in (
+        ("D1", "2015-03-02", "2019-12-31"),
+        ("D2", "2020-01-02", "2022-12-30"),
+    ):
+        stored = reference["metrics"]["phases"][name]
+        recomputed = _v9_bundle_from_roles(
+            stored.get("roles", {}), start=start, end=end, protocol=protocol
+        )
+        if stored != recomputed:
+            raise ValueError(f"9.0 development {name} gate does not replay")
+    if verify_data:
+        actual = _v9_reference_from_runtime(
+            "development",
+            closure_payload=str(closure["payload_sha256"]),
+            execution_commit=execution_commit,
+            run_nonce=run_nonce,
+            predecessor=predecessor,
+            protocol=protocol,
+            verify_data=True,
+        )
+        if actual != reference:
+            raise ValueError("9.0 development reference differs from runtime")
+
+
+def _v9_verify_execution_lineage(
+    commit: str,
+    *,
+    evidence_path: Path,
+    required_files: tuple[Path, ...],
+) -> None:
+    if not _is_commit(commit):
+        raise ValueError(f"invalid 9.0 execution commit: {commit!r}")
+    resolved = _git("rev-parse", "--verify", f"{commit}^{{commit}}").decode(
+        "ascii"
+    ).strip()
+    if resolved != commit or subprocess.run(
+        ["git", "merge-base", "--is-ancestor", commit, "HEAD"],
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    ).returncode != 0:
+        raise ValueError("9.0 execution commit is not an ancestor of HEAD")
+    for relative in required_files:
+        if _git("show", f"{commit}:{relative.as_posix()}") != (
+            ROOT / relative
+        ).read_bytes():
+            raise ValueError(
+                f"9.0 execution commit lacks exact predecessor: {relative}"
+            )
+    if subprocess.run(
+        ["git", "cat-file", "-e", f"{commit}:{evidence_path.as_posix()}"],
+        cwd=ROOT,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    ).returncode == 0:
+        raise ValueError(f"9.0 evidence predates its execution: {evidence_path}")
+
+
+def _v9_verify_freeze(
+    freeze: Mapping[str, Any],
+    *,
+    closure: Mapping[str, Any],
+    protocol: Mapping[str, Any],
+    verify_data: bool,
+) -> None:
+    commit = str(freeze.get("development_execution_commit") or "")
+    run_nonce = str(freeze.get("run_nonce") or "")
+    development = freeze.get("development")
+    development_source = freeze.get("development_source")
+    if (
+        set(freeze) != FREEZE_FIELDS
+        or freeze.get("payload_sha256") != canonical_payload_sha256(freeze)
+        or freeze.get("schema_version") != 1
+        or freeze.get("kind") != "factor_lab_multi_asset_winner_freeze"
+        or freeze.get("release") != RELEASE
+        or freeze.get("protocol_payload_sha256") != protocol.get("payload_sha256")
+        or freeze.get("implementation_closure_payload_sha256")
+        != closure.get("payload_sha256")
+        or freeze.get("candidate_registry") != [PRIMARY_ID]
+        or development_source
+        != {
+            "source_manifest_payload_sha256": PRIOR_VALIDATION_MANIFEST_PAYLOAD,
+            "tag_object": PRIOR_TAG_OBJECT,
+            "tag_commit": PRIOR_COMMIT,
+        }
+        or freeze.get("runner_up_fallback") is not False
+        or freeze.get("audit_market_outcomes_opened") is not False
+        or freeze.get("claim_contract") != protocol.get("claim_contract")
+        or not _is_commit(commit)
+        or not re.fullmatch(r"[0-9a-f]{32}", run_nonce)
+    ):
+        raise ValueError("9.0 winner freeze contract differs")
+    _v9_verify_execution_lineage(
+        commit,
+        evidence_path=WINNER_FREEZE_PATH,
+        required_files=(
+            CLOSURE_PATH,
+            PROTOCOL_PATH,
+            SCOUT_PATH,
+            ASSET_SELECTION_PATH,
+            INHERITED_PROTOCOL_PATH,
+            ECONOMIC_GATE_PROTOCOL_PATH,
+            PRIOR_PROTOCOL_PATH,
+            PRIOR_CLOSURE_PATH,
+            PRIOR_RECLASSIFICATION_PATH,
+            PRIOR_FREEZE_PATH,
+            PRIOR_RESULT_PATH,
+        ),
     )
-    return 0
-
-
-def run_validation() -> int:
-    head = _require_clean_main()
-    closure, protocol, selection = _verify_closure()
-    if (ROOT / WINNER_FREEZE_PATH).exists():
-        raise FileExistsError("8.1 winner freeze is create-only")
-    if any((ROOT / path).exists() for path in (AUDIT_PATH, RESULT_PATH)):
-        raise RuntimeError("8.1 validation forbids audit or result evidence")
-    reclassification = _read_json(TRAIN_RECLASSIFICATION_PATH)
-    reclassification_bytes = _require_committed(TRAIN_RECLASSIFICATION_PATH)
-    _verify_train_reclassification_contract(
-        reclassification,
+    _v9_verify_development_reference(
+        development,
         closure=closure,
         protocol=protocol,
-        selection=selection,
+        execution_commit=commit,
+        run_nonce=run_nonce,
+        verify_data=verify_data,
     )
-    if head == reclassification.get("reclassification_execution_commit"):
-        raise RuntimeError(
-            "8.1 validation requires a later commit containing reclassification"
-        )
-    _assert_runtime_layout(set())
-    _assert_evidence_layout({TRAIN_RECLASSIFICATION_PATH.name})
-    validation: dict[str, Any] | None = None
-    selected: str | None = None
-    run_nonce = uuid.uuid4().hex
-    if run_nonce == reclassification.get("run_nonce"):
-        raise RuntimeError("8.1 validation nonce must differ from reclassification nonce")
-    if reclassification["corrected_gate"]["passed"] is True:
-        validation = _evaluate_stage(
-            "validation",
-            gate_config=protocol["shared_absolute_gate"],
-            validity_config=protocol["execution_validity_hard_fail"],
-            closure_payload=closure["payload_sha256"],
-            execution_commit=head,
-            run_nonce=run_nonce,
-            predecessor={
-                "kind": "train_reclassification",
-                "payload_sha256": reclassification["payload_sha256"],
-            },
-        )
-        if validation["gate"]["passed"] is True:
-            selected = PRIMARY_ID
-    status = (
+    passed = bool(development["gate"]["passed"])
+    expected_status = (
         "selected_policy_frozen"
-        if selected is not None
-        else "selected_null_frozen_validation_failed"
-        if validation is not None
-        else "selected_null_frozen_reclassification_failed"
+        if passed
+        else "selected_null_frozen_development_failed"
     )
-    if _git("rev-parse", "HEAD").decode("ascii").strip() != head:
-        raise RuntimeError("HEAD changed during formal validation")
-    if _git("status", "--porcelain").strip():
-        raise RuntimeError("tracked worktree changed during formal validation")
-    allowed_stages: set[str] = set()
-    if validation is not None:
-        allowed_stages.add("validation")
-    _assert_runtime_layout(allowed_stages)
-    _assert_evidence_layout({TRAIN_RECLASSIFICATION_PATH.name})
-    _verify_closure()
+    expected_selected = PRIMARY_ID if passed else None
+    if (
+        freeze.get("status") != expected_status
+        or freeze.get("selected_candidate_id") != expected_selected
+    ):
+        raise ValueError("9.0 winner freeze selection differs from development gate")
+
+
+def run_development() -> int:
+    head = _require_clean_main()
+    closure, protocol = _v9_verify_closure()
+    if any((ROOT / path).exists() for path in (WINNER_FREEZE_PATH, AUDIT_PATH, RESULT_PATH)):
+        raise RuntimeError("9.0 development requires an empty evidence root")
+    _assert_runtime_layout(set())
+    _assert_evidence_layout(set())
     _require_head_pushed_and_ci_success(head)
+    archived = _verify_prior_8_1_archive(verify_data=True, verify_runtime=True)
+    stage = load_multi_asset_stage(PRIOR_SOURCE_ROOT, "validation")
+    if (
+        stage.manifest.get("price_end_date") != "2022-12-30"
+        or archived.get("validation_manifest_payload_sha256")
+        != stage.manifest.get("payload_sha256")
+    ):
+        raise ValueError("9.0 development source is not the retained 8.1 validation stage")
+    run_nonce = uuid.uuid4().hex
+    binding = _v9_create_development_binding(
+        stage,
+        closure_payload=str(closure["payload_sha256"]),
+        execution_commit=head,
+        run_nonce=run_nonce,
+    )
+    predecessor = binding["predecessor"]
+    development = _v9_evaluate_stage(
+        "development",
+        stage=stage,
+        binding=binding,
+        closure_payload=str(closure["payload_sha256"]),
+        execution_commit=head,
+        run_nonce=run_nonce,
+        predecessor=predecessor,
+        protocol=protocol,
+    )
+    _assert_runtime_layout({"development"})
+    if _git("rev-parse", "HEAD").decode("ascii").strip() != head:
+        raise RuntimeError("HEAD changed during 9.0 development")
+    if _git("status", "--porcelain").strip():
+        raise RuntimeError("tracked worktree changed during 9.0 development")
+    _require_head_pushed_and_ci_success(head)
+    passed = bool(development["gate"]["passed"])
     freeze: dict[str, Any] = {
         "schema_version": 1,
         "kind": "factor_lab_multi_asset_winner_freeze",
         "release": RELEASE,
-        "status": status,
+        "status": (
+            "selected_policy_frozen"
+            if passed
+            else "selected_null_frozen_development_failed"
+        ),
         "protocol_payload_sha256": protocol["payload_sha256"],
-        "asset_selection_payload_sha256": selection["payload_sha256"],
         "implementation_closure_payload_sha256": closure["payload_sha256"],
-        "selection_execution_commit": head,
+        "development_execution_commit": head,
         "run_nonce": run_nonce,
         "candidate_registry": [PRIMARY_ID],
-        "selected_candidate_id": selected,
-        "train_reclassification": {
-            "path": TRAIN_RECLASSIFICATION_PATH.as_posix(),
-            "file_sha256": hashlib.sha256(reclassification_bytes).hexdigest(),
-            "payload_sha256": reclassification["payload_sha256"],
+        "selected_candidate_id": PRIMARY_ID if passed else None,
+        "development_source": {
+            "source_manifest_payload_sha256": PRIOR_VALIDATION_MANIFEST_PAYLOAD,
+            "tag_object": PRIOR_TAG_OBJECT,
+            "tag_commit": PRIOR_COMMIT,
         },
-        "validation": validation,
-        "validation_market_outcomes_opened": validation is not None,
+        "development": development,
         "audit_market_outcomes_opened": False,
         "runner_up_fallback": False,
         "claim_contract": protocol["claim_contract"],
     }
     freeze["payload_sha256"] = canonical_payload_sha256(freeze)
     _create_only(WINNER_FREEZE_PATH, freeze)
-    _assert_evidence_layout(
-        {TRAIN_RECLASSIFICATION_PATH.name, WINNER_FREEZE_PATH.name}
-    )
+    _assert_evidence_layout({WINNER_FREEZE_PATH.name})
     print(
-        f"winner freeze selected={selected} payload={freeze['payload_sha256']}",
+        f"development selected={freeze['selected_candidate_id']} "
+        f"payload={freeze['payload_sha256']}",
         flush=True,
     )
     return 0
 
 
+def _v9_verify_audit(
+    audit: Mapping[str, Any],
+    *,
+    freeze: Mapping[str, Any],
+    closure: Mapping[str, Any],
+    protocol: Mapping[str, Any],
+    verify_data: bool,
+) -> None:
+    commit = str(audit.get("audit_execution_commit") or "")
+    nonce = str(audit.get("run_nonce") or "")
+    reference = audit.get("audit")
+    source_prefix = audit.get("pre_2023_source_prefix")
+    prefix_hashes = (
+        source_prefix.get("prefix_content_sha256")
+        if isinstance(source_prefix, Mapping)
+        else None
+    )
+    predecessor = {"kind": "winner_freeze", "payload_sha256": freeze["payload_sha256"]}
+    if (
+        set(audit) != AUDIT_FIELDS
+        or audit.get("payload_sha256") != canonical_payload_sha256(audit)
+        or audit.get("schema_version") != 1
+        or audit.get("kind") != "factor_lab_multi_asset_historical_audit"
+        or audit.get("release") != RELEASE
+        or audit.get("selected_candidate_id") != PRIMARY_ID
+        or audit.get("winner_freeze_payload_sha256") != freeze.get("payload_sha256")
+        or audit.get("protocol_payload_sha256") != protocol.get("payload_sha256")
+        or audit.get("implementation_closure_payload_sha256")
+        != closure.get("payload_sha256")
+        or audit.get("runner_up_fallback") is not False
+        or audit.get("claim_contract") != protocol.get("claim_contract")
+        or not _is_commit(commit)
+        or not re.fullmatch(r"[0-9a-f]{32}", nonce)
+        or nonce == freeze.get("run_nonce")
+        or not isinstance(reference, Mapping)
+        or set(reference) != _PHASE_FIELDS
+        or set(reference.get("metrics", {}).get("phases", {})) != {"audit"}
+        or not isinstance(source_prefix, Mapping)
+        or set(source_prefix)
+        != {
+            "cutoff",
+            "retained_source_manifest_payload_sha256",
+            "audit_source_manifest_payload_sha256",
+            "prefix_content_sha256",
+            "payload_sha256",
+        }
+        or source_prefix.get("payload_sha256")
+        != canonical_payload_sha256(source_prefix)
+        or source_prefix.get("cutoff") != "2022-12-30"
+        or source_prefix.get("retained_source_manifest_payload_sha256")
+        != PRIOR_VALIDATION_MANIFEST_PAYLOAD
+        or not _is_sha256(source_prefix.get("audit_source_manifest_payload_sha256"))
+        or reference.get("source_manifest_payload_sha256")
+        != source_prefix.get("audit_source_manifest_payload_sha256")
+        or not isinstance(prefix_hashes, Mapping)
+        or set(prefix_hashes) != {"calendar", *ALL_CODES}
+        or any(not _is_sha256(value) for value in prefix_hashes.values())
+    ):
+        raise ValueError("9.0 historical audit contract differs")
+    _v9_verify_execution_lineage(
+        commit,
+        evidence_path=AUDIT_PATH,
+        required_files=(
+            CLOSURE_PATH,
+            PROTOCOL_PATH,
+            SCOUT_PATH,
+            ASSET_SELECTION_PATH,
+            INHERITED_PROTOCOL_PATH,
+            ECONOMIC_GATE_PROTOCOL_PATH,
+            PRIOR_PROTOCOL_PATH,
+            PRIOR_CLOSURE_PATH,
+            PRIOR_RECLASSIFICATION_PATH,
+            PRIOR_FREEZE_PATH,
+            PRIOR_RESULT_PATH,
+            WINNER_FREEZE_PATH,
+        ),
+    )
+    stored_phase = reference["metrics"]["phases"]["audit"]
+    recomputed_phase = _v9_bundle_from_roles(
+        stored_phase.get("roles", {}),
+        start="2023-01-03",
+        end="2026-08-28",
+        protocol=protocol,
+    )
+    if stored_phase != recomputed_phase:
+        raise ValueError("9.0 historical audit gate does not replay")
+    stored_passed = bool(stored_phase.get("passed"))
+    if reference.get("gate") != {
+        "passed": stored_passed,
+        "phase_passes": {"audit": stored_passed},
+    }:
+        raise ValueError("9.0 historical audit envelope gate differs")
+    passed = stored_passed
+    if audit.get("status") != (
+        "historical_audit_passed" if passed else "historical_audit_failed"
+    ):
+        raise ValueError("9.0 historical audit status differs from gate")
+    if verify_data:
+        audit_stage = load_multi_asset_stage(SOURCE_ROOT, "audit")
+        if _v9_verify_audit_history_prefix(audit_stage) != source_prefix:
+            raise ValueError("9.0 audit pre-2023 source prefix differs")
+        actual = _v9_reference_from_runtime(
+            "audit",
+            closure_payload=str(closure["payload_sha256"]),
+            execution_commit=commit,
+            run_nonce=nonce,
+            predecessor=predecessor,
+            protocol=protocol,
+            verify_data=True,
+        )
+        if actual != reference:
+            raise ValueError("9.0 audit reference differs from runtime")
+
+
+def _v9_verify_audit_history_prefix(audit_stage: MultiAssetStage) -> dict[str, Any]:
+    """Reject provider history rewrites before any 2023+ target is generated."""
+
+    prior = load_multi_asset_stage(PRIOR_SOURCE_ROOT, "validation")
+    cutoff = pd.Timestamp("2022-12-30")
+
+    def prefix(frame: pd.DataFrame) -> pd.DataFrame:
+        dates = pd.to_datetime(frame["trade_date"], errors="raise").dt.normalize()
+        return frame.loc[dates.le(cutoff)].reset_index(drop=True)
+
+    prior_calendar = prefix(prior.calendar)
+    audit_calendar = prefix(audit_stage.calendar)
+    _v9_assert_frame_exact(
+        audit_calendar, prior_calendar, role="9.0 audit calendar <=2022 prefix"
+    )
+    hashes: dict[str, str] = {
+        "calendar": _frame_content_sha256(audit_calendar)
+    }
+    if hashes["calendar"] != _frame_content_sha256(prior_calendar):
+        raise ValueError("9.0 audit calendar prefix content hash differs")
+    if set(audit_stage.assets) != set(prior.assets):
+        raise ValueError("9.0 audit asset set differs from retained 8.1 source")
+    for code in sorted(prior.assets):
+        expected = prefix(prior.assets[code])
+        actual = prefix(audit_stage.assets[code])
+        _v9_assert_frame_exact(
+            actual, expected, role=f"9.0 audit {code} <=2022 prefix"
+        )
+        actual_hash = _frame_content_sha256(actual)
+        if actual_hash != _frame_content_sha256(expected):
+            raise ValueError(f"9.0 audit {code} prefix content hash differs")
+        hashes[code] = actual_hash
+    identity = {
+        "cutoff": cutoff.date().isoformat(),
+        "retained_source_manifest_payload_sha256": prior.manifest["payload_sha256"],
+        "audit_source_manifest_payload_sha256": audit_stage.manifest["payload_sha256"],
+        "prefix_content_sha256": hashes,
+    }
+    identity["payload_sha256"] = canonical_payload_sha256(identity)
+    return identity
+
+
 def run_audit() -> int:
     head = _require_clean_main()
-    closure, protocol, selection = _verify_closure()
+    closure, protocol = _v9_verify_closure()
     freeze = _read_json(WINNER_FREEZE_PATH)
     _require_committed(WINNER_FREEZE_PATH)
-    _verify_winner_freeze_contract(
-        freeze,
-        closure=closure,
-        protocol=protocol,
-        selection=selection,
+    _v9_verify_freeze(
+        freeze, closure=closure, protocol=protocol, verify_data=True
     )
-    if (
-        freeze.get("selected_candidate_id") != PRIMARY_ID
-        or freeze.get("protocol_payload_sha256") != protocol.get("payload_sha256")
-        or freeze.get("asset_selection_payload_sha256")
-        != selection.get("payload_sha256")
-        or freeze.get("implementation_closure_payload_sha256")
-        != closure.get("payload_sha256")
-        or freeze.get("audit_market_outcomes_opened") is not False
-    ):
-        raise RuntimeError("audit requires the frozen non-null 8.1 policy")
-    if (ROOT / AUDIT_PATH).exists():
-        raise FileExistsError("8.1 historical audit is create-only")
-    _assert_runtime_layout({"validation"})
-    _assert_evidence_layout(
-        {TRAIN_RECLASSIFICATION_PATH.name, WINNER_FREEZE_PATH.name}
-    )
+    if freeze.get("selected_candidate_id") != PRIMARY_ID:
+        raise RuntimeError("9.0 audit requires a committed non-null winner freeze")
+    if head == freeze.get("development_execution_commit"):
+        raise RuntimeError("9.0 audit requires a later commit containing the freeze")
+    if any((ROOT / path).exists() for path in (AUDIT_PATH, RESULT_PATH)):
+        raise RuntimeError("9.0 audit/result evidence must be absent before audit")
+    _assert_runtime_layout({"development"})
+    _assert_evidence_layout({WINNER_FREEZE_PATH.name})
+    _require_head_pushed_and_ci_success(head)
     run_nonce = uuid.uuid4().hex
     if run_nonce == freeze.get("run_nonce"):
-        raise RuntimeError("8.1 audit nonce must differ from validation nonce")
-    audit = _evaluate_stage(
+        raise RuntimeError("9.0 audit nonce must differ from development nonce")
+    predecessor = {"kind": "winner_freeze", "payload_sha256": freeze["payload_sha256"]}
+    stage, binding = _stage(
         "audit",
-        gate_config=protocol["shared_absolute_gate"],
-        validity_config=protocol["execution_validity_hard_fail"],
-        closure_payload=closure["payload_sha256"],
+        closure_payload=str(closure["payload_sha256"]),
         execution_commit=head,
         run_nonce=run_nonce,
-        predecessor={
-            "kind": "winner_freeze",
-            "payload_sha256": freeze["payload_sha256"],
-        },
+        predecessor=predecessor,
     )
+    prefix_identity = _v9_verify_audit_history_prefix(stage)
+    reference = _v9_evaluate_stage(
+        "audit",
+        stage=stage,
+        binding=binding,
+        closure_payload=str(closure["payload_sha256"]),
+        execution_commit=head,
+        run_nonce=run_nonce,
+        predecessor=predecessor,
+        protocol=protocol,
+    )
+    _assert_runtime_layout({"development", "audit"})
     if _git("rev-parse", "HEAD").decode("ascii").strip() != head:
-        raise RuntimeError("HEAD changed during historical audit")
+        raise RuntimeError("HEAD changed during 9.0 audit")
     if _git("status", "--porcelain").strip():
-        raise RuntimeError("tracked worktree changed during historical audit")
-    _assert_runtime_layout({"validation", "audit"})
-    _assert_evidence_layout(
-        {TRAIN_RECLASSIFICATION_PATH.name, WINNER_FREEZE_PATH.name}
-    )
-    _verify_closure()
+        raise RuntimeError("tracked worktree changed during 9.0 audit")
     _require_head_pushed_and_ci_success(head)
+    passed = bool(reference["gate"]["passed"])
     value: dict[str, Any] = {
         "schema_version": 1,
         "kind": "factor_lab_multi_asset_historical_audit",
         "release": RELEASE,
-        "status": (
-            "historical_audit_passed"
-            if audit["gate"]["passed"] is True
-            else "historical_audit_failed"
-        ),
+        "status": "historical_audit_passed" if passed else "historical_audit_failed",
         "selected_candidate_id": PRIMARY_ID,
         "winner_freeze_payload_sha256": freeze["payload_sha256"],
         "protocol_payload_sha256": protocol["payload_sha256"],
-        "asset_selection_payload_sha256": selection["payload_sha256"],
         "implementation_closure_payload_sha256": closure["payload_sha256"],
         "audit_execution_commit": head,
         "run_nonce": run_nonce,
-        "audit": audit,
+        "audit": reference,
+        "pre_2023_source_prefix": prefix_identity,
         "runner_up_fallback": False,
         "claim_contract": protocol["claim_contract"],
     }
     value["payload_sha256"] = canonical_payload_sha256(value)
     _create_only(AUDIT_PATH, value)
-    print(
-        f"audit status={value['status']} payload={value['payload_sha256']}",
-        flush=True,
-    )
+    _assert_evidence_layout({WINNER_FREEZE_PATH.name, AUDIT_PATH.name})
+    print(f"audit status={value['status']} payload={value['payload_sha256']}", flush=True)
     return 0
 
 
 def run_finalize() -> int:
-    _require_clean_main()
-    closure, protocol, selection = _verify_closure()
+    head = _require_clean_main()
+    _require_head_pushed_and_ci_success(head)
+    closure, protocol = _v9_verify_closure()
     if (ROOT / RESULT_PATH).exists():
-        raise FileExistsError(f"{RELEASE} terminal result is create-only")
-    _assert_evidence_layout(
-        {TRAIN_RECLASSIFICATION_PATH.name, WINNER_FREEZE_PATH.name, AUDIT_PATH.name}
-    )
-    _assert_runtime_layout({"validation", "audit"})
+        raise FileExistsError("9.0 terminal result is create-only")
     freeze = _read_json(WINNER_FREEZE_PATH)
     freeze_bytes = _require_committed(WINNER_FREEZE_PATH)
-    _verify_winner_freeze_contract(
-        freeze,
-        closure=closure,
-        protocol=protocol,
-        selection=selection,
+    _v9_verify_freeze(
+        freeze, closure=closure, protocol=protocol, verify_data=True
     )
-    if (
-        freeze.get("protocol_payload_sha256") != protocol.get("payload_sha256")
-        or freeze.get("asset_selection_payload_sha256") != selection.get("payload_sha256")
-        or freeze.get("implementation_closure_payload_sha256")
-        != closure.get("payload_sha256")
-    ):
-        raise ValueError(f"winner freeze does not bind the active {RELEASE} closure")
     selected = freeze.get("selected_candidate_id")
     audit: dict[str, Any] | None = None
-    allowed_stages: set[str] = set()
-    if freeze.get("validation") is not None:
-        allowed_stages.add("validation")
+    audit_bytes: bytes | None = None
     if selected is None:
         if (ROOT / AUDIT_PATH).exists():
-            raise RuntimeError("null 8.1 selection cannot have an audit artifact")
+            raise RuntimeError("null 9.0 selection cannot have audit evidence")
         status = "selection_falsified_no_candidate"
+        audit_status = "not_opened"
+        _assert_runtime_layout({"development"})
     else:
-        if selected != PRIMARY_ID:
-            raise RuntimeError("8.1 finalize received an unknown selected policy")
         audit = _read_json(AUDIT_PATH)
         audit_bytes = _require_committed(AUDIT_PATH)
-        _verify_audit_contract(
+        _v9_verify_audit(
             audit,
             freeze=freeze,
             closure=closure,
             protocol=protocol,
-            selection=selection,
+            verify_data=True,
         )
-        allowed_stages.add("audit")
+        audit_status = str(audit["status"])
         status = (
-            "historical_strategic_beta_diagnostic_passed_fresh_evidence_required"
-            if audit.get("status") == "historical_audit_passed"
-            else "historical_strategic_beta_diagnostic_failed"
+            "historical_adaptive_beta_diagnostic_passed_fresh_evidence_required"
+            if audit_status == "historical_audit_passed"
+            else "historical_adaptive_beta_diagnostic_failed"
         )
-        if hashlib.sha256(audit_bytes).hexdigest() != file_sha256(ROOT / AUDIT_PATH):
-            raise RuntimeError("audit bytes changed while finalizing")
-    _assert_runtime_layout(allowed_stages)
+        _assert_runtime_layout({"development", "audit"})
     result: dict[str, Any] = {
         "schema_version": 1,
         "kind": "factor_lab_multi_asset_terminal_result",
         "release": RELEASE,
         "status": status,
         "selected_candidate_id": selected,
-        "audit_status": audit.get("status") if audit is not None else "not_opened",
+        "audit_status": audit_status,
         "winner_freeze": {
             "path": WINNER_FREEZE_PATH.as_posix(),
             "file_sha256": hashlib.sha256(freeze_bytes).hexdigest(),
@@ -3029,217 +3294,31 @@ def run_finalize() -> int:
             else None
         ),
         "protocol_payload_sha256": protocol["payload_sha256"],
-        "asset_selection_payload_sha256": selection["payload_sha256"],
         "implementation_closure_payload_sha256": closure["payload_sha256"],
         "claim_contract": protocol["claim_contract"],
     }
     result["payload_sha256"] = canonical_payload_sha256(result)
+    if _git("rev-parse", "HEAD").decode("ascii").strip() != head:
+        raise RuntimeError("HEAD changed during 9.0 finalize")
+    if _git("status", "--porcelain").strip():
+        raise RuntimeError("tracked worktree changed during 9.0 finalize")
+    _v9_verify_closure()
+    _require_head_pushed_and_ci_success(head)
+    if _git("rev-parse", "HEAD").decode("ascii").strip() != head:
+        raise RuntimeError("HEAD changed during final 9.0 result publication")
+    if _git("status", "--porcelain").strip():
+        raise RuntimeError("tracked worktree changed during final 9.0 result publication")
+    if _require_committed(WINNER_FREEZE_PATH) != freeze_bytes:
+        raise RuntimeError("winner freeze changed during 9.0 finalize")
+    if audit_bytes is not None and _require_committed(AUDIT_PATH) != audit_bytes:
+        raise RuntimeError("historical audit changed during 9.0 finalize")
     _create_only(RESULT_PATH, result)
-    allowed_evidence = {
-        TRAIN_RECLASSIFICATION_PATH.name,
-        WINNER_FREEZE_PATH.name,
-        RESULT_PATH.name,
-    }
+    allowed = {WINNER_FREEZE_PATH.name, RESULT_PATH.name}
     if audit is not None:
-        allowed_evidence.add(AUDIT_PATH.name)
-    _assert_evidence_layout(allowed_evidence)
+        allowed.add(AUDIT_PATH.name)
+    _assert_evidence_layout(allowed)
     print(f"terminal result status={status} payload={result['payload_sha256']}", flush=True)
     return 0
-
-
-def _verify_result_contract(
-    result: Mapping[str, Any],
-    *,
-    freeze: Mapping[str, Any],
-    audit: Mapping[str, Any] | None,
-    closure: Mapping[str, Any],
-    protocol: Mapping[str, Any],
-    selection: Mapping[str, Any],
-) -> None:
-    if (
-        set(result) != _RESULT_FIELDS
-        or result.get("payload_sha256") != canonical_payload_sha256(result)
-        or result.get("schema_version") != 1
-        or result.get("kind") != "factor_lab_multi_asset_terminal_result"
-        or result.get("release") != RELEASE
-        or result.get("protocol_payload_sha256") != protocol.get("payload_sha256")
-        or result.get("asset_selection_payload_sha256") != selection.get("payload_sha256")
-        or result.get("implementation_closure_payload_sha256") != closure.get("payload_sha256")
-        or result.get("claim_contract") != protocol.get("claim_contract")
-    ):
-        raise ValueError("terminal result contract differs")
-    freeze_binding = result.get("winner_freeze")
-    if (
-        not isinstance(freeze_binding, Mapping)
-        or set(freeze_binding) != {"path", "file_sha256", "payload_sha256"}
-        or freeze_binding.get("path") != WINNER_FREEZE_PATH.as_posix()
-        or freeze_binding.get("file_sha256") != file_sha256(ROOT / WINNER_FREEZE_PATH)
-        or freeze_binding.get("payload_sha256") != freeze.get("payload_sha256")
-        or result.get("selected_candidate_id") != freeze.get("selected_candidate_id")
-    ):
-        raise ValueError("terminal winner-freeze binding differs")
-    selected = freeze.get("selected_candidate_id")
-    audit_binding = result.get("historical_audit")
-    if selected is None:
-        if (
-            audit is not None
-            or audit_binding is not None
-            or result.get("status") != "selection_falsified_no_candidate"
-            or result.get("audit_status") != "not_opened"
-        ):
-            raise ValueError("null-selection terminal result differs")
-        return
-    if audit is None or not isinstance(audit_binding, Mapping):
-        raise ValueError("selected terminal result lacks its historical audit")
-    if (
-        set(audit_binding) != {"path", "file_sha256", "payload_sha256"}
-        or audit_binding.get("path") != AUDIT_PATH.as_posix()
-        or audit_binding.get("file_sha256") != file_sha256(ROOT / AUDIT_PATH)
-        or audit_binding.get("payload_sha256") != audit.get("payload_sha256")
-        or result.get("audit_status") != audit.get("status")
-    ):
-        raise ValueError("terminal historical-audit binding differs")
-    expected_status = (
-        "historical_strategic_beta_diagnostic_passed_fresh_evidence_required"
-        if audit.get("status") == "historical_audit_passed"
-        else "historical_strategic_beta_diagnostic_failed"
-    )
-    if result.get("status") != expected_status:
-        raise ValueError("terminal result status differs from historical audit")
-
-
-def verify_release_state(
-    *, verify_data: bool = False, verify_runtime: bool = False
-) -> dict[str, Any]:
-    """Verify the complete committed 8.1 closure/evidence chain for CLI and CI."""
-
-    closure, protocol, selection = _verify_closure(verify_runtime=verify_runtime)
-    freeze_path = ROOT / WINNER_FREEZE_PATH
-    reclassification_path = ROOT / TRAIN_RECLASSIFICATION_PATH
-    audit_path = ROOT / AUDIT_PATH
-    result_path = ROOT / RESULT_PATH
-    if not freeze_path.is_file():
-        if audit_path.exists() or result_path.exists():
-            raise ValueError("audit/result exists without a winner freeze")
-        reclassification: dict[str, Any] | None = None
-        if reclassification_path.is_file():
-            reclassification = _read_json(TRAIN_RECLASSIFICATION_PATH)
-            _require_committed(TRAIN_RECLASSIFICATION_PATH)
-            _verify_train_reclassification_contract(
-                reclassification,
-                closure=closure,
-                protocol=protocol,
-                selection=selection,
-                verify_data=verify_data,
-            )
-            _assert_evidence_layout({TRAIN_RECLASSIFICATION_PATH.name})
-            _assert_runtime_layout(set())
-            status = (
-                "train_reclassification_passed_pending_validation"
-                if reclassification["corrected_gate"]["passed"] is True
-                else "train_reclassification_failed_pending_null_freeze"
-            )
-        else:
-            _assert_evidence_layout(set())
-            _assert_runtime_layout(set())
-            status = str(closure["status"])
-        return {
-            "status": status,
-            "closure": closure,
-            "protocol": protocol,
-            "selection": selection,
-            "train_reclassification": reclassification,
-            "freeze": None,
-            "audit": None,
-            "result": None,
-        }
-    if not reclassification_path.is_file():
-        raise ValueError("winner freeze exists without a train reclassification")
-    freeze = _read_json(WINNER_FREEZE_PATH)
-    _require_committed(WINNER_FREEZE_PATH)
-    _verify_winner_freeze_contract(
-        freeze,
-        closure=closure,
-        protocol=protocol,
-        selection=selection,
-        verify_data=verify_data,
-    )
-    audit: dict[str, Any] | None = None
-    if audit_path.is_file():
-        if freeze.get("selected_candidate_id") != PRIMARY_ID:
-            raise ValueError("null 8.1 selection cannot have historical audit evidence")
-        audit = _read_json(AUDIT_PATH)
-        _require_committed(AUDIT_PATH)
-        _verify_audit_contract(
-            audit,
-            freeze=freeze,
-            closure=closure,
-            protocol=protocol,
-            selection=selection,
-            verify_data=verify_data,
-        )
-    result: dict[str, Any] | None = None
-    if result_path.is_file():
-        result = _read_json(RESULT_PATH)
-        _require_committed(RESULT_PATH)
-        _verify_result_contract(
-            result,
-            freeze=freeze,
-            audit=audit,
-            closure=closure,
-            protocol=protocol,
-            selection=selection,
-        )
-    allowed_stages: set[str] = set()
-    if freeze.get("validation") is not None:
-        allowed_stages.add("validation")
-    if audit is not None:
-        allowed_stages.add("audit")
-    _assert_runtime_layout(allowed_stages)
-    allowed_evidence = {
-        TRAIN_RECLASSIFICATION_PATH.name,
-        WINNER_FREEZE_PATH.name,
-    }
-    if result is not None:
-        allowed_evidence.add(RESULT_PATH.name)
-    if audit is not None:
-        allowed_evidence.add(AUDIT_PATH.name)
-    _assert_evidence_layout(allowed_evidence)
-    if result is not None:
-        status = str(result["status"])
-    elif audit is not None:
-        status = str(audit["status"])
-    elif freeze.get("selected_candidate_id") is None:
-        status = "selection_frozen_no_candidate_pending_finalize"
-    else:
-        status = "selection_frozen_pending_historical_audit"
-    return {
-        "status": status,
-        "closure": closure,
-        "protocol": protocol,
-        "selection": selection,
-        "train_reclassification": _read_json(TRAIN_RECLASSIFICATION_PATH),
-        "freeze": freeze,
-        "audit": audit,
-        "result": result,
-    }
-
-
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--mode",
-        required=True,
-        choices=("reclassify", "validation", "audit", "finalize"),
-    )
-    args = parser.parse_args(argv)
-    if args.mode == "reclassify":
-        return run_reclassify()
-    if args.mode == "validation":
-        return run_validation()
-    if args.mode == "audit":
-        return run_audit()
-    return run_finalize()
 
 
 if __name__ == "__main__":
