@@ -10,6 +10,8 @@
 
 ## [Unreleased]
 
+## [11.1] - 2026-09-01
+
 ### Added
 
 - 新增 11.1 `quarterly prospective paper cycle`，把已发布 11.0 双周期确认混合直接接入稳定双抓、
@@ -21,6 +23,13 @@
   `runtime/prospective/11.1`，并要求 clean checkout 精确匹配已同步 GitHub 的 annotated `11.1` tag。
 - 10.1 prospective runner、historical dry-run runner 及其大体积集成测试从当前 main 删除；不可变实现仍在
   GitHub tag `10.1`，协议和历史 evidence 留在主线供审计，从而避免同时维护两套已归档运行代码。
+- 11.1 protocol payload/file SHA-256 为
+  `457e54d57b3bf821ced04bd4c638f686243ee40ee64431e63a67dbc5ff692a5d` /
+  `81ce81f15ca43c714cc7d40d5c966850214fee28460608e5a855ce950ce95adf`；implementation candidate
+  `1ecdf2fd4ed6eab5bad1115fa869f7b464af99ce` 的四平台 CI run `33445237860` 全部通过。
+- 从该 candidate 的 clean `git archive` 构建 `factor_research_mvp-11.1.0-py3-none-any.whl`，SHA-256
+  `455570aa9f032efa7bf1909eb045e6b86d4094070bf7ede297b6f2daee20433f`；fresh venv、`pip check`、
+  detached-checkout 11.1 loader/11.0 status 及 wheel/Git 30 个 Python 文件逐字节核对通过。
 
 ### Research status
 
