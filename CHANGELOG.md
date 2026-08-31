@@ -10,6 +10,8 @@
 
 ## [Unreleased]
 
+## [10.1] - 2026-09-01
+
 ### Added
 
 - 新增 10.1 `quarterly prospective paper cycle`：稳定 source、decision、outcome 三类 create-only 状态，
@@ -32,6 +34,14 @@
   fresh-cash reset、错过决策窗口后的回填、用更晚 open 替代 frozen next open，或任选有利 outcome 日。
 - Exact next-open 缺失会阻断 outcome。若 next-open 发生官方份额折算，只允许按官方 multiplier 确定性
   缩放执行视图中的 share 字段；decision 内的权重、信号价、ADV、冻结人民币名义金额和原封单不变。
+- Historical as-of evidence payload/file SHA-256 为
+  `0d2103896410f8800cf9351cb8fb31b807df7ff06c79413b0c2ed45fbc3fed47` /
+  `888313dd86c9c15bf6e915d087a784c1a8e4d48e85f3832b4e0945e77e3e27c3`，绑定 implementation commit
+  `699ee3f7687d25364438faca4b0a5bbf9b69a76a`；对应四平台 CI run `33425333175` 全部通过。
+- 从该 implementation commit 的 clean `git archive` 构建
+  `factor_research_mvp-10.1.0-py3-none-any.whl`，SHA-256 为
+  `75756f90ea930e3f4c99f6208c93e28c717d24aa3b4057967cc2d27c005ba66e`；fresh venv、`pip check`、
+  detached-checkout CLI/runner import 及 wheel/Git 30 个 Python 文件逐字节核对通过。
 
 ### Research status
 

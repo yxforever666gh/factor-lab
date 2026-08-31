@@ -19,6 +19,10 @@ PRIOR_EVIDENCE_PATH = (
 )
 PROTOCOL_PAYLOAD = "0c3f2240cc404c1084230f1efbfe3f9fd3f0fa73dbbdc69ec63e5465ef7610ca"
 PROTOCOL_FILE_SHA256 = "81240134127de2fedde6e231f8a3a02dd74950ff9da67e5298e71834c61843b5"
+EVIDENCE_PATH = ROOT / "protocols" / "evidence" / "10.1" / "historical-asof-dry-run.json"
+EVIDENCE_PAYLOAD = "0d2103896410f8800cf9351cb8fb31b807df7ff06c79413b0c2ed45fbc3fed47"
+EVIDENCE_FILE_SHA256 = "888313dd86c9c15bf6e915d087a784c1a8e4d48e85f3832b4e0945e77e3e27c3"
+IMPLEMENTATION_COMMIT = "699ee3f7687d25364438faca4b0a5bbf9b69a76a"
 
 
 def _read(path: Path = PROTOCOL_PATH) -> dict[str, Any]:
@@ -42,6 +46,28 @@ def test_10_1_protocol_is_exactly_self_hashed() -> None:
     assert protocol["release"] == "10.1"
     assert protocol["direction_change"] is False
     assert protocol["status"] == "frozen_before_first_prospective_cycle"
+
+
+def test_10_1_historical_dry_run_evidence_is_exact_nonprospective_and_zero_mismatch() -> None:
+    evidence = _read(EVIDENCE_PATH)
+    assert evidence["payload_sha256"] == EVIDENCE_PAYLOAD
+    assert canonical_payload_sha256(evidence) == EVIDENCE_PAYLOAD
+    assert hashlib.sha256(EVIDENCE_PATH.read_bytes()).hexdigest() == EVIDENCE_FILE_SHA256
+    assert evidence["implementation"]["git_head"] == IMPLEMENTATION_COMMIT
+    assert evidence["source"]["path"] == "runtime/data/multi-asset-9.0/sources/stage=audit"
+    assert evidence["prospective"] is False
+    assert evidence["summary"] == {
+        "signal_count": 46,
+        "signal_count_strictly_positive": True,
+        "confirmed_outcome_count": 45,
+        "target_prefix_mismatch_count": 0,
+        "sealed_plan_prefix_mismatch_count": 0,
+        "signal_close_state_prefix_mismatch_count": 0,
+        "outcome_prefix_mismatch_count": 0,
+        "formal_path_write_count": 0,
+    }
+    assert evidence["claim_contract"]["prospective_label_allowed"] is False
+    assert evidence["claim_contract"]["profit_claim_allowed"] is False
 
 
 def test_10_1_binds_the_exact_published_10_0_release_and_evidence() -> None:
