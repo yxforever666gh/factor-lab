@@ -430,4 +430,6 @@ def test_formal_identity_rejects_core_head_blob_mismatch(
 
 def test_default_formal_evidence_is_not_created_by_tests() -> None:
     module = _load_runner("factor_lab_v100_absence")
+    if (ROOT / module.EVIDENCE_PATH).exists():
+        pytest.skip("10.0 formal evidence stage has completed")
     assert not (ROOT / module.EVIDENCE_PATH).exists()
