@@ -10,6 +10,8 @@
 
 ## [Unreleased]
 
+## [8.0] - 2026-08-31
+
 ### Added
 
 - 冻结 8.0 大方向 `strategic_static_capital_budget_beta`：在已披露 7.x train 中，静态预算 CAGR
@@ -51,6 +53,14 @@
 - 8.0 没有形成正常 admission/freeze/result，不能声称策略通过或已完成正式 falsification；若继续
   同一经济路线，8.1 只能公开地修正 operational role scope，且必须保持资产、权重、现金收益门、
   成本、日期与所有经济阈值不变。
+
+### Release artifacts
+
+- 从候选提交 `5e218f85f6a236fdd09bdd4f8fd346b77b6e5ce5` 的 `git archive` 构建
+  `factor_research_mvp-8.0.0-py3-none-any.whl`；SHA-256：
+  `02e220a82736be36b4dfe52dd53d5b6c7cbea8318c5dac9bc44310a6caeeb2e9`。全新隔离 venv 的
+  精确依赖安装、`pip check`、版本/import，以及 installed-wheel 对 detached checkout 的深度归档状态
+  验证均通过。
 
 ## [7.1] - 2026-08-31
 
