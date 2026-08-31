@@ -131,7 +131,7 @@ label，并再次验证 availability 必须恰好是 `report_date` 后第一个�
 拆送股稳健性对照）、FY1 相对 FY0 的预测增长，以及实际公告相对公告前共识的 earnings surprise。
 coverage/initiations、dispersion 与 active-reviser breadth 先只做诊断，不再建 selector。
 
-## 8.1 当前方向：政策运行指标重分类
+## 8.1 归档结论：政策运行指标重分类
 
 8.1 逐字节绑定已发布的 annotated `8.0` tag（tag object
 `3fcbd73f7497b074e484ce7793e2d3603bf5a177`，peeled commit
@@ -160,6 +160,15 @@ python scripts/run-multi-asset-evidence.py --mode audit
 # null freeze 或 audit 单独提交、推送且 CI 全绿后
 python scripts/run-multi-asset-evidence.py --mode finalize
 ```
+
+正式 reclassification 按上述聚合域通过，但它只是 post-hoc train 重分类。随后首次打开的 2020–2022
+validation 正式失败：主策略 CAGR 2.3342%、相对现金 CAGR 超额 0.3356pp、Sharpe 0.2802、最大回撤
+-15.9635%，三个完整年份只有 1 年为正。Base Sharpe 与 base/stress 正年份比例未过门；其余收益、
+压力、回撤、换手、fill、容量和会计检查通过。Null freeze payload 为
+`d10f51b522a16838a4744fa16d770a720d34c2d340c2bf0bd5a05bedc61ceb76`，terminal result payload 为
+`d4496b9a64def6a443827737987d44ec77532cc9d11137a247302376a00ad6a4`，状态
+`selection_falsified_no_candidate`。Audit 从未打开；8.1 不会调权、降门或重试，下一研究方向必须升
+major 版本。
 
 `python -m factor_lab.cli strategy status` 默认核验 8.1，并分别显示 reclassification、freeze、audit、
 result 状态；`--release 8.0` 始终核验上述不可变失败档案。即使后续 validation/audit 全部通过，含义也

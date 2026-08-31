@@ -10,6 +10,8 @@
 
 ## [Unreleased]
 
+## [8.1] - 2026-08-31
+
 ### Added
 
 - 冻结 8.1 corrective protocol `policy_operational_metric_reclassification`，逐字节绑定已发布的 annotated
@@ -36,11 +38,23 @@
   不新增经济阈值；但 `planned_signal_notional > 10% signal-date ADV20` 的 capacity violation 仍是继承
   执行合同违约，和负现金、杠杆、会计不一致一样 fail closed。
 
-### Research status
+### Research results
 
-- 截至协议冻结和本次实现提交，2020–2022 validation 与 2023–2026 audit 仍未打开，8.1 尚无
-  freeze、audit 或 terminal result。8.0 train 本身早已暴露，任何重分类通过最多只允许进入首个
-  未打开阶段，不能表述为策略、alpha、盈利或稳定未来收益通过。
+- Post-hoc train reclassification 按冻结 role scope 通过，payload
+  `4f498ffc12deac61144c77c56ba89cb9abccc034d2d73df4f1df8a6c50184c79`；policy fill 99.5149%、
+  年化换手 0.5400、容量受限比例 0，cash fill 89.6578% 继续完整披露但不进入 policy fill。该通过
+  不是独立 train，只允许首次打开 validation。
+- 2020–2022 validation 的 source/binding/evaluation payload 分别为
+  `f5903d2b24b47662a9ba4ea3d2d127c9b5dee385d5b927140b25eda68b3ff060`、
+  `7479aa06071d34544b6ce880d6a2986a09988e3905853dbab7127eaeb0e13d5b`、
+  `7794ee8c81cc784d262a464c55d37f3017b1e75cbc4bb421b5e4b8eb85685981`。主策略 CAGR 2.3342%、
+  cash excess CAGR 0.3356pp、Sharpe 0.2802、最大回撤 -15.9635%，完整正年份比例仅 1/3；失败项为
+  base Sharpe ≥0.30、base/stress 完整正年份比例 ≥50%。其余 nominal/stress CAGR、现金超额、压力
+  Sharpe、回撤、换手、fill、容量和会计门均通过。
+- Create-only null freeze payload 为
+  `d10f51b522a16838a4744fa16d770a720d34c2d340c2bf0bd5a05bedc61ceb76`，terminal result payload 为
+  `d4496b9a64def6a443827737987d44ec77532cc9d11137a247302376a00ad6a4`，状态
+  `selection_falsified_no_candidate`。2023–2026 audit 保持物理未创建；禁止降门、改权或 runner-up。
 
 ### Known limitations
 
@@ -50,6 +64,14 @@
 - 收据绑定的 8.0 train runtime 必须保留到 8.1 validation、audit 与 finalize 全部完成，以便每个正式
   阶段递归深验 validity；只有终态与远端 tag 均核对后才能清理。经济 role metrics 始终只取发布收据，
   retained artifacts 只提供执行/会计证明。
+
+### Release artifacts
+
+- 从候选提交 `b12539c61075aecf292eab1282d67a64d12e5cea` 的 `git archive` 构建
+  `factor_research_mvp-8.1.0-py3-none-any.whl`；SHA-256：
+  `447232fa6892f33e4bac456977a77f99219b1bd04a3a0539baf36ed996b3eb4e`。全新隔离 venv 的精确
+  依赖安装、`pip check`、版本/import，以及 installed-wheel 对无 runtime detached checkout 的浅归档
+  状态验证均通过。
 
 ## [8.0] - 2026-08-31
 
