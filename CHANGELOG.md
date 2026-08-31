@@ -10,6 +10,8 @@
 
 ## [Unreleased]
 
+## [11.0] - 2026-09-01
+
 ### Added
 
 - 新增 11.0 results-first 路线 `quarterly_dual_confirm_top3_borda_blend_75_25`：季度末同时计算
@@ -25,6 +27,14 @@
   prospective decision、0 个 outcome 时被历史收益更强的候选替代，不会再开启首周期。
 - 11.0 选择门要求 candidate 在 D1/D2/D3/full 的 8bp 与 16bp CAGR 均至少高于 matching cash、static
   和已发布 10.0 `50bp`，且 stress CAGR 严格高于 matching 10.0 base；Sharpe 和回撤仍只披露。
+- 正式 evidence payload/file SHA-256 为
+  `8ceffbf9aaff605c03d7ca87c56244e47722481acaf1042cb90f4ec70b6eda4d` /
+  `6c74d76285c7003ffd509c0866fc6d0b084be6770aadf32d2463293d38d83946`，绑定 implementation commit
+  `adb4f5b775a391f8ad3ac154dcf93633ad5962c5`；对应四平台 CI run `33438885289` 全部通过。
+- 从该 implementation commit 的 clean `git archive` 构建
+  `factor_research_mvp-11.0.0-py3-none-any.whl`，SHA-256 为
+  `2f2dbf623f6d7a3d8ed35f827a6f2c6c171f3c774d04ca8ee5a6697a8fef04f1`；fresh venv、`pip check`、
+  detached-checkout runner import 及 wheel/Git 30 个 Python 文件逐字节核对通过。
 
 ### Research status
 

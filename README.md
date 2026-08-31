@@ -9,6 +9,19 @@ Factor Lab 11.0 把 10.0 的单周期季度 Borda 换成双周期确认混合：
 至少领先已发布 10.0 与 static 50bp，同时通过 fill、容量和会计门。10.1 prospective 尚无任何 decision
 或 outcome，因此在首周期前被替代；11.0 仍是历史诊断，未来运行需后续 prospective 小版本。
 
+正式 exact replay：
+
+| 区间 | 11.0 base CAGR | 11.0 stress | 10.0 base | static base |
+| --- | ---: | ---: | ---: | ---: |
+| D1（2015–2019） | 8.532% | 8.327% | 7.365% | 6.909% |
+| D2（2020–2022） | 6.857% | 6.630% | 5.547% | 2.334% |
+| D3（2023–2026） | 21.768% | 21.581% | 19.028% | 13.644% |
+| Full | 12.118% | 11.916% | 10.450% | 7.783% |
+
+Full 最大回撤约 -24.82%、Sharpe 0.865、年化换手 2.34，fill 99.88%，capacity-limited 0.03%。
+协议与正式证据见 [11.0 protocol](protocols/11.0-results-first-dual-confirm-blend.json) 和
+[11.0 evidence](protocols/evidence/11.0/results-first-diagnostic.json)。这些数值全部来自已暴露历史。
+
 底层 10.0 把 9.0 的低波动风险预算降为 comparator，主线改为严格因果的季度 12-1 双动量：
 每个自然季度最后一个上交所交易日，只用该时点之前第 252 与第 21 个官方 session 的六只 ETF
 总回报指数；五只风险资产分别减去现金代理同期 log return，只保留正值，并按相对动量从高到低

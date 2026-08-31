@@ -23,6 +23,10 @@ REFERENCE_EVIDENCE_PATH = (
 )
 PROTOCOL_PAYLOAD = "d23739b85fa02d0cfeca977ba5f60fe003ae5753a387f7b10fa611a6688ae0bf"
 PROTOCOL_FILE_SHA256 = "8c6b20996e1e735a020fd71a31b0401570948549a041c5f3848a3dd19ae8fc7c"
+EVIDENCE_PATH = ROOT / "protocols" / "evidence" / "11.0" / "results-first-diagnostic.json"
+EVIDENCE_PAYLOAD = "8ceffbf9aaff605c03d7ca87c56244e47722481acaf1042cb90f4ec70b6eda4d"
+EVIDENCE_FILE_SHA256 = "6c74d76285c7003ffd509c0866fc6d0b084be6770aadf32d2463293d38d83946"
+IMPLEMENTATION_COMMIT = "adb4f5b775a391f8ad3ac154dcf93633ad5962c5"
 
 
 def _read(path: Path = PROTOCOL_PATH) -> dict[str, Any]:
@@ -47,6 +51,31 @@ def test_11_0_protocol_is_exactly_self_hashed() -> None:
     assert protocol["direction_change"] is True
     assert protocol["route"] == "quarterly_dual_confirm_top3_borda_blend_75_25"
     assert protocol["status"].startswith("frozen_after_fully_exposed_two_stage")
+
+
+def test_11_0_formal_evidence_is_exact_commit_bound_and_selected() -> None:
+    evidence = _read(EVIDENCE_PATH)
+    assert evidence["payload_sha256"] == EVIDENCE_PAYLOAD
+    assert canonical_payload_sha256(evidence) == EVIDENCE_PAYLOAD
+    assert hashlib.sha256(EVIDENCE_PATH.read_bytes()).hexdigest() == EVIDENCE_FILE_SHA256
+    assert evidence["implementation"]["git_head"] == IMPLEMENTATION_COMMIT
+    assert evidence["implementation"]["commit_bound"] is True
+    assert evidence["scratch_replay"] == {
+        "matched": True,
+        "projection_payload_sha256": (
+            "5e124ccb33557215c711839d8de60eb8bb0551a492bf1e26c5efb48ccd3eb931"
+        ),
+        "minimum_cagr_edge": 0.011575950499677967,
+        "target_prefix_mismatch_count": 0,
+        "all_return_and_execution_gates_passed": True,
+    }
+    assert evidence["selection"] == {
+        "gate_passed": True,
+        "selected_candidate_id": "quarterly_dual_confirm_top3_borda_blend_75_25",
+        "runner_up_fallback": False,
+        "parameter_or_candidate_change_after_results_allowed": False,
+    }
+    assert all(evidence["periods"][name]["passed"] for name in ("D1", "D2", "D3", "full"))
 
 
 def test_11_0_binds_the_exact_published_10_1_release_and_zero_outcomes() -> None:
