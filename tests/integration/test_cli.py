@@ -180,9 +180,10 @@ def test_strategy_status_verifies_tracked_implementation_and_evidence(
     # below.
     monkeypatch.setattr(cli, "_v81_require_head_ci", lambda _root: "a" * 40)
     monkeypatch.setattr(cli, "_working_tree_is_clean", lambda _root: True)
-    _mock_v81_preclosure_admission(monkeypatch)
-    result, exit_code = cli._strategy_status(root, verify_data=False)
     closure_exists = (root / cli.V81_CLOSURE_PATH).is_file()
+    if not closure_exists:
+        _mock_v81_preclosure_admission(monkeypatch)
+    result, exit_code = cli._strategy_status(root, verify_data=False)
     if closure_exists:
         assert exit_code == 0
     else:
