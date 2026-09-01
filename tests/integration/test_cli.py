@@ -78,6 +78,9 @@ def test_cli_exposes_only_lightweight_mainline_commands() -> None:
     assert parser.parse_args(
         ["strategy", "status", "--release", "11.0"]
     ).release == "11.0"
+    assert parser.parse_args(
+        ["strategy", "status", "--release", "12.0"]
+    ).release == "12.0"
     targets = parser.parse_args(["strategy", "targets", "--signal-date", "latest"])
     assert targets.strategy_command == "targets"
     capture = parser.parse_args(["prospective", "capture", "--as-of", "2026-09-30"])
@@ -306,14 +309,14 @@ def test_strategy_status_verifies_tracked_implementation_and_evidence(
         assert "retained_8_1_development_readiness" in categories
 
 
-def test_default_strategy_status_tracks_11_0_results_first_stage() -> None:
+def test_default_strategy_status_tracks_12_0_terminal_failure() -> None:
     root = Path(__file__).resolve().parents[2]
-    evidence_path = root / cli.V11_EVIDENCE_PATH
+    evidence_path = root / cli.V12_EVIDENCE_PATH
     clean = cli._working_tree_is_clean(root)
     committed = (
         evidence_path.is_file()
         and subprocess.run(
-            ["git", "cat-file", "-e", f"HEAD:{cli.V11_EVIDENCE_PATH}"],
+            ["git", "cat-file", "-e", f"HEAD:{cli.V12_EVIDENCE_PATH}"],
             cwd=root,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -321,20 +324,21 @@ def test_default_strategy_status_tracks_11_0_results_first_stage() -> None:
         == 0
     )
     result, exit_code = cli._strategy_status(root, verify_data=False)
-    assert result["version"] == "11.0"
-    assert result["route"] == cli.V11_ROUTE
+    assert result["version"] == "12.0"
+    assert result["route"] == cli.V12_ROUTE
     assert result["profit_claim_allowed"] is False
-    if not evidence_path.is_file():
-        assert exit_code == 2
-        assert result["status"] == "implementation_pending_results_first_replay"
-        assert result["selected_candidate_id"] is None
-    elif not committed or not clean:
+    if not evidence_path.is_file() or not committed or not clean:
         assert exit_code == 3
         assert result["status"] == "integrity_mismatch"
     else:
         assert exit_code == 0
-        assert result["status"] == "candidate_passed_all_results_first_gates"
-        assert result["selected_candidate_id"] == cli.V11_ROUTE
+        assert result["status"] == (
+            "development_screening_falsified_max_drawdown_selection_unopened"
+        )
+        assert result["selected_candidate_id"] is None
+        assert result["failed_checks"] == [
+            "base_max_drawdown_at_least_negative_0_35"
+        ]
 
 
 def test_10_0_status_delegates_exact_and_deep_evidence_verification(

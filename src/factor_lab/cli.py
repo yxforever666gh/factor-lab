@@ -153,6 +153,14 @@ V112_RUNNER_PATH = "scripts/run-11.2-quarterly-cycle.py"
 V112_PROTOCOL_ID = "factor-lab/11.2/quarterly-prospective-cycle-v1"
 V112_PROTOCOL_PAYLOAD_SHA256 = "b9da758aad617d8752f9dbc628f8421fe4c04fe26f9f2a677fee1a8797b50e08"
 V112_PROTOCOL_FILE_SHA256 = "d363ae60326b17d3b28c04201f1ab411df544b2e16f0fe93e7fba30010c728a6"
+V12_PROTOCOL_PATH = "protocols/12.0-quarterly-pit-stock.json"
+V12_EVIDENCE_PATH = "protocols/evidence/12.0/development-screening-failure.json"
+V12_ROUTE = "quarterly_pit_dual_market_gate_trend_lowvol_top80"
+V12_PROTOCOL_ID = "factor-lab/12.0/quarterly-pit-stock-v1"
+V12_PROTOCOL_PAYLOAD_SHA256 = "493e7fa32e93e1f96add0cc7c873c5f1991def48533f82e0fce02eaa4cd9a1e7"
+V12_PROTOCOL_FILE_SHA256 = "0ba5356d99befe02dd2c8053c6ef360ade823f1d8ddc65a937095acedcc675ee"
+V12_EVIDENCE_PAYLOAD_SHA256 = "b02d9e3de09670921d927abe9d13e4cbaae8effad113bf73c842f3457d24e860"
+V12_EVIDENCE_FILE_SHA256 = "e79349c142fc1bad4cfc9a587ca9abd38c04a1c0fd05947e543079dbbe95f20a"
 
 
 def _root() -> Path:
@@ -347,7 +355,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     strategy_status.add_argument(
         "--release",
-        choices=("6.0", "6.3", "7.0", "7.1", "8.0", "8.1", "9.0", "10.0", "11.0"),
+        choices=("6.0", "6.3", "7.0", "7.1", "8.0", "8.1", "9.0", "10.0", "11.0", "12.0"),
         help="Verify one release closure; defaults to the latest tracked closure.",
     )
     strategy_targets = strategy_commands.add_parser(
@@ -3332,6 +3340,192 @@ def _strategy_status_11_0(
     }, 0
 
 
+def _strategy_status_12_0(
+    root: Path, *, verify_data: bool
+) -> tuple[dict[str, Any], int]:
+    checks: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
+    protocol, protocol_check = _v7_json_check(
+        root,
+        V12_PROTOCOL_PATH,
+        expected_payload=V12_PROTOCOL_PAYLOAD_SHA256,
+        expected_file=V12_PROTOCOL_FILE_SHA256,
+    )
+    protocol_check["category"] = "pit_stock_protocol"
+    checks.append(protocol_check)
+    if protocol_check.get("status") != "match":
+        failures.append(protocol_check)
+    elif not (
+        protocol.get("release") == "12.0"
+        and protocol.get("protocol_id") == V12_PROTOCOL_ID
+        and protocol.get("frozen_strategy", {}).get("strategy_id") == V12_ROUTE
+        and protocol.get("terminal_screening_result", {}).get(
+            "selected_candidate_id"
+        )
+        is None
+        and protocol.get("claim_contract", {}).get("profit_claim_allowed")
+        is False
+    ):
+        item = {
+            "category": "pit_stock_protocol_contract",
+            "path": V12_PROTOCOL_PATH,
+            "status": "mismatch",
+        }
+        checks.append(item)
+        failures.append(item)
+
+    evidence, evidence_check = _v7_json_check(
+        root,
+        V12_EVIDENCE_PATH,
+        expected_payload=V12_EVIDENCE_PAYLOAD_SHA256,
+        expected_file=V12_EVIDENCE_FILE_SHA256,
+    )
+    evidence_check["category"] = "pit_stock_terminal_evidence"
+    checks.append(evidence_check)
+    if evidence_check.get("status") != "match":
+        failures.append(evidence_check)
+    elif not (
+        evidence.get("status")
+        == "development_screening_falsified_max_drawdown_selection_unopened"
+        and evidence.get("implementation", {}).get("commit_bound") is True
+        and evidence.get("gate", {}).get("failed_checks")
+        == ["base_max_drawdown_at_least_negative_0_35"]
+        and evidence.get("evidence_boundary", {}).get(
+            "selection_market_partitions_read"
+        )
+        is False
+        and evidence.get("evidence_boundary", {}).get("selected_candidate_id")
+        is None
+    ):
+        item = {
+            "category": "pit_stock_terminal_evidence_contract",
+            "path": V12_EVIDENCE_PATH,
+            "status": "mismatch",
+        }
+        checks.append(item)
+        failures.append(item)
+
+    if evidence is not None:
+        implementation = evidence.get("implementation") or {}
+        commit = str(implementation.get("git_commit") or "")
+        ancestor = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", commit, "HEAD"],
+            cwd=root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        ).returncode == 0
+        bytes_match = ancestor
+        for relative, expected in (implementation.get("files") or {}).items():
+            completed = subprocess.run(
+                ["git", "show", f"{commit}:{relative}"],
+                cwd=root,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            if (
+                completed.returncode != 0
+                or hashlib.sha256(completed.stdout).hexdigest() != expected
+            ):
+                bytes_match = False
+                break
+        item = {
+            "category": "pit_stock_implementation_commit",
+            "path": commit,
+            "status": "match" if bytes_match else "mismatch",
+        }
+        checks.append(item)
+        if not bytes_match:
+            failures.append(item)
+
+    clean = _working_tree_is_clean(root)
+    evidence_path = root / V12_EVIDENCE_PATH
+    committed = subprocess.run(
+        ["git", "show", f"HEAD:{V12_EVIDENCE_PATH}"],
+        cwd=root,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    committed_match = (
+        clean
+        and evidence_path.is_file()
+        and committed.returncode == 0
+        and committed.stdout == evidence_path.read_bytes()
+    )
+    item = {
+        "category": "pit_stock_committed_terminal_evidence",
+        "path": V12_EVIDENCE_PATH,
+        "status": "match" if committed_match else "mismatch",
+    }
+    checks.append(item)
+    if not committed_match:
+        failures.append(item)
+
+    data_verified = False
+    if verify_data and evidence is not None:
+        expected_files = {
+            "runtime/data/pit-stock-12.0/development/manifest.json": evidence[
+                "formal_development_panel"
+            ]["manifest_file_sha256"],
+            "runtime/data/pit-stock-12.0/development/source-allowlist.json": evidence[
+                "formal_development_panel"
+            ]["source_allowlist_file_sha256"],
+            "runtime/data/pit-stock-12.0/development-screening/manifest.json": evidence[
+                "formal_screening"
+            ]["manifest_file_sha256"],
+            "runtime/data/pit-stock-12.0/development-screening/result.json": evidence[
+                "formal_screening"
+            ]["result_file_sha256"],
+        }
+        data_verified = all(
+            (root / relative).is_file()
+            and hashlib.sha256((root / relative).read_bytes()).hexdigest()
+            == expected
+            for relative, expected in expected_files.items()
+        )
+        item = {
+            "category": "pit_stock_formal_runtime_hashes",
+            "path": "runtime/data/pit-stock-12.0",
+            "status": "match" if data_verified else "mismatch",
+        }
+        checks.append(item)
+        if not data_verified:
+            failures.append(item)
+
+    if failures or evidence is None:
+        return {
+            "status": "integrity_mismatch",
+            "version": "12.0",
+            "route": V12_ROUTE,
+            "protocol_id": V12_PROTOCOL_ID,
+            "profit_claim_allowed": False,
+            "selected_candidate_id": None,
+            "evidence_payload_sha256": None,
+            "canonical_data_hashes_verified": False,
+            "checks": checks,
+        }, 3
+    base = evidence["metrics"]["candidate_base"]
+    stress = evidence["metrics"]["candidate_stress"]
+    return {
+        "status": evidence["status"],
+        "version": "12.0",
+        "route": V12_ROUTE,
+        "protocol_id": V12_PROTOCOL_ID,
+        "evidence_class": evidence["claim_contract"]["evidence_class"],
+        "profit_claim_allowed": False,
+        "selected_candidate_id": None,
+        "failed_checks": evidence["gate"]["failed_checks"],
+        "selection_market_partitions_read": False,
+        "evidence_payload_sha256": evidence["payload_sha256"],
+        "full_cagr": base["cagr"],
+        "full_stress_cagr": stress["cagr"],
+        "train_cagr": base["train_cagr"],
+        "validation_cagr": base["validation_cagr"],
+        "full_max_drawdown": base["max_drawdown"],
+        "canonical_data_hashes_verified": data_verified,
+        "checks": checks,
+    }, 0
+
+
 def _strategy_status_7_0_archived(
     root: Path, *, verify_data: bool
 ) -> tuple[dict[str, Any], int]:
@@ -3465,7 +3659,7 @@ def _strategy_status_7_1_archived(
 def _strategy_status(
     root: Path, *, verify_data: bool, release: str | None = None
 ) -> tuple[dict[str, Any], int]:
-    selected = release or "11.0"
+    selected = release or "12.0"
     if selected == "6.0":
         return _strategy_status_6_0(root, verify_data=verify_data)
     if selected == "6.3":
@@ -3484,6 +3678,8 @@ def _strategy_status(
         return _strategy_status_10_0(root, verify_data=verify_data)
     if selected == "11.0":
         return _strategy_status_11_0(root, verify_data=verify_data)
+    if selected == "12.0":
+        return _strategy_status_12_0(root, verify_data=verify_data)
     raise ValueError(f"unsupported strategy release: {selected}")
 
 

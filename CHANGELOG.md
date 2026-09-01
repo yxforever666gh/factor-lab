@@ -24,6 +24,8 @@
 ### Changed
 
 - Python 包版本更新为 `12.0.0`；这是从六 ETF 路线切换到全状态沪深 PIT 股票截面的研究大方向变更。
+- `strategy status` 默认迁移到 12.0 terminal evidence，明确返回 `selected_candidate_id=null` 和唯一失败门；
+  历史 11.0 仍可通过 `--release 11.0` 显式审计。
 - Factor Lab 临时测试、构建、下载和一次性分析产物统一迁移到 `H:\Download\FactorLabPytest`；
   不再直接散落于 `H:\Download` 根目录。
 
