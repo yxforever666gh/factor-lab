@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_12_0_development_screening_failure",
+  "release": "12.0",
+  "status": "development_screening_falsified_max_drawdown_selection_unopened",
+  "protocol": {
+    "path": "protocols/12.0-quarterly-pit-stock.json",
+    "protocol_id": "factor-lab/12.0/quarterly-pit-stock-v1",
+    "payload_sha256": "493e7fa32e93e1f96add0cc7c873c5f1991def48533f82e0fce02eaa4cd9a1e7",
+    "file_sha256": "0ba5356d99befe02dd2c8053c6ef360ade823f1d8ddc65a937095acedcc675ee"
+  },
+  "implementation": {
+    "git_commit": "6531c9590a6c2542495e41390eda7be6f97dbc1f",
+    "commit_bound": true,
+    "files": {
+      "scripts/run-12.0-pit-stock.py": "d0faac47d539d9c95a24b74d06e185df8e1e1f8ad2026d6506eee110a7550519",
+      "src/factor_lab/data/pit_stock.py": "9d436cf1f7ec1fe3b124ddd72aae721904f296327b7d312eadad254a5aa19882",
+      "src/factor_lab/research/pit_stock.py": "9f7bae8e3a705f0b3f34e662fa1a8ac9613cb98477f84b21fd60d1be59208ebd",
+      "src/factor_lab/research/pit_stock_account.py": "c61aef36cc6cd5491bd8894652b2c5ea612dd990072d96e7ac47080e29d3658b"
+    },
+    "github_ci": {
+      "run_id": 33470651119,
+      "conclusion": "success",
+      "jobs": {
+        "ubuntu_python_3_10": 99739568749,
+        "ubuntu_python_3_11": 99739568918,
+        "windows_python_3_10": 99739568872,
+        "windows_python_3_11": 99739568767
+      }
+    }
+  },
+  "formal_development_panel": {
+    "manifest_file_sha256": "82fbba704066d9779c73b8b6d90c3ce566447b96b7e1fcfcd1803525c3a09763",
+    "manifest_payload_sha256": "5b4815885c500656af0c597f1cf4b0030932b7ea82556a052a376b494f61a870",
+    "source_allowlist_file_sha256": "ad28ceaa5d70bfacc3d7b540998e154a006702754d9fd096dd87327b77c7a0c9",
+    "source_allowlist_payload_sha256": "ffc9c778259e80982b8d2a5db88e94b88d3373bd7d095ba529d145672fb5f36b",
+    "market_partition_contract_sha256": "02a8e57f40d81163dfaf4046addd1b45a9cc5a645a6b2e79b2f3a6ad230769d1",
+    "security_master_snapshot_sha256": "8cd9b6cb0298cfd265de925eac2ee727d1ada765b734cbc50c342a75ed368cf5",
+    "panel": {
+      "row_count": 88386,
+      "signal_count": 22,
+      "file_sha256": "d51cad0de60484292ca24e4909d2c7617e0d83d3b8df58b29358f438eb5a48ca",
+      "payload_sha256": "3392346175e43618039020d5f5989483bd520d4366949371e5f940aa938d7a65"
+    },
+    "targets": {
+      "row_count": 880,
+      "nonempty_signal_count": 11,
+      "file_sha256": "ce3cd6c37dd1b04e77c170055e1bb7351cd99b6e2a201e7745ac1cf29a9ea06c",
+      "payload_sha256": "1022288372cd07f97b0e963b670c3a7e9ddfc94414b4d21cb7cbea9c643e76be"
+    },
+    "decisions": {
+      "row_count": 22,
+      "file_sha256": "9f499c7a8728ce9a7e8c408e540be64f55afab4e1c8f112878f3ff9ece1e0674",
+      "payload_sha256": "5178c3d3ffb54e6a84b87bde293e5c573dabba9582a9a458690cb9607e777fe0"
+    },
+    "maximum_market_date": "2023-01-03",
+    "historical_vintage_class": "reconstructed_effective_date_pit_from_2026_provider_capture"
+  },
+  "formal_screening": {
+    "manifest_file_sha256": "2cbaef333843897f17eef34480b0f3cb3c781ce1daf3bb4759cd375f599f1b7e",
+    "manifest_payload_sha256": "f65869e25012efd6720378984652568b49dc8fbcd183b390237c54e64df3d25f",
+    "result_file_sha256": "6f9285aa785faf59bbb14241a710117d737c23f04fd4b857ed8589aaaecb9953",
+    "result_payload_sha256": "e9e8250c45160cff588f8372172c0054d40168c83bb68957bdc3ac68b1229b8f",
+    "artifact_file_sha256": {
+      "daily_nav": "d5132e18e63fd64a29cc5311b006f40d7a4dfc5770497f9d305a5b56e06a238e",
+      "boundaries": "1f2a622740c01f13558a89af5118753da89823341fd50e8cce7626f0b3c69984",
+      "orders": "4aecc6ccfb8f53a46f579d7ed6c6757b0a9a45fdef8c2fedaf431aec6a300a34",
+      "holdings": "dc1cc03a83bc7c913c1cb4ae955e64db83176331e31a159e1e856fe6f18f11ec"
+    },
+    "artifact_row_count": {
+      "daily_nav": 5104,
+      "boundaries": 88,
+      "orders": 31434,
+      "holdings": 23924
+    },
+    "price_basis": "adjusted_total_return_synthetic_units",
+    "real_100_share_claim_allowed": false
+  },
+  "metrics": {
+    "candidate_base": {
+      "cagr": 0.08056137958292076,
+      "train_cagr": 0.10930215983471725,
+      "validation_cagr": 0.01686285955114286,
+      "sharpe": 0.5139639781782297,
+      "max_drawdown": -0.4005292245704233,
+      "fill_ratio": 0.9985959507234988,
+      "capacity_limited_requested_notional_ratio": 0.0,
+      "blocked_order_count": 0,
+      "negative_cash_observation_count": 0,
+      "leverage_observation_count": 0,
+      "max_nav_reconciliation_error": 0.0
+    },
+    "candidate_stress": {
+      "cagr": 0.07883087697964286,
+      "train_cagr": 0.10805893213808626,
+      "validation_cagr": 0.014430617394636247,
+      "sharpe": 0.5052503524232386,
+      "max_drawdown": -0.40179300213203717,
+      "fill_ratio": 0.9981551293332557
+    },
+    "adv500_base": {
+      "cagr": -0.07913419643981812,
+      "train_cagr": -0.060766122591843885,
+      "validation_cagr": -0.10698788986993779,
+      "sharpe": -0.20877849514133498,
+      "max_drawdown": -0.41701693702927944
+    },
+    "candidate_base_drawdown_path": {
+      "peak_date": "2021-09-13",
+      "peak_nav": 16805844.853873126,
+      "trough_date": "2022-04-26",
+      "trough_nav": 10074612.846300485
+    }
+  },
+  "gate": {
+    "failed_checks": [
+      "base_max_drawdown_at_least_negative_0_35"
+    ],
+    "all_other_frozen_screening_checks_passed": true,
+    "pre_attribution_passed": false,
+    "winner_freeze_allowed": false
+  },
+  "evidence_boundary": {
+    "selection_market_partitions_read": false,
+    "selection_result_created": false,
+    "real_share_100_lot_gate_opened": false,
+    "group_pnl_attribution_opened": false,
+    "runner_up_fallback_used": false,
+    "selected_candidate_id": null,
+    "parameter_or_gate_change_allowed_in_12_x": false
+  },
+  "claim_contract": {
+    "evidence_class": "formal_commit_bound_fully_exposed_development_screening_falsified",
+    "independent_oos": false,
+    "profit_claim_allowed": false,
+    "stable_future_profit_claim_allowed": false,
+    "historical_vendor_revision_vintage_verified": false
+  },
+  "payload_sha256": "b02d9e3de09670921d927abe9d13e4cbaae8effad113bf73c842f3457d24e860"
+}

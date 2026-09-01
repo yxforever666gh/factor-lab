@@ -33,6 +33,10 @@
   开发前后半 base CAGR 为 10.93%/1.69%，Sharpe 0.514，成交率 99.86%，没有容量、借现金、杠杆或
   会计违规；但日级最大回撤为 -40.05%，低于预先固定的 -35% 门，因此 12.0 正式淘汰且未打开
   2023–2024 selection，也未进入 raw-price/100 股公司行动硬门。近似季度回撤没有捕捉该日级路径。
+- Formal panel/screening 均绑定 implementation commit `6531c9590a6c2542495e41390eda7be6f97dbc1f`；对应
+  GitHub CI run `33470651119` 四个 Windows/Linux × Python 3.10/3.11 job 全绿。Terminal evidence
+  payload/file SHA-256 为 `b02d9e3de09670921d927abe9d13e4cbaae8effad113bf73c842f3457d24e860` /
+  `e79349c142fc1bad4cfc9a587ca9abd38c04a1c0fd05947e543079dbbe95f20a`。
 
 ### Known limitations
 
