@@ -42,6 +42,11 @@
   GitHub CI run `33470651119` 四个 Windows/Linux × Python 3.10/3.11 job 全绿。Terminal evidence
   payload/file SHA-256 为 `b02d9e3de09670921d927abe9d13e4cbaae8effad113bf73c842f3457d24e860` /
   `e79349c142fc1bad4cfc9a587ca9abd38c04a1c0fd05947e543079dbbe95f20a`。
+- Release candidate `3c95b1b63f5aeac9808cf9d0ad0939e9b34af5be` 的 GitHub CI run `33472986739`
+  四个 Windows/Linux × Python 3.10/3.11 job 全绿。从其 clean `git archive` 构建的
+  `factor_research_mvp-12.0.0-py3-none-any.whl` SHA-256 为
+  `821f5ab2642036bf08f9541eb514b631f8f65cb666b172f09bfc8853f6a981e4`；fresh venv 安装、
+  `pip check`、detached-checkout 12.0 terminal status 及 wheel/Git 33 个 Python 文件逐字节核对通过。
 
 ### Known limitations
 
