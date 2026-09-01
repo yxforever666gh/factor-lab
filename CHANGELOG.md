@@ -10,6 +10,35 @@
 
 ## [Unreleased]
 
+### Added
+
+- 启动 12.0 大方向：复用全状态沪深证券主表与日级 PIT 原始分区，新增季度股票面板和纯因果选股核心；
+  每季度保留全部当时活跃股票及排除原因，未来退市日期不会提前剔除历史股票。
+- 冻结开发候选 `quarterly_pit_dual_market_gate_trend_lowvol_top80`：Top1000 ADV20 池的 12-1/6-1
+  中位动量同时为正才开仓，再从长动量为正的股票中按 12-1 趋势与 63 日低波等权排名选 Top80；否则全现金。
+- 记录三轮、共 13 个 fully exposed 开发候选及一次零新增候选的 strict-panel 重放哈希和限制；重放后
+  赢家不变。正式 selection/holdout 在 exact 连续账户、winner freeze 提交并推送前保持封存。
+
+### Changed
+
+- Factor Lab 临时测试、构建、下载和一次性分析产物统一迁移到 `H:\Download\FactorLabPytest`；
+  不再直接散落于 `H:\Download` 根目录。
+
+### Research status
+
+- 严格面板重放后的最佳开发近似结果为：全段/前半/后半成本后 CAGR 约 7.75%/10.86%/1.78%，全段最大回撤
+  约 -18.46%，开发前后段相对 ADV500 的最差 CAGR edge 约 12.43pp。该近似结果不是独立 OOS 或
+  未来盈利证据。
+- 随后的 adjusted-total-return 连续账户淘汰测试中，candidate base/stress 全段 CAGR 为 8.06%/7.88%，
+  开发前后半 base CAGR 为 10.93%/1.69%，Sharpe 0.514，成交率 99.86%，没有容量、借现金、杠杆或
+  会计违规；但日级最大回撤为 -40.05%，低于预先固定的 -35% 门，因此 12.0 正式淘汰且未打开
+  2023–2024 selection，也未进入 raw-price/100 股公司行动硬门。近似季度回撤没有捕捉该日级路径。
+
+### Known limitations
+
+- 历史 raw 分区在 2026 年才抓取，只能证明 effective-date 因果重建，不能证明当年供应商 revision vintage；
+  12.0 screening 使用复权总回报合成单位和 `lot_size=0`，明确不构成 100 股实盘执行证据。
+
 ## [11.2] - 2026-09-01
 
 ### Added

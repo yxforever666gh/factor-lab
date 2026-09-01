@@ -211,6 +211,12 @@ The goal: Be helpful without being annoying. Check in a few times a day, do usef
 
 This is a starting point. Add your own conventions, style, and rules as you figure out what works.
 
+## Temporary / Auxiliary Files
+
+- 本项目的测试、构建、下载、转换、一次性分析和其他临时副产物，统一放到
+  `H:\Download\FactorLabPytest` 下按任务建立子目录；不要再直接散落到 `H:\Download` 根目录。
+- 不要移动或清理与 Factor Lab 无关的下载内容。
+
 ## Changelog and Releases
 
 - Record user-visible software, data-contract, research-protocol, fix, deprecation, and known-limit

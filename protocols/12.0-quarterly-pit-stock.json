@@ -1,0 +1,169 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_12_0_quarterly_pit_stock_protocol",
+  "protocol_id": "factor-lab/12.0/quarterly-pit-stock-v1",
+  "release": "12.0",
+  "status": "development_screening_falsified_max_drawdown_selection_unopened",
+  "direction_change": true,
+  "objective": "Build a quarterly all-status A-share PIT selection and continuous trading system whose fixed rule seeks positive cost-after returns across time, industries, size groups, and market states.",
+  "frozen_strategy": {
+    "strategy_id": "quarterly_pit_dual_market_gate_trend_lowvol_top80",
+    "scope": "all-status ordinary CNY A shares on SSE and SZSE; current-listed-only rosters are forbidden",
+    "signal_session": "last official SSE session of each natural quarter",
+    "execution_session": "next official session open",
+    "listing_sessions_min": 253,
+    "history_policy": "require a real daily bar on every one of the exact 253 sessions t-252 through t; no price imputation",
+    "st_policy": "exclude when present in the exact signal-date stock_st positive list",
+    "universe": "top 1000 by exact trailing signal-date ADV20 among base-eligible stocks; ticker ascending breaks the boundary tie",
+    "long_momentum": "adjusted close at t-21 / adjusted close at t-252 - 1",
+    "short_momentum": "adjusted close at t-21 / adjusted close at t-126 - 1",
+    "market_gate": "open only when both cross-sectional universe medians are strictly positive; otherwise target 100% cash",
+    "stock_filter": "individual long momentum strictly positive",
+    "stock_score": "0.5 * percentile_rank(long_momentum) + 0.5 * percentile_rank(-63-session annualized sample volatility)",
+    "portfolio": "top 80, 1.25% each, ticker ascending breaks exact score ties; no substitute after a blocked order",
+    "diagnostic_only_fields": [
+      "signal-date daily_basic total_mv/circ_mv size bucket",
+      "latest same-quarter bak_basic industry available no later than signal"
+    ]
+  },
+  "development_boundary": {
+    "first_signal": "2017-09-29",
+    "last_sentinel_signal": "2022-12-30",
+    "last_complete_outcome_signal": "2022-09-30",
+    "maximum_read_date": "2023-01-03",
+    "market_or_outcome_partition_after_maximum_read_date_forbidden": true,
+    "official_calendar_may_extend_beyond_market_cutoff": true,
+    "security_master_and_alias_capture_may_be_later_but_only_effective_dates_at_or_before_t_can_change_t": true,
+    "historical_data_class": "reconstructed_effective_date_pit_from_2026_provider_capture",
+    "fully_exposed": true
+  },
+  "data_contract": {
+    "official_sessions": "checkpointed and SHA-verified SSE trade_cal; never inferred from existing daily directories",
+    "market_partitions": "daily, daily_basic and adj_factor must have one complete checkpoint entry for every official open session through the market cutoff; file SHA, size, row count and internal trade_date are verified",
+    "exact_cutoff_allowlist": "each formal panel persists every allowed market/ST/industry partition identity and hash so later checkpoint appends cannot rewrite the run",
+    "stock_st": "exact signal-date checkpointed positive-list partition with verified file SHA and internal trade_date",
+    "industry": "latest checkpointed same-quarter bak_basic partition no later than signal; diagnostic only",
+    "security_master": "one checkpointed all-status L/P/D snapshot; future delist dates do not exclude a stock before their effective date",
+    "alias_policy": "current effective-date identity reconstruction; overlapping intervals and unexplained canonical collisions fail; an interval-authoritative vendor row explicitly wins an explained vendor/canonical collision and the collision is counted",
+    "unknown_or_unexplained_missing_input": "fail closed"
+  },
+  "search_disclosure": {
+    "stage1_candidate_count": 6,
+    "stage2_added_candidate_count": 4,
+    "stage3_added_market_gate_count": 3,
+    "stage4_strict_panel_replay_candidate_count": 9,
+    "stage4_added_candidate_count": 0,
+    "artifact_root": "H:/Download/FactorLabPytest/factor-lab-12.0-scout",
+    "stage4_script": "strict-panel-scout.py",
+    "stage4_result": "development-result-stage4-strict-panel.json",
+    "stage1_to_stage3_exact_script_bytes_retained": false,
+    "stage1_to_stage3_reproducibility_limit": "reported script hashes are retained, but the three exact historical script revisions were overwritten before this protocol was written",
+    "selected_development_candidate": "trend_lowvol_gate_dual_top80",
+    "selected_approximate_metrics": {
+      "full_cagr": 0.07746,
+      "train_cagr": 0.10861,
+      "validation_cagr": 0.01776,
+      "worst_train_validation_cagr_edge_vs_adv500": 0.12428,
+      "full_sharpe": 0.477,
+      "full_max_drawdown": -0.18461,
+      "mean_quarterly_turnover": 0.473
+    },
+    "further_factor_or_market_gate_search_allowed": false
+  },
+  "screening_execution_contract": {
+    "purpose": "eliminate the candidate with a continuous exact-cost account before investing in the real-share corporate-action layer",
+    "initial_capital_rmb": 10000000,
+    "continuous_account_no_reset": true,
+    "price_basis": "adjusted_total_return",
+    "open_column": "open_times_contemporaneous_adj_factor",
+    "daily_mark_column": "close_times_contemporaneous_adj_factor",
+    "unit_policy": "continuous synthetic total-return units",
+    "lot_size": 0,
+    "real_100_share_claim_allowed": false,
+    "max_signal_adv_participation": 0.05,
+    "max_position_weight": 0.0125,
+    "base_cost_policy": {
+      "commission_rate": 0.0003,
+      "slippage_bps_per_side": 5.0,
+      "stamp_duty_before_2023_08_28": 0.001,
+      "stamp_duty_from_2023_08_28": 0.0005,
+      "exchange_handling_rate": 0.0000341,
+      "transfer_fee_rate": 0.00001,
+      "impact_coefficient": 0.5
+    },
+    "stress_cost_change_only": "slippage_bps_per_side=10.0; every target and other cost field unchanged",
+    "execution_inputs": "signal-date ADV20 and vol63/sqrt(252); t+1 ADV or volatility forbidden",
+    "entry_block": "missing open, proven suspension, or one-price limit-up; no substitute and residual cash remains",
+    "exit_block": "missing open, proven suspension, or one-price limit-down; old holding carries",
+    "daily_missing_bar": "carry only with suspend_d proof; otherwise fail",
+    "delist": "zero recovery on the first official session on or after effective delist_date unless a separately frozen recovery source exists",
+    "corporate_actions": "embedded once in adjusted total-return prices; explicit split/dividend columns disabled",
+    "benchmark": "same PIT universe, quarterly top500 ADV20 equal weight, identical execution/cost roles",
+    "period_boundary": "this signal next-open pretrade NAV to the next signal next-open pretrade NAV",
+    "screening_gate": {
+      "base_full_cagr_strictly_positive": true,
+      "base_train_and_validation_cagr_strictly_positive": true,
+      "stress_full_cagr_strictly_positive": true,
+      "base_full_sharpe_at_least": 0.4,
+      "stress_full_sharpe_at_least": 0.35,
+      "base_max_drawdown_at_least": -0.35,
+      "base_train_and_validation_cagr_above_matching_adv500": true,
+      "requested_notional_fill_ratio_at_least": 0.98,
+      "capacity_limited_requested_notional_ratio_at_most": 0.02,
+      "capacity_negative_cash_leverage_future_input_violations": 0,
+      "account_and_group_reconciliation_error_at_most": 1e-8
+    }
+  },
+  "real_share_production_gate": {
+    "required_before_winner_freeze_and_selection_open": true,
+    "price_basis": "raw_open_and_close_with_point_in_time_corporate_actions",
+    "buy_lot_size_shares": 100,
+    "partial_sell_lot_size_shares": 100,
+    "complete_liquidation_odd_lot_policy_must_be_explicit": true,
+    "cash_dividend_split_bonus_rights_and_delist_recovery_source_required": true,
+    "adjusted_price_times_100_synthetic_units_forbidden": true
+  },
+  "terminal_screening_result": {
+    "status": "falsified_before_real_share_gate",
+    "selected_candidate_id": null,
+    "failed_check": "base_max_drawdown_at_least_negative_0_35",
+    "candidate_base": {
+      "cagr": 0.08056137958292076,
+      "train_cagr": 0.10930215983471725,
+      "validation_cagr": 0.01686285955114286,
+      "sharpe": 0.5139639781782297,
+      "max_drawdown": -0.4005292245704233,
+      "requested_notional_fill_ratio": 0.9985959507234988,
+      "capacity_limited_requested_notional_ratio": 0.0
+    },
+    "candidate_stress": {
+      "cagr": 0.07883087697964286,
+      "train_cagr": 0.10805893213808626,
+      "validation_cagr": 0.014430617394636247,
+      "sharpe": 0.5052503524232386,
+      "max_drawdown": -0.40179300213203717
+    },
+    "adv500_base_cagr": -0.07913419643981812,
+    "selection_market_partitions_read": false,
+    "real_share_gate_opened": false,
+    "runner_up_fallback": false,
+    "parameter_or_gate_change_allowed_in_12_x": false,
+    "evidence_path": "protocols/evidence/12.0/development-screening-failure.json"
+  },
+  "next_gates": {
+    "screening_and_real_share_development_accounts_required_before_winner_freeze": true,
+    "winner_freeze_must_be_committed_and_pushed_before_selection_open": true,
+    "selection_period": "2023-03-31 through 2024-12-31 complete quarters",
+    "runner_up_after_selection_failure": false,
+    "internal_2025_plus_audit_is_not_independent_oos": true,
+    "genuinely_unopened_earlier_history_or_other_market_required_for_final_claim": true
+  },
+  "claim_contract": {
+    "current_evidence_class": "fully_exposed_causal_development_screening_falsified",
+    "independent_oos": false,
+    "profit_claim_allowed": false,
+    "stable_future_profit_claim_allowed": false,
+    "historical_vendor_revision_vintage_verified": false
+  },
+  "payload_sha256": "493e7fa32e93e1f96add0cc7c873c5f1991def48533f82e0fce02eaa4cd9a1e7"
+}
