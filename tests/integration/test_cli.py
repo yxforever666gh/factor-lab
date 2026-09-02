@@ -81,6 +81,9 @@ def test_cli_exposes_only_lightweight_mainline_commands() -> None:
     assert parser.parse_args(
         ["strategy", "status", "--release", "12.0"]
     ).release == "12.0"
+    assert parser.parse_args(
+        ["strategy", "status", "--release", "13.0"]
+    ).release == "13.0"
     targets = parser.parse_args(["strategy", "targets", "--signal-date", "latest"])
     assert targets.strategy_command == "targets"
     capture = parser.parse_args(["prospective", "capture", "--as-of", "2026-09-30"])
@@ -309,14 +312,14 @@ def test_strategy_status_verifies_tracked_implementation_and_evidence(
         assert "retained_8_1_development_readiness" in categories
 
 
-def test_default_strategy_status_tracks_12_0_terminal_failure() -> None:
+def test_default_strategy_status_tracks_13_0_terminal_failure() -> None:
     root = Path(__file__).resolve().parents[2]
-    evidence_path = root / cli.V12_EVIDENCE_PATH
+    evidence_path = root / cli.V13_EVIDENCE_PATH
     clean = cli._working_tree_is_clean(root)
     committed = (
         evidence_path.is_file()
         and subprocess.run(
-            ["git", "cat-file", "-e", f"HEAD:{cli.V12_EVIDENCE_PATH}"],
+            ["git", "cat-file", "-e", f"HEAD:{cli.V13_EVIDENCE_PATH}"],
             cwd=root,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -324,8 +327,8 @@ def test_default_strategy_status_tracks_12_0_terminal_failure() -> None:
         == 0
     )
     result, exit_code = cli._strategy_status(root, verify_data=False)
-    assert result["version"] == "12.0"
-    assert result["route"] == cli.V12_ROUTE
+    assert result["version"] == "13.0"
+    assert result["route"] == cli.V13_ROUTE
     assert result["profit_claim_allowed"] is False
     if not evidence_path.is_file() or not committed or not clean:
         assert exit_code == 3
@@ -333,12 +336,25 @@ def test_default_strategy_status_tracks_12_0_terminal_failure() -> None:
     else:
         assert exit_code == 0
         assert result["status"] == (
-            "development_screening_falsified_max_drawdown_selection_unopened"
+            "development_stage_1_failed_stage_2_and_selection_forbidden"
         )
-        assert result["selected_candidate_id"] is None
+        assert result["stage_1_passed"] is False
+        assert result["stage_2_permitted"] is False
+        assert result["selection_opened"] is False
         assert result["failed_checks"] == [
-            "base_max_drawdown_at_least_negative_0_35"
+            "capacity_limited_target_gap_ratio_at_most_0_02",
+            "industry_positive_fraction_at_least_0_60",
+            "target_gap_fill_ratio_at_least_0_98",
         ]
+
+
+def test_strategy_status_can_explicitly_audit_12_0() -> None:
+    root = Path(__file__).resolve().parents[2]
+    result, _exit_code = cli._strategy_status(
+        root, verify_data=False, release="12.0"
+    )
+    assert result["version"] == "12.0"
+    assert result["route"] == cli.V12_ROUTE
 
 
 def test_10_0_status_delegates_exact_and_deep_evidence_verification(

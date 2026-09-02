@@ -41,6 +41,9 @@
 - 新增无网络的两阶段 orchestration：stage 1 失败时不读取其他结果字段且 stage 2 callback 保证零调用；
   通过时只调用一次 stage 2，并要求 candidate base/stress 的订单、过账、日净值、期间、分组和冻结指标
   投影与 stage 1 canonical exact，否则拒绝全角色结果。
+- 默认 `strategy status` 升级到 13.0 终止证据：校验协议与 Stage 1 terminal payload/file SHA、要求
+  两份证据已提交且工作树干净，并可用 `--verify-data` 核对外部 minute/action/stage-result 文件；12.0
+  仍可通过显式 `--release 12.0` 审计，避免 13.0 tag 后主状态入口继续误报旧路线。
 
 ### Changed
 
@@ -99,11 +102,8 @@
   leave-one-industry-out 与非 both-positive 行为均通过；日级最大回撤仍为 -38.36%/-38.63%。
   仓库内终止证据 `protocols/13.0-stage1-terminal.json` payload 为
   `d89b573d0b1aaa54baa3b25abe3e6dfb4ec3394f1301583d8a972d73ea1b4d63`；13.0 不再做结果后参数搜索。
-- 13.0 发布候选在显式 H Download basetemp/pycache 下完成全量验证：`1011 passed, 5 skipped`，并成功
+- 13.0 发布候选在显式 H Download basetemp/pycache 下完成全量验证：`1012 passed, 5 skipped`，并成功
   `compileall src/factor_lab`；测试通过仅证明实现和证据合同，不改变 Stage 1 失败结论。
-- 从候选提交 `216779d` 的 `git archive` 构建 `factor_research_mvp-13.0.0-py3-none-any.whl`，SHA-256
-  为 `64013ed117a387601313309b27e08768a0c152a39b70ede6ff7babb7ee0f59e4`；全新隔离 venv 安装后
-  `pip check`、包版本 13.0.0 与 CLI import 均通过。
 - 13.0 前置 bounded scout 固定测试 vol63/126 × 10%/12%/15% 六个次月生效的 realized-vol overlay；
   六者 validation CAGR 全为负（约 -3.30% 至 -1.11%），零赢家。固定 75% 暴露虽把回撤降至约
   -31.60%，但 full CAGR 从 12.0 的 8.06% 降至 6.32%，只保留为 comparator，不作为新路线。

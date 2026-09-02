@@ -161,6 +161,14 @@ V12_PROTOCOL_PAYLOAD_SHA256 = "493e7fa32e93e1f96add0cc7c873c5f1991def48533f82e0f
 V12_PROTOCOL_FILE_SHA256 = "0ba5356d99befe02dd2c8053c6ef360ade823f1d8ddc65a937095acedcc675ee"
 V12_EVIDENCE_PAYLOAD_SHA256 = "b02d9e3de09670921d927abe9d13e4cbaae8effad113bf73c842f3457d24e860"
 V12_EVIDENCE_FILE_SHA256 = "e79349c142fc1bad4cfc9a587ca9abd38c04a1c0fd05947e543079dbbe95f20a"
+V13_PROTOCOL_PATH = "protocols/13.0-profit-first-real-share-closure.json"
+V13_EVIDENCE_PATH = "protocols/13.0-stage1-terminal.json"
+V13_ROUTE = V12_ROUTE
+V13_PROTOCOL_ID = "factor-lab/13.0/profit-first-real-share-closure-v1"
+V13_PROTOCOL_PAYLOAD_SHA256 = "7989478d24cc4597a7066eab5a737e698d3647d5a70704f85854a744ec3fa9d8"
+V13_PROTOCOL_FILE_SHA256 = "9973cbdeb0e2d421e227afe7d22ffa9074e0f847041a8025b294cdb5f642fef2"
+V13_EVIDENCE_PAYLOAD_SHA256 = "d89b573d0b1aaa54baa3b25abe3e6dfb4ec3394f1301583d8a972d73ea1b4d63"
+V13_EVIDENCE_FILE_SHA256 = "ebe31436bebade75ae24352f140528d77cae9598df3e47998c48f21c49bc6683"
 
 
 def _root() -> Path:
@@ -355,7 +363,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     strategy_status.add_argument(
         "--release",
-        choices=("6.0", "6.3", "7.0", "7.1", "8.0", "8.1", "9.0", "10.0", "11.0", "12.0"),
+        choices=("6.0", "6.3", "7.0", "7.1", "8.0", "8.1", "9.0", "10.0", "11.0", "12.0", "13.0"),
         help="Verify one release closure; defaults to the latest tracked closure.",
     )
     strategy_targets = strategy_commands.add_parser(
@@ -3526,6 +3534,177 @@ def _strategy_status_12_0(
     }, 0
 
 
+def _strategy_status_13_0(
+    root: Path, *, verify_data: bool
+) -> tuple[dict[str, Any], int]:
+    checks: list[dict[str, Any]] = []
+    failures: list[dict[str, Any]] = []
+    protocol, protocol_check = _v7_json_check(
+        root,
+        V13_PROTOCOL_PATH,
+        expected_payload=V13_PROTOCOL_PAYLOAD_SHA256,
+        expected_file=V13_PROTOCOL_FILE_SHA256,
+    )
+    protocol_check["category"] = "real_share_protocol"
+    checks.append(protocol_check)
+    if protocol_check.get("status") != "match":
+        failures.append(protocol_check)
+    elif not (
+        protocol.get("release") == "13.0"
+        and protocol.get("protocol_id") == V13_PROTOCOL_ID
+        and protocol.get("inherited_stock_route", {}).get("strategy_id")
+        == V13_ROUTE
+        and protocol.get("closure", {}).get("selection_opened") is False
+        and protocol.get("claim_contract", {}).get("profit_claim_allowed")
+        is False
+    ):
+        item = {
+            "category": "real_share_protocol_contract",
+            "path": V13_PROTOCOL_PATH,
+            "status": "mismatch",
+        }
+        checks.append(item)
+        failures.append(item)
+
+    evidence, evidence_check = _v7_json_check(
+        root,
+        V13_EVIDENCE_PATH,
+        expected_payload=V13_EVIDENCE_PAYLOAD_SHA256,
+        expected_file=V13_EVIDENCE_FILE_SHA256,
+    )
+    evidence_check["category"] = "real_share_terminal_evidence"
+    checks.append(evidence_check)
+    if evidence_check.get("status") != "match":
+        failures.append(evidence_check)
+    elif not (
+        evidence.get("status")
+        == "development_stage_1_failed_stage_2_and_selection_forbidden"
+        and evidence.get("stage_1_result", {}).get("stage_1_passed") is False
+        and evidence.get("stage_1_result", {}).get("stage_2_permitted")
+        is False
+        and evidence.get("stage_1_result", {}).get("stage_2_dispatched")
+        is False
+        and evidence.get("terminal_decision", {}).get(
+            "continue_13_0_parameter_search"
+        )
+        is False
+        and evidence.get("terminal_decision", {}).get("open_13_0_selection")
+        is False
+        and evidence.get("claim_contract", {}).get("profit_claim_allowed")
+        is False
+    ):
+        item = {
+            "category": "real_share_terminal_evidence_contract",
+            "path": V13_EVIDENCE_PATH,
+            "status": "mismatch",
+        }
+        checks.append(item)
+        failures.append(item)
+
+    clean = _working_tree_is_clean(root)
+    for relative, category in (
+        (V13_PROTOCOL_PATH, "committed_real_share_protocol"),
+        (V13_EVIDENCE_PATH, "committed_real_share_terminal_evidence"),
+    ):
+        path = root / relative
+        committed = subprocess.run(
+            ["git", "show", f"HEAD:{relative}"],
+            cwd=root,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        matches = (
+            clean
+            and path.is_file()
+            and committed.returncode == 0
+            and committed.stdout == path.read_bytes()
+        )
+        item = {
+            "category": category,
+            "path": relative,
+            "status": "match" if matches else "mismatch",
+        }
+        checks.append(item)
+        if not matches:
+            failures.append(item)
+
+    data_verified = False
+    if verify_data and evidence is not None:
+        minute = evidence["external_inputs"]["candidate_minutes"]
+        action = evidence["external_inputs"]["corporate_actions"]
+        result = evidence["stage_1_result"]
+        expected_files = {
+            Path(minute["path"]) / "manifest.json": minute[
+                "manifest_file_sha256"
+            ],
+            Path(action["path"]) / "manifest.json": action[
+                "manifest_file_sha256"
+            ],
+            Path(result["path"]) / "manifest.json": result[
+                "manifest_file_sha256"
+            ],
+            Path(result["path"]) / "result.json": result[
+                "result_file_sha256"
+            ],
+        }
+        data_verified = all(
+            path.is_file()
+            and hashlib.sha256(path.read_bytes()).hexdigest() == expected
+            for path, expected in expected_files.items()
+        )
+        item = {
+            "category": "real_share_external_artifact_hashes",
+            "path": evidence["stage_1_result"]["path"],
+            "status": "match" if data_verified else "mismatch",
+        }
+        checks.append(item)
+        if not data_verified:
+            failures.append(item)
+
+    if failures or evidence is None:
+        return {
+            "status": "integrity_mismatch",
+            "version": "13.0",
+            "route": V13_ROUTE,
+            "protocol_id": V13_PROTOCOL_ID,
+            "profit_claim_allowed": False,
+            "stage_1_passed": False,
+            "stage_2_permitted": False,
+            "selection_opened": False,
+            "evidence_payload_sha256": None,
+            "canonical_data_hashes_verified": False,
+            "checks": checks,
+        }, 3
+    base = evidence["candidate_base"]
+    stress = evidence["candidate_stress"]
+    failed_checks = sorted(evidence["failed_controls"])
+    return {
+        "status": evidence["status"],
+        "version": "13.0",
+        "route": V13_ROUTE,
+        "protocol_id": V13_PROTOCOL_ID,
+        "evidence_class": "strict_real_share_development_stage_1_terminal_failure",
+        "profit_claim_allowed": False,
+        "stage_1_passed": False,
+        "stage_2_permitted": False,
+        "selection_opened": False,
+        "failed_checks": failed_checks,
+        "evidence_payload_sha256": evidence["payload_sha256"],
+        "full_cagr": base["full_quarterly_cagr"],
+        "full_stress_cagr": stress["full_quarterly_cagr"],
+        "train_cagr": base["train_quarterly_cagr"],
+        "validation_cagr": base["validation_quarterly_cagr"],
+        "validation_stress_cagr": stress["validation_quarterly_cagr"],
+        "full_max_drawdown": base["daily_max_drawdown"],
+        "target_gap_fill_ratio": base["target_gap_fill_ratio"],
+        "positive_industry_fraction": evidence[
+            "cross_sectional_repeatability"
+        ]["positive_industry_fraction_each_role"],
+        "canonical_data_hashes_verified": data_verified,
+        "checks": checks,
+    }, 0
+
+
 def _strategy_status_7_0_archived(
     root: Path, *, verify_data: bool
 ) -> tuple[dict[str, Any], int]:
@@ -3659,7 +3838,7 @@ def _strategy_status_7_1_archived(
 def _strategy_status(
     root: Path, *, verify_data: bool, release: str | None = None
 ) -> tuple[dict[str, Any], int]:
-    selected = release or "12.0"
+    selected = release or "13.0"
     if selected == "6.0":
         return _strategy_status_6_0(root, verify_data=verify_data)
     if selected == "6.3":
@@ -3680,6 +3859,8 @@ def _strategy_status(
         return _strategy_status_11_0(root, verify_data=verify_data)
     if selected == "12.0":
         return _strategy_status_12_0(root, verify_data=verify_data)
+    if selected == "13.0":
+        return _strategy_status_13_0(root, verify_data=verify_data)
     raise ValueError(f"unsupported strategy release: {selected}")
 
 
