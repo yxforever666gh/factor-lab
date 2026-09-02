@@ -244,17 +244,21 @@ def run_stage1(
     output = output.resolve()
     if output.exists():
         raise FileExistsError(f"create-only stage-1 output exists: {output}")
-    output.parent.mkdir(parents=True, exist_ok=True)
-    protocol = _read_protocol()
-    if file_sha256(PANEL_PATH) != PANEL_FILE_SHA256:
-        raise ValueError("12.0 development panel bytes differ")
-    if file_sha256(TARGETS_PATH) != TARGETS_FILE_SHA256:
-        raise ValueError("12.0 development target bytes differ")
     if (
         len(minute_manifest_payload_sha256) != 64
         or len(minute_manifest_file_sha256) != 64
     ):
         raise ValueError("minute external manifest anchors are required")
+    if (
+        len(actions_manifest_payload_sha256) != 64
+        or len(actions_manifest_file_sha256) != 64
+    ):
+        raise ValueError("action external manifest anchors are required")
+    protocol = _read_protocol()
+    if not PANEL_PATH.is_file() or file_sha256(PANEL_PATH) != PANEL_FILE_SHA256:
+        raise ValueError("12.0 development panel bytes differ")
+    if not TARGETS_PATH.is_file() or file_sha256(TARGETS_PATH) != TARGETS_FILE_SHA256:
+        raise ValueError("12.0 development target bytes differ")
     minute_manifest_path = Path(minute_root).resolve() / "manifest.json"
     if (
         not minute_manifest_path.is_file()
@@ -304,6 +308,7 @@ def run_stage1(
     if gate.get("complete") is not False:
         raise ValueError("stage-1 gate incorrectly claims all-role completion")
     stage_1_passed = gate.get("stage_1_passed") is True
+    output.parent.mkdir(parents=True, exist_ok=True)
     transaction = output.parent / f".{output.name}.tmp-{uuid.uuid4().hex}"
     transaction.mkdir(parents=True, exist_ok=False)
     frames = {

@@ -10,7 +10,9 @@ $ErrorActionPreference = "Stop"
 
 $Remote = "origin"
 $ReleaseBranch = "main"
-$Workflow = "ci.yml"
+$ExpectedRemotePrefix = "ssh://git@ssh.github.com:443/"
+$ExpectedIdentityFile = "C:/Users/yxforever/.codex/secrets/github/codex_github_ed25519"
+$ExpectedProxyScript = "C:/Users/yxforever/.ssh/github_proxy.py"
 
 function Invoke-Git {
     param([Parameter(Mandatory = $true)][string[]]$Arguments)
@@ -18,16 +20,6 @@ function Invoke-Git {
     $output = @(& git @Arguments 2>&1)
     if ($LASTEXITCODE -ne 0) {
         throw "git $($Arguments -join ' ') failed:`n$($output -join [Environment]::NewLine)"
-    }
-    return $output
-}
-
-function Invoke-Gh {
-    param([Parameter(Mandatory = $true)][string[]]$Arguments)
-
-    $output = @(& gh @Arguments 2>&1)
-    if ($LASTEXITCODE -ne 0) {
-        throw "gh $($Arguments -join ' ') failed:`n$($output -join [Environment]::NewLine)"
     }
     return $output
 }
@@ -40,6 +32,58 @@ function Get-FirstField {
         return $null
     }
     return ($text.Trim() -split "\s+")[0]
+}
+
+function Assert-GitHubTransport {
+    $remoteUrl = ([string](Invoke-Git @("remote", "get-url", $Remote) |
+        Select-Object -First 1)).Trim()
+    if (-not $remoteUrl.StartsWith($ExpectedRemotePrefix, [StringComparison]::Ordinal)) {
+        throw "Remote '$Remote' must use $ExpectedRemotePrefix through the account SSH configuration; found '$remoteUrl'."
+    }
+
+    if (-not (Test-Path -LiteralPath $ExpectedIdentityFile -PathType Leaf)) {
+        throw "Required account SSH identity is absent: $ExpectedIdentityFile"
+    }
+    $sshConfig = @(& ssh -G ssh.github.com 2>&1)
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not resolve the fail-closed ssh.github.com configuration."
+    }
+    $settings = @{}
+    foreach ($line in $sshConfig) {
+        $parts = ([string]$line).Trim() -split "\s+", 2
+        if ($parts.Count -eq 2 -and -not $settings.ContainsKey($parts[0])) {
+            $settings[$parts[0]] = $parts[1]
+        }
+    }
+    $identity = ([string]$settings["identityfile"]).Replace("\", "/")
+    $proxyCommand = ([string]$settings["proxycommand"]).Replace("\", "/")
+    if (
+        $settings["hostname"] -ne "ssh.github.com" -or
+        $settings["port"] -ne "443" -or
+        $settings["user"] -ne "git" -or
+        $settings["identitiesonly"] -ne "yes" -or
+        -not $identity.Equals($ExpectedIdentityFile, [StringComparison]::OrdinalIgnoreCase) -or
+        $proxyCommand -notlike "*$ExpectedProxyScript*"
+    ) {
+        throw "ssh.github.com must use the pinned account key, port 443, IdentitiesOnly, and fail-closed proxy command."
+    }
+    $proxySource = Get-Content -LiteralPath $ExpectedProxyScript -Raw
+    if ($proxySource -notmatch 'PROXY\s*=\s*\("127\.0\.0\.1",\s*7890\)') {
+        throw "GitHub ProxyCommand does not pin 127.0.0.1:7890."
+    }
+
+    $acl = Get-Acl -LiteralPath $ExpectedIdentityFile
+    $currentIdentity = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+    $allowedIdentities = @("NT AUTHORITY\SYSTEM", $currentIdentity)
+    $unexpectedAllow = @(
+        $acl.Access | Where-Object {
+            $_.AccessControlType -eq "Allow" -and
+            $allowedIdentities -notcontains $_.IdentityReference.Value
+        }
+    )
+    if ($unexpectedAllow.Count -gt 0) {
+        throw "GitHub account private key ACL grants access outside SYSTEM/current user."
+    }
 }
 
 function Get-RemoteRefSha {
@@ -75,6 +119,7 @@ if ($Tag -notmatch '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$') {
     throw "Tag must use canonical major.minor digits without leading zeroes (for example 4.1)."
 }
 
+Assert-GitHubTransport
 $head = Assert-ReleaseCommitState
 
 $pyproject = Get-Content -LiteralPath "pyproject.toml" -Raw
@@ -155,52 +200,25 @@ if (-not $validReleaseDate -or $releaseDate.ToString("yyyy-MM-dd") -ne $releaseD
     throw "CHANGELOG.md release date '$releaseDateText' is not a valid ISO date."
 }
 
-$ghCommand = Get-Command gh -ErrorAction SilentlyContinue
-if (-not $ghCommand) {
-    throw "GitHub CLI ('gh') is required to verify CI before publishing."
+$releaseSections = [regex]::Matches(
+    $changelog,
+    "(?ms)^## \[$escapedTag\] - [0-9]{4}-[0-9]{2}-[0-9]{2}[ `t]*`r?`n(?<body>.*?)(?=^## \[|\z)"
+)
+if ($releaseSections.Count -ne 1) {
+    throw "Could not parse the unique CHANGELOG.md release body for '$Tag'."
+}
+$releaseBody = $releaseSections[0].Groups["body"].Value
+if (
+    $releaseBody -notmatch '[0-9][0-9,]* passed, [0-9][0-9,]* skipped' -or
+    $releaseBody -notmatch 'SHA-256[^0-9a-fA-F]*[0-9a-fA-F]{64}' -or
+    $releaseBody -notmatch 'compileall' -or
+    $releaseBody -notmatch 'pip check' -or
+    $releaseBody -notmatch 'CLI'
+) {
+    throw "Release '$Tag' Changelog must record local tests, compileall, wheel SHA-256, pip check, and CLI verification."
 }
 
-$repoJson = ((Invoke-Gh @("repo", "view", "--json", "nameWithOwner")) -join [Environment]::NewLine)
-try {
-    $repoObject = $repoJson | ConvertFrom-Json
-} catch {
-    throw "Could not parse the GitHub repository response: $repoJson"
-}
-$repo = [string]$repoObject.nameWithOwner
-if ([string]::IsNullOrWhiteSpace($repo)) {
-    throw "Could not resolve the GitHub repository."
-}
-
-$runJson = ((Invoke-Gh @(
-    "run", "list",
-    "--repo", $repo.Trim(),
-    "--workflow", $Workflow,
-    "--branch", $ReleaseBranch,
-    "--event", "push",
-    "--commit", $head,
-    "--limit", "20",
-    "--json", "status,conclusion,headSha,headBranch,event,databaseId,url"
-)) -join [Environment]::NewLine)
-try {
-    $runs = @($runJson | ConvertFrom-Json)
-} catch {
-    throw "Could not parse GitHub CI status: $runJson"
-}
-$latestRun = $runs |
-    Where-Object {
-        $_.headSha -eq $head -and
-        $_.headBranch -eq $ReleaseBranch -and
-        $_.event -eq "push"
-    } |
-    Select-Object -First 1
-if (-not $latestRun) {
-    throw "No '$Workflow' push run on '$ReleaseBranch' was found for HEAD $head."
-}
-if ($latestRun.status -ne "completed" -or $latestRun.conclusion -ne "success") {
-    throw "GitHub CI '$Workflow' is not green for HEAD $head (status=$($latestRun.status), conclusion=$($latestRun.conclusion), url=$($latestRun.url))."
-}
-
-# Re-check the immutable release boundary after the network CI lookup.
+# Re-check the immutable release boundary after all local policy validation.
 $verifiedHead = Assert-ReleaseCommitState
 if ($verifiedHead -ne $head) {
     throw "HEAD changed during release validation: $head -> $verifiedHead."

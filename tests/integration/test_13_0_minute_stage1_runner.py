@@ -20,11 +20,25 @@ def _module():
     return module
 
 
-def test_stage1_runner_binds_protocol_and_suspension_artifact() -> None:
+def test_stage1_runner_binds_tracked_protocol_and_implementation() -> None:
     module = _module()
     protocol = module._read_protocol()
-    suspensions = module._load_suspensions()
     assert protocol["payload_sha256"] == module.PROTOCOL_PAYLOAD_SHA256
+    implementation = module._implementation_files()
+    assert set(implementation) == {
+        path.as_posix() for path in module.IMPLEMENTATION_FILES
+    }
+    assert all(len(value) == 64 for value in implementation.values())
+
+
+def test_stage1_runner_binds_optional_local_suspension_artifact() -> None:
+    module = _module()
+    if not (
+        module.SUSPENSIONS_PATH.is_file()
+        and module.SUSPENSIONS_META_PATH.is_file()
+    ):
+        pytest.skip("local hash-bound suspension artifacts are not in Git")
+    suspensions = module._load_suspensions()
     assert len(suspensions) == module.SUSPENSIONS_ROW_COUNT == 170_703
     assert tuple(suspensions.columns) == (
         "ticker",
@@ -32,11 +46,6 @@ def test_stage1_runner_binds_protocol_and_suspension_artifact() -> None:
         "suspend_type",
         "suspend_timing",
     )
-    implementation = module._implementation_files()
-    assert set(implementation) == {
-        path.as_posix() for path in module.IMPLEMENTATION_FILES
-    }
-    assert all(len(value) == 64 for value in implementation.values())
 
 
 def test_stage1_runner_requires_external_minute_manifest_anchors(
@@ -55,6 +64,25 @@ def test_stage1_runner_requires_external_minute_manifest_anchors(
             actions_manifest_file_sha256="1" * 64,
         )
     assert not output.exists()
+
+
+def test_stage1_runner_requires_external_action_manifest_anchors(
+    tmp_path: Path,
+) -> None:
+    module = _module()
+    output = tmp_path / "new-parent" / "result"
+    with pytest.raises(ValueError, match="action external manifest anchors"):
+        module.run_stage1(
+            output,
+            minute_root=tmp_path / "minutes",
+            minute_manifest_payload_sha256="0" * 64,
+            minute_manifest_file_sha256="1" * 64,
+            actions_root=tmp_path / "actions",
+            actions_manifest_payload_sha256="",
+            actions_manifest_file_sha256="",
+        )
+    assert not output.exists()
+    assert not output.parent.exists()
 
 
 def test_stage1_verifier_requires_external_manifest_file_anchor(

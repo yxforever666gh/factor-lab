@@ -1,7 +1,8 @@
 # 发布与 Git tag 同步
 
-Factor Lab 用 annotated Git tag 标识正式版本。发布必须同时更新版本元数据、
-`CHANGELOG.md`、GitHub `main` 和 GitHub tag；本地 tag 不算发布完成。
+Factor Lab 用 annotated Git tag 标识正式版本。GitHub 只承担公开备份和 tag 同步；
+构建、测试、安装与 CLI 验证全部在本机完成，GitHub Actions/CI/CD 保持关闭。发布必须同时
+更新版本元数据、`CHANGELOG.md`、GitHub `main` 和 GitHub tag；本地 tag 不算发布完成。
 
 唯一支持的 tag 发布入口是：
 
@@ -9,9 +10,9 @@ Factor Lab 用 annotated Git tag 标识正式版本。发布必须同时更新�
 ./scripts/publish-tag.ps1 -Tag <major.minor>
 ```
 
-脚本固定使用 `origin`、`main` 和 `.github/workflows/ci.yml`。它只接受干净且与
-`origin/main` 完全一致的提交，只接受该提交自己的 `main/push` CI 成功记录，并在推送
-单个 annotated tag 后核对本地与 GitHub 的 tag object SHA 和 peeled commit。
+脚本固定使用 `origin` 和 `main`，拒绝 GitHub Actions/workflow 依赖。它只接受干净且与
+`origin/main` 完全一致、版本/Changelog/本机验证记录完整的提交，并在推送单个 annotated tag
+后核对本地与 GitHub 的 tag object SHA 和 peeled commit。
 
 ## 版本规则
 
@@ -31,7 +32,7 @@ Factor Lab 用 annotated Git tag 标识正式版本。发布必须同时更新�
 
    ```powershell
    $tag = "<major.minor>"
-   $buildRoot = "H:\Download\factor-lab-release-$tag"
+   $buildRoot = "H:\Download\FactorLabPytest\factor-lab-release-$tag"
    $archive = "$buildRoot\source.zip"
    $source = "$buildRoot\source"
    New-Item -ItemType Directory -Force -Path $source | Out-Null
@@ -50,10 +51,11 @@ Factor Lab 用 annotated Git tag 标识正式版本。发布必须同时更新�
    `python -m factor_lab.cli --root <detached-worktree> strategy status`。不要对 `git archive` 解压目录运行
    该命令：6.1+ 完整性校验会读取 commit/tree/blob，缺少 `.git` 时必须失败。验证后通过
    `git worktree remove <detached-worktree>` 清理。
-5. 用全新临时目录运行完整测试并编译生产源码：
+5. 用全新临时目录运行完整测试并编译生产源码；字节码也必须离开源码仓库：
 
    ```powershell
-   $testRoot = "H:\Download\factor-lab-test-" + [guid]::NewGuid().ToString("N")
+   $testRoot = "H:\Download\FactorLabPytest\factor-lab-test-" + [guid]::NewGuid().ToString("N")
+   $env:PYTHONPYCACHEPREFIX = "H:\Download\FactorLabPytest\factor-lab-pycache-" + [guid]::NewGuid().ToString("N")
    python -m pytest tests -q --basetemp $testRoot -p no:cacheprovider
    python -m compileall -q src/factor_lab
    ```
@@ -61,11 +63,13 @@ Factor Lab 用 annotated Git tag 标识正式版本。发布必须同时更新�
 6. 若 wheel 构建后又修改了 `src/factor_lab/**` 或 `pyproject.toml`，必须重新构建并重跑；
    仅 Changelog 的 wheel hash、测试或发布说明变化不改变包字节，但最终仍要确认 wheel 内全部
    `factor_lab/*.py` 与最终 release commit 的 Git blob 一致。
-7. 提交最终发布元数据，确认工作树干净，推送 `main`，等待精确提交自己的双平台 CI 成功。
+7. 将 wheel SHA、本机完整测试计数、编译、隔离安装、`pip check`、CLI status 与 wheel/source
+   字节比较结果写入对应 Changelog 版本段。提交最终发布元数据，再确认工作树干净并推送 `main`；
+   用 SSH `git ls-remote origin refs/heads/main` 核对远端 commit。不得用 GitHub Actions 替代本机验证。
 
 ## 发布 tag
 
-CI 绿后执行：
+本机验证完成、证据已写入 Changelog、最终 `main` 已通过 SSH 同步后执行：
 
 ```powershell
 ./scripts/publish-tag.ps1 -Tag <major.minor>

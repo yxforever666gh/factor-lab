@@ -25,6 +25,11 @@ from factor_lab.research.pit_stock_minute_scope import (
 
 
 ROOT = Path(__file__).resolve().parents[2]
+FORMAL_RUNTIME_FILES = (
+    ROOT / "runtime/data/pit-stock-12.0/development/quarterly-snapshots.parquet",
+    ROOT / "runtime/data/pit-stock-12.0/development/targets.parquet",
+    ROOT / "runtime/data/pit-stock-12.0/development/manifest.json",
+)
 
 
 SIGNALS = ("2020-09-30", "2020-03-31", "2020-06-30")
@@ -176,6 +181,10 @@ def test_schema_and_overlap_verifiers_fail_closed() -> None:
         )
 
 
+@pytest.mark.skipif(
+    not all(path.is_file() for path in FORMAL_RUNTIME_FILES),
+    reason="local hash-bound 12.0 development artifacts are not in Git",
+)
 def test_formal_scopes_reproduce_frozen_counts_hashes_and_overlap() -> None:
     scopes = build_formal_development_scopes(ROOT)
     stage1 = scopes.stage1

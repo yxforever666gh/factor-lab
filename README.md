@@ -618,8 +618,10 @@ python -m compileall -q src/factor_lab
 ./scripts/publish-tag.ps1 -Tag <major.minor>
 ```
 
-脚本要求 clean `main`、对应提交自己的双平台 GitHub CI 成功，并在推送 annotated tag 后核对
-本地与 GitHub 的 tag object SHA 和 peeled commit；本地 tag 不算完成发布。
+GitHub 只用于公开备份和 tag 同步，Actions/CI/CD 保持关闭。脚本要求本机完成全量测试、编译、
+wheel/隔离安装/`pip check`/CLI 验证并把结果写入对应 Changelog 版本段；随后要求 clean `main`
+与 `origin/main` 精确一致，并在推送 annotated tag 后核对本地与 GitHub 的 tag object SHA 和
+peeled commit。本地 tag 不算完成发布。
 
 wheel 只封装 `factor_lab` Python 包；版本化协议、evidence runner、配置与 canonical 数据仍属于
 Git checkout。安装 wheel 后应在 checkout 内运行 CLI，或显式传入

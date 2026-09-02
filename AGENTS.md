@@ -191,7 +191,7 @@ You are free to edit `HEARTBEAT.md` with a short checklist or reminders. Keep it
 - Read and organize memory files
 - Check on projects (git status, etc.)
 - Update documentation
-- Commit and push your own changes
+- Commit your own changes; push only when the user explicitly requests GitHub publication or backup
 - **Review and update MEMORY.md** (see below)
 
 ### 🔄 Memory Maintenance (During Heartbeats)
@@ -223,11 +223,27 @@ This is a starting point. Add your own conventions, style, and rules as you figu
   changes under `CHANGELOG.md` → `Unreleased` as part of the same change.
 - Before creating a release tag, follow `RELEASING.md`: update the dated changelog section and
   `pyproject.toml` version, then use `scripts/publish-tag.ps1` as the only supported publishing
-  entry point. It must verify a clean `main`, green GitHub CI, an annotated tag, and matching local
-  and GitHub tag objects/target commits.
+  entry point. All builds, tests, package installation checks and CLI verification run locally;
+  GitHub Actions and CI/CD are disabled. The publisher must verify a clean locally tested `main`,
+  the exact `origin/main` commit, an annotated tag, and matching local/GitHub tag objects and
+  peeled target commits.
 - Version tags use `major.minor`: increment major and reset minor for a research-direction change;
   increment minor for a smaller iteration. Keep `pyproject.toml` at the equivalent `major.minor.0`.
 - A local-only tag is not a completed release. Do not claim a tag is published until the remote SHA
   has been verified.
 - Do not silently move or delete a published or archive tag. A new corrective release is preferred;
   rewriting a remote tag requires explicit user confirmation and a changelog explanation.
+
+## GitHub
+
+- GitHub is a public backup and tag-synchronization remote, not an execution or validation
+  environment. Do not add workflows, enable Actions, or use CI/CD; validate exclusively on this
+  machine under the commands and artifact rules in `RELEASING.md`.
+- Ordinary commits stay local. Push `main`, tags, releases, or other GitHub state only after an
+  explicit user request. A release request authorizes only the documented release workflow.
+- Use only the account SSH key
+  `C:\Users\yxforever\.codex\secrets\github\codex_github_ed25519` through
+  `ssh.github.com:443` and the fail-closed `127.0.0.1:7890` proxy configuration. Never create,
+  retain, or reuse repository deploy keys, and never fall back to a direct GitHub connection.
+- Do not force-push, move/delete published tags, or create a GitHub Release unless the user asks
+  for that exact external action.

@@ -47,6 +47,16 @@
 
 ### Changed
 
+- GitHub 运行策略按项目 AGENTS 统一为“仅公开备份与 tag 同步”：删除仓库 workflow、关闭 GitHub
+  Actions/CI/CD，并移除旧的 `factor-lab-10.1-readonly-runtime` deploy key；唯一账户认证继续使用
+  `C:\Users\yxforever\.codex\secrets\github\codex_github_ed25519`，通过 `ssh.github.com:443` 和
+  fail-closed `127.0.0.1:7890` 代理。`publish-tag.ps1` 不再读取 GitHub CI，而是强制 SSH/代理/key
+  配置、clean main、远端 main、版本、Changelog 本机测试/编译/wheel/隔离安装记录及远端 tag SHA。
+- 首次 13.0 GitHub CI run `33623232311` 四矩阵均因三项测试直接读取未提交的本机 12.0 panel/targets/
+  suspension artifact 而失败，并非策略或跨平台计算差异；该 run 发生在关闭 Actions 的规则纠正之前，
+  不再作为发布门。正式 scope 与停牌 hash 复验测试现在仅在这些本机 artifact 存在时运行，否则明确
+  skip；生产 runner 仍强制其存在且哈希匹配。外部 manifest 必填 SHA 校验提前到任何本机 Parquet
+  读取之前，使本机 archive/checkout 的负向合同测试与机器数据状态解耦。
 - v6 Stage 1 在收益 artifact 生成前继续被 `600677.SH` 的 Tushare `stk_limit.pre_close=null` 阻断；
   全部 22 个分区只有该股票在 2020-07-01、2020-10-09、2021-01-04 三行出现该情况，其 `up_limit=3.16`
   和 `down_limit=2.86` 均有限、为正且双抓精确一致。执行上下限只消费 up/down，边界昨收来自独立 raw daily
@@ -102,7 +112,7 @@
   leave-one-industry-out 与非 both-positive 行为均通过；日级最大回撤仍为 -38.36%/-38.63%。
   仓库内终止证据 `protocols/13.0-stage1-terminal.json` payload 为
   `d89b573d0b1aaa54baa3b25abe3e6dfb4ec3394f1301583d8a972d73ea1b4d63`；13.0 不再做结果后参数搜索。
-- 13.0 发布候选在显式 H Download basetemp/pycache 下完成全量验证：`1012 passed, 5 skipped`，并成功
+- 13.0 发布候选在显式 H Download basetemp/pycache 下完成全量验证：`1016 passed, 5 skipped`，并成功
   `compileall src/factor_lab`；测试通过仅证明实现和证据合同，不改变 Stage 1 失败结论。
 - 从候选提交 `0b6bb1a` 的 `git archive` 构建 `factor_research_mvp-13.0.0-py3-none-any.whl`，SHA-256
   为 `c28e3d3a1cfe94f6e15b1f90848f6dc5a521095c3447322a33a8344a7f58eb27`；全新隔离 venv 安装后
