@@ -10,6 +10,149 @@
 
 ## [Unreleased]
 
+## [13.0] - 2026-09-02
+
+### Added
+
+- 启动 13.0 `profit-first real-share closure`：12.0 的 PIT 股票池、季度 gate、Top80 排名和每期 target
+  必须逐字节不变；新工作包括 CNInfo 公司行动主源与 Tushare 交叉诊断、原价 100 股连续账户、实际持仓
+  time×industry×size×market-state P&L 归因，以及将最大回撤重分类为强制披露而非收益唯一否决门。
+- 预注册公司行动时序：登记日持仓取得权益，除权日确认税后现金应收和待上市送转股，派息日转现金，
+  红股上市日才转为可交易股；同除权日的不同分配分别保留，只有经济字段完全一致的公告重复才折叠。
+- 新增 Diemeng 历史分钟数据合同：逐 ticker/date 在 `volume×{1,100}`、`amount×{1,1000}` 中，
+  只接受能让该slice每根连续竞价正成交bar的VWAP唯一落入OHLC的单位组合；不再把一个样本的“手”口径
+  外推全市场。严格检查schema、时间网格、逐bar VWAP、重复行、声明总数、满页及末页sentinel；
+  exact 1min 09:30仅作raw-open价格锚，09:36/09:42仅作决策时钟间隔，三者都不参与单位推断或容量；
+  正式执行和单位验证只消费连续竞价栏09:31..35、09:37..41、09:43..47。
+- 新增三窗口真实股数执行器：A窗口只退出 target-zero，A完成后才规划B调减，B完成并结算后才按
+  B-close和1%限价规划C买入；C未来VWAP/容量只能减少成交，不能增加请求或把未用现金重分给别的股票。
+  每个ticker/session累计signal-ADV容量与逐窗口amount容量同时约束，所有分钟mark、成交价差和成本逐笔
+  过账。旧的A/B/C宽表与单体入口已移除，各阶段只接受当前窗口窄schema；A/B仅写事务内工作账户，
+  C全部通过才一次发布，任一后段校验失败会原子回滚整个边界账户。
+- 新增 `DATA_REQUIREMENTS.md`，把 13.0 的必要字段、现有来源、实际采购触发条件和明确不采购项分开；
+  当前不把完整公司行动库、另一套历史分钟、集合竞价、实时分钟或 Level-2 数据列为前置采购。
+- 新增独立的两阶段分钟 scope 生成器：从冻结的 12.0 manifest、官方日历、证券主表、panel 与 targets
+  机械重建 stage 1 的 4,729 个 candidate pair 和 stage 2 的 33,984 个 candidate+ADV500 pair，
+  固定字段、排序、退市生效剔除和最终 mark-only sentinel，并证明 stage 2 完整复用 stage 1 identity。
+- 新增 create-only 的 stage 1 runner：强制外部绑定分钟与公司行动 manifest 的 payload/file SHA，读取
+  既有全状态停复牌证据，输出 daily/boundary/order/posting/period/ticker/group 全套 artifact；即使
+  `stage_1_passed=true`，在正式stage 2 capture/runner尚未纳入exact file-hash集合前仍记录
+  `stage_2_permitted=false`，新增实现后必须先以扩大后的hash集合重放stage 1，不能提前派发stage 2。
+- 新增无网络的两阶段 orchestration：stage 1 失败时不读取其他结果字段且 stage 2 callback 保证零调用；
+  通过时只调用一次 stage 2，并要求 candidate base/stress 的订单、过账、日净值、期间、分组和冻结指标
+  投影与 stage 1 canonical exact，否则拒绝全角色结果。
+
+### Changed
+
+- v6 Stage 1 在收益 artifact 生成前继续被 `600677.SH` 的 Tushare `stk_limit.pre_close=null` 阻断；
+  全部 22 个分区只有该股票在 2020-07-01、2020-10-09、2021-01-04 三行出现该情况，其 `up_limit=3.16`
+  和 `down_limit=2.86` 均有限、为正且双抓精确一致。执行上下限只消费 up/down，边界昨收来自独立 raw daily
+  `pre_close`，因此 reader 改为允许未消费的 limit.pre_close 为 null，但仍拒绝无穷、非正有限 pre_close、
+  非正/非有限 up/down 或上下限倒置；该实现修复不改变 v6 协议，修复前仍未生成收益。
+- v5 候选分钟 4,729/4,729 对完成且全量 hash/receipt 校验通过后，首次严格 Stage 1 在产生任何收益
+  artifact 前被 `600288.SH` 2019-10-08 阻断：Diemeng 09:30 行为零量零额、平坦 10.80 元且等于
+  raw pre_close，但 raw daily open 为 10.72 元。对全部 pair 的收益前审计确认：4,671 条正流动性 09:30
+  行全部匹配 daily open；55 条零流动性平坦行中仅 6 条与 daily open 不同，且 6 条全部精确等于
+  raw pre_close；另有 3 条缺 09:30 行。v6 因此只把“零量、零额、平坦 OHLC、等于 raw pre_close”
+  识别为可证明的供应商昨收占位，不能覆盖权威 raw daily open；其他 09:30 不一致仍 fail-closed，
+  缺行仍需原停牌/盘中复牌证明。原 v5 分钟文件不重抓，只能经固定源 manifest/file SHA、原 plan 和
+  全部 4,729 pair/22 limit artifact 重验后 create-only 重锚定；修订前没有打开收益。
+- 候选分钟数据完成后，CNInfo 连续请求在当前重抓中两次于开头返回 HTTP 403；公司行动 runner 因此新增
+  fail-closed 的审计重锚定入口，只接受已冻结身份的 v2/v3 两份候选捕获，要求两份 manifest payload/file
+  SHA 正确、双样本回执一致且九类非 manifest artifact 逐字节同哈希，再按当前协议重新计算全部规范化行动、
+  raw-reference fallback 与新 manifest。该路径保留原捕获时间，不声称发生了新抓取，也不打开任何收益。
+- 13.0 首次真实账户结构 smoke 在尚未产出任何收益指标时，被 `300495.SZ` 2019-07-12 的持仓复权跳变阻断：
+  CNInfo 接口漏失该实施分红，但双次稳定 Tushare 抓取、原始前收/除权参考价和复权因子均支持每股税前
+  0.10 元现金。因而在重跑前全局重冻结缺源 fallback：仅当 CNInfo 对同 ticker/ex-date 完全无记录、
+  Tushare 双抓一致、复权因子确有跳变、理论除权误差不超过 1%、factor/reference 误差不超过 0.0011 时
+  才允许记账；不跳变、缺相邻 raw bar 或参考价不符仍 fail-closed。候选范围 28 个缺源事件中 25 个满足，
+  2 个缺相邻 raw bar，1 个无因子跳变且理论误差 26.2%，不会手工逐股放行。
+- v2正式分钟抓取在12个稳定pair、0个收益后被`002203.SZ` 2019-07-01阻断：其09:30集合竞价
+  `amount/vol`隐含10.890857元，略超单价10.88元的1分容差，但09:31..09:47全部17根连续bar均以
+  `vol×100/amount×1`严格落入OHLC。由于协议本就把09:30定义为price-only anchor，v3只将该行排除
+  单位推断/验证，不放宽任何连续bar容差；旧12-pair staging已迁至rejected目录且不得resume。
+- v3随后在41个稳定pair、0个收益后被`600064.SH` 2019-07-01的09:42行阻断：该行隐含VWAP
+  10.869487元，略低于low 10.88元超过1分，但09:42同样是从不用于执行/mark的C规划重叠分钟；
+  全部15根实际A/B/C bar严格通过。因此v4只在实际消费clock上推断/验证单位，连续执行bar容差仍不变，
+  旧41-pair staging也已迁至rejected目录且不得resume。
+- v4在103个稳定pair、0个收益后被`002714.SZ` 2019-10-08的09:32单分钟阻断：单分钟隐含VWAP
+  73.336605略高于high 73.32，但策略从不消费单分钟VWAP；实际A/B/C聚合VWAP 73.186706/72.036151/
+  72.840011均严格落在聚合OHLC。v5因此在三个真实成交聚合上唯一识别单位，仍要求每个窗口0或5行、
+  每行时间/OHLC/量额zero-state有效及聚合VWAP一分容差；旧103-pair staging保留审计且不得resume。
+- 正式仿真由逐role完整跑A→B→C改为全role先冻结context，再统一A、统一B、统一C；provider每阶段只
+  predicate-read该阶段union clock并禁止缓存future值，final sentinel只读09:30。future-input gate由实际
+  call trace计算，不再硬编码0；盘中复牌但未证明09:30前恢复时保留旧mark，后续窗口独立证明可交易。
+- 成交率与容量门分母改为因果决策时已知、尚未做整手/缺reference/capacity/cash缩放的完整
+  `target_gap_notional`，避免100股取整或缺B-close把未成交经济缺口从98%门中删除。
+
+### Research status
+
+- 13.0 严格 Stage 1 已完成并由独立 verifier 重验：manifest payload/file 为
+  `198c13c30d82d8ccd157d3b11512668047254c8faf73e8fe08012c749d27b4a5` /
+  `6f15c211a1a4dc8ff6ed570399322d06ceb2d5966c9e1b306311420182fb6df4`，结果 payload/file 为
+  `fc0256d821cad3a7ced647725e896d059a363f03cadafed4eed29f877794f7e2` /
+  `7127f1af0eea5bd8e2ca087a895fd3c42d193aaf2b60c74e01336e3e5b918969`。base/stress 的
+  full/train/validation 季度 CAGR 分别为 5.58%/7.74%/1.39% 与 5.46%/7.64%/1.23%，全部为正；
+  但 target-gap fill 仅 89.52%/89.23%（要求 98%），容量限制 3.28%/3.28%（上限 2%），49 个充分
+  行业只有 28 个正收益、比例 57.14%（要求 60%），因此 `stage_1_failed_stage_2_forbidden`。
+  Stage 2 零派发、selection 未打开。会计重构、负现金、杠杆、未来输入、三档市值、年度比例、
+  leave-one-industry-out 与非 both-positive 行为均通过；日级最大回撤仍为 -38.36%/-38.63%。
+  仓库内终止证据 `protocols/13.0-stage1-terminal.json` payload 为
+  `d89b573d0b1aaa54baa3b25abe3e6dfb4ec3394f1301583d8a972d73ea1b4d63`；13.0 不再做结果后参数搜索。
+- 13.0 发布候选在显式 H Download basetemp/pycache 下完成全量验证：`1011 passed, 5 skipped`，并成功
+  `compileall src/factor_lab`；测试通过仅证明实现和证据合同，不改变 Stage 1 失败结论。
+- 13.0 前置 bounded scout 固定测试 vol63/126 × 10%/12%/15% 六个次月生效的 realized-vol overlay；
+  六者 validation CAGR 全为负（约 -3.30% 至 -1.11%），零赢家。固定 75% 暴露虽把回撤降至约
+  -31.60%，但 full CAGR 从 12.0 的 8.06% 降至 6.32%，只保留为 comparator，不作为新路线。
+- 最大回撤在 13.0 强制披露但不再作为开发期唯一收益否决门；12.0 的 -40.05% 仍是未解决风险，
+  在真实执行、分组重复性与未见 selection 通过前禁止盈利、稳定性或实盘启用声明。
+- 上述结构 smoke 没有生成完整日/季度收益、候选胜负或 selection 信息；fallback 修订属于公司行动覆盖合同修复，
+  不是看过收益后的参数或门槛放宽。
+- 本机 Diemeng key 的最小只读探针确认历史分钟并非从 2016 年才开始：1min 的 `000001.SZ`、
+  `000002.SZ`、`600000.SH` 从 2000-06-09 有记录，`600519.SH`、`002024.SZ`、`300001.SZ`
+  分别从其 2001/2004/2009 上市首日有记录；仍逐 ticker/session 留证，不把这些样本外推为全市场共同起点，
+  也不新增任何收益结果。
+- 第一版 Diemeng 8样本双抓校准 artifact payload/file SHA-256 为
+  `04a7523ab069da3ab3436d246b40aa5b06ada63b2a2f66e4cb6cb44037e41856` /
+  `fabac85ec716d70900cf6156d1a04054169bc8241daef9ffc14d4ccb07de72a9`；unit contract payload 为
+  `e99f6def8673b3dc39d4e3628e3b789689e90896f6dda8bafa04ab7ecac43416`，未包含密钥且未打开收益；
+  但样本集中在大盘股，没有暴露混合单位，现已明确标记拒绝。`300630.SZ` 2020-07-01 的vol直接为股，
+  而`000001.SZ`需按手×100，证明全局单位假设错误。
+- 第一版5min candidate staging在442个pair、0个分钟收益时停止并迁移到rejected目录：09:35聚合bar
+  混入09:30集合竞价，无法用于raw-open公司行动结算后才提交的订单，也不能通过减去auction修复。
+- 随后的 raw-open、同一时点先卖后买账户只作 fully exposed 非正式诊断：candidate base/stress
+  full/train/validation 季度 CAGR 为 7.49%/10.69%/1.38% 与 7.35%/10.61%/1.11%，成交率约
+  98.56%，三档市值均正、行业正收益比例恰为60%；但它在知道 open 后才定股数并复用同-open卖出回款，
+  因果上不可执行，不能作为 real-share 证据。正式账户在读取任何分钟收益前改冻为：09:30事件结算后
+  规划A并执行09:31..35，09:36规划B并执行09:37..41，09:42规划C并执行09:43..47；缺分钟分区不得
+  回退日线开盘，C未来行情只能减少成交且不能释放现金给其他订单。
+- v2 protocol 曾以 payload/file `633de5a27f59c4362ed085ee734ee07d25bab7541686b455092b45be031cdbe0` /
+  `d9857577a5043cbfea4e381191ad5751fc1be86b7a1786db8f6419edba6085bf`重冻，但在12个pair后被上述
+  price-only auction单位问题取代，未打开收益。
+- v3九样本真实双抓 calibration manifest payload/file 为
+  `a4b093e5d9d59d21b28c33da6738d4c82096ebf26ccc0849a71da90399501ada` /
+  `9eaf854f27533cce1db1f65312d0916bc39567b7c6dc9bdebce65d0d4022702c`，unit-contract payload为
+  `4fea7dd66e57c1dcbd87a76920bcc7c891cc190cf819c5692b73f76e4b44113d`；对应protocol payload/file
+  `5e6f5bdac43b3ee261d8e80081315e09287f3b19c4caacd3577a79e4ff7f9225` /
+  `b392753c6185e781ed4a52b74fb76a6d9ecfe60c15b76911e698806668bfbac1`在41个pair后被v4取代，未开收益。
+- v4十样本真实双抓 calibration manifest payload/file 为
+  `412f3a4dad08730e4b3ed5991f24d5c77a37296abc401076ffebb583e4234cd4` /
+  `5e9dfe7a9d3e6b2a07ac45bf9f1d546c8c968da3d5413834768c173d7fafe59a`，unit-contract payload为
+  `c81e6866fa3f851f29f21a776b94e9fa038ef08e4881dea63ab45c3033797381`；对应protocol payload/file
+  `59978daef0590bced55302597426ab816ac3fa5a487fdda7f1854ec6778a377d` /
+  `58630dde172ae3e75237461bbf5016ae36909c487fb3b6b1f46f7a06f9fcbc08`在103个pair后被v5取代，未开收益。
+- v5十一样本真实双抓 calibration manifest payload/file 为
+  `04c43dacebdfc35b40a457023f40696188254bf9858ea3b026aadb820253fd43` /
+  `c014eece5670f925bf323442e8605ebe2518834b50fb750141f6b6b5cf3c3056`，unit-contract payload为
+  `b7d676b4ed2230b910a896749c705c0e46d5d53031430c44484823bc0be9fc22`；lockstep/provider/file-hash
+  闭环后的13.0 protocol payload/file为`89cc2962ec4bbb0b86ba7b578f8803639828da371d8e3f64aee13cf6520f1f9e` /
+  `58a2660d4f2490bcc2db32665c66683a74d4463469a602dd7476042cb56bfa11`，收益仍未打开。
+- 09:30 昨收占位的 v6 预收益重冻不改变 v5 单位校准或任何 A/B/C 执行栏；13.0 protocol 新
+  payload/file 为 `7989478d24cc4597a7066eab5a737e698d3647d5a70704f85854a744ec3fa9d8` /
+  `9973cbdeb0e2d421e227afe7d22ffa9074e0f847041a8025b294cdb5f642fef2`。v5 完整分钟捕获的
+  payload/file 为 `39c47f45a854fc3a0283879bef428f1f00e252b49af1701fd2d74dafcf6bdc6f` /
+  `a37bf3e14092148b3fc64e0ced1be68564b93681e1ad8284aa127bd88a10ba45`，只允许由该固定身份重锚定。
+
 ## [12.0] - 2026-09-01
 
 ### Added

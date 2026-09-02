@@ -156,17 +156,11 @@ def test_capacity_metrics_use_stable_large_notional_reduction() -> None:
         float(row["executed_notional"])
         for row in trades
     ]
-    requested_naive = sum(requested_values)
-    requested_by_side_naive = sum(requested_values[0::2]) + sum(
-        requested_values[1::2]
-    )
-    executed_naive = sum(executed_values)
-    executed_by_side_naive = sum(executed_values[0::2]) + sum(
-        executed_values[1::2]
-    )
     assert CAPACITY_RECONCILIATION_ABS_TOL_RMB == 1e-6
-    assert abs(requested_naive - requested_by_side_naive) > 1e-6
-    assert abs(executed_naive - executed_by_side_naive) > 1e-6
+    # Whether two naive ``sum`` orders diverge by more than the accounting
+    # tolerance depends on the Python/compiler floating-point reduction path.
+    # The contract under test is the exact ``math.fsum`` result below, not a
+    # platform-specific amount of naive rounding error.
     expected_requested = math.fsum(requested_values)
     expected_executed = math.fsum(executed_values)
 

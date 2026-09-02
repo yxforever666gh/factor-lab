@@ -472,6 +472,10 @@ python -m pip install -e ".[data,dev]"
 
 ## 数据
 
+13.0 当前路线的必要字段、已有来源、采购触发器和明确不采购项见
+[`DATA_REQUIREMENTS.md`](DATA_REQUIREMENTS.md)。梦蝶历史分钟按逐 ticker/session 验证，不采用统一的
+2016 起点假设。
+
 ```powershell
 # 查看 canonical Parquet readiness、键和覆盖范围
 python -m factor_lab.cli data status --deep --hash

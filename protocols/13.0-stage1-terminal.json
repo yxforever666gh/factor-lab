@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "kind": "factor_lab_13_0_stage1_terminal_evidence",
+  "release": "13.0",
+  "status": "development_stage_1_failed_stage_2_and_selection_forbidden",
+  "protocol": {
+    "path": "protocols/13.0-profit-first-real-share-closure.json",
+    "payload_sha256": "7989478d24cc4597a7066eab5a737e698d3647d5a70704f85854a744ec3fa9d8",
+    "file_sha256": "9973cbdeb0e2d421e227afe7d22ffa9074e0f847041a8025b294cdb5f642fef2"
+  },
+  "external_inputs": {
+    "candidate_minutes": {
+      "path": "H:/Download/FactorLabPytest/factor-lab-13.0-candidate-minutes-v6",
+      "manifest_payload_sha256": "24c05fd0e91bb10d5175801eea21cbcfb212944bd1eb9e0135438d3dce884a06",
+      "manifest_file_sha256": "63f9ed448bc4c7ad40ae4c4f11ae366c5d1527bab354c23c94ba1a7fab084056",
+      "pair_count": 4729,
+      "execution_count": 22
+    },
+    "corporate_actions": {
+      "path": "H:/Download/FactorLabPytest/factor-lab-13.0-candidate-actions-v6",
+      "manifest_payload_sha256": "c5062bca5cd97a19f81108807dfca7b7bdef603065063355bf075b17528d9a16",
+      "manifest_file_sha256": "9378b73f67c5f16a9b28ce1165e890d02141a3475b9760adef02e25fd2199784",
+      "ticker_count": 501
+    }
+  },
+  "stage_1_result": {
+    "path": "H:/Download/FactorLabPytest/factor-lab-13.0-minute-stage1-result",
+    "manifest_payload_sha256": "198c13c30d82d8ccd157d3b11512668047254c8faf73e8fe08012c749d27b4a5",
+    "manifest_file_sha256": "6f15c211a1a4dc8ff6ed570399322d06ceb2d5966c9e1b306311420182fb6df4",
+    "result_payload_sha256": "fc0256d821cad3a7ced647725e896d059a363f03cadafed4eed29f877794f7e2",
+    "result_file_sha256": "7127f1af0eea5bd8e2ca087a895fd3c42d193aaf2b60c74e01336e3e5b918969",
+    "independent_full_verification_passed": true,
+    "stage_1_passed": false,
+    "stage_2_gate_satisfied": false,
+    "stage_2_permitted": false,
+    "stage_2_dispatched": false
+  },
+  "candidate_base": {
+    "initial_nav": 10000000.0,
+    "end_nav": 13297659.232465914,
+    "full_quarterly_cagr": 0.05578680133496272,
+    "train_quarterly_cagr": 0.07737787869777879,
+    "validation_quarterly_cagr": 0.013894056359945006,
+    "daily_cagr": 0.05790003590325754,
+    "daily_max_drawdown": -0.38356199072172104,
+    "daily_sharpe": 0.42865157424043265,
+    "target_gap_fill_ratio": 0.8952145751082912,
+    "capacity_limited_target_gap_ratio": 0.03275336308273976,
+    "blocked_order_count": 84,
+    "unfilled_order_count": 78,
+    "positive_2019_2022_year_fraction": 0.75,
+    "max_daily_reconciliation_error": 5.311449058353901e-09,
+    "max_period_reconciliation_error": 3.469446951953614e-16
+  },
+  "candidate_stress": {
+    "initial_nav": 10000000.0,
+    "end_nav": 13218492.333516277,
+    "full_quarterly_cagr": 0.05458665446551336,
+    "train_quarterly_cagr": 0.0764051424982386,
+    "validation_quarterly_cagr": 0.012267481382569612,
+    "daily_cagr": 0.0566532184459958,
+    "daily_max_drawdown": -0.38627006649635764,
+    "daily_sharpe": 0.42188489424680237,
+    "target_gap_fill_ratio": 0.8923249114442211,
+    "capacity_limited_target_gap_ratio": 0.032818704603118504,
+    "blocked_order_count": 84,
+    "unfilled_order_count": 76,
+    "positive_2019_2022_year_fraction": 0.75,
+    "max_daily_reconciliation_error": 4.94765117764473e-09,
+    "max_period_reconciliation_error": 3.608224830031759e-16
+  },
+  "cross_sectional_repeatability": {
+    "sufficient_industry_count": 49,
+    "positive_industry_count_each_role": 28,
+    "positive_industry_fraction_each_role": 0.5714285714285714,
+    "required_positive_industry_fraction": 0.6,
+    "leave_one_industry_out_positive_fraction_each_role": 1.0,
+    "small_mid_large_cumulative_net_pnl_strictly_positive_each_role": true,
+    "non_both_positive_signal_count": 10,
+    "non_both_positive_targets_empty": true,
+    "non_both_positive_executed_buy_count": 0
+  },
+  "execution_diagnosis": {
+    "base_A_window_fill_ratio": 0.9885184428842284,
+    "base_B_window_fill_ratio": 0.8157582092253052,
+    "base_C_window_fill_ratio": 0.8193058293238837,
+    "base_buy_limit_not_reached_target_gap_notional": 11795655.328258613,
+    "dominant_failure": "a quarterly target cannot reliably complete inside the first 17 minutes with a buy limit only one percent above the observable B close",
+    "execution_failure_does_not_rescue_alpha": "validation CAGR remains about 1.4 percent, industry breadth fails, and daily maximum drawdown remains about 38 percent"
+  },
+  "passed_controls": {
+    "future_input_violation_count": 0,
+    "negative_cash_observation_count_each_role": 0,
+    "leverage_observation_count_each_role": 0,
+    "daily_and_period_reconciliation": true,
+    "calendar_year_fraction": true,
+    "size_groups": true,
+    "leave_one_industry_out": true,
+    "non_both_positive_behavior": true
+  },
+  "failed_controls": {
+    "target_gap_fill_ratio_at_least_0_98": true,
+    "capacity_limited_target_gap_ratio_at_most_0_02": true,
+    "industry_positive_fraction_at_least_0_60": true
+  },
+  "terminal_decision": {
+    "continue_13_0_parameter_search": false,
+    "run_13_0_stage_2": false,
+    "open_13_0_selection": false,
+    "claim_profit_or_stability": false,
+    "next_direction": "14.0 industry-and-size-neutral multi-factor sleeves with strictly lagged fundamentals and whole-day or multi-session participation execution"
+  },
+  "claim_contract": {
+    "independent_oos": false,
+    "selection_opened": false,
+    "profit_claim_allowed": false,
+    "stable_future_profit_claim_allowed": false,
+    "real_capital_enablement_allowed": false
+  },
+  "payload_sha256": "d89b573d0b1aaa54baa3b25abe3e6dfb4ec3394f1301583d8a972d73ea1b4d63"
+}
