@@ -101,6 +101,9 @@
   `d89b573d0b1aaa54baa3b25abe3e6dfb4ec3394f1301583d8a972d73ea1b4d63`；13.0 不再做结果后参数搜索。
 - 13.0 发布候选在显式 H Download basetemp/pycache 下完成全量验证：`1011 passed, 5 skipped`，并成功
   `compileall src/factor_lab`；测试通过仅证明实现和证据合同，不改变 Stage 1 失败结论。
+- 从候选提交 `216779d` 的 `git archive` 构建 `factor_research_mvp-13.0.0-py3-none-any.whl`，SHA-256
+  为 `64013ed117a387601313309b27e08768a0c152a39b70ede6ff7babb7ee0f59e4`；全新隔离 venv 安装后
+  `pip check`、包版本 13.0.0 与 CLI import 均通过。
 - 13.0 前置 bounded scout 固定测试 vol63/126 × 10%/12%/15% 六个次月生效的 realized-vol overlay；
   六者 validation CAGR 全为负（约 -3.30% 至 -1.11%），零赢家。固定 75% 暴露虽把回撤降至约
   -31.60%，但 full CAGR 从 12.0 的 8.06% 降至 6.32%，只保留为 comparator，不作为新路线。
